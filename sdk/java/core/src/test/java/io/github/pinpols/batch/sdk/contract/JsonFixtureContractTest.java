@@ -240,9 +240,10 @@ class JsonFixtureContractTest {
     JsonNode state = given.path("state");
 
     // ── 1) heartbeat directive(03/04/05/06/26/27):驱动 HeartbeatDirective + WorkerRuntimeState ──
-    if (scenario.startsWith("heartbeat-directive")
+    boolean isHeartbeatResponseScenario = scenario.startsWith("heartbeat-directive")
         || scenario.equals("heartbeat-desired-max-concurrent")
-        || scenario.equals("heartbeat-next-interval-hint")) {
+        || scenario.equals("heartbeat-next-interval-hint");
+    if (isHeartbeatResponseScenario) {
       return computeHeartbeatDirective(when);
     }
 
@@ -255,13 +256,15 @@ class JsonFixtureContractTest {
     // ── 3) HTTP 状态分类(07/08/09/21/22/23):仅 claim/report/renew 走 PlatformHttpException + fail-fast
     // streak。
     //    heartbeat 5xx(25)是另一套语义(不重试,等下次定时 tick),不复用 claim/report 退避分类。 ──
-    if ("http".equals(when.path("channel").asText())
+    boolean httpFailureResponseIsConfigured = "http".equals(when.path("channel").asText())
         && when.has("responseStatus")
-        && when.get("responseStatus").isInt()) {
+        && when.get("responseStatus").isInt();
+    if (httpFailureResponseIsConfigured) {
       String httpPath = when.path("path").asText();
-      if (httpPath.endsWith("/claim")
+      boolean httpPathUsesTaskTransport = httpPath.endsWith("/claim")
           || httpPath.endsWith("/report")
-          || httpPath.endsWith("/renew")) {
+          || httpPath.endsWith("/renew");
+      if (httpPathUsesTaskTransport) {
         return computeHttpClassification(when, state);
       }
       if (httpPath.endsWith("/heartbeat") && when.get("responseStatus").asInt() >= 500) {

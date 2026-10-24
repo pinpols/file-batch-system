@@ -37,7 +37,9 @@ SENSITIVE_KEYWORDS: Final[tuple[str, ...]] = (
 
 def _normalize(key: str) -> str:
     """转小写并剥除非字母数字字符,便于子串匹配。"""
-    return "".join(ch for ch in key.lower() if ch.isalnum())
+    lower_key = key.lower()
+    alphanumeric_characters = (character for character in lower_key if character.isalnum())
+    return "".join(alphanumeric_characters)
 
 
 def is_sensitive_key(key: str) -> bool:

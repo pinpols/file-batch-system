@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：Test Impact Analysis (TIA) POC — 测试类粒度。
+# 用法：在仓库根目录执行 python3 scripts/ci/select-affected-tests.py；参数与前置环境见下方说明及所属 README。
 """
 Test Impact Analysis (TIA) POC — 测试类粒度。
 
@@ -17,7 +19,7 @@ Test Impact Analysis (TIA) POC — 测试类粒度。
   stdout 一行一个 test 类(simple class name,逗号拼给 mvn -Dtest 用)
   stderr 诊断信息
 
-为何不识别 properties/yml/SQL/Flyway?见 docs/runbook/tia-poc-2026-05-22.md「盲区」一节。
+为何不识别 properties/yml/SQL/Flyway?见 docs/archive/verifications/tia-poc-2026-05-22.md「盲区」一节。
 """
 from __future__ import annotations
 

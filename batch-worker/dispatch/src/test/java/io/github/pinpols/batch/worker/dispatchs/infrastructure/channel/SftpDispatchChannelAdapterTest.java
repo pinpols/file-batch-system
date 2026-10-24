@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
@@ -49,5 +50,19 @@ class SftpDispatchChannelAdapterTest {
         () -> SftpDispatchChannelAdapter.publishRemoteFile(sftp, tempRemotePath, remotePath));
 
     verify(sftp, never()).rm(remotePath);
+  }
+
+  @Test
+  @DisplayName("SFTP 明确拒绝重命名时可安全重试,连接丢失时结果不明")
+  void publicationFailureClassification_matchesSftpResponseCertainty() {
+    SftpException rejected = new SftpException(ChannelSftp.SSH_FX_PERMISSION_DENIED, "denied");
+    SftpException lost = new SftpException(ChannelSftp.SSH_FX_CONNECTION_LOST, "response lost");
+
+    assertThat(SftpDispatchChannelAdapter.isAmbiguousPublicationFailure(rejected))
+        .isFalse();
+    assertThat(SftpDispatchChannelAdapter.isAmbiguousPublicationFailure(lost)).isTrue();
+    assertThat(SftpDispatchChannelAdapter.isAmbiguousPublicationFailure(
+            new IllegalStateException("transport failed")))
+        .isTrue();
   }
 }

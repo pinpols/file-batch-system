@@ -106,11 +106,6 @@ public class ConfigPackageExcelWorkbookWriter {
   public static final List<String> FILE_TEMPLATE_COLUMNS =
       ConfigPackageExcelSchema.FileTemplate.COLUMNS;
 
-  public static final List<String> PIPELINE_COLUMNS =
-      ConfigPackageExcelSchema.PipelineDefinition.COLUMNS;
-
-  public static final List<String> STEP_COLUMNS = ConfigPackageExcelSchema.PipelineStep.COLUMNS;
-
   public static final List<String> WF_DEF_COLUMNS =
       ConfigPackageExcelSchema.WorkflowDefinition.COLUMNS;
 
@@ -119,6 +114,7 @@ public class ConfigPackageExcelWorkbookWriter {
   public static final List<String> WF_EDGE_COLUMNS = ConfigPackageExcelSchema.WorkflowEdge.COLUMNS;
 
   private final List<ConfigPackageSheetSpecs.SheetDef> sheetDefs;
+  private final List<ConfigPackageSheetSpecs.SheetDef> exportSheetDefs;
   private final List<ConfigPackageSheetSpecs.SheetDef> allSheetDefs;
   private final MessageSource messageSource;
   private final ConfigPackageWorkbookSupplementWriter supplementWriter;
@@ -134,6 +130,11 @@ public class ConfigPackageExcelWorkbookWriter {
     this.sheetSpecs = new ConfigPackageSheetSpecs(messageSource);
     this.allSheetDefs = sheetSpecs.build();
     this.sheetDefs = sheetSpecs.project(scenarios);
+    // 若列表列有值，则优先使用该列而不是标量投影。
+    // 保留已退役工作表定义，仅用于识别并拒绝包含这些工作表的上传。
+    this.exportSheetDefs = sheetDefs.stream()
+        .filter(def -> !PIPELINE_SHEET.equals(def.name()) && !STEP_SHEET.equals(def.name()))
+        .toList();
   }
 
   public byte[] buildExportWorkbook(List<List<Map<String, Object>>> sheetDataList) {
@@ -167,12 +168,12 @@ public class ConfigPackageExcelWorkbookWriter {
     Locale locale = LocaleContextHolder.getLocale();
     Map<String, List<String>> implRegistry = copyImplRegistry(registeredImplCodesByModule);
     try (SXSSFWorkbook wb = new SXSSFWorkbook(50)) {
-      for (ConfigPackageSheetSpecs.SheetDef def : sheetDefs) {
+      for (ConfigPackageSheetSpecs.SheetDef def : exportSheetDefs) {
         int sourceIndex = sheetIndex(def.name());
         writeDataSheet(wb, def, sheetDataList.get(sourceIndex), locale, implRegistry);
       }
       supplementWriter.createReadmeSheet(wb, locale);
-      supplementWriter.createFillOrderSheet(wb, sheetDefs);
+      supplementWriter.createFillOrderSheet(wb, exportSheetDefs);
       supplementWriter.createDependencyGuideSheet(wb);
       supplementWriter.createFiveWorkerExampleSheet(wb);
       supplementWriter.createBundleExampleSheet(wb);
@@ -212,11 +213,11 @@ public class ConfigPackageExcelWorkbookWriter {
     Locale locale = LocaleContextHolder.getLocale();
     Map<String, List<String>> implRegistry = copyImplRegistry(registeredImplCodesByModule);
     try (SXSSFWorkbook wb = new SXSSFWorkbook(50)) {
-      for (ConfigPackageSheetSpecs.SheetDef def : sheetDefs) {
+      for (ConfigPackageSheetSpecs.SheetDef def : exportSheetDefs) {
         writeDataSheet(wb, def, List.of(), locale, implRegistry);
       }
       supplementWriter.createReadmeSheet(wb, locale);
-      supplementWriter.createFillOrderSheet(wb, sheetDefs);
+      supplementWriter.createFillOrderSheet(wb, exportSheetDefs);
       supplementWriter.createDependencyGuideSheet(wb);
       supplementWriter.createFiveWorkerExampleSheet(wb);
       supplementWriter.createBundleExampleSheet(wb);
@@ -233,11 +234,11 @@ public class ConfigPackageExcelWorkbookWriter {
     Locale locale = LocaleContextHolder.getLocale();
     Map<String, List<String>> implRegistry = copyImplRegistry(registeredImplCodesByModule);
     try (SXSSFWorkbook wb = new SXSSFWorkbook(50)) {
-      for (ConfigPackageSheetSpecs.SheetDef def : sheetDefs) {
+      for (ConfigPackageSheetSpecs.SheetDef def : exportSheetDefs) {
         writeDataSheet(wb, def, List.of(), locale, implRegistry);
       }
-      supplementWriter.createFocusedReadmeSheet(wb, locale, sheetDefs);
-      supplementWriter.createFillOrderSheet(wb, sheetDefs);
+      supplementWriter.createFocusedReadmeSheet(wb, locale, exportSheetDefs);
+      supplementWriter.createFillOrderSheet(wb, exportSheetDefs);
       supplementWriter.createDictionarySheet(wb, locale);
       createFieldGuideSheet(wb);
       ConsoleExcelStyles.createValidationSheet(wb);
@@ -282,8 +283,6 @@ public class ConfigPackageExcelWorkbookWriter {
         session.jobMonitoringPolicyRows(),
         session.fileChannelRows(),
         session.fileTemplateRows(),
-        session.pipelineRows(),
-        session.pipelineStepRows(),
         session.workflowDefinitionRows(),
         session.workflowNodeRows(),
         session.workflowEdgeRows());
@@ -295,16 +294,19 @@ public class ConfigPackageExcelWorkbookWriter {
         result.jobMonitoringPolicies(),
         result.channels(),
         result.fileTemplates(),
-        result.pipelines(),
-        result.steps(),
         result.wfDefs(),
         result.wfNodes(),
         result.wfEdges());
     try (XSSFWorkbook wb = new XSSFWorkbook()) {
-      for (int i = 0; i < sheetDefs.size(); i++) {
-        ConfigPackageSheetSpecs.SheetDef def = sheetDefs.get(i);
+      for (ConfigPackageSheetSpecs.SheetDef def : exportSheetDefs) {
+        int sourceIndex = sheetIndex(def.name());
         writePreviewSheet(
-            wb, def, sessionData.get(i), results.get(i).issues(), locale, implRegistry);
+            wb,
+            def,
+            sessionData.get(sourceIndex),
+            results.get(sourceIndex).issues(),
+            locale,
+            implRegistry);
       }
       ConsoleExcelPreviewWorkbookSupport.populateValidationSheet(wb, result.allIssues());
       wb.write(out);
@@ -329,14 +331,18 @@ public class ConfigPackageExcelWorkbookWriter {
         Object val = row.get(def.columns().get(c));
         Cell cell = dataRow.createCell(c);
         cell.setCellStyle(textStyle);
-        cell.setCellValue(
-            EmptyChecks.isNull(val)
-                ? EMPTY
-                : ConsoleExcelStyles.escapeFormula(String.valueOf(val)));
+        String cellText;
+        if (EmptyChecks.isNull(val)) {
+          cellText = EMPTY;
+        } else {
+          String serializedCellText = String.valueOf(val);
+          cellText = ConsoleExcelStyles.escapeFormula(serializedCellText);
+        }
+        cell.setCellValue(cellText);
       }
     }
-    sheet.setAutoFilter(
-        new CellRangeAddress(0, Math.max(0, idx - 1), 0, def.columns().size() - 1));
+    int lastDataRow = Math.max(0, idx - 1);
+    sheet.setAutoFilter(new CellRangeAddress(0, lastDataRow, 0, def.columns().size() - 1));
     applyValidations(def, sheet, locale, registeredImplCodesByModule);
     applyRequiredColumnValidations(def, sheet);
     setWidths(sheet, def.columns());
@@ -365,8 +371,8 @@ public class ConfigPackageExcelWorkbookWriter {
         cell.setCellValue(EmptyChecks.isNull(val) ? EMPTY : val);
       }
     }
-    sheet.setAutoFilter(
-        new CellRangeAddress(0, Math.max(0, idx - 1), 0, def.columns().size() - 1));
+    int lastDataRow = Math.max(0, idx - 1);
+    sheet.setAutoFilter(new CellRangeAddress(0, lastDataRow, 0, def.columns().size() - 1));
     applyValidations(def, sheet, locale, registeredImplCodesByModule);
     applyRequiredColumnValidations(def, sheet);
     ConsoleExcelPreviewWorkbookSupport.addIssueComments(sheet, def.columns(), sheetIssues, 0);
@@ -379,9 +385,10 @@ public class ConfigPackageExcelWorkbookWriter {
     for (int c = 0; c < def.columns().size(); c++) {
       String columnName = def.columns().get(c);
       ConsoleExcelStyles.ColumnGuide guide = def.guides().get(columnName);
-      if (EmptyChecks.isNull(guide)
+      boolean requiredFieldGuideIsNotApplicable = EmptyChecks.isNull(guide)
           || !guide.required()
-          || EmptyChecks.isNotEmpty(guide.allowedValues())) {
+          || EmptyChecks.isNotEmpty(guide.allowedValues());
+      if (requiredFieldGuideIsNotApplicable) {
         continue;
       }
       String excelColumn = CellReference.convertNumToColString(c);
@@ -404,10 +411,6 @@ public class ConfigPackageExcelWorkbookWriter {
       Sheet sheet,
       Locale locale,
       Map<String, List<String>> registeredImplCodesByModule) {
-    if (STEP_SHEET.equals(def.name())) {
-      sheetSpecs.applyStepValidations(sheet, locale, registeredImplCodesByModule);
-      return;
-    }
     def.validationApplier().accept(sheet, locale);
   }
 
@@ -433,7 +436,7 @@ public class ConfigPackageExcelWorkbookWriter {
     writeGuideHeader(sheet, styles.head());
     int rowIdx = 1;
     // 记录每个 sheet 的起止行号，最后做第一列合并（per-sheet 一段，垂直居中），更美观、可读
-    for (ConfigPackageSheetSpecs.SheetDef spec : sheetDefs) {
+    for (ConfigPackageSheetSpecs.SheetDef spec : exportSheetDefs) {
       int sectionStart = rowIdx;
       for (int ci = 0; ci < spec.columns().size(); ci++) {
         String colName = spec.columns().get(ci);
@@ -637,9 +640,8 @@ public class ConfigPackageExcelWorkbookWriter {
       Map.entry(
           WF_NODE_SHEET,
           Map.of(
-              "node_type", "WORKFLOW 内部分类：START/END/TASK/GATEWAY/FILE_STEP/JOB",
-              "related_job_code", "WORKFLOW 节点引用的其他 Job（任意 worker 类型）",
-              "related_pipeline_code", "WORKFLOW FILE_STEP 节点引用的 pipeline")));
+              "node_type", "WORKFLOW 内部分类：START/END/TASK/GATEWAY/JOB",
+              "related_job_code", "WORKFLOW 节点引用的其他 Job（任意 worker 类型）")));
 
   public static String joinAllowedValues(ConsoleExcelStyles.ColumnGuide guide) {
     if (guide == null || EmptyChecks.isEmpty(guide.allowedValues())) {

@@ -31,6 +31,15 @@ class ProductionRuntimeConfigurationGuardTest {
   }
 
   @Test
+  @DisplayName("生产环境缺少 Kafka namespace 时启动校验失败")
+  void shouldRequireKafkaNamespaceInProduction() {
+    MockEnvironment environment = validProductionEnvironment();
+    environment.setProperty("batch.kafka.namespace", "");
+
+    assertFailsClosed(environment, "batch.kafka.namespace");
+  }
+
+  @Test
   @DisplayName("生产环境调度端地址指向本机回环地址时启动校验失败并指出该配置项")
   void shouldRejectLoopbackEndpointInProduction() {
     MockEnvironment environment = validProductionEnvironment();
@@ -108,6 +117,7 @@ class ProductionRuntimeConfigurationGuardTest {
     environment.setProperty("spring.application.name", "batch-orchestrator");
     environment.setProperty("spring.datasource.url", "jdbc:postgresql://postgres:5432/platform");
     environment.setProperty("spring.kafka.bootstrap-servers", "kafka:9092");
+    environment.setProperty("batch.kafka.namespace", "test-deployment");
     environment.setProperty("spring.data.redis.host", "valkey");
     environment.setProperty("batch.orchestrator.base-url", "http://orchestrator:18082");
     environment.setProperty("batch.storage.backend", "filesystem");

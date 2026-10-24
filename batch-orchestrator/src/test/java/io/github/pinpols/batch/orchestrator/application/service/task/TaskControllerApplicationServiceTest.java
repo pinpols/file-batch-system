@@ -87,7 +87,9 @@ class TaskControllerApplicationServiceTest {
     when(taskExecutionService.assignWorker(anyString(), anyLong(), anyString())).thenReturn(null);
 
     assertThatThrownBy(() -> service.claim(100L, new TaskClaimCommand("ta", "w1", "inv-1")))
-        .isInstanceOf(BizException.class);
+        .isInstanceOf(BizException.class)
+        .satisfies(exception -> assertThat(((BizException) exception).getMessageKey())
+            .isEqualTo("error.task.claim_not_available"));
     verify(taskExecutionService, never()).loadEffectiveConfig(anyString(), anyLong());
   }
 

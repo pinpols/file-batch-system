@@ -73,7 +73,7 @@ Kafka KRaft 裸装维护成本（quorum controller + log dir + JVM 参数），�
 
 **MinIO 部署状态：授权与维护支持待确认。** 当前仓库保留的 MinIO 镜像用于本地开发/集成测试；部署前必须针对实际镜像来源、版本和使用方式完成许可证审查。MinIO 官方当前许可页对无有效企业协议的使用列出非生产、单实例内部评估条件，官方仓库也已归档。本文中的 MinIO Operator/HA 清单仅作历史架构示例，未经授权确认和目标版本验证，不应作为生产部署批准依据。替代存储 POC 尚未覆盖有效多节点故障恢复及完整业务 E2E。
 
-参考：[MinIO 软件许可](https://docs.min.io/license/) · [MinIO 仓库与维护状态](https://github.com/minio/minio) · [S3 兼容后端 POC 结论](../analysis/s3-compatible-backend-comparison-2026-09-25.md)
+参考：[MinIO 软件许可](https://docs.min.io/license/) · [MinIO 仓库与维护状态](https://github.com/minio/minio) · [S3 兼容后端 POC 结论](../verifications/s3-compatible-backend-comparison-2026-09-25.md)
 
 | 服务 | Operator |
 |---|---|

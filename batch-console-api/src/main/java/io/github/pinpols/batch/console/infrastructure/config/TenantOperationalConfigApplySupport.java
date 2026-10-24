@@ -41,8 +41,8 @@ final class TenantOperationalConfigApplySupport {
   private final AlertRoutingConfigMapper alertRoutingConfigMapper;
 
   Map<String, Object> findResourceQueue(String tenantId, ResourceQueueSpec spec) {
-    return resourceQueueMapper.selectByUniqueKey(
-        tenantId, CodeNormalizer.toConfigFormOrNull(spec.getQueueCode()));
+    String queueCode = CodeNormalizer.toConfigFormOrNull(spec.getQueueCode());
+    return resourceQueueMapper.selectByUniqueKey(tenantId, queueCode);
   }
 
   void upsertResourceQueue(String tenantId, ResourceQueueSpec spec, String operator) {
@@ -66,8 +66,8 @@ final class TenantOperationalConfigApplySupport {
   }
 
   Map<String, Object> findBatchWindow(String tenantId, BatchWindowSpec spec) {
-    return batchWindowMapper.selectByUniqueKey(
-        tenantId, CodeNormalizer.toConfigFormOrNull(spec.getWindowCode()));
+    String windowCode = CodeNormalizer.toConfigFormOrNull(spec.getWindowCode());
+    return batchWindowMapper.selectByUniqueKey(tenantId, windowCode);
   }
 
   void upsertBatchWindow(String tenantId, BatchWindowSpec spec) {
@@ -87,8 +87,8 @@ final class TenantOperationalConfigApplySupport {
   }
 
   Map<String, Object> findBusinessCalendar(String tenantId, BusinessCalendarSpec spec) {
-    return businessCalendarMapper.selectActiveByTenantAndCalendarCode(
-        tenantId, CodeNormalizer.toConfigFormOrNull(spec.getCalendarCode()));
+    String calendarCode = CodeNormalizer.toConfigFormOrNull(spec.getCalendarCode());
+    return businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, calendarCode);
   }
 
   void upsertBusinessCalendar(
@@ -122,18 +122,20 @@ final class TenantOperationalConfigApplySupport {
     List<Map<String, Object>> holidayRows = new ArrayList<>();
     for (String date : spec.getHolidays()) {
       Map<String, Object> row = new HashMap<>();
-      row.put("calendar_id", calendarId);
-      row.put("holiday_date", date);
-      row.put("holiday_type", "PUBLIC_HOLIDAY");
-      row.put("created_by", operator);
+      row.put("tenantId", tenantId);
+      row.put("calendarId", calendarId);
+      row.put("bizDate", date);
+      row.put("dayType", "HOLIDAY");
+      row.put("holidayName", null);
+      row.put("description", null);
       holidayRows.add(row);
     }
     calendarHolidayMapper.batchInsert(holidayRows);
   }
 
   Map<String, Object> findQuotaPolicy(String tenantId, TenantQuotaPolicySpec spec) {
-    return tenantQuotaPolicyMapper.selectByUniqueKey(
-        tenantId, CodeNormalizer.toConfigFormOrNull(spec.getPolicyCode()));
+    String policyCode = CodeNormalizer.toConfigFormOrNull(spec.getPolicyCode());
+    return tenantQuotaPolicyMapper.selectByUniqueKey(tenantId, policyCode);
   }
 
   void upsertQuotaPolicy(String tenantId, TenantQuotaPolicySpec spec) {
@@ -151,8 +153,8 @@ final class TenantOperationalConfigApplySupport {
   }
 
   Map<String, Object> findAlertRouting(String tenantId, AlertRoutingSpec spec) {
-    return alertRoutingConfigMapper.selectByUniqueKey(
-        tenantId, CodeNormalizer.toConfigFormOrNull(spec.getRouteCode()));
+    String routeCode = CodeNormalizer.toConfigFormOrNull(spec.getRouteCode());
+    return alertRoutingConfigMapper.selectByUniqueKey(tenantId, routeCode);
   }
 
   void upsertAlertRouting(String tenantId, AlertRoutingSpec spec, String operator) {

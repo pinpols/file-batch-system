@@ -2,7 +2,11 @@ package io.github.pinpols.batch.sdk.dispatcher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.idempotent.Idempotent;
@@ -17,6 +21,7 @@ import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import io.github.pinpols.batch.sdk.task.SdkTaskTypeDescriptor;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -58,6 +63,11 @@ class TaskDispatcherAutoWrapTest {
         42L, "tx", "job-1", taskType, "ti-9", params, Map.of("traceId", "abc"));
   }
 
+  private void stubClaimPayload(PlatformHttpClient http) throws IOException {
+    when(http.claim(eq(42L), anyString(), any()))
+        .thenReturn(new PlatformHttpClient.TaskClaimResponse("inv-42", "{\"orderId\":\"o1\"}", null));
+  }
+
   // ─── handlers ────────────────────────────────────────────────────────────────
 
   /** 仅 @RetryOn:对 IllegalStateException 重试,前 N-1 次抛、第 N 次成功;计数执行次数。 */
@@ -72,6 +82,12 @@ class TaskDispatcherAutoWrapTest {
 
     RetryOnlyHandler(int failuresBeforeSuccess) {
       this.failuresBeforeSuccess = failuresBeforeSuccess;
+    }
+
+    // 夹具只模拟计数/瞬时异常，不提交外部业务动作，可安全重复以验证重试策略。
+    @Override
+    public boolean isSafeToReplay(SdkTaskContext ctx) {
+      return true;
     }
 
     @Override
@@ -117,6 +133,12 @@ class TaskDispatcherAutoWrapTest {
     final AtomicInteger executions = new AtomicInteger();
     int failuresBeforeSuccess;
 
+    // 夹具只模拟计数/瞬时异常，不提交外部业务动作，可安全重复以验证重试策略。
+    @Override
+    public boolean isSafeToReplay(SdkTaskContext ctx) {
+      return true;
+    }
+
     @Override
     public String taskType() {
       return "tt";
@@ -141,6 +163,12 @@ class TaskDispatcherAutoWrapTest {
   static class MismatchHandler implements SdkTaskHandler {
     final AtomicInteger executions = new AtomicInteger();
 
+    // 仅抛模拟异常、不提交外部动作，保持本用例验证“异常类型不匹配”而非安全门提前退出。
+    @Override
+    public boolean isSafeToReplay(SdkTaskContext ctx) {
+      return true;
+    }
+
     @Override
     public String taskType() {
       return "tt";
@@ -162,6 +190,12 @@ class TaskDispatcherAutoWrapTest {
       backoff = Backoff.FIXED)
   static class AlwaysFailingBothHandler implements SdkTaskHandler {
     final AtomicInteger executions = new AtomicInteger();
+
+    // 夹具只模拟计数/瞬时异常，不提交外部业务动作，可安全重复以验证重试策略。
+    @Override
+    public boolean isSafeToReplay(SdkTaskContext ctx) {
+      return true;
+    }
 
     @Override
     public String taskType() {
@@ -265,9 +299,10 @@ class TaskDispatcherAutoWrapTest {
 
   @Test
   @DisplayName("仅 @RetryOn:4 参 dispatcher 构造后,匹配异常会重试到成功")
-  void shouldRetry_whenRetryOnHandlerThrowsTransient() {
+  void shouldRetry_whenRetryOnHandlerThrowsTransient() throws IOException {
     // 准备
     PlatformHttpClient http = mock(PlatformHttpClient.class);
+    stubClaimPayload(http);
     RetryOnlyHandler handler = new RetryOnlyHandler(2); // 前 2 次抛,第 3 次成功
     dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, null);
 
@@ -280,9 +315,10 @@ class TaskDispatcherAutoWrapTest {
 
   @Test
   @DisplayName("仅 @Idempotent + store:同 key 第二次命中缓存,handler 不再执行")
-  void shouldHitCache_whenSameKeyDispatchedTwice() {
+  void shouldHitCache_whenSameKeyDispatchedTwice() throws IOException {
     // 准备
     PlatformHttpClient http = mock(PlatformHttpClient.class);
+    stubClaimPayload(http);
     IdempotentOnlyHandler handler = new IdempotentOnlyHandler();
     RecordingStore store = new RecordingStore();
     dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, store);
@@ -299,9 +335,10 @@ class TaskDispatcherAutoWrapTest {
 
   @Test
   @DisplayName("同时标两注解(idempotent 外/retry 内):单次重试到成功 + 记一次幂等;再次同 key 命中、不重试")
-  void shouldRetryThenIdempotent_whenBothAnnotated() {
+  void shouldRetryThenIdempotent_whenBothAnnotated() throws IOException {
     // 准备
     PlatformHttpClient http = mock(PlatformHttpClient.class);
+    stubClaimPayload(http);
     BothHandler handler = new BothHandler();
     handler.failuresBeforeSuccess = 1; // 第一次执行内:1 次瞬时失败 + 1 次成功
     RecordingStore store = new RecordingStore();
@@ -340,9 +377,10 @@ class TaskDispatcherAutoWrapTest {
 
   @Test
   @DisplayName("无注解 handler → 原样,不包装,行为不变")
-  void shouldNotWrap_whenNoAnnotation() {
+  void shouldNotWrap_whenNoAnnotation() throws IOException {
     // 准备
     PlatformHttpClient http = mock(PlatformHttpClient.class);
+    stubClaimPayload(http);
     PlainHandler handler = new PlainHandler();
     dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, null);
 
@@ -355,9 +393,10 @@ class TaskDispatcherAutoWrapTest {
 
   @Test
   @DisplayName("两注解 + 重试耗尽仍 fail → idempotent 外层不 record;同 key 再来仍会重新执行")
-  void shouldNotRecordIdempotent_whenRetryExhaustsAndFails() {
+  void shouldNotRecordIdempotent_whenRetryExhaustsAndFails() throws IOException {
     // 准备
     PlatformHttpClient http = mock(PlatformHttpClient.class);
+    stubClaimPayload(http);
     AlwaysFailingBothHandler handler = new AlwaysFailingBothHandler();
     RecordingStore store = new RecordingStore();
     dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, store);
@@ -401,9 +440,10 @@ class TaskDispatcherAutoWrapTest {
 
   @Test
   @DisplayName("retryOn 不匹配的异常透传,不重试(IOException 不在 value 列表)")
-  void shouldNotRetry_whenExceptionTypeMismatch() {
+  void shouldNotRetry_whenExceptionTypeMismatch() throws IOException {
     // 准备
     PlatformHttpClient http = mock(PlatformHttpClient.class);
+    stubClaimPayload(http);
     MismatchHandler handler = new MismatchHandler();
     dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, null);
 

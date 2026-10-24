@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiMonthlyUsageSettleParam;
+
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
@@ -90,12 +93,14 @@ class ConsoleAiCostServiceTest {
     assertThat(result.amount()).isEqualByComparingTo("0.00600000");
     verify(mapper)
         .settle(
-            "tenant-a",
-            reservation.billingMonth(),
-            reservation.reservedAmount(),
-            result.amount(),
-            1000,
-            500);
+            ConsoleAiMonthlyUsageSettleParam.builder()
+                .tenantId("tenant-a")
+                .billingMonth(reservation.billingMonth())
+                .reservedAmount(reservation.reservedAmount())
+                .actualAmount(result.amount())
+                .promptTokens(1000)
+                .completionTokens(500)
+                .build());
   }
 
   @Test

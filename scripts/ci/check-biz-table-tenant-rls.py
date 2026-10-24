@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：业务表多租户与 RLS。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-biz-table-tenant-rls.py；参数与前置环境见下方说明及所属 README。
 """守护:biz.* 业务表的多租 + RLS 强制约束(docs/agent-baseline.md §多租隔离 + RLS 盲区防回归)。
 
 业务库 biz.* 不走 Flyway,表定义在 scripts/db/business/create_biz_tables.sql,

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.NotificationProperties;
 import java.util.Arrays;
 import java.util.List;
@@ -64,34 +65,40 @@ public class EmailNotificationSender implements NotificationSender {
   public WebhookDeliveryResult send(NotificationMessage message) {
     Map<String, Object> config = parseConfig(message.configJson());
 
-    String[] declared = parseRecipients(str(config, CONFIG_KEY_TO));
+    String configuredRecipients = str(config, CONFIG_KEY_TO);
+    String[] declared = parseRecipients(configuredRecipients);
     if (declared.length == 0) {
       return WebhookDeliveryResult.failure(null, "missing email recipients");
     }
     // 域名白名单:配置非空时,只向白名单域名收件人发送,挡邮件轰炸/外泄到非受信邮箱。
     String[] recipients = filterAllowedRecipients(declared);
     if (recipients.length == 0) {
+      String sanitizedChannelCode = LogSanitizer.value(message.channelCode());
       log.warn(
           "EMAIL all recipients blocked by domain allowlist; skipping: channelCode={}, declared={}",
-          LogSanitizer.value(message.channelCode()),
+          sanitizedChannelCode,
           declared.length);
       return WebhookDeliveryResult.failure(null, "no allowed email recipients");
     }
 
     JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
     if (mailSender == null) {
+      String sanitizedChannelCode = LogSanitizer.value(message.channelCode());
       log.warn(
           "EMAIL channel selected but JavaMailSender not configured; skipping:"
               + " channelCode={}, recipients={}",
-          LogSanitizer.value(message.channelCode()),
+          sanitizedChannelCode,
           recipients.length);
       return WebhookDeliveryResult.failure(null, "mail not configured");
     }
 
     SimpleMailMessage mailMessage = new SimpleMailMessage();
     mailMessage.setTo(recipients);
-    mailMessage.setSubject(resolveSubject(str(config, CONFIG_KEY_SUBJECT), message));
-    mailMessage.setText(buildBody(message));
+    String configuredSubject = str(config, CONFIG_KEY_SUBJECT);
+    String subject = resolveSubject(configuredSubject, message);
+    mailMessage.setSubject(subject);
+    String body = buildBody(message);
+    mailMessage.setText(body);
     String from = str(config, CONFIG_KEY_FROM);
     if (from != null && !from.isBlank()) {
       mailMessage.setFrom(from);
@@ -101,9 +108,10 @@ public class EmailNotificationSender implements NotificationSender {
       doSend(mailSender, mailMessage);
       return WebhookDeliveryResult.ok();
     } catch (MailException ex) {
+      String sanitizedChannelCode = LogSanitizer.value(message.channelCode());
       log.warn(
           "EMAIL delivery failed: channelCode={}, recipients={}, cause={}",
-          LogSanitizer.value(message.channelCode()),
+          sanitizedChannelCode,
           recipients.length,
           ex.getClass().getSimpleName());
       return WebhookDeliveryResult.failure(null, ex.getClass().getSimpleName());
@@ -167,9 +175,16 @@ public class EmailNotificationSender implements NotificationSender {
     if (at < 0 || at == address.length() - 1) {
       return false;
     }
-    String domain = address.substring(at + 1).trim().toLowerCase(Locale.ROOT);
+    String rawDomain = address.substring(at + 1);
+    String trimmedDomain = rawDomain.trim();
+    String domain = trimmedDomain.toLowerCase(Locale.ROOT);
     for (String allowed : allowedDomains) {
-      if (allowed != null && domain.equals(allowed.trim().toLowerCase(Locale.ROOT))) {
+      if (EmptyChecks.isNull(allowed)) {
+        continue;
+      }
+      String trimmedAllowedDomain = allowed.trim();
+      String normalizedAllowedDomain = trimmedAllowedDomain.toLowerCase(Locale.ROOT);
+      if (domain.equals(normalizedAllowedDomain)) {
         return true;
       }
     }

@@ -65,7 +65,8 @@ public final class BusinessDataSourceBuilder {
     hikariConfig.setPassword(properties.getPassword());
     applyPoolDefaults(hikariConfig, properties);
     HikariPgSessionSupport.applyBusiness(hikariConfig, pgSessionProperties, appName + "-business");
-    return BusinessRoutingDataSourceFactory.singleShard(new HikariDataSource(hikariConfig));
+    DataSource shardDataSource = new HikariDataSource(hikariConfig);
+    return BusinessRoutingDataSourceFactory.singleShard(shardDataSource);
   }
 
   /** 多片:每片各建一个 Hikari 池(凭据来自 routing.shards),按 resolver(config 或 table 驱动)路由。 */

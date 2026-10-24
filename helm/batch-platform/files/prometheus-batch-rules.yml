@@ -209,6 +209,38 @@ groups:
           summary: "SLA violations detected"
           description: "At least one SLA violation is still outstanding."
 
+      - alert: BatchDayCatchupBacklog
+        expr: batch_batch_day_open_catchup_remaining_days > 0
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: batch-day
+        annotations:
+          summary: "Batch-day calendar catch-up is still behind"
+          description: "The maximum raw business-date backlog across enabled calendars has remained non-zero for 10 minutes. Check the batch_day_open scheduler and calendar catch-up runbook; this aggregate metric does not identify a tenant or calendar."
+
+      - alert: BatchDayCatchupScanFailures
+        expr: increase(batch_batch_day_open_catchup_scan_failures_total[10m]) > 0
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: batch-day
+        annotations:
+          summary: "Batch-day catch-up scan failed"
+          description: "At least one complete calendar scan failed in the last 10 minutes. The catch-up backlog gauge retains its previous complete snapshot; inspect Orchestrator logs before taking recovery action."
+
+      - alert: BatchJobDependencyWaitTooOld
+        expr: batch_job_dependency_waiting > 0 and batch_job_dependency_wait_oldest_age_seconds > 86400
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: job-dependency
+        annotations:
+          summary: "A job dependency launch has been waiting for more than 24 hours"
+          description: "The aggregate WAITING dependency queue contains an item older than 24 hours. The metrics intentionally omit tenant and job labels; inspect the tenant-scoped Console waiting list and dependency timeout alert."
+
       - alert: BatchJobMonitoringScanFailures
         expr: sum by (violation_type) (increase(batch_job_monitoring_scan_failures_total[5m])) > 0
         labels:
@@ -509,7 +541,7 @@ groups:
 
       # ── Outbox / DLQ 积压告警（BatchBacklogMetricsScheduler 每 30 秒采样） ──────────
       # 触发 → 人工：kubectl / make ops-inspect 看堆积明细
-      #         → 无根因消退则 scripts/ops/heal-stuck-outbox.sh / heal-dead-letters.sh
+      #         → 用 scripts/ops/heal-stuck-outbox.sh 只读诊断；FAILED/GIVE_UP 经 Orchestrator 审计接口处理
       # 禁止配自动 heal：隐藏真实故障（见 docs/runbook/troubleshooting-decision-tree.md）
       - alert: BatchOutboxBacklogHigh
         expr: batch_outbox_pending_events > 5000
@@ -569,7 +601,7 @@ groups:
           alert_group: outbox
         annotations:
           summary: "Outbox events transitioned to GIVE_UP terminal state"
-          description: "{{ $value }} outbox events/sec entered GIVE_UP in last 5min. These events are permanently failed and need ops intervention — check Kafka health, then run scripts/ops/heal-stuck-outbox.sh or POST /internal/outbox/republish."
+          description: "{{ $value }} outbox events/sec entered GIVE_UP in last 5min. These events are permanently failed and need ops intervention — check Kafka health, then use the audited Orchestrator POST /internal/outbox/republish operation."
 
       - alert: BatchOutboxCircuitBreakerOpen
         expr: batch_outbox_circuit_open == 1
@@ -628,7 +660,7 @@ groups:
           alert_group: dlq
         annotations:
           summary: "Dead letter tasks backlog is growing"
-          description: "{{ $value }} dead letter tasks in NEW+FAILED state for 30 minutes. Investigate root cause before running scripts/ops/heal-dead-letters.sh."
+          description: "{{ $value }} dead letter tasks in NEW+FAILED state for 30 minutes. Inspect candidates with scripts/ops/inspect-dead-letters.sh; submit replay through Console approval."
 
       - alert: BatchWorkerStaleOnlinePresent
         expr: batch_worker_registry_stale_online_count > 0
@@ -775,6 +807,28 @@ groups:
         annotations:
           summary: "Trigger launch Kafka queue age is high"
           description: "batch.trigger.launch.v1 消费前 p95 排队时间已超过 30 秒并持续 10 分钟。先检查 consumer group lag、topic 分区数是否至少等于 orchestrator 副本数 × BATCH_TRIGGER_CONSUMER_CONCURRENCY，以及 DB 连接池/launch 耗时。"
+
+      - alert: TriggerStaleAcceptedWithoutInstance
+        expr: batch_trigger_launch_stale_accepted_count > 0
+        for: 2m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: trigger-async
+        annotations:
+          summary: "Accepted trigger requests have no Workflow root run"
+          description: "{{ $value }} top-level ACCEPTED/PROCESSING trigger request(s) older than the configured threshold have no same-tenant workflow_run, excluding pending manual misfire/catch-up approval. Check outbox publication, Kafka consumer lag, and root launch errors."
+
+      - alert: TriggerRequestToInstanceLatencyHigh
+        expr: batch_trigger_launch_request_to_instance_samples >= 20 and batch_trigger_launch_request_to_instance_p95_seconds > 30
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: trigger-async
+        annotations:
+          summary: "Trigger request to Workflow root latency is high"
+          description: "Recent top-level trigger request to workflow_run creation p95 is {{ $value }} seconds, including workflows without Job nodes. Check outbox publish latency, Kafka consumer lag, and Orchestrator root launch throughput."
 
       # outbox 行被标 GIVE_UP — 通常是 payload 反序列化失败 / 重试上限耗尽,
       # 任意 1 条都需要运维介入(数据问题, 等不到自愈).

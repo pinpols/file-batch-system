@@ -1,0 +1,3 @@
+interface:
+  display_name: "调度正确性审查"
+  short_description: "核实 Trigger 时序、业务日历、misfire、补跑、readiness defer 与暂停恢复语义"

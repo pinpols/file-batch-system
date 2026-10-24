@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
+import io.github.pinpols.batch.console.domain.notification.query.AlertRoutingConfigCountQuery;
+import io.github.pinpols.batch.console.domain.notification.query.AlertRoutingConfigQuery;
+
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -38,9 +42,24 @@ class DefaultConsoleAlertRoutingApplicationServiceTest {
     request.setPageNo(3);
     request.setPageSize(15);
     when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
-    when(mapper.countByQuery("ta", "payment", "PAYMENT", "ops", "WARN", true)).thenReturn(31L);
+    when(mapper.countByQuery(AlertRoutingConfigCountQuery.builder()
+        .tenantId("ta")
+        .keyword("payment")
+        .routeCode("PAYMENT")
+        .team("ops")
+        .severity("WARN")
+        .enabled(true)
+        .build())).thenReturn(31L);
     when(mapper.selectByQuery(
-            "ta", "payment", "PAYMENT", "ops", "WARN", true, new PageRequest(3, 15)))
+            AlertRoutingConfigQuery.builder()
+                .tenantId("ta")
+                .keyword("payment")
+                .routeCode("PAYMENT")
+                .team("ops")
+                .severity("WARN")
+                .enabled(true)
+                .pageRequest(new PageRequest(3, 15))
+                .build()))
         .thenReturn(List.of(Map.of("id", 7L, "route_code", "PAYMENT")));
 
     var response = service.list(request);
@@ -50,6 +69,14 @@ class DefaultConsoleAlertRoutingApplicationServiceTest {
     assertEquals(15, response.pageSize());
     assertEquals(7L, response.items().getFirst().id());
     verify(mapper)
-        .selectByQuery("ta", "payment", "PAYMENT", "ops", "WARN", true, new PageRequest(3, 15));
+        .selectByQuery(AlertRoutingConfigQuery.builder()
+            .tenantId("ta")
+            .keyword("payment")
+            .routeCode("PAYMENT")
+            .team("ops")
+            .severity("WARN")
+            .enabled(true)
+            .pageRequest(new PageRequest(3, 15))
+            .build());
   }
 }

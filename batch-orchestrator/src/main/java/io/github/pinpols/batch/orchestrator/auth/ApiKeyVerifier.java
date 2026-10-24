@@ -4,6 +4,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Ticker;
 import io.github.pinpols.batch.common.security.ApiKeyHasher;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.mapper.auth.ApiKeyAuthMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
@@ -31,7 +32,7 @@ import org.springframework.stereotype.Component;
  * endpoint 应调 {@link #verifyWithScope(String, String, String)} 要求显式 {@code "worker.execute"}
  * scope。老 key {@code scopes='*'}(V47 默认) 通配通过,无需轮转;新 key 必须显式带 {@code "worker.execute"} 才放行。
  *
- * <p>P1-1(2026-06-03,docs/archive/analysis/2026-06-03-deep-scan-be-security.md): V166 起 api_key.key_hash 由裸
+ * <p>P1-1(2026-06-03,docs/archive/audit/deep-scan-be-security-2026-06-03.md): V166 起 api_key.key_hash 由裸
  * SHA-256 升级为 PBKDF2-HMAC-SHA256 + per-key salt。老 key {@code key_hash_algo='sha256'} 走原路径,验证
  * **命中**后异步 best-effort 升级为 PBKDF2,实现"登录即升级"。新 key 由 console-api 创建时即写 PBKDF2 + salt。
  *
@@ -185,7 +186,9 @@ public class ApiKeyVerifier {
     if (cached != null) {
       // expires_at 硬边界内存复查:自然过期不允许被缓存 TTL 延长(revoke 的 5 分钟窗口是另一回事,见类 javadoc)。
       Instant expiresAt = cached.expiresAt();
-      if (expiresAt != null && expiresAt.isBefore(instantSource.instant())) {
+      boolean cachedKeyIsExpired =
+          EmptyChecks.isNotNull(expiresAt) && expiresAt.isBefore(instantSource.instant());
+      if (cachedKeyIsExpired) {
         verifyCache.invalidate(cacheKey);
         // 落回慢路径:SQL 只取未过期行,自然拒掉。
       } else {

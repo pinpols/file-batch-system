@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：使用固定版本的 MinIO 客户端；不依赖 MinIO 服务镜像内置 mc。
+# 用法：由调用脚本 source scripts/lib/minio-mc.sh 后使用公共变量或函数。
 # 使用固定版本的 MinIO 客户端；不依赖 MinIO 服务镜像内置 mc。
 # 本工具仅通过 Docker 运行，与 scripts/sim 的执行方式保持一致。
 set -euo pipefail

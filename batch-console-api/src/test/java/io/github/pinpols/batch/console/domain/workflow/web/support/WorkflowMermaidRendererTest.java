@@ -55,12 +55,12 @@ class WorkflowMermaidRendererTest {
   }
 
   @Test
-  @DisplayName("文件步骤与等待节点分别渲染为平行四边形与子程序形状")
+  @DisplayName("作业任务与等待节点分别渲染为矩形与子程序形状")
   void shouldRenderFileStepAndWaitShapes_whenRenderingNodes() {
     WorkflowDefinitionDetailResponse detail = detail(
         List.of(
             node("START_0", null, "START"),
-            node("FILE_1", "文件导入", "FILE_STEP"),
+            node("FILE_1", "文件导入", "TASK"),
             node("WAIT_1", "等到货", "WAIT"),
             node("END_0", null, "END")),
         List.of(
@@ -70,7 +70,7 @@ class WorkflowMermaidRendererTest {
 
     String mermaid = WorkflowMermaidRenderer.render(detail);
 
-    assertThat(mermaid).contains("FILE_1[(文件导入 · FILE_1)]").contains("WAIT_1[[等到货 · WAIT_1]]");
+    assertThat(mermaid).contains("FILE_1[文件导入 · FILE_1]").contains("WAIT_1[[等到货 · WAIT_1]]");
   }
 
   @Test
@@ -119,13 +119,36 @@ class WorkflowMermaidRendererTest {
   private static WorkflowDefinitionDetailResponse detail(
       List<ConsoleWorkflowNodeResponse> nodes, List<ConsoleWorkflowEdgeResponse> edges) {
     return new WorkflowDefinitionDetailResponse(
-        1L, "t1", "WF_DEMO", "Demo", "DAG", 1, true, "demo workflow", null, null, nodes, edges);
+        1L,
+        "t1",
+        "WF_DEMO",
+        "Demo",
+        "DAG",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        1,
+        true,
+        "demo workflow",
+        null,
+        null,
+        nodes,
+        edges);
   }
 
   private static ConsoleWorkflowNodeResponse node(String code, String name, String type) {
-    return new ConsoleWorkflowNodeResponse(
-        1L, 1L, code, name, type, null, null, null, null, null, null, null, null, null, true, null,
-        null, null, null);
+    return ConsoleWorkflowNodeResponse.builder()
+        .id(1L)
+        .workflowDefinitionId(1L)
+        .nodeCode(code)
+        .nodeName(name)
+        .nodeType(type)
+        .enabled(true)
+        .build();
   }
 
   private static ConsoleWorkflowEdgeResponse edge(

@@ -103,34 +103,45 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
         Statement stmt = conn.createStatement()) {
       conn.setAutoCommit(false);
 
-      stmt.execute("""
+      final String createIFSql = """
           CREATE TABLE IF NOT EXISTS biz.keyset_demo (
               id        BIGINT PRIMARY KEY,
               tenant_id VARCHAR(64)  NOT NULL,
               batch_no  VARCHAR(128) NOT NULL
           )
-          """);
-      stmt.execute("TRUNCATE TABLE biz.keyset_demo");
+          """;
+      stmt.execute(createIFSql);
+      final String truncateBizKeysetDemoSql = """
+          TRUNCATE TABLE biz.keyset_demo
+      """;
+      stmt.execute(truncateBizKeysetDemoSql);
 
       // 用例 1/3/4：连续 id=1..1000，batch_no = BATCH_NO
-      StringBuilder bulk =
-          new StringBuilder("INSERT INTO biz.keyset_demo(id, tenant_id, batch_no) VALUES ");
+      StringBuilder bulk = new StringBuilder("""
+          INSERT INTO biz.keyset_demo(id, tenant_id, batch_no) VALUES
+          """);
       for (int i = 1; i <= ROW_COUNT; i++) {
         appendRow(bulk, i, BATCH_NO, i < ROW_COUNT);
       }
-      stmt.execute(bulk.toString());
+      String insertKeysetRowsSql = bulk.toString();
+      stmt.execute(insertKeysetRowsSql);
 
       // 用例 2：倾斜数据——独立表，跳过 id ∈ [400,450]，实插 950 行
-      stmt.execute("""
+      final String createIFSqlValue1 = """
           CREATE TABLE IF NOT EXISTS biz.keyset_skew_demo (
               id        BIGINT PRIMARY KEY,
               tenant_id VARCHAR(64)  NOT NULL,
               batch_no  VARCHAR(128) NOT NULL
           )
+          """;
+      stmt.execute(createIFSqlValue1);
+      final String truncateBizKeysetSkewDemoSql = """
+          TRUNCATE TABLE biz.keyset_skew_demo
+      """;
+      stmt.execute(truncateBizKeysetSkewDemoSql);
+      StringBuilder skew = new StringBuilder("""
+          INSERT INTO biz.keyset_skew_demo(id, tenant_id, batch_no) VALUES
           """);
-      stmt.execute("TRUNCATE TABLE biz.keyset_skew_demo");
-      StringBuilder skew =
-          new StringBuilder("INSERT INTO biz.keyset_skew_demo(id, tenant_id, batch_no) VALUES ");
       boolean first = true;
       for (int i = 1; i <= ROW_COUNT; i++) {
         if (i >= SKEW_GAP_LO && i <= SKEW_GAP_HI) {
@@ -142,49 +153,43 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
         appendRow(skew, i, SKEW_BATCH_NO, false);
         first = false;
       }
-      stmt.execute(skew.toString());
+      String insertSkewedKeysetRowsSql = skew.toString();
+      stmt.execute(insertSkewedKeysetRowsSql);
 
       // jdbc_mapped keyset 变体：复用 settlement_batch + settlement_detail（id 数值列）
-      stmt.execute("""
+      final String insertBizSettlementBatchSql = """
           INSERT INTO biz.settlement_batch
               (id, tenant_id, batch_no, biz_date, accounting_period)
           VALUES
               (%d, '%s', '%s', '2024-01-01', '2024-01')
           ON CONFLICT DO NOTHING
-          """.formatted(BATCH_ID_SEED, TENANT_ID, "KEYSET-JDBC-MAPPED"));
-      stmt.execute("DELETE FROM biz.settlement_detail WHERE batch_id = " + BATCH_ID_SEED);
-      StringBuilder detail = new StringBuilder("INSERT INTO biz.settlement_detail"
-          + "(tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,"
-          + " gross_amount, fee_amount, net_amount) VALUES ");
+          """.formatted(BATCH_ID_SEED, TENANT_ID, "KEYSET-JDBC-MAPPED");
+      stmt.execute(insertBizSettlementBatchSql);
+      final String deleteBizSettlementDetailSql = """
+          DELETE FROM biz.settlement_detail WHERE batch_id = %d
+          """.formatted(BATCH_ID_SEED);
+      stmt.execute(deleteBizSettlementDetailSql);
+      StringBuilder detail = new StringBuilder("""
+          INSERT INTO biz.settlement_detail
+              (tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,
+               gross_amount, fee_amount, net_amount) VALUES
+          """);
       for (int i = 1; i <= ROW_COUNT; i++) {
-        detail
-            .append("('")
-            .append(TENANT_ID)
-            .append("',")
-            .append(BATCH_ID_SEED)
-            .append(",'KS-SNO-")
-            .append(i)
-            .append("','CUST-")
-            .append(i)
-            .append("','2024-01-01','2024-01',0,0,0)");
+        detail.append("('%s',%d,'KS-SNO-%d','CUST-%d','2024-01-01','2024-01',0,0,0)"
+            .formatted(TENANT_ID, BATCH_ID_SEED, i, i));
         if (i < ROW_COUNT) {
           detail.append(",");
         }
       }
-      stmt.execute(detail.toString());
+      String insertSettlementDetailsSql = detail.toString();
+      stmt.execute(insertSettlementDetailsSql);
 
       conn.commit();
     }
   }
 
   private static void appendRow(StringBuilder sb, int id, String batchNo, boolean trailingComma) {
-    sb.append("(")
-        .append(id)
-        .append(",'")
-        .append(TENANT_ID)
-        .append("','")
-        .append(batchNo)
-        .append("')");
+    sb.append("(%d,'%s','%s')".formatted(id, TENANT_ID, batchNo));
     if (trailingComma) {
       sb.append(",");
     }

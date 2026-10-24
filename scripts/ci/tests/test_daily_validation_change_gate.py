@@ -1,3 +1,5 @@
+# 用途：验证nightly 的北京时间日期与变更范围判断。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_daily_validation_change_gate.py。
 from __future__ import annotations
 
 import importlib.util

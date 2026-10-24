@@ -17,6 +17,10 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -70,6 +74,13 @@ public class MaintenanceStateHolder {
         Instant.now(),
         false);
     state.set(initialState);
+  }
+
+  @Order(Ordered.HIGHEST_PRECEDENCE)
+  @EventListener(ApplicationReadyEvent.class)
+  public void refreshAfterApplicationReady() {
+    // 已解析的顶层 Workflow 启动请求，后续委派给 Trigger 处理。
+    // 避免在 @PostConstruct 阶段数据库迁移尚未完成时查询状态。
     refreshFromStore();
     refreshExecutor.scheduleWithFixedDelay(this::refreshFromStore, 5, 5, TimeUnit.SECONDS);
   }
@@ -87,13 +98,19 @@ public class MaintenanceStateHolder {
   /** Admin 热更新入口,使用当前操作员写入共享状态审计字段。 */
   @Transactional
   public MaintenanceState update(MaintenanceState next, String operator) {
+    boolean enabled = next.enabled();
+    boolean readOnly = next.readOnly();
+    String message = next.message();
+    Instant etaAt = next.etaAt();
+    Instant startsAt = next.startsAt();
+    List<String> affectedServices = normalizeServices(next.affectedServices());
     MaintenanceState normalized = new MaintenanceState(
-        next.enabled(),
-        next.readOnly(),
-        next.message(),
-        next.etaAt(),
-        next.startsAt(),
-        normalizeServices(next.affectedServices()),
+        enabled,
+        readOnly,
+        message,
+        etaAt,
+        startsAt,
+        affectedServices,
         state.get().version(),
         state.get().updatedAt(),
         true);
@@ -146,13 +163,14 @@ public class MaintenanceStateHolder {
       }
       List<String> services = objectMapper.readValue(
           entity.getAffectedServicesJson(), new TypeReference<List<String>>() {});
+      List<String> normalizedServices = normalizeServices(services);
       state.set(new MaintenanceState(
           entity.isEnabled(),
           entity.isReadOnly(),
           entity.getMessage(),
           entity.getEtaAt(),
           entity.getStartsAt(),
-          normalizeServices(services),
+          normalizedServices,
           entity.getVersion(),
           entity.getUpdatedAt(),
           true));
@@ -170,7 +188,8 @@ public class MaintenanceStateHolder {
 
   private String writeServices(List<String> services) {
     try {
-      return objectMapper.writeValueAsString(normalizeServices(services));
+      List<String> normalizedServices = normalizeServices(services);
+      return objectMapper.writeValueAsString(normalizedServices);
     } catch (Exception ex) {
       throw new IllegalArgumentException("invalid maintenance affectedServices", ex);
     }

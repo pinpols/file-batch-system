@@ -39,6 +39,7 @@ class ChannelConfigMergeTest {
     cj.put("enabled", false); // 策略字段：必须忽略（原黑名单漏了这个）
     cj.put("receipt_policy", "ASYNC"); // 策略字段：必须忽略
     cj.put("receipt_poll_url", "http://callback.example/receipt"); // 回执轮询端点：允许
+    cj.put("receiver_idempotency_supported", true); // 显式接收端幂等契约：允许
     cj.put("dispatch_manifest_enabled", false); // sidecar manifest 开关：允许
     cj.put("dispatch_manifest_suffix", ".sha256"); // sidecar manifest 后缀：允许
     cj.put("random_key", "x"); // 未注册：忽略
@@ -50,6 +51,7 @@ class ChannelConfigMergeTest {
     assertThat(merged).containsEntry("secret_ref", "dispatch/credentials");
     assertThat(merged).containsEntry("sftp_port", 2222);
     assertThat(merged).containsEntry("receipt_poll_url", "http://callback.example/receipt");
+    assertThat(merged).containsEntry("receiver_idempotency_supported", true);
     assertThat(merged).containsEntry("dispatch_manifest_enabled", false);
     assertThat(merged).containsEntry("dispatch_manifest_suffix", ".sha256");
     assertThat(merged).doesNotContainKeys("enabled", "receipt_policy", "random_key");

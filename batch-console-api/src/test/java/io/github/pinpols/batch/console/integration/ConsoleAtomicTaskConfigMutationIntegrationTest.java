@@ -53,18 +53,20 @@ class ConsoleAtomicTaskConfigMutationIntegrationTest extends AbstractMutationInt
         .expectStatus()
         .isOk();
 
-    var row = jdbcTemplate.queryForMap(
-        "SELECT tenant_id, task_type, name, parameters::text AS parameters"
-            + " FROM batch.atomic_task_config WHERE tenant_id = ? AND name = ?",
-        TENANT,
-        name);
+    String atomicTaskConfigSnapshotSql = """
+        select tenant_id, task_type, name, parameters::text as parameters
+        from batch.atomic_task_config where tenant_id = ? and name = ?
+        """;
+    var row = jdbcTemplate.queryForMap(atomicTaskConfigSnapshotSql, TENANT, name);
     assertThat(row).containsEntry("tenant_id", TENANT);
     assertThat(row).containsEntry("task_type", "sql");
     assertThat(row).containsEntry("name", name);
     assertThat((String) row.get("parameters")).contains("select 1");
 
-    jdbcTemplate.update(
-        "DELETE FROM batch.atomic_task_config WHERE tenant_id = ? AND name = ?", TENANT, name);
+    String deleteAtomicTaskConfigSql = """
+        delete from batch.atomic_task_config where tenant_id = ? and name = ?
+    """;
+    jdbcTemplate.update(deleteAtomicTaskConfigSql, TENANT, name);
   }
 
   @Test
@@ -93,8 +95,10 @@ class ConsoleAtomicTaskConfigMutationIntegrationTest extends AbstractMutationInt
         .expectBody(String.class)
         .value(b -> assertThat(b).contains(name));
 
-    jdbcTemplate.update(
-        "DELETE FROM batch.atomic_task_config WHERE tenant_id = ? AND name = ?", TENANT, name);
+    String deleteAtomicTaskConfigSql = """
+        delete from batch.atomic_task_config where tenant_id = ? and name = ?
+    """;
+    jdbcTemplate.update(deleteAtomicTaskConfigSql, TENANT, name);
   }
 
   @Test
@@ -114,8 +118,10 @@ class ConsoleAtomicTaskConfigMutationIntegrationTest extends AbstractMutationInt
         .isBadRequest();
 
     // 不应有写入数据库
-    Long cnt = jdbcTemplate.queryForObject(
-        "SELECT COUNT(*) FROM batch.atomic_task_config WHERE tenant_id = ?", Long.class, TENANT);
+    String atomicTaskConfigCountSql = """
+        select count(*) from batch.atomic_task_config where tenant_id = ?
+        """;
+    Long cnt = jdbcTemplate.queryForObject(atomicTaskConfigCountSql, Long.class, TENANT);
     // 可能有其它用例残留,但本次 sensitive name 不应入库
     assertThat(cnt).isNotNull();
   }

@@ -45,34 +45,24 @@ class ConsoleAiToolsTest {
   }
 
   private ConsoleJobInstanceResponse instance(Long id, String status, String failureClass) {
-    return new ConsoleJobInstanceResponse(
-        id,
-        TENANT,
-        "JOB_A",
-        "INST-1",
-        null,
-        "MANUAL",
-        status,
-        "B1",
-        "op",
-        false,
-        false,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        "trace-1",
-        null,
-        "boom",
-        null,
-        null,
-        null,
-        Instant.now(),
-        Instant.now(),
-        false,
-        failureClass);
+    return ConsoleJobInstanceResponse.builder()
+        .id(id)
+        .tenantId(TENANT)
+        .jobCode("JOB_A")
+        .instanceNo("INST-1")
+        .triggerType("MANUAL")
+        .instanceStatus(status)
+        .batchNo("B1")
+        .operatorId("op")
+        .rerunFlag(false)
+        .retryFlag(false)
+        .traceId("trace-1")
+        .resultSummary("boom")
+        .startedAt(Instant.now())
+        .finishedAt(Instant.now())
+        .dryRun(false)
+        .failureClass(failureClass)
+        .build();
   }
 
   @Test
@@ -231,22 +221,23 @@ class ConsoleAiToolsTest {
 
   private ConsoleAlertEventResponse alert(
       Long id, String alertType, String severity, String status, Integer occurrenceCount) {
-    return new ConsoleAlertEventResponse(
-        id,
-        TENANT,
-        "orchestrator",
-        alertType,
-        severity,
-        alertType + " title",
-        "{}",
-        "fp-" + id,
-        occurrenceCount,
-        Instant.now(),
-        Instant.now(),
-        "trace-" + id,
-        status,
-        Instant.now(),
-        Instant.now());
+    return ConsoleAlertEventResponse.builder()
+        .id(id)
+        .tenantId(TENANT)
+        .serviceName("orchestrator")
+        .alertType(alertType)
+        .severity(severity)
+        .title(alertType + " title")
+        .detailJson("{}")
+        .dedupFingerprint("fp-" + id)
+        .occurrenceCount(occurrenceCount)
+        .firstSeenAt(Instant.now())
+        .lastSeenAt(Instant.now())
+        .traceId("trace-" + id)
+        .status(status)
+        .createdAt(Instant.now())
+        .updatedAt(Instant.now())
+        .build();
   }
 
   @Test

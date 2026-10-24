@@ -108,8 +108,10 @@ public class LineageEvidenceService {
         fileSource,
         dispatches,
         dispatchSource);
+    ResultVersion versionEvidence = resultVersion(version);
+    LineageCoverage lineageCoverage = coverage(coverageInput);
     return new LineageEvidenceResponse(
-        resultVersion(version), jobInstance, pipelines, files, dispatches, coverage(coverageInput));
+        versionEvidence, jobInstance, pipelines, files, dispatches, lineageCoverage);
   }
 
   private static ResultVersion resultVersion(ResultVersionEntity v) {
@@ -154,12 +156,20 @@ public class LineageEvidenceService {
         || (!EmptyChecks.isEmpty(input.fileRecords()) && ARCHIVE.equals(input.fileSource()))
         || (!EmptyChecks.isEmpty(input.dispatchRecords())
             && ARCHIVE.equals(input.dispatchSource()));
+    String jobSource = jobFound ? input.jobInstanceSource() : NONE;
+    String pipelineSource = EmptyChecks.isEmpty(input.pipelineInstances())
+        ? NONE
+        : input.pipelineSource();
+    String fileSource = EmptyChecks.isEmpty(input.fileRecords()) ? NONE : input.fileSource();
+    String dispatchSource = EmptyChecks.isEmpty(input.dispatchRecords())
+        ? NONE
+        : input.dispatchSource();
     LineageSources sources = new LineageSources(
         input.resultVersionSource(),
-        jobFound ? input.jobInstanceSource() : NONE,
-        EmptyChecks.isEmpty(input.pipelineInstances()) ? NONE : input.pipelineSource(),
-        EmptyChecks.isEmpty(input.fileRecords()) ? NONE : input.fileSource(),
-        EmptyChecks.isEmpty(input.dispatchRecords()) ? NONE : input.dispatchSource());
+        jobSource,
+        pipelineSource,
+        fileSource,
+        dispatchSource);
     return new LineageCoverage(
         archiveUsed ? "BFS_HOT_AND_ARCHIVE" : "BFS_HOT_TABLES",
         input.version().id(),
@@ -174,13 +184,16 @@ public class LineageEvidenceService {
   }
 
   private static Long payloadFileId(ResultVersionEntity version) {
-    if (EmptyChecks.isNull(version)
+    boolean resultVersionHasNoFileRecordReference = EmptyChecks.isNull(version)
         || !"FILE_RECORD".equals(version.payloadStorage())
         || !Texts.hasText(version.payloadRef())
-        || !version.payloadRef().startsWith(FILE_RECORD_REF_PREFIX)) {
+        || !version.payloadRef().startsWith(FILE_RECORD_REF_PREFIX);
+    if (resultVersionHasNoFileRecordReference) {
       return null;
     }
-    String id = version.payloadRef().substring(FILE_RECORD_REF_PREFIX.length()).trim();
+    String payloadReferenceSuffix =
+        version.payloadRef().substring(FILE_RECORD_REF_PREFIX.length());
+    String id = payloadReferenceSuffix.trim();
     try {
       return Long.valueOf(id);
     } catch (NumberFormatException ignored) {

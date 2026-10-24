@@ -47,7 +47,7 @@ class ServiceEntryGuardArchTest {
     }
     if (Files.exists(batchDayGate)) {
       String src = Files.readString(batchDayGate);
-      if (!src.contains("request == null || loaded == null")) {
+      if (!hasBatchDayNullGuard(src)) {
         violations.add(batchDayGate.getFileName()
             + " — evaluateAndApply 必须对 request/loaded 空值采取显式 fail-safe 策略");
       }
@@ -55,6 +55,38 @@ class ServiceEntryGuardArchTest {
     assertThat(violations)
         .as("core service entries must defend against null inputs")
         .isEmpty();
+  }
+
+  @Test
+  @DisplayName("判空守卫兼容等价工具方法，仍拒绝漏检、与条件及注释中的伪守卫")
+  void shouldRecognizeEquivalentNullGuardWithoutAcceptingUnsafeBranches() {
+    String utilityGuard = "if (EmptyChecks.isNull(request) || EmptyChecks.isNull(loaded)) {"
+        + " return GateDecision.allow(); }";
+    String legacyGuard = "if (request == null || loaded == null) { return GateDecision.allow(); }";
+    String andGuard = utilityGuard.replace("||", "&&");
+    String incompleteGuard = utilityGuard.replace("EmptyChecks.isNull(loaded)", "false");
+    String commentedGuard = "/* " + utilityGuard + " */";
+
+    boolean utilityAccepted = hasBatchDayNullGuard(utilityGuard);
+    boolean legacyAccepted = hasBatchDayNullGuard(legacyGuard);
+    boolean andAccepted = hasBatchDayNullGuard(andGuard);
+    boolean incompleteAccepted = hasBatchDayNullGuard(incompleteGuard);
+    boolean commentAccepted = hasBatchDayNullGuard(commentedGuard);
+
+    assertThat(utilityAccepted).isTrue();
+    assertThat(legacyAccepted).isTrue();
+    assertThat(andAccepted).isFalse();
+    assertThat(incompleteAccepted).isFalse();
+    assertThat(commentAccepted).isFalse();
+  }
+
+  private static boolean hasBatchDayNullGuard(String source) {
+    String executableSource = source.replaceAll("(?s)/\\*.*?\\*/", "")
+        .replaceAll("(?m)//[^\\r\\n]*", "");
+    String compact = executableSource.replaceAll("\\s+", "");
+    return compact.contains(
+            "if(EmptyChecks.isNull(request)||EmptyChecks.isNull(loaded)){returnGateDecision.allow();")
+        || compact.contains("if(request==null||loaded==null){returnGateDecision.allow();");
   }
 
   private static void requireSource(Path rel, List<String> violations) {

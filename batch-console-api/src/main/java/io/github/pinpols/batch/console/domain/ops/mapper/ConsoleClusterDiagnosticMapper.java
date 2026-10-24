@@ -1,9 +1,13 @@
 package io.github.pinpols.batch.console.domain.ops.mapper;
 
+import io.github.pinpols.batch.console.domain.ops.view.cluster.ActiveTaskWorkerIssueView;
 import io.github.pinpols.batch.console.domain.ops.view.cluster.DeliveryStatusCountView;
+import io.github.pinpols.batch.console.domain.ops.view.cluster.JobInstanceDiagnosticView;
+import io.github.pinpols.batch.console.domain.ops.view.cluster.OutboxStatusCountView;
 import io.github.pinpols.batch.console.domain.ops.view.cluster.ShedLockView;
+import io.github.pinpols.batch.console.domain.ops.view.cluster.StatusCountView;
+import io.github.pinpols.batch.console.domain.ops.view.cluster.WorkerGroupCapacityView;
 import java.util.List;
-import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 /**
@@ -46,20 +50,20 @@ public interface ConsoleClusterDiagnosticMapper {
   Long countJobInstancesByStatuses(
       @Param("tenantId") String tenantId, @Param("statuses") List<String> statuses);
 
-  Map<String, Object> selectJobInstanceSummary(
+  JobInstanceDiagnosticView selectJobInstanceSummary(
       @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
   Long countTerminalInstancesWithActiveChildren(@Param("tenantId") String tenantId);
 
-  List<Map<String, Object>> workerGroupCapacity(@Param("tenantId") String tenantId);
+  List<WorkerGroupCapacityView> workerGroupCapacity(@Param("tenantId") String tenantId);
 
-  List<Map<String, Object>> partitionStatusCounts(
+  List<StatusCountView> partitionStatusCounts(
       @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
-  List<Map<String, Object>> taskStatusCounts(
+  List<StatusCountView> taskStatusCounts(
       @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
-  List<Map<String, Object>> activeTaskWorkerIssues(
+  List<ActiveTaskWorkerIssueView> activeTaskWorkerIssues(
       @Param("tenantId") String tenantId,
       @Param("jobInstanceId") Long jobInstanceId,
       @Param("heartbeatTimeoutSeconds") long heartbeatTimeoutSeconds);
@@ -67,6 +71,6 @@ public interface ConsoleClusterDiagnosticMapper {
   Long countOnlineWorkersForGroup(
       @Param("tenantId") String tenantId, @Param("workerGroup") String workerGroup);
 
-  List<Map<String, Object>> outboxStatusCountsForInstance(
+  List<OutboxStatusCountView> outboxStatusCountsForInstance(
       @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 }

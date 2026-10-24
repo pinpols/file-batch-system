@@ -46,7 +46,8 @@ public class AlertEscalationNotificationOutboxService {
     row.setEscalationTier(tier);
     row.setStream(stream);
     row.setEventType(eventType);
-    row.setPayloadJson(JsonUtils.toJson(payload));
+    String payloadJson = JsonUtils.toJson(payload);
+    row.setPayloadJson(payloadJson);
     row.setPublishStatus(OutboxPublishStatus.NEW.code());
     row.setAttemptCount(0);
     row.setNextPublishAt(BatchDateTimeSupport.utcNow());

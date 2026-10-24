@@ -1,3 +1,5 @@
+-- 为作业依赖完成监控增加可配置的等待宽限时长。
+
 ALTER TABLE batch.job_monitoring_policy
     ADD COLUMN dependency_completion_window_seconds INTEGER NOT NULL DEFAULT 0,
     ADD CONSTRAINT ck_job_monitoring_policy_dependency_completion_window
@@ -11,6 +13,7 @@ COMMENT ON COLUMN batch.job_monitoring_policy.dependency_completion_window_secon
 
 -- 固定频率作业的墙上时钟截止点无法无损换算成相对每轮触发时刻的时长。
 -- 清除不适用的固定频率配置，不臆造宽限时长。
+
 UPDATE batch.job_monitoring_policy mp
 SET completion_deadline_local_time = NULL,
     completion_deadline_day_offset = 0,

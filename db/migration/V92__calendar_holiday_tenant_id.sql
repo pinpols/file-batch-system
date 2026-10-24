@@ -25,6 +25,7 @@ ALTER TABLE batch.calendar_holiday
     ADD CONSTRAINT uk_calendar_holiday UNIQUE (tenant_id, calendar_id, biz_date);
 
 -- 复合索引让 SELECT WHERE tenant_id=? AND calendar_id=? 走 index-only scan
+
 CREATE INDEX IF NOT EXISTS idx_calendar_holiday_tenant
     ON batch.calendar_holiday (tenant_id, calendar_id, biz_date);
 

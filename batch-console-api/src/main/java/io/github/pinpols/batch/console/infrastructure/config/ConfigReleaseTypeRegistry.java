@@ -13,7 +13,6 @@ import io.github.pinpols.batch.console.application.contract.request.config.Tenan
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileChannelSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileTemplateSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.JobDefinitionSpec;
-import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.PipelineDefinitionSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.ResourceQueueSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.TenantQuotaPolicySpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
@@ -31,7 +30,6 @@ class ConfigReleaseTypeRegistry {
 
   private static final String TYPE_JOB = "JOB";
   private static final String TYPE_WORKFLOW = "WORKFLOW";
-  private static final String TYPE_PIPELINE = "PIPELINE";
   private static final String TYPE_BATCH_WINDOW = "BATCH_WINDOW";
   private static final String TYPE_BUSINESS_CALENDAR = "BUSINESS_CALENDAR";
   private static final String TYPE_QUOTA_POLICY = "QUOTA_POLICY";
@@ -55,7 +53,6 @@ class ConfigReleaseTypeRegistry {
             WorkflowDefinitionSpec.class,
             WorkflowDefinitionSpec::getWorkflowCode,
             TenantConfigBatchInitRequest::setWorkflowDefinitions));
-    register(handlers, pipelineHandler());
     register(
         handlers,
         specHandler(
@@ -109,7 +106,6 @@ class ConfigReleaseTypeRegistry {
     this.aliases = Map.ofEntries(
         Map.entry("JOB_DEFINITION", TYPE_JOB),
         Map.entry("WORKFLOW_DEFINITION", TYPE_WORKFLOW),
-        Map.entry("PIPELINE_DEFINITION", TYPE_PIPELINE),
         Map.entry("QUEUE", "RESOURCE_QUEUE"),
         Map.entry("WINDOW", TYPE_BATCH_WINDOW),
         Map.entry("CALENDAR", TYPE_BUSINESS_CALENDAR),
@@ -121,7 +117,8 @@ class ConfigReleaseTypeRegistry {
     if (!Texts.hasText(raw)) {
       throw invalid("configType is required");
     }
-    String normalized = raw.trim().toUpperCase(Locale.ROOT);
+    String trimmedRaw = raw.trim();
+    String normalized = trimmedRaw.toUpperCase(Locale.ROOT);
     return aliases.getOrDefault(normalized, normalized);
   }
 
@@ -171,20 +168,6 @@ class ConfigReleaseTypeRegistry {
       T spec = JsonUtils.fromJsonStrict(payload, specClass);
       requireKey(configKey, codeExtractor.apply(spec), type);
       requestSetter.accept(request, List.of(spec));
-    });
-  }
-
-  private ConfigReleaseTypeHandler pipelineHandler() {
-    return new ConfigReleaseTypeHandler(TYPE_PIPELINE, (configKey, payload, request) -> {
-      PipelineDefinitionSpec spec = JsonUtils.fromJsonStrict(payload, PipelineDefinitionSpec.class);
-      String jobCode = spec.getJobCode();
-      String qualifiedKey =
-          Texts.hasText(spec.getPipelineType()) ? jobCode + "." + spec.getPipelineType() : jobCode;
-      if (!Texts.hasText(jobCode)
-          || (!configKey.equals(jobCode) && !configKey.equals(qualifiedKey))) {
-        throw invalid("PIPELINE payload identity must equal configKey: " + configKey);
-      }
-      request.setPipelineDefinitions(List.of(spec));
     });
   }
 

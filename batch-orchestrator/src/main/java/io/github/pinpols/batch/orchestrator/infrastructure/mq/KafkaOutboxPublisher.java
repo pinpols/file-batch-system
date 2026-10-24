@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.i18n.LocalizedError;
 import io.github.pinpols.batch.common.kafka.BatchEventMessage;
 import io.github.pinpols.batch.common.kafka.BatchMessageType;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.mq.MqMessage;
@@ -18,10 +19,10 @@ import io.github.pinpols.batch.common.observability.W3cTraceContext;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.engine.OutboxPublisher;
+import io.github.pinpols.batch.orchestrator.application.outbox.OutboxChildRecordService;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.EventDeliveryLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
-import io.github.pinpols.batch.orchestrator.mapper.EventDeliveryLogMapper;
 import io.opentelemetry.context.Scope;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
@@ -59,8 +60,9 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
 
   private final MqMessagePublisher mqMessagePublisher;
   private final BatchOrchestratorGovernanceProperties governance;
-  private final EventDeliveryLogMapper eventDeliveryLogMapper;
+  private final OutboxChildRecordService outboxChildRecordService;
   private final BatchTopicResolver topicResolver;
+  private final BatchKafkaTopicNamespace topicNamespace;
   private final BizMessageResolver bizMessageResolver;
   private final ObjectMapper objectMapper;
 
@@ -74,15 +76,17 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
   public KafkaOutboxPublisher(
       @Qualifier("orchestratorMqMessagePublisher") MqMessagePublisher mqMessagePublisher,
       BatchOrchestratorGovernanceProperties governance,
-      EventDeliveryLogMapper eventDeliveryLogMapper,
+      OutboxChildRecordService outboxChildRecordService,
       BatchTopicResolver topicResolver,
+      BatchKafkaTopicNamespace topicNamespace,
       BizMessageResolver bizMessageResolver,
       ObjectMapper objectMapper,
       @Qualifier("applicationTaskExecutor") Executor deliveryLogExecutor) {
     this.mqMessagePublisher = mqMessagePublisher;
     this.governance = governance;
-    this.eventDeliveryLogMapper = eventDeliveryLogMapper;
+    this.outboxChildRecordService = outboxChildRecordService;
     this.topicResolver = topicResolver;
+    this.topicNamespace = topicNamespace;
     this.bizMessageResolver = bizMessageResolver;
     this.objectMapper = objectMapper;
     this.deliveryLogExecutor = deliveryLogExecutor;
@@ -106,7 +110,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
       // 任务卡在 CREATED 永不下发（被 e2e ImportFailureE2eIT/OutboxForwarderE2eIT 等暴露）。
       String targetTopic;
       if (dispatchMessage != null && dispatchMessage.selectedWorkerId() != null) {
-        String baseTopic = governance.mqTopics().resolveDispatchTopic(event.getEventType());
+        String baseTopic = topicResolver.resolveBaseTopic(event.getEventType());
         targetTopic =
             BatchTopics.directDispatchTopic(baseTopic, dispatchMessage.selectedWorkerId());
       } else {
@@ -114,12 +118,12 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
       }
       String workerId = dispatchMessage == null ? null : dispatchMessage.selectedWorkerId();
       String kafkaKey = dispatchKafkaKey(event, dispatchMessage);
-      return sendWithTraceContext(
-              targetTopic,
-              kafkaKey,
-              event.getPayloadJson(),
-              EmptyChecks.isNull(dispatchMessage) ? null : dispatchMessage.traceContext())
-          .handleAsync(
+      String payloadJson = event.getPayloadJson();
+      W3cTraceContext traceContext =
+          EmptyChecks.isNull(dispatchMessage) ? null : dispatchMessage.traceContext();
+      CompletableFuture<MqPublishResult> publishFuture =
+          sendWithTraceContext(targetTopic, kafkaKey, payloadJson, traceContext);
+      return publishFuture.handleAsync(
               (result, ex) -> {
                 if (ex == null) {
                   recordDelivery(
@@ -143,11 +147,16 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
 
     // R6 P0-4：ADR-030 §F verifier.failure.v1 走专用 topic，运维告警 / SLO 直接订阅，
     // 不再混入通用 outbox fallback 桶（之前会被 ops 默认 ACL 屏蔽，告警系统拿不到）。
-    String dedicatedTopic = resolveDedicatedTopic(event.getEventType());
+    String resolvedDedicatedTopic = resolveDedicatedTopic(event.getEventType());
+    String dedicatedTopic = EmptyChecks.isNull(resolvedDedicatedTopic)
+        ? null
+        : topicNamespace.topic(resolvedDedicatedTopic);
     if (dedicatedTopic != null) {
-      return mqMessagePublisher
-          .publish(MqMessage.of(dedicatedTopic, event.getEventKey(), event.getPayloadJson()))
-          .handleAsync(
+      MqMessage dedicatedMessage =
+          MqMessage.of(dedicatedTopic, event.getEventKey(), event.getPayloadJson());
+      CompletableFuture<MqPublishResult> publishFuture =
+          mqMessagePublisher.publish(dedicatedMessage);
+      return publishFuture.handleAsync(
               (result, ex) -> {
                 if (ex == null) {
                   recordDelivery(
@@ -170,29 +179,29 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
     }
 
     // fallback：非任务派发类 outbox，统一包装成 BatchEventMessage 投递到默认 topic，便于通用消费者/审计。
-    String fallbackTopic = governance.outbox().getDefaultTopic();
-    BatchEventMessage message = new BatchEventMessage(
-        "v1",
-        BatchMessageType.OUTBOX_EVENT,
-        event.getTenantId(),
-        null,
-        null,
-        null,
-        null,
-        null,
-        event.getTraceId(),
-        event.getEventKey(),
-        event.getAggregateType(),
-        governance.outbox().getProducerName(),
-        event.getEventType(),
-        fallbackTopic,
-        event.getEventKey(),
-        event.getCreatedAt(),
-        Map.of("payload", JsonUtils.fromJson(event.getPayloadJson(), Object.class)),
-        Map.of("aggregateId", event.getAggregateId()));
-    return mqMessagePublisher
-        .publish(MqMessage.of(fallbackTopic, event.getEventKey(), JsonUtils.toJson(message)))
-        .handleAsync(
+    String fallbackTopic = topicNamespace.topic(governance.outbox().getDefaultTopic());
+    Object payload = JsonUtils.fromJson(event.getPayloadJson(), Object.class);
+    Map<String, Object> payloadFields = Map.of("payload", payload);
+    BatchEventMessage message = BatchEventMessage.builder()
+        .schemaVersion("v1")
+        .messageType(BatchMessageType.OUTBOX_EVENT)
+        .tenantId(event.getTenantId())
+        .traceId(event.getTraceId())
+        .idempotencyKey(event.getEventKey())
+        .businessKey(event.getAggregateType())
+        .producer(governance.outbox().getProducerName())
+        .eventName(event.getEventType())
+        .topic(fallbackTopic)
+        .key(event.getEventKey())
+        .eventTime(event.getCreatedAt())
+        .payload(payloadFields)
+        .ext(Map.of("aggregateId", event.getAggregateId()))
+        .build();
+    String messageEventKey = event.getEventKey();
+    String messageJson = JsonUtils.toJson(message);
+    MqMessage mqMessage = MqMessage.of(fallbackTopic, messageEventKey, messageJson);
+    CompletableFuture<MqPublishResult> publishFuture = mqMessagePublisher.publish(mqMessage);
+    return publishFuture.handleAsync(
             (result, ex) -> {
               if (ex == null) {
                 recordDelivery(
@@ -224,13 +233,19 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
   /**
    * R6 P0-4：event_type → 专用 topic 映射。命中即走专用 topic，未命中走 fallback。
    *
-   * <p>当前覆盖：{@code verifier.failure.v1}（运维告警）与 {@code WORKFLOW_TERMINAL}（可靠血缘投递）。
+   * <p>当前覆盖：{@code verifier.failure.v1}（运维告警）与 Job/Workflow 终态事件（可靠血缘/业务通知投递）。
    */
   private static final Set<String> VERIFIER_FAILURE_EVENT_TYPES = Set.of("verifier.failure.v1");
 
   private static String resolveDedicatedTopic(String eventType) {
     if (eventType != null && VERIFIER_FAILURE_EVENT_TYPES.contains(eventType)) {
       return BatchTopics.VERIFIER_FAILURE_V1;
+    }
+    if ("WORKFLOW_LAUNCH".equals(eventType)) {
+      return BatchTopics.TRIGGER_LAUNCH_V1;
+    }
+    if ("JOB_TERMINAL".equals(eventType)) {
+      return BatchTopics.JOB_TERMINAL_V1;
     }
     if ("WORKFLOW_TERMINAL".equals(eventType)) {
       return BatchTopics.WORKFLOW_TERMINAL_V1;
@@ -270,7 +285,9 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
   private static String plannedPartitionKafkaKey(TaskDispatchMessage message) {
     Integer partitionNo = message.partitionNo();
     Integer partitionCount = message.partitionCount();
-    if (partitionNo == null || partitionCount == null || partitionNo <= 0 || partitionCount <= 1) {
+    boolean partitionMetadataIsInvalid =
+        EmptyChecks.isNull(partitionNo) || EmptyChecks.isNull(partitionCount) || partitionNo <= 0 || partitionCount <= 1;
+    if (partitionMetadataIsInvalid) {
       return null;
     }
     int targetPartition = Math.floorMod(partitionNo - 1, partitionCount);
@@ -297,7 +314,8 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
       return 0;
     }
     byte[] bytes = key == null ? new byte[0] : key.getBytes(StandardCharsets.UTF_8);
-    return Utils.toPositive(Utils.murmur2(bytes)) % partitionCount;
+    int positiveHash = Utils.toPositive(Utils.murmur2(bytes));
+    return positiveHash % partitionCount;
   }
 
   // #5-2: 敏感字段关键词，delivery log 中的 payload 需对这些字段脱敏
@@ -314,6 +332,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
     EventDeliveryLogEntity log = new EventDeliveryLogEntity();
     log.setTenantId(event.getTenantId());
     log.setOutboxEventId(event.getId());
+    log.setOutboxEventCreatedAt(event.getCreatedAt());
     log.setEventType(event.getEventType());
     log.setEventKey(event.getEventKey());
     log.setTargetTopic(targetTopic);
@@ -323,7 +342,9 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
     Map<String, Object> summary = new LinkedHashMap<>();
     summary.put("aggregateType", event.getAggregateType());
     summary.put("aggregateId", event.getAggregateId());
-    summary.put("payloadPreview", sanitizePayload(event.getPayloadJson()));
+    String payloadJson = event.getPayloadJson();
+    String payloadPreview = sanitizePayload(payloadJson);
+    summary.put("payloadPreview", payloadPreview);
     log.setDeliverySummary(JsonUtils.toJson(summary));
     if (error != null) {
       log.setErrorMessage(error.renderedMessage());
@@ -331,7 +352,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
       log.setErrorArgs(error.argsJson());
     }
     log.setTraceId(event.getTraceId());
-    eventDeliveryLogMapper.insert(log);
+    outboxChildRecordService.recordDelivery(log);
   }
 
   @SuppressWarnings("unchecked")

@@ -169,7 +169,7 @@ class ShellAtomicHandlerTest {
   }
 
   @Test
-  @DisplayName("timeout:/bin/sleep 10 + timeoutSeconds=1 → destroyForcibly + fail(timeout)")
+  @DisplayName("进程超过一秒超时限制时强制结束并返回超时失败")
   void shouldFailWithTimeout_whenProcessExceedsLimit() {
     assumeTrue(exists(SLEEP), "/bin/sleep 不存在,跳过");
 

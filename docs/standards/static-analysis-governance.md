@@ -35,7 +35,7 @@ CI 的实际覆盖以 `.github/workflows/` 为准，Ruleset 的 required 状态�
 
 当前生产范围内已发现 8 个 YAML IDE `noinspection`；未发现 Java `//NOSONAR` 或 `@SuppressFBWarnings` 用法。门禁现扫描生产 Java 的 `@SuppressWarnings`、`@SuppressFBWarnings`、Sonar 行级 `//NOSONAR`，以及模块 `src/main/resources` 下所有 YAML 的 `noinspection`。测试 fixture 的编译器抑制仍不进入生产基线。
 
-登记文件 `scripts/ci/java-suppression-baseline.tsv` 按“路径 + 标识 + 数量”阻止例外增长；该形式易审查，但无法识别同一文件中抑制位置的替换，也不能单独证明每个存量用法的理由仍成立。`docs/standards/java-suppression-registry.md` 记录规则级理由和退出条件；增量变更仍需人工审查具体代码位置。
+登记文件 `scripts/ci/baselines/java-suppression-baseline.tsv` 按“路径 + 标识 + 数量”阻止例外增长；该形式易审查，但无法识别同一文件中抑制位置的替换，也不能单独证明每个存量用法的理由仍成立。`docs/standards/java-suppression-registry.md` 记录规则级理由和退出条件；增量变更仍需人工审查具体代码位置。
 
 ### 新增或修改抑制项
 

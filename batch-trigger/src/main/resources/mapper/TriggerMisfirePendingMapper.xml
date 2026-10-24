@@ -6,6 +6,7 @@
                type="io.github.pinpols.batch.common.persistence.entity.TriggerMisfirePendingEntity">
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
+        <result column="workflow_definition_id" property="workflowDefinitionId"/>
         <result column="job_code" property="jobCode"/>
         <result column="scheduled_fire_time" property="scheduledFireTime"/>
         <result column="detected_at" property="detectedAt"/>
@@ -22,23 +23,38 @@
     <insert id="insertPendingWithStatus"
             useGeneratedKeys="true" keyProperty="entity.id" keyColumn="id">
         insert into batch.trigger_misfire_pending (
-            tenant_id, job_code, scheduled_fire_time,
+            tenant_id, workflow_definition_id, job_code, scheduled_fire_time,
             detected_at, status, expires_at, created_at, updated_at
         ) values (
-            #{entity.tenantId}, #{entity.jobCode}, #{entity.scheduledFireTime},
+            #{entity.tenantId}, #{entity.workflowDefinitionId}, #{entity.jobCode}, #{entity.scheduledFireTime},
             now(), #{initialStatus}, #{entity.expiresAt}, now(), now()
         )
+        on conflict (tenant_id, workflow_definition_id, scheduled_fire_time) do nothing
     </insert>
 
     <select id="selectById" resultMap="TriggerMisfirePendingResultMap">
         select * from batch.trigger_misfire_pending where id = #{id}
     </select>
 
+    <select id="selectByCatchUpRequest" resultMap="TriggerMisfirePendingResultMap">
+        select pending.*
+        from batch.trigger_misfire_pending pending
+        join batch.trigger_request request
+          on request.id = pending.catch_up_request_id
+         and request.tenant_id = pending.tenant_id
+         and request.workflow_definition_id = pending.workflow_definition_id
+        where pending.tenant_id = #{tenantId}
+          and request.tenant_id = #{tenantId}
+          and request.request_id = #{requestId}
+        order by pending.id desc
+        limit 1
+    </select>
+
     <select id="selectBySchedule" resultMap="TriggerMisfirePendingResultMap">
         select *
           from batch.trigger_misfire_pending
          where tenant_id = #{tenantId}
-           and job_code = #{jobCode}
+           and workflow_definition_id = #{workflowDefinitionId}
            and scheduled_fire_time = #{scheduledFireTime}
          order by id desc
          limit 1
@@ -79,6 +95,108 @@
                updated_at = now()
          where status = #{expectedStatus}
            and expires_at &lt; #{now}
+    </update>
+
+    <update id="expireAndCloseUnlaunchedWithStatuses">
+        with expired as (
+            update batch.trigger_misfire_pending p
+               set status = #{targetPendingStatus}, updated_at = now()
+             where p.status = 'PENDING'
+               and p.expires_at &lt;= #{now}
+               and (
+                   p.catch_up_request_id is null
+                   or exists (
+                       select 1 from batch.trigger_request tr
+                        where tr.id = p.catch_up_request_id
+                          and tr.tenant_id = p.tenant_id
+                          and tr.request_status = 'ACCEPTED'
+                   )
+               )
+            returning p.tenant_id, p.workflow_definition_id, p.scheduled_fire_time, p.catch_up_request_id
+        ), rejected_request as (
+            update batch.trigger_request tr
+               set request_status = #{targetRequestStatus}, updated_at = now()
+              from expired e
+             where tr.id = e.catch_up_request_id
+               and tr.tenant_id = e.tenant_id
+               and tr.request_status = 'ACCEPTED'
+            returning tr.tenant_id, tr.request_id
+        )
+        update batch.scheduled_occurrence so
+           set occurrence_status = #{targetOccurrenceStatus}, updated_at = now()
+          from expired e
+         where so.tenant_id = e.tenant_id
+           and so.workflow_definition_id = e.workflow_definition_id
+           and so.scheduled_fire_time = e.scheduled_fire_time
+           and so.occurrence_status = 'MISFIRE_PENDING'
+    </update>
+
+    <update id="rejectAndCloseCentrallyRejectedWithStatuses">
+        with rejected as (
+            update batch.trigger_misfire_pending p
+               set status = #{targetPendingStatus},
+                   approved_by = a.approver_id,
+                   approved_at = coalesce(a.updated_at, now()),
+                   rejection_reason = coalesce(a.approval_reason, 'Rejected by central approval'),
+                   updated_at = now()
+              from batch.trigger_request tr
+              cross join batch.approval_command a
+             where a.tenant_id = tr.tenant_id
+               and a.target_id = tr.request_id
+               and a.approval_type = 'CATCH_UP'
+               and a.target_type = 'CATCH_UP'
+               and a.approval_status = 'REJECTED'
+               and p.tenant_id = tr.tenant_id
+               and p.catch_up_request_id = tr.id
+               and p.status = 'PENDING'
+               and tr.request_status = 'ACCEPTED'
+            returning p.tenant_id, p.workflow_definition_id, p.scheduled_fire_time, p.catch_up_request_id
+        ), rejected_request as (
+            update batch.trigger_request tr
+               set request_status = #{targetRequestStatus}, updated_at = now()
+              from rejected r
+             where tr.id = r.catch_up_request_id
+               and tr.tenant_id = r.tenant_id
+               and tr.request_status = 'ACCEPTED'
+            returning tr.tenant_id, tr.request_id
+        )
+        update batch.scheduled_occurrence so
+           set occurrence_status = #{targetOccurrenceStatus}, updated_at = now()
+          from rejected r
+         where so.tenant_id = r.tenant_id
+           and so.workflow_definition_id = r.workflow_definition_id
+           and so.scheduled_fire_time = r.scheduled_fire_time
+           and so.occurrence_status = 'MISFIRE_PENDING'
+    </update>
+
+    <update id="approveCentrallyApprovedWithStatuses">
+        with approved as (
+            update batch.trigger_misfire_pending p
+               set status = #{targetPendingStatus},
+                   approved_by = a.approver_id,
+                   approved_at = coalesce(a.approved_at, a.updated_at, now()),
+                   updated_at = now()
+              from batch.trigger_request tr
+              join batch.approval_command a
+                on a.tenant_id = tr.tenant_id
+               and a.target_id = tr.request_id
+               and a.approval_type = 'CATCH_UP'
+               and a.target_type = 'CATCH_UP'
+               and a.approval_status in ('APPROVED', 'EXECUTED')
+             where p.tenant_id = tr.tenant_id
+               and p.catch_up_request_id = tr.id
+               and p.status = 'PENDING'
+            returning p.tenant_id, p.workflow_definition_id, p.scheduled_fire_time, tr.request_id
+        )
+        update batch.scheduled_occurrence so
+           set occurrence_status = #{targetOccurrenceStatus},
+               request_id = coalesce(a.request_id, so.request_id),
+               updated_at = now()
+          from approved a
+         where so.tenant_id = a.tenant_id
+           and so.workflow_definition_id = a.workflow_definition_id
+           and so.scheduled_fire_time = a.scheduled_fire_time
+           and so.occurrence_status = 'MISFIRE_PENDING'
     </update>
 
 </mapper>

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.audit.command;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 public record AiAuditCommand(
@@ -18,6 +19,6 @@ public record AiAuditCommand(
     String refusalReason,
     Integer promptTokens,
     Integer completionTokens,
-    java.math.BigDecimal estimatedCostUsd,
+    BigDecimal estimatedCostUsd,
     String costStatus,
     Instant createdAt) {}

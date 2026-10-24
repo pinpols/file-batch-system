@@ -1,56 +1,24 @@
-# 归档目录（archive/）— 历史快照，不再维护
+# 历史归档索引
 
-> **不要**改这里的文件。当前权威版本在 `docs/{analysis,architecture,design,runbook,testing}/` 主干目录。
+归档按当前文档职责分类，有实际材料才建立对应子目录。历史结论不代表当前实现或当前待办；规则见 [文档治理规范](../standards/document-governance.md)，当前路径见 [文档路由](../standards/document-routing-guide.md)。
 
-## 命名约定
-
-| 形态 | 用途 | 例 |
+| 归档目录 | 放什么 | 当前权威入口 |
 |---|---|---|
-| `<topic>-YYYY-MM-DD.md` | 单点快照（按 git 首次提交日期） | `system-deep-analysis-2026-04-09.md` |
-| `<topic>-YYYY-MM-DD-DD.md` | 跨天合并快照（起讫日） | `historical-test-reports-2026-04-09-10.md` |
-| `<topic>-vN.md` | 多版本归档（v 表征版本，不加日期） | `deep-issue-analysis-v1.md` ~ `-v3.md` |
+| [architecture/](architecture/README.md) | 历史架构与边界资产 | [当前目录](../architecture/README.md) |
+| [audit/](audit/README.md) | 历史系统/专项审计与评估 | [当前目录](../audit/README.md) |
+| [design/](design/README.md) | 历史业务设计与方案对比 | [当前目录](../design/README.md) |
+| [plans/](plans/README.md) | 历史阶段方案、路线与台账快照 | [当前目录](../plans/README.md) |
+| [review/](review/README.md) | 历史代码与差异审查 | [当前目录](../review/README.md) |
+| [runbook/](runbook/README.md) | 已被现行手册取代的操作流程 | [当前目录](../runbook/README.md) |
+| [standards/](standards/README.md) | 已被现行规范吸收的规则与范围裁决 | [当前目录](../standards/README.md) |
+| [stats/](stats/README.md) | 历史统计快照 | [当前目录](../stats/README.md) |
+| [testing/](testing/README.md) | 历史测试方法与覆盖矩阵 | [当前目录](../testing/README.md) |
+| [verifications/](verifications/README.md) | 历史实测、验收和兼容性证据 | [当前目录](../verifications/README.md) |
 
-## 子目录分类
+## 归档命名与维护
 
-| 目录 | 收纳 |
-|---|---|
-| `analysis/` | 分析报告 / bug 路线图 / engineering backlog / 深度分析多版本 |
-| `architecture/` | 架构 audit / 命名重构候选 / 历史 scalability 评估 / design gap |
-| `backlog/` | 已实现 / 已替代 / 已裁定暂不继续滚动维护的 backlog 与施工方案 |
-| `design/` | mega 设计文档历史快照 |
-| `review/` | 历史代码审查快照 |
-| `runbook/` | 已废弃或已被新 SOP 替代的运维流程 |
-| `testing/` | 历史测试报告 + 测试 plan 旧版 + 跑测产物 |
-
-## 当前权威 vs 归档对照
-
-| 主题 | 当前权威 | 归档历史 |
-|---|---|---|
-| 系统流程 | `architecture/system-flow-overview.md` | — |
-| 设计说明 | `design/` 14 个章节文件 + `design/README.md` 索引 | `archive/design/system-design-2026-03-21.md`（**存根**：20 章+95 子节标题供锚点兼容，正文移到主干 / git 历史）+ [`archive/design/mega-chapter-map.md`](design/mega-chapter-map.md)（mega 20 章 → 当前位置导航） |
-| 扩展性评估 | `architecture/scalability-assessment.md`（2026-04-25）| `archive/architecture/scalability-ha-assessment-2026-03-26.md`（初版 + 6 项改造完成快照）|
-| 深度分析 | `analysis/deep-issue-analysis.md`（2026-04-23 最新）| `archive/analysis/deep-issue-analysis-v1.md`/`-v2`/`-v3`（4-15 / 4-17 / 4-20）|
-| 修复报告 | `analysis/fix-report.md`（2026-04-22 最新）| `archive/analysis/fix-report-v1`/`-v2`/`-v3` |
-| 项目评估 | `analysis/project-assessment.md`（2026-04-30，已去日期）| `archive/analysis/project-assessment-2026-04-29.md`（v1 历史基线）|
-| ADR 12/21..27 范围决策 | docs/agent-baseline.md "ADR 实施范围纪律" 章（权威）| `archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md`（原 fold 来源）|
-| PG schema 多租隔离决策 | docs/agent-baseline.md "多租隔离" 章（权威）+ V82-V85 落地 | `archive/analysis/pg-schema-audit-2026-05-03.md` |
-| 越界审计 | `analysis/system-scope-boundary.md`（架构基准）| `archive/analysis/system-scope-boundary-audit-2026-05-06.md`（一次性代码审计快照）|
-| 时区一致性 | docs/agent-baseline.md "时区策略" 章（权威）| `archive/analysis/batch-system-timezone-consistency-check-2026-05-05.md` |
-| 业界对标 benchmark | `architecture/scalability-assessment.md` 等吸收结论 | `archive/analysis/{orchestrator,worker,file-io,batch-day-instantiation}-vs-industry-2026-05-03.md` |
-| Sonar 清理 | git commit history（2026-05-02 已闭环）| `archive/analysis/sonar-cleanup-2026-05-02.md` |
-| 持久层与测试架构 | ADR-001 + `design/` 持久层章节 | `archive/analysis/persistence-and-test-architecture-2026-05-02.md` |
-| Worker ADR backlog 优先级 | docs/agent-baseline.md "ADR 实施范围纪律" + `architecture/adr/` 各 ADR 文档 | `archive/analysis/worker-adr-backlog-priority-2026-05-03.md`（时效性 priority 表）|
-| 测试计划 | `testing/full-project-test-plan.md` | `archive/testing/test-plan-2026-03-28.md` |
-| 测试报告 | `testing/load-test-report.md` | `archive/testing/historical-test-reports-2026-04-09-10.md` |
-| E2E 覆盖矩阵 | `testing/coverage-gap-analysis.md`（注明核查日期） | `archive/testing/e2e-coverage-2026-05-03.md`（历史场景快照） |
-| 发布流程 | `runbook/releasing.md` | `archive/runbook/release-process-2026-05-22.md`（已废弃 GitOps 蓝图） |
-| Trigger 异步 launch 灰度 | `runbook/trigger-operations.md` | `archive/runbook/trigger-async-launch-rollout-2026-05-02.md`（旧开关和同步路径已删除） |
-| 代码审查 | `review/` 当前保留近期仍有参考价值的快照 | `archive/review/` 历史快照 |
-
-## 2026-08-21 归档批次
-
-本批只移动以下三类文件，不修改原文内容：
-
-1. `analysis/` 下已 fold 到滚动文档或只保留历史证据的一次性 audit / review / 升级评估。
-2. `backlog/` 下已实现、已替代，或由当前容量/验证文档接管的施工方案。
-3. `runbook/` 下文件名和正文均已标明废弃的历史发布流程。
+- 一次性材料统一 `<topic>-YYYY-MM-DD.md`；多版本为 `<topic>-vN-YYYY-MM-DD.md`；跨日为 `<topic>-YYYY-MM-DD-to-YYYY-MM-DD.md`。
+- 文件日期采用原始基线、审查或执行日期；缺失时查原始 Git 记录，不把归档日当作重新审计日期。
+- 关联 ADR 的旧方案、探索与优先级材料以业务主题命名，关联编号写在正文。正式决策入口继续在当前 ADR 索引中维护状态。
+- 索引与迁移链接继续维护；历史结论不追溯改写。每个子目录 README 维护全部同级文档的跳转和用途。
+- 原 analysis/backlog 分桶已按方案、审计、验证、设计等职责拆分；统计归档统一在 stats/，不再另设 docs/archive/stats/。

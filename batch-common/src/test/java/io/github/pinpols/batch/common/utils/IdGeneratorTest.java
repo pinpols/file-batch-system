@@ -2,6 +2,10 @@ package io.github.pinpols.batch.common.utils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -42,7 +46,7 @@ class IdGeneratorTest {
   @Test
   @DisplayName("批量业务单号: 同一批次共享时间戳, 各条后缀互不相同")
   void shouldShareTimestampAndDifferInSuffix_whenGeneratingBusinessNoBatch() {
-    java.util.List<String> ids = IdGenerator.newBusinessNoBatch("PART", 5);
+    List<String> ids = IdGenerator.newBusinessNoBatch("PART", 5);
     assertThat(ids).hasSize(5);
     String ts0 = ids.get(0).split("-")[1];
     for (String id : ids) {
@@ -55,7 +59,7 @@ class IdGeneratorTest {
   @Test
   @DisplayName("批量业务单号: 数量非正时抛出非法参数异常")
   void shouldRejectNonPositiveCount_whenGeneratingBusinessNoBatch() {
-    org.assertj.core.api.Assertions.assertThatThrownBy(() -> IdGenerator.newBusinessNoBatch("X", 0))
+    Assertions.assertThatThrownBy(() -> IdGenerator.newBusinessNoBatch("X", 0))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining(">= 1");
   }
@@ -71,7 +75,7 @@ class IdGeneratorTest {
   @Test
   @DisplayName("幂等键生成: 连续生成一千个互不重复")
   void shouldBeUniqueAcrossManyRounds_whenGeneratingIdempotencyKey() {
-    java.util.Set<String> keys = new java.util.HashSet<>();
+    Set<String> keys = new HashSet<>();
     for (int i = 0; i < 1000; i++) {
       keys.add(IdGenerator.newIdempotencyKey());
     }

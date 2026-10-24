@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：提交前轻量门禁：只对暂存区命中的文件域执行对应检查。
+# 用法：在仓库根目录执行 bash scripts/local/pre-commit-checks.sh；参数与前置环境见下方说明及所属 README。
 # 提交前轻量门禁：只对暂存区命中的文件域执行对应检查。
 set -euo pipefail
 
@@ -84,7 +86,7 @@ for file in "${staged_files[@]}"; do
     && env_governance_changed=1
   [[ "$file" == pom.xml || "$file" == */pom.xml ]] && maven_descriptor_changed=1
   [[ "$file" == helm/* ]] && helm_changed=1
-  [[ "$file" == docs/test-data/test-full-coverage-import-suite/*.xlsx \
+  [[ "$file" == test-data/tenant-config-packages/*.xlsx \
     || "$file" == batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelSchema.java \
     || "$file" == scripts/fix-fixture-xlsx.py \
     || "$file" == scripts/local/append-tenant-coverage.py \
@@ -263,6 +265,11 @@ if ((scripts_changed == 1)); then
   gate_run PRE_COMMIT_CI_QUALITY_GUARD_TESTS "CI 质量治理门禁测试" \
     "$PYTHON_BIN" -m unittest \
     scripts/ci/tests/test_check_github_action_pinning.py \
+    scripts/ci/tests/test_check_script_governance.py \
+    scripts/ci/tests/test_check_docs_structure.py \
+    scripts/ci/tests/test_document_naming_policy.py \
+    scripts/ci/tests/test_sql_config_boundaries.py \
+    scripts/ci/tests/test_detect_change_scope.py \
     scripts/ci/tests/test_check_flaky_test_governance.py \
     scripts/ci/tests/test_check_soft_gate_governance.py \
     scripts/ci/tests/test_check_diff_coverage.py \
@@ -271,7 +278,10 @@ if ((scripts_changed == 1)); then
     scripts/ci/tests/test_console_api_readiness.py \
     scripts/ci/tests/test_pre_push_module_selection.py \
     scripts/ci/tests/test_report_ci_quality_trends.py \
-    scripts/ci/tests/test_sdk_orchestrator_e2e_scripts.py
+    scripts/ci/tests/test_sdk_orchestrator_e2e_scripts.py \
+    scripts/ci/tests/test_control_plane_benchmark_cleanup.py \
+    scripts/ci/tests/test_control_plane_mixed_pressure.py \
+    scripts/ci/tests/test_dr_drill_rls_rebuild.py
   gate_run PRE_COMMIT_TESTCONTAINERS_REUSE_LABEL "Testcontainers 复用标签判定" \
     "$PYTHON_BIN" scripts/ci/check-testcontainers-reuse-label.py
   gate_run PRE_COMMIT_SCHEMA_GOVERNANCE_ASSETS "数据库结构治理资产" \

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：仓库文本 UTF-8 编码。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-utf8-encoding.py；参数与前置环境见下方说明及所属 README。
 """检查仓库文本文件编码为 UTF-8；仅允许登记过的 UTF-8 BOM fixture。"""
 
 from __future__ import annotations

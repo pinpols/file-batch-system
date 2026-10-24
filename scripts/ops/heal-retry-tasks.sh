@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：自愈：按指定条件重放 job_task（任务重放/重试回放）。
+# 用法：在仓库根目录执行 bash scripts/ops/heal-retry-tasks.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # heal-retry-tasks.sh - 自愈：按指定条件重放 job_task（任务重放/重试回放）
 #
@@ -13,7 +15,7 @@
 #
 #   # 实际执行（建议限定租户）
 #   BATCH_HEAL_RETRY_DRY_RUN=false \
-#     BATCH_ORCHESTRATOR_URL=http://localhost:18082 \
+#     BATCH_INTERNAL_SECRET="$SECRET" \
 #     BATCH_HEAL_RETRY_TENANT=tenant-001 \
 #     bash scripts/ops/heal-retry-tasks.sh
 #
@@ -24,6 +26,7 @@
 #   BATCH_HEAL_RETRY_BATCH_SIZE          单批最大数量（默认 50）
 #   BATCH_HEAL_RETRY_SLEEP_MS           批次间休眠毫秒（默认 500）
 #   BATCH_HEAL_RETRY_REASON             仅用于 dry-run 日志（可空）
+#   BATCH_INTERNAL_SECRET               实际执行所需的非默认内部服务密钥
 #
 # =========================================================
 
@@ -41,8 +44,6 @@ require_tools() {
     fi
   done
 }
-
-BATCH_ORCHESTRATOR_TOKEN="${BATCH_ORCHESTRATOR_TOKEN:-}"
 
 BATCH_HEAL_RETRY_DRY_RUN="${BATCH_HEAL_RETRY_DRY_RUN:-true}"
 BATCH_HEAL_RETRY_TENANT="${BATCH_HEAL_RETRY_TENANT:-}"
@@ -65,14 +66,9 @@ orchestrator_post() {
   local path="$1"
   local body="$2"
 
-  local auth_header=()
-  if [[ -n "${BATCH_ORCHESTRATOR_TOKEN}" ]]; then
-    auth_header=(-H "Authorization: Bearer ${BATCH_ORCHESTRATOR_TOKEN}")
-  fi
-
   curl -fsS -X POST \
     -H "Content-Type: application/json" \
-    "${auth_header[@]}" \
+    -H "X-Internal-Secret: ${BATCH_INTERNAL_SECRET}" \
     -d "${body}" \
     "${BATCH_ORCHESTRATOR_URL%/}${path}"
 }
@@ -86,10 +82,20 @@ sleep_ms() {
 
 require_tools
 
+case "$BATCH_HEAL_RETRY_DRY_RUN" in
+  true) ;;
+  false) batch_require_internal_secret ;;
+  *) echo "ERROR: BATCH_HEAL_RETRY_DRY_RUN must be true or false" >&2; exit 2 ;;
+esac
+
 log "heal-retry-tasks: DRY_RUN=${BATCH_HEAL_RETRY_DRY_RUN}"
 log "Filter: task_status=${BATCH_HEAL_RETRY_TASK_STATUS} tenant=${BATCH_HEAL_RETRY_TENANT:-<all>}"
 
-total="$(psql_file -f "$OPS_SQL_DIR/heal-retry-tasks-count.sql" 2>/dev/null)" || total=0
+total="$(psql_file -f "$OPS_SQL_DIR/heal-retry-tasks-count.sql")" || {
+  query_status=$?
+  log "ERROR: cannot count job_task candidates"
+  exit "$query_status"
+}
 
 if [[ "${total}" -eq 0 ]]; then
   log "No job_task match filter — nothing to heal"
@@ -106,9 +112,10 @@ while true; do
   batch="$(psql_file \
       -v batch_size="$BATCH_HEAL_RETRY_BATCH_SIZE" \
       -v batch_offset="$offset" \
-      -f "$OPS_SQL_DIR/heal-retry-tasks-batch.sql" 2>/dev/null)" || {
+      -f "$OPS_SQL_DIR/heal-retry-tasks-batch.sql")" || {
+      query_status=$?
       log "ERROR: cannot query job_task at offset ${offset}"
-      break
+      exit "$query_status"
     }
 
   [[ -z "${batch}" ]] && break

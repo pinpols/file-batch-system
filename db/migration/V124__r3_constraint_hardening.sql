@@ -19,6 +19,7 @@
 
 -- ─── 1. job_partition.idempotency_key UNIQUE NULL bypass (R3-P0-1) ──────────
 -- 原 UNIQUE 在 idempotency_key=NULL 的行上失效，CLAIM 防重失效。改 partial unique。
+
 ALTER TABLE batch.job_partition DROP CONSTRAINT IF EXISTS uk_job_partition_idempotency_key;
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_job_partition_idempotency_key
@@ -26,10 +27,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_job_partition_idempotency_key
     WHERE idempotency_key IS NOT NULL;
 
 -- ─── 2. file_record (tenant, checksum, path) UNIQUE NULL bypass (R3-P0-2) ───
+
 -- checksum_value NULL（checksum_type=NONE）的行可无限重复。
+
 ALTER TABLE batch.file_record DROP CONSTRAINT IF EXISTS uk_file_record_tenant_checksum_path;
 
 -- 有 checksum 的行保留原唯一性
+
 CREATE UNIQUE INDEX IF NOT EXISTS uk_file_record_with_checksum
     ON batch.file_record (tenant_id, checksum_value, storage_path)
     WHERE checksum_value IS NOT NULL;
@@ -38,8 +42,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_file_record_with_checksum
 -- (tenant_id, storage_path) 重复 file_record 行(全部 checksum_value IS NULL),
 -- 会让下方 UNIQUE INDEX 创建失败。每组按 id 保留最新(最大)一行,删 id 更小的旧副本。
 -- 干净库下两段都是 no-op(EXISTS / JOIN 0 命中)。
+
 --
 -- (1) 把指向"将删副本"的 file_audit_log 重指到每组保留的 winner id,避免 FK 阻挡
+
 UPDATE batch.file_audit_log fal
 SET file_id = winner.winner_id
 FROM (
@@ -61,6 +67,7 @@ FROM (
 WHERE fal.file_id = winner.loser_id;
 
 -- (2) 删 file_record 重复行(保留每组 id 最大者)
+
 DELETE FROM batch.file_record a
 USING batch.file_record b
 WHERE a.checksum_value IS NULL
@@ -70,44 +77,53 @@ WHERE a.checksum_value IS NULL
   AND a.id < b.id;
 
 -- 无 checksum 时退化为 (tenant, path) 唯一，至少防同路径重复
+
 CREATE UNIQUE INDEX IF NOT EXISTS uk_file_record_no_checksum
     ON batch.file_record (tenant_id, storage_path)
     WHERE checksum_value IS NULL;
 
 -- ─── 3. job_task.uk_job_task_partition_seq NULL bypass (R3-P1-7) ────────────
 -- job_partition_id=NULL 的 GENERAL job 可重复同 task_seq。
+
 ALTER TABLE batch.job_task DROP CONSTRAINT IF EXISTS uk_job_task_partition_seq;
 
 -- 有 partition_id 的行保留 (partition_id, seq) 唯一
+
 CREATE UNIQUE INDEX IF NOT EXISTS uk_job_task_partition_seq
     ON batch.job_task (job_partition_id, task_seq)
     WHERE job_partition_id IS NOT NULL;
 
 -- 无 partition_id 的行用 (job_instance_id, seq) 兜底
+
 CREATE UNIQUE INDEX IF NOT EXISTS uk_job_task_no_partition_seq
     ON batch.job_task (job_instance_id, task_seq)
     WHERE job_partition_id IS NULL;
 
 -- ─── 4. pipeline_instance 无业务 UNIQUE (R3-P1-8) ──────────────────────────
 -- 同 (tenant, job_code, file_id) 可重复 CREATED；至少强制 related_job_instance_id 唯一。
+
 CREATE UNIQUE INDEX IF NOT EXISTS uk_pipeline_instance_job_instance
     ON batch.pipeline_instance (related_job_instance_id)
     WHERE related_job_instance_id IS NOT NULL;
 
 -- ─── 5. workflow_run 业务 UNIQUE + 索引 (R3-P1-4) ──────────────────────────
 -- 同 (tenant, workflow_def, biz_date) 不应同时有多个非终态 run。
+
 CREATE UNIQUE INDEX IF NOT EXISTS uk_workflow_run_active
     ON batch.workflow_run (tenant_id, workflow_definition_id, biz_date)
     WHERE run_status IN ('CREATED', 'RUNNING');
 
 -- 高频 lookup 索引（按 def + biz_date 查具体 run）
+
 CREATE INDEX IF NOT EXISTS idx_workflow_run_def_bizdate
     ON batch.workflow_run (tenant_id, workflow_definition_id, biz_date);
 
 -- ─── 6. batch_day_replay_session 枚举 CHECK (R3-P1-5) ──────────────────────
+
 -- result_policy / config_version_policy 直写 DB 非法值会进未定义状态机分支。
 -- 用 NOT VALID 让存量数据不阻塞；运维 backfill 后 VALIDATE CONSTRAINT。
 -- PG 不支持 ADD CONSTRAINT IF NOT EXISTS for CHECK/FK；用 DO 块保证 idempotent（Flyway 重跑或 docker test 环境重复迁移不挂）。
+
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_replay_session_result_policy') THEN
@@ -133,6 +149,7 @@ BEGIN
 END $$;
 
 -- ─── 7. result_version.dq_gate_status CHECK (R3-P1-6) ──────────────────────
+
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_result_version_dq_gate_status') THEN
@@ -152,6 +169,7 @@ END $$;
 -- ─── 8. data_quality_check FK + updated_at (R3-P0-4) ────────────────────────
 -- rule_id 不再悬空；rule 删除时 SET NULL（保留审计行但解除引用）。
 -- 加 updated_at 让 archive retention scheduler 有 timestamp 决策依据。
+
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_dq_check_rule_id') THEN
@@ -169,6 +187,7 @@ ALTER TABLE archive.data_quality_check_archive
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- ─── 9. calendar_holiday.scope=GROUP 强制 group_code (R3-P2-7) ──────────────
+
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_calendar_holiday_group_code_required') THEN

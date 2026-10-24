@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.rbac.support;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -103,9 +104,9 @@ public class ConsoleSessionRegistry {
         sessionStore.expire(key, sessionStateTtl());
       } catch (DataAccessException expireEx) {
         // TTL 刷失败不影响版本号正确性，仅可能让 key 提前 / 延后到期。记 warn 不抛。
+        String causeSummary = SwallowedExceptionLogger.summary(expireEx);
         log.warn(
-            "Redis expire() failed for session key (value already incremented): {}",
-            SwallowedExceptionLogger.summary(expireEx));
+            "Redis expire() failed for session key (value already incremented): {}", causeSummary);
       }
       return v;
     } catch (DataAccessException ex) {
@@ -114,9 +115,10 @@ public class ConsoleSessionRegistry {
       Long current = localMirror.getIfPresent(key);
       long v = current == null ? 1L : current + 1L;
       localMirror.put(key, v);
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
       log.warn(
           "Redis unavailable during nextSessionVersion; falling back to local mirror: {}",
-          SwallowedExceptionLogger.summary(ex));
+          causeSummary);
       return v;
     }
   }
@@ -143,10 +145,11 @@ public class ConsoleSessionRegistry {
       }
     } catch (DataAccessException ex) {
       Long cached = localMirror.getIfPresent(key);
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
       log.warn(
           "Redis unavailable during currentSessionVersion; local mirror={}, cause={}",
           cached,
-          SwallowedExceptionLogger.summary(ex));
+          causeSummary);
       return cached == null ? 0L : cached;
     }
   }
@@ -157,9 +160,8 @@ public class ConsoleSessionRegistry {
     try {
       sessionStore.delete(key);
     } catch (DataAccessException ex) {
-      log.warn(
-          "Redis unavailable during invalidateSession; local-only eviction: {}",
-          SwallowedExceptionLogger.summary(ex));
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
+      log.warn("Redis unavailable during invalidateSession; local-only eviction: {}", causeSummary);
     }
     localMirror.invalidate(key);
   }
@@ -173,9 +175,8 @@ public class ConsoleSessionRegistry {
       return current > 0L && current == sessionVersion;
     } catch (DataAccessException ex) {
       // 非预期场景（currentSessionVersion 自身已回退），额外 fail-open
-      log.warn(
-          "Unexpected Redis failure in isCurrentSession; fail-open: {}",
-          SwallowedExceptionLogger.summary(ex));
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
+      log.warn("Unexpected Redis failure in isCurrentSession; fail-open: {}", causeSummary);
       return true;
     }
   }
@@ -194,6 +195,10 @@ public class ConsoleSessionRegistry {
   }
 
   private String normalize(String value) {
-    return value == null ? "unknown" : value.trim().toLowerCase(Locale.ROOT);
+    if (EmptyChecks.isNull(value)) {
+      return "unknown";
+    }
+    String trimmedValue = value.trim();
+    return trimmedValue.toLowerCase(Locale.ROOT);
   }
 }

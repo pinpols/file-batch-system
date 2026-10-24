@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.errors.WakeupException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -130,7 +131,7 @@ class KafkaTaskConsumerCrashTest {
     // poll 阻塞短时,close() 调 wakeup → 第二次 poll 抛 WakeupException
     doAnswer(inv -> {
           Thread.sleep(50);
-          return org.apache.kafka.clients.consumer.ConsumerRecords.<String, byte[]>empty();
+          return ConsumerRecords.<String, byte[]>empty();
         })
         .when(consumer)
         .poll(any());

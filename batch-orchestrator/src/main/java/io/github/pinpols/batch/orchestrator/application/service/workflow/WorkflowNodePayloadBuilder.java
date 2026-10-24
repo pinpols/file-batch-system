@@ -2,6 +2,9 @@ package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.enums.SystemPipelineCatalog;
+import io.github.pinpols.batch.common.enums.SystemPipelineDefinition;
+import io.github.pinpols.batch.common.enums.SystemPipelineTaskKeys;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
@@ -49,13 +52,14 @@ public class WorkflowNodePayloadBuilder {
   private final FileRecordLookupMapper fileRecordLookupMapper;
 
   /**
-   * 组装下游节点的 task payload。分层优先级(后写覆盖前写):
+   * 组装下游节点的 task payload。各来源的合并规则:
    *
    * <ol>
    *   <li>workflow 实例的 {@code sourcePayload}(整条链路共享的根 params)
    *   <li>上游兄弟分区产出({@code job_partition.output_summary} 里带的 {@code fileId} 等),保证 SETTLE 生成的
    *       file_record id 自动流向 DISPATCH 节点,而不是靠每条 workflow 手工声明
-   *   <li>当前节点的 {@code workflow_node.node_params}(节点级静态配置,如 DISPATCH 的 {@code channelCode})
+   *   <li>当前节点的 {@code workflow_node.node_params}(节点级默认配置,如 DISPATCH 的 {@code channelCode})
+   *       仅补齐已有 payload 中缺失的键，显式根参数优先。
    *   <li>workflow 元数据({@code workflowNodeCode / workflowNodeType / targetJobCode}),供 worker
    *       侧用作上下文日志、幂等键计算
    * </ol>
@@ -92,6 +96,24 @@ public class WorkflowNodePayloadBuilder {
     return JsonUtils.toJson(payload);
   }
 
+  /** 将 Worker 选定的系统 Pipeline 契约固定到任务中，以便确定性重放。 */
+  String pinSystemPipelineIdentity(String taskPayload, String workerType) {
+    SystemPipelineDefinition definition =
+        SystemPipelineCatalog.forJobType(workerType).orElse(null);
+    if (EmptyChecks.isNull(definition)) {
+      return taskPayload;
+    }
+    Map<String, Object> parsedPayload = parsePayloadMap(taskPayload);
+    Map<String, Object> payload = new LinkedHashMap<>(parsedPayload);
+    if (payload.containsKey(SystemPipelineTaskKeys.CODE)
+        || payload.containsKey(SystemPipelineTaskKeys.VERSION)) {
+      return taskPayload;
+    }
+    payload.put(SystemPipelineTaskKeys.CODE, definition.code());
+    payload.put(SystemPipelineTaskKeys.VERSION, definition.semanticVersion());
+    return JsonUtils.toJson(payload);
+  }
+
   /**
    * 扫描当前 workflow_run 同一 job_instance 下已 SUCCESS 的兄弟分区的 {@code output_summary},把 {@code fileId} /
    * {@code fileCode} 这类跨节点常用字段挑出来写入 payload。保守做法:只挑已知少量字段(避免把 partition 内部诊断字段污染到 worker
@@ -105,8 +127,10 @@ public class WorkflowNodePayloadBuilder {
     if (EmptyChecks.isNull(jobInstance) || EmptyChecks.isNull(jobInstance.getId())) {
       return;
     }
-    List<JobPartitionEntity> siblings = jobMappers.jobPartitionMapper.selectByQuery(
-        JobPartitionQuery.ofJobInstance(jobInstance.getTenantId(), jobInstance.getId()));
+    JobPartitionQuery siblingPartitionQuery =
+        JobPartitionQuery.ofJobInstance(jobInstance.getTenantId(), jobInstance.getId());
+    List<JobPartitionEntity> siblings =
+        jobMappers.jobPartitionMapper.selectByQuery(siblingPartitionQuery);
     if (EmptyChecks.isEmpty(siblings)) {
       return;
     }
@@ -145,7 +169,8 @@ public class WorkflowNodePayloadBuilder {
       return;
     }
     try {
-      Object outputObj = JsonUtils.fromJson(latestSuccess.getOutputSummary(), Object.class);
+      String outputSummary = latestSuccess.getOutputSummary();
+      Object outputObj = JsonUtils.fromJson(outputSummary, Object.class);
       if (!(outputObj instanceof Map<?, ?> outMap)) {
         return;
       }
@@ -237,7 +262,8 @@ public class WorkflowNodePayloadBuilder {
     try {
       Object parsed = JsonUtils.fromJson(raw, Object.class);
       if (parsed instanceof Map<?, ?> map) {
-        Object resolved = workflowParamResolver.resolve(map, loadWorkflowRunContext(workflowRun));
+        WorkflowRunContext workflowRunContext = loadWorkflowRunContext(workflowRun);
+        Object resolved = workflowParamResolver.resolve(map, workflowRunContext);
         if (resolved instanceof Map<?, ?> resolvedMap) {
           ((Map<String, Object>) resolvedMap).forEach(payload::putIfAbsent);
         }
@@ -317,7 +343,8 @@ public class WorkflowNodePayloadBuilder {
    * TASK 节点派发前决定展开几个并行分区。
    */
   public List<Object> resolveFanOutItems(String itemsExpr, WorkflowRunEntity workflowRun) {
-    Object resolved = workflowParamResolver.resolve(itemsExpr, loadWorkflowRunContext(workflowRun));
+    WorkflowRunContext workflowRunContext = loadWorkflowRunContext(workflowRun);
+    Object resolved = workflowParamResolver.resolve(itemsExpr, workflowRunContext);
     if (resolved instanceof List<?> list) {
       return List.copyOf(list);
     }

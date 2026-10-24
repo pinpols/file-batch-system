@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：为 Sonar CSV 报告补充治理范围与候选标记。
+# 用法：在仓库根目录执行 python3 scripts/dev/annotate-sonar-report.py；参数与前置环境见下方说明及所属 README。
 """为 reports/sonar/latest/sonar-report.csv 增加两列：
 
 - action — FIXED / ANNOTATION / DEFERRED / SKIP_FP / SKIP_SPI / SKIP_DOMAIN /
@@ -30,7 +32,7 @@ FIXED = {
     ("java:S2699", "ProcessMetricsTest.java", "13"):
         ("FIXED", "noop 路径包成 assertThatCode().doesNotThrowAnyException()"),
 
-    # ── BLOCKER S3516 ──
+    # S3516 阻断级问题。
     ("java:S3516", "ConsoleWebhookService.java", "105"):
         ("FIXED", "删除恒等 if normalized==\"*\" return 死分支"),
 
@@ -54,7 +56,7 @@ FIXED = {
     ("java:S112", "TriggerManagementController.java", "109"):
         ("FIXED", "throws Exception 收窄到 throws SchedulerException"),
 
-    # ── S3776 Tier 1（CC ≥ 30） ──
+    # S3776 第一层候选：圈复杂度 CC ≥ 30。
     ("java:S3776", "SqlTemplateExportSqlValidator.java", "86"):
         ("FIXED", "Tier1：拆 collectInitialBodies / rejectStarItems / enqueueNestedBodies"),
     ("java:S3776", "SqlTransformComputeSqlValidator.java", "82"):
@@ -72,7 +74,7 @@ FIXED = {
     ("java:S3776", "DefaultConsoleJobDefinitionExcelApplicationService.java", "351"):
         ("FIXED", "Tier1：拆 validateRow + validateIdentity/Existing/Enum/Numeric/FK/Json"),
 
-    # ── S3776 Tier 2 ──
+    # S3776 第二层候选。
     ("java:S3776", "ConfigPackageExcelValidator.java", "268"):
         ("FIXED", "Tier2：抽 validateJobRow + 引入 SheetValidationHelpers 工具"),
     ("java:S3776", "ConfigPackageExcelValidator.java", "322"):

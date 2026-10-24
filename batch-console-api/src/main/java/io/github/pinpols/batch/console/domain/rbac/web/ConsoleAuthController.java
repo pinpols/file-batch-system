@@ -112,8 +112,11 @@ public class ConsoleAuthController {
     if (!securityProperties.getLoginEncryption().isEnabled()) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.auth.encryption_unavailable");
     }
-    return responseFactory.success(new ConsoleLoginPublicKeyResponse(
-        "RSA-OAEP-256", loginKeyPairService.publicKeyPem(), loginKeyPairService.fingerprint()));
+    String publicKeyPem = loginKeyPairService.publicKeyPem();
+    String fingerprint = loginKeyPairService.fingerprint();
+    ConsoleLoginPublicKeyResponse response =
+        new ConsoleLoginPublicKeyResponse("RSA-OAEP-256", publicKeyPem, fingerprint);
+    return responseFactory.success(response);
   }
 
   /** 为当前已认证用户签发 JWT。 */

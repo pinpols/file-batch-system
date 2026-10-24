@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.ReplayOperationPreviewTokenMapper">
+    <select id="setTenantContext" resultType="string">
+        select set_config('app.tenant_id', #{tenantId}, true)
+    </select>
+    <resultMap id="ReplayOperationPreviewTokenResultMap"
+               type="io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationPreviewTokenEntity">
+        <constructor>
+            <idArg column="tenant_id" javaType="java.lang.String"/>
+            <idArg column="token_hash" javaType="java.lang.String"/>
+            <arg column="operation_key" javaType="java.lang.String"/>
+            <arg column="request_hash" javaType="java.lang.String"/>
+            <arg column="snapshot_hash" javaType="java.lang.String"/>
+            <arg column="snapshot_payload" javaType="java.lang.String"/>
+            <arg column="expires_at" javaType="java.time.Instant"/>
+            <arg column="consumed_at" javaType="java.time.Instant"/>
+            <arg column="operation_id" javaType="java.lang.Long"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="insert" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationPreviewTokenEntity">
+        insert into batch.replay_operation_preview_token (
+            tenant_id, token_hash, operation_key, request_hash, snapshot_hash,
+            snapshot_payload, expires_at, consumed_at, operation_id, created_at
+        ) values (
+            #{tenantId}, #{tokenHash}, #{operationKey}::uuid, #{requestHash}, #{snapshotHash},
+            #{snapshotPayload,jdbcType=VARCHAR}::jsonb, #{expiresAt}, #{consumedAt},
+            #{operationId}, #{createdAt}
+        )
+    </insert>
+
+    <select id="selectForUpdate" resultMap="ReplayOperationPreviewTokenResultMap">
+        select tenant_id, token_hash, operation_key, request_hash, snapshot_hash, snapshot_payload,
+               expires_at, consumed_at, operation_id, created_at
+        from batch.replay_operation_preview_token
+        where tenant_id = #{tenantId} and token_hash = #{tokenHash}
+        for update
+    </select>
+
+    <update id="consume">
+        update batch.replay_operation_preview_token
+        set consumed_at = #{now}
+        where tenant_id = #{tenantId} and token_hash = #{tokenHash} and consumed_at is null
+    </update>
+
+    <update id="linkOperation">
+        update batch.replay_operation_preview_token
+        set operation_id = #{operationId}
+        where tenant_id = #{tenantId} and token_hash = #{tokenHash} and operation_id is null
+    </update>
+</mapper>

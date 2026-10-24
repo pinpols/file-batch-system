@@ -43,7 +43,9 @@ final class IdempotencyKeyResolver {
         throw new IllegalArgumentException(
             "idempotent key placeholder {" + field + "} resolved to null");
       }
-      m.appendReplacement(out, Matcher.quoteReplacement(String.valueOf(value)));
+      String replacementValue = String.valueOf(value);
+      String safeReplacement = Matcher.quoteReplacement(replacementValue);
+      m.appendReplacement(out, safeReplacement);
     }
     m.appendTail(out);
     return out.toString();

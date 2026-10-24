@@ -37,6 +37,19 @@ class WorkflowRunMapperXmlTest {
               mapperXml,
               "(?is)<update id=\"updateStatus\".*?run_status\\s+not\\s+in\\s*\\(([^)]*)\\)"))
           .containsExactlyInAnyOrderElementsOf(WorkflowRunStatus.terminalCodes());
+      assertThat(mapperXml)
+          .contains("<result column=\"trigger_request_id\" property=\"triggerRequestId\"/>")
+          .contains(
+              "<result column=\"workflow_version_snapshot\" property=\"workflowVersionSnapshot\"/>")
+          .contains("<result column=\"execution_snapshot\" property=\"executionSnapshot\"/>")
+          .contains("<select id=\"selectByTenantAndTriggerRequestId\"")
+          .contains("<select id=\"selectLatestJobDefinitionSnapshot\"")
+          .contains("jsonb_each(coalesce(workflow_run.execution_snapshot -> 'jobDefinitions'")
+          .contains("workflow_run.tenant_id = #{tenantId}")
+          .contains("job_snapshot.identity -> 'executionDefinition' ->> 'id'")
+          .contains("job_snapshot.identity -> 'executionDefinition' ->> 'version'")
+          .contains("CAST(#{executionSnapshot} AS jsonb)");
+      assertArchivedColumnsAreExplicit(mapperXml);
       new XMLMapperBuilder(
               new ByteArrayInputStream(mapperBytes),
               configuration,
@@ -46,6 +59,33 @@ class WorkflowRunMapperXmlTest {
     } catch (Exception ex) {
       throw new AssertionError("failed to validate " + resource, ex);
     }
+  }
+
+  private static void assertArchivedColumnsAreExplicit(String mapperXml) {
+    Matcher archive = Pattern.compile(
+            "(?is)<insert id=\"archiveWorkflowRunsByIds\".*?insert into archive\\.workflow_run_archive\\s*\\((.*?)\\)\\s*select\\s*(.*?)\\s*from batch\\.workflow_run")
+        .matcher(mapperXml);
+    assertThat(archive.find()).isTrue();
+    assertThat(normalizeColumns(archive.group(1)))
+        .contains("trigger_request_id", "workflow_version_snapshot", "execution_snapshot");
+    assertThat(normalizeColumns(archive.group(2)))
+        .contains("trigger_request_id", "workflow_version_snapshot", "execution_snapshot");
+    Matcher nodeRuns = Pattern.compile(
+            "(?is)<insert id=\"archiveWorkflowNodeRunsByWorkflowRunIds\".*?insert into archive\\.workflow_node_run_archive\\s*\\((.*?)\\)\\s*select\\s*(.*?)\\s*from batch\\.workflow_node_run")
+        .matcher(mapperXml);
+    assertThat(nodeRuns.find()).isTrue();
+    assertThat(normalizeColumns(nodeRuns.group(1)))
+        .contains("skip_reason_code", "skip_reason", "source_payload_protected");
+    assertThat(normalizeColumns(nodeRuns.group(2)))
+        .contains("skip_reason_code", "skip_reason", "source_payload_protected");
+  }
+
+  private static Set<String> normalizeColumns(String columns) {
+    Set<String> result = new HashSet<>();
+    for (String column : columns.split(",")) {
+      result.add(column.trim());
+    }
+    return result;
   }
 
   private static Set<String> statusesForClause(String mapperXml, String clausePattern) {

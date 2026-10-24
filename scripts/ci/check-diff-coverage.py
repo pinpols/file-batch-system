@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：使用 JaCoCo XML 校验本次变更新增/修改的可执行 Java 行覆盖率。
+# 用法：python3 scripts/ci/check-diff-coverage.py --base <基线引用> --path <JaCoCo XML 路径>。
 """使用 JaCoCo XML 校验本次变更新增/修改的可执行 Java 行覆盖率。"""
 
 from __future__ import annotations

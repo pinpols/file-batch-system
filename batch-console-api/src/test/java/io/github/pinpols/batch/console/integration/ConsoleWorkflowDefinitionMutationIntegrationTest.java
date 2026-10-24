@@ -50,9 +50,49 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationI
         .stripTrailing();
   }
 
+  private void acquireDesignLock(Long definitionId, String user, String roles) {
+    client
+        .put()
+        .uri(
+            "/api/console/workflow-definitions/{id}/lock?tenantId={tenantId}",
+            definitionId,
+            "int-wf-ta")
+        .header("X-Console-User", user)
+        .header("X-Console-Roles", roles)
+        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, "int-wf-ta")
+        .exchange()
+        .expectStatus()
+        .isOk();
+  }
+
+  private String fullUpdateBody(String definitionBody, int expectedVersion) {
+    return """
+        {"definition": %s, "expectedVersion": %d}
+        """.formatted(definitionBody, expectedVersion);
+  }
+
   @Test
   @DisplayName("创建 DAG 工作流: 定义,节点与边三张表分别落 1,3,2 行")
   void shouldCreateWorkflowWithAllThreeTables() {
+    final String selectIdSql = """
+      SELECT id FROM batch.workflow_definition WHERE workflow_code = ?
+  """;
+    final String selectCountSql = """
+      SELECT COUNT(*) FROM batch.workflow_node WHERE workflow_definition_id = ?
+  """;
+    final String selectCountSql2 = """
+      SELECT COUNT(*) FROM batch.workflow_edge WHERE workflow_definition_id = ?
+  """;
+    final String deleteWorkflowEdgeSql = """
+        DELETE FROM batch.workflow_edge WHERE workflow_definition_id = ?
+    """;
+    final String deleteWorkflowNodeSql = """
+        DELETE FROM batch.workflow_node WHERE workflow_definition_id = ?
+    """;
+    final String deleteWorkflowDefinitionSql = """
+        DELETE FROM batch.workflow_definition WHERE id = ?
+    """;
+
     String wfCode = "int_wf_create_" + System.currentTimeMillis();
 
     client
@@ -67,31 +107,98 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationI
         .expectBody(String.class)
         .value(b -> assertThat(b).contains("\"code\":\"SUCCESS\""));
 
-    Long defId = jdbcTemplate.queryForObject(
-        "SELECT id FROM batch.workflow_definition WHERE workflow_code = ?", Long.class, wfCode);
+    Long defId = jdbcTemplate.queryForObject(selectIdSql, Long.class, wfCode);
     assertThat(defId).isNotNull();
 
-    Long nodeCount = jdbcTemplate.queryForObject(
-        "SELECT COUNT(*) FROM batch.workflow_node WHERE workflow_definition_id = ?",
-        Long.class,
-        defId);
+    Long nodeCount = jdbcTemplate.queryForObject(selectCountSql, Long.class, defId);
     assertThat(nodeCount).isEqualTo(3L);
 
-    Long edgeCount = jdbcTemplate.queryForObject(
-        "SELECT COUNT(*) FROM batch.workflow_edge WHERE workflow_definition_id = ?",
-        Long.class,
-        defId);
+    Long edgeCount = jdbcTemplate.queryForObject(selectCountSql2, Long.class, defId);
     assertThat(edgeCount).isEqualTo(2L);
 
     // 清理(按外键反向顺序)
-    jdbcTemplate.update("DELETE FROM batch.workflow_edge WHERE workflow_definition_id = ?", defId);
-    jdbcTemplate.update("DELETE FROM batch.workflow_node WHERE workflow_definition_id = ?", defId);
-    jdbcTemplate.update("DELETE FROM batch.workflow_definition WHERE id = ?", defId);
+    jdbcTemplate.update(deleteWorkflowEdgeSql, defId);
+    jdbcTemplate.update(deleteWorkflowNodeSql, defId);
+    jdbcTemplate.update(deleteWorkflowDefinitionSql, defId);
+  }
+
+  @Test
+  @DisplayName("拒绝不带版本与设计锁的旧式工作流图写入")
+  void shouldRejectUnversionedWorkflowGraphWrite() {
+    final String selectIdSql = """
+        SELECT id FROM batch.workflow_definition WHERE tenant_id = ? AND workflow_code = ?
+    """;
+    final String selectCountSql = """
+        SELECT COUNT(*) FROM batch.workflow_node WHERE workflow_definition_id = ?
+    """;
+    final String deleteWorkflowEdgeSql = """
+        DELETE FROM batch.workflow_edge WHERE workflow_definition_id = ?
+    """;
+    final String deleteWorkflowNodeSql = """
+        DELETE FROM batch.workflow_node WHERE workflow_definition_id = ?
+    """;
+    final String deleteWorkflowDefinitionSql = """
+        DELETE FROM batch.workflow_definition WHERE id = ?
+    """;
+
+    String workflowCode = "int_wf_unversioned_" + System.currentTimeMillis();
+    client
+        .post()
+        .uri("/api/console/workflow-definitions")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-wf-" + workflowCode)
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(body(workflowCode, "task1", "start"))
+        .exchange()
+        .expectStatus()
+        .isOk();
+
+    Long definitionId =
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, "int-wf-ta", workflowCode);
+    try {
+      client
+          .put()
+          .uri("/api/console/workflow-definitions/{id}", definitionId)
+          .header(
+              CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER,
+              "idem-wf-unversioned-update-" + workflowCode)
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(body(workflowCode, "replacement", "start"))
+          .exchange()
+          .expectStatus()
+          .isEqualTo(405);
+
+      Long nodeCount = jdbcTemplate.queryForObject(selectCountSql, Long.class, definitionId);
+      assertThat(nodeCount).isEqualTo(3L);
+    } finally {
+      jdbcTemplate.update(deleteWorkflowEdgeSql, definitionId);
+      jdbcTemplate.update(deleteWorkflowNodeSql, definitionId);
+      jdbcTemplate.update(deleteWorkflowDefinitionSql, definitionId);
+    }
   }
 
   @Test
   @DisplayName("工作流敏感节点参数读取脱敏且掩码更新保留原凭据")
   void shouldMaskAndPreserveSensitiveNodeParams() {
+    final String selectIdSql = """
+        SELECT id FROM batch.workflow_definition WHERE tenant_id = ? AND workflow_code = ?
+    """;
+    final String selectVersionSql = """
+        SELECT version FROM batch.workflow_definition WHERE id = ?
+    """;
+    final String selectNodeParamsSql = """
+        SELECT node_params->>'apiKey' AS api_key, node_params->>'label' AS label FROM batch.workflow_node\s\
+        WHERE workflow_definition_id = ? AND node_code = ?\
+        """;
+    final String deleteWorkflowEdgeSql = """
+        DELETE FROM batch.workflow_edge WHERE workflow_definition_id = ?
+    """;
+    final String deleteWorkflowNodeSql = """
+        DELETE FROM batch.workflow_node WHERE workflow_definition_id = ?
+    """;
+    final String deleteWorkflowDefinitionSql = """
+        DELETE FROM batch.workflow_definition WHERE id = ?
+    """;
+
     String workflowCode = "int_wf_secret_" + System.currentTimeMillis();
     Long definitionId = null;
     try {
@@ -114,11 +221,8 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationI
           .returnResult()
           .getResponseBody();
 
-      definitionId = jdbcTemplate.queryForObject(
-          "SELECT id FROM batch.workflow_definition WHERE tenant_id = ? AND workflow_code = ?",
-          Long.class,
-          "int-wf-ta",
-          workflowCode);
+      definitionId =
+          jdbcTemplate.queryForObject(selectIdSql, Long.class, "int-wf-ta", workflowCode);
       assertThat(created).contains("****").doesNotContain("workflow-secret");
       String detail = client
           .get()
@@ -135,14 +239,20 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationI
       assertThat(detail).contains("****").doesNotContain("workflow-secret");
 
       String updateBody = createBody.replace("workflow-secret", "****").replace("old", "new");
+      acquireDesignLock(definitionId, "workflow-secret-admin", "ROLE_ADMIN");
+      int currentVersion =
+          jdbcTemplate.queryForObject(selectVersionSql, Integer.class, definitionId);
       String updated = client
           .put()
-          .uri("/api/console/workflow-definitions/{id}", definitionId)
+          .uri("/api/console/workflow-definitions/{id}/full", definitionId)
           .header(
               CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER,
               "idem-wf-secret-update-" + workflowCode)
+          .header("X-Console-User", "workflow-secret-admin")
+          .header("X-Console-Roles", "ROLE_ADMIN")
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, "int-wf-ta")
           .contentType(MediaType.APPLICATION_JSON)
-          .bodyValue(updateBody)
+          .bodyValue(fullUpdateBody(updateBody, currentVersion))
           .exchange()
           .expectStatus()
           .isOk()
@@ -151,20 +261,14 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationI
           .getResponseBody();
 
       assertThat(updated).contains("****").doesNotContain("workflow-secret");
-      var storedParams = jdbcTemplate.queryForMap(
-          "SELECT node_params->>'apiKey' AS api_key, node_params->>'label' AS label "
-              + "FROM batch.workflow_node WHERE workflow_definition_id = ? AND node_code = ?",
-          definitionId,
-          "task1");
+      var storedParams = jdbcTemplate.queryForMap(selectNodeParamsSql, definitionId, "task1");
       assertThat(storedParams).containsEntry("api_key", "workflow-secret");
       assertThat(storedParams).containsEntry("label", "new");
     } finally {
       if (definitionId != null) {
-        jdbcTemplate.update(
-            "DELETE FROM batch.workflow_edge WHERE workflow_definition_id = ?", definitionId);
-        jdbcTemplate.update(
-            "DELETE FROM batch.workflow_node WHERE workflow_definition_id = ?", definitionId);
-        jdbcTemplate.update("DELETE FROM batch.workflow_definition WHERE id = ?", definitionId);
+        jdbcTemplate.update(deleteWorkflowEdgeSql, definitionId);
+        jdbcTemplate.update(deleteWorkflowNodeSql, definitionId);
+        jdbcTemplate.update(deleteWorkflowDefinitionSql, definitionId);
       }
     }
   }
@@ -172,6 +276,10 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationI
   @Test
   @DisplayName("租户管理员不能在工作流节点上指定物理 Worker 分组")
   void shouldRejectTenantAdminAssigningNodeWorkerGroup() {
+    final String selectCountSql = """
+        SELECT COUNT(*) FROM batch.workflow_definition WHERE tenant_id = ? AND workflow_code = ?
+    """;
+
     String workflowCode = "int_wf_tenant_route_" + System.currentTimeMillis();
     String routedBody = body(workflowCode, "task1", "start")
         .replace("\"nodeType\": \"TASK\"", "\"nodeType\": \"TASK\", \"workerGroup\": \"IMPORT\"");
@@ -187,17 +295,32 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationI
         .expectStatus()
         .isForbidden();
 
-    Long count = jdbcTemplate.queryForObject(
-        "SELECT COUNT(*) FROM batch.workflow_definition WHERE tenant_id = ? AND workflow_code = ?",
-        Long.class,
-        "int-wf-ta",
-        workflowCode);
+    Long count = jdbcTemplate.queryForObject(selectCountSql, Long.class, "int-wf-ta", workflowCode);
     assertThat(count).isZero();
   }
 
   @Test
   @DisplayName("租户管理员更新工作流时省略物理路由字段不清除平台分配")
   void shouldPreserveNodeWorkerGroup_whenTenantAdminUpdatesWorkflow() {
+    final String selectIdSql = """
+        SELECT id FROM batch.workflow_definition WHERE tenant_id = ? AND workflow_code = ?
+    """;
+    final String selectVersionSql = """
+        SELECT version FROM batch.workflow_definition WHERE id = ?
+    """;
+    final String selectWorkerGroupSql = """
+        SELECT worker_group FROM batch.workflow_node WHERE workflow_definition_id = ? AND node_code = ?
+    """;
+    final String deleteWorkflowEdgeSql = """
+        DELETE FROM batch.workflow_edge WHERE workflow_definition_id = ?
+    """;
+    final String deleteWorkflowNodeSql = """
+        DELETE FROM batch.workflow_node WHERE workflow_definition_id = ?
+    """;
+    final String deleteWorkflowDefinitionSql = """
+        DELETE FROM batch.workflow_definition WHERE id = ?
+    """;
+
     String workflowCode = "int_wf_route_preserve_" + System.currentTimeMillis();
     String routedBody = body(workflowCode, "task1", "start")
         .replace("\"nodeType\": \"TASK\"", "\"nodeType\": \"TASK\", \"workerGroup\": \"IMPORT\"");
@@ -212,44 +335,44 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationI
         .expectStatus()
         .isOk();
 
-    Long definitionId = jdbcTemplate.queryForObject(
-        "SELECT id FROM batch.workflow_definition WHERE tenant_id = ? AND workflow_code = ?",
-        Long.class,
-        "int-wf-ta",
-        workflowCode);
+    Long definitionId =
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, "int-wf-ta", workflowCode);
     try {
+      acquireDesignLock(definitionId, "workflow-route-admin", "ROLE_TENANT_ADMIN");
+      int currentVersion =
+          jdbcTemplate.queryForObject(selectVersionSql, Integer.class, definitionId);
       client
           .put()
-          .uri("/api/console/workflow-definitions/{id}", definitionId)
+          .uri("/api/console/workflow-definitions/{id}/full", definitionId)
           .header(
               CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER,
               "idem-wf-route-update-" + workflowCode)
+          .header("X-Console-User", "workflow-route-admin")
           .header("X-Console-Roles", "ROLE_TENANT_ADMIN")
           .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, "int-wf-ta")
           .contentType(MediaType.APPLICATION_JSON)
-          .bodyValue(body(workflowCode, "task1", "start"))
+          .bodyValue(fullUpdateBody(body(workflowCode, "task1", "start"), currentVersion))
           .exchange()
           .expectStatus()
           .isOk();
 
-      String workerGroup = jdbcTemplate.queryForObject(
-          "SELECT worker_group FROM batch.workflow_node WHERE workflow_definition_id = ? AND node_code = ?",
-          String.class,
-          definitionId,
-          "task1");
+      String workerGroup =
+          jdbcTemplate.queryForObject(selectWorkerGroupSql, String.class, definitionId, "task1");
       assertThat(workerGroup).isEqualTo("IMPORT");
     } finally {
-      jdbcTemplate.update(
-          "DELETE FROM batch.workflow_edge WHERE workflow_definition_id = ?", definitionId);
-      jdbcTemplate.update(
-          "DELETE FROM batch.workflow_node WHERE workflow_definition_id = ?", definitionId);
-      jdbcTemplate.update("DELETE FROM batch.workflow_definition WHERE id = ?", definitionId);
+      jdbcTemplate.update(deleteWorkflowEdgeSql, definitionId);
+      jdbcTemplate.update(deleteWorkflowNodeSql, definitionId);
+      jdbcTemplate.update(deleteWorkflowDefinitionSql, definitionId);
     }
   }
 
   @Test
   @DisplayName("嵌套节点编码含空格: 返回校验错误且不落库")
   void shouldRejectNestedInvalidNodeCode() {
+    final String selectCountSql = """
+        SELECT COUNT(*) FROM batch.workflow_definition WHERE workflow_code = ?
+    """;
+
     // 嵌套 nodes[].nodeCode 含空格 → @Valid 下钻 → 400
     client
         .post()
@@ -264,10 +387,7 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationI
         .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
 
     // 守护:异常数据不入库
-    Long cnt = jdbcTemplate.queryForObject(
-        "SELECT COUNT(*) FROM batch.workflow_definition WHERE workflow_code = ?",
-        Long.class,
-        "int_wf_bad_node");
+    Long cnt = jdbcTemplate.queryForObject(selectCountSql, Long.class, "int_wf_bad_node");
     assertThat(cnt).isZero();
   }
 
@@ -288,6 +408,19 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationI
   @Test
   @DisplayName("工作流编码重复: 第二次写入失败,不产生重复定义")
   void shouldRejectDuplicateWorkflowCode() {
+    final String selectIdSql = """
+        SELECT id FROM batch.workflow_definition WHERE workflow_code = ?
+    """;
+    final String deleteWorkflowEdgeSql = """
+        DELETE FROM batch.workflow_edge WHERE workflow_definition_id = ?
+    """;
+    final String deleteWorkflowNodeSql = """
+        DELETE FROM batch.workflow_node WHERE workflow_definition_id = ?
+    """;
+    final String deleteWorkflowDefinitionSql = """
+        DELETE FROM batch.workflow_definition WHERE id = ?
+    """;
+
     String wfCode = "int_wf_dup_" + System.currentTimeMillis();
     // 首次成功
     client
@@ -312,14 +445,11 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationI
         .value(s -> assertThat(s).isIn(400, 409, 500));
 
     // 清理
-    Long defId = jdbcTemplate.queryForObject(
-        "SELECT id FROM batch.workflow_definition WHERE workflow_code = ?", Long.class, wfCode);
+    Long defId = jdbcTemplate.queryForObject(selectIdSql, Long.class, wfCode);
     if (defId != null) {
-      jdbcTemplate.update(
-          "DELETE FROM batch.workflow_edge WHERE workflow_definition_id = ?", defId);
-      jdbcTemplate.update(
-          "DELETE FROM batch.workflow_node WHERE workflow_definition_id = ?", defId);
-      jdbcTemplate.update("DELETE FROM batch.workflow_definition WHERE id = ?", defId);
+      jdbcTemplate.update(deleteWorkflowEdgeSql, defId);
+      jdbcTemplate.update(deleteWorkflowNodeSql, defId);
+      jdbcTemplate.update(deleteWorkflowDefinitionSql, defId);
     }
   }
 

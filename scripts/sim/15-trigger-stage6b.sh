@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：trigger-stage6b.sh:Trigger 去重 + 小规模 storm 验证。
+# 用法：在仓库根目录执行 bash scripts/sim/15-trigger-stage6b.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # 15-trigger-stage6b.sh:Trigger 去重 + 小规模 storm 验证
 #
@@ -36,6 +38,8 @@ export START_TS
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/trigger-stage6b.log"
 import json, os, subprocess, sys, time, urllib.request
+from datetime import date, timedelta
+from scripts.sim.launch_contract import workflow_id_for_fixture
 
 BASE = os.environ["TRIGGER_BASE"]
 SECRET = os.environ["INTERNAL_SECRET"]
@@ -46,17 +50,17 @@ START_TS = os.environ["START_TS"].strip()
 JOB = "TA_PROCESS_STAGE4_EMPTY_SUCCESS"
 SQL_DIR = os.path.join(os.getcwd(), "scripts", "sim", "sql")
 
-def launch(request_id, batch_key):
+def launch(request_id, batch_key, biz_date):
     body = {
         "tenantId": "ta",
-        "jobCode": JOB,
+        "workflowDefinitionId": workflow_id_for_fixture("ta", JOB),
         "triggerType": "API",
-        "bizDate": BIZ,
+        "bizDate": biz_date,
         "requestId": request_id,
         "params": {
             "batchNo": BATCH,
             "batchKey": batch_key,
-            "bizDate": BIZ,
+            "bizDate": biz_date,
         },
     }
     req = urllib.request.Request(
@@ -95,15 +99,22 @@ def psql(sql_file, variables=None, tuples=False, capture_output=True):
 
 dedup_id = f"sim-stage6b-dedup-{int(time.time()*1000)%100000000}"
 print("==> dedup launch same requestId twice", flush=True)
-launch(dedup_id, BATCH + "-dedup")
-launch(dedup_id, BATCH + "-dedup")
+dedup_biz_date = (date.fromisoformat(BIZ) + timedelta(days=STORM_COUNT + 1)).isoformat()
+launch(dedup_id, BATCH + "-dedup", dedup_biz_date)
+launch(dedup_id, BATCH + "-dedup", dedup_biz_date)
 
 storm_ids = []
 print(f"==> storm launch {STORM_COUNT}", flush=True)
+# 此前阶段可能已结算历史日期；此场景验证新的 API 准入路径。
+storm_base_date = date.fromisoformat(BIZ) + timedelta(days=1)
 for i in range(STORM_COUNT):
     rid = f"sim-stage6b-storm-{i:03d}-{int(time.time()*1000)%100000000}"
     storm_ids.append(rid)
-    launch(rid, f"{BATCH}-storm-{i:03d}")
+    storm_biz_date = (storm_base_date + timedelta(days=i)).isoformat()
+    # 按租户/Workflow/业务日进行幂等准入。每个
+    # 独立的风暴请求使用不同业务日，确保测试验证
+    # 执行并发，而非重复请求确认数量。
+    launch(rid, f"{BATCH}-storm-{i:03d}", storm_biz_date)
 print("  [launch] all accepted", flush=True)
 
 deadline = time.time() + 240
@@ -128,16 +139,25 @@ psql("select-job-instance-status-counts.sql", storm_variables, capture_output=Fa
 
 dedup_out = psql("select-trigger-request-dedup-counts.sql", dedup_variables, tuples=True)
 storm_out = psql(
-    "count-successful-job-instances.sql",
-    storm_variables,
+    "select-stage6b-workflow-outcomes.sql",
+    {"tenant_id": "ta", "request_ids": ",".join([dedup_id, *storm_ids])},
     tuples=True,
 )
-dedup_summary = (dedup_out.stdout or "").strip().replace("|", "|")
-success_count = int((storm_out.stdout or "0").strip() or "0")
-summary = f"{dedup_summary}|{success_count}"
+dedup_summary = (dedup_out.stdout or "").strip()
+outcome_rows = [line.split("|") for line in (storm_out.stdout or "").splitlines()]
+actual_outcomes = {row[0]: tuple(row[1:]) for row in outcome_rows if len(row) == 5}
+expected_request_ids = [dedup_id, *storm_ids]
+bad_outcomes = {
+    request_id: actual_outcomes.get(request_id)
+    for request_id in expected_request_ids
+    if actual_outcomes.get(request_id) != ("LAUNCHED", "SUCCESS", "SUCCESS", "SUCCESS")
+}
+success_count = len(expected_request_ids) - len(bad_outcomes)
+summary = f"{dedup_summary}|{success_count}|{len(bad_outcomes)}"
 print(f"\n-- assertion_summary --\n{summary}", flush=True)
-if dedup_summary != "1|1" or success_count < STORM_COUNT + 1:
-    print(f"❌ Trigger Stage6b assertion failed, expected dedup=1|1 and success>={STORM_COUNT + 1}", flush=True)
+if dedup_summary != "1|1" or bad_outcomes:
+    print(f"❌ Trigger Stage6b assertion failed, expected dedup=1|1 and all {STORM_COUNT + 1} requests to reach SUCCESS", flush=True)
+    print(f"  nonterminal or duplicate requests: {bad_outcomes}", flush=True)
     sys.exit(1)
 
 print(f"\n==> Stage 6b trigger scenario PASS: batchNo={BATCH} stormCount={STORM_COUNT}", flush=True)

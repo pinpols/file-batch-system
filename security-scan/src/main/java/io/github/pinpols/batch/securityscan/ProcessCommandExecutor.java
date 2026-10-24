@@ -2,6 +2,7 @@ package io.github.pinpols.batch.securityscan;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -28,8 +29,9 @@ public final class ProcessCommandExecutor {
                     .redirectErrorStream(true)
                     .start();
 
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+            InputStream processOutput = process.getInputStream();
+            InputStreamReader utf8Reader = new InputStreamReader(processOutput, StandardCharsets.UTF_8);
+            try (BufferedReader reader = new BufferedReader(utf8Reader)) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     System.out.println("[" + command.step().displayName() + "] " + line);

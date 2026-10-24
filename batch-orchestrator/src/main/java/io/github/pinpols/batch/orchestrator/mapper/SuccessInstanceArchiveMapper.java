@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import io.github.pinpols.batch.orchestrator.domain.view.ArchiveIntegrityCandidateSummary;
 import java.time.Instant;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -29,8 +30,23 @@ import org.apache.ibatis.annotations.Param;
 public interface SuccessInstanceArchiveMapper {
 
   /** 选 SUCCESS / PARTIAL_FAILED 且 finished_at 早于 cutoff 的 instance id（带 limit）。 */
+  List<ArchiveIntegrityCandidateSummary> selectInvalidArchiveReferenceSummaries(
+      @Param("cutoff") Instant cutoff);
+
   List<Long> selectArchivableInstanceIds(
       @Param("cutoff") Instant cutoff, @Param("limit") int limit);
+
+  /** 固定本批 Pipeline 集合并按 ID 持父行锁，阻止新位点绕过本批复制。 */
+  List<Long> selectPipelineInstanceIdsForUpdate(@Param("instanceIds") List<Long> instanceIds);
+
+  /** 父行持锁后锁定已有位点，保护复制与删除之间的并发更新。 */
+  List<Long> selectPipelineProgressIdsForUpdate(@Param("pipelineIds") List<Long> pipelineIds);
+
+  int archivePipelineProgressByPipelineIds(@Param("pipelineIds") List<Long> pipelineIds);
+
+  long countPipelineCheckpointArchiveMismatches(@Param("pipelineIds") List<Long> pipelineIds);
+
+  int deletePipelineProgressByPipelineIds(@Param("pipelineIds") List<Long> pipelineIds);
 
   // ── 冷表归档（按 instanceIds 列表，先复制后删除）──────────────────────
 
@@ -57,6 +73,14 @@ public interface SuccessInstanceArchiveMapper {
   int archiveJobExecutionLogsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
 
   int archiveCompensationCommandsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+
+  List<Long> selectDataQualityCheckIdsForUpdate(@Param("instanceIds") List<Long> instanceIds);
+
+  int archiveDataQualityChecksByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+
+  int countDataQualityCheckArchiveMismatches(@Param("instanceIds") List<Long> instanceIds);
+
+  int deleteDataQualityChecksByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
 
   // ── 级联删（按 instanceIds 列表）──────────────────────────────
 

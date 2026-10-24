@@ -1,4 +1,5 @@
 -- 将已消费的预览凭证关联到原会话，支持客户端在提交响应丢失后安全重试并取回结果。
+
 ALTER TABLE batch.batch_day_replay_preview_token
     ADD COLUMN session_id BIGINT;
 

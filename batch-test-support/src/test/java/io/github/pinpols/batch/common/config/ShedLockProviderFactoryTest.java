@@ -31,17 +31,30 @@ class ShedLockProviderFactoryTest extends AbstractIntegrationTest {
     dataSource.setPassword(DB_PASSWORD);
 
     JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
-    jdbcTemplate.execute("drop table if exists batch.shedlock");
+    String dropShedLockTableSql = """
+        drop table if exists batch.shedlock
+    """;
+    jdbcTemplate.execute(dropShedLockTableSql);
 
     LockProvider lockProvider = ShedLockProviderFactory.jdbcTemplateLockProvider(dataSource, true);
 
-    Integer tableCount = jdbcTemplate.queryForObject("""
+    String shedLockTableCountSql = """
             select count(*)
               from information_schema.tables
              where table_schema = 'batch'
                and table_name = 'shedlock'
-            """, Integer.class);
+            """;
+    Integer tableCount = jdbcTemplate.queryForObject(shedLockTableCountSql, Integer.class);
     assertThat(tableCount).isEqualTo(1);
+    String lockUntilTypeSql = """
+            select data_type
+              from information_schema.columns
+             where table_schema = 'batch'
+               and table_name = 'shedlock'
+               and column_name = 'lock_until'
+            """;
+    String lockUntilType = jdbcTemplate.queryForObject(lockUntilTypeSql, String.class);
+    assertThat(lockUntilType).isEqualTo("timestamp without time zone");
 
     SimpleLock simpleLock = lockProvider
         .lock(new LockConfiguration(
@@ -50,6 +63,13 @@ class ShedLockProviderFactoryTest extends AbstractIntegrationTest {
             Duration.ofSeconds(30),
             Duration.ZERO))
         .orElseThrow();
+    String lockUntilUtcWindowSql = """
+        select lock_until > timezone('utc', current_timestamp) + interval '25 seconds'
+        from batch.shedlock where name = 'factory-auto-create'
+        """;
+    Boolean lockUntilCoversMinimumWindow =
+        jdbcTemplate.queryForObject(lockUntilUtcWindowSql, Boolean.class);
+    assertThat(lockUntilCoversMinimumWindow).isTrue();
     simpleLock.unlock();
   }
 

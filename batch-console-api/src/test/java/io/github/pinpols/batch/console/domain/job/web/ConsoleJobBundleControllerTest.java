@@ -25,6 +25,7 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -82,7 +83,7 @@ class ConsoleJobBundleControllerTest {
         ArgumentCaptor.forClass(JobBundleCreateRequest.class);
     verify(applicationService).create(captor.capture());
     JobBundleCreateRequest req = captor.getValue();
-    org.assertj.core.api.Assertions.assertThat(req.getTenantId()).isEqualTo("t1");
+    Assertions.assertThat(req.getTenantId()).isEqualTo("t1");
   }
 
   @Test

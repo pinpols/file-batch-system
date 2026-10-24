@@ -30,6 +30,9 @@ public class JobDefinitionMaintenanceUpdateParam {
   private String shardStrategy;
   private String executionMode;
   private String watermarkField;
+  private String executionHandler;
+  private String paramSchema;
+  private Integer priority;
   private String defaultParams;
   private boolean defaultParamsSpecified;
   private Boolean enabled;

@@ -7,6 +7,7 @@
 -- 注意:本迁移含全表复制,生产规模执行前评估窗口;当前为上线前阶段,数据量 <20 万行,秒级。
 
 -- A) 建分区父表(列集 = pg_dump 实库 DDL,2026-06-10)
+
 CREATE TABLE batch.outbox_event_p (
     id              BIGINT       NOT NULL,
     tenant_id       VARCHAR(64)  NOT NULL,
@@ -35,10 +36,12 @@ CREATE TABLE batch.outbox_event_p (
 ) PARTITION BY RANGE (created_at);
 
 -- 复制 sequence（避免 id 冲突）
+
 ALTER TABLE batch.outbox_event_p
     ALTER COLUMN id SET DEFAULT nextval('batch.outbox_event_id_seq'::regclass);
 
 -- B) 建近 24 个月 + 未来 12 个月分区。生产用 03-add-future-partitions.sql cron 持续维护
+
 DO $$
 DECLARE
     m INT;
@@ -62,6 +65,7 @@ BEGIN
 END$$;
 
 -- C) 索引（PG 14+ 父表 CREATE INDEX 自动级联所有分区;对齐实库全部 5 个二级索引）
+
 CREATE INDEX idx_outbox_p_aggregate ON batch.outbox_event_p (aggregate_type, aggregate_id);
 CREATE INDEX idx_outbox_p_publish_status
     ON batch.outbox_event_p (publish_status, next_publish_at);
@@ -70,11 +74,13 @@ CREATE INDEX idx_outbox_p_tenant_status_scheduled
 CREATE INDEX idx_outbox_p_payload_json_gin
     ON batch.outbox_event_p USING gin (payload_json);
 -- OutboxPollScheduler 高优先派发扫描(partial)
+
 CREATE INDEX idx_outbox_p_priority_pending
     ON batch.outbox_event_p (publish_status, next_publish_at NULLS FIRST, priority DESC, id)
     WHERE publish_status IN ('NEW','FAILED');
 
 -- D) 复制数据(显式全列)
+
 INSERT INTO batch.outbox_event_p (
     id, tenant_id, aggregate_type, aggregate_id, event_type, event_key, payload_json,
     publish_status, publish_attempt, next_publish_at, trace_id, created_at, updated_at,
@@ -87,9 +93,11 @@ SELECT
 FROM batch.outbox_event;
 
 -- 同步 sequence 到当前最大 id
+
 SELECT setval('batch.outbox_event_id_seq', COALESCE((SELECT MAX(id) FROM batch.outbox_event_p), 1));
 
 -- E) 切换名字（先解 event_delivery_log FK，因为它指向旧 outbox_event）
+
 ALTER TABLE batch.event_delivery_log
     DROP CONSTRAINT IF EXISTS event_delivery_log_outbox_event_id_fkey;
 
@@ -107,7 +115,9 @@ ALTER TABLE batch.outbox_event_p RENAME TO outbox_event;
 -- outbox_event_id_seq 原来 OWNED BY outbox_event（现已改名 outbox_event_legacy）。
 -- 先把 ownership 转移到新分区表（已改名 outbox_event）；
 -- 否则 DROP outbox_event_legacy 会级联删 sequence，而 outbox_event 和
+
 -- archive.outbox_event_archive 的 id DEFAULT 均依赖该 sequence。
+
 ALTER SEQUENCE batch.outbox_event_id_seq OWNED BY batch.outbox_event.id;
 
 -- archive.outbox_event_archive 用 LIKE INCLUDING DEFAULTS 复制了 batch.outbox_event 的
@@ -119,4 +129,5 @@ DROP TABLE batch.outbox_event_legacy;
 
 -- legacy 已 DROP 释放原约束名,改回兼容名(DuplicateKey 异常消息用 conname,
 -- 调用方按 uk_outbox_event_key 识别;建表期用 _p_key 仅为避开与 legacy 的 index 撞名)。
+
 ALTER TABLE batch.outbox_event RENAME CONSTRAINT uk_outbox_event_p_key TO uk_outbox_event_key;

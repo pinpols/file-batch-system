@@ -197,4 +197,35 @@ class S3ObjectStoreTest {
 
     assertThat(url).contains(key).contains("X-Amz-Signature");
   }
+
+  @Test
+  @DisplayName("部署命名空间隔离 MinIO 实际对象、列举和 GET/PUT 预签名 key")
+  void shouldIsolateS3ObjectsByDeploymentNamespace() throws Exception {
+    NamespacedObjectStore blueStore = new NamespacedObjectStore(store, "it-blue");
+    NamespacedObjectStore redStore = new NamespacedObjectStore(store, "it-red");
+    String logicalKey = "namespace/result.csv";
+    String physicalKey = "it-blue/" + logicalKey;
+    byte[] payload = "isolated".getBytes(StandardCharsets.UTF_8);
+
+    blueStore.put(
+        bucket, logicalKey, new ByteArrayInputStream(payload), payload.length, "text/csv");
+
+    assertThat(store.exists(bucket, physicalKey)).isTrue();
+    assertThat(blueStore.exists(bucket, logicalKey)).isTrue();
+    assertThat(redStore.exists(bucket, logicalKey)).isFalse();
+    assertThat(blueStore.list(bucket, "", null, 10).objects())
+        .extracting(ObjectSummary::key)
+        .containsExactly(logicalKey);
+    assertThat(blueStore.presign(bucket, logicalKey, Duration.ofMinutes(5)))
+        .contains(physicalKey)
+        .contains("X-Amz-Signature");
+    assertThat(blueStore.presignPut(bucket, logicalKey, Duration.ofMinutes(5), "text/csv"))
+        .contains(physicalKey)
+        .contains("X-Amz-Signature");
+
+    try (InputStream input = blueStore.get(bucket, logicalKey)) {
+      assertThat(input.readAllBytes()).isEqualTo(payload);
+    }
+    blueStore.delete(bucket, logicalKey);
+  }
 }

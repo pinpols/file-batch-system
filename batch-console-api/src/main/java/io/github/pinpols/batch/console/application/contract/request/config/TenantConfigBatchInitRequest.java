@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.console.application.contract.request.config;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDependencyRuleRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Pattern;
@@ -13,6 +15,13 @@ import lombok.Data;
 /** mode=SKIP_EXISTING 已存在跳过；mode=UPSERT 已存在更新。dryRun=true 时只校验不写入数据库。 */
 @Data
 public class TenantConfigBatchInitRequest {
+
+  /** 配置导入拒绝未知字段，避免已退役载荷被静默当作成功。 */
+  @com.fasterxml.jackson.annotation.JsonAnySetter
+  public void rejectUnknownField(String fieldName, Object ignoredValue) {
+    throw new IllegalArgumentException("Unsupported configuration field: " + fieldName);
+  }
+
   // CPD-OFF: Batch initialization exposes the same nested specs as file-template APIs by contract.
 
   @NotEmpty(message = "targetTenantIds must not be empty")
@@ -34,9 +43,6 @@ public class TenantConfigBatchInitRequest {
 
   @Valid
   private List<WorkflowDefinitionSpec> workflowDefinitions;
-
-  @Valid
-  private List<PipelineDefinitionSpec> pipelineDefinitions;
 
   @Valid
   private List<FileChannelSpec> fileChannels;
@@ -77,6 +83,10 @@ public class TenantConfigBatchInitRequest {
             + " underscore or hyphen")
     private String dependsOnJobCode;
 
+    @Valid
+    @Size(max = 32)
+    private List<JobDependencyRuleRequest> dependencyRules;
+
     @Size(max = 256)
     private String jobName;
 
@@ -111,7 +121,7 @@ public class TenantConfigBatchInitRequest {
     private LocalTime completionDeadlineLocalTime;
 
     @Min(0)
-    @jakarta.validation.constraints.Max(1)
+    @Max(1)
     private Integer completionDeadlineDayOffset;
 
     @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
@@ -143,6 +153,16 @@ public class TenantConfigBatchInitRequest {
 
     private String workflowType;
     private Boolean enabled;
+    /** 可移植的受管关联：目标租户根据该 Job code 解析本地 ID。 */
+    private String singleJobCode;
+
+    private Boolean scheduleEnabled;
+    private String scheduleType;
+    private String scheduleExpr;
+    private String timezone;
+    private String triggerMode;
+    private String calendarCode;
+    private String dependsOnJobCode;
     private List<NodeSpec> nodes;
     private List<EdgeSpec> edges;
 
@@ -152,7 +172,6 @@ public class TenantConfigBatchInitRequest {
       private String nodeName;
       private String nodeType;
       private String relatedJobCode;
-      private String relatedPipelineCode;
       private String workerGroup;
       private String windowCode;
       private Integer nodeOrder;
@@ -169,45 +188,6 @@ public class TenantConfigBatchInitRequest {
       private String toNodeCode;
       private String edgeType;
       private String conditionExpr;
-      private Boolean enabled;
-    }
-  }
-
-  @Data
-  public static class PipelineDefinitionSpec {
-    @Size(max = 128)
-    private String jobCode;
-
-    @Size(max = 256)
-    private String pipelineName;
-
-    @Size(max = 32)
-    private String pipelineType;
-
-    @Size(max = 64)
-    private String bizType;
-
-    @Size(max = 128)
-    private String workerGroup;
-
-    private Boolean enabled;
-
-    @Size(max = 512)
-    private String description;
-
-    private List<StepSpec> steps;
-
-    @Data
-    public static class StepSpec {
-      private String stepCode;
-      private String stepName;
-      private String stageCode;
-      private Integer stepOrder;
-      private String implCode;
-      private String stepParams;
-      private Integer timeoutSeconds;
-      private String retryPolicy;
-      private Integer retryMaxCount;
       private Boolean enabled;
     }
   }

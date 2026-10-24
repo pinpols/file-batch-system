@@ -40,7 +40,8 @@ public class BusinessRoutingDataSource extends AbstractRoutingDataSource impleme
 
   @Override
   protected Object determineCurrentLookupKey() {
-    return resolver.resolve(RlsTenantContextHolder.get());
+    String tenantId = RlsTenantContextHolder.get();
+    return resolver.resolve(tenantId);
   }
 
   /**

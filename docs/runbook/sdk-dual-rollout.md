@@ -1,6 +1,6 @@
 # SDK / Orchestrator 协议 Dual-Rollout 指南
 
-> 决策依据:[`docs/plans/sdk-roadmap-2026-h2.md`](../plans/sdk-roadmap-2026-h2.md) §1 决策记录 #3(2 周兼容窗口)
+> 决策依据:[`docs/plans/sdk-h2-roadmap-2026-05-31.md`](../plans/sdk-h2-roadmap-2026-05-31.md) §1 决策记录 #3(2 周兼容窗口)
 > + §15.5 PR 合并节奏(协议先,使用方后)。
 > 红线机制:[`scripts/local/pre-push-sdk-checks.sh`](../../scripts/local/pre-push-sdk-checks.sh)
 > + [`SdkWireContractTest`](../../batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/controller/SdkWireContractTest.java)
@@ -108,7 +108,7 @@ T2: (可选) Agent-API / FE 跟上(如新字段需要在 console 展示)
 
 ## 参考
 
-- [SDK roadmap H2-2026 plan](../plans/sdk-roadmap-2026-h2.md) §1 决策 #3 / §2 Phase 0 / §15.5
+- [SDK roadmap H2-2026 plan](../plans/sdk-h2-roadmap-2026-05-31.md) §1 决策 #3 / §2 Phase 0 / §15.5
 - [ADR-035 租户自托管 SDK](../architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md) §9 两套绑定契约
 - [Orchestrator internal OpenAPI](../api/orchestrator-internal.openapi.yaml)
 - [SdkWireContractTest](../../batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/controller/SdkWireContractTest.java)

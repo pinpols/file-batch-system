@@ -47,6 +47,9 @@ batch:
       subscribe-mode: ${BATCH_WORKER_KAFKA_SUBSCRIBE_MODE:PATTERN}
       tenant-allowlist: ${BATCH_WORKER_KAFKA_TENANT_ALLOWLIST:}
     process:
+      staging-cleanup:
+        # 跨已启用日历汇总的原始业务日期补扫积压低基数视图。
+        deletion-enabled: false
       worker-code: ${BATCH_WORKER_PROCESS_CODE:process-node-1}
       worker-type: PROCESS
       tenant-id: ${BATCH_WORKER_PROCESS_TENANT_ID:default-tenant}

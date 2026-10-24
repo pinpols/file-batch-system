@@ -11,10 +11,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
 import io.github.pinpols.batch.common.dto.WorkerTaskTypeDescriptorDto;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.orchestrator.config.WorkerRegistryProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.CustomTaskTypeUpsertParam;
 import io.github.pinpols.batch.orchestrator.domain.param.TouchHeartbeatParam;
@@ -29,6 +31,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -67,9 +70,7 @@ class DefaultWorkerRegistryServiceTest {
           new io.github.pinpols.batch.orchestrator.infrastructure.progress
               .PipelineStageProgressCache();
 
-  private final io.github.pinpols.batch.orchestrator.config.WorkerRegistryProperties
-      workerRegistryProperties =
-          new io.github.pinpols.batch.orchestrator.config.WorkerRegistryProperties();
+  private final WorkerRegistryProperties workerRegistryProperties = new WorkerRegistryProperties();
 
   private DefaultWorkerRegistryService service;
 
@@ -142,7 +143,7 @@ class DefaultWorkerRegistryServiceTest {
     service.heartbeat("w1", dto(WorkerRegistryStatus.ONLINE.code()));
 
     verify(mapper)
-        .touchHeartbeat(org.mockito.ArgumentMatchers.argThat((TouchHeartbeatParam p) ->
+        .touchHeartbeat(ArgumentMatchers.argThat((TouchHeartbeatParam p) ->
             WorkerRegistryStatus.DRAINING.code().equals(p.getNextStatus())));
   }
 
@@ -157,7 +158,7 @@ class DefaultWorkerRegistryServiceTest {
     service.heartbeat("w1", dto(WorkerRegistryStatus.ONLINE.code()));
 
     verify(mapper)
-        .touchHeartbeat(org.mockito.ArgumentMatchers.argThat((TouchHeartbeatParam p) ->
+        .touchHeartbeat(ArgumentMatchers.argThat((TouchHeartbeatParam p) ->
             WorkerRegistryStatus.DECOMMISSIONED.code().equals(p.getNextStatus())));
   }
 
@@ -172,7 +173,7 @@ class DefaultWorkerRegistryServiceTest {
     service.heartbeat("w1", dto(WorkerRegistryStatus.ONLINE.code()));
 
     verify(mapper)
-        .touchHeartbeat(org.mockito.ArgumentMatchers.argThat((TouchHeartbeatParam p) ->
+        .touchHeartbeat(ArgumentMatchers.argThat((TouchHeartbeatParam p) ->
             WorkerRegistryStatus.ONLINE.code().equals(p.getNextStatus())));
   }
 
@@ -237,6 +238,34 @@ class DefaultWorkerRegistryServiceTest {
     assertThat(captor.getValue().taskCapabilities().getValue())
         .contains("file_sha256")
         .contains("300000");
+  }
+
+  @Test
+  @DisplayName("注册 Worker 时保存 Replay 能力目录")
+  void shouldPersistReplayCapabilitiesOnlyWhenProvided() {
+    WorkerRegistryEntity saved = entityWithStatus(WorkerRegistryStatus.ONLINE.code());
+    when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(null, saved);
+    ReplayCapabilityDeclaration declaration = ReplayCapabilityDeclaration.unknown("plugin-a");
+    WorkerHeartbeatDto request =
+        dto(null).toBuilder().replayCapabilities(List.of(declaration)).build();
+    when(mapper.updateReplayCapabilities(eq("ta"), eq("w1"), anyString())).thenReturn(1);
+
+    service.register(request);
+
+    ArgumentCaptor<String> jsonCaptor = ArgumentCaptor.forClass(String.class);
+    verify(mapper).updateReplayCapabilities(eq("ta"), eq("w1"), jsonCaptor.capture());
+    assertThat(jsonCaptor.getValue()).contains("plugin-a").contains("UNKNOWN");
+  }
+
+  @Test
+  @DisplayName("旧 Worker 注册未携带 Replay 能力目录时保留已有声明")
+  void shouldPreserveReplayCapabilities_whenRegistrationOmitsCatalogue() {
+    WorkerRegistryEntity saved = entityWithStatus(WorkerRegistryStatus.ONLINE.code());
+    when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(saved, saved);
+
+    service.register(dto(null));
+
+    verify(mapper, never()).updateReplayCapabilities(anyString(), anyString(), anyString());
   }
 
   @Test
@@ -456,7 +485,7 @@ class DefaultWorkerRegistryServiceTest {
     service.register(dtoWithTaskTypes(List.of(descriptor)));
 
     verify(customTaskTypeRegistryMapper)
-        .upsertDeclared(org.mockito.ArgumentMatchers.argThat(
+        .upsertDeclared(ArgumentMatchers.argThat(
             (CustomTaskTypeUpsertParam p) -> "tenant_ta_import".equals(p.getTaskTypeCode())
                 && "导入".equals(p.getDisplayName())
                 && "v1".equals(p.getDescriptorVersion())

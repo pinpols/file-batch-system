@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.trigger.infrastructure.scheduler;
 
+import io.github.pinpols.batch.trigger.domain.param.BatchDayInstanceMarkCutoffParam;
+
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -51,17 +54,21 @@ class BatchDayCutoffSchedulerTest {
     BatchDayCutoffCandidate future = candidate(2L, LocalTime.MAX);
     when(batchDayInstanceMapper.selectOpenCutoffCandidates()).thenReturn(List.of(due, future));
     when(batchDayInstanceMapper.markCutoff(
-            eq(1L), eq("t1"), eq("CAL"), eq(due.getBizDate()), any()))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.id(), 1L) && java.util.Objects.equals(parameters.tenantId(), "t1") && java.util.Objects.equals(parameters.calendarCode(), "CAL") && java.util.Objects.equals(parameters.bizDate(), due.getBizDate()))))
         .thenReturn(1);
 
     scheduler.cutoff();
 
-    ArgumentCaptor<Instant> cutoffCaptor = ArgumentCaptor.forClass(Instant.class);
+    ArgumentCaptor<BatchDayInstanceMarkCutoffParam> cutoffCaptor = ArgumentCaptor.forClass(BatchDayInstanceMarkCutoffParam.class);
     verify(batchDayInstanceMapper)
-        .markCutoff(eq(1L), eq("t1"), eq("CAL"), eq(due.getBizDate()), cutoffCaptor.capture());
-    assertThat(cutoffCaptor.getValue()).isNotNull();
+        .markCutoff(cutoffCaptor.capture());
+    assertThat(cutoffCaptor.getValue().id()).isEqualTo(1L);
+    assertThat(cutoffCaptor.getValue().tenantId()).isEqualTo("t1");
+    assertThat(cutoffCaptor.getValue().calendarCode()).isEqualTo("CAL");
+    assertThat(cutoffCaptor.getValue().bizDate()).isEqualTo(due.getBizDate());
+    assertThat(cutoffCaptor.getValue().cutoffAt()).isNotNull();
     verify(batchDayInstanceMapper, never())
-        .markCutoff(eq(2L), eq("t1"), eq("CAL"), eq(future.getBizDate()), any());
+        .markCutoff(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.id(), 2L) && java.util.Objects.equals(parameters.tenantId(), "t1") && java.util.Objects.equals(parameters.calendarCode(), "CAL") && java.util.Objects.equals(parameters.bizDate(), future.getBizDate())));
   }
 
   @Test
@@ -71,7 +78,7 @@ class BatchDayCutoffSchedulerTest {
 
     scheduler.cutoff();
 
-    verify(batchDayInstanceMapper, never()).markCutoff(any(), any(), any(), any(), any());
+    verify(batchDayInstanceMapper, never()).markCutoff(org.mockito.ArgumentMatchers.any(BatchDayInstanceMarkCutoffParam.class));
   }
 
   private BatchDayCutoffCandidate candidate(Long id, LocalTime cutoffTime) {

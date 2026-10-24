@@ -162,4 +162,4 @@ Spring AI / OpenAI SDK 是开源组件，但 OpenAI API 调用本身**不是仅�
 - [`../compliance/THIRD-PARTY-LICENSES.md`](../compliance/THIRD-PARTY-LICENSES.md) — 第三方许可证清单
 - [`../compliance/sbom.json`](../compliance/sbom.json) — SBOM
 - [`../runbook/security-scan.md`](../runbook/security-scan.md) — 安全扫描 SOP
-- [project-structure-pom.md](./project-structure-pom.md) — 模块结构与 POM 设计
+- [project-structure-pom-2026-03-21.md](../archive/design/project-structure-pom-2026-03-21.md) — 模块结构与 POM 设计

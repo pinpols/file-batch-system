@@ -9,6 +9,7 @@
 -- 运维通过 console UI 调整 retention_days / 启用 cleanup 即可,不用手动 INSERT。
 --
 -- 已存在的不动(WHERE NOT EXISTS 兜底,可重复执行)。
+
 INSERT INTO batch.archive_policy (
     tenant_id, target_table, retention_days,
     archive_enabled, cleanup_enabled, batch_size,

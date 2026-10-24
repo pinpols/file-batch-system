@@ -1,10 +1,13 @@
 -- API Key 自助管理：租户创建/吊销用于外部集成的 API Key。
+
 CREATE TABLE IF NOT EXISTS batch.api_key (
     id              BIGSERIAL       PRIMARY KEY,
     tenant_id       VARCHAR(64)     NOT NULL,
     key_name        VARCHAR(128)    NOT NULL,
-    key_prefix      VARCHAR(8)      NOT NULL,          -- 前 8 位明文，用于识别
-    key_hash        VARCHAR(128)    NOT NULL,           -- SHA-256 哈希
+    -- 前 8 位明文，用于识别
+    key_prefix      VARCHAR(8)      NOT NULL,
+    -- SHA-256 哈希
+    key_hash        VARCHAR(128)    NOT NULL,
     scopes          VARCHAR(512)    NOT NULL DEFAULT '*',
     enabled         BOOLEAN         NOT NULL DEFAULT TRUE,
     expires_at      TIMESTAMPTZ,

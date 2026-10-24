@@ -1,8 +1,10 @@
 # 架构文档索引
 
-工程向运行态架构：系统流程、模块通信、扩展性评估、ADR 决策。
+系统架构、模型、原语、资产定义、边界、运行主链与 ADR；长期资产原位更新，单次核查记录放 audit。
 
 > **第一次接触系统？** 先看 [`project-structure.md`](./project-structure.md) 确认工程边界，再看 [`system-flow-overview.md`](./system-flow-overview.md) 理解端到端链路。
+
+Workflow 新根与系统 Pipeline 的实施范围见[整合方案](../plans/workflow-daily-integration-plan-2026-10-14.md)。本目录按当前开发分支代码更新；历史表/列或辅助实现保留不代表仍是新部署入口，也不代表正式验收全部完成。
 
 ## 文件清单（编号即推荐阅读顺序）
 
@@ -15,35 +17,36 @@
 | 05 | [kafka-topic-plan.md](./kafka-topic-plan.md) | Kafka Topic 命名 / 分区 / PATTERN 订阅规范 | 加新 topic 前 |
 | 06 | [worker-plugins.md](./worker-plugins.md) | Worker 平台框架 + IMPORT / EXPORT / DISPATCH 插件扩展机制 | 写新 Worker 类型前 |
 | 07 | [workflow-dependency-guide.md](./workflow-dependency-guide.md) | 租户 Workflow 完整运行流程图、运行态对象、DAG / GATEWAY / joinMode / CONDITION 编排指南 | 配 Workflow 或排查节点推进前 |
-| 08 | [scalability-assessment.md](./scalability-assessment.md) | 容量方向评估历史快照（2026-07-28）；不是当前容量认证 | 追溯容量判断；当前评估需结合最新压测与待办 |
-| 09 | [rework-classification.md](./rework-classification.md) | scalability 评估的"改什么"分类（代码 / 配置 / 数据 / 运维 / SQL / 部署 / 文档） | 决定哪些项目立项、哪些当下办 |
-| 10 | [quartz-replacement-design.md](./quartz-replacement-design.md) | 已撤销的 Quartz → Wheel 实施设计 | 历史决策 |
-| 11 | [quartz-replacement-evaluation.md](./quartz-replacement-evaluation.md) | Quartz 替换可行性评估 + 落地路径 | 同上，看决策上下文 |
 | 12 | [pipeline-vs-workflow-boundary.md](./pipeline-vs-workflow-boundary.md) | `pipeline_*` 与 `workflow_*` 职责边界（命名相似但不重叠） | 看到 pipeline / workflow 表名困惑时 |
 | 13 | [governance-tables-boundary.md](./governance-tables-boundary.md) | `config_approval` vs `approval_command` / `subscription_rule` vs `alert_routing_config` 职责边界 | 看到 governance 表对疑似重叠时 |
 | 14 | [notification-and-audit-boundary.md](./notification-and-audit-boundary.md) | 通知、技术告警、运行日志、业务审计的统一职责与复用边界 | 判断告警/通知/审计归属时 |
 | 15 | [outbox-architecture.md](./outbox-architecture.md) | Outbox 主表 + 副表（retry / delivery_log）+ 兄弟表（trigger_outbox_event）总览 | 排障 / 改 outbox 子系统前 |
 | 16 | [architecture-truth.md](./architecture-truth.md) | 当前架构事实的稳定入口与权威源清单 | 核对版本、模块、端口或迁移事实 |
-| 17 | [adr/](./adr/) | 架构决策记录（决策结论只追加；实现状态可按证据更新） | 想知道"为什么这么做" |
-| 18 | [../analysis/p0-p1-governance-status-2026-09-02.md](../analysis/p0-p1-governance-status-2026-09-02.md) | 2026-09-02 P0/P1 治理状态历史快照 | 追溯当时的证据边界；当前事项看 todo-master |
+| 17 | [adr/](adr) | 架构决策记录（决策结论只追加；实现状态可按证据更新） | 想知道"为什么这么做" |
 | 19 | [application-governance.md](./application-governance.md) | 超时、运行时兼容、故障注入、告警、供应链五项应用治理入口 | 复核横切治理是否有代码和证据 |
 | 20 | [bounded-context-rules.md](./bounded-context-rules.md) | bounded context 依赖方向和例外规则 | 调整跨域依赖前 |
 | 21 | [event-routing-policy.md](./event-routing-policy.md) | 事件路由与 topic 选择规则 | 新增或迁移事件前 |
-| 22 | [runtime-compatibility-contract-2026-09-01.md](./runtime-compatibility-contract-2026-09-01.md) | Java、Shell、容器和协议运行时兼容契约 | 升级运行时前 |
+| 22 | [runtime-compatibility-contract.md](runtime-compatibility-contract.md) | Java、Shell、容器和协议运行时兼容契约 | 升级运行时前 |
 | 23 | [engineering-maturity-roadmap.md](./engineering-maturity-roadmap.md) | 当前工程成熟度路线图,串联 Java、DB、运维、CI 和前端协作治理 | 规划下一批治理 / 上线准入复核 |
-| 24 | [maturity-assessment.md](./maturity-assessment.md) | 成熟度评估快照 | 能力对标时，结论需结合最新验证 |
-| 25 | [deficiencies-2026-05-30.md](./deficiencies-2026-05-30.md) / [p0-p1-p2-roadmap.md](./p0-p1-p2-roadmap.md) | 历史差距与治理路线证据 | 审计历史，不作为当前待办 |
 | 26 | [heavy-workload-guarantees.md](./heavy-workload-guarantees.md) | 重任务容量保障设计与已验证边界；目标环境容量仍需实测 | 重任务上线 / 定容 / 资源隔离前 |
 | 27 | [security-model.md](./security-model.md) | 资产、信任边界、攻击者假设和安全验证入口 | 新增外部入口、执行能力或安全控制前 |
+
+## 历史评估与撤销方案
+
+历史材料只用于追溯依据，当前治理以 [工程成熟度路线图](engineering-maturity-roadmap.md) 和 [TODO Master](../plans/todo-master.md) 为准：
+
+- [成熟度评估（2026-04-26）](../archive/audit/maturity-assessment-2026-04-26.md)、[容量方向评估（2026-07-28）](../archive/audit/scalability-assessment-2026-07-28.md)。
+- [改造工作量分类（2026-04-25）](../archive/plans/rework-classification-2026-04-25.md)、[P0/P1/P2 路线（2026-05-29）](../archive/plans/p0-p1-p2-roadmap-2026-05-29.md)、[缺陷盘点（2026-05-30）](../archive/audit/deficiencies-2026-05-30.md)。
+- 已撤销的时间轮 [实施设计](../archive/design/quartz-replacement-design-2026-04-25.md) 与 [评估](../archive/audit/quartz-replacement-evaluation-2026-04-25.md)；撤销决策继续保留在 [ADR-033](adr/ADR-033-quartz-to-wheel-scheduler.md)。
 
 ## 角色路径
 
 | 角色 | 路径 |
 |---|---|
 | 新人入门 | 01 → 02 → 03 |
-| 运维 / SRE | 08 → 09 → [`../runbook/`](../runbook/README.md) |
+| 运维 / SRE | [重任务保障](heavy-workload-guarantees.md) → [工程治理路线](engineering-maturity-roadmap.md) → [`../runbook/`](../runbook/README.md) |
 | 业务开发 | 07 → 06 → [`../design/`](../design/README.md) |
-| 架构改动 | 12 / 14（全 ADR）→ 写新 ADR |
+| 架构改动 | [职责边界](pipeline-vs-workflow-boundary.md) → [ADR 索引](adr/README.md) → 写新 ADR |
 
 ## 与其他子目录的分工
 
@@ -53,6 +56,16 @@
 | [`../design/`](../design/README.md) | 业务向 / 静态：数据模型 DDL、能力评估、链路设计 |
 | [`../runbook/`](../runbook/README.md) | 运维向：部署、监控、灰度、应急、巡检 |
 | [`../testing/`](../testing/README.md) | 质量向：测试计划、覆盖矩阵、release-gate |
-| [`../analysis/`](../analysis/README.md) | 当前事项索引、硬化 backlog 与历史分析快照 |
+| [`../plans/`](../plans/README.md) | 当前方案、事项与验收入口 |
 | [`../api/`](../api/README.md) | 前后端契约：Console API 协议 + OpenAPI |
 | [`../archive/`](../archive/README.md) | 历史快照：不再维护 |
+
+## 本次分支资产核查
+
+[五类系统资产逐文件核查](../audit/architecture-and-contract-assets-review-2026-10-24.md)记录 architecture/design/api/sdk/dict 的覆盖、修正与未验证边界；当前系统定义仍以各原文档为准，不转移到增量审计报告。
+
+## 系统边界资产
+
+| 文档 | 职责 |
+|---|---|
+| [system-scope-boundary.md](system-scope-boundary.md) | 系统职责范围分析 — 批量调度系统的边界守护 |

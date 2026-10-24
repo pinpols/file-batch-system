@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Enforce Java console and exception logging conventions."""
+# 用途：Java 日志与异常输出治理。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-java-logging-governance.py；参数与前置环境见下方说明及所属 README。
+"""检查 Java 控制台输出与异常日志是否遵循规约。"""
 
 from __future__ import annotations
 
@@ -73,7 +75,7 @@ def mask_literals_and_comments(source: str) -> str:
 
 
 def logger_calls(source: str) -> list[str]:
-    """Extract balanced logger invocations while ignoring parentheses in literals/comments."""
+    """提取括号配对的日志调用，忽略字面量与注释中的括号。"""
     calls: list[str] = []
     cursor = 0
     searchable = mask_literals_and_comments(source)

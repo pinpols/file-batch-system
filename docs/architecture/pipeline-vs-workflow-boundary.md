@@ -1,6 +1,8 @@
 # pipeline_* 与 workflow_* 职责边界
 
-> **结论先行**：`pipeline_*` 与 `workflow_*` **不是替代关系，是两个并列 abstraction**。pipeline 是**文件域内的步骤链路**，workflow 是**跨 job 的 DAG 编排**。命名相似容易让人误判为重叠／半弃用，本文给出权威边界。
+> **当前开发分支口径（2026-10-24）**：单作业和组合图均由 WorkflowRun 承载顶层运行，JOB 节点按需创建独立 JobInstance；按 Job 类型解析系统固定 Pipeline。旧顶层 Job 包装、租户 Pipeline 编辑和旧配置包格式不作为新部署入口。ADR-048 采用全新数据库与隔离命名空间切换，不承诺旧载荷/旧运行原地兼容；部署验收另看当前矩阵。
+
+> **结论先行**：Workflow 管理 Job 之间的编排；Pipeline 是文件类 Job 按类型执行的固定阶段链。二者都保留，但新配置中不再由 Workflow 节点引用租户可编辑的 Pipeline 定义；Pipeline 也不是独立顶层调度入口。
 
 ---
 
@@ -12,20 +14,20 @@ flowchart TB
     direction LR
     W1[workflow_definition] --- WN1[workflow_node<br/>WorkflowNodeType]
     WN1 -- related_job_code --> J1[job_definition]
-    WN1 -- related_pipeline_code --> P1[pipeline_definition]
     WN1 --- WE[workflow_edge<br/>SUCCESS / FAILURE / CONDITION]
   end
 
   subgraph Pipeline["pipeline_* — 文件域内的步骤链路"]
     direction LR
-    P1 --- PSD[pipeline_step_definition<br/>预处理→解析→校验→入库 / 数据准备→生成→存储 等]
+    J1 -- JobType --> SYS[SystemPipelineCatalog<br/>平台代码固定定义]
+    SYS --- PSD[固定阶段序列<br/>IMPORT / EXPORT / PROCESS / DISPATCH]
     PI[pipeline_instance] --- PSR[pipeline_step_run]
   end
 
-  P1 -. 运行时实例化 .-> PI
+  J1 -. 运行时按类型实例化 .-> PI
 ```
 
-**关系一句话**：workflow_node 可以引用 pipeline_definition（`related_pipeline_code`）。pipeline 是 workflow 的一种 **节点实现**，不是 workflow 的替代品。
+**关系一句话**：Workflow 节点引用 Job；文件类 Job 的类型决定系统 Pipeline。旧租户Pipeline定义及步骤表在V347退役；系统固定阶段只来自代码目录和Job业务参数，不提供旧定义查询或执行回退。
 
 ---
 
@@ -33,12 +35,12 @@ flowchart TB
 
 | 维度 | `workflow_*`（DAG 编排） | `pipeline_*`（文件链路）|
 |---|---|---|
-| 粒度 | **跨 job** | **job 内的 step** |
-| 主要场景 | "JOB_A 跑完 → JOB_B 跑"、"JOB_A/B/C 等齐 → JOB_D"、catch-up、补数 | 文件 IMPORT / EXPORT / DISPATCH 三类链路的步骤拆分 |
-| 表 | `workflow_definition` / `workflow_node` / `workflow_edge` / `workflow_run` / `workflow_node_run` | `pipeline_definition` / `pipeline_step_definition` / `pipeline_instance` / `pipeline_step_run` |
-| 主消费者 | `batch-orchestrator`（DAG 推进、join 触发、SKIP 级联） | `batch-worker-import` / `batch-worker-export` / `batch-worker-dispatch`（按 step 顺序执行插件） |
-| 节点／步骤类型 | <!-- enum-sync:WorkflowNodeType:start -->`TASK`, `GATEWAY`, `FILE_STEP`, `START`, `END`, `JOB`, `WAIT`<!-- enum-sync:WorkflowNodeType:end -->（`WorkflowNodeType`）| 由 `pipeline_step_definition.impl_code` 决定，按链路领域不同（`PreprocessStep` / `ParseStep` / `ValidateStep` / `LoadStep` / `GenerateStep` ...）|
-| 边／条件 | <!-- enum-sync:WorkflowEdgeType:start -->`SUCCESS`, `FAILURE`, `CONDITION`, `ALWAYS`<!-- enum-sync:WorkflowEdgeType:end --> 边 + GATEWAY join（<!-- enum-sync:WorkflowJoinMode:start -->`ALL`, `ANY`, `N_OF`<!-- enum-sync:WorkflowJoinMode:end -->） | 顺序执行，无条件分支；失败靠 retry / 补偿 |
+| 粒度 | **顶层执行的 Job 组合与控制流** | **单个文件类 Job 内部的固定阶段** |
+| 主要场景 | 单 Job、串行/并行 Job、分支、汇合、依赖和整体调度 | IMPORT / EXPORT / PROCESS / DISPATCH 阶段推进 |
+| 定义与运行事实 | `workflow_definition` / `workflow_node` / `workflow_edge` / `workflow_run` / `workflow_node_run` | 新执行身份来自 `SystemPipelineCatalog`；旧定义表及关联ID已退役，运行表为 `pipeline_instance` / `pipeline_step_run` |
+| 主消费者 | `batch-orchestrator`（Workflow 推进、节点 Job 派发、join 与整体收敛） | `batch-worker-import` / `batch-worker-export` / `batch-worker-process` / `batch-worker-dispatch` |
+| 节点／步骤类型 | <!-- enum-sync:WorkflowNodeType:start -->`TASK`, `GATEWAY`, `START`, `END`, `JOB`, `WAIT`<!-- enum-sync:WorkflowNodeType:end --> | 由系统目录与 Worker 阶段实现共同固定；用户不可编辑阶段顺序 |
+| 边／条件 | <!-- enum-sync:WorkflowEdgeType:start -->`SUCCESS`, `FAILURE`, `CONDITION`, `ALWAYS`<!-- enum-sync:WorkflowEdgeType:end --> 边 + GATEWAY join（<!-- enum-sync:WorkflowJoinMode:start -->`ALL`, `ANY`, `N_OF`<!-- enum-sync:WorkflowJoinMode:end -->） | 固定顺序，无用户配置的分支；阶段内恢复语义归 Worker |
 | 状态机 | `workflow_run.run_status`：<!-- enum-sync:WorkflowRunStatus:start -->`CREATED`, `RUNNING`, `PAUSED`, `SUCCESS`, `FAILED`, `TERMINATED`, `SUCCESS_DRY_RUN`, `FAILED_DRY_RUN`<!-- enum-sync:WorkflowRunStatus:end --> | `pipeline_instance.run_status`：<!-- enum-sync:PipelineRunStatus:start -->`CREATED`, `RUNNING`, `SUCCESS`, `FAILED`, `COMPENSATING`, `TERMINATED`<!-- enum-sync:PipelineRunStatus:end --> |
 | 入口文档 | [workflow-dependency-guide.md](workflow-dependency-guide.md) + [ADR-009 workflow-param-dsl](adr/ADR-009-workflow-param-dsl.md) | [docs/design/file-pipeline-design.md §9](../design/file-pipeline-design.md) |
 
@@ -48,22 +50,22 @@ flowchart TB
 
 判断顺序：
 
-1. **要让多个 job 之间有依赖／catch-up／GATEWAY join** → `workflow_*`
-2. **要把一类文件处理（导入／导出／分发）切成可插拔的步骤** → `pipeline_*`
-3. **既要跨 job 编排，又要文件链路** → 上层用 workflow，文件节点用 `workflow_node.node_type=FILE_STEP` + `related_pipeline_code` 指向 pipeline 定义。两者协作。
+1. **任何顶层运行，包括只运行一个 Job** → `workflow_*`；单 Job 使用受管 `START → JOB → END`。
+2. **需要配置 Job 参数、模板、通道或分片** → `job_definition`。
+3. **文件类 Job 需要固定处理阶段** → Job 的类型映射到系统 Pipeline；不创建、选择或编辑租户 Pipeline 定义。
+4. **需要组合多个执行单元** → Workflow 节点引用已有 Job。
 
 **反例**：
 
-- ❌ "我有一个文件处理流程，但又想加 retry 策略" → 不要用 workflow，用 `pipeline_step_definition.retry_policy` 字段
-- ❌ "我有两个 job 想串起来" → 不要在 pipeline 里塞 job，用 workflow_edge
+- ❌ "我要调整某个 Job 的 Pipeline 阶段顺序" → 阶段顺序是系统执行契约，不能在租户配置中编辑
+- ❌ "我想让一个单 Job 绕过 Workflow 直接运行" → 调用该 Job 的受管单作业 Workflow
+- ❌ "我有两个 Job 想串起来" → 不在 Pipeline 中塞 Job，使用 Workflow 节点和边
 
 ---
 
 ## 4. 为什么命名相似但不重叠
 
-历史原因：pipeline 概念早于 workflow 引入（先解决"文件链路碎片化"），workflow 后来加上来解决"跨 job 编排"。两者的领域单词（pipeline / workflow）在调度生态里都有，确实容易混。
-
-**未来改名计划**：无。两者都已 active 在生产，重命名收益不抵 schema migration 成本。本文档作为唯一权威边界说明。
+Pipeline 负责 Job 内部阶段事实，Workflow 负责顶层状态与编排。Workflow 节点通过 Job 类型间接选择系统 Pipeline。
 
 ---
 
@@ -71,8 +73,9 @@ flowchart TB
 
 | 想看 | join 路径 |
 |---|---|
-| 某 workflow_run 用了哪些 pipeline | `workflow_run` → `workflow_node`（`node_type=FILE_STEP`）→ `pipeline_definition`（`related_pipeline_code`）|
-| 某 pipeline_instance 是哪个 workflow_run 触发的 | `pipeline_instance` 没有直连 workflow 的 FK 列；按 `trace_id` 反查 `workflow_run` 即可（同一 traceId 在派发时贯穿）|
+| 某 Workflow 节点的 Job 使用哪类系统 Pipeline | `workflow_node.related_job_code` → `job_definition.job_type` → `SystemPipelineCatalog` |
+| Workflow 的 Pipeline 归属 | Workflow 节点引用 Job；Pipeline 类型由 Job 类型决定，不存在 Workflow 直接 Pipeline 引用 |
+| 某 pipeline_instance 是哪个 workflow_run 触发的 | 优先通过关联的 `job_instance` 与 Workflow 节点运行关系查询；按持久化节点/作业关联查询，trace 仅用于排障关联 |
 | 某 pipeline_instance 关联的 job | `pipeline_instance.related_job_instance_id` → `job_instance.id` |
 | 某 job 同时被几个 workflow 引用 | `workflow_node` where `related_job_code = ?` |
 
@@ -83,4 +86,4 @@ flowchart TB
 - [workflow-dependency-guide.md](workflow-dependency-guide.md) — workflow DAG 主文档
 - [docs/design/file-pipeline-design.md §9](../design/file-pipeline-design.md) — 文件链路设计（pipeline 主文档）
 - [ADR-009 workflow-param-dsl](adr/ADR-009-workflow-param-dsl.md) — workflow 节点参数 DSL
-- [docs/agent-baseline.md §领域数据字典](../../docs/agent-baseline.md) — `WorkflowNodeType` / `WorkflowEdgeType` / `WorkflowType` / `JobType` 枚举
+- [docs/agent-baseline.md §领域数据字典](../agent-baseline.md) — `WorkflowNodeType` / `WorkflowEdgeType` / `WorkflowType` / `JobType` 枚举

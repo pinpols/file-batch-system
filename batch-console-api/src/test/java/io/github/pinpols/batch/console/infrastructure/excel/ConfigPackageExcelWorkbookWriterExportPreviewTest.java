@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import org.apache.poi.ss.usermodel.Comment;
 import org.apache.poi.ss.usermodel.DataValidation;
+import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.DisplayName;
@@ -36,11 +37,11 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
       ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET,
       ConfigPackageExcelValidator.CHANNEL_SHEET,
       ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
-      ConfigPackageExcelValidator.PIPELINE_SHEET,
-      ConfigPackageExcelValidator.STEP_SHEET,
       ConfigPackageExcelValidator.WF_DEF_SHEET,
       ConfigPackageExcelValidator.WF_NODE_SHEET,
       ConfigPackageExcelValidator.WF_EDGE_SHEET);
+
+  private static final int LEGACY_IMPORT_SHEET_COUNT = 12;
 
   private static final List<String> SUPPLEMENT_SHEET_NAMES = List.of(
       ConsoleExcelStyles.SHEET_NAME_README,
@@ -82,7 +83,8 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
       assertThat(jobSheet.getRow(1).getCell(1).getStringCellValue())
           .isEqualTo("JOB_IMPORT_CUSTOMER");
       // 公式注入被转义（不产生可执行公式）
-      assertThat(jobSheet.getRow(1).getCell(20).getStringCellValue())
+      int defaultParamsColumn = headerColumnIndex(jobSheet.getRow(0), "default_params");
+      assertThat(jobSheet.getRow(1).getCell(defaultParamsColumn).getStringCellValue())
           .isNotEqualTo("=1+1")
           .contains("1+1");
     }
@@ -128,20 +130,16 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
   }
 
   @Test
-  @DisplayName("导出工作簿:步骤实现编码列按注册表生成动态下拉")
-  void shouldApplyStepImplDropdown_whenRegistryProvidesImplCodes() throws Exception {
+  @DisplayName("导出工作簿:不再提供可编辑的 Pipeline 定义和步骤表")
+  void shouldOmitLegacyPipelineConfigurationSheetsFromExports() throws Exception {
     List<List<Map<String, Object>>> sheetData = emptyExportData();
     sheetData.set(
         8, List.of(row("job_code", "JOB_PROCESS", "version", "1", "impl_code", "sqlCompute")));
 
     try (XSSFWorkbook wb = read(workbookWriter()
         .buildExportWorkbook(sheetData, Map.of("PROCESS", List.of("sqlCompute"))))) {
-      Sheet stepSheet = wb.getSheet(ConfigPackageExcelValidator.STEP_SHEET);
-      // impl_code 列(index 6)有动态下拉
-      assertThat(stepSheet.getDataValidations()).anySatisfy(dv -> {
-        String formula = dv.getValidationConstraint().getFormula1();
-        assertThat(formula).contains("PROCESS:sqlCompute");
-      });
+      assertThat(wb.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET)).isNull();
+      assertThat(wb.getSheet(ConfigPackageExcelValidator.STEP_SHEET)).isNull();
     }
   }
 
@@ -176,11 +174,7 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
         ConfigPackageExcelValidator.COL_QUEUE_CODE,
         "queue_code references unknown resource_queue: no-such-queue");
     // 单元格批注来自 sheet 自身 issue；跨表 issue 只进入校验明细 sheet（锁定现状，避免重构漂移）。
-    List<WorkbookIssue> crossRefIssues = List.of(new WorkbookIssue(
-        ConfigPackageExcelValidator.PIPELINE_SHEET,
-        3,
-        ConfigPackageExcelValidator.COL_JOB_CODE,
-        "job_code references unknown job definition: JOB_MISSING"));
+    List<WorkbookIssue> crossRefIssues = List.of();
     PackageValidationResult result = new PackageValidationResult(
         emptySheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET),
         emptySheet(ConfigPackageExcelValidator.BUSINESS_CALENDAR_SHEET),
@@ -208,9 +202,10 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
           .isEqualTo(ConfigPackageExcelValidator.JOB_SHEET);
       assertThat(validationSheet.getRow(1).getCell(3).getStringCellValue())
           .contains("no-such-queue");
-      assertThat(validationSheet.getRow(2).getCell(0).getStringCellValue())
-          .isEqualTo(ConfigPackageExcelValidator.PIPELINE_SHEET);
-      assertThat(validationSheet.getRow(2).getCell(3).getStringCellValue()).contains("JOB_MISSING");
+      assertThat(wb.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET))
+          .as("retired tenant Pipeline sheets are excluded from new previews")
+          .isNull();
+      assertThat(wb.getSheet(ConfigPackageExcelValidator.STEP_SHEET)).isNull();
     }
   }
 
@@ -240,7 +235,7 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
 
   private static List<List<Map<String, Object>>> emptyExportData() {
     List<List<Map<String, Object>>> data = new ArrayList<>();
-    for (int i = 0; i < DATA_SHEET_NAMES.size(); i++) {
+    for (int i = 0; i < LEGACY_IMPORT_SHEET_COUNT; i++) {
       data.add(List.of());
     }
     return data;
@@ -262,5 +257,14 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
 
   private static SheetResult emptySheet(String sheetName) {
     return new SheetResult(sheetName, 0, List.of(), List.of());
+  }
+
+  private static int headerColumnIndex(Row header, String columnName) {
+    for (int column = 0; column < header.getLastCellNum(); column++) {
+      if (columnName.equals(header.getCell(column).getStringCellValue())) {
+        return column;
+      }
+    }
+    throw new AssertionError("missing column: " + columnName);
   }
 }

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：Shell 脚本共用的 Python 运行时选择器。
+# 用法：由调用脚本 source scripts/lib/python-runtime.sh 后使用公共变量或函数。
 # Shell 脚本共用的 Python 运行时选择器。
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

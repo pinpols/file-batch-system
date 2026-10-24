@@ -1,6 +1,6 @@
-UPDATE batch.job_definition
-SET enabled = false,
+UPDATE batch.workflow_definition
+SET schedule_enabled = false,
     updated_by = 'sim-cleanup',
     updated_at = CURRENT_TIMESTAMP
 WHERE tenant_id = 'ta'
-  AND job_code IN ('TA_TRIGGER_STAGE6C_SCHEDULED', 'TA_TRIGGER_STAGE6C_MISFIRE');
+  AND workflow_code IN ('WF-TA_TRIGGER_STAGE6C_SCHEDULED', 'WF-TA_TRIGGER_STAGE6C_MISFIRE');

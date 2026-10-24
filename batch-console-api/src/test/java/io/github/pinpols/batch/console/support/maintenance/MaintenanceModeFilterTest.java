@@ -10,6 +10,7 @@ import io.github.pinpols.batch.console.config.ConsoleMaintenanceProperties;
 import io.github.pinpols.batch.console.domain.ops.mapper.MaintenanceStateMapper;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
 import jakarta.servlet.FilterChain;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
@@ -72,12 +73,7 @@ class MaintenanceModeFilterTest {
   @DisplayName("计划维护开始前公告生效但业务写请求仍放行")
   void shouldAllowWritesBeforeScheduledStart() throws Exception {
     stateHolder.update(new MaintenanceState(
-        true,
-        true,
-        "planned maintenance",
-        null,
-        java.time.Instant.now().plusSeconds(3600),
-        List.of()));
+        true, true, "planned maintenance", null, Instant.now().plusSeconds(3600), List.of()));
 
     filter.doFilterInternal(
         new MockHttpServletRequest("POST", "/api/console/jobs"), response, chain);
@@ -90,12 +86,7 @@ class MaintenanceModeFilterTest {
   @DisplayName("计划开始时间到达后维护拦截立即生效")
   void shouldBlockAfterScheduledStart() throws Exception {
     stateHolder.update(new MaintenanceState(
-        true,
-        true,
-        "maintenance active",
-        null,
-        java.time.Instant.now().minusSeconds(1),
-        List.of()));
+        true, true, "maintenance active", null, Instant.now().minusSeconds(1), List.of()));
 
     filter.doFilterInternal(
         new MockHttpServletRequest("POST", "/api/console/jobs"), response, chain);

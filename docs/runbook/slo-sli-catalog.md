@@ -14,14 +14,16 @@
 
 | SLI | 业务含义 | 主要信号 | 典型 Runbook |
 |---|---|---|---|
-| 调度准点率 | 计划触发在允许延迟内进入 launch / WAITING / RUNNING | trigger fire 延迟、`trigger_request` 状态、Quartz misfire、readiness defer | [`trigger-operations.md`](./trigger-operations.md)、[`dependency-aware-fire.md`](./dependency-aware-fire.md) |
-| 批次日完成率 | 指定业务日内关键作业终态达到 SUCCESS 或可解释终态 | `batch_day_instance`、`job_instance` 终态、审批 / skip 记录 | [`batch-day-gate-howto.md`](./batch-day-gate-howto.md)、[`go-live-realism-audit-2026-06-21.md`](./go-live-realism-audit-2026-06-21.md) |
+| 调度准点率 | 计划触发在允许延迟内进入 launch / WAITING / RUNNING | trigger fire 延迟、`trigger_request` 状态、请求到实例 p95、Quartz misfire、readiness defer | [`trigger-operations.md`](./trigger-operations.md)、[`dependency-aware-fire.md`](./dependency-aware-fire.md) |
+| 批次日完成率 | 指定业务日内关键作业终态达到 SUCCESS 或可解释终态 | `batch_day_instance`、`job_instance` 终态、审批 / skip 记录 | [`batch-day-gate-howto.md`](./batch-day-gate-howto.md)、[`go-live-audit-checklist.md`](../standards/go-live-audit-checklist.md) |
+| 日切恢复进度 | Orchestrator 停机后，启用日历的原始业务日 catch-up 是否收敛 | `batch_batch_day_open_catchup_remaining_days`、`batch_batch_day_open_catchup_calendars_behind`、扫描失败计数 | [`batch-day-gate-howto.md`](./batch-day-gate-howto.md) |
+| 作业依赖等待 | 下游作业是否长期因上游结果缺失而无法启动 | `batch_job_dependency_waiting`、`batch_job_dependency_wait_oldest_age_seconds`、超时告警 | [`dependency-aware-fire.md`](./dependency-aware-fire.md) |
 | 运行积压深度 | 运行态排队是否超过容量假设 | WAITING partition、oldest queued age、tenant / queue 并发 | [`heavy-workload-operations.md`](./heavy-workload-operations.md)、[`autoscaling-strategy.md`](./autoscaling-strategy.md) |
 | Outbox 投递健康 | 控制面事件是否持续可投递 | `outbox_event` backlog、oldest unpublished age、retry / DLQ | [`outbox-architecture.md`](../architecture/outbox-architecture.md)、[`compensation-cleanup.md`](./compensation-cleanup.md) |
 | Kafka 消费滞后 | Worker / 下游消费者是否跟上生产速率 | consumer group lag、topic backlog、KEDA scaler 信号 | [`autoscaling-strategy.md`](./autoscaling-strategy.md)、[`base-services-deployment.md`](./base-services-deployment.md) |
-| 文件到达准点率 | 上游文件组是否在 SLA 内完整到达并通过完整性门禁 | file arrival group、manifest / checksum、missing / stale 告警 | [`event-driven-arrival.md`](./event-driven-arrival.md)、[`worker-stage-coverage.md`](./worker-stage-coverage.md) |
+| 文件到达准点率 | 上游文件组是否在 SLA 内完整到达并通过完整性门禁 | file arrival group、`batch_file_arrival_group_waiting_count`、`batch_file_arrival_group_oldest_wait_seconds`、manifest / checksum、missing / stale 告警 | [`event-driven-arrival.md`](./event-driven-arrival.md)、[后端 Sim 可靠性场景组](../testing/backend-sim-reliability.md) |
 | 重试恢复率 | 失败任务是否在重试预算内恢复,未耗尽进入 DLQ | `retry_schedule`、`dead_letter_task`、worker report 失败原因 | [`forensic-replay-howto.md`](./forensic-replay-howto.md)、[`compensation-cleanup.md`](./compensation-cleanup.md) |
-| Worker 在线健康 | Worker 是否按能力和租约稳定参与执行 | `worker_registry` 心跳、lease renew、fast retry、offline count | [`rolling-upgrade-workers.md`](./rolling-upgrade-workers.md)、[`worker-stage-coverage.md`](./worker-stage-coverage.md) |
+| Worker 在线健康 | Worker 是否按能力和租约稳定参与执行 | `worker_registry` 心跳、lease renew、fast retry、offline count | [`rolling-upgrade-workers.md`](./rolling-upgrade-workers.md)、[后端 Sim 可靠性场景组](../testing/backend-sim-reliability.md) |
 | 下游 readiness 成功率 | 依赖上游结果的触发是否正确等待并在窗口内放行 | readiness defer、timeout、asset partition EFFECTIVE | [`dependency-aware-fire.md`](./dependency-aware-fire.md)、[`../design/asset-partition-readiness.md`](../design/asset-partition-readiness.md) |
 | 数据库迁移一致性 | 代码迁移文件与目标库 Flyway history 是否一致 | `flyway_schema_history`、schema governance report | [`db-migration-checklist.md`](./db-migration-checklist.md)、[`../design/database-schema-governance.md`](../design/database-schema-governance.md) |
 | 归档调度健康 | 归档与文件清理调度是否持续正常返回 | `batch_archive_scheduler_last_success_timestamp_seconds{scheduler=...}`、数据库增长与磁盘水位 | [`backup-and-pitr.md`](./backup-and-pitr.md) |
@@ -39,6 +41,8 @@
 | `oldest queued partition waited` | 运行积压深度 | 检查准入限制、资源队列、Worker 容量、Kafka lag 和 PG 锁等待 |
 | `PG lock / Hikari saturation` | 多个 SLI 的基础依赖 | 先保护写路径和主链路,再分析慢 SQL、连接池和迁移/清理任务 |
 | `ArchiveSchedulerNeverSucceeded` / `ArchiveSchedulerStale` | 归档调度健康 | 先按 `scheduler` 标签检查任务日志、ShedLock、数据库连通性和归档开关；此指标表示调度调用正常返回，不证明逐条归档成功 |
+| `BatchDayCatchupBacklog` / `BatchDayCatchupScanFailures` | 日切恢复进度 | 先检查 Orchestrator `batch_day_open` 调度与错误日志；失败时 gauge 保留上次完整快照。全局指标不含 tenant/calendar 归属，也不发现游标锚点前历史缺口 |
+| `BatchJobDependencyWaitTooOld` | 作业依赖等待 | 指标仅为全局聚合且不含租户/作业标签；从租户作用域的 Console WAITING 列表定位，再检查对应上游业务日结果和超时告警，禁止直接修改等待表 |
 
 Prometheus 规则入口：
 
@@ -72,6 +76,8 @@ Prometheus 规则入口：
 |---|---|---|---|
 | HTTP Controller/API 异常 | `HttpServerErrorRateHigh` / `http_server_requests_seconds_count` | 已覆盖：按稳定 target `job` 分服务计算 5xx 比率，并设请求数下限；避免服务间流量稀释 | 低于请求数下限的单次错误由日志/追踪定位，不按 URI 等高基数标签分组告警 |
 | Trigger launch 技术失败 | `TriggerLaunchFailureDetected`、`TriggerLaunchFailureSpike` / `batch_trigger_launch_failed_total` | 已覆盖：低频技术失败告警 + 持续高频严重告警；排除预期限流和业务拒绝 | 消息解析、HTTP 和 runtime 失败触发；业务拒绝保留为业务结果，不升级成平台故障告警 |
+| ACCEPTED 请求未创建实例 | `TriggerStaleAcceptedWithoutInstance` / `batch_trigger_launch_stale_accepted_count`、`batch_trigger_launch_stale_accepted_oldest_age_seconds` | 已覆盖：超过配置阈值仍没有非 CREATED 实例即告警；待人工审批的 misfire/catch-up 不计入，避免把审批等待误报为投递故障 | 排查 outbox 发布、Kafka consumer、Orchestrator launch 错误和陈旧 CREATED 恢复；审批等待由独立待审批/过期链路处理；指标为全局聚合，不暴露租户标签 |
+| 请求到实例延迟 | `TriggerRequestToInstanceLatencyHigh` / `batch_trigger_launch_request_to_instance_p95_seconds` | 已覆盖：近 15 分钟至少 20 个样本且 p95 超过 30 秒持续 10 分钟告警 | 这是数据库请求创建到 job_instance 创建的端到端控制面时延；WAITING/未启动请求不进入延迟样本 |
 | 陈旧 CREATED 实例恢复失败 | `StaleCreatedLaunchRecoveryFailed` / `batch_trigger_launch_created_recovery_failed_total` | 已覆盖：窗口内任一恢复失败即告警 | 恢复失败会阻碍实例自愈；按告警描述检查 DB、trigger_request 和恢复调度器 |
 | 告警渠道实际投递失败 | `BatchAlertmanagerDeliveryFailed` / `am_notify_failed_total` | 已覆盖：匹配到渠道但发送器返回失败时按 receiver 计数；与无渠道跳过分开处理 | 检查 `notification_delivery_log`、渠道状态和独立升级渠道；不能只看 Alertmanager 已把 webhook 发到 Console |
 | Outbox、REPORT、DLQ、重试及通知投递 | Outbox backlog/GIVE_UP/circuit、Worker report dropped/GIVE_UP、DLQ、Webhook delivery 规则 | 已有多条事件告警 | 按 Runbook 先恢复投递，再处理重放；不能用清理积压替代根因修复 |

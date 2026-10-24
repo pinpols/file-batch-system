@@ -18,7 +18,8 @@ public final class DataSourceConnectionLease implements AutoCloseable {
 
   public static DataSourceConnectionLease acquire(DataSource dataSource) {
     DataSource source = Objects.requireNonNull(dataSource, "dataSource");
-    return new DataSourceConnectionLease(DataSourceUtils.getConnection(source), source);
+    Connection connection = DataSourceUtils.getConnection(source);
+    return new DataSourceConnectionLease(connection, source);
   }
 
   public Connection connection() {

@@ -1,6 +1,6 @@
 # 工程成熟度路线图
 
-本文把 Java 后端、数据库、运维、CI 和配对前端协作的长期治理目标收敛为一个当前入口。历史评估见 [`maturity-assessment.md`](./maturity-assessment.md),历史 P0/P1/P2 方案见 [`p0-p1-p2-roadmap.md`](./p0-p1-p2-roadmap.md)。本文只保留后续持续执行的工程口径。
+本文把 Java 后端、数据库、运维、CI 和配对前端协作的长期治理目标收敛为一个当前入口。历史评估见 [`maturity-assessment-2026-04-26.md`](../archive/audit/maturity-assessment-2026-04-26.md),历史 P0/P1/P2 方案见 [`p0-p1-p2-roadmap-2026-05-29.md`](../archive/plans/p0-p1-p2-roadmap-2026-05-29.md)。本文只保留后续持续执行的工程口径。
 
 ## 成熟度目标
 

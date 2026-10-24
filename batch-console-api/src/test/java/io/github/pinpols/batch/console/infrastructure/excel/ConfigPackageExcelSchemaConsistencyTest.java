@@ -30,10 +30,6 @@ class ConfigPackageExcelSchemaConsistencyTest {
         .isEqualTo(ConfigPackageExcelSchema.FileChannel.COLUMNS);
     assertThat(ConfigPackageExcelWorkbookWriter.FILE_TEMPLATE_COLUMNS)
         .isEqualTo(ConfigPackageExcelSchema.FileTemplate.COLUMNS);
-    assertThat(ConfigPackageExcelWorkbookWriter.PIPELINE_COLUMNS)
-        .isEqualTo(ConfigPackageExcelSchema.PipelineDefinition.COLUMNS);
-    assertThat(ConfigPackageExcelWorkbookWriter.STEP_COLUMNS)
-        .isEqualTo(ConfigPackageExcelSchema.PipelineStep.COLUMNS);
     assertThat(ConfigPackageExcelWorkbookWriter.WF_DEF_COLUMNS)
         .isEqualTo(ConfigPackageExcelSchema.WorkflowDefinition.COLUMNS);
     assertThat(ConfigPackageExcelWorkbookWriter.WF_NODE_COLUMNS)

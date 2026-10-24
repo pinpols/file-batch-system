@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.console.domain.rbac.service;
 
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleUserBatchOperationInsertOperationParam;
+
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -126,17 +129,21 @@ public class ConsoleUserBatchProvisioningService {
   public Preview preview(MultipartFile file) throws IOException {
     UploadFileGuard.requireExcel(file);
     String filename = file.getOriginalFilename();
-    if (file.getSize() > MAX_BYTES
+    boolean provisioningWorkbookIsInvalid = file.getSize() > MAX_BYTES
         || filename == null // empty-check: allow - Sonar 需要直接识别解引用前的空值保护。
-        || !filename.toLowerCase(Locale.ROOT).endsWith(".xlsx")) {
+        || !filename.toLowerCase(Locale.ROOT).endsWith(".xlsx");
+    if (provisioningWorkbookIsInvalid) {
       throw invalid("XLSX file exceeds 2 MiB or has an unsupported extension");
     }
     byte[] bytes = file.getBytes();
     List<AccountRow> rows = parse(bytes);
     if (EmptyChecks.isEmpty(rows)) throw invalid("Workbook contains no accounts");
-    String token = UUID.randomUUID().toString();
+    UUID tokenId = UUID.randomUUID();
+    String token = tokenId.toString();
     String digest = digest(bytes);
-    Session session = new Session(actor().username(), digest, 1, rows);
+    ConsolePrincipal principal = actor();
+    String previewActorUsername = principal.username();
+    Session session = new Session(previewActorUsername, digest, 1, rows);
     save(token, session);
     return validate(token, session);
   }
@@ -170,7 +177,8 @@ public class ConsoleUserBatchProvisioningService {
     if (session.version() != version)
       throw BizException.of(ResultCode.CONFLICT, "preview version changed");
     if (EmptyChecks.isNull(requestId)) throw invalid("requestId is required");
-    if (EmptyChecks.isNotNull(findByRequestId(requestId, null))) {
+    Operation existingApplication = findByRequestId(requestId, null);
+    if (EmptyChecks.isNotNull(existingApplication)) {
       throw BizException.of(ResultCode.CONFLICT, "Batch already applied; query by requestId");
     }
     Preview checked = validate(token, session);
@@ -240,13 +248,18 @@ public class ConsoleUserBatchProvisioningService {
       tenantIds.add(created.tenantId());
     }
     UUID operationId = UUID.randomUUID();
+    List<String> sortedTenantIds = tenantIds.stream().sorted().toList();
+    String tenantIdsCsv = String.join(",", sortedTenantIds);
+    ConsoleUserBatchOperationInsertOperationParam consoleUserBatchOperationInsertOperationParam = ConsoleUserBatchOperationInsertOperationParam.builder()
+        .operationId(operationId)
+        .requestId(requestId)
+        .actor(session.actor())
+        .sourceDigest(session.sourceDigest())
+        .accountCount(credentials.size())
+        .tenantIds(tenantIdsCsv)
+        .build();
     operationMapper.insertOperation(
-        operationId,
-        requestId,
-        session.actor(),
-        session.sourceDigest(),
-        credentials.size(),
-        String.join(",", tenantIds.stream().sorted().toList()));
+        consoleUserBatchOperationInsertOperationParam);
     return new ApplyResult(operationId, credentials.size(), credentials);
   }
 
@@ -304,32 +317,36 @@ public class ConsoleUserBatchProvisioningService {
   private AccountRow normalize(AccountRow raw, ConsolePrincipal principal) {
     String tenantId = trim(raw.tenantId());
     if (!principal.authorities().contains(ConsoleRoles.ADMIN)) tenantId = principal.tenantId();
-    return new AccountRow(
-        raw.rowNo(),
-        tenantId,
-        trim(raw.username()),
-        trim(raw.displayName()),
-        trim(raw.role()).toUpperCase(Locale.ROOT));
+    int rowNo = raw.rowNo();
+    String username = trim(raw.username());
+    String displayName = trim(raw.displayName());
+    String role = trim(raw.role());
+    String normalizedRole = role.toUpperCase(Locale.ROOT);
+    return new AccountRow(rowNo, tenantId, username, displayName, normalizedRole);
   }
 
   private String validateRow(AccountRow row, ConsolePrincipal principal, Set<String> usernames) {
     if (!USERNAME.matcher(row.username()).matches() || row.displayName().length() > 256)
       return "INVALID_ACCOUNT";
-    if (!usernames.add(row.username().toLowerCase(Locale.ROOT))) return "DUPLICATE_IN_FILE";
-    if (!ConsoleRoles.ALL.contains(row.role())
-        || (!principal.authorities().contains(ConsoleRoles.ADMIN)
-            && !Set.of(ConsoleRoles.TENANT_ADMIN, ConsoleRoles.TENANT_USER).contains(row.role())))
-      return "INVALID_ROLE";
+    String normalizedUsernameForDuplicateCheck = row.username().toLowerCase(Locale.ROOT);
+    boolean usernameIsUniqueInFile = usernames.add(normalizedUsernameForDuplicateCheck);
+    if (!usernameIsUniqueInFile) return "DUPLICATE_IN_FILE";
+    boolean roleIsNotAllowedForPrincipal =
+        !ConsoleRoles.ALL.contains(row.role())
+            || (!principal.authorities().contains(ConsoleRoles.ADMIN)
+                && !Set.of(ConsoleRoles.TENANT_ADMIN, ConsoleRoles.TENANT_USER)
+                    .contains(row.role()));
+    if (roleIsNotAllowedForPrincipal) return "INVALID_ROLE";
     if (Set.of(ConsoleRoles.ADMIN, ConsoleRoles.AUDITOR).contains(row.role())) {
       if (!"system".equals(row.tenantId())) return "INVALID_TENANT";
     } else {
       Map<String, Object> tenant = tenantMapper.selectByTenantId(row.tenantId());
-      if (EmptyChecks.isNull(tenant) || !"ACTIVE".equals(tenant.get("status")))
-        return "TENANT_NOT_ACTIVE";
+      boolean tenantIsMissingOrInactive =
+          EmptyChecks.isNull(tenant) || !"ACTIVE".equals(tenant.get("status"));
+      if (tenantIsMissingOrInactive) return "TENANT_NOT_ACTIVE";
     }
-    return EmptyChecks.isNull(accountMapper.selectByUsername(row.username()))
-        ? null
-        : "USERNAME_EXISTS";
+    Map<String, Object> existingAccount = accountMapper.selectByUsername(row.username());
+    return EmptyChecks.isNull(existingAccount) ? null : "USERNAME_EXISTS";
   }
 
   private static String trim(String value) {
@@ -393,8 +410,13 @@ public class ConsoleUserBatchProvisioningService {
   private AccountRow parseRow(Row row, int rowNo, DataFormatter formatter) {
     if (row.getLastCellNum() > HEADERS.size()) throw invalid("Unexpected columns at row " + rowNo);
     List<String> cells = new ArrayList<>();
-    for (int col = 0; col < HEADERS.size(); col++) cells.add(text(row.getCell(col), formatter));
-    if (cells.stream().allMatch(String::isBlank)) return null;
+    for (int col = 0; col < HEADERS.size(); col++) {
+      Cell cell = row.getCell(col);
+      String cellText = text(cell, formatter);
+      cells.add(cellText);
+    }
+    boolean allCellsBlank = cells.stream().allMatch(String::isBlank);
+    if (allCellsBlank) return null;
     return new AccountRow(rowNo, cells.get(0), cells.get(1), cells.get(2), cells.get(3));
   }
 
@@ -446,7 +468,10 @@ public class ConsoleUserBatchProvisioningService {
 
   private static String digest(byte[] bytes) {
     try {
-      return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+      HexFormat hexFormat = HexFormat.of();
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      byte[] hashedBytes = digest.digest(bytes);
+      return hexFormat.formatHex(hashedBytes);
     } catch (NoSuchAlgorithmException ex) {
       throw new IllegalStateException(ex);
     }

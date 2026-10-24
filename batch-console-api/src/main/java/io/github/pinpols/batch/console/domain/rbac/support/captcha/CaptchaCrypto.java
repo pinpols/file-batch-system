@@ -36,7 +36,9 @@ final class CaptchaCrypto {
   static String sha256Hex(String data) {
     try {
       MessageDigest md = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-      return hex(md.digest(data.getBytes(StandardCharsets.UTF_8)));
+      byte[] encodedData = data.getBytes(StandardCharsets.UTF_8);
+      byte[] digest = md.digest(encodedData);
+      return hex(digest);
     } catch (Exception ex) {
       throw new IllegalStateException("SHA-256 unavailable", ex);
     }
@@ -46,8 +48,10 @@ final class CaptchaCrypto {
   static byte[] hmacSha256(byte[] key, String message) {
     try {
       Mac mac = Mac.getInstance(HMAC_SHA256);
-      mac.init(new SecretKeySpec(key, HMAC_SHA256));
-      return mac.doFinal(message.getBytes(StandardCharsets.UTF_8));
+      SecretKeySpec signingKey = new SecretKeySpec(key, HMAC_SHA256);
+      mac.init(signingKey);
+      byte[] encodedMessage = message.getBytes(StandardCharsets.UTF_8);
+      return mac.doFinal(encodedMessage);
     } catch (Exception ex) {
       throw new IllegalStateException("HmacSHA256 unavailable", ex);
     }
@@ -55,7 +59,9 @@ final class CaptchaCrypto {
 
   /** hex(HMAC-SHA256(utf8(key), utf8(data)))。 */
   static String hmacSha256Hex(String key, String data) {
-    return hex(hmacSha256(key.getBytes(StandardCharsets.UTF_8), data));
+    byte[] encodedKey = key.getBytes(StandardCharsets.UTF_8);
+    byte[] signature = hmacSha256(encodedKey, data);
+    return hex(signature);
   }
 
   /** 委派共享换行净化规则;保留验证码日志既有的 null 归空串语义。 */

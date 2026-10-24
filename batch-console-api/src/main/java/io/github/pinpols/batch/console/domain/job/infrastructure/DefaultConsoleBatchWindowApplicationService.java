@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleBatchWindowApplicationService;
@@ -71,14 +72,15 @@ public class DefaultConsoleBatchWindowApplicationService
     batchWindowMapper.insert(params);
     cacheInvalidationService.evictBatchWindow(tenantId, request.getWindowCode());
     Long id = ((Number) params.get("id")).longValue();
-    return ConsoleBatchWindowResponse.from(batchWindowMapper.selectById(tenantId, id));
+    Map<String, Object> createdWindow = batchWindowMapper.selectById(tenantId, id);
+    return ConsoleBatchWindowResponse.from(createdWindow);
   }
 
   @Override
   public ConsoleBatchWindowResponse update(Long id, BatchWindowUpdateRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    Map<String, Object> existing =
-        Guard.requireFound(batchWindowMapper.selectById(tenantId, id), "batch window not found");
+    Map<String, Object> selectedWindow = batchWindowMapper.selectById(tenantId, id);
+    Map<String, Object> existing = Guard.requireFound(selectedWindow, "batch window not found");
     Map<String, Object> params = new HashMap<>();
     params.put("tenant_id", tenantId);
     params.put("id", id);
@@ -88,16 +90,14 @@ public class DefaultConsoleBatchWindowApplicationService
     params.put(
         "timezone",
         request.getTimezone() != null ? request.getTimezone() : existing.get("timezone"));
-    params.put(
-        "start_time",
-        request.getStartTime() != null
-            ? request.getStartTime()
-            : String.valueOf(existing.get("start_time")));
-    params.put(
-        "end_time",
-        request.getEndTime() != null
-            ? request.getEndTime()
-            : String.valueOf(existing.get("end_time")));
+    String effectiveStartTime = EmptyChecks.isNotNull(request.getStartTime())
+        ? request.getStartTime()
+        : String.valueOf(existing.get("start_time"));
+    String effectiveEndTime = EmptyChecks.isNotNull(request.getEndTime())
+        ? request.getEndTime()
+        : String.valueOf(existing.get("end_time"));
+    params.put("start_time", effectiveStartTime);
+    params.put("end_time", effectiveEndTime);
     params.put(
         "end_strategy",
         request.getEndStrategy() != null ? request.getEndStrategy() : existing.get("end_strategy"));
@@ -119,7 +119,8 @@ public class DefaultConsoleBatchWindowApplicationService
     batchWindowMapper.update(params);
     cacheInvalidationService.evictBatchWindow(
         tenantId, String.valueOf(existing.get("window_code")));
-    return ConsoleBatchWindowResponse.from(batchWindowMapper.selectById(tenantId, id));
+    Map<String, Object> updatedWindow = batchWindowMapper.selectById(tenantId, id);
+    return ConsoleBatchWindowResponse.from(updatedWindow);
   }
 
   @Override

@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
+# 用途：tenant-config-scenarios.sh:租户场景模板真实 API / Excel 预览矩阵。
+# 用法：在仓库根目录执行 bash scripts/sim/29-tenant-config-scenarios.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # 29-tenant-config-scenarios.sh:租户场景模板真实 API / Excel 预览矩阵
 #
-# 验证 IMPORT / EXPORT / PROCESS / DISPATCH / ATOMIC / WORKFLOW / SCHEDULE、
+# 验证 IMPORT / EXPORT / PROCESS / DISPATCH / ATOMIC / Workflow definitions / SCHEDULE、
 # 组合场景及 ALL 模板的 Sheet/列投影，确保租户包不暴露平台资源队列和运行阈值。
 # 每个生成的工作簿都会走 upload → preview；不执行 Apply，不写入作业配置。
 # =========================================================
@@ -171,14 +173,14 @@ print(f"  ✓ {case_name}: upload + preview valid; Apply intentionally not calle
 PY
 }
 
-run_case IMPORT IMPORT 'job_definition,file_template_config,pipeline_definition,pipeline_step_definition' 1
-run_case EXPORT EXPORT 'job_definition,file_template_config,pipeline_definition,pipeline_step_definition' 2
-run_case PROCESS PROCESS 'job_definition,pipeline_definition,pipeline_step_definition' 3
-run_case DISPATCH DISPATCH 'job_definition,file_channel_config,pipeline_definition,pipeline_step_definition' 4
+run_case IMPORT IMPORT 'job_definition,file_template_config' 1
+run_case EXPORT EXPORT 'job_definition,file_template_config' 2
+run_case PROCESS PROCESS 'job_definition' 3
+run_case DISPATCH DISPATCH 'job_definition,file_channel_config' 4
 run_case ATOMIC ATOMIC 'job_definition' 5
-run_case WORKFLOW WORKFLOW 'job_definition,file_channel_config,file_template_config,pipeline_definition,pipeline_step_definition,workflow_definition,workflow_node,workflow_edge' 6
+run_case WORKFLOW WORKFLOW 'job_definition,file_channel_config,file_template_config,workflow_definition,workflow_node,workflow_edge' 6
 run_case SCHEDULE SCHEDULE 'business_calendar,batch_window,job_definition,job_monitoring_policy' 7
-run_case IMPORT+DISPATCH IMPORT+DISPATCH 'job_definition,file_channel_config,file_template_config,pipeline_definition,pipeline_step_definition' 8
-run_case ALL ALL 'business_calendar,batch_window,job_definition,job_monitoring_policy,file_channel_config,file_template_config,pipeline_definition,pipeline_step_definition,workflow_definition,workflow_node,workflow_edge' 9
+run_case IMPORT+DISPATCH IMPORT+DISPATCH 'job_definition,file_channel_config,file_template_config' 8
+run_case ALL ALL 'business_calendar,batch_window,job_definition,job_monitoring_policy,file_channel_config,file_template_config,workflow_definition,workflow_node,workflow_edge' 9
 
 echo "==> ✅ 租户场景模板 SIM 完成:9 个生成/校验/预览用例;未 Apply 配置"

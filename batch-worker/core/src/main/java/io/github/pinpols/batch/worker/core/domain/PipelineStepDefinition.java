@@ -11,7 +11,6 @@ import lombok.Builder;
 @Builder
 public record PipelineStepDefinition(
     Long id,
-    Long pipelineDefinitionId,
     String stepCode,
     String stepName,
     String stageCode,
@@ -34,7 +33,8 @@ public record PipelineStepDefinition(
       }
       if (value != null) {
         String text = String.valueOf(value);
-        if (Texts.hasText(text) && !"null".equalsIgnoreCase(text)) {
+        boolean parameterTextIsUsable = Texts.hasText(text) && !"null".equalsIgnoreCase(text);
+        if (parameterTextIsUsable) {
           return text;
         }
       }

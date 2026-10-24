@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.console.integration;
 
+import io.github.pinpols.batch.console.domain.observability.query.ConsoleUsageDailySummaryQuery;
+
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
@@ -16,6 +19,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -58,7 +62,7 @@ class ConsoleUsageDailyIntegrationTest extends AbstractIntegrationTest {
 
   @BeforeAll
   static void grantRlsTestRole(@Autowired JdbcTemplate jdbcTemplate) {
-    jdbcTemplate.execute("""
+    String createRlsTestRoleSql = """
         DO $$
         BEGIN
           IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'console_usage_rls_test') THEN
@@ -66,9 +70,16 @@ class ConsoleUsageDailyIntegrationTest extends AbstractIntegrationTest {
           END IF;
         END
         $$
-        """);
-    jdbcTemplate.execute("GRANT USAGE ON SCHEMA batch TO " + RLS_ROLE);
-    jdbcTemplate.execute("GRANT SELECT ON batch.console_usage_daily TO " + RLS_ROLE);
+        """;
+    jdbcTemplate.execute(createRlsTestRoleSql);
+    String grantBatchSchemaUsageSql = """
+        GRANT USAGE ON SCHEMA batch TO %s
+    """.formatted(RLS_ROLE);
+    jdbcTemplate.execute(grantBatchSchemaUsageSql);
+    String grantConsoleUsageSelectSql = """
+        GRANT SELECT ON batch.console_usage_daily TO %s
+    """.formatted(RLS_ROLE);
+    jdbcTemplate.execute(grantConsoleUsageSelectSql);
   }
 
   @Test
@@ -83,7 +94,7 @@ class ConsoleUsageDailyIntegrationTest extends AbstractIntegrationTest {
     int recordsPerWorker = 12;
 
     try (ExecutorService executor = Executors.newFixedThreadPool(workers)) {
-      List<? extends Future<?>> futures = java.util.stream.IntStream.range(0, workers)
+      List<? extends Future<?>> futures = IntStream.range(0, workers)
           .mapToObj(worker -> executor.submit(() -> {
             for (int record = 0; record < recordsPerWorker; record++) {
               int sequence = worker * recordsPerWorker + record;
@@ -121,18 +132,42 @@ class ConsoleUsageDailyIntegrationTest extends AbstractIntegrationTest {
     recorder.record(tenantB, "job.run", true, eventTime);
 
     transactionTemplate.executeWithoutResult(status -> {
-      jdbcTemplate.execute("SET LOCAL ROLE " + RLS_ROLE);
+      String setRlsTestRoleSql = """
+          SET LOCAL ROLE %s
+      """.formatted(RLS_ROLE);
+      jdbcTemplate.execute(setRlsTestRoleSql);
       mapper.setTenantContext(tenantA);
 
-      assertThat(mapper.querySummary(tenantB, statDate, statDate, "operation.job.run", null))
+      assertThat(mapper.querySummary(ConsoleUsageDailySummaryQuery.builder()
+          .tenantId(tenantB)
+          .from(statDate)
+          .to(statDate)
+          .metricCode("operation.job.run")
+          .pageCode(null)
+          .build()))
           .isEmpty();
-      assertThat(mapper.querySummary(tenantA, statDate, statDate, "operation.job.run", null))
+      assertThat(mapper.querySummary(ConsoleUsageDailySummaryQuery.builder()
+          .tenantId(tenantA)
+          .from(statDate)
+          .to(statDate)
+          .metricCode("operation.job.run")
+          .pageCode(null)
+          .build()))
           .hasSize(1);
     });
 
     transactionTemplate.executeWithoutResult(status -> {
-      jdbcTemplate.execute("SET LOCAL ROLE " + RLS_ROLE);
-      assertThat(mapper.querySummary(tenantA, statDate, statDate, "operation.job.run", null))
+      String setRlsTestRoleSql = """
+          SET LOCAL ROLE %s
+      """.formatted(RLS_ROLE);
+      jdbcTemplate.execute(setRlsTestRoleSql);
+      assertThat(mapper.querySummary(ConsoleUsageDailySummaryQuery.builder()
+          .tenantId(tenantA)
+          .from(statDate)
+          .to(statDate)
+          .metricCode("operation.job.run")
+          .pageCode(null)
+          .build()))
           .isEmpty();
     });
   }

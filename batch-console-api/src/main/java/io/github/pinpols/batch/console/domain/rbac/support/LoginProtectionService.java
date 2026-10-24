@@ -43,10 +43,14 @@ public class LoginProtectionService {
     CaptchaResult result = captchaVerifier.verify(captchaToken, clientIp);
     if (!result.success()) {
       boolean provided = captchaToken != null && !captchaToken.isBlank();
+      String sanitizedUsername = LogSanitizer.value(username);
+      String usernameForLog = truncateForLog(sanitizedUsername);
+      String sanitizedClientIp = LogSanitizer.value(clientIp);
+      String clientIpForLog = truncateForLog(sanitizedClientIp);
       log.warn(
           "login captcha required: user={} ip={} failures={} provider={} provided={} reason={}",
-          truncateForLog(LogSanitizer.value(username)),
-          truncateForLog(LogSanitizer.value(clientIp)),
+          usernameForLog,
+          clientIpForLog,
           failures,
           captchaVerifier.provider(),
           provided,
@@ -78,8 +82,9 @@ public class LoginProtectionService {
   }
 
   private void applyBackoff(long failures) {
-    long delay =
-        Math.min(properties.getBackoffStepMillis() * failures, properties.getBackoffCapMillis());
+    long linearBackoffDelay = properties.getBackoffStepMillis() * failures;
+    long maximumBackoffDelay = properties.getBackoffCapMillis();
+    long delay = Math.min(linearBackoffDelay, maximumBackoffDelay);
     if (delay <= 0) {
       return;
     }

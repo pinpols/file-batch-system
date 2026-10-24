@@ -2,6 +2,29 @@
 
 这里收纳项目的运行、测试、巡检和自愈脚本。
 
+
+## 如何找入口与新增脚本
+
+| 需要做什么 | 目录 | 职责边界 |
+|---|---|---|
+| CI 检查、回归编排、门禁问题复现 | [ci](ci/README.md) | 执行脚本、[历史基线](ci/baselines/README.md)、配套 SQL 和守卫自测分别归组；[全部工作流](../.github/workflows/README.md)逐项登记 |
+| 本地 JVM 构建、服务启停、验收与联调 | [local](local/README.md) | 针对当前工作树和开发环境，不承担生产发布 |
+| Docker/Compose 开发环境生命周期 | [docker](docker/README.md) | 构建、启停、状态和观测栈；镜像内部资源见 [容器入口](../deploy/docker/README.md) |
+| 受控交付、不可变镜像清单与回滚 | [deploy](deploy/README.md) | 发布行为与只读巡检区分，按目标环境确认执行 |
+| 巡检、证据采集、运维计划与受控处置 | [ops](ops/README.md) | README 区分只读与写入；原 observability/staging 的只读入口已归入此处 |
+| 数据库巡检、备份、清理与演练 | [db](db/README.md) | 操作工具与配套 SQL；正式结构演进保留在根 db/migration |
+| 初始化外部依赖与测试环境数据 | [data](data/README.md) | topic、ACL、对象存储及环境数据准备，不替代 Flyway |
+| 可复现生成 API/字典等资产 | [codegen](codegen/README.md) | 从权威输入生成，不作为手工配置入口 |
+| 本地诊断、源码维护和实验工具 | [dev](dev/README.md) | 原 tools 的一次性源码工具归入此处；运行后复核生成差异 |
+| 集群高可用部署与故障演练 | [ha](ha/README.md) | 集群变更与受控演练，不混入日常只读 ops |
+| 对象存储生命周期策略 | [minio](minio/README.md) | 脚本、profile 与策略 JSON 配套维护；保留领域边界 |
+| 单轮或跨业务日场景验证 | [sim](sim/README.md)、[sim-4day](sim-4day/README.md) | 场景入口与本目录配套 SQL；跨场景共享数据在根 test-data |
+| 共享 Shell/Python 能力 | [lib](lib/README.md) | 供入口引用，不重复复制环境、进程与传输逻辑 |
+
+新文件先按职责归入已有目录，再判断它是入口、共享库、测试、配置还是配套 SQL。不要因单个工具新建一级目录；也不要仅因文件少而合并有独立配置/执行边界的目录。新增入口在最近的职责 README 维护跳转和用途，子目录在上级 README 登记。
+
+脚本头及内部说明按 [编码规约 §19.5](../docs/coding-conventions.md#195-自动化脚本的头注释与说明)；索引与用途由 `python3 scripts/ci/check-script-governance.py` 检查。基线按真实差异收紧，不能自动扩张；新增/改名 CI 工作流和共享 Action 同步各自 README。
+
 ## 目录分工
 
 - `scripts/local/`：本地 JVM 开发——启停、构建、测试
@@ -18,13 +41,12 @@
 - `scripts/codegen/`：OpenAPI、错误码字典和契约 fixture 等可复现代码生成
 - `scripts/dev/`：开发期诊断、演示和本机工具，不作为生产运维入口
 - `scripts/ha/`：高可用部署与故障转移演练
-- `scripts/observability/`：运行时指标、健康端点和可观测性证据采集
-- `scripts/staging/`：staging 部署、滚动升级和回滚前置检查
 - `scripts/lib/`：Shell/Python 共享函数库，只供其他脚本引用
 - `scripts/sim/`、`scripts/sim-4day/`：受管环境场景模拟与四日链路验证
-- `scripts/tools/`：不属于运行、运维或 CI 主链的独立维护工具
 
 ## 主要入口
+
+- `python3 scripts/local/manage-logs.py`：本地日志留存与归档预览；策略在 `config/local-log-retention.json`，执行与恢复说明见[本地日志手册](../docs/runbook/local-log-layout.md)。
 
 - `scripts/ci/run-full-regression.sh`：统一回归入口，支持默认测试、IT/E2E、压测 smoke、部署 smoke、部署升级 / 回滚验证和巡检
 - `scripts/ci/run-staging-live-smoke.sh`：staging live rollout / rollback smoke 的便捷入口
@@ -78,3 +100,38 @@ Python 脚本依赖由 `scripts/requirements.txt` 统一管理。本地首次使
 - [docs/testing/README.md](../docs/testing/README.md)
 - [docs/testing/release-gate.md](../docs/testing/release-gate.md)
 - [docs/runbook/go-live-staging-execution.md](../docs/runbook/go-live-staging-execution.md)
+
+## 脚本与配套 SQL 索引
+
+本表登记本目录的执行入口、公共模块及配套 SQL；测试代码通过测试命令执行。新增、移动或删除资产时同步跳转和用途，SQL 正文保持独立维护。
+
+| 文件 | 用途 / 调用归属 |
+|---|---|
+| [fix-fixture-xlsx.py](fix-fixture-xlsx.py) | 校验或修复 SIM 配置包 Excel 的结构与场景约束。 |
+| [python.sh](python.sh) | 仓库统一 Python 入口：优先使用 .venv，并校验 Python 3 版本。 |
+
+- [codegen 目录](codegen/README.md)：可复现契约和文档生成入口与使用说明。
+
+- [data 目录](data/README.md)：环境数据初始化入口与使用说明。
+
+- [db 目录](db/README.md)：数据库维护与验证入口与使用说明。
+
+- [deploy 目录](deploy/README.md)：受控发布与回滚入口与使用说明。
+
+- [dev 目录](dev/README.md)：开发诊断与维护入口与使用说明。
+
+- [docker 目录](docker/README.md)：Docker/Compose 开发环境入口与使用说明。
+
+- [ha 目录](ha/README.md)：集群高可用部署与演练入口与使用说明。
+
+- [lib 目录](lib/README.md)：共享脚本函数入口与使用说明。
+
+- [local 目录](local/README.md)：本地构建、服务生命周期与验收入口与使用说明。
+
+- [minio 目录](minio/README.md)：对象存储策略下发入口与使用说明。
+
+- [ops 目录](ops/README.md)：运维巡检与受控处置入口与使用说明。
+
+- [sim 目录](sim/README.md)：多租户 SIM 场景入口与使用说明。
+
+- [sim-4day 目录](sim-4day/README.md)：跨业务日 SIM 场景入口与使用说明。

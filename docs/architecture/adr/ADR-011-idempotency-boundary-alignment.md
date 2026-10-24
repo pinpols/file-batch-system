@@ -1,14 +1,16 @@
 # ADR-011: Console / Trigger / Orchestrator 三层幂等责任边界对齐
 
+> **当前适用性（2026-10-24）**：三层幂等继续适用；业务机会/目标投递身份与 HTTP 重试键分离。Workflow 批量发起按目标逐项独立接纳，未知响应先查回执，不能换键重发。 原决策背景与阶段记录保留，正式关闭状态以当前验收矩阵为准。
+
 - **状态**: 已落地(代码已实施,本 ADR 是事后定稿,close hardening-backlog V6-P2-CONSOLE-IDEMPOTENCY)
 - **日期**: 2026-04-30
 - **决策人**: 后端平台团队
-- **关联**: `[docs/analysis/deep-issue-analysis.md` §5.5 / §5.6 / §5.10](../../analysis/deep-issue-analysis.md)
+- **关联**: `[docs/archive/audit/deep-issue-analysis-2026-04-30.md` §5.5 / §5.6 / §5.10](../../archive/audit/deep-issue-analysis-2026-04-30.md)
 - **解决问题**: 三层(console HTTP / trigger service / db 唯一约束)对"幂等"的责任边界不一致,接口契约与实际行为有偏差
 
 ## 背景
 
-`docs/analysis/deep-issue-analysis.md` §5.5 / §5.6 / §5.10 三处指出:幂等语义在 console / trigger / db 三层的实现不统一,容易出现:
+`docs/archive/audit/deep-issue-analysis-2026-04-30.md` §5.5 / §5.6 / §5.10 三处指出:幂等语义在 console / trigger / db 三层的实现不统一,容易出现:
 
 - **console 拦截器假冲突**:不同 endpoint / 不同租户共用 `Idempotency-Key` 互相阻塞;失败请求占着 key 24h 让调用方无法重试。
 - **trigger 接口契约虚假**:`/api/triggers/catch-up/approve` `@RequiredHeader("Idempotency-Key")` 但 service 不消费,header 是装饰物。
@@ -128,7 +130,7 @@ HTTP POST/PUT/PATCH/DELETE + Idempotency-Key
 
 ## 参考
 
-- [deep-issue-analysis.md §5.5](../../analysis/deep-issue-analysis.md) — Console 幂等拦截器设计不完整(已闭环)
-- [deep-issue-analysis.md §5.6](../../analysis/deep-issue-analysis.md) — Trigger 补跑审批接口幂等头未真正使用(已闭环)
-- [deep-issue-analysis.md §5.10](../../analysis/deep-issue-analysis.md) — Trigger 去重策略设计漂移(已闭环)
-- [hardening-backlog.md V6-P2-CONSOLE-IDEMPOTENCY](../../analysis/hardening-backlog.md)
+- [deep-issue-analysis.md §5.5](../../archive/audit/deep-issue-analysis-2026-04-30.md) — Console 幂等拦截器设计不完整(已闭环)
+- [deep-issue-analysis.md §5.6](../../archive/audit/deep-issue-analysis-2026-04-30.md) — Trigger 补跑审批接口幂等头未真正使用(已闭环)
+- [deep-issue-analysis.md §5.10](../../archive/audit/deep-issue-analysis-2026-04-30.md) — Trigger 去重策略设计漂移(已闭环)
+- [hardening-backlog.md V6-P2-CONSOLE-IDEMPOTENCY](../../plans/hardening-backlog.md)

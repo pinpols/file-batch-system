@@ -2,12 +2,16 @@ package io.github.pinpols.batch.worker.imports.plugin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.plugin.ImportLoadPlugin;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -80,6 +84,50 @@ class ImportLoadPluginRegistryTest {
 
     assertThat(registry.require("jdbc_mapped")).isSameAs(p1);
     assertThat(registry.require(WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE)).isSameAs(p2);
+  }
+
+  @Test
+  @DisplayName("重放能力按实际解析的插件和冻结模板配置计算")
+  void shouldResolveReplayCapabilityFromSelectedPluginAndFrozenConfig() {
+    Map<String, Object> frozenConfig = Map.of("loadStrategy", "BATCH_UPSERT");
+    ImportLoadPlugin plugin = stubPlugin("jdbc_mapped");
+    ReplayCapabilityDeclaration declaredCapability = new ReplayCapabilityDeclaration(
+        "jdbc_mapped",
+        "1.2.3",
+        List.of("DATABASE_WRITE"),
+        IdempotencyCapability.IDEMPOTENT_BY_UNIQUE_CONSTRAINT,
+        "tenant+business-key",
+        "database-unique-constraint",
+        ReplayCapabilityDeclaration.CURRENT_CONTRACT_VERSION);
+    when(plugin.replayCapability(frozenConfig)).thenReturn(declaredCapability);
+    ImportLoadPluginRegistry registry = new ImportLoadPluginRegistry(List.of(plugin));
+
+    ReplayCapabilityDeclaration actualCapability =
+        registry.replayCapability("JDBC_MAPPED", frozenConfig);
+
+    assertThat(actualCapability).isEqualTo(declaredCapability);
+  }
+
+  @Test
+  @DisplayName("注册目录不以空配置推断安全能力")
+  void shouldUseConservativeStaticDeclarationForCatalog() {
+    ImportLoadPlugin plugin = mock(ImportLoadPlugin.class, CALLS_REAL_METHODS);
+    when(plugin.id()).thenReturn("jdbc_mapped");
+    ReplayCapabilityDeclaration configSpecificDeclaration = new ReplayCapabilityDeclaration(
+        "jdbc_mapped",
+        "1.2.3",
+        List.of("DATABASE_WRITE"),
+        IdempotencyCapability.IDEMPOTENT_BY_UNIQUE_CONSTRAINT,
+        "tenant+business-key",
+        "database-unique-constraint",
+        ReplayCapabilityDeclaration.CURRENT_CONTRACT_VERSION);
+    when(plugin.replayCapability(Map.of())).thenReturn(configSpecificDeclaration);
+    ImportLoadPluginRegistry registry = new ImportLoadPluginRegistry(List.of(plugin));
+
+    ReplayCapabilityDeclaration catalogDeclaration =
+        registry.replayCapabilityCatalog().getFirst();
+
+    assertThat(catalogDeclaration).isEqualTo(ReplayCapabilityDeclaration.unknown("jdbc_mapped"));
   }
 
   // --- helpers ---

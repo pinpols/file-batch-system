@@ -269,3 +269,11 @@ SDK 专属约定(async 风格、错误分类、fixture 提升)等 P1 公共 API
 ## License
 
 Apache-2.0,与主仓一致。见 [`LICENSE`](../../LICENSE)。
+
+## 脚本与配套 SQL 索引
+
+本表登记本目录的执行入口、公共模块及配套 SQL；测试代码通过测试命令执行。新增、移动或删除资产时同步跳转和用途，SQL 正文保持独立维护。
+
+| 文件 | 用途 / 调用归属 |
+|---|---|
+| [scripts/run-contract.sh](scripts/run-contract.sh) | 运行 SDK 契约 fixture 测试套件(硬校验)。 |

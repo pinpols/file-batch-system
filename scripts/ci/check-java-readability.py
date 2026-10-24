@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Guard readability rules for production Java source."""
+# 用途：Java 可读性约定。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-java-readability.py；参数与前置环境见下方说明及所属 README。
+"""检查生产 Java 源码的可读性规约。"""
 
 from __future__ import annotations
 
@@ -37,7 +39,7 @@ def tracked_main_sources(candidates: list[str] | None = None) -> list[Path]:
             and relative.startswith(SOURCE_PREFIXES)
         ]
     result = subprocess.run(
-        ["git", "ls-files", "--", *SOURCE_PREFIXES],
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", *SOURCE_PREFIXES],
         cwd=ROOT,
         check=True,
         capture_output=True,
@@ -53,7 +55,7 @@ def tracked_main_sources(candidates: list[str] | None = None) -> list[Path]:
 
 
 def strip_non_code(source: str) -> str:
-    """Remove comments and literals while preserving line breaks and positions."""
+    """移除注释和字面量，同时保留换行与字符位置。"""
     output: list[str] = []
     state = "code"
     index = 0

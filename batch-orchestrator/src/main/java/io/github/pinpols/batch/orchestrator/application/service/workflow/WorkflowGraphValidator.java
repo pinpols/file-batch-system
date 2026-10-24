@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.workflow;
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.constants.NodeOutputKeys;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowValidationResult.ValidationIssue;
@@ -15,6 +15,7 @@ import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -170,7 +171,7 @@ public class WorkflowGraphValidator {
 
     validateGatewayJoinMode(byCode.values(), incoming, errors);
 
-    Map<String, JobDefinitionEntity> jobDefByCode = loadJobDefinitions(byCode);
+    Map<String, JobDefinitionEntity> jobDefByCode = loadJobDefinitions(byCode, errors);
     Set<String> optionalNodes = collectOptionalNodes(byCode);
     for (WorkflowNodeEntity n : byCode.values()) {
       validateOutputContractRefs(n, byCode, jobDefByCode, optionalNodes, errors, warnings);
@@ -255,7 +256,9 @@ public class WorkflowGraphValidator {
     Set<String> reachableToEnd = new HashSet<>();
     for (String e : endCodes) dfs(e, incoming, reachableToEnd);
     for (String code : allCodes) {
-      if (!endCodes.isEmpty() && !reachableToEnd.contains(code) && !endCodes.contains(code)) {
+      boolean nodeCannotReachAnEnd =
+          !endCodes.isEmpty() && !reachableToEnd.contains(code) && !endCodes.contains(code);
+      if (nodeCannotReachAnEnd) {
         errors.add(issue("V3", "node cannot reach END", code));
       }
     }
@@ -277,7 +280,7 @@ public class WorkflowGraphValidator {
   }
 
   private void validateGatewayJoinMode(
-      java.util.Collection<WorkflowNodeEntity> nodes,
+      Collection<WorkflowNodeEntity> nodes,
       Map<String, List<String>> incoming,
       List<ValidationIssue> errors) {
     for (WorkflowNodeEntity n : nodes) {
@@ -309,26 +312,34 @@ public class WorkflowGraphValidator {
     }
   }
 
-  /** 收集本 workflow 节点引用的 jobCode → JobDefinition 映射；缺失节点 / 缺失定义不抛错。 */
+  /** JOB 引用是运行准入条件；数据库查询失败必须传播，不能转为健康结果。 */
   private Map<String, JobDefinitionEntity> loadJobDefinitions(
-      Map<String, WorkflowNodeEntity> nodes) {
+      Map<String, WorkflowNodeEntity> nodes, List<ValidationIssue> errors) {
     Map<String, JobDefinitionEntity> result = new HashMap<>();
     for (WorkflowNodeEntity node : nodes.values()) {
       String jobCode = node.getRelatedJobCode();
-      if (!Texts.hasText(jobCode) || result.containsKey(jobCode)) {
+      boolean jobNode = WorkflowNodeType.JOB.code().equalsIgnoreCase(node.getNodeType());
+      if (!Texts.hasText(jobCode)) {
+        if (jobNode) {
+          errors.add(
+              issue("JOB_REF_MISSING", "JOB node missing related_job_code", node.getNodeCode()));
+        }
         continue;
       }
-      try {
-        JobDefinitionEntity def = jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(
-            node.getTenantId(), jobCode, true);
-        if (def != null) {
-          result.put(jobCode, def);
-        }
-      } catch (RuntimeException ex) {
-        log.warn(
-            "validator skipped job_definition lookup for jobCode={} due to {}",
-            jobCode,
-            SwallowedExceptionLogger.summary(ex));
+      if (result.containsKey(jobCode)) {
+        continue;
+      }
+      JobDefinitionEntity def = jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(
+          node.getTenantId(), jobCode, true);
+      boolean jobNodeDefinitionIsUnavailable =
+          jobNode && (EmptyChecks.isNull(def) || !Boolean.TRUE.equals(def.enabled()));
+      if (jobNodeDefinitionIsUnavailable) {
+        errors.add(issue(
+            "JOB_REF_NOT_FOUND",
+            "JOB reference not found or disabled: " + jobCode,
+            node.getNodeCode()));
+      } else if (EmptyChecks.isNotNull(def)) {
+        result.put(jobCode, def);
       }
     }
     return result;
@@ -408,33 +419,31 @@ public class WorkflowGraphValidator {
       }
       // V5
       if (!contract.contains(outputKey)) {
-        warnings.add(warning(
-            "V5",
+        String unknownOutputContractMessage =
             "DSL ref $.nodes."
                 + referencedNodeCode
                 + ".output."
                 + outputKey
                 + " not in known output contract for jobType="
-                + refJobDef.jobType(),
-            node.getNodeCode()));
+                + refJobDef.jobType();
+        warnings.add(warning("V5", unknownOutputContractMessage, node.getNodeCode()));
       } else {
         // V12 占位 — contract type info 留 worker SPI 扩展（@WorkerOutputContract 注解未来注入）；
         // 当前只对 contract-hit 输出 key 记一条信息级 hint，避免 type 误判
-        warnings.add(warning(
-            "V12",
+        String knownOutputContractMessage =
             "DSL ref $.nodes."
                 + referencedNodeCode
                 + ".output."
                 + outputKey
-                + " hits contract; type-check pending worker SPI",
-            node.getNodeCode()));
+                + " hits contract; type-check pending worker SPI";
+        warnings.add(warning("V12", knownOutputContractMessage, node.getNodeCode()));
       }
     }
   }
 
   /** V15 — 同 workflow 多个节点引用的 job_definition.calendarCode / timezone 不一致 → WARN。 */
   private void validateCalendarTimezoneConsistency(
-      java.util.Collection<WorkflowNodeEntity> nodes,
+      Collection<WorkflowNodeEntity> nodes,
       Map<String, JobDefinitionEntity> jobDefByCode,
       List<ValidationIssue> warnings) {
     Set<String> calendars = new HashSet<>();
@@ -471,7 +480,9 @@ public class WorkflowGraphValidator {
       List<WorkflowEdgeEntity> edges, boolean outgoingDirection) {
     Map<String, List<String>> adj = new HashMap<>();
     for (WorkflowEdgeEntity e : edges) {
-      if (e == null || !Texts.hasText(e.getFromNodeCode()) || !Texts.hasText(e.getToNodeCode()))
+      boolean workflowEdgeIdentityIsIncomplete =
+          e == null || !Texts.hasText(e.getFromNodeCode()) || !Texts.hasText(e.getToNodeCode());
+      if (workflowEdgeIdentityIsIncomplete)
         continue;
       String key = outgoingDirection ? e.getFromNodeCode() : e.getToNodeCode();
       String value = outgoingDirection ? e.getToNodeCode() : e.getFromNodeCode();
@@ -531,10 +542,10 @@ public class WorkflowGraphValidator {
     try {
       deps = JsonUtils.fromJson(spec, SPEC_LIST_TYPE);
     } catch (Exception parseFailure) {
-      errors.add(issue(
-          "V6",
-          "cross_day_dependencies JSON parse failed: " + parseFailure.getMessage(),
-          node.getNodeCode()));
+      String failureMessage = parseFailure.getMessage();
+      String validationMessage = "cross_day_dependencies JSON parse failed: " + failureMessage;
+      String nodeCode = node.getNodeCode();
+      errors.add(issue("V6", validationMessage, nodeCode));
       return;
     }
     if (deps == null) return;
@@ -544,29 +555,41 @@ public class WorkflowGraphValidator {
         errors.add(issue("V6", "cross_day_dep missing jobCode", node.getNodeCode()));
         continue;
       }
+      if (!dep.hasSupportedStrategy() || !dep.hasValidVersionSelector()) {
+        errors.add(issue(
+            "V6", "cross_day_dep has unsupported consume version strategy", node.getNodeCode()));
+      }
+      boolean dependencyScopeIsUnsupported = EmptyChecks.isNotNull(dep.scope())
+          && !CrossDayDependencySpec.SCOPE_REQUIRED.equalsIgnoreCase(dep.scope())
+          && !CrossDayDependencySpec.SCOPE_OPTIONAL.equalsIgnoreCase(dep.scope());
+      if (dependencyScopeIsUnsupported) {
+        errors.add(issue("V6", "cross_day_dep has unsupported scope", node.getNodeCode()));
+      }
       if (Texts.hasText(dep.bizDateRange())) {
         Integer days = parseRangeDays(dep.bizDateRange());
         if (days != null && days > MAX_RANGE_DAYS) {
-          errors.add(issue(
-              "V7",
+          String rangeLimitMessage =
               "cross_day_dep range "
                   + dep.bizDateRange()
                   + " exceeds max "
                   + MAX_RANGE_DAYS
-                  + " days",
-              node.getNodeCode()));
+                  + " days";
+          errors.add(issue("V7", rangeLimitMessage, node.getNodeCode()));
         }
       }
     }
   }
 
   private Integer parseRangeDays(String rangeTag) {
-    String tag = rangeTag.trim().toUpperCase(Locale.ROOT);
+    String trimmedRangeTag = rangeTag.trim();
+    String tag = trimmedRangeTag.toUpperCase(Locale.ROOT);
     if (tag.startsWith("PREV_") && tag.endsWith("_BIZ_DAYS")) {
-      return parseLeadingInt(tag.substring("PREV_".length()));
+      String previousBusinessDayCount = tag.substring("PREV_".length());
+      return parseLeadingInt(previousBusinessDayCount);
     }
     if (tag.startsWith("LAST_") && tag.endsWith("_WEEKS")) {
-      Integer weeks = parseLeadingInt(tag.substring("LAST_".length()));
+      String weekCount = tag.substring("LAST_".length());
+      Integer weeks = parseLeadingInt(weekCount);
       return weeks == null ? null : weeks * 7;
     }
     return null;
@@ -593,12 +616,16 @@ public class WorkflowGraphValidator {
       if (map == null) return null;
       Object jm = map.get("joinMode");
       if (jm == null) return null;
-      String s = jm.toString().trim().toUpperCase(Locale.ROOT);
-      if ("ALL_OF".equals(s)) return new JoinMode(true, null);
-      if (s.matches("^\\d+_OF_\\d+$")) {
-        String[] parts = s.split("_OF_");
-        return new JoinMode(
-            false, new int[] {Integer.parseInt(parts[0]), Integer.parseInt(parts[1])});
+      String rawJoinMode = jm.toString();
+      String trimmedJoinMode = rawJoinMode.trim();
+      String joinModeText = trimmedJoinMode.toUpperCase(Locale.ROOT);
+      if ("ALL_OF".equals(joinModeText)) return new JoinMode(true, null);
+      if (joinModeText.matches("^\\d+_OF_\\d+$")) {
+        String[] parts = joinModeText.split("_OF_");
+        int requiredMatches = Integer.parseInt(parts[0]);
+        int totalOptions = Integer.parseInt(parts[1]);
+        int[] nOfM = {requiredMatches, totalOptions};
+        return new JoinMode(false, nOfM);
       }
       return null;
     } catch (Exception ignore) {

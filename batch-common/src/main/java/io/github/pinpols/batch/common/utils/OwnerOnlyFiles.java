@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.utils;
 
 import java.io.IOException;
+import java.nio.file.FileStore;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
@@ -10,6 +11,7 @@ import java.nio.file.attribute.AclEntryPermission;
 import java.nio.file.attribute.AclEntryType;
 import java.nio.file.attribute.AclFileAttributeView;
 import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Set;
 
@@ -48,10 +50,11 @@ public final class OwnerOnlyFiles {
   @SuppressWarnings("java:S1452")
   public static FileAttribute<?>[] attributes(Path path, boolean directory) throws IOException {
     if (supportsPosix(path)) {
-      return new FileAttribute<?>[] {
-        PosixFilePermissions.asFileAttribute(
-            PosixFilePermissions.fromString(directory ? "rwx------" : "rw-------"))
-      };
+      String permissionText = directory ? "rwx------" : "rw-------";
+      Set<PosixFilePermission> permissions = PosixFilePermissions.fromString(permissionText);
+      FileAttribute<Set<PosixFilePermission>> permissionAttribute =
+          PosixFilePermissions.asFileAttribute(permissions);
+      return new FileAttribute<?>[] {permissionAttribute};
     }
     // 不按操作系统名称猜测安全性: 自定义临时根和网络挂载必须验证实际继承权限。
     requirePrivateAcl(existingAncestor(path));
@@ -59,7 +62,9 @@ public final class OwnerOnlyFiles {
   }
 
   private static boolean supportsPosix(Path path) throws IOException {
-    return Files.getFileStore(existingAncestor(path)).supportsFileAttributeView("posix");
+    Path existingPath = existingAncestor(path);
+    FileStore fileStore = Files.getFileStore(existingPath);
+    return fileStore.supportsFileAttributeView("posix");
   }
 
   private static Path existingAncestor(Path path) throws IOException {
@@ -87,9 +92,10 @@ public final class OwnerOnlyFiles {
         AclEntryPermission.DELETE, AclEntryPermission.DELETE_CHILD,
         AclEntryPermission.WRITE_ACL, AclEntryPermission.WRITE_OWNER);
     for (AclEntry entry : view.getAcl()) {
-      if (entry.type() == AclEntryType.ALLOW
+      boolean grantsSensitiveAccessToNonOwner = entry.type() == AclEntryType.ALLOW
           && !entry.principal().equals(view.getOwner())
-          && entry.permissions().stream().anyMatch(sensitive::contains)) {
+          && entry.permissions().stream().anyMatch(sensitive::contains);
+      if (grantsSensitiveAccessToNonOwner) {
         throw new IOException("private path ACL grants access to another principal: " + path);
       }
     }

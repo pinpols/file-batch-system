@@ -62,21 +62,18 @@ public class ArchiveSchemaDriftCheck {
       "batch_day_replay_entry",
       // R7-A3-P0 / V118 (ADR-021) — 数据质量规则 + 校验记录；archive 镜像已建立但之前未注册，
       // 任何加列 migration 启动期不会 fail-fast，归档静默漂移。
-      "data_quality_rule",
       "data_quality_check",
       // V139 (DBA-2026-05-20 P0-3) — trigger_outbox_event 归档表;ADR-010 trigger 异步事件。
       "trigger_outbox_event",
       // V140 (DBA-2026-05-20 P0-4) — dead_letter_task 归档表;死信任务事故复盘。
       "dead_letter_task",
-      // V159 (SDK Phase 3 M3.1) — custom_task_type_registry 归档表;租户自定义 taskType 注册。
-      "custom_task_type_registry",
       // V164 (ADR-038 P1) — pipeline_progress 归档表;平台 worker LOAD/GENERATE 续跑位点。
       "pipeline_progress",
-      // V165 (Round-1 TOP-8 / R3-5) — atomic_task_config 归档表;租户保存的 atomic 节点配置。
-      "atomic_task_config",
-      // V167 (workflow-dag-designer Polish) — workflow_definition_version 归档表;fullUpdate
-      // 全量历史快照。
-      "workflow_definition_version");
+      "console_operation_audit",
+      "notification_delivery_log",
+      "console_push_job_delivery",
+      "workflow_terminal_notification_receipt",
+      "webhook_delivery_log");
 
   private final InformationSchemaMapper informationSchemaMapper;
 
@@ -120,7 +117,8 @@ public class ArchiveSchemaDriftCheck {
 
   /** Public 让 IT 测试直接调验证查询行为;运行期由 {@link #checkOnStartup()} 内部使用。 */
   public Set<String> columnsOf(String schema, String table) {
-    return Set.copyOf(informationSchemaMapper.listColumns(schema, table));
+    List<String> columns = informationSchemaMapper.listColumns(schema, table);
+    return Set.copyOf(columns);
   }
 
   /**

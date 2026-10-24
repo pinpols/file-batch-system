@@ -6,7 +6,6 @@ import io.github.pinpols.batch.console.config.ConsolePipelineProgressDirtyProper
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsolePipelineProgressDirtyEventResponse;
 import io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper;
 import io.github.pinpols.batch.console.domain.file.view.PipelineProgressDirtyView;
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
@@ -20,6 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -60,8 +60,10 @@ public class ConsolePipelineProgressDirtyPublisher {
   private long throttleMillis;
   private int batchSize;
 
-  @PostConstruct
+  @EventListener(ApplicationReadyEvent.class)
   void start() {
+    // Flyway 初始化会先于 ApplicationReadyEvent 完成。若从
+    // @PostConstruct 启动轮询器，新数据库仍在迁移时就可能查询 pipeline_progress。
     intervalMillis = Math.max(1_000L, properties.getIntervalMillis());
     initialDelayMillis = Math.max(0L, properties.getInitialDelayMillis());
     lookbackOverlapMillis = Math.max(0L, properties.getLookbackOverlapMillis());

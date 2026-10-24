@@ -11,6 +11,13 @@
         <result column="workflow_name" property="workflowName"/>
         <result column="workflow_type" property="workflowType"/>
         <result column="enabled" property="enabled"/>
+        <result column="schedule_enabled" property="scheduleEnabled"/>
+        <result column="schedule_type" property="scheduleType"/>
+        <result column="schedule_expr" property="scheduleExpr"/>
+        <result column="timezone" property="timezone"/>
+        <result column="trigger_mode" property="triggerMode"/>
+        <result column="calendar_code" property="calendarCode"/>
+        <result column="depends_on_job_code" property="dependsOnJobCode"/>
         <result column="nodes_json" property="nodesJson"/>
         <result column="edges_json" property="edgesJson"/>
         <result column="saved_by" property="savedBy"/>
@@ -31,6 +38,13 @@
             workflow_name,
             workflow_type,
             enabled,
+            schedule_enabled,
+            schedule_type,
+            schedule_expr,
+            timezone,
+            trigger_mode,
+            calendar_code,
+            depends_on_job_code,
             nodes_json,
             edges_json,
             saved_by,
@@ -44,6 +58,13 @@
             #{p.workflowName},
             #{p.workflowType},
             #{p.enabled},
+            #{p.scheduleEnabled},
+            #{p.scheduleType},
+            #{p.scheduleExpr},
+            #{p.timezone},
+            #{p.triggerMode},
+            #{p.calendarCode},
+            #{p.dependsOnJobCode},
             #{p.nodesJson,jdbcType=VARCHAR}::jsonb,
             #{p.edgesJson,jdbcType=VARCHAR}::jsonb,
             #{p.savedBy},
@@ -54,7 +75,9 @@
 
     <select id="listByDefinitionId" resultMap="WorkflowDefinitionVersionResultMap">
         select id, tenant_id, workflow_definition_id, workflow_code, version,
-               workflow_name, workflow_type, enabled,
+               workflow_name, workflow_type, enabled, schedule_enabled,
+               schedule_type, schedule_expr, timezone, trigger_mode, calendar_code,
+               depends_on_job_code,
                nodes_json::text as nodes_json,
                edges_json::text as edges_json,
                saved_by, saved_at, summary
@@ -66,7 +89,9 @@
 
     <select id="findByDefinitionIdAndVersion" resultMap="WorkflowDefinitionVersionResultMap">
         select id, tenant_id, workflow_definition_id, workflow_code, version,
-               workflow_name, workflow_type, enabled,
+               workflow_name, workflow_type, enabled, schedule_enabled,
+               schedule_type, schedule_expr, timezone, trigger_mode, calendar_code,
+               depends_on_job_code,
                nodes_json::text as nodes_json,
                edges_json::text as edges_json,
                saved_by, saved_at, summary

@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -46,7 +48,8 @@ public class ConsoleAiKnowledgeBase {
   /** 检索与 query 最相关的若干片段(已按相似度降序、过滤低于阈值、截断到 topK)。RAG 关闭或无可用片段时返回空。 */
   public List<Snippet> retrieve(String query) {
     ConsoleAiProperties.Rag rag = properties.getRag();
-    if (!rag.isEnabled() || query == null || query.isBlank()) {
+    boolean knowledgeRetrievalIsUnavailable = !rag.isEnabled() || query == null || query.isBlank();
+    if (knowledgeRetrievalIsUnavailable) {
       return List.of();
     }
     List<Chunk> chunks = ensureIndex();
@@ -65,8 +68,13 @@ public class ConsoleAiKnowledgeBase {
       return List.of();
     }
     return chunks.stream()
-        .map(
-            chunk -> new Snippet(chunk.source(), chunk.text(), cosine(queryVector, chunk.vector())))
+        .map(chunk -> {
+          String source = chunk.source();
+          String text = chunk.text();
+          float[] chunkVector = chunk.vector();
+          double similarity = cosine(queryVector, chunkVector);
+          return new Snippet(source, text, similarity);
+        })
         .filter(snippet -> snippet.score() >= rag.getMinScore())
         .sorted(Comparator.comparingDouble(Snippet::score).reversed())
         .limit(Math.max(rag.getTopK(), 1))
@@ -113,8 +121,8 @@ public class ConsoleAiKnowledgeBase {
     List<Chunk> chunks = new ArrayList<>(documents.size());
     for (int i = 0; i < documents.size() && i < vectors.size(); i++) {
       Object source = documents.get(i).getMetadata().get("source");
-      chunks.add(new Chunk(
-          source == null ? "knowledge" : source.toString(), texts.get(i), vectors.get(i)));
+      String chunkSource = EmptyChecks.isNull(source) ? "knowledge" : source.toString();
+      chunks.add(new Chunk(chunkSource, texts.get(i), vectors.get(i)));
     }
     log.info(
         "console AI RAG: knowledge base built, {} chunk(s) from {} location(s)",
@@ -133,7 +141,11 @@ public class ConsoleAiKnowledgeBase {
           continue;
         }
         String source = resource.getFilename() == null ? location : resource.getFilename();
-        documents.addAll(splitter.apply(List.of(new Document(text, Map.of("source", source)))));
+        Map<String, Object> metadata = Map.of("source", source);
+        Document sourceDocument = new Document(text, metadata);
+        List<Document> sourceDocuments = List.of(sourceDocument);
+        List<Document> splitDocuments = splitter.apply(sourceDocuments);
+        documents.addAll(splitDocuments);
       }
     }
     return documents;
@@ -151,7 +163,9 @@ public class ConsoleAiKnowledgeBase {
 
   private String read(Resource resource) {
     try {
-      return new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+      InputStream input = resource.getInputStream();
+      byte[] resourceBytes = input.readAllBytes();
+      return new String(resourceBytes, StandardCharsets.UTF_8);
     } catch (IOException ex) {
       SwallowedExceptionLogger.info(ConsoleAiKnowledgeBase.class, "catch:read-resource-failed", ex);
       return null;

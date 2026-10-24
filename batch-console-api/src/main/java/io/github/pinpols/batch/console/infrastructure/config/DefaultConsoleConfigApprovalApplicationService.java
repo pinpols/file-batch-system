@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -87,8 +88,11 @@ public class DefaultConsoleConfigApprovalApplicationService
     configReleaseApplyService.validate(
         release.getConfigType(), release.getConfigKey(), release.getConfigPayload());
     Map<String, Object> latest = configApprovalMapper.selectLatestByRelease(tenantId, releaseId);
-    if (latest != null && STATUS_PENDING.equals(String.valueOf(latest.get(KEY_APPROVAL_STATUS)))) {
-      throw BizException.of(ResultCode.CONFLICT, "error.config_approval.already_pending");
+    if (EmptyChecks.isNotNull(latest)) {
+      String latestApprovalStatus = String.valueOf(latest.get(KEY_APPROVAL_STATUS));
+      if (STATUS_PENDING.equals(latestApprovalStatus)) {
+        throw BizException.of(ResultCode.CONFLICT, "error.config_approval.already_pending");
+      }
     }
     String submittedBy = currentOperator();
     String reviewComment = ConsoleTextSanitizer.safeInput(request.getReason(), 1024);
@@ -129,10 +133,13 @@ public class DefaultConsoleConfigApprovalApplicationService
       Long approvalId, ConfigApprovalActionRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> approval = requireApproval(tenantId, approvalId);
-    if (!STATUS_PENDING.equals(String.valueOf(approval.get(KEY_APPROVAL_STATUS)))) {
+    String approvalStatus = String.valueOf(approval.get(KEY_APPROVAL_STATUS));
+    if (!STATUS_PENDING.equals(approvalStatus)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.config_approval.not_pending");
     }
-    if (currentOperator().equals(String.valueOf(approval.get("requestedBy")))) {
+    String operatorForSelfApprovalCheck = currentOperator();
+    String requestedBy = String.valueOf(approval.get("requestedBy"));
+    if (operatorForSelfApprovalCheck.equals(requestedBy)) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT, "error.config_approval.self_approval_forbidden");
     }
@@ -175,7 +182,8 @@ public class DefaultConsoleConfigApprovalApplicationService
       Long approvalId, ConfigApprovalActionRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> approval = requireApproval(tenantId, approvalId);
-    if (!STATUS_PENDING.equals(String.valueOf(approval.get(KEY_APPROVAL_STATUS)))) {
+    String approvalStatus = String.valueOf(approval.get(KEY_APPROVAL_STATUS));
+    if (!STATUS_PENDING.equals(approvalStatus)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.config_approval.not_pending");
     }
     Long releaseId = longValue(approval.get(KEY_RELEASE_ID));
@@ -204,25 +212,25 @@ public class DefaultConsoleConfigApprovalApplicationService
   }
 
   private Map<String, Object> requireApproval(String tenantId, Long approvalId) {
-    return Guard.requireFound(
-        configApprovalMapper.selectById(tenantId, approvalId), "config approval not found");
+    Map<String, Object> approval = configApprovalMapper.selectById(tenantId, approvalId);
+    return Guard.requireFound(approval, "config approval not found");
   }
 
   private ConfigReleaseEntity loadRelease(String tenantId, Long releaseId) {
-    return Guard.requireFound(
-        configReleaseMapper.selectById(
-            ConsoleMapSupport.mapOf(KEY_TENANT_ID, tenantId, KEY_RELEASE_ID, releaseId)),
-        "config release not found");
+    Map<String, Object> query =
+        ConsoleMapSupport.mapOf(KEY_TENANT_ID, tenantId, KEY_RELEASE_ID, releaseId);
+    ConfigReleaseEntity release = configReleaseMapper.selectById(query);
+    return Guard.requireFound(release, "config release not found");
   }
 
   private void acquireReleaseLock(ConfigReleaseEntity release) {
-    configReleaseMapper.acquireVersionLock(ConsoleMapSupport.mapOf(
-        KEY_TENANT_ID,
-        release.getTenantId(),
-        "configType",
-        configReleaseApplyService.canonicalType(release.getConfigType()),
-        "configKey",
-        release.getConfigKey()));
+    String tenantId = release.getTenantId();
+    String configType = release.getConfigType();
+    String canonicalConfigType = configReleaseApplyService.canonicalType(configType);
+    String configKey = release.getConfigKey();
+    Map<String, Object> lockParameters = ConsoleMapSupport.mapOf(
+        KEY_TENANT_ID, tenantId, "configType", canonicalConfigType, "configKey", configKey);
+    configReleaseMapper.acquireVersionLock(lockParameters);
   }
 
   private void logChange(
@@ -232,16 +240,20 @@ public class DefaultConsoleConfigApprovalApplicationService
       String operatorId,
       String reason,
       Map<String, Object> detail) {
-    configChangeLogMapper.insertConfigChangeLog(
-        ConfigChangeLogBuilder.create(tenantId, operatorId, currentTraceId())
-            .forType(release.getConfigType())
-            .withKey(release.getConfigKey())
-            .versionNo(release.getVersionNo())
-            .action(action)
-            .operatorType(AuditLogConstants.OPERATOR_TYPE_API)
-            .summary(JsonUtils.toJson(ConsoleMapSupport.mapOf(
-                "reason", ConsoleTextSanitizer.safeInput(reason, 512), "detail", detail)))
-            .build());
+    String traceId = currentTraceId();
+    ConfigChangeLogBuilder changeLogBuilder = ConfigChangeLogBuilder.create(
+            tenantId, operatorId, traceId)
+        .forType(release.getConfigType())
+        .withKey(release.getConfigKey())
+        .versionNo(release.getVersionNo())
+        .action(action)
+        .operatorType(AuditLogConstants.OPERATOR_TYPE_API);
+    String safeReason = ConsoleTextSanitizer.safeInput(reason, 512);
+    Map<String, Object> changeSummary =
+        ConsoleMapSupport.mapOf("reason", safeReason, "detail", detail);
+    String summaryJson = JsonUtils.toJson(changeSummary);
+    Map<String, Object> changeLog = changeLogBuilder.summary(summaryJson).build();
+    configChangeLogMapper.insertConfigChangeLog(changeLog);
   }
 
   private Long longValue(Object value) {
@@ -255,17 +267,20 @@ public class DefaultConsoleConfigApprovalApplicationService
   }
 
   private String currentTraceId() {
-    return ConsoleTextSanitizer.safeInput(requestMetadataResolver.current().traceId(), 128);
+    ConsoleRequestMetadata metadata = requestMetadataResolver.current();
+    String traceId = metadata.traceId();
+    return ConsoleTextSanitizer.safeInput(traceId, 128);
   }
 
   private void validateLatestVersion(String tenantId, ConfigReleaseEntity release) {
-    Integer latestVersionNo = configReleaseMapper.selectLatestVersionNo(ConsoleMapSupport.mapOf(
+    Map<String, Object> latestVersionQuery = ConsoleMapSupport.mapOf(
         KEY_TENANT_ID,
         tenantId,
         "configType",
         release.getConfigType(),
         "configKey",
-        release.getConfigKey()));
+        release.getConfigKey());
+    Integer latestVersionNo = configReleaseMapper.selectLatestVersionNo(latestVersionQuery);
     if (!Objects.equals(latestVersionNo, release.getVersionNo())) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
@@ -281,7 +296,7 @@ public class DefaultConsoleConfigApprovalApplicationService
       String nextStatus,
       Instant publishedAt,
       String operatorId) {
-    int rows = configReleaseMapper.updateConfigReleaseStatus(ConsoleMapSupport.mapOf(
+    Map<String, Object> releaseStatusUpdate = ConsoleMapSupport.mapOf(
         KEY_TENANT_ID,
         tenantId,
         KEY_RELEASE_ID,
@@ -297,7 +312,8 @@ public class DefaultConsoleConfigApprovalApplicationService
         "rolledBackAt",
         null,
         "updatedBy",
-        ConsoleTextSanitizer.safeInput(operatorId, 64)));
+        ConsoleTextSanitizer.safeInput(operatorId, 64));
+    int rows = configReleaseMapper.updateConfigReleaseStatus(releaseStatusUpdate);
     if (rows != 1) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.config.release_concurrent_change");
     }

@@ -50,16 +50,20 @@ COMMENT ON COLUMN batch.workflow_definition_version.saved_by               IS '�
 COMMENT ON COLUMN batch.workflow_definition_version.summary                IS '可空,描述本次改动;Spike 阶段 FE 未提交字段,留空预留';
 
 -- 列表主路径:按 (workflow_definition_id) 拉所有 version desc
+
 CREATE INDEX IF NOT EXISTS idx_workflow_definition_version_def_ver_desc
     ON batch.workflow_definition_version (workflow_definition_id, version DESC);
 
 -- ---------------------------------------------------------
 -- archive 镜像(docs/agent-baseline.md 红线;LIKE INCLUDING ALL 与 V159 / V165 一致)
+
 -- ---------------------------------------------------------
+
 CREATE TABLE IF NOT EXISTS archive.workflow_definition_version_archive
     (LIKE batch.workflow_definition_version INCLUDING DEFAULTS INCLUDING GENERATED INCLUDING IDENTITY INCLUDING CONSTRAINTS);
 
 -- LIKE INCLUDING CONSTRAINTS 不复制 PRIMARY KEY(归档 UPSERT ON CONFLICT(id) 依赖)
+
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -77,4 +81,4 @@ BEGIN
 END $$;
 
 COMMENT ON TABLE archive.workflow_definition_version_archive IS
-    'V167 archive mirror of batch.workflow_definition_version';
+    'V167 新增的 batch.workflow_definition_version 归档镜像。';

@@ -1,3 +1,5 @@
+# 用途：回归验证直接配置 Key 读取快照。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_check_direct_config_key_access.py。
 from __future__ import annotations
 
 import importlib.util

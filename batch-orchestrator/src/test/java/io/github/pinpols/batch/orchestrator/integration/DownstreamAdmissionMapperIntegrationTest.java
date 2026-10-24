@@ -55,11 +55,11 @@ class DownstreamAdmissionMapperIntegrationTest extends AbstractIntegrationTest {
   }
 
   private void insertHealth(String tenantId, String channelCode, String status) {
-    jdbcTemplate.update(
-        "insert into batch.file_channel_health "
-            + "(tenant_id, channel_code, channel_type, health_status) values (?, ?, 'SFTP', ?)",
-        tenantId,
-        channelCode,
-        status);
+    String insertFileChannelHealthSql = """
+        insert into batch.file_channel_health
+            (tenant_id, channel_code, channel_type, health_status)
+        values (?, ?, 'SFTP', ?)
+        """;
+    jdbcTemplate.update(insertFileChannelHealthSql, tenantId, channelCode, status);
   }
 }

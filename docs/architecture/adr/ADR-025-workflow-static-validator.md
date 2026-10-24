@@ -1,9 +1,11 @@
 # ADR-025 · Workflow 静态校验
 
+> **当前适用性（2026-10-24）**：静态图校验继续适用；新图执行节点只引用 JOB，控制节点含 WAIT；不支持嵌套 Workflow，旧 TASK/FILE_STEP 不能作为新图执行方案。 原决策背景与阶段记录保留，正式关闭状态以当前验收矩阵为准。
+
 - **Status**: Accepted（**第 1 阶段必做 / P0**，~5 人天，便宜高收益，建议第一个落地）
 - **Date**: 2026-05-06
 - **Supersedes**: —
-- **Related**: ADR-009（workflow DSL）/ ADR-018（跨日依赖）/ §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md)
+- **Related**: ADR-009（workflow DSL）/ ADR-018（跨日依赖）/ §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../archive/standards/worker-capability-priority-and-scope-2026-05-06.md)
 
 ## 范围边界（Scope Discipline）
 

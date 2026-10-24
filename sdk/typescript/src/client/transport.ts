@@ -36,6 +36,9 @@ const HAPPY_EYEBALLS_ATTEMPT_TIMEOUT_MS = 250;
 
 /** Effective task config returned by claim. */
 export interface ClaimResponse {
+  /** Persisted task business parameters resolved by the current Orchestrator at claim time. */
+  payload?: string | null;
+  /** Legacy compatibility field; handlers should receive the authoritative payload when present. */
   effectiveConfig?: Record<string, unknown>;
   leaseUntil?: string | null;
   traceId?: string | null;
@@ -243,10 +246,15 @@ export class HttpTransport implements Transport {
     }
     const headers: Record<string, string> = { "X-Batch-Api-Key": this.#apiKey };
     if (this.#requestSigningEnabled && WRITE_METHODS.has(method.toUpperCase())) {
-      Object.assign(
-        headers,
-        signatureHeaders(this.#apiKey, method, path, payload, this.#now, this.#nonceGen),
+      const requestSignatureHeaders = signatureHeaders(
+        this.#apiKey,
+        method,
+        path,
+        payload,
+        this.#now,
+        this.#nonceGen,
       );
+      Object.assign(headers, requestSignatureHeaders);
     }
     return headers;
   }
@@ -283,9 +291,12 @@ export class HttpTransport implements Transport {
           res.on("data", (c: Buffer) => chunks.push(c));
           res.on("end", () => {
             clearTimeout(timer);
+            const responseStatus = res.statusCode ?? 0;
+            const responseBytes = Buffer.concat(chunks);
+            const responseBody = responseBytes.toString("utf8");
             resolve({
-              status: res.statusCode ?? 0,
-              body: Buffer.concat(chunks).toString("utf8"),
+              status: responseStatus,
+              body: responseBody,
             });
           });
         },
@@ -421,18 +432,13 @@ export class HttpTransport implements Transport {
 
   async deactivate(workerCode: string): Promise<void> {
     // WorkerHeartbeatDto requires [tenantId, workerCode, status, heartbeatAt].
-    await this.#call(
-      "deactivate",
-      `/internal/workers/${encodeURIComponent(workerCode)}/deactivate`,
-      {
-        tenantId: this.#tenantId,
-        workerCode,
-        status: "OFFLINE",
-        heartbeatAt: new Date().toISOString(),
-      },
-      {},
-      true,
-    );
+    const encodedWorkerCode = encodeURIComponent(workerCode);
+    const path = `/internal/workers/${encodedWorkerCode}/deactivate`;
+    const tenantId = this.#tenantId;
+    const status = "OFFLINE";
+    const heartbeatAt = new Date().toISOString();
+    const requestBody = { tenantId, workerCode, status, heartbeatAt };
+    await this.#call("deactivate", path, requestBody, {}, true);
   }
 
   async claim(

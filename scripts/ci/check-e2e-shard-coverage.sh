@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：E2E shard 覆盖。
+# 用法：在仓库根目录执行 bash scripts/ci/check-e2e-shard-coverage.sh；参数与前置环境见下方说明及所属 README。
 # 守护:e2e shard 清单漂移。
 #
 # 背景:full-ci-gate / staging-gate 的 e2e 用硬编码 `-Dtest=<逗号分隔类名>` 分 6 shard 跑,

@@ -295,7 +295,8 @@ export function decideBackpressure(
  * still has a reachable resume point.
  */
 function resumeThreshold(maxConcurrent: number): number {
-  return Math.max(1, Math.floor(maxConcurrent / 2));
+  const halfConcurrency = Math.floor(maxConcurrent / 2);
+  return Math.max(1, halfConcurrency);
 }
 
 // ---------------------------------------------------------------------------

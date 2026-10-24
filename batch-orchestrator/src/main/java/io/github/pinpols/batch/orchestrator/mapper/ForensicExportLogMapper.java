@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import io.github.pinpols.batch.orchestrator.domain.param.ForensicExportLogMarkCompletedParam;
+
+
 import io.github.pinpols.batch.orchestrator.domain.entity.ForensicExportLogEntity;
 import java.time.Instant;
 import java.util.List;
@@ -41,13 +44,15 @@ public interface ForensicExportLogMapper {
 
   /** 完成时回写 status=COMPLETED + storage_path + sha256 + row_counts + completed_at。 */
   default int markCompleted(
-      String tenantId,
-      String exportId,
-      String storagePath,
-      Long fileSizeBytes,
-      String sha256,
-      String rowCountsJson,
-      Instant completedAt) {
+      ForensicExportLogMarkCompletedParam parameters) {
+    String tenantId = parameters.tenantId();
+    String exportId = parameters.exportId();
+    String storagePath = parameters.storagePath();
+    Long fileSizeBytes = parameters.fileSizeBytes();
+    String sha256 = parameters.sha256();
+    String rowCountsJson = parameters.rowCountsJson();
+    Instant completedAt = parameters.completedAt();
+
     CompletionParam completion = new CompletionParam(
         tenantId,
         exportId,

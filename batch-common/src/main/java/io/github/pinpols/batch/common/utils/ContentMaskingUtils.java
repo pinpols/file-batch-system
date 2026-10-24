@@ -50,7 +50,9 @@ public final class ContentMaskingUtils {
     String code = ruleSetCode.toUpperCase(Locale.ROOT);
 
     // STRICT / PCI / GDPR 均对命名字段脱敏
-    if (code.contains("STRICT") || code.contains("PCI") || code.contains("GDPR")) {
+    boolean requiresStrictMasking =
+        code.contains("STRICT") || code.contains("PCI") || code.contains("GDPR");
+    if (requiresStrictMasking) {
       masked = NAMED_FIELDS.matcher(masked).replaceAll("$1=***");
     }
 

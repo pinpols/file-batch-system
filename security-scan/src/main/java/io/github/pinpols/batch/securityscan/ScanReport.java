@@ -24,7 +24,14 @@ public final class ScanReport {
         System.out.println();
         System.out.println("=== Security Scan Summary ===");
         for (ScanResult result : results) {
-            String status = result.skipped() ? "SKIPPED" : (result.exitCode() == 0 ? "OK" : "FAILED");
+            String status;
+            if (result.skipped()) {
+                status = "SKIPPED";
+            } else if (result.exitCode() == 0) {
+                status = "OK";
+            } else {
+                status = "FAILED";
+            }
             System.out.println(status + " | " + result.step().displayName() + " | " + result.label() + " | " + result.duration().toSeconds() + "s");
             if (!result.skipped() && result.exitCode() != 0) {
                 System.out.println("  command: " + result.commandLine());

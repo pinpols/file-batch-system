@@ -1,6 +1,7 @@
 -- 将稳定的 Kafka 路由池与具体 Worker 进程/Pod 身份分开。
 -- 既有 Worker 和外部 SDK Worker 回填 worker_code，继续保持单实例池语义。
 -- worker_registry 是运行态注册表，不在 ArchiveSchemaDriftCheck.ARCHIVED_TABLES 清单内，无 archive 镜像。
+
 ALTER TABLE batch.worker_registry
     ADD COLUMN IF NOT EXISTS worker_pool_code VARCHAR(128);
 

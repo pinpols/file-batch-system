@@ -16,6 +16,7 @@ import io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties;
 import io.github.pinpols.batch.worker.core.support.TaskExecutionClient;
 import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewItem;
 import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewResult;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Map;
@@ -43,8 +44,8 @@ class WorkerTaskLeaseRenewerTest {
     client = mock(TaskExecutionClient.class);
     meter = new SimpleMeterRegistry();
     @SuppressWarnings("unchecked")
-    ObjectProvider<io.micrometer.core.instrument.MeterRegistry> provider =
-        (ObjectProvider<io.micrometer.core.instrument.MeterRegistry>) mock(ObjectProvider.class);
+    ObjectProvider<MeterRegistry> provider =
+        (ObjectProvider<MeterRegistry>) mock(ObjectProvider.class);
     when(provider.getIfAvailable()).thenReturn(meter);
     WorkerLeaseProperties leaseProps = new WorkerLeaseProperties();
     leaseProps.setConsecutiveFailureAlertThreshold(3);
@@ -59,6 +60,7 @@ class WorkerTaskLeaseRenewerTest {
   void shouldRenewActiveLeasesAndClearCountersOnSuccess() {
     ActiveTaskLeaseRegistry.ActiveTaskLease lease = lease("t1", "100", "w1");
     when(registry.snapshot()).thenReturn(List.of(lease));
+    when(registry.markRenewedIfCurrent(lease)).thenReturn(true);
     when(client.renewLeasesBatch(List.of(new TaskLeaseRenewItem("t1", 100L, "w1", null))))
         .thenReturn(Map.of(100L, TaskLeaseRenewResult.renewed(100L)));
 
@@ -72,6 +74,7 @@ class WorkerTaskLeaseRenewerTest {
   void shouldTrackConsecutiveFailureWhenRenewRejected() {
     ActiveTaskLeaseRegistry.ActiveTaskLease lease = lease("t1", "100", "w1");
     when(registry.snapshot()).thenReturn(List.of(lease));
+    when(registry.markLostIfCurrent(lease)).thenReturn(true);
     when(client.renewLeasesBatch(List.of(new TaskLeaseRenewItem("t1", 100L, "w1", null))))
         .thenReturn(Map.of(100L, TaskLeaseRenewResult.rejected(100L)));
 
@@ -81,7 +84,7 @@ class WorkerTaskLeaseRenewerTest {
 
     verify(client, times(3))
         .renewLeasesBatch(List.of(new TaskLeaseRenewItem("t1", 100L, "w1", null)));
-    verify(registry, times(3)).markLost("100");
+    verify(registry, times(3)).markLostIfCurrent(lease);
     assertThat(renewer.isRenewCircuitOpen()).isFalse();
     assertThat(meter.find("batch.worker.lease.circuit.open.total").counter()).isNull();
   }
@@ -91,13 +94,14 @@ class WorkerTaskLeaseRenewerTest {
   void shouldRequestLocalCancellationWhenRenewReturnsCancelRequested() {
     ActiveTaskLeaseRegistry.ActiveTaskLease lease = lease("t1", "100", "w1");
     when(registry.snapshot()).thenReturn(List.of(lease));
+    when(registry.markRenewedIfCurrent(lease)).thenReturn(true);
     when(client.renewLeasesBatch(List.of(new TaskLeaseRenewItem("t1", 100L, "w1", null))))
         .thenReturn(Map.of(100L, new TaskLeaseRenewResult(100L, true, true)));
 
     renewer.renewActiveTaskLeases();
 
-    verify(registry).requestCancellation("100");
-    verify(registry, never()).markLost(anyString());
+    verify(registry).requestCancellationIfCurrent(lease);
+    verify(registry, never()).markLostIfCurrent(any());
   }
 
   @Test
@@ -114,7 +118,7 @@ class WorkerTaskLeaseRenewerTest {
     assertThat(meter.find("batch.worker.lease.circuit.open.total").counter().count())
         .isEqualTo(1.0);
     assertThat(meter.find("batch.worker.lease.circuit.open").gauge().value()).isEqualTo(1.0);
-    verify(registry, never()).markLost(anyString());
+    verify(registry, never()).markLostIfCurrent(any());
   }
 
   @Test
@@ -135,6 +139,9 @@ class WorkerTaskLeaseRenewerTest {
     ActiveTaskLeaseRegistry.ActiveTaskLease failed = lease("t1", "100", "w1");
     ActiveTaskLeaseRegistry.ActiveTaskLease healthy = lease("t1", "200", "w1");
     when(registry.snapshot()).thenReturn(List.of(failed, healthy));
+    when(registry.markLostIfCurrent(failed)).thenReturn(true);
+    when(registry.markRenewedIfCurrent(healthy)).thenReturn(true);
+    when(registry.markRenewedIfCurrent(failed)).thenReturn(true);
 
     when(client.renewLeasesBatch(List.of(
             new TaskLeaseRenewItem("t1", 100L, "w1", null),
@@ -164,6 +171,7 @@ class WorkerTaskLeaseRenewerTest {
   void shouldClearStaleCountersWhenLeaseRemovedFromRegistry() {
     ActiveTaskLeaseRegistry.ActiveTaskLease lease = lease("t1", "100", "w1");
     when(registry.snapshot()).thenReturn(List.of(lease));
+    when(registry.markLostIfCurrent(lease)).thenReturn(true);
     when(client.renewLeasesBatch(List.of(new TaskLeaseRenewItem("t1", 100L, "w1", null))))
         .thenReturn(Map.of(100L, TaskLeaseRenewResult.rejected(100L)));
 

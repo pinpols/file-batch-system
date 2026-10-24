@@ -2,6 +2,8 @@ package io.github.pinpols.batch.orchestrator.application.ratelimit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.common.redis.BatchRedisKeys;
+import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
 import io.github.bucket4j.distributed.ExpirationAfterWriteStrategy;
 import io.github.bucket4j.redis.lettuce.Bucket4jLettuce;
 import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager;
@@ -25,6 +27,8 @@ import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 /**
  * 令牌桶限流器集成测试：用真实 Redis 容器验证 Bucket4j 分布式令牌桶语义。
@@ -37,11 +41,14 @@ import org.springframework.context.annotation.Import;
     webEnvironment = SpringBootTest.WebEnvironment.NONE,
     properties = {
       "batch.startup-self-check.enabled=false",
+      "batch.kafka.namespace=rate-limit-isolation-test",
       // 显式固定旧副本版本；发布默认值递增时仍需验证 v1 -> v2 升级，而不是让夹具随默认值漂移。
       "batch.rate-limit.bucket-configuration-version=1"
     })
 @DisplayName("令牌桶限流集成: 配额消耗, 多副本共享与热配置切换口径")
 class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
+
+  private static final String REDIS_NAMESPACE = "rate-limit-isolation-test";
 
   @SpringBootConfiguration
   @EnableAutoConfiguration
@@ -56,6 +63,9 @@ class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
   private TokenBucketRateLimiter limiter;
+
+  @Autowired
+  private RedisConnectionFactory redisConnectionFactory;
 
   private static String uniqueTenant() {
     return "t-tb-" + System.nanoTime();
@@ -74,6 +84,22 @@ class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
     }
     // 桶已空，且 refill 速率为 5/min（12s 补 1 个），测试瞬间内不会补回 → 拒绝。
     assertThat(limiter.tryConsume(tenant, "LAUNCH", capacity)).isFalse();
+  }
+
+  @Test
+  @DisplayName("Bucket4j 原生 Lettuce key 带部署 namespace")
+  void shouldNamespaceBucketKey_whenDeploymentNamespaceIsConfigured() {
+    String tenant = uniqueTenant();
+    assertThat(limiter.tryConsume(tenant, "LAUNCH", 5)).isTrue();
+
+    String logicalKey = BatchRedisKeys.rateLimitBucket(tenant, "LAUNCH");
+    String physicalKey = "rate-limit-isolation-test:" + logicalKey;
+    StringRedisTemplate rawTemplate = new StringRedisTemplate(redisConnectionFactory);
+    rawTemplate.afterPropertiesSet();
+
+    assertThat(rawTemplate.hasKey(physicalKey)).isTrue();
+    assertThat(rawTemplate.hasKey(logicalKey)).isFalse();
+    rawTemplate.delete(physicalKey);
   }
 
   @Test
@@ -115,7 +141,8 @@ class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
           secondProxyManager,
           replicaMeterRegistry,
           RedisRateLimitCircuitBreaker.disabled(replicaMeterRegistry),
-          new RateLimitProperties());
+          new RateLimitProperties(),
+          new BatchRedisNamespace(REDIS_NAMESPACE));
 
       // 副本1 消费 2 个
       assertThat(limiter.tryConsume(tenant, "LAUNCH", capacity)).isTrue();
@@ -169,7 +196,8 @@ class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
           secondProxyManager,
           replicaMeterRegistry,
           RedisRateLimitCircuitBreaker.disabled(replicaMeterRegistry),
-          newerProperties);
+          newerProperties,
+          new BatchRedisNamespace(REDIS_NAMESPACE));
 
       // 旧桶还剩约 50%；容量从 4 降到 2 后按比例继承为 1，而不是重置为满桶或继续沿用旧容量。
       assertThat(newerReplica.tryConsume(tenant, action, 2L)).isTrue();

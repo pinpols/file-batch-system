@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：数据库注释覆盖。
+# 用法：在仓库根目录执行 bash scripts/ci/check-db-comment-coverage.sh；参数与前置环境见下方说明及所属 README。
 # 守护：新增数据库对象必须在同一 Flyway 迁移中补充可读注释。
 set -euo pipefail
 

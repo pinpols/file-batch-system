@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -40,7 +41,11 @@ public final class OutboundTrailerRecord {
     if (raw == null) {
       raw = trailerTemplate.get("amount_field");
     }
-    String text = raw == null ? null : String.valueOf(raw).trim();
+    String text = null;
+    if (EmptyChecks.isNotNull(raw)) {
+      String rawText = String.valueOf(raw);
+      text = rawText.trim();
+    }
     return Texts.hasText(text) ? text : null;
   }
 
@@ -80,7 +85,8 @@ public final class OutboundTrailerRecord {
     if (value == null) {
       return fallback;
     }
-    String text = String.valueOf(value).trim();
+    String rawText = String.valueOf(value);
+    String text = rawText.trim();
     return Texts.hasText(text) ? text : fallback;
   }
 
@@ -92,7 +98,9 @@ public final class OutboundTrailerRecord {
       return null;
     }
     try {
-      return Integer.valueOf(String.valueOf(value).trim());
+      String textValue = String.valueOf(value);
+      String trimmedValue = textValue.trim();
+      return Integer.valueOf(trimmedValue);
     } catch (NumberFormatException ignored) {
       return null;
     }
@@ -107,6 +115,10 @@ public final class OutboundTrailerRecord {
     if (value instanceof Boolean bool) {
       return bool;
     }
-    return value == null ? fallback : Boolean.parseBoolean(String.valueOf(value));
+    if (EmptyChecks.isNull(value)) {
+      return fallback;
+    }
+    String textValue = String.valueOf(value);
+    return Boolean.parseBoolean(textValue);
   }
 }

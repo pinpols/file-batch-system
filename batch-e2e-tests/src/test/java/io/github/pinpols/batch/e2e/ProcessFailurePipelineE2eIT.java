@@ -13,7 +13,7 @@ import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
 import io.github.pinpols.batch.e2e.support.E2eStatusLogger;
 import io.github.pinpols.batch.e2e.support.ProcessE2eFixture;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -44,7 +44,7 @@ class ProcessFailurePipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
 
-  private final LaunchService launchService;
+  private final WorkflowRunLaunchService launchService;
   private final JdbcTemplate jdbcTemplate;
   private final DataSource businessDataSource;
   private final E2eOutboxPublishSupport e2eOutboxPublishSupport;
@@ -52,7 +52,7 @@ class ProcessFailurePipelineE2eIT extends AbstractIntegrationTest {
 
   @Autowired
   ProcessFailurePipelineE2eIT(
-      LaunchService launchService,
+      WorkflowRunLaunchService launchService,
       JdbcTemplate jdbcTemplate,
       @Qualifier("processBusinessDataSource") DataSource businessDataSource,
       E2eOutboxPublishSupport e2eOutboxPublishSupport,
@@ -67,6 +67,13 @@ class ProcessFailurePipelineE2eIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("校验规则不通过时提交阶段整体中止:目标表没有新增,暂存数据保留供追溯,任务与实例落到失败终态")
   void wap_sqlTransform_validationFailureAbortsCommit() throws Exception {
+    final String selectCountSql = """
+        select count(*)::int from biz.process_account_summary
+    """;
+    final String selectCountSql2 = """
+        select count(*)::int from batch.process_staging where tenant_id=?
+    """;
+
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API);
@@ -80,7 +87,7 @@ class ProcessFailurePipelineE2eIT extends AbstractIntegrationTest {
         "select bool_and((payload->>'total_amount')::numeric >= 1000) AS pass,"
             + " 'total_amount must be >= 1000' AS message"
             + " from batch.process_staging where batch_key = :batchKey");
-    ProcessE2eFixture.seedSqlTransformPipelineDefinition(
+    ProcessE2eFixture.configureSqlTransformJobParameters(
         jdbcTemplate, objectMapper, TENANT, seed.jobCode(), List.of(validationRule));
 
     Map<String, Object> params = new LinkedHashMap<>();
@@ -88,7 +95,7 @@ class ProcessFailurePipelineE2eIT extends AbstractIntegrationTest {
 
     launchService.launch(new LaunchRequest(
         TENANT,
-        seed.jobCode(),
+        seed.workflowDefinitionId(),
         LocalDate.of(2026, 1, 15),
         TriggerType.API,
         seed.requestId(),
@@ -108,23 +115,22 @@ class ProcessFailurePipelineE2eIT extends AbstractIntegrationTest {
         });
 
     // Target 表保持空（COMMIT 没跑）
-    assertThat(businessJdbc.queryForObject(
-            "select count(*)::int from biz.process_account_summary", Integer.class))
-        .isZero();
+    Integer selectedCount = businessJdbc.queryForObject(selectCountSql, Integer.class);
+    assertThat(selectedCount).isZero();
     // staging 仍含本批的 2 行（留 forensics，直到下次 prepare 才清）
-    assertThat(businessJdbc.queryForObject(
-            "select count(*)::int from batch.process_staging where tenant_id=?",
-            Integer.class,
-            TENANT))
-        .isEqualTo(2);
+    Integer selectedCountRead2 =
+        businessJdbc.queryForObject(selectCountSql2, Integer.class, TENANT);
+    assertThat(selectedCountRead2).isEqualTo(2);
   }
 
   private Map<String, Object> loadProcessOutcome(String dedupKey) {
-    return jdbcTemplate.queryForMap("""
+    final String selectTaskStatusSql = """
         select t.task_status, ji.instance_status, ji.high_water_mark_out
         from batch.job_task t
         join batch.job_instance ji on ji.id = t.job_instance_id
         where ji.tenant_id = ? and ji.dedup_key = ?
-        """, TENANT, dedupKey);
+        """;
+
+    return jdbcTemplate.queryForMap(selectTaskStatusSql, TENANT, dedupKey);
   }
 }

@@ -1,4 +1,8 @@
-# Workflow 动态 fan-out(P1, v0.1)
+# Workflow 分区契约与历史 TASK fan-out
+
+> **当前适用范围**：下述 `TASK.fanOut` 是旧根 Job 模型的设计说明。新根 WorkflowRun 不支持 TASK 直接派发，不能将该配置用于新图或据此宣称动态 task mapping 可用。新图使用 `JOB` 节点，分区/分片由对应 Job 的冻结分区计划产生；BUNDLE 类型按 manifest 展开。若需“上游数组动态展开 JOB 节点”，需单独确认契约和验收，当前不新增模型。
+>
+> 下文的分区快照与产物聚合仍是可复用执行契约；历史 TASK 展开步骤和测试数量只描述原实现，不能替代新根运行验收。
 
 > 2026-05-30。对标 Airflow dynamic task mapping:一个 workflow TASK 节点按上游节点的 output 数组,
 > 在运行时展开成 N 个并行执行单元。

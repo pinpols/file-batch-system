@@ -48,8 +48,11 @@ public final class WebhookDeliverySupport {
       return WebhookDeliveryResult.failure(
           null, "no sender registered for channel type: " + channelType);
     }
-    return sender.send(new NotificationMessage(
-        tenantId, channelCode, channelType, configJson, context.payload(), context.payloadJson()));
+    WebhookEventPayload payload = context.payload();
+    String payloadJson = context.payloadJson();
+    NotificationMessage message = new NotificationMessage(
+        tenantId, channelCode, channelType, configJson, payload, payloadJson);
+    return sender.send(message);
   }
 
   private static WebhookSubscriptionEntity syntheticSubscription(
@@ -88,6 +91,7 @@ public final class WebhookDeliverySupport {
   }
 
   public static String configText(String configJson, String key, Class<?> logOwner) {
-    return text(parseConfig(configJson, logOwner), key);
+    Map<String, Object> config = parseConfig(configJson, logOwner);
+    return text(config, key);
   }
 }

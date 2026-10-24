@@ -3,7 +3,6 @@ package io.github.pinpols.batch.worker.core.infrastructure;
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.CURRENT_STAGE;
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.FILE_ID;
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.ID;
-import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.PIPELINE_DEFINITION_ID;
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.PIPELINE_INSTANCE_ID;
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.TENANT_ID;
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.params;
@@ -14,6 +13,7 @@ import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntime
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.enums.PipelineRunStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
@@ -38,14 +38,16 @@ public class PlatformPipelineRunRepository {
   private final PlatformFileRuntimeMapper mapper;
 
   public Long createPipelineInstance(CreatePipelineInstanceParam param) {
-    if (!Texts.hasText(param.tenantId()) || param.pipelineDefinitionId() == null) {
+    if (!Texts.hasText(param.tenantId()) || !Texts.hasText(param.systemPipelineCode())) {
       return null;
     }
     Map<String, Object> values = params(
         TENANT_ID,
         param.tenantId(),
-        PIPELINE_DEFINITION_ID,
-        param.pipelineDefinitionId(),
+        "systemPipelineCode",
+        param.systemPipelineCode(),
+        "systemPipelineVersion",
+        param.systemPipelineVersion(),
         "jobCode",
         param.jobCode(),
         "pipelineType",
@@ -61,13 +63,17 @@ public class PlatformPipelineRunRepository {
         "runStatus",
         PipelineRunStatus.RUNNING.name());
     mapper.insertPipelineInstance(values);
-    return toLong(values.get(ID));
+    Object insertedIdValue = values.get(ID);
+    return toLong(insertedIdValue);
   }
 
-  public void bindFileToPipelineInstance(Long pipelineInstanceId, Long fileId) {
-    if (pipelineInstanceId != null && fileId != null) {
+  public void bindFileToPipelineInstance(String tenantId, Long pipelineInstanceId, Long fileId) {
+    boolean pipelineFileAssociationIsComplete = EmptyChecks.isNotNull(tenantId)
+        && EmptyChecks.isNotNull(pipelineInstanceId)
+        && EmptyChecks.isNotNull(fileId);
+    if (pipelineFileAssociationIsComplete) {
       mapper.bindFileToPipelineInstance(
-          params(PIPELINE_INSTANCE_ID, pipelineInstanceId, FILE_ID, fileId));
+          params(TENANT_ID, tenantId, PIPELINE_INSTANCE_ID, pipelineInstanceId, FILE_ID, fileId));
     }
   }
 
@@ -178,7 +184,8 @@ public class PlatformPipelineRunRepository {
     mapper.lockStepRunSequence(values);
     values.put("runSeq", mapper.selectNextStepRunSeq(values));
     mapper.insertStepRun(values);
-    return toLong(values.get(ID));
+    Object insertedIdValue = values.get(ID);
+    return toLong(insertedIdValue);
   }
 
   public void finishStepRunSuccess(Long stepRunId, Object outputSummary) {
@@ -225,12 +232,14 @@ public class PlatformPipelineRunRepository {
     if (param.stepRunId() == null) {
       return;
     }
+    String outputSummaryJson = toJson(param.outputSummary());
+    String boundedErrorMessage = truncate(param.errorMessage(), 1024);
     mapper.finishStepRun(params(
         "stepRunId", param.stepRunId(),
         "status", param.status(),
-        "outputSummaryJson", toJson(param.outputSummary()),
+        "outputSummaryJson", outputSummaryJson,
         "errorCode", param.errorCode(),
-        "errorMessage", truncate(param.errorMessage(), 1024),
+        "errorMessage", boundedErrorMessage,
         "errorKey", param.errorKey(),
         "errorArgs", param.errorArgs()));
   }

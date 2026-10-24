@@ -17,6 +17,7 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -142,17 +143,24 @@ class ConsoleJobDefinitionControllerValidationTest {
   }
 
   @Test
-  @DisplayName("共享枚举声明的每种作业类型逐一创建均成功, 不留缺口")
-  void shouldAcceptEveryJobType_whenEnumeratingDeclaredValues() throws Exception {
+  @DisplayName("所有执行型作业类型均可创建")
+  void shouldAcceptExecutableJobTypesAndRejectWorkflowAsJobType() throws Exception {
     when(service.create(ArgumentMatchers.any())).thenReturn(null);
 
     for (JobType jobType : JobType.values()) {
-      mockMvc
+      var result = mockMvc
           .perform(post("/api/console/job-definitions")
               .contentType(APPLICATION_JSON)
               .content(createBody("JOB_" + jobType.code(), jobType.code())))
-          .andExpect(status().isOk());
+          .andReturn();
+      Assertions.assertThat(result.getResponse().getStatus()).isEqualTo(200);
     }
+    var retiredType = mockMvc
+        .perform(post("/api/console/job-definitions")
+            .contentType(APPLICATION_JSON)
+            .content(createBody("JOB_RETIRED_WORKFLOW", "WORKFLOW")))
+        .andReturn();
+    Assertions.assertThat(retiredType.getResponse().getStatus()).isEqualTo(400);
   }
 
   @Test

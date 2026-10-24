@@ -7,23 +7,24 @@
 | # | 文件 | 作用 | 何时看 |
 |---|---|---|---|
 | 01 | [full-project-test-plan.md](./full-project-test-plan.md) | 测试分层与历史阶段计划；当前待办以 todo-master 为准 | 了解测试策略 |
-| 02 | [phase-coverage.md](./phase-coverage.md) | 历史测试覆盖矩阵；不代表当前缺口 | 查阅阶段背景 |
-| 03 | [coverage-gap-analysis.md](./coverage-gap-analysis.md) | 最近一次覆盖盘点（注明核查日期）；实时状态仍以代码和 CI 为准 | 了解覆盖现状与候选缺口 |
 | 04 | [e2e-coverage.md](./e2e-coverage.md) | 旧 E2E 矩阵迁移提示；历史矩阵已归档 | 查看归档入口 |
 | 05 | [release-gate.md](./release-gate.md) | PR 合入门禁、main/每周回归、手动 E2E 复验与本地发布验收边界 | 上线 / 评 PR |
 | 06 | [realtime-sse-verification.md](./realtime-sse-verification.md) | 实时 SSE 推送链路验证 SOP | console 实时栏目验收 |
-| 07 | [load-test-report.md](./load-test-report.md) | 单实例 orchestrator 拐点压测报告（8 req/s）+ 生产容量推算 | 容量规划 |
 | 08 | [load-test-dimensions.md](./load-test-dimensions.md) | 压测维度矩阵：调度快照 / 端到尾完成 / 与指标分工 | 扩展 Gatling 场景前必读 |
 | 09 | [backend-sim-reliability.md](./backend-sim-reliability.md) | 后端 Sim 可靠性场景组：文件完整性、DB 并发、故障隔离与恢复的覆盖矩阵及验证分层 | 盘点可靠性场景、扩展 Sim 或安排 staging 演练 |
+
+## 历史覆盖与压测
+
+[覆盖缺口（2026-04-08）](../archive/testing/coverage-gap-analysis-2026-04-08.md)、[Phase 1/2 矩阵（2026-09-11 状态记录）](../archive/testing/phase-coverage-2026-09-11.md)、[压测报告（2026-04-25）](../verifications/load-test-report-2026-04-25.md) 仅用于历史对照。当前测试资产、执行范围和结果以源码、CI、[发布门禁](release-gate.md) 与最新验证证据为准。
 
 ## 角色路径
 
 | 角色 | 顺序 |
 |---|---|
-| 新加测试 | 03 → 检查现有测试类与 `scripts/local/run-tests.sh --e2e` |
+| 新加测试 | 01 → 检查现有测试类与 `scripts/local/run-tests.sh --e2e` |
 | Review PR | 05 |
-| 容量 / 性能 | 07 → 08 → [`../architecture/scalability-assessment.md`](../architecture/scalability-assessment.md) |
-| 写新 E2E | 03 → [`../runbook/worker-stage-coverage.md`](../runbook/worker-stage-coverage.md) |
+| 容量 / 性能 | 08 → [容量治理](../runbook/production-capacity-governance.md) → [验证证据](../verifications/README.md) |
+| 写新 E2E | 09 → [验收手册](../runbook/be-acceptance.md) |
 | 可靠性 / 故障恢复 | 09 → [`../design/file-integrity-recovery.md`](../design/file-integrity-recovery.md) → [`../runbook/go-live-staging-execution.md`](../runbook/go-live-staging-execution.md) |
 
 ## 与其他子目录的分工
@@ -31,7 +32,15 @@
 | 目录 | 视角 |
 |---|---|
 | `testing/`（本目录） | 质量向：计划 / 矩阵 / 门禁 / 压测 |
-| [`../runbook/worker-stage-coverage.md`](../runbook/worker-stage-coverage.md) | 端到端验证手册（运维角度）|
+| [历史 Worker Stage 验证](../verifications/worker-stage-coverage-2026-04-25.md) | 2026-04-25 的运行证据，不作为当前覆盖率 |
 | [`../runbook/quartz-capacity-baseline.md`](../runbook/quartz-capacity-baseline.md) | Quartz 容量压测（运维角度）|
-| [`../analysis/`](../analysis/README.md) | 测试中发现问题的滚动记录 |
-| [`../archive/testing/`](../archive/testing/) | 历史压测报告 / 测试运行快照 |
+| [`../analysis/`](../plans/README.md) | 测试中发现问题的滚动记录 |
+| [`../archive/testing/`](../archive/testing) | 历史压测报告 / 测试运行快照 |
+
+## 专题入口
+
+| 文档 | 职责 |
+|---|---|
+| [be-acceptance-template.md](be-acceptance-template.md) | BE 验收 backlog — <date> |
+
+- [test-fixture-guide.md](test-fixture-guide.md)：测试资产位置、调用方和路径迁移验证规则。

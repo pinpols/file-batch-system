@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：数据库结构治理画像入口。只读查询，不执行 DDL/DML。
+# 用法：在仓库根目录执行 bash scripts/db/inspect-schema-governance.sh；参数与前置环境见下方说明及所属 README。
 # 数据库结构治理画像入口。只读查询，不执行 DDL/DML。
 # shellcheck disable=SC1091
 

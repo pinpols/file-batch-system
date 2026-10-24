@@ -16,7 +16,7 @@
 ### 1.2 隔离对象
 
 - **任务**：`job_definition` / `job_instance` / `job_partition` / `job_task` 全部带 `tenant_id`
-- **配置**：`file_channel_config` / `workflow_definition` / `pipeline_definition` / `tenant_quota_policy` 全部带 `tenant_id`
+- **配置**：`file_channel_config` / `workflow_definition` / `job_definition` / `tenant_quota_policy` 全部带 `tenant_id`
 - **资源**：worker_group / 配额 / 限流 / 通知渠道按租户独立
 
 ### 1.3 当前实现
@@ -75,7 +75,7 @@
 - 重要文件支持服务端二次鉴权 + 水印审计
 - 文件删除**优先软删除**，再异步清理对象
 
-> 桶生命周期与清理：[`../runbook/minio-lifecycle-policy.md`](../runbook/minio-lifecycle-policy.md)。
+> 桶生命周期与清理：[`object-storage-lifecycle-policy.md`](../runbook/object-storage-lifecycle-policy.md)。
 
 ## 5. 密钥与凭证轮换
 
@@ -253,7 +253,7 @@ AI 仅作为 Console 控制面辅助能力，遵循「**先鉴权 → 再裁剪 
 
 > ✅ **已实现**：`batch.config_release` + `batch.config_change_log` 表（V22 migration）
 
-定义态配置（`job_definition` / `workflow_definition` / `pipeline_definition` / `file_template_config`）**不应**在控制台直接修改后立即影响生产。须纳入发布治理。
+定义态配置（`job_definition` / `workflow_definition` / `file_template_config`）**不应**在控制台直接修改后立即影响生产。须纳入发布治理。
 
 ### 12.1 配置生命周期
 
@@ -283,7 +283,7 @@ AI 仅作为 Console 控制面辅助能力，遵循「**先鉴权 → 再裁剪 
 
 - [`../architecture/architecture-truth.md`](../architecture/architecture-truth.md) — 架构基线
 - [`../architecture/adr/ADR-007-dual-datasource.md`](../architecture/adr/ADR-007-dual-datasource.md) — 单 PG 双 schema 隔离
-- [`../runbook/minio-lifecycle-policy.md`](../runbook/minio-lifecycle-policy.md) — MinIO 桶生命周期
+- [`object-storage-lifecycle-policy.md`](../runbook/object-storage-lifecycle-policy.md) — MinIO 桶生命周期
 - [`../runbook/security-scan.md`](../runbook/security-scan.md) — 安全扫描 SOP
 - [`../runbook/feature-switches.md`](../runbook/feature-switches.md) — 安全旁路 / 限流 / 配额相关开关
 - [`../coding-conventions.md`](../coding-conventions.md) §21 — `batch.security.bypass-mode` 规范

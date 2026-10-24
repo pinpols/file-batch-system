@@ -16,10 +16,33 @@
           and is_deleted = false
     </select>
 
-    <!-- 调用方(DELIVER)只判「该(file,channel)是否已有分发记录」——有则自增尝试、无则首插,
-         不读任何列,故只取 id,避免 select * 白拉整行。 -->
-    <select id="selectLatestDispatchRecordId" resultType="java.lang.Long">
-        select id
+    <select id="isChannelActive" resultType="boolean">
+        select exists (
+            select 1
+            from batch.file_channel_config
+            where tenant_id = #{tenantId}
+              and channel_code = #{channelCode}
+              and is_deleted = false
+              and enabled = true
+        )
+    </select>
+
+    <resultMap id="dispatchRecordSnapshotMap"
+               type="io.github.pinpols.batch.worker.dispatchs.domain.DispatchRecordSnapshot">
+        <constructor>
+            <arg column="dispatch_status" javaType="java.lang.String"/>
+            <arg column="receipt_status" javaType="java.lang.String"/>
+            <arg column="external_request_id" javaType="java.lang.String"/>
+            <arg column="receipt_code" javaType="java.lang.String"/>
+            <arg column="error_code" javaType="java.lang.String"/>
+            <arg column="error_message" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <!-- 状态快照决定恢复时是否可安全地再次访问外部渠道。 -->
+    <select id="selectLatestDispatchRecord" resultMap="dispatchRecordSnapshotMap">
+        select dispatch_status, receipt_status, external_request_id, receipt_code,
+               error_code, error_message
         from batch.file_dispatch_record
         where tenant_id = #{tenantId}
           and file_id = #{fileId}
@@ -32,19 +55,136 @@
         insert into batch.file_dispatch_record (
             tenant_id, file_id, pipeline_instance_id, channel_code, dispatch_target, dispatch_status,
             dispatch_attempt, receipt_code, receipt_status, external_request_id
-        ) values (
+        ) select
             #{tenantId}, #{fileId}, #{pipelineInstanceId}, #{channelCode}, #{dispatchTarget}, #{dispatchStatus},
             1, #{receiptCode}, #{receiptStatus}, #{externalRequestId}
+        where exists (
+            select 1 from batch.file_record file_record
+            where file_record.tenant_id = #{tenantId}
+              and file_record.id = #{fileId}
         )
+          and exists (
+            select 1 from batch.pipeline_instance pipeline_instance
+            where pipeline_instance.tenant_id = #{tenantId}
+              and pipeline_instance.id = #{pipelineInstanceId}
+        )
+        on conflict (tenant_id, file_id, channel_code) do nothing
     </insert>
 
-    <update id="incrementAttempt">
+    <!-- 仅从已知失败状态 CAS 到 CREATED。CREATED 是持久化外发意图；重领见到它必须按结果未知处理。 -->
+    <update id="beginAttempt">
         update batch.file_dispatch_record
-        set dispatch_attempt = dispatch_attempt + 1,
+        set dispatch_status = #{dispatchStatus},
+            dispatch_attempt = dispatch_attempt + 1,
+            receipt_status = #{receiptStatus},
+            error_code = null,
+            error_message = null,
+            dispatched_at = null,
+            ack_at = null,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and file_id = #{fileId}
           and channel_code = #{channelCode}
+          and dispatch_status in ('FAILED', 'COMPENSATED')
+          and coalesce(error_code, '') &lt;&gt; #{unknownOutcomeCode}
+    </update>
+
+    <!-- 消费绑定当前根 Workflow 请求的一次性授权，并将最新外发台账归属本次 Pipeline。 -->
+    <update id="beginVerifiedExternalOutcomeAttempt">
+        with authorized_source_task as (
+            select source_task.id, source_task.tenant_id,
+                   source_pipeline.id as source_pipeline_instance_id
+            from batch.pipeline_instance dispatch_pipeline
+            join batch.job_instance dispatch_job
+              on dispatch_job.id = dispatch_pipeline.related_job_instance_id
+             and dispatch_job.tenant_id = dispatch_pipeline.tenant_id
+            join batch.trigger_request child_request
+              on child_request.id = dispatch_job.trigger_request_id
+             and child_request.tenant_id = dispatch_job.tenant_id
+            join batch.workflow_run parent_run
+              on parent_run.id = child_request.parent_workflow_run_id
+             and parent_run.tenant_id = child_request.tenant_id
+            join batch.trigger_request resolution_request
+              on resolution_request.id = parent_run.trigger_request_id
+             and resolution_request.tenant_id = parent_run.tenant_id
+            join batch.job_task source_task
+              on source_task.tenant_id = resolution_request.tenant_id
+             and source_task.id::text =
+                 resolution_request.launch_payload #>> '{params,_externalOutcomeResolutionTaskId}'
+             and source_task.external_outcome_resolution_version::text =
+                 resolution_request.launch_payload #>> '{params,_externalOutcomeResolutionVersion}'
+             and source_task.external_outcome_resolution_trigger_request_id = resolution_request.id
+            join batch.job_instance source_job
+              on source_job.tenant_id = source_task.tenant_id
+             and source_job.id = source_task.job_instance_id
+             and source_job.job_code = dispatch_job.job_code
+            join batch.pipeline_instance source_pipeline
+              on source_pipeline.tenant_id = source_job.tenant_id
+             and source_pipeline.related_job_instance_id = source_job.id
+            where dispatch_pipeline.tenant_id = #{tenantId}
+              and dispatch_pipeline.id = #{pipelineInstanceId}
+              and dispatch_job.id = #{jobInstanceId}
+              and source_task.task_status = 'FAILED'
+              and source_task.error_code = #{unknownOutcomeCode}
+              and source_task.external_outcome_resolution_consumed_at is null
+              and coalesce(
+                    nullif(source_task.task_payload -&gt;&gt; 'fileId', ''),
+                    nullif(source_task.task_payload -&gt;&gt; 'bundleSourceFileId', '')
+                  ) = cast(#{fileId,jdbcType=BIGINT} as text)
+              and coalesce(
+                    nullif(source_task.task_payload -&gt;&gt; 'channelCode', ''),
+                    nullif(source_task.task_payload -&gt;&gt; 'bundleTargetRef', '')
+                  ) = #{channelCode}
+            for update of source_task
+        ),
+        eligible_dispatch_record as (
+            select dispatch_record.id
+            from batch.file_dispatch_record dispatch_record
+            join authorized_source_task source_task
+              on source_task.tenant_id = dispatch_record.tenant_id
+             and source_task.source_pipeline_instance_id = dispatch_record.pipeline_instance_id
+            where dispatch_record.tenant_id = #{tenantId}
+              and dispatch_record.file_id = #{fileId}
+              and dispatch_record.channel_code = #{channelCode}
+              and dispatch_record.dispatch_status = 'FAILED'
+              and dispatch_record.error_code = #{unknownOutcomeCode}
+            for update of dispatch_record
+        ),
+        started_dispatch_record as (
+            update batch.file_dispatch_record dispatch_record
+            set pipeline_instance_id = #{pipelineInstanceId},
+                dispatch_status = #{dispatchStatus},
+                dispatch_attempt = dispatch_attempt + 1,
+                receipt_status = #{receiptStatus},
+                error_code = null,
+                error_message = null,
+                dispatched_at = null,
+                ack_at = null,
+                updated_at = current_timestamp
+            from authorized_source_task, eligible_dispatch_record
+            where dispatch_record.id = eligible_dispatch_record.id
+            returning dispatch_record.id
+        )
+        update batch.job_task source_task
+        set external_outcome_resolution_consumed_at = current_timestamp,
+            updated_at = current_timestamp
+        from authorized_source_task, started_dispatch_record
+        where source_task.tenant_id = authorized_source_task.tenant_id
+          and source_task.id = authorized_source_task.id
+          and source_task.external_outcome_resolution_consumed_at is null
+    </update>
+
+    <update id="markAttemptFailed">
+        update batch.file_dispatch_record
+        set dispatch_status = #{dispatchStatus},
+            receipt_status = #{receiptStatus},
+            error_code = #{errorCode},
+            error_message = #{errorMessage},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and file_id = #{fileId}
+          and channel_code = #{channelCode}
+          and dispatch_status = #{expectedDispatchStatus}
     </update>
 
     <update id="markSent">
@@ -58,6 +198,7 @@
         where tenant_id = #{tenantId}
           and file_id = #{fileId}
           and channel_code = #{channelCode}
+          and dispatch_status = #{expectedDispatchStatus}
     </update>
 
     <update id="markAcked">

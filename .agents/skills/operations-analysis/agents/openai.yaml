@@ -1,0 +1,3 @@
+interface:
+  display_name: "只读运维分析"
+  short_description: "只读分析运行状态、日志、部署配置、告警、容量和恢复链路并提出建议"

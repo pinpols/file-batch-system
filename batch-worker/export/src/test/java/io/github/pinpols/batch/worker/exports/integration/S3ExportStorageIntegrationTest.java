@@ -2,18 +2,32 @@ package io.github.pinpols.batch.worker.exports.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.common.config.BatchKmsProperties;
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
+import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.exports.BatchWorkerExportApplication;
+import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.infrastructure.S3ExportStorage;
+import io.github.pinpols.batch.worker.exports.stage.StoreStep;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.util.Base64;
 import java.util.HexFormat;
+import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -34,6 +48,117 @@ class S3ExportStorageIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
   private S3ExportStorage storage;
+
+  @Autowired
+  private StoreStep storeStep;
+
+  @Autowired
+  private S3StorageProperties storageProperties;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
+
+  @Autowired
+  private BatchObjectStore objectStore;
+
+  @Test
+  @DisplayName("已登记加密产物重派后真实对象与 PostgreSQL 摘要及安全元数据保持不变")
+  void shouldReuseRegisteredEncryptedArtifactAfterWholePipelineRetry() throws Exception {
+    String tenantId = "seam2_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+    String objectName = "export/seam2/" + tenantId + ".json";
+    String keyRef = "SEAM2_TEST_KEY";
+    String keyMaterial = Base64.getEncoder()
+        .encodeToString("01234567890123456789012345678901".getBytes(StandardCharsets.US_ASCII));
+    BatchSecurityProperties security = new BatchSecurityProperties();
+    security.setBypassMode(false);
+    BatchKmsProperties kms = new BatchKmsProperties();
+    kms.setDefaultKeyRef(keyRef);
+    kms.setKeys(Map.of(keyRef, keyMaterial));
+    BatchObjectCryptoService realCrypto = new BatchObjectCryptoService(security, kms);
+    byte[] originalCiphertext =
+        realCrypto.encrypt("original registered export".getBytes(StandardCharsets.UTF_8), keyRef);
+    Path regenerated = Files.createTempFile("seam2-export-retry-", ".json");
+    Files.writeString(regenerated, "regenerated plaintext from retry");
+
+    try {
+      storage.writeObject(objectName, originalCiphertext, "application/octet-stream");
+      String originalChecksum = storage.sha256Hex(objectName);
+      String originalMetadata = "{\"contentEncryptionEnabled\":true,"
+          + "\"encryptionKeyRef\":\"" + keyRef + "\","
+          + "\"encryptionObjectVersion\":\"BATCHENC1\"}";
+      final String insertBatchFileRecordSql = """
+          insert into batch.file_record (
+              tenant_id, file_category, file_name, original_file_name, file_format_type,
+              file_size_bytes, checksum_type, checksum_value, storage_type, storage_path,
+              storage_bucket, source_type, file_status, metadata_json)
+          values (?, 'OUTPUT', ?, ?, 'JSON', ?, 'SHA-256', ?, 'S3', ?, ?,
+              'GENERATED', 'GENERATED', ?::jsonb)
+          """;
+      jdbcTemplate.update(
+          insertBatchFileRecordSql,
+          tenantId,
+          tenantId + ".json",
+          tenantId + ".json",
+          (long) originalCiphertext.length,
+          originalChecksum,
+          objectName,
+          storageProperties.getBucket(),
+          originalMetadata);
+      final String selectBatchFileRecordSql = """
+          select metadata_json::text from batch.file_record where tenant_id = ? and storage_path = ?
+      """;
+      String metadataBefore = jdbcTemplate.queryForObject(
+          selectBatchFileRecordSql,
+          String.class,
+          tenantId,
+          objectName);
+
+      ExportJobContext context = new ExportJobContext();
+      context.setTenantId(tenantId);
+      context.getAttributes().put(PipelineRuntimeKeys.GENERATED_FILE_PATH, regenerated.toString());
+      context.getAttributes().put(PipelineRuntimeKeys.OBJECT_NAME, objectName);
+      context
+          .getAttributes()
+          .put(
+              PipelineRuntimeKeys.TEMPLATE_CONFIG,
+              Map.of("content_encryption_enabled", true, "encryption_key_ref", keyRef));
+
+      var result = storeStep.execute(context);
+
+      assertThat(result.success()).isTrue();
+      assertThat(context.getAttributes())
+          .containsEntry(PipelineRuntimeKeys.CHECKSUM_VALUE, originalChecksum)
+          .containsEntry(PipelineRuntimeKeys.EXPORT_STORE_COMMITTED, true);
+      assertThat(storage.sha256Hex(objectName)).isEqualTo(originalChecksum);
+      try (var storedBytes = objectStore.get(storageProperties.getBucket(), objectName)) {
+        assertThat(realCrypto.decrypt(storedBytes.readAllBytes()))
+            .isEqualTo("original registered export".getBytes(StandardCharsets.UTF_8));
+      }
+      final String selectBatchFileRecordSqlValue1 = """
+          select checksum_value from batch.file_record where tenant_id = ? and storage_path = ?
+      """;
+      String selectedChecksumValue = jdbcTemplate.queryForObject(
+          selectBatchFileRecordSqlValue1, String.class, tenantId, objectName);
+      assertThat(selectedChecksumValue).isEqualTo(originalChecksum);
+      final String selectBatchFileRecordSqlValue2 = """
+          select metadata_json::text from batch.file_record where tenant_id = ? and storage_path = ?
+      """;
+      String selectedBatchFileRecord = jdbcTemplate.queryForObject(
+          selectBatchFileRecordSqlValue2, String.class, tenantId, objectName);
+      assertThat(selectedBatchFileRecord).isEqualTo(metadataBefore);
+      assertThat(regenerated).doesNotExist();
+    } finally {
+      storage.removeObject(objectName);
+      final String deleteBatchFileRecordSql = """
+          delete from batch.file_record where tenant_id = ? and storage_path = ?
+      """;
+      jdbcTemplate.update(
+          deleteBatchFileRecordSql,
+          tenantId,
+          objectName);
+      Files.deleteIfExists(regenerated);
+    }
+  }
 
   @Test
   @DisplayName("写入 JSON 对象后,存在性检查立即为真")

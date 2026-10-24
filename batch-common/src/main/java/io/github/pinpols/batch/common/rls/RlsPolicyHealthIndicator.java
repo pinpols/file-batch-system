@@ -12,7 +12,7 @@ import org.springframework.boot.health.contributor.HealthIndicator;
  * Phase A · RLS healthcheck — 启动期 + actuator/health 时<b>闭世界</b>确认真实 biz.* 表(+
  * batch.process_staging) 都启用了 RLS(ENABLE + FORCE)且挂了 tenant_isolation policy。
  *
- * <p><b>闭世界(closed-world)</b>:不再遍历硬编码清单,而是扫真实 biz schema 的表(排除分区子表)。新增 biz 表漏配 RLS 时也会被发现 —— 旧的硬编码
+ * <p><b>闭世界(closed-world)</b>:不再遍历硬编码清单,而是扫真实 biz schema 的租户父表及叶子。新增 biz 表漏配 RLS 时也会被发现 —— 旧的硬编码
  * 静态清单做不到(新增租户表不在清单里就静默放过 → 跨租户泄露),因此按真实 catalog 动态检查。检查逻辑见 {@link RlsClosedWorldChecker}。
  *
  * <p>缺一报 DOWN,details 分 {@code missingEnableRls}/{@code missingForceRls}/{@code missingPolicy}
@@ -42,7 +42,8 @@ public class RlsPolicyHealthIndicator implements HealthIndicator {
     try {
       result = checker.check();
     } catch (SQLException e) {
-      log.warn("RLS health check failed: {}", SwallowedExceptionLogger.summary(e));
+      String causeSummary = SwallowedExceptionLogger.summary(e);
+      log.warn("RLS health check failed: {}", causeSummary);
       return Health.down().withException(e).build();
     }
 

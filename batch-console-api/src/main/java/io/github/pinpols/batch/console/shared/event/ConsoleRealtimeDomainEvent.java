@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.shared.event;
 
-import java.time.Instant;
 import lombok.Builder;
 
+import java.time.Instant;
 /**
  * 控制台侧的实时领域事件。
  *

@@ -1,5 +1,5 @@
 server:
-  port: 18086
+  port: ${BATCH_WORKER_PROCESS_PORT:18086}
 
 spring:
   main:
@@ -36,7 +36,7 @@ batch:
     process:
       staging-cleanup:
         # 本地 profile 只验证业务链路，不让普通业务 writer 承担 process_staging 分区 DDL。
-        # 生产默认仍开启，由运行环境确保维护账号/权限满足分区管理要求。
+        # deletion-enabled 默认关闭；跨库生命周期围栏通过 PART-02 验收前不得开启按年龄删除。
         enabled: false
       worker-code: process-node-1
       worker-type: PROCESS

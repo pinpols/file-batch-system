@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.timeout;
 
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.service.task.JobInstanceTerminalStatusApplicationService;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
@@ -20,7 +21,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Job-level timeout 回退强制器（ADR-参考 docs/archive/analysis/orchestrator-vs-industry-2026-05-03.md §2.1）。
+ * Job-level timeout 回退强制器（ADR-参考 docs/archive/audit/orchestrator-vs-industry-2026-05-03.md §2.1）。
  *
  * <p>周期扫至少一个子 task 已 {@code RUNNING}，且 {@code now - job_instance.started_at >
  * job_definition.timeout_seconds} 的实例，CAS 推到 FAILED 终态。实例的 RUNNING 表示已派发，不是 worker 已执行；
@@ -75,9 +76,10 @@ public class JobInstanceTimeoutEnforcer {
             : JobInstanceStatus.FAILED.code();
         JobInstanceTerminalStatusCommand cmd = new JobInstanceTerminalStatusCommand(
             ji.getTenantId(), ji.getId(), terminalStatus, now, ji.getVersion());
-        int rows =
-            jobInstanceTerminalStatusApplicationService.updateTerminalStatusAndReconcileChildren(
-                cmd);
+        int rows = RlsTenantContextHolder.runWithTenant(
+            ji.getTenantId(),
+            () -> jobInstanceTerminalStatusApplicationService.enforceTimeoutAndReconcileWorkflow(
+                cmd));
         if (rows > 0) {
           failed++;
           log.warn(

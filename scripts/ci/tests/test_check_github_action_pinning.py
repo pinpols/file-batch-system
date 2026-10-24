@@ -1,3 +1,5 @@
+# 用途：GitHub Actions SHA 固定门禁测试。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_check_github_action_pinning.py。
 import importlib.util
 import tempfile
 import unittest

@@ -21,6 +21,7 @@ import java.net.URI;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -82,7 +83,7 @@ class ConsoleOidcAuthenticationSuccessHandlerTest {
             Instant.parse("2026-10-09T02:00:00Z"),
             "local-user",
             TENANT_ID,
-            java.util.Set.of("ROLE_TENANT_USER"),
+            Set.of("ROLE_TENANT_USER"),
             false));
 
     MockHttpServletResponse response = invoke("external-sub", ISSUER, REGISTRATION_ID);

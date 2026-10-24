@@ -1,5 +1,10 @@
 package io.github.pinpols.batch.worker.core.mapper;
 
+import io.github.pinpols.batch.worker.core.param.WorkerReportOutboxPgGiveUpRowParam;
+import io.github.pinpols.batch.worker.core.param.WorkerReportOutboxPgUpdateGiveUpParam;
+import io.github.pinpols.batch.worker.core.param.WorkerReportOutboxPgUpdateRetryParam;
+
+
 import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxRow;
 import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxUpsertParam;
 import java.util.List;
@@ -18,19 +23,10 @@ public interface WorkerReportOutboxPgMapper {
   Integer selectAttemptCount(@Param("id") long id);
 
   int updateGiveUp(
-      @Param("id") long id,
-      @Param("publishStatus") String publishStatus,
-      @Param("attemptCount") int attemptCount,
-      @Param("updatedAt") long updatedAt,
-      @Param("statusPublishing") String statusPublishing);
+      WorkerReportOutboxPgUpdateGiveUpParam parameters);
 
   int updateRetry(
-      @Param("id") long id,
-      @Param("attemptCount") int attemptCount,
-      @Param("nextAttemptAt") long nextAttemptAt,
-      @Param("updatedAt") long updatedAt,
-      @Param("publishStatus") String publishStatus,
-      @Param("statusPublishing") String statusPublishing);
+      WorkerReportOutboxPgUpdateRetryParam parameters);
 
   // CPD-OFF: PostgreSQL and SQLite report-outbox mappers intentionally mirror the same contract.
   int resetStalePublishing(
@@ -47,10 +43,6 @@ public interface WorkerReportOutboxPgMapper {
   int deleteById(@Param("id") long id);
 
   int giveUpRow(
-      @Param("id") long id,
-      @Param("publishStatus") String publishStatus,
-      @Param("now") long now,
-      @Param("maxAttempts") int maxAttempts,
-      @Param("statusPublishing") String statusPublishing);
+      WorkerReportOutboxPgGiveUpRowParam parameters);
   // CPD-ON
 }

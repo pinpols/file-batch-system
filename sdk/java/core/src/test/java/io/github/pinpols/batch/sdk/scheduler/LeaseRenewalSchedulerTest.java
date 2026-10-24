@@ -3,6 +3,7 @@ package io.github.pinpols.batch.sdk.scheduler;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -10,15 +11,24 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage;
 import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
+import io.github.pinpols.batch.sdk.task.SdkTaskContext;
+import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
+import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 
 @DisplayName("LeaseRenewalScheduler — 在途任务续租报文、取消信号翻转与错误分支")
 class LeaseRenewalSchedulerTest {
@@ -89,6 +99,58 @@ class LeaseRenewalSchedulerTest {
     }
 
     verify(http, never()).renew(anyLong(), any());
+  }
+
+  @Test
+  @DisplayName("处理器Error原样逃出执行线程且不报告伪成功,失去执行线程后不残留或继续续租")
+  void shouldStopRenewingTask_whenHandlerThrowsError() throws Exception {
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    when(http.claim(eq(42L), anyString(), any()))
+        .thenReturn(new PlatformHttpClient.TaskClaimResponse("inv-42"));
+    AssertionError fatal = new AssertionError("handler aborted");
+    AtomicReference<Throwable> observed = new AtomicReference<>();
+    CountDownLatch threadExited = new CountDownLatch(1);
+    SdkTaskHandler handler = new SdkTaskHandler() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
+
+      @Override
+      public SdkTaskResult execute(SdkTaskContext context) {
+        // 只捕获本测试执行线程的未处理异常，不改 JVM 默认处理器。
+        Thread.currentThread().setUncaughtExceptionHandler((thread, failure) -> {
+          observed.set(failure);
+          threadExited.countDown();
+        });
+        throw fatal;
+      }
+    };
+    TaskDispatcher dispatcher = new TaskDispatcher(cfg, Map.of("tt", handler), http);
+    TaskDispatchMessage message = new TaskDispatchMessage(
+        42L, "tx", "job-1", "tt", "ti-9", Map.of(), Map.of());
+    try {
+      TaskDispatcher.DispatchDecision decision = dispatcher.onMessage(message);
+      assertThat(decision).isEqualTo(TaskDispatcher.DispatchDecision.SUBMITTED);
+      boolean exited = threadExited.await(2, TimeUnit.SECONDS);
+      assertThat(exited).isTrue();
+      assertThat(observed.get()).isSameAs(fatal);
+      try (LeaseRenewalScheduler scheduler = new LeaseRenewalScheduler(cfg, http, dispatcher)) {
+        scheduler.tick();
+      }
+
+      verify(http, never()).report(anyLong(), anyString(), any());
+      verify(http, never()).renew(anyLong(), any());
+      assertThat(dispatcher.inFlightTaskIds()).isEmpty();
+      assertThat(dispatcher.partitionInvocation(42L)).isNull();
+      assertThat(dispatcher.progressSnapshot(42L)).isNull();
+      assertThat(dispatcher.isFatal()).isTrue();
+      TaskDispatcher.DispatchDecision redelivery = dispatcher.onMessage(message);
+      assertThat(redelivery).isEqualTo(TaskDispatcher.DispatchDecision.RETRY_LATER);
+      verify(http, times(1)).claim(eq(42L), anyString(), any());
+    } finally {
+      dispatcher.stop(Duration.ofMillis(50));
+    }
   }
 
   @Test
@@ -210,6 +272,6 @@ class LeaseRenewalSchedulerTest {
   }
 
   private static <T> T eq(T v) {
-    return org.mockito.ArgumentMatchers.eq(v);
+    return ArgumentMatchers.eq(v);
   }
 }

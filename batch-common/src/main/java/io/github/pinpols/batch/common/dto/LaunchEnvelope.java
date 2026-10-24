@@ -14,15 +14,15 @@ import java.time.Instant;
  *
  * <ul>
  *   <li>{@code dedupKey} — trigger 已计算过的 dedup key,避免 orchestrator 重复算
- *   <li>{@code sourceFireTime} — Quartz 实际 fire 时刻,supports 链路审计与 latency 统计
- *   <li>{@code envelopeVersion} — 协议演进时 consumer 兼容多版本(v2 现行)
+ *   <li>{@code sourceFireTime} — Quartz 原计划 fire 时刻；非 Quartz 请求为接纳事件时刻，不能用业务数据区间冒充
+ *   <li>{@code envelopeVersion} — 持久化消息协议版本；consumer 仅接受当前版本，不将旧载荷降级到旧 Job 根入口
  *   <li>{@code traceContext} — 持久化异步边界所需的 W3C 传输上下文；不承载业务身份
  * </ul>
  *
- * @param launchRequest 完整的 launch
- *     命令参数(tenantId/jobCode/bizDate/triggerType/requestId/traceId/params)
+ * @param launchRequest 完整的 launch 命令参数。顶层 Trigger launch 必须使用
+ *     {@code workflowDefinitionId}；JobCode 仅用于 Workflow 节点派发等内部作业上下文。
  * @param dedupKey trigger 端已计算的去重 key(orchestrator 仍会通过 uk_job_instance_tenant_dedup 回退)
- * @param sourceFireTime trigger 实际 fire 时刻,UTC instant
+ * @param sourceFireTime Quartz 原计划时刻或非 Quartz 接纳事件时刻，UTC instant
  * @param envelopeVersion 协议版本号,当前 2
  */
 public record LaunchEnvelope(
@@ -34,12 +34,6 @@ public record LaunchEnvelope(
 
   /** 当前协议版本。 */
   public static final int CURRENT_VERSION = 2;
-
-  /** 保留 v1 源码兼容入口，供测试和不跨持久化边界的调用方使用。 */
-  public LaunchEnvelope(
-      LaunchRequest launchRequest, String dedupKey, Instant sourceFireTime, int envelopeVersion) {
-    this(launchRequest, dedupKey, sourceFireTime, envelopeVersion, null);
-  }
 
   /** 工厂方法:用当前版本号 + now() 构造,业务路径默认调用此方法。 */
   public static LaunchEnvelope of(

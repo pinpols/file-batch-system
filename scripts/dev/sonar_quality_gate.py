@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Validate Sonar's evaluated quality-gate conditions against its configuration."""
+# 用途：核对 Sonar 实际评估条件与配置的 Quality Gate。
+# 用法：设置 SONAR_GATE_CONFIG_JSON、SONAR_GATE_RESULT_JSON、SONAR_GATE_MEASURES_JSON 后执行 python3 scripts/dev/sonar_quality_gate.py --gate <名称>。
+"""核对 Sonar 实际评估的质量门禁条件与配置。"""
 
 from __future__ import annotations
 

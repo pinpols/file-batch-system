@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -40,8 +41,9 @@ record ExcelStyleOptions(
     Map<String, Object> style = helper.toMap(
         helper.firstNonNull(templateConfig.get("header_style"), templateConfig.get("headerStyle")));
     boolean bold = booleanValue(style.get("bold"));
-    byte[] background =
-        parseRgb(helper.textValue(helper.firstNonNull(style.get("background"), style.get("bg"))));
+    Object configuredBackground = helper.firstNonNull(style.get("background"), style.get("bg"));
+    String backgroundText = helper.textValue(configuredBackground);
+    byte[] background = parseRgb(backgroundText);
     boolean freeze =
         booleanValue(helper.firstNonNull(style.get("freeze_header"), style.get("freezeHeader")));
     boolean autoWidth =
@@ -68,7 +70,8 @@ record ExcelStyleOptions(
           helper.integerValue(helper.firstNonNull(map.get("from"), map.get("fromColumn")));
       Integer to = helper.integerValue(helper.firstNonNull(map.get("to"), map.get("toColumn")));
       String title = helper.textValue(helper.firstNonNull(map.get("title"), map.get("label")));
-      if (from == null || to == null || to < from) {
+      boolean excelColumnRangeIsInvalid = from == null || to == null || to < from;
+      if (excelColumnRangeIsInvalid) {
         continue;
       }
       groups.add(new HeaderGroup(title == null ? "" : title, from, to));
@@ -99,6 +102,11 @@ record ExcelStyleOptions(
     if (value instanceof Boolean b) {
       return b;
     }
-    return value != null && Boolean.parseBoolean(String.valueOf(value).trim());
+    if (EmptyChecks.isNull(value)) {
+      return false;
+    }
+    String rawText = String.valueOf(value);
+    String text = rawText.trim();
+    return Boolean.parseBoolean(text);
   }
 }

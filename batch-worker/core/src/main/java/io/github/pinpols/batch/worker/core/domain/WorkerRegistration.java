@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.core.domain;
 
 import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import java.time.OffsetDateTime;
 import java.util.List;
 import lombok.Data;
@@ -41,4 +42,7 @@ public class WorkerRegistration {
 
   /** 执行器能力摘要，仅用于运维查询展示。 */
   private List<WorkerTaskCapabilityDto> taskCapabilities;
+
+  /** 实际安装执行器的 Replay 能力声明；仅注册时上报。 */
+  private List<ReplayCapabilityDeclaration> replayCapabilities;
 }

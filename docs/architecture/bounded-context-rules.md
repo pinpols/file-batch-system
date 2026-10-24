@@ -2,7 +2,7 @@
 
 > 守护测试:`batch-console-api/src/test/java/io/github/pinpols/batch/console/arch/BoundedContextDependencyArchTest.java`
 > 进度 metric:`BoundedContextMigrationProgressTest.java`
-> Roadmap:[`docs/architecture/p0-p1-p2-roadmap.md`](p0-p1-p2-roadmap.md) § P1-A
+> Roadmap:[`docs/archive/plans/p0-p1-p2-roadmap-2026-05-29.md`](../archive/plans/p0-p1-p2-roadmap-2026-05-29.md) § P1-A
 
 ## 9 个有界上下文
 

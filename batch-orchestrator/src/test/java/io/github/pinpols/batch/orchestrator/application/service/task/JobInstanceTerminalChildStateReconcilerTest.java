@@ -63,6 +63,22 @@ class JobInstanceTerminalChildStateReconcilerTest {
   }
 
   @Test
+  @DisplayName("dry-run 终态按对应成功/失败状态收敛子表")
+  void shouldReconcileDryRunTerminalStates() {
+    reconciler.reconcile("ta", 100L, JobInstanceStatus.SUCCESS_DRY_RUN.code());
+    reconciler.reconcile("ta", 101L, JobInstanceStatus.FAILED_DRY_RUN.code());
+
+    verify(partitionMapper)
+        .closeNonTerminalPartitionsForTerminalInstance("ta", 100L, PartitionStatus.SUCCESS.code());
+    verify(taskMapper)
+        .closeNonTerminalTasksForTerminalInstance("ta", 100L, TaskStatus.SUCCESS.code());
+    verify(partitionMapper)
+        .closeNonTerminalPartitionsForTerminalInstance("ta", 101L, PartitionStatus.FAILED.code());
+    verify(taskMapper)
+        .closeNonTerminalTasksForTerminalInstance("ta", 101L, TaskStatus.FAILED.code());
+  }
+
+  @Test
   @DisplayName("FAILED → 子表收敛为 FAILED")
   void shouldReconcileFailed_whenInstanceFailed() {
     reconciler.reconcile("ta", 100L, JobInstanceStatus.FAILED.code());

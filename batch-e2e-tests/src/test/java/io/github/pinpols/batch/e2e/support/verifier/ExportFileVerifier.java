@@ -67,7 +67,7 @@ public final class ExportFileVerifier implements E2eVerifier {
   // ─── Individual assertion methods (package-visible for direct test use) ───
 
   private void verifyFileRecord() {
-    List<Map<String, Object>> fileRecords = platformJdbc.queryForList("""
+    final String selectStoragePathSql = """
             select fr.storage_path, fr.file_status, fr.file_size_bytes
             from batch.file_record fr
             join batch.job_instance ji on ji.tenant_id = fr.tenant_id
@@ -75,7 +75,9 @@ public final class ExportFileVerifier implements E2eVerifier {
               and fr.file_category = 'OUTPUT'
             order by fr.id desc
             limit 1
-            """, tenantId, dedupKey);
+            """;
+
+    List<Map<String, Object>> fileRecords = platformJdbc.queryForList(selectStoragePathSql, tenantId, dedupKey);
 
     if (fileRecords.isEmpty()) {
       // No file_record yet — could be a pipeline without file output; skip.
@@ -94,8 +96,12 @@ public final class ExportFileVerifier implements E2eVerifier {
   }
 
   private void verifySettlementAmount() {
+    final String selectTotalAmountSql = """
+        select total_amount from biz.settlement_batch where tenant_id = ? and batch_no = ?
+    """;
+
     BigDecimal totalAmount = businessJdbc.queryForObject(
-        "select total_amount from biz.settlement_batch where tenant_id = ? and batch_no = ?",
+        selectTotalAmountSql,
         BigDecimal.class,
         tenantId,
         batchNo);
@@ -113,10 +119,11 @@ public final class ExportFileVerifier implements E2eVerifier {
 
   /** Best-effort: silently skips if MinIO is unreachable or path is LOCAL. */
   private void tryAssertObjectContent(String storagePath) {
-    if (storagePath == null
+    boolean exportUsesFilesystemStorage = storagePath == null
         || storagePath.startsWith("/")
         || storagePath.startsWith("file://")
-        || s3Bucket == null) {
+        || s3Bucket == null;
+    if (exportUsesFilesystemStorage) {
       return;
     }
     try {

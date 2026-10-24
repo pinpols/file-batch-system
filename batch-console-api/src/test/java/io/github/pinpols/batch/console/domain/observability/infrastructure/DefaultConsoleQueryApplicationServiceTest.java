@@ -14,11 +14,10 @@ import io.github.pinpols.batch.console.domain.file.infrastructure.query.ConsoleF
 import io.github.pinpols.batch.console.domain.job.application.contract.query.JobExecutionLogQueryRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobInstanceResponse;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.query.WorkflowNodeRunQueryRequest;
 import io.github.pinpols.batch.console.domain.workflow.infrastructure.query.ConsoleWorkflowQueryService;
-import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
 import io.github.pinpols.batch.console.infrastructure.query.ConsoleJobQueryService;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.shared.view.ConsoleTraceSnapshotResponse;
 import java.time.Instant;
 import java.util.List;
@@ -53,10 +52,7 @@ class DefaultConsoleQueryApplicationServiceTest {
   private JobDefinitionMapper jobDefinitionMapper;
 
   @Mock
-  private PipelineDefinitionMapper pipelineDefinitionMapper;
-
-  @Mock
-  private ConsoleTenantGuard tenantGuard;
+  private TenantIdResolver tenantGuard;
 
   private DefaultConsoleQueryApplicationService service;
 
@@ -69,7 +65,6 @@ class DefaultConsoleQueryApplicationServiceTest {
         opsQueryService,
         operationAuditQueryService,
         jobDefinitionMapper,
-        pipelineDefinitionMapper,
         tenantGuard);
   }
 
@@ -106,34 +101,20 @@ class DefaultConsoleQueryApplicationServiceTest {
             1,
             1,
             200,
-            List.of(new ConsoleJobInstanceResponse(
-                7L,
-                "t1",
-                "job-a",
-                "i-7",
-                null,
-                "MANUAL",
-                "SUCCESS",
-                null,
-                null,
-                false,
-                false,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                Instant.parse("2026-08-02T01:02:00Z"),
-                null,
-                null,
-                Instant.parse("2026-08-02T01:00:00Z"),
-                Instant.parse("2026-08-02T01:03:00Z"),
-                false,
-                null))));
+            List.of(ConsoleJobInstanceResponse.builder()
+                .id(7L)
+                .tenantId("t1")
+                .jobCode("job-a")
+                .instanceNo("i-7")
+                .triggerType("MANUAL")
+                .instanceStatus("SUCCESS")
+                .rerunFlag(false)
+                .retryFlag(false)
+                .deadlineAt(Instant.parse("2026-08-02T01:02:00Z"))
+                .startedAt(Instant.parse("2026-08-02T01:00:00Z"))
+                .finishedAt(Instant.parse("2026-08-02T01:03:00Z"))
+                .dryRun(false)
+                .build()));
 
     ConsoleTraceSnapshotResponse response = service.traceSnapshot("t1", "trace-1");
 

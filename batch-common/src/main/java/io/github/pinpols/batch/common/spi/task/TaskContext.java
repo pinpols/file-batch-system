@@ -43,9 +43,11 @@ public record TaskContext(
   }
 
   private static Map<String, Object> immutableNullableMap(Map<String, Object> source) {
-    return EmptyChecks.isEmpty(source)
-        ? Map.of()
-        : Collections.unmodifiableMap(new LinkedHashMap<>(source));
+    if (EmptyChecks.isEmpty(source)) {
+      return Map.of();
+    }
+    Map<String, Object> snapshot = new LinkedHashMap<>(source);
+    return Collections.unmodifiableMap(snapshot);
   }
 
   /**

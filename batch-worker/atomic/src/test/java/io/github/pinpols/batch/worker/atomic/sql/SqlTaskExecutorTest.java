@@ -17,6 +17,7 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.Duration;
 import java.util.Map;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
@@ -248,7 +249,7 @@ class SqlTaskExecutorTest {
     void shouldReturnUnknown_whenBlockCommentUnterminated() {
       String statement = "/*" + "*".repeat(100_000);
       assertTimeoutPreemptively(
-          java.time.Duration.ofSeconds(2),
+          Duration.ofSeconds(2),
           () -> assertThat(SqlTaskExecutor.detectStatementType(statement)).isEqualTo("UNKNOWN"));
     }
   }

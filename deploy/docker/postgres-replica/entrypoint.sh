@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：P2-4: postgres-replica 容器入口脚本。
+# 用法：由对应容器的 entrypoint/init 配置调用；环境参数见容器配置与下方说明。
 # P2-4: postgres-replica 容器入口脚本。
 #
 # 行为：

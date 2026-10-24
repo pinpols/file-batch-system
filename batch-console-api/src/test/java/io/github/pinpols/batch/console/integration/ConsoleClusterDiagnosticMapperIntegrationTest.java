@@ -4,11 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.ops.mapper.ConsoleClusterDiagnosticMapper;
+import io.github.pinpols.batch.console.domain.ops.view.cluster.OutboxStatusCountView;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,6 +41,35 @@ class ConsoleClusterDiagnosticMapperIntegrationTest extends AbstractIntegrationT
   @Autowired
   private JdbcTemplate jdbcTemplate;
 
+  private final List<String> ownedTenants = new ArrayList<>();
+
+  @AfterEach
+  void removeOwnedFixture() {
+    final String deleteOutboxEventSql = """
+        delete from batch.outbox_event where tenant_id=?
+    """;
+    final String deleteJobTaskSql = """
+        delete from batch.job_task where tenant_id=?
+    """;
+    final String deleteJobPartitionSql = """
+        delete from batch.job_partition where tenant_id=?
+    """;
+    final String deleteJobInstanceSql = """
+        delete from batch.job_instance where tenant_id=?
+    """;
+    final String deleteJobDefinitionSql = """
+        delete from batch.job_definition where tenant_id=?
+    """;
+
+    for (String tenantId : ownedTenants) {
+      jdbcTemplate.update(deleteOutboxEventSql, tenantId);
+      jdbcTemplate.update(deleteJobTaskSql, tenantId);
+      jdbcTemplate.update(deleteJobPartitionSql, tenantId);
+      jdbcTemplate.update(deleteJobInstanceSql, tenantId);
+      jdbcTemplate.update(deleteJobDefinitionSql, tenantId);
+    }
+  }
+
   // 全局递增 task_seq,保证 uk_job_task_no_partition_seq (job_instance_id, task_seq) 不撞。
   private final AtomicLong taskSeq = new AtomicLong(0);
 
@@ -47,10 +78,11 @@ class ConsoleClusterDiagnosticMapperIntegrationTest extends AbstractIntegrationT
   void
       outboxStatusCountsForInstance_countsOnlyJobTaskEventsOfThisInstance_notCollidingAggregateIds() {
     // arrange
-    String tenantId = "ta-diag-" + System.nanoTime();
-    // job_instance_id 只是一个数值(V173 已删 job_task→job_instance 外键,无需实体化 job_instance)。
+    String tenantId = ownTenant("ta-diag-");
+    // 新复合外键要求实际 JobInstance 父行；仍让一个 task ID 与 instance ID 数值相等，保留 aggregate_type 撞车场景。
     // 关键:让某个 job_task 的 id 与 job_instance_id 数值相等,复现 aggregate_id 跨类型撞车。
     long jobInstanceId = nextTaskId();
+    insertJobInstance(tenantId, jobInstanceId);
     long taskA = nextTaskId();
     long taskB = nextTaskId();
 
@@ -67,102 +99,192 @@ class ConsoleClusterDiagnosticMapperIntegrationTest extends AbstractIntegrationT
     insertOutbox(tenantId, "WORKFLOW_RUN", jobInstanceId, "FAILED");
 
     // act
-    List<Map<String, Object>> rows = mapper.outboxStatusCountsForInstance(tenantId, jobInstanceId);
+    List<OutboxStatusCountView> rows =
+        mapper.outboxStatusCountsForInstance(tenantId, jobInstanceId);
 
     // assert：只应有 NEW=2 这一组;诱饵的 FAILED 不得泄漏
     assertThat(rows).hasSize(1);
     assertThat(countForStatus(rows, "NEW")).isEqualTo(2L);
-    assertThat(rows).noneMatch(r -> "FAILED".equals(r.get("status")));
+    assertThat(rows).noneMatch(r -> "FAILED".equals(r.status()));
   }
 
   @Test
   @DisplayName("outbox 卡死统计按租户隔离,不串入他租户同 job_instance_id 的 JOB_TASK 事件")
   void outboxStatusCountsForInstance_isTenantScoped() {
     // arrange
-    long jobInstanceId = nextTaskId();
-
-    String tenantA = "ta-scope-" + System.nanoTime();
+    String tenantA = ownTenant("ta-scope-");
+    long jobInstanceIdA = insertJobInstance(tenantA);
     long taskA = nextTaskId();
-    insertJobTask(tenantA, taskA, jobInstanceId);
+    insertJobTask(tenantA, taskA, jobInstanceIdA);
     insertOutbox(tenantA, "JOB_TASK", taskA, "NEW");
 
-    // 另一租户:同一 job_instance_id 数值,也是 JOB_TASK outbox——若租户谓词失守会被误计
-    String tenantB = "tb-scope-" + System.nanoTime();
+    // 另一租户使用自己的真实实例；复合主键不允许跨租户复用同一个 instance ID。
+    String tenantB = ownTenant("tb-scope-");
+    long jobInstanceIdB = insertJobInstance(tenantB);
     long taskB = nextTaskId();
-    insertJobTask(tenantB, taskB, jobInstanceId);
+    insertJobTask(tenantB, taskB, jobInstanceIdB);
     insertOutbox(tenantB, "JOB_TASK", taskB, "NEW");
 
     // act
-    List<Map<String, Object>> rowsA = mapper.outboxStatusCountsForInstance(tenantA, jobInstanceId);
-    List<Map<String, Object>> rowsB = mapper.outboxStatusCountsForInstance(tenantB, jobInstanceId);
+    List<OutboxStatusCountView> rowsA =
+        mapper.outboxStatusCountsForInstance(tenantA, jobInstanceIdA);
+    List<OutboxStatusCountView> rowsB =
+        mapper.outboxStatusCountsForInstance(tenantB, jobInstanceIdB);
+    List<OutboxStatusCountView> crossTenantRows =
+        mapper.outboxStatusCountsForInstance(tenantA, jobInstanceIdB);
 
     // assert：各自只看到自己那条,互不串号
     assertThat(rowsA).hasSize(1);
     assertThat(countForStatus(rowsA, "NEW")).isEqualTo(1L);
     assertThat(rowsB).hasSize(1);
     assertThat(countForStatus(rowsB, "NEW")).isEqualTo(1L);
+    assertThat(crossTenantRows).isEmpty();
   }
 
   @Test
   @DisplayName("终态父子一致性诊断覆盖 dry-run 成功与失败终态")
   void shouldIncludeDryRunTerminalStates_whenCountingTerminalInstancesWithActiveChildren() {
-    String tenantId = "ta-dry-run-" + System.nanoTime();
+    final String deleteJobPartitionSql = """
+        delete from batch.job_partition where tenant_id = ? and job_instance_id in (?, ?)
+    """;
+
+    String tenantId = ownTenant("ta-dry-run-");
     long successId = insertJobInstanceWithActivePartition(tenantId, "SUCCESS_DRY_RUN");
     long failedId = insertJobInstanceWithActivePartition(tenantId, "FAILED_DRY_RUN");
 
     assertThat(mapper.countTerminalInstancesWithActiveChildren(tenantId)).isEqualTo(2L);
 
-    jdbcTemplate.update(
-        "delete from batch.job_partition where tenant_id = ? and job_instance_id in (?, ?)",
-        tenantId,
-        successId,
-        failedId);
+    jdbcTemplate.update(deleteJobPartitionSql, tenantId, successId, failedId);
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────
 
+  private String ownTenant(String prefix) {
+    String tenantId = prefix + UUID.randomUUID();
+    ownedTenants.add(tenantId);
+    return tenantId;
+  }
+
   private long nextTaskId() {
-    return jdbcTemplate.queryForObject("select nextval('batch.job_task_id_seq')", Long.class);
+    final String selectNextvalSql = """
+        select nextval('batch.job_task_id_seq')
+    """;
+
+    return jdbcTemplate.queryForObject(selectNextvalSql, Long.class);
   }
 
   private void insertJobTask(String tenantId, long id, long jobInstanceId) {
-    jdbcTemplate.update("""
-        INSERT INTO batch.job_task
-          (id, tenant_id, job_instance_id, task_type, task_seq, task_status,
-           created_at, updated_at)
-        VALUES (?, ?, ?, 'EXECUTION', ?, 'RUNNING', now(), now())
-        """, id, tenantId, jobInstanceId, taskSeq.incrementAndGet());
+    final String insertJobTaskSql = """
+          INSERT INTO batch.job_task
+            (id, tenant_id, job_instance_id, job_instance_biz_date, task_type, task_seq, task_status,
+             created_at, updated_at)
+          VALUES (?, ?, ?, (SELECT biz_date FROM batch.job_instance WHERE tenant_id = ?\s\
+          AND id = ?), 'EXECUTION', ?, 'RUNNING', now(), now())
+          """;
+
+    jdbcTemplate.update(
+        insertJobTaskSql,
+        id,
+        tenantId,
+        jobInstanceId,
+        tenantId,
+        jobInstanceId,
+        taskSeq.incrementAndGet());
+  }
+
+  private long insertJobInstance(String tenantId) {
+    return insertJobInstance(tenantId, null);
+  }
+
+  private long insertJobInstance(String tenantId, Long instanceId) {
+    final String insertJobDefinitionSql = """
+              insert into batch.job_definition(
+                tenant_id, job_code, job_name, job_type, schedule_type, timezone
+              ) values (?, ?, 'Diagnostic Test', 'GENERAL', 'MANUAL', 'Asia/Shanghai')
+              returning id
+              """;
+    final String insertJobInstanceSql = """
+                insert into batch.job_instance(
+                  tenant_id, job_definition_id, job_code, instance_no, biz_date,
+                  trigger_type, instance_status, priority, dedup_key
+                ) values (?, ?, ?, ?, current_date, 'MANUAL', 'RUNNING', 5, ?)
+                returning id
+                """;
+    final String insertJobInstanceSql2 = """
+        insert into batch.job_instance(
+          id, tenant_id, job_definition_id, job_code, instance_no, biz_date,
+          trigger_type, instance_status, priority, dedup_key
+        ) values (?, ?, ?, ?, ?, current_date, 'MANUAL', 'RUNNING', 5, ?)
+        """;
+
+    String suffix = UUID.randomUUID().toString();
+    String jobCode = "DIAG-" + suffix;
+    Long definitionId =
+        jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, tenantId, jobCode);
+    if (instanceId == null) {
+      return jdbcTemplate.queryForObject(
+          insertJobInstanceSql,
+          Long.class,
+          tenantId,
+          definitionId,
+          jobCode,
+          "INST-" + suffix,
+          tenantId + ":" + suffix);
+    }
+    jdbcTemplate.update(
+        insertJobInstanceSql2,
+        instanceId,
+        tenantId,
+        definitionId,
+        jobCode,
+        "INST-" + suffix,
+        tenantId + ":" + suffix);
+    return instanceId;
   }
 
   private void insertOutbox(
       String tenantId, String aggregateType, long aggregateId, String status) {
+    final String insertOutboxEventSql = """
+    INSERT INTO batch.outbox_event
+    (tenant_id, aggregate_type, aggregate_id, event_type, event_key, payload_json,
+    publish_status, created_at, updated_at)
+    VALUES (?, ?, ?, 'TASK_EVENT', ?, '{}'::jsonb, ?, now(), now())
+    """;
+
     String eventKey = aggregateType + "-" + aggregateId + "-" + System.nanoTime();
-    jdbcTemplate.update("""
-        INSERT INTO batch.outbox_event
-          (tenant_id, aggregate_type, aggregate_id, event_type, event_key, payload_json,
-           publish_status, created_at, updated_at)
-        VALUES (?, ?, ?, 'TASK_EVENT', ?, '{}'::jsonb, ?, now(), now())
-        """, tenantId, aggregateType, aggregateId, eventKey, status);
+    jdbcTemplate.update(
+        insertOutboxEventSql, tenantId, aggregateType, aggregateId, eventKey, status);
   }
 
   private long insertJobInstanceWithActivePartition(String tenantId, String status) {
+    final String insertJobDefinitionSql = """
+              insert into batch.job_definition(
+                tenant_id, job_code, job_name, job_type, schedule_type, timezone
+              ) values (?, ?, 'Diagnostic Test', 'GENERAL', 'MANUAL', 'Asia/Shanghai')
+              returning id
+              """;
+    final String insertJobInstanceSql = """
+              insert into batch.job_instance(
+                tenant_id, job_definition_id, job_code, instance_no, biz_date, trigger_type,
+                instance_status, priority, dedup_key, expected_partition_count,
+                success_partition_count, failed_partition_count, trace_id, dry_run
+              ) values (?, ?, ?, ?, current_date, 'MANUAL', ?, 5, ?, 1, 0, 0, ?, true)
+              returning id
+              """;
+    final String insertJobPartitionSql = """
+          insert into batch.job_partition(
+            tenant_id, job_instance_id, job_instance_biz_date, partition_no, partition_status, business_key,
+            idempotency_key, dry_run
+          ) values (?, ?, (select biz_date from batch.job_instance where tenant_id=?\s\
+          and id=?), 1, 'RUNNING', ?, ?, true)
+          """;
+
     String suffix = UUID.randomUUID().toString();
     String jobCode = "DIAG-" + suffix;
-    Long definitionId = jdbcTemplate.queryForObject("""
-            insert into batch.job_definition(
-              tenant_id, job_code, job_name, job_type, schedule_type, timezone
-            ) values (?, ?, 'Diagnostic Test', 'GENERAL', 'MANUAL', 'Asia/Shanghai')
-            returning id
-            """, Long.class, tenantId, jobCode);
+    Long definitionId =
+        jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, tenantId, jobCode);
     Long instanceId = jdbcTemplate.queryForObject(
-        """
-            insert into batch.job_instance(
-              tenant_id, job_definition_id, job_code, instance_no, biz_date, trigger_type,
-              instance_status, priority, dedup_key, expected_partition_count,
-              success_partition_count, failed_partition_count, trace_id, dry_run
-            ) values (?, ?, ?, ?, current_date, 'MANUAL', ?, 5, ?, 1, 0, 0, ?, true)
-            returning id
-            """,
+        insertJobInstanceSql,
         Long.class,
         tenantId,
         definitionId,
@@ -171,19 +293,21 @@ class ConsoleClusterDiagnosticMapperIntegrationTest extends AbstractIntegrationT
         status,
         "DEDUP-" + suffix,
         "TRACE-" + suffix);
-    jdbcTemplate.update("""
-        insert into batch.job_partition(
-          tenant_id, job_instance_id, partition_no, partition_status, business_key,
-          idempotency_key, dry_run
-        ) values (?, ?, 1, 'RUNNING', ?, ?, true)
-        """, tenantId, instanceId, "BIZ-" + suffix, "IDEM-" + suffix);
+    jdbcTemplate.update(
+        insertJobPartitionSql,
+        tenantId,
+        instanceId,
+        tenantId,
+        instanceId,
+        "BIZ-" + suffix,
+        "IDEM-" + suffix);
     return instanceId;
   }
 
-  private static long countForStatus(List<Map<String, Object>> rows, String status) {
+  private static long countForStatus(List<OutboxStatusCountView> rows, String status) {
     return rows.stream()
-        .filter(r -> status.equals(r.get("status")))
-        .mapToLong(r -> ((Number) r.get("count")).longValue())
+        .filter(r -> status.equals(r.status()))
+        .mapToLong(r -> r.count() == null ? 0L : r.count())
         .sum();
   }
 }

@@ -138,13 +138,7 @@ class ConsolePushApprovalNotificationMapperIntegrationTest extends AbstractInteg
       String approver,
       String reason,
       String approvedAgo) {
-    String no = approvalType + "-" + System.nanoTime();
-    boolean terminal =
-        "APPROVED".equals(status) || "REJECTED".equals(status) || "EXECUTED".equals(status);
-    String approvalReason = "APPROVED".equals(status) || "EXECUTED".equals(status) ? reason : null;
-    String rejectionReason = "REJECTED".equals(status) ? reason : null;
-    jdbc.update(
-        """
+    final String insertApprovalCommandSql = """
         INSERT INTO batch.approval_command
           (tenant_id, approval_no, approval_type, action_type, target_type, target_id,
            payload_json, approval_status, requester_id, approver_id,
@@ -155,7 +149,15 @@ class ConsolePushApprovalNotificationMapperIntegrationTest extends AbstractInteg
                 ?, ?,
                 CASE WHEN ? THEN now() - (?::interval) ELSE NULL END,
                 now(), now())
-        """,
+        """;
+
+    String no = approvalType + "-" + System.nanoTime();
+    boolean terminal =
+        "APPROVED".equals(status) || "REJECTED".equals(status) || "EXECUTED".equals(status);
+    String approvalReason = "APPROVED".equals(status) || "EXECUTED".equals(status) ? reason : null;
+    String rejectionReason = "REJECTED".equals(status) ? reason : null;
+    jdbc.update(
+        insertApprovalCommandSql,
         tenantId,
         no,
         approvalType,

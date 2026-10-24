@@ -73,7 +73,9 @@ class MessagesPropertiesParityTest {
       String line;
       while ((line = reader.readLine()) != null) {
         String trimmed = line.strip();
-        if (trimmed.isEmpty() || trimmed.startsWith("#") || trimmed.startsWith("!")) {
+        boolean isPropertyCommentOrEmptyLine =
+            trimmed.isEmpty() || trimmed.startsWith("#") || trimmed.startsWith("!");
+        if (isPropertyCommentOrEmptyLine) {
           continue;
         }
         int eq = trimmed.indexOf('=');

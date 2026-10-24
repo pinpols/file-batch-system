@@ -37,8 +37,9 @@ public class KafkaConsumerConfiguration {
   @Bean
   public ProducerFactory<String, String> kafkaProducerFactory(
       BatchKafkaProducerProperties kafkaProducerProperties) {
-    return new DefaultKafkaProducerFactory<>(BatchKafkaProducerSupport.stringProducerConfig(
-        kafkaProperties.getBootstrapServers(), kafkaProducerProperties));
+    Map<String, Object> producerConfig = BatchKafkaProducerSupport.stringProducerConfig(
+        kafkaProperties.getBootstrapServers(), kafkaProducerProperties);
+    return new DefaultKafkaProducerFactory<>(producerConfig);
   }
 
   @Bean
@@ -74,7 +75,9 @@ public class KafkaConsumerConfiguration {
     ConcurrentKafkaListenerContainerFactory<String, String> factory =
         new ConcurrentKafkaListenerContainerFactory<>();
     factory.setConsumerFactory(kafkaConsumerFactory);
-    factory.setConcurrency(Math.max(1, kafkaProperties.getListener().getConcurrency()));
+    int requestedConcurrency = kafkaProperties.getListener().getConcurrency();
+    int listenerConcurrency = Math.max(1, requestedConcurrency);
+    factory.setConcurrency(listenerConcurrency);
     factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
     factory.getContainerProperties().setObservationEnabled(true);
     factory.getContainerProperties().setObservationRegistry(observationRegistry);
@@ -96,7 +99,9 @@ public class KafkaConsumerConfiguration {
     ConcurrentKafkaListenerContainerFactory<String, String> factory =
         new ConcurrentKafkaListenerContainerFactory<>();
     factory.setConsumerFactory(kafkaConsumerFactory);
-    factory.setConcurrency(Math.max(1, kafkaProperties.getListener().getConcurrency()));
+    int requestedConcurrency = kafkaProperties.getListener().getConcurrency();
+    int listenerConcurrency = Math.max(1, requestedConcurrency);
+    factory.setConcurrency(listenerConcurrency);
     factory.setBatchListener(true);
     factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
     factory.getContainerProperties().setObservationEnabled(true);

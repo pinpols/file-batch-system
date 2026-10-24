@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：开源许可证与 SBOM。
+# 用法：在仓库根目录执行 bash scripts/ci/check-license-compliance.sh；参数与前置环境见下方说明及所属 README。
 # 守护:依赖许可证合规 + SBOM 生成(R8 守护)。
 #
 # 背景:仓库已有 -P compliance(cyclonedx + license-maven-plugin),但只「生成」THIRD-PARTY.txt,

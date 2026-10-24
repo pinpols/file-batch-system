@@ -1,10 +1,17 @@
 package io.github.pinpols.batch.orchestrator.application.service.forensic;
 
+import io.github.pinpols.batch.orchestrator.domain.param.ForensicExportLogMarkCompletedParam;
+import io.github.pinpols.batch.orchestrator.domain.query.JobInstanceForensicByBizDateRangeQuery;
+
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.IdGenerator;
+import com.fasterxml.jackson.databind.ObjectWriter;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -69,6 +76,11 @@ public class ForensicExportService {
 
   private static final String EXPORT_PREFIX = "fex";
 
+  // Bundle 被 SQL/CLI 读取，业务日和时间必须保持 ISO 文本，不能写 Jackson 数组/数值日期。
+  private static final ObjectWriter BUNDLE_JSON = JsonUtils.newDefaultMapper()
+      .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+      .writer();
+
   private final ForensicExportLogMapper forensicExportLogMapper;
   private final JobInstanceMapper jobInstanceMapper;
   private final BatchDayOperationAuditMapper batchDayOperationAuditMapper;
@@ -96,28 +108,38 @@ public class ForensicExportService {
 
     try {
       ExportResult result = doExport(request, exportId);
+      String tenantId = request.tenantId();
+      String exportPath = result.path().toString();
+      long sizeBytes = result.sizeBytes();
+      String sha256 = result.sha256();
+      String rowCountsJson = JsonUtils.toJson(result.rowCounts());
+      Instant completedAt = dateTimeSupport.nowInstant();
+      ForensicExportLogMarkCompletedParam forensicExportLogMarkCompletedParam = ForensicExportLogMarkCompletedParam.builder()
+          .tenantId(tenantId)
+          .exportId(exportId)
+          .storagePath(exportPath)
+          .fileSizeBytes(sizeBytes)
+          .sha256(sha256)
+          .rowCountsJson(rowCountsJson)
+          .completedAt(completedAt)
+          .build();
       forensicExportLogMapper.markCompleted(
-          request.tenantId(),
-          exportId,
-          result.path().toString(),
-          result.sizeBytes(),
-          result.sha256(),
-          JsonUtils.toJson(result.rowCounts()),
-          dateTimeSupport.nowInstant());
+          forensicExportLogMarkCompletedParam);
       return new ForensicExportResponse(
           exportId,
           "COMPLETED",
-          result.path().toString(),
-          result.sizeBytes(),
-          result.sha256(),
+          exportPath,
+          sizeBytes,
+          sha256,
           null);
     } catch (RuntimeException | IOException | NoSuchAlgorithmException e) {
       log.warn("forensic export failed exportId={}", exportId, e);
+      String tenantId = request.tenantId();
+      String failureMessage = e.getMessage();
+      String truncatedFailureMessage = truncate(failureMessage, 2000);
+      Instant failedAt = dateTimeSupport.nowInstant();
       forensicExportLogMapper.markFailed(
-          request.tenantId(),
-          exportId,
-          truncate(e.getMessage(), 2000),
-          dateTimeSupport.nowInstant());
+          tenantId, exportId, truncatedFailureMessage, failedAt);
       if (e instanceof RuntimeException re) {
         throw re;
       }
@@ -127,10 +149,12 @@ public class ForensicExportService {
   }
 
   private void validate(ForensicExportRequest request) {
-    if (request == null
+    boolean exportRequestIsIncomplete =
+        EmptyChecks.isNull(request)
         || !Texts.hasText(request.tenantId())
         || request.bizDateFrom() == null
-        || request.bizDateTo() == null) {
+        || EmptyChecks.isNull(request.bizDateTo());
+    if (exportRequestIsIncomplete) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.forensic.invalid_argument");
     }
     if (request.bizDateFrom().isAfter(request.bizDateTo())) {
@@ -157,13 +181,17 @@ public class ForensicExportService {
         ZipOutputStream zip = new ZipOutputStream(digesting, StandardCharsets.UTF_8)) {
 
       // 1) job_instances
+      JobInstanceForensicByBizDateRangeQuery jobInstanceForensicByBizDateRangeQuery = JobInstanceForensicByBizDateRangeQuery.builder()
+          .tenantId(request.tenantId())
+          .bizDateFrom(request.bizDateFrom())
+          .bizDateTo(request.bizDateTo())
+          .jobCodes(request.jobCodes())
+          .limit(properties.getInstanceRowCap())
+          .build();
       List<JobInstanceEntity> instances = jobInstanceMapper.selectForensicByBizDateRange(
-          request.tenantId(),
-          request.bizDateFrom(),
-          request.bizDateTo(),
-          request.jobCodes(),
-          properties.getInstanceRowCap());
-      writeEntry(zip, "job-instances.json", JsonUtils.toJson(instances));
+          jobInstanceForensicByBizDateRangeQuery);
+      String instancesJson = BUNDLE_JSON.writeValueAsString(instances);
+      writeEntry(zip, "job-instances.json", instancesJson);
       rowCounts.put("job_instances", instances.size());
 
       // 2) batch_day_operation_audits（按 bizDate 拆 — 只对 calendar 跨度内每天捞一次）
@@ -177,10 +205,14 @@ public class ForensicExportService {
         }
         // calendar_code 在 v0.1 不参与过滤 — 同 tenant 同 bizDate 下所有 calendar 的治理动作一并取
         // limit 1000 / 天足以覆盖正常运维节奏；总量再受 auditRowCap 保护
-        allAudits.addAll(batchDayOperationAuditMapper.selectByCalendarBizDate(
-            request.tenantId(), null, cursor, Math.min(1000, remaining)));
+        int dailyAuditLimit = Math.min(1000, remaining);
+        List<BatchDayOperationAuditEntity> dailyAudits =
+            batchDayOperationAuditMapper.selectByCalendarBizDate(
+                request.tenantId(), null, cursor, dailyAuditLimit);
+        allAudits.addAll(dailyAudits);
       }
-      writeEntry(zip, "batch-day-operation-audits.json", JsonUtils.toJson(allAudits));
+      String auditsJson = BUNDLE_JSON.writeValueAsString(allAudits);
+      writeEntry(zip, "batch-day-operation-audits.json", auditsJson);
       rowCounts.put("batch_day_operation_audits", allAudits.size());
 
       // 3) manifest（最后写，含 sha256 占位 — sha256 是 zip 整体哈希含 manifest 自身，
@@ -196,14 +228,18 @@ public class ForensicExportService {
       manifest.put("auditRowCap", properties.getAuditRowCap());
       manifest.put("maxDateRangeDays", properties.getMaxDateRangeDays());
       manifest.put("rowCounts", rowCounts);
-      manifest.put("generatedAt", dateTimeSupport.nowInstant().toString());
+      Instant generatedAt = dateTimeSupport.nowInstant();
+      String generatedAtText = generatedAt.toString();
+      manifest.put("generatedAt", generatedAtText);
       manifest.put("requestedBy", request.requestedBy());
       manifest.put("traceId", request.traceId());
-      writeEntry(zip, "manifest.json", JsonUtils.toJson(manifest));
+      String manifestJson = BUNDLE_JSON.writeValueAsString(manifest);
+      writeEntry(zip, "manifest.json", manifestJson);
     }
 
     long size = Files.size(outFile);
-    String sha = HexFormat.of().formatHex(digest.digest());
+    byte[] digestBytes = digest.digest();
+    String sha = HexFormat.of().formatHex(digestBytes);
     return new ExportResult(outFile, size, sha, rowCounts);
   }
 

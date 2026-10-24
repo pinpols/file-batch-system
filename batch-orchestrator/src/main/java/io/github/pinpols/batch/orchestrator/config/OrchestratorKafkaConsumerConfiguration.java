@@ -20,6 +20,7 @@ import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.listener.ContainerProperties;
+import org.springframework.kafka.listener.ConsumerRecordRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.util.backoff.FixedBackOff;
 
@@ -105,38 +106,42 @@ public class OrchestratorKafkaConsumerConfiguration {
    */
   private DefaultErrorHandler triggerLaunchErrorHandler() {
     TriggerConsumerProperties.ErrorHandler eh = consumerProperties.getErrorHandler();
-    DefaultErrorHandler handler = new DefaultErrorHandler(
-        (consumerRecord, exception) -> {
-          // BizException / IllegalArgumentException 是预期的业务级拒绝(jobCode 不存在/跨租拒/字段缺失),
-          // 用 WARN 即可,不需要 ERROR 占用告警通道;系统级 transient 错误重试到上限才是真 ERROR
-          Throwable cause = unwrap(exception);
-          boolean businessLevel =
-              cause instanceof BizException || cause instanceof IllegalArgumentException;
-          if (businessLevel) {
-            log.warn(
-                "TriggerLaunchConsumer skipped a business error: topic={} partition={} offset={} key={} cause={}",
-                consumerRecord.topic(),
-                consumerRecord.partition(),
-                consumerRecord.offset(),
-                consumerRecord.key(),
-                SwallowedExceptionLogger.summary(cause));
-          } else {
-            log.error(
-                "TriggerLaunchConsumer message exceeded the retry limit: topic={} partition={} offset={}"
-                    + " key={} value={} cause={}",
-                consumerRecord.topic(),
-                consumerRecord.partition(),
-                consumerRecord.offset(),
-                consumerRecord.key(),
-                consumerRecord.value(),
-                SwallowedExceptionLogger.summary(exception));
-            Counter.builder(METRIC_FAILED)
-                .tags(Tags.of("reason", "retries_exhausted"))
-                .register(meterRegistry)
-                .increment();
-          }
-        },
-        new FixedBackOff(eh.getRetryBackoffMs(), Math.max(0, eh.getRetryAttempts() - 1)));
+    ConsumerRecordRecoverer recoverer = (consumerRecord, exception) -> {
+      // BizException / IllegalArgumentException 是预期的业务级拒绝(jobCode 不存在/跨租拒/字段缺失),
+      // 用 WARN 即可,不需要 ERROR 占用告警通道;系统级 transient 错误重试到上限才是真 ERROR
+      Throwable cause = unwrap(exception);
+      boolean businessLevel =
+          cause instanceof BizException || cause instanceof IllegalArgumentException;
+      if (businessLevel) {
+        log.warn(
+            "TriggerLaunchConsumer skipped a business error: topic={} partition={} offset={} key={} cause={}",
+            consumerRecord.topic(),
+            consumerRecord.partition(),
+            consumerRecord.offset(),
+            consumerRecord.key(),
+            SwallowedExceptionLogger.summary(cause));
+      } else {
+        log.error(
+            "TriggerLaunchConsumer message exceeded the retry limit: topic={} partition={} offset={}"
+                + " key={} value={} cause={}",
+            consumerRecord.topic(),
+            consumerRecord.partition(),
+            consumerRecord.offset(),
+            consumerRecord.key(),
+            consumerRecord.value(),
+            SwallowedExceptionLogger.summary(exception));
+        Counter.builder(METRIC_FAILED)
+            .tags(Tags.of("reason", "retries_exhausted"))
+            .register(meterRegistry)
+            .increment();
+      }
+    };
+    long retryBackoffMillis = eh.getRetryBackoffMs();
+    int configuredRetryAttempts = eh.getRetryAttempts();
+    int retriesAfterFirstAttempt = configuredRetryAttempts - 1;
+    int nonnegativeRetryCount = Math.max(0, retriesAfterFirstAttempt);
+    FixedBackOff retryBackOff = new FixedBackOff(retryBackoffMillis, nonnegativeRetryCount);
+    DefaultErrorHandler handler = new DefaultErrorHandler(recoverer, retryBackOff);
     // 业务异常一次跳过：jobCode 不存在 / 协议字段缺失 / 跨租拒绝 等都不可能靠重试恢复
     handler.addNotRetryableExceptions(BizException.class);
     handler.addNotRetryableExceptions(IllegalArgumentException.class);

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Keep shared backend test configuration in its batch-test-support source."""
+# 用途：测试配置事实来源。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-test-config-sources.py；参数与前置环境见下方说明及所属 README。
+"""确保后端共享测试配置来自 batch-test-support 权威来源。"""
 
 from __future__ import annotations
 

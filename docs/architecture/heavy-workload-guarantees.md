@@ -43,8 +43,7 @@ Worker、长任务如何安全执行、下游故障如何阻断放量、容量�
 advisory lock，再读取 `READY/RUNNING` 活跃作业数；状态推进提交前不释放锁，因此多个 Orchestrator 不会
 同时抢到最后一个槽位。
 
-DAG 的多个初始节点只占一个父作业槽位。WAITING 父作业重新进入活跃态时再次取得同一事务锁；已经运行
-的 DAG 后续节点不重复计算为新作业。
+当前根 WorkflowRun 没有虚拟父 Job 槽位。每个 JOB 节点创建的 JobInstance 按 `newJobAdmission` 做自身准入；该实例已活跃后的分区重派不重复申请 Job 槽位。节点等待、根运行数量和 Job 并发是不同口径，不用旧父作业计数估算组合图容量。
 
 本地 profile 默认显式把该值设为 `0`，便于独立性能实验。生产 Helm values 固定为正数，不能照搬本地值。
 

@@ -1,5 +1,7 @@
 # ADR-015 · Worker 端本地 outbox — report 重投与防重复执行
 
+> **当前适用性（2026-10-24）**：REPORT 重投只重放已完成结果，不授权再次执行业务副作用。业务提交成功而报告丢失/结果未知的恢复须保留原 invocation、结果证据并按 ADR-049 核对；本地 outbox 不构成平台库与业务库的分布式原子提交。 原决策与历史阶段记录保留。
+
 - **Status**: Accepted（2026-05-03）：HTTP REPORT 耗尽重试后写入 **平台 PG**（默认，`batch.worker_report_outbox` / Flyway **V96**）或 **SQLite**（`storage=SQLITE`）；poller `SKIP LOCKED` 多副本抢占、`PUBLISHING` 陈旧回收、续租熔断协同；Kafka offset 仍在 listener 成功后提交（与 durable outbox 顺序一致）。业务 JDBC 与 outbox **同一 PG 事务**未实现（executor 线程模型限制）。
 - **Date**: 2026-05-03
 - **Related**: ADR-014 (CLAIM 幂等) / docs/analysis/worker-vs-industry-2026-05-03.md P1-10

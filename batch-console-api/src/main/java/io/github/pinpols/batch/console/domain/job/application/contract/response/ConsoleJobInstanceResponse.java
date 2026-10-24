@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.response;
 
+import lombok.Builder;
+
 import java.time.Instant;
 import java.time.LocalDate;
-
+@Builder
 public record ConsoleJobInstanceResponse(
     Long id,
     String tenantId,

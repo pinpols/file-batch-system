@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.console.application.rbac;
 
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleUserAccountInsertParam;
+
+
 import io.github.pinpols.batch.common.config.BatchProfileSupport;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
@@ -36,7 +39,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -68,7 +73,7 @@ public class ConsoleTenantApplicationService {
   private final ConsoleTenantReadinessService readinessService;
   private final ConsoleTenantGuard tenantGuard;
   // bypassMode=true(本地/E2E)时关守卫,允许 e2e-/test- 前缀;production 时拒绝
-  private final org.springframework.core.env.Environment environment;
+  private final Environment environment;
 
   public record CreateTenantCommand(
       String tenantId,
@@ -111,7 +116,7 @@ public class ConsoleTenantApplicationService {
       Map<String, Object> row = tenantMapper.selectByTenantId(tenantScope);
       List<ConsoleTenantResponse> scoped = row == null
           ? List.of()
-          : java.util.stream.Stream.of(row)
+          : Stream.of(row)
               .map(this::toResponse)
               .filter(t -> !HIDDEN_TENANT_IDS.contains(t.tenantId()))
               .toList();
@@ -133,8 +138,10 @@ public class ConsoleTenantApplicationService {
     // SEC(跨租户越权修复):非全局角色只能读自身租户,path tenantId 与 JWT 不符 → FORBIDDEN;
     // 全局角色(ADMIN / AUDITOR)可读任意租户。
     tenantGuard.assertTenantAllowed(tenantId);
-    return toResponse(Guard.requireFound(
-        tenantMapper.selectByTenantId(tenantId), "tenant not found: " + tenantId));
+    Map<String, Object> tenantRow = tenantMapper.selectByTenantId(tenantId);
+    Map<String, Object> foundTenant =
+        Guard.requireFound(tenantRow, "tenant not found: " + tenantId);
+    return toResponse(foundTenant);
   }
 
   @Transactional
@@ -155,14 +162,15 @@ public class ConsoleTenantApplicationService {
     if (userAccountMapper.selectByUsername(cmd.username()) != null) {
       throw BizException.of(ResultCode.CONFLICT, "error.username.already_exists", cmd.username());
     }
-    insertTenantWithAccount(
-        cmd.tenantId(),
-        cmd.tenantName(),
-        cmd.description(),
-        cmd.username(),
-        passwordHasher.encode(cmd.plainPassword()),
-        cmd.operator());
-    return toResponse(tenantMapper.selectByTenantId(cmd.tenantId()));
+    String tenantId = cmd.tenantId();
+    String tenantName = cmd.tenantName();
+    String description = cmd.description();
+    String username = cmd.username();
+    String encodedPassword = passwordHasher.encode(cmd.plainPassword());
+    String operator = cmd.operator();
+    insertTenantWithAccount(tenantId, tenantName, description, username, encodedPassword, operator);
+    Map<String, Object> createdTenant = tenantMapper.selectByTenantId(cmd.tenantId());
+    return toResponse(createdTenant);
   }
 
   /**
@@ -180,8 +188,10 @@ public class ConsoleTenantApplicationService {
       copyRequest.setSourceTenantId(init.sourceTenantId());
       copyRequest.setTargetTenantIds(List.of(tenant.tenantId()));
       copyRequest.setMode(init.mode() != null ? init.mode() : InitMode.SKIP_EXISTING);
-      configInit =
-          configCopyService.copy(copyRequest, cmd.operator(), UUID.randomUUID().toString());
+      String copyOperator = cmd.operator();
+      UUID operationUuid = UUID.randomUUID();
+      String operationId = operationUuid.toString();
+      configInit = configCopyService.copy(copyRequest, copyOperator, operationId);
     }
     // 建完(并复制配置后)立即跑就绪自检,把「建租户→复制配置→就绪校验」收敛到一次响应。
     TenantReadinessResponse readiness = readinessService.check(tenant.tenantId());
@@ -199,8 +209,10 @@ public class ConsoleTenantApplicationService {
       copyRequest.setTargetTenantIds(
           tenants.stream().map(ConsoleTenantResponse::tenantId).toList());
       copyRequest.setMode(init.mode() != null ? init.mode() : InitMode.SKIP_EXISTING);
-      configInit =
-          configCopyService.copy(copyRequest, cmd.operator(), UUID.randomUUID().toString());
+      String copyOperator = cmd.operator();
+      UUID operationUuid = UUID.randomUUID();
+      String operationId = operationUuid.toString();
+      configInit = configCopyService.copy(copyRequest, copyOperator, operationId);
     }
     return new BatchCreateTenantsResponse(tenants, configInit);
   }
@@ -258,7 +270,8 @@ public class ConsoleTenantApplicationService {
       String tenantId, String tenantName, String description) {
     assertExists(tenantId);
     tenantMapper.update(tenantId, tenantName, description);
-    return toResponse(tenantMapper.selectByTenantId(tenantId));
+    Map<String, Object> updatedTenant = tenantMapper.selectByTenantId(tenantId);
+    return toResponse(updatedTenant);
   }
 
   @Transactional
@@ -269,7 +282,8 @@ public class ConsoleTenantApplicationService {
     // 避免「DB 已 commit 但 trigger runtime 未变」的状态分裂(P1-5)。
     triggerProxyService.pauseByTenant(tenantId);
     tenantMapper.updateStatus(tenantId, TenantStatus.SUSPENDED.code());
-    return toResponse(tenantMapper.selectByTenantId(tenantId));
+    Map<String, Object> suspendedTenant = tenantMapper.selectByTenantId(tenantId);
+    return toResponse(suspendedTenant);
   }
 
   private void assertNoActiveInstances(String tenantId) {
@@ -299,7 +313,8 @@ public class ConsoleTenantApplicationService {
     // 避免「DB 已 commit 但 trigger runtime 未变」的状态分裂(P1-5)。
     triggerProxyService.resumeByTenant(tenantId);
     tenantMapper.updateStatus(tenantId, TenantStatus.ACTIVE.code());
-    return toResponse(tenantMapper.selectByTenantId(tenantId));
+    Map<String, Object> activatedTenant = tenantMapper.selectByTenantId(tenantId);
+    return toResponse(activatedTenant);
   }
 
   private void insertTenantWithAccount(
@@ -318,12 +333,21 @@ public class ConsoleTenantApplicationService {
     tenantMapper.insert(param);
     // 2026-05 角色重设计:租户首账号必须是 TENANT_ADMIN,后续由它派生 TENANT_USER。
     // 若给 TENANT_USER,新租户没人能加员工,还需平台 ADMIN 额外介入,500 租户场景下不可持续。
+    ConsoleUserAccountInsertParam consoleUserAccountInsertParam = ConsoleUserAccountInsertParam.builder()
+        .tenantId(tenantId)
+        .username(username)
+        .displayName(tenantName)
+        .passwordHash(passwordHash)
+        .authoritiesCsv(ConsoleRoles.TENANT_ADMIN)
+        .createdBy(operator)
+        .build();
     userAccountMapper.insert(
-        tenantId, username, tenantName, passwordHash, ConsoleRoles.TENANT_ADMIN, operator);
+        consoleUserAccountInsertParam);
   }
 
   private void assertExists(String tenantId) {
-    Guard.requireFound(tenantMapper.selectByTenantId(tenantId), "tenant not found: " + tenantId);
+    Map<String, Object> tenant = tenantMapper.selectByTenantId(tenantId);
+    Guard.requireFound(tenant, "tenant not found: " + tenantId);
   }
 
   private ConsoleTenantResponse toResponse(Map<String, Object> row) {

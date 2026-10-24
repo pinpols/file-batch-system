@@ -26,26 +26,28 @@ public final class ExportFileNameResolver {
     String normalizedBatchNo = defaultText(input.batchNo(), "batch");
     String normalizedVersion = defaultText(input.version(), "v1");
     if (hasText(input.namingRule())) {
-      return input
-          .namingRule()
-          .replace("${bizType}", defaultText(input.bizType(), "export"))
-          .replace("${bizDate}", defaultText(input.bizDate(), ""))
-          .replace("${tenantId}", defaultText(input.tenantId(), ""))
-          .replace("${batchNo}", normalizedBatchNo)
-          .replace("${region}", defaultText(input.region(), ""))
-          .replace("${version}", normalizedVersion);
+      String normalizedBizType = defaultText(input.bizType(), "export");
+      String normalizedBizDate = defaultText(input.bizDate(), "");
+      String normalizedTenantId = defaultText(input.tenantId(), "");
+      String normalizedRegion = defaultText(input.region(), "");
+      String namingRule = input.namingRule();
+      String withBizType = namingRule.replace("${bizType}", normalizedBizType);
+      String withBizDate = withBizType.replace("${bizDate}", normalizedBizDate);
+      String withTenantId = withBizDate.replace("${tenantId}", normalizedTenantId);
+      String withBatchNo = withTenantId.replace("${batchNo}", normalizedBatchNo);
+      String withRegion = withBatchNo.replace("${region}", normalizedRegion);
+      return withRegion.replace("${version}", normalizedVersion);
     }
-    return defaultText(input.bizType(), "export")
-        + "_"
-        + defaultText(input.bizDate(), "")
-        + "_"
-        + normalizedBatchNo
-        + extension(input.fileFormatType());
+    String normalizedBizType = defaultText(input.bizType(), "export");
+    String normalizedBizDate = defaultText(input.bizDate(), "");
+    String fileExtension = extension(input.fileFormatType());
+    return normalizedBizType + "_" + normalizedBizDate + "_" + normalizedBatchNo + fileExtension;
   }
 
   static String extension(String fileFormatType) {
-    FileTemplateFormat format = DictEnum.fromCode(
-        FileTemplateFormat.class, defaultText(fileFormatType, FileTemplateFormat.JSON.code()));
+    String defaultFormatCode = FileTemplateFormat.JSON.code();
+    String normalizedFormatCode = defaultText(fileFormatType, defaultFormatCode);
+    FileTemplateFormat format = DictEnum.fromCode(FileTemplateFormat.class, normalizedFormatCode);
     if (EmptyChecks.isNull(format)) {
       return BatchFileConstants.JSON_SUFFIX;
     }

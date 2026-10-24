@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.securityscan;
 
 import java.time.Duration;
+import java.util.List;
 
 public record ScanResult(
         ScanStep step,
@@ -13,15 +14,27 @@ public record ScanResult(
 ) {
 
     public static ScanResult success(ExternalCommand command, Duration duration) {
-        return new ScanResult(command.step(), command.label(), String.join(" ", command.commandLine()), 0, duration, false, "ok");
+        ScanStep step = command.step();
+        String label = command.label();
+        List<String> commandTokens = command.commandLine();
+        String renderedCommandLine = String.join(" ", commandTokens);
+        return new ScanResult(step, label, renderedCommandLine, 0, duration, false, "ok");
     }
 
     public static ScanResult failed(ExternalCommand command, int exitCode, Duration duration, String message) {
-        return new ScanResult(command.step(), command.label(), String.join(" ", command.commandLine()), exitCode, duration, false, message);
+        ScanStep step = command.step();
+        String label = command.label();
+        List<String> commandTokens = command.commandLine();
+        String renderedCommandLine = String.join(" ", commandTokens);
+        return new ScanResult(step, label, renderedCommandLine, exitCode, duration, false, message);
     }
 
     public static ScanResult skipped(ExternalCommand command, String message) {
-        return new ScanResult(command.step(), command.label(), String.join(" ", command.commandLine()), 0, Duration.ZERO, true, message);
+        ScanStep step = command.step();
+        String label = command.label();
+        List<String> commandTokens = command.commandLine();
+        String renderedCommandLine = String.join(" ", commandTokens);
+        return new ScanResult(step, label, renderedCommandLine, 0, Duration.ZERO, true, message);
     }
 
     public boolean success() {

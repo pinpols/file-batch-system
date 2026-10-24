@@ -3,6 +3,7 @@ package io.github.pinpols.batch.common.dto;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -36,5 +37,17 @@ class WorkerHeartbeatDtoTest {
     capabilities.clear();
 
     assertThat(heartbeat.taskCapabilities()).containsExactly(CAPABILITY);
+  }
+
+  @Test
+  @DisplayName("拒绝超过上限的 Replay 能力目录")
+  void shouldRejectTooManyReplayCapabilities() {
+    List<ReplayCapabilityDeclaration> capabilities =
+        Collections.nCopies(129, ReplayCapabilityDeclaration.unknown("plugin"));
+
+    assertThatThrownBy(
+            () -> WorkerHeartbeatDto.builder().replayCapabilities(capabilities).build())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("at most 128");
   }
 }

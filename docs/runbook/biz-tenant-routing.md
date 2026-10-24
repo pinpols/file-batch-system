@@ -2,7 +2,7 @@
 
 > 应用层把租户路由到不同 biz PG 实例的能力。**自研、零依赖**(不引 Citus / ShardingSphere),
 > 走 Spring `AbstractRoutingDataSource`。设计背景见 `docs/plans/biz-tiered-tenancy-plan-2026-06-14.md`
-> 与 `docs/analysis/scaling-state-and-biz-path-2026-06-14.md`。RLS(片内租户隔离)是正交的另一层,
+> 与 `docs/archive/architecture/scaling-state-and-biz-path-2026-06-14.md`。RLS(片内租户隔离)是正交的另一层,
 > 见 `docs/runbook/multi-tenant-rls.md`。
 
 ## 1. 它解决什么 / 不解决什么
@@ -58,7 +58,7 @@
 | console 管理 API | `ConsoleBusinessTenantPlacement*` / `ConsoleBusinessShardCatalog*`(`/api/console/ops/tenant-placements`、`/shard-catalog`) | batch-console-api |
 | worker 接线 | 各 `BusinessDataSourceConfiguration` | import / export / process |
 
-> 只有 import / export / process 三个 worker 持有 biz 数据源;dispatch / atomic / SDK 不碰 biz,无需改。
+> 本平台的 `batch.datasource.business.routing.*` 分片装配由 import / export / process 三个 Worker 使用；dispatch / atomic 未接入这套装配。ATOMIC 的 SQL/存储过程和租户 SDK 可按各自执行合同访问配置的数据源，不能据此推断它们不访问业务数据库。
 > `BusinessRoutingDataSource` 对工厂创建的各分片连接池负责；Spring 销毁 worker 上下文时会关闭去重后的全部子池。多片装配会先校验分片键，并在后续构建失败时回滚已经创建的池，避免启动失败、测试重建上下文或优雅停机后遗留 Hikari 线程和连接。
 
 ## 4. 事务与凭据(设计约束)
@@ -109,8 +109,9 @@ scripts/local/provision-biz-shard.sh <placement-key> <host-port>
 # 例: scripts/local/provision-biz-shard.sh shard-1 15442
 #     scripts/local/provision-biz-shard.sh silo-big 15443
 ```
-一次完成:起 PG → 建库建表 → rls-phase-a(角色+授权+RLS)→ 只读角色 → 写 secret(存在不覆盖)。可重跑。
-compose 里 `postgres-biz-shard-1`(profile `biz-shard`)是 shard-1 的「生产形态」声明。
+一次完成:起 PG → 建库建表 → rls-phase-a(角色+授权+RLS)→ 只读角色 → 写 secret(存在不覆盖)。手工调用默认保留分片供后续路由使用；compose 里 `postgres-biz-shard-1`(profile `biz-shard`)是 shard-1 的「生产形态」声明。
+
+SIM harness 通过 `BATCH_SIM_RESIDUE_CONTAINER=true` 创建临时分片，并记录仓库与 Compose project 两个所有权标签。`verify-data` 完成或失败、`all` 退出时会删除该临时容器和匿名数据卷；中断后 `clean-stale-test-env.sh` 仅清理当前 project 的双标签资源。临时模式遇到无标签且非当前 Compose project 的同名容器会失败关闭，不会复用或删除未知数据库。
 
 ## 8. 启用多片路由(配置)
 
@@ -216,7 +217,7 @@ scripts/local/verify-biz-shard.sh
 > HASH 选 tenant_id 的关键好处:所有 biz UNIQUE 本就含 tenant_id → **只重建 PK,不动 UNIQUE/ON CONFLICT/模板** = 幂等中性。
 > RANGE 时序表里,risk_score/risk_alert 的 UNIQUE 加日期不影响幂等(score_date 本就在;risk_alert 不 upsert);
 > **唯一动幂等语义的是 transaction**:UNIQUE 加 `txn_date`,模板 `conflictColumns` 同步成 `[tenant_id, txn_no, txn_date]`
-> (改动点:`batch-test-support/.../multi-tenant-seed.sql` ×3、`docs/test-data/sim-e2e-bootstrap.sql`、手工 seed `sim-stage3c-export-source.sql`)。
+> (改动点:`batch-test-support/.../multi-tenant-seed.sql` ×3、`test-data/sim/sim-e2e-bootstrap.sql`、手工 seed `sim-stage3c-export-source.sql`)。
 > **prod 自定义模板**:用户侧 `IMP-TRANSACTION-CSV` 的 conflictColumns 须同样加 `txn_date`,否则 ON CONFLICT 不匹配新约束。
 
 全 6 表已落地并在真实 PG 验证(幂等/FK/HASH 路由/RANGE 落分区)。

@@ -3,6 +3,10 @@
 > 面向"我要让一个作业等另一个作业完成才跑"或者"等多个作业都完成才跑"的人。
 > 系统通过 `workflow_definition` + `workflow_node` + `workflow_edge` 三表把多个 `job_definition` 编排成 DAG。
 
+> **当前契约（ADR-048）**：部署到全新数据库，不导入旧图。单 Job 和组合图均由 Workflow Run 承载根运行；JOB 节点通过 `related_job_code` 引用可执行作业，系统按 Job 类型选择 Pipeline。当前版本不支持 Workflow 嵌套/子 Workflow。`FILE_STEP`、`related_pipeline_code` 和旧 `job_type=WORKFLOW` wrapper 已从新模型与 schema 退役。本文早期关于 `FILE_STEP`、父 JobInstance 和 Workflow wrapper 嵌套的示例是历史资料，不是可用契约。
+
+延期子Job的请求若在创建实例前被拒绝，等待取消后仍须推进所属JOB节点的失败结果；后续沿冻结DAG的FAILURE/跳过规则处理，根终态与通知事件同事务保存。系统固定具体节点尝试，历史拒绝不会改写同编码的新重试；暂停时暂缓传播，恢复后周期扫描继续。已创建实例的请求由实例恢复链处理，不因坏等待被提前拒绝。运维语义见[触发运行手册](../runbook/trigger-operations.md)，实施与未完成的保留/外键边界见[引用整改专题§2.10](../plans/database-reference-integrity-remediation-2026-10-18.md)。
+
 Workflow 不支持 `APPROVAL` 人工审批节点；设计器与保存接口均不提供该类型。补跑、配置发布等独立运维审批不受此限制。
 
 ---
@@ -49,7 +53,7 @@ erDiagram
   workflow_definition ||--o{ workflow_node : has
   workflow_definition ||--o{ workflow_edge : has
   workflow_node }o--|| job_definition : "JOB.related_job_code"
-  workflow_node }o--|| pipeline_definition : "TASK/FILE_STEP.related_pipeline_code"
+  job_definition }o..|| system_pipeline_catalog : "job_type (file types only)"
 
   workflow_definition {
     bigint id PK
@@ -63,9 +67,8 @@ erDiagram
     bigint id PK
     bigint workflow_definition_id FK
     string node_code "唯一标识 START/END/JOB_X/MERGE..."
-    string node_type "START/END/JOB/TASK/FILE_STEP/GATEWAY/WAIT"
-    string related_job_code "node_type=JOB 时指向 job_definition.job_code"
-    string related_pipeline_code
+    string node_type "START/END/JOB/TASK/GATEWAY/WAIT"
+    string related_job_code "目标执行节点指向 job_definition.job_code"
     string worker_group
     int    node_order
     string retry_policy
@@ -89,7 +92,7 @@ erDiagram
 | 枚举 | 取值 | 含义 |
 |---|---|---|
 | `WorkflowType` | `DAG` / `PIPELINE` / `MIXED` | DAG 自由有向无环图；PIPELINE 严格线性；MIXED 混合 |
-| `WorkflowNodeType` | `START` / `END` / `JOB` / `TASK` / `FILE_STEP` / `GATEWAY` / `WAIT` | JOB = 嵌套独立子作业；TASK = workflow 内 pipeline step；GATEWAY = 路由/汇聚；WAIT = Sensor 等待节点（当前未完成稳定 E2E 验收） |
+| `WorkflowNodeType` | `START` / `END` / `JOB` / `TASK` / `GATEWAY` / `WAIT` | JOB 节点拉起引用的子作业；TASK 执行工作流内任务；GATEWAY = 路由/汇聚；WAIT = Sensor 等待节点 |
 | `WorkflowEdgeType` | `SUCCESS` / `FAILURE` / `CONDITION` / `ALWAYS` | 边的触发条件 |
 | `WorkflowJoinMode` | `ALL` / `ANY` / `N_OF` | GATEWAY 等多上游的 join 策略 |
 
@@ -104,150 +107,72 @@ Worker，而是由 Orchestrator 持有 DAG 游标，按节点逐步物化任务�
 
 ```mermaid
 sequenceDiagram
-    autonumber
-    actor Tenant as 租户用户/上游系统
-    participant Console as Console API
-    participant Trigger as batch-trigger
-    participant TDB as trigger_request<br/>trigger_outbox_event
-    participant TK as Kafka<br/>batch.trigger.launch.v1
-    participant Orch as batch-orchestrator
-    participant PDB as PostgreSQL<br/>batch_platform
-    participant DK as Kafka<br/>batch.task.dispatch.*
-    participant Worker as 五类 Worker
-    participant Target as 业务库/MinIO/SFTP/HTTP
-
-    Note over Tenant,Console: 定义期：同 tenant 下配置 job_definition(job_type=WORKFLOW)<br/>以及 workflow_definition/node/edge
-    Tenant->>Console: 保存并启用 Workflow 定义
-    Console->>PDB: 校验 DAG、租户引用、版本后写定义
-
-    alt Quartz 定时触发（生产主路径）
-        Trigger->>TDB: 同事务写 trigger_request + trigger_outbox_event
-    else 人工/补数/replay/文件等齐触发
-        Tenant->>Console: launch/rerun/replay
-        Console->>Trigger: 提交触发命令
-        Trigger->>TDB: 同事务写 trigger_request + trigger_outbox_event
-    end
-
-    Trigger->>TK: Relay 发布 LaunchEnvelope
-    TK->>Orch: TriggerLaunchConsumer 消费
-    Orch->>PDB: 校验 tenant/job/workflow/dedup/readiness/批次日
-
-    rect rgb(236, 248, 255)
-        Note over Orch,PDB: T1 准备事务：先提交稳定事实源
-        Orch->>PDB: INSERT job_instance(CREATED)
-        Orch->>PDB: INSERT workflow_run(CREATED)
-        Orch->>PDB: INSERT START node_run(SUCCESS)
-    end
-
-    rect rgb(241, 250, 241)
-        Note over Orch,PDB: T2 派发事务：节点运行态、任务和 Outbox 原子提交
-        Orch->>PDB: 解析 START 出边、join、condition、跨日依赖
-        Orch->>PDB: INSERT node_run/partition/task/outbox
-        Orch->>PDB: job_instance/workflow_run → RUNNING 或 WAITING
-    end
-
-    PDB->>DK: Outbox Relay 发布任务
-    DK->>Worker: 按 Import/Export/Process/Dispatch/Atomic 路由
-    Worker->>Orch: claim(taskId, tenantId, workerId)
-    Worker->>Orch: renew lease / heartbeat
-    Worker->>Target: 执行业务副作用
-    Worker->>Orch: report SUCCESS/FAILED + outputs
-
-    rect rgb(255, 248, 235)
-        Note over Orch,PDB: report 事务：完成当前节点并推进 DAG
-        Orch->>PDB: 更新 task/partition/node_run
-        Orch->>PDB: 保存 workflow_node_run.output
-        Orch->>PDB: 解析 SUCCESS/FAILURE/CONDITION/ALWAYS 出边
-        Orch->>PDB: 创建下游 task + outbox，更新 current_node_code
-    end
-
-    loop 直到 END 可达且所有活跃节点终结
-        PDB->>DK: 发布下游节点任务
-        DK->>Worker: 执行下一节点
-        Worker->>Orch: report
-    end
-
-    Orch->>PDB: workflow_run/job_instance → SUCCESS/FAILED/TERMINATED
-    Orch->>PDB: 写 terminal outbox、审计与结果版本
-    Console-->>Tenant: 查询运行图、节点输出、错误和重跑入口
+  participant Caller as Console/日程/到达适配器
+  participant Trigger
+  participant DB as 平台PostgreSQL
+  participant Kafka
+  participant Orch as Orchestrator
+  participant Worker
+  Caller->>Trigger: 显式workflowDefinitionId与稳定来源身份
+  Trigger->>DB: 请求与Trigger Outbox同事务
+  DB->>Kafka: Relay发布LaunchEnvelope
+  Kafka->>Orch: 消费原请求
+  Orch->>DB: 准备WorkflowRun、冻结图、START成功节点
+  Orch->>DB: 解析依赖与出边，物化JOB节点
+  Orch->>Trigger: 按父WorkflowRun/NodeRun接纳内部子Job请求
+  Trigger->>DB: 子请求与Outbox
+  DB->>Kafka: 发布子请求
+  Kafka->>Orch: 创建节点JobInstance及分区/任务
+  Orch->>DB: 状态与任务Outbox同事务
+  DB->>Kafka: 发布任务
+  Kafka->>Worker: 类型与Worker路由
+  Worker->>Orch: CLAIM，取得有效配置及invocation
+  Worker->>Worker: 核验冻结输入并执行
+  Worker->>Orch: REPORT（单条或逐项批量）
+  Orch->>DB: 聚合Job终态、节点输出与后继节点
+  Orch->>DB: 全图终态与终态Outbox/通知回执
 ```
+
+控制节点直接写NodeRun事实；WAIT由持久化轮询器驱动，既不创建空Job也不占用等待中的Worker线程。具体事务细分以根启动、子Job接纳和报告服务为准，不能把所有节点写入画成一个长事务。
 
 ### 3.2 运行态对象关系图
 
 ```mermaid
 erDiagram
-  job_definition ||--o{ job_instance : "tenant + jobCode"
   workflow_definition ||--o{ workflow_run : snapshots
-  job_instance ||--|| workflow_run : owns
   workflow_run ||--o{ workflow_node_run : advances
-  job_instance ||--o{ job_partition : materializes
+  workflow_node_run o|--o| job_instance : materializes_JOB
+  job_definition ||--o{ job_instance : configures
+  job_instance ||--o{ job_partition : partitions
   job_partition ||--o{ job_task : executes
-  job_task ||--o{ outbox_event : dispatches
-  job_instance ||--o{ job_instance : "JOB node child"
-
-  job_instance {
-    bigint id PK
-    string tenant_id
-    string instance_status
-    date biz_date
-    int run_attempt
-    string trace_id
-    jsonb params_snapshot
-  }
-  workflow_run {
-    bigint id PK
-    string tenant_id
-    bigint related_job_instance_id
-    string run_status
-    string current_node_code
-    bool dry_run
-  }
-  workflow_node_run {
-    bigint id PK
-    bigint workflow_run_id
-    string node_code
-    string node_status
-    int run_seq
-    jsonb output
-  }
-  job_task {
-    bigint id PK
-    string tenant_id
-    string task_status
-    string task_type
-    jsonb task_payload
-  }
+  job_task ||--o{ job_step_instance : records
 ```
 
-`workflow_run.current_node_code` 是活跃节点集合的摘要；真正的节点历史以
-`workflow_node_run(workflow_run_id, node_code, run_seq)` 为准。JOB 节点会拉起独立子
-`job_instance`，父实例用虚拟 partition/task 等待子实例终态，因此嵌套作业仍复用统一的分区聚合逻辑。
+图表达逻辑归属，实际FK与分区键见数据库目录。控制节点没有JobInstance；JOB节点运行保留job_instance_id与根Workflow身份，不使用父虚拟任务，也不形成子Workflow。
 
 ### 3.3 分阶段执行表
 
-| 阶段 | 责任模块 | 核心动作 | 主要持久化结果 |
-|---|---|---|---|
-| 0. 定义 | Console API | 保存、静态校验并版本化租户 DAG | `job_definition`、`workflow_definition/node/edge`、定义版本 |
-| 1. 触发 | Trigger | 生成 requestId/dedupKey，事务性记录触发 | `trigger_request`、`trigger_outbox_event` |
-| 2. 接收 | Orchestrator | 按 `tenantId + jobCode` 读取启用定义，处理重复和 RERUN | 触发接受状态、traceId |
-| 3. T1 准备 | Orchestrator | 创建父实例、Workflow 实例和已完成 START 节点 | `job_instance`、`workflow_run`、START `node_run` |
-| 4. T2 派发 | Orchestrator | 解析初始节点，做配额/资源准入，创建任务和 Outbox | `partition/task/outbox`，实例转 RUNNING/WAITING |
-| 5. 执行 | Worker | consume → claim → execute → renew → report | Worker 不直接改核心调度状态 |
-| 6. 节点收口 | Orchestrator | 聚合分片，写节点终态和 outputs | `workflow_node_run.output`、task/partition 终态 |
-| 7. DAG 推进 | Orchestrator | 计算出边、join 和条件，物化下游节点 | 新 task/outbox、更新活跃节点集合 |
-| 8. 总体收口 | Orchestrator | 所有活跃节点结束后收敛 Workflow 和父实例 | SUCCESS/FAILED/dry-run/TERMINATED、terminal outbox |
-| 9. 运维闭环 | Console API | 查询、暂停/恢复、终止、重跑、补偿、审计 | 操作审计、retry/DLQ/replay/补偿记录 |
+| 阶段 | 所有者 | 主要事实 |
+|---|---|---|
+| 定义/版本 | Console配置域 | Workflow图与日程、Job类型化参数、模板/通道及引用校验 |
+| 机会与接纳 | Trigger | scheduled occurrence、原始日期、trigger_request与触发Outbox |
+| 根准备 | Orchestrator | WorkflowRun、冻结快照、START节点 |
+| 节点物化 | Orchestrator及既有子请求链 | 依赖证据、NodeRun、按需创建的JobInstance |
+| 执行派发 | Orchestrator | 分区/任务与Outbox同事务，配额/窗口/路由准入 |
+| 执行 | Worker/SDK | Kafka → CLAIM → EXECUTE → REPORT，lease/invocation围栏 |
+| 图收敛 | Orchestrator | Job终态、节点输出、后继推进、Workflow终态 |
+| 治理 | Console/控制面 | BatchDay结算、审批与Replay Operation、独立通知和审计 |
 
 ### 3.4 节点派发规则
 
 | 节点类型 | 是否创建 Worker 任务 | 当前运行语义 |
 |---|---:|---|
 | `START` | 否 | T1 中直接记录 SUCCESS，再解析初始出边 |
-| `TASK` / `FILE_STEP` | 是 | 构造 SchedulePlan，创建真实 partition/task，经 Outbox 发到对应 Worker |
-| `JOB` | 子作业执行 | 创建父虚拟 partition/task，再启动同租户子 `job_instance`；子实例终态回写父虚拟 task |
+| `TASK` | 新根不派发 | 枚举/旧执行代码保留；没有旧根Job的当前运行明确拒绝，应改用JOB节点 |
+| `JOB` | 实际执行 | 经子请求链创建同租户节点JobInstance，终态直接关联NodeRun；无父虚拟partition/task |
 | `GATEWAY` | 否 | Orchestrator 内执行 fork/join，支持 ALL/ANY/N_OF |
 | `END` | 否 | 入边满足后记录终态节点；没有活跃节点后收敛 Workflow |
-| `WAIT` | 设计为否 | Sensor SPI、轮询器和状态机已有代码，但 ADR-028 仍为 Proposed；未完成稳定 E2E 验收前，不作为生产主链承诺 |
+| `WAIT` | 否 | 持久化Sensor轮询，按FAIL或SKIP_DOWNSTREAM处理超时；ADR-028已采纳，环境验收另行判断 |
 
 ### 3.5 参数和输出传递
 
@@ -258,7 +183,7 @@ erDiagram
 3. 当前节点 `node_params`，其中 ADR-009 DSL 引用会用当前 `workflow_run` 上下文解析；
 4. `workflowNodeCode/workflowNodeType/targetJobCode` 等运行元数据。
 
-Worker 成功上报的 `outputs` 写入 `workflow_node_run.output`。下游可以显式引用
+Worker输出先进入任务/作业聚合，再按节点关系保存到 `workflow_node_run.output`。下游可以显式引用
 `$.nodes.<nodeCode>.output.<key>` 或 `$.workflowRun.<key>`；多分片节点先按节点聚合，再推进 DAG。
 
 ### 3.6 状态与分支规则
@@ -425,19 +350,15 @@ INSERT INTO batch.workflow_edge ... VALUES
 related_job_code = 'job_a'   →  独立子 job_instance
 ```
 
-每次执行会**新建一个独立的 job_instance**（带回指 `_parentNodeCode/_parentVirtualTaskId/_parentWorkflowRunId`），跑完再回写父 workflow_node_run 状态。子作业可以是任何 IMPORT/EXPORT/DISPATCH/WORKFLOW。
+每次执行会**新建一个独立的 job_instance**（关联 WorkflowRun、NodeRun 与来源），跑完再回写父 workflow_node_run 状态。Job类型以当前枚举为准，不包含WORKFLOW；束类型仍按分区展开。
 
-### `TASK` — workflow 内嵌 pipeline step
+### `TASK` — 旧执行路径保留
 
-```
-related_pipeline_code = 'export_settlement_pipeline'
-```
+当前Workflow根派发不支持依赖旧根Job的TASK；配置应引用可执行Job。枚举存在不构成新图支持承诺。
 
-不开新 job_instance，而是 workflow 内执行一段 pipeline。一般用于轻量步骤（不需要独立调度/quota 计费）。
+### `FILE_STEP` — 已退役
 
-### `FILE_STEP` — 文件相关步骤
-
-针对 dispatch / import 中的 file 中间环节（如等待文件到达）。
+新部署不接收此节点，也不把它转换成另一个Workflow。文件处理通过JOB类型映射系统Pipeline。
 
 ### `GATEWAY` — 路由 / 汇聚
 
@@ -446,9 +367,7 @@ related_pipeline_code = 'export_settlement_pipeline'
 
 ### `WAIT` — 等待外部条件（谨慎使用）
 
-目标语义是等待文件到达、HTTP 条件、Kafka offset 或业务库信号。后端已有 SensorPolicy、轮询调度器、
-状态机和静态校验，但 ADR-028 仍为 Proposed，完整节点初始化和生产级 E2E 尚未形成稳定证据。
-在验收完成前，生产流程优先使用文件等齐、readiness 或外部事件触发，不把 WAIT 当作已承诺能力。
+WAIT表示等待文件到达、HTTP条件、Kafka offset或业务库信号。SensorPolicy、持久化轮询和超时状态推进按ADR-028执行；FAIL与SKIP_DOWNSTREAM不等价。源码实现不替代目标环境验收。
 
 ### `START` / `END` — 边界
 
@@ -517,10 +436,10 @@ return switch (joinRule.joinMode()) {
 
 | 场景 | 现状 | 替代 |
 |---|---|---|
-| **跨 workflow 依赖**（workflow_A 依赖 workflow_B） | 分两种形态：① **同步嵌套**（支持）——JOB 节点 `related_job_code` 指向一个 `job_type=WORKFLOW` 的 job，父 workflow 把子 workflow 作为子 `job_instance` 拉起并等待其终态（见 §6 `JOB` 和环检测说明）；② **异步解耦触发**（不内建）——A 完成后让独立调度的 B 自动启动 | 同步依赖直接用 JOB 节点嵌套；异步解耦让 workflow_A 末节点写一个事件，workflow_B 配事件触发入口 |
+| **跨 workflow 依赖**（workflow_A 依赖 workflow_B） | 当前不支持把一个 Workflow 嵌套成另一个 Workflow 的执行节点；旧 `job_type=WORKFLOW` wrapper 已退役。跨运行结果依赖使用持久化 Job 结果依赖；等待上游整个 Workflow 成功须使用 ADR-048 定义的 Workflow 整体成功依赖；独立异步触发由外部事件入口接纳 | 只使用已实现且有对应身份/等待状态的依赖类型；不得借 JOB wrapper 构造嵌套或将普通 Job 成功解释为上游 Workflow 成功 |
 | **跨 tenant 依赖** | 不允许。`related_job_code` 在同 `tenant_id` 下查 `job_definition` | 设计如此（多租户隔离）。需要的话拆成两个 workflow 通过事件桥接 |
-| **依赖外部系统就绪** | WAIT Sensor 后端组件已存在，但 ADR-028 仍为 Proposed，完整派发接线与稳定 E2E 尚未验收 | 当前生产流程优先使用文件等齐/readiness 或由外部系统调用触发入口；WAIT 验收后再开放 |
-| **环 / 自循环** | 强制 DAG，三道防线：① 单 workflow 内的边环，配置期 `WorkflowDagValidator.validate` Kahn 拒绝；② 跨 workflow 嵌套环（A 的 JOB 节点→B，B 又→A，或自引用），**配置期** `WorkflowDagValidator.validateNoCrossWorkflowCycle` 在 `fullUpdate` 保存时沿「JOB→WORKFLOW」展开 workflow 图 DFS 检测，命中抛 `error.workflow.dag.cross_workflow_cycle_detected`；③ 同样的跨 workflow 嵌套环，**运行期** `ChildJobLaunchSupport` 在拉起子作业前沿 `parent_instance_id` 链上溯检测祖先 job_code，命中抛 `error.workflow.nested_cycle_detected` fail-fast（回退定义漂移/绕过保存校验的情况） | 重试用 `retry_policy`，不要用边或嵌套模拟循环 |
+| **依赖外部系统就绪** | ADR-028 已 Accepted；新根运行可创建持久化 WAIT 并由 Sensor 轮询，超时区分 FAIL 与 SKIP_DOWNSTREAM | 按 Sensor 实现、权限与失败关闭规则配置；画布编辑能力和目标环境验收须分别确认，不能把 WAIT 当 Worker 空任务 |
+| **环 / 自循环** | 当前契约要求每个 Workflow 定义自身为 DAG；`WorkflowDagValidator` 在配置期拒绝图内循环。跨 Workflow 的嵌套执行不受支持，因此不定义嵌套环检测语义 | 跨 Workflow 依赖按其独立持久化状态机与终态条件处理；不要用环形依赖模拟循环 |
 | **动态依赖**（运行时根据数据决定下个节点） | 静态 DAG。能用 CONDITION 边在配置层做有限分支 | 复杂动态分支建议拆成多个 workflow + 事件触发 |
 
 ---
@@ -603,7 +522,7 @@ ADR-009 引入受限 JSONPath 子集做这种显式引用。
 
 - [`system-flow-overview.md`](./system-flow-overview.md) — 系统总流程，看 workflow 在整体架构中的位置
 - [`core-model.md`](./core-model.md) — workflow_run / workflow_node_run 等运行态实体
-- [`../runbook/worker-stage-coverage.md`](../runbook/worker-stage-coverage.md) — TC_WF_RISK_PIPELINE 的真实跑通过程（含 sourcePayload 继承的问题、`buildChildLaunchRequest` 怎么把 `node_params` 透到子作业）
+- [`worker-stage-coverage-2026-04-25.md`](../verifications/worker-stage-coverage-2026-04-25.md) — TC_WF_RISK_PIPELINE 的真实跑通过程（含 sourcePayload 继承的问题、`buildChildLaunchRequest` 怎么把 `node_params` 透到子作业）
 - 源码：
   - `batch-orchestrator/.../service/DefaultWorkflowDagService.java`（DAG 计算 + join 规则）
   - `batch-orchestrator/.../service/WorkflowConditionEvaluator.java`（CONDITION 表达式解析）

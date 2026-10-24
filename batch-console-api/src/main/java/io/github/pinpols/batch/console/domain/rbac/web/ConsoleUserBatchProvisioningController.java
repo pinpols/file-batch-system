@@ -71,7 +71,8 @@ public class ConsoleUserBatchProvisioningController {
       recordParams = false)
   public CommonResponse<Preview> patch(
       @PathVariable String token, @Valid @RequestBody PatchRequest request) {
-    return responseFactory.success(service.patch(token, request.version(), request.row()));
+    Preview preview = service.patch(token, request.version(), request.row());
+    return responseFactory.success(preview);
   }
 
   @PostMapping("/apply/{token}")
@@ -83,7 +84,8 @@ public class ConsoleUserBatchProvisioningController {
       recordParams = false)
   public CommonResponse<ApplyResult> apply(
       @PathVariable String token, @Valid @RequestBody ApplyRequest request) {
-    return responseFactory.success(service.apply(token, request.version(), request.requestId()));
+    ApplyResult result = service.apply(token, request.version(), request.requestId());
+    return responseFactory.success(result);
   }
 
   @GetMapping("/operations/{operationId}")

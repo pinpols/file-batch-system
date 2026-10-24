@@ -11,10 +11,12 @@ import io.github.pinpols.batch.worker.core.support.TaskClaimItem;
 import io.github.pinpols.batch.worker.core.support.TaskClaimResult;
 import io.github.pinpols.batch.worker.core.support.TaskExecutionWrapper;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -36,7 +38,9 @@ public class TaskDispatchExecutor {
 
   /** Kafka 只负责把任务送到 worker，实际执行前仍然要回 Orchestrator 做 CLAIM。 */
   public WorkerExecutionResult execute(TaskDispatchMessage message, String workerId) {
-    if (message == null || message.taskId() == null || workerId == null || workerId.isBlank()) {
+    boolean executionRequestIsIncomplete =
+        EmptyChecks.isNull(message) || EmptyChecks.isNull(message.taskId()) || EmptyChecks.isNull(workerId) || EmptyChecks.isBlank(workerId);
+    if (executionRequestIsIncomplete) {
       return null;
     }
     Optional<EffectiveTaskConfig> claimed =
@@ -44,7 +48,8 @@ public class TaskDispatchExecutor {
     if (claimed.isEmpty()) {
       return null;
     }
-    return taskExecutionWrapper.execute(buildTask(message, workerId, claimed.get()));
+    PulledTask task = buildTask(message, workerId, claimed.get());
+    return taskExecutionWrapper.execute(task);
   }
 
   /**
@@ -75,15 +80,20 @@ public class TaskDispatchExecutor {
   /** 批量执行的逐项结果版本。Kafka 批量 consumer 需要知道是哪条消息失败，才能只 DLQ 毒丸消息，而不是把同 poll 的正常任务一起送进 DLQ。 */
   public List<BatchItemExecution> executeBatchDetailed(
       List<TaskDispatchMessage> messages, String workerId) {
-    if (messages == null || messages.isEmpty() || workerId == null || workerId.isBlank()) {
+    boolean batchExecutionRequestIsIncomplete =
+        EmptyChecks.isNull(messages) || EmptyChecks.isEmpty(messages) || EmptyChecks.isNull(workerId) || EmptyChecks.isBlank(workerId);
+    if (batchExecutionRequestIsIncomplete) {
       return List.of();
     }
-    List<TaskClaimItem> items = new ArrayList<>(messages.size());
+    Map<Long, TaskClaimItem> uniqueItems = new LinkedHashMap<>();
     for (TaskDispatchMessage m : messages) {
       if (m != null && m.taskId() != null) {
-        items.add(new TaskClaimItem(m.tenantId(), m.taskId(), workerId));
+        Long deduplicationTaskId = m.taskId();
+        TaskClaimItem claimItem = new TaskClaimItem(m.tenantId(), m.taskId(), workerId);
+        uniqueItems.putIfAbsent(deduplicationTaskId, claimItem);
       }
     }
+    List<TaskClaimItem> items = new ArrayList<>(uniqueItems.values());
     if (items.isEmpty()) {
       return List.of();
     }
@@ -93,21 +103,44 @@ public class TaskDispatchExecutor {
         claimedById.put(r.taskId(), r);
       }
     }
+    Map<Long, PulledTask> claimedTasksById = new LinkedHashMap<>();
+    for (TaskDispatchMessage message : messages) {
+      boolean dispatchMessageIsMissingOrAlreadyClaimed = EmptyChecks.isNull(message)
+          || EmptyChecks.isNull(message.taskId())
+          || claimedTasksById.containsKey(message.taskId());
+      if (dispatchMessageIsMissingOrAlreadyClaimed) {
+        continue;
+      }
+      TaskClaimResult claim = claimedById.get(message.taskId());
+      if (isClaimReadyForExecution(claim)) {
+        Long taskId = message.taskId();
+        PulledTask claimedTask = buildTask(message, workerId, claim.config());
+        claimedTasksById.put(taskId, claimedTask);
+      }
+    }
+    // CLAIM 一次取得整批 lease；在开始第一个任务前就登记每个成功项，令周期续租覆盖排队项。
+    List<PulledTask> claimedBatch = new ArrayList<>(claimedTasksById.values());
+    taskExecutionWrapper.registerClaimedBatch(claimedBatch);
     List<BatchItemExecution> detailedResults = new ArrayList<>();
+    Set<Long> executedTaskIds = new HashSet<>();
     for (int messageIndex = 0; messageIndex < messages.size(); messageIndex++) {
       TaskDispatchMessage message = messages.get(messageIndex);
       if (message == null || message.taskId() == null) {
         continue;
       }
+      if (!executedTaskIds.add(message.taskId())) {
+        detailedResults.add(BatchItemExecution.skipped(messageIndex, message));
+        continue;
+      }
       TaskClaimResult claim = claimedById.get(message.taskId());
-      if (claim == null || !claim.claimed() || claim.config() == null) {
+      if (!isClaimReadyForExecution(claim)) {
         detailedResults.add(BatchItemExecution.skipped(messageIndex, message));
         continue; // 没领到 → 跳过(与单条 execute 返 null 一致)
       }
       putExecutionMdc(message, workerId);
       try {
-        WorkerExecutionResult result =
-            taskExecutionWrapper.execute(buildTask(message, workerId, claim.config()));
+        PulledTask claimedTask = claimedTasksById.get(message.taskId());
+        WorkerExecutionResult result = taskExecutionWrapper.execute(claimedTask);
         detailedResults.add(BatchItemExecution.completed(messageIndex, message, result));
       } catch (Exception ex) {
         detailedResults.add(BatchItemExecution.failed(messageIndex, message, ex));
@@ -164,38 +197,42 @@ public class TaskDispatchExecutor {
     }
   }
 
+  private static boolean isClaimReadyForExecution(TaskClaimResult claim) {
+    return EmptyChecks.isNotNull(claim)
+        && claim.claimed()
+        && EmptyChecks.isNotNull(claim.config());
+  }
+
   private static void putExecutionMdc(TaskDispatchMessage message, String workerId) {
     BatchMdc.put(StructuredLogField.TENANT_ID, message.tenantId());
     BatchMdc.put(StructuredLogField.TRACE_ID, message.traceId());
-    BatchMdc.put(
-        StructuredLogField.TASK_ID,
-        EmptyChecks.isNull(message.taskId()) ? null : String.valueOf(message.taskId()));
-    BatchMdc.put(
-        StructuredLogField.JOB_INSTANCE_ID,
-        EmptyChecks.isNull(message.jobInstanceId())
-            ? null
-            : String.valueOf(message.jobInstanceId()));
-    BatchMdc.put(
-        StructuredLogField.PARTITION_ID,
-        EmptyChecks.isNull(message.jobPartitionId())
-            ? null
-            : String.valueOf(message.jobPartitionId()));
+    Object rawTaskId = message.taskId();
+    String mdcTaskId = EmptyChecks.isNull(rawTaskId) ? null : String.valueOf(message.taskId());
+    BatchMdc.put(StructuredLogField.TASK_ID, mdcTaskId);
+    Object rawJobInstanceId = message.jobInstanceId();
+    String mdcJobInstanceId =
+        EmptyChecks.isNull(rawJobInstanceId) ? null : String.valueOf(message.jobInstanceId());
+    BatchMdc.put(StructuredLogField.JOB_INSTANCE_ID, mdcJobInstanceId);
+    Object rawPartitionId = message.jobPartitionId();
+    String mdcPartitionId =
+        EmptyChecks.isNull(rawPartitionId) ? null : String.valueOf(message.jobPartitionId());
+    BatchMdc.put(StructuredLogField.PARTITION_ID, mdcPartitionId);
     if (EmptyChecks.isNotNull(message.schedulingContext())) {
-      BatchMdc.put(
-          StructuredLogField.WORKFLOW_RUN_ID,
-          EmptyChecks.isNull(message.schedulingContext().workflowRunId())
-              ? null
-              : String.valueOf(message.schedulingContext().workflowRunId()));
-      BatchMdc.put(
-          StructuredLogField.BATCH_DAY,
-          EmptyChecks.isNull(message.schedulingContext().bizDate())
-              ? null
-              : message.schedulingContext().bizDate().toString());
-      BatchMdc.put(
-          StructuredLogField.ATTEMPT,
-          EmptyChecks.isNull(message.schedulingContext().attemptNo())
-              ? null
-              : String.valueOf(message.schedulingContext().attemptNo()));
+      Object rawWorkflowRunId = message.schedulingContext().workflowRunId();
+      String mdcWorkflowRunId = EmptyChecks.isNull(rawWorkflowRunId)
+          ? null
+          : String.valueOf(message.schedulingContext().workflowRunId());
+      BatchMdc.put(StructuredLogField.WORKFLOW_RUN_ID, mdcWorkflowRunId);
+      Object rawBizDate = message.schedulingContext().bizDate();
+      String mdcBizDate = EmptyChecks.isNull(rawBizDate)
+          ? null
+          : message.schedulingContext().bizDate().toString();
+      BatchMdc.put(StructuredLogField.BATCH_DAY, mdcBizDate);
+      Object rawAttempt = message.schedulingContext().attemptNo();
+      String mdcAttempt = EmptyChecks.isNull(rawAttempt)
+          ? null
+          : String.valueOf(message.schedulingContext().attemptNo());
+      BatchMdc.put(StructuredLogField.ATTEMPT, mdcAttempt);
     }
     BatchMdc.put(StructuredLogField.WORKER_TYPE, message.workerType());
     BatchMdc.put(StructuredLogField.WORKER_ID, workerId);
@@ -233,6 +270,8 @@ public class TaskDispatchExecutor {
     task.setRangeEndExclusive(effective.rangeEndExclusive());
     task.setExpectedRows(effective.expectedRows());
     task.setPartitionInvocationId(effective.partitionInvocationId());
+    task.setDependencyResultSnapshot(effective.dependencyResultSnapshot());
+    task.setReplayExecutionGuard(effective.replayExecutionGuard());
     task.setTimeoutSeconds(effective.timeoutSeconds());
     // V94: data_interval 透传给 worker, 业务 SQL 拼时间窗
     task.setDataIntervalStart(effective.dataIntervalStart());

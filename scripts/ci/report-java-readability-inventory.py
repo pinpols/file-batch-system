@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Report Java readability refactoring candidates without modifying sources."""
+# 用途：生成 Java 可读性候选清单并核对当前快照。
+# 用法：在仓库根目录执行 python3 scripts/ci/report-java-readability-inventory.py；参数与前置环境见下方说明及所属 README。
+"""输出 Java 可读性重构候选清单，不修改源码。"""
 
 from __future__ import annotations
 
@@ -117,7 +119,7 @@ def markdown(facts: list[SourceFact]) -> str:
     config_files = [fact for fact in facts if fact.configuration_count]
 
     lines = [
-        "# Java 可读性治理扫描快照",
+        "# Java 可读性治理当前机器清单",
         "",
         "> 由 `bash scripts/python.sh scripts/ci/report-java-readability-inventory.py` 生成。",
         "> 本报告只列候选，不把行数、Map 或 suppression 数量直接判定为缺陷。",

@@ -11,6 +11,7 @@ import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaRe
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import lombok.Builder;
 
 /**
  * dashboard sla-report 响应：按 job 维度的 SLA 报表。
@@ -21,6 +22,7 @@ import java.util.Map;
 public record ConsoleSlaReportResponse(
     String tenantId, Integer periodDays, List<SlaJobEntry> jobs) {
 
+  @Builder
   public record SlaJobEntry(
       String jobCode,
       String jobName,
@@ -33,31 +35,33 @@ public record ConsoleSlaReportResponse(
       BigDecimal maxDurationSeconds,
       Long totalPartitions) {
     static SlaJobEntry from(Map<String, Object> row) {
-      return new SlaJobEntry(
-          stringValue(row, "jobCode"),
-          stringValue(row, "jobName"),
-          longValue(row, "totalInstances"),
-          longValue(row, "successCount"),
-          longValue(row, "failedCount"),
-          longValue(row, "slaBreached"),
-          longValue(row, "slaOnTime"),
-          bigDecimalValue(row, "avgDurationSeconds"),
-          bigDecimalValue(row, "maxDurationSeconds"),
-          longValue(row, "totalPartitions"));
+      return SlaJobEntry.builder()
+        .jobCode(stringValue(row, "jobCode"))
+        .jobName(stringValue(row, "jobName"))
+        .totalInstances(longValue(row, "totalInstances"))
+        .successCount(longValue(row, "successCount"))
+        .failedCount(longValue(row, "failedCount"))
+        .slaBreached(longValue(row, "slaBreached"))
+        .slaOnTime(longValue(row, "slaOnTime"))
+        .avgDurationSeconds(bigDecimalValue(row, "avgDurationSeconds"))
+        .maxDurationSeconds(bigDecimalValue(row, "maxDurationSeconds"))
+        .totalPartitions(longValue(row, "totalPartitions"))
+        .build();
     }
 
     static SlaJobEntry from(SlaJobReportView row) {
-      return new SlaJobEntry(
-          row.jobCode(),
-          row.jobName(),
-          row.totalInstances() == null ? 0L : row.totalInstances(),
-          row.successCount() == null ? 0L : row.successCount(),
-          row.failedCount() == null ? 0L : row.failedCount(),
-          row.slaBreached() == null ? 0L : row.slaBreached(),
-          row.slaOnTime() == null ? 0L : row.slaOnTime(),
-          row.avgDurationSeconds(),
-          row.maxDurationSeconds(),
-          row.totalPartitions() == null ? 0L : row.totalPartitions());
+      return SlaJobEntry.builder()
+        .jobCode(row.jobCode())
+        .jobName(row.jobName())
+        .totalInstances(row.totalInstances() == null ? 0L : row.totalInstances())
+        .successCount(row.successCount() == null ? 0L : row.successCount())
+        .failedCount(row.failedCount() == null ? 0L : row.failedCount())
+        .slaBreached(row.slaBreached() == null ? 0L : row.slaBreached())
+        .slaOnTime(row.slaOnTime() == null ? 0L : row.slaOnTime())
+        .avgDurationSeconds(row.avgDurationSeconds())
+        .maxDurationSeconds(row.maxDurationSeconds())
+        .totalPartitions(row.totalPartitions() == null ? 0L : row.totalPartitions())
+        .build();
     }
   }
 

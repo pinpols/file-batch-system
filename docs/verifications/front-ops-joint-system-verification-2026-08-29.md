@@ -26,7 +26,7 @@
    - 问题：SFTP endpoint 判定逻辑在脚本内重复实现，容易和公共环境判定漂移。
    - 修复：统一改为 `sim_sftp_endpoint`。
 
-3. `docs/test-data/sim-stage5c-dispatch-channels-platform.sql`
+3. `test-data/sim/sim-stage5c-dispatch-channels-platform.sql`
    - 问题：Stage 5c 每轮会重写通道 endpoint，但旧的 `file_channel_health` 失败退避快照会污染下一轮。
    - 修复：重写 Stage 5c 通道 fixture 后清理同名通道健康快照。
 
@@ -250,7 +250,7 @@ logs/runs/sim-4day/sim-4day-4days-20260606-20260830-205917-797cde07e
 
 本轮修复点：
 
-- `docs/test-data/sim-stage6c-trigger-fixtures.sql`：补齐 `trigger_runtime_state` 与 `trigger_misfire_pending` fixture，使 catch-up approve 能绑定真实 pending 记录。
+- `test-data/sim/sim-stage6c-trigger-fixtures.sql`：补齐 `trigger_runtime_state` 与 `trigger_misfire_pending` fixture，使 catch-up approve 能绑定真实 pending 记录。
 - `scripts/sim/22-trigger-stage6c.sh`：approve 请求显式传 `pendingId`；misfire 断言改为“pending 或运行时成功”两种真实行为均可证明链路有效，避免依赖直接改 Quartz `next_fire_time` 的不稳定时序。
 
 执行命令：

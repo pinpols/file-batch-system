@@ -23,7 +23,7 @@ import static io.gatling.javaapi.http.HttpDsl.*;
  *
  * <pre>
  *   mvn gatling:test -Dsimulation=SchedulingSnapshotUnderLoadSimulation \
- *       -DjobCode=E2E_IMPORT_LOAD -DtenantId=t1 -Dusers.peak=30 -Dduration.seconds=180 \
+ *       -DworkflowDefinitionId=123 -DtenantId=t1 -Dusers.peak=30 -Dduration.seconds=180 \
  *       -Dorchestrator.baseUrl=http://localhost:18082
  * </pre>
  */
@@ -55,13 +55,13 @@ public class SchedulingSnapshotUnderLoadSimulation extends Simulation {
       """
             {
               "tenantId": "%s",
-              "jobCode": "%s",
+              "workflowDefinitionId": %s,
               "bizDate": "%s",
               "triggerType": "API",
               "params": {}
             }
             """
-          .formatted(GatlingConfig.TENANT_ID, GatlingConfig.JOB_CODE, GatlingConfig.BIZ_DATE);
+          .formatted(GatlingConfig.TENANT_ID, GatlingConfig.requiredWorkflowDefinitionId(), GatlingConfig.BIZ_DATE);
 
   private final ChainBuilder launch =
       feed(launchFeeder)

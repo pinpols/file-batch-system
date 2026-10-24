@@ -17,6 +17,7 @@ import io.github.pinpols.batch.console.application.observability.SseTicketServic
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import jakarta.servlet.FilterChain;
+import jakarta.servlet.http.Cookie;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,7 +30,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
-
 // SseTicketService used in mock() call below
 
 @ExtendWith(MockitoExtension.class)
@@ -106,7 +106,7 @@ class ConsoleAuthenticationFilterTest {
     when(jwtService.authenticate("valid-jwt")).thenReturn(principal);
 
     MockHttpServletRequest request = new MockHttpServletRequest();
-    request.setCookies(new jakarta.servlet.http.Cookie("batch_console_token", "valid-jwt"));
+    request.setCookies(new Cookie("batch_console_token", "valid-jwt"));
     MockHttpServletResponse response = new MockHttpServletResponse();
     FilterChain chain = mock(FilterChain.class);
 
@@ -123,7 +123,7 @@ class ConsoleAuthenticationFilterTest {
     doNothing().when(responseWriter).write(any(), any(), any(), anyString());
 
     MockHttpServletRequest request = new MockHttpServletRequest();
-    request.setCookies(new jakarta.servlet.http.Cookie("batch_console_token", "bad-jwt"));
+    request.setCookies(new Cookie("batch_console_token", "bad-jwt"));
     MockHttpServletResponse response = new MockHttpServletResponse();
     FilterChain chain = mock(FilterChain.class);
 
@@ -143,7 +143,7 @@ class ConsoleAuthenticationFilterTest {
     for (String path : new String[] {"/api/console/auth/login", "/api/console/auth/logout"}) {
       MockHttpServletRequest request = new MockHttpServletRequest();
       request.setRequestURI(path);
-      request.setCookies(new jakarta.servlet.http.Cookie("batch_console_token", "bad-jwt"));
+      request.setCookies(new Cookie("batch_console_token", "bad-jwt"));
       MockHttpServletResponse response = new MockHttpServletResponse();
       FilterChain chain = mock(FilterChain.class);
 
@@ -240,10 +240,8 @@ class ConsoleAuthenticationFilterTest {
   @DisplayName("工单票据:首次校验并缓存到请求属性, 异步派发复用不再校验")
   void filter_validatesSseTicketAndCachesResultForAsyncDispatch() throws Exception {
     // R4-P1-1：validate 返回 TicketPayload，含签发时角色集
-    io.github.pinpols.batch.console.application.observability.SseTicketService.TicketPayload
-        payload =
-            new io.github.pinpols.batch.console.application.observability.SseTicketService
-                .TicketPayload("alice", "t1", Set.of("ROLE_TENANT_USER"));
+    SseTicketService.TicketPayload payload =
+        new SseTicketService.TicketPayload("alice", "t1", Set.of("ROLE_TENANT_USER"));
     when(sseTicketService.validate("ticket-1")).thenReturn(payload);
 
     MockHttpServletRequest request = new MockHttpServletRequest();
@@ -293,7 +291,7 @@ class ConsoleAuthenticationFilterTest {
     doNothing().when(responseWriter).write(any(), any(), any(), anyString());
 
     MockHttpServletRequest request = new MockHttpServletRequest();
-    request.setCookies(new jakarta.servlet.http.Cookie("batch_console_token", "bad-jwt"));
+    request.setCookies(new Cookie("batch_console_token", "bad-jwt"));
     MockHttpServletResponse response = new MockHttpServletResponse();
     FilterChain chain = mock(FilterChain.class);
 

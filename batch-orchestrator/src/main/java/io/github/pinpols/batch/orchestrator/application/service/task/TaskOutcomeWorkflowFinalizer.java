@@ -2,13 +2,17 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeTerminalFinalizer;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleEventMapper;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
@@ -32,17 +36,24 @@ final class TaskOutcomeWorkflowFinalizer {
   private final OrchestratorWorkflowMappers workflowMappers;
   private final LifecycleEventMapper<Object> lifecycleEventMapper;
   private final WorkflowTerminalOutboxService terminalOutboxService;
+  private final WorkflowNodeTerminalFinalizer nodeTerminalFinalizer;
 
   TaskOutcomeWorkflowFinalizer(
       OrchestratorWorkflowMappers workflowMappers,
       LifecycleEventMapper<Object> lifecycleEventMapper,
-      WorkflowTerminalOutboxService terminalOutboxService) {
+      WorkflowTerminalOutboxService terminalOutboxService,
+      WorkflowNodeTerminalFinalizer nodeTerminalFinalizer) {
     this.workflowMappers = workflowMappers;
     this.lifecycleEventMapper = lifecycleEventMapper;
     this.terminalOutboxService = terminalOutboxService;
+    this.nodeTerminalFinalizer = nodeTerminalFinalizer;
   }
 
   void finalizeWorkflow(Context context) {
+    if (EmptyChecks.isEmpty(Objects.requireNonNull(context.activeNodes()))) {
+      nodeTerminalFinalizer.finalizeIfAllNodesTerminal(context.workflowRun());
+      return;
+    }
     String workflowEvent = TaskOutcomeStatePolicy.resolveWorkflowEvent(
         context.failedPartitionCount(),
         context.allPartitionsFinished(),
@@ -50,29 +61,50 @@ final class TaskOutcomeWorkflowFinalizer {
         Boolean.TRUE.equals(context.workflowRun().getDryRun()));
     String workflowStatus =
         lifecycleEventMapper.map(context.workflowRun(), workflowEvent).toState();
-    Instant workflowFinishedAt = context.jobFullyComplete() ? context.finishedAt() : null;
-    int updated =
-        workflowMappers.workflowRunMapper.updateStatus(UpdateWorkflowRunStatusParam.builder()
-            .tenantId(context.command().tenantId())
-            .id(context.workflowRun().getId())
-            .runStatus(workflowStatus)
-            .currentNodeCode(TaskOutcomeStatePolicy.resolveWorkflowCurrentNode(
-                context.activeNodes(), workflowStatus, context.currentNodeCode()))
-            .finishedAt(workflowFinishedAt)
-            .expectedStatuses(LIVE_STATUSES)
-            .build());
+    Instant workflowFinishedAt =
+        WorkflowTerminalOutboxService.isTerminal(workflowStatus) ? context.finishedAt() : null;
+    WorkflowRunMapper workflowRunMapper = workflowMappers.workflowRunMapper;
+    UpdateWorkflowRunStatusParam.UpdateWorkflowRunStatusParamBuilder updateStatusBuilder = UpdateWorkflowRunStatusParam.builder()
+        .tenantId(context.command().tenantId())
+        .id(context.workflowRun().getId())
+        .runStatus(workflowStatus);
+    String workflowCurrentNodeCode = TaskOutcomeStatePolicy.resolveWorkflowCurrentNode(
+        context.activeNodes(), workflowStatus, context.currentNodeCode());
+    UpdateWorkflowRunStatusParam updateStatusParam = updateStatusBuilder
+        .currentNodeCode(workflowCurrentNodeCode)
+        .finishedAt(workflowFinishedAt)
+        .expectedStatuses(LIVE_STATUSES)
+        .build();
+    int updated = workflowRunMapper.updateStatus(updateStatusParam);
     if (updated <= 0) {
-      log.warn(
-          "workflow_run {} already in terminal state when outcome arrived; skip transition to"
-              + " {} (likely cancel/terminate raced ahead)",
-          context.workflowRun().getId(),
-          workflowStatus);
+      diagnoseRejectedTransition(context, workflowStatus);
       return;
     }
     if (WorkflowTerminalOutboxService.isTerminal(workflowStatus)) {
       terminalOutboxService.writeTerminalEvent(
           context.workflowRun(), workflowStatus, workflowFinishedAt);
     }
+  }
+
+  private void diagnoseRejectedTransition(Context context, String candidateStatus) {
+    WorkflowRunEntity current = workflowMappers.workflowRunMapper.selectById(
+        context.command().tenantId(), context.workflowRun().getId());
+    String observed = EmptyChecks.isNull(current) ? "MISSING" : current.getRunStatus();
+    if (candidateStatus.equals(observed) || WorkflowRunStatus.PAUSED.code().equals(observed)) {
+      // DAG 的 END 可在同一 REPORT 事务中先完成根运行；相同终态是幂等收口。
+      // PAUSED 仍保留人工暂停，在途结果不能把它当成取消/终止竞争，也不能自动恢复。
+      log.debug(
+          "workflow outcome retained persisted state: workflowRunId={}, candidate={}, observed={}",
+          context.workflowRun().getId(),
+          candidateStatus,
+          observed);
+      return;
+    }
+    log.warn(
+        "workflow outcome transition rejected: workflowRunId={}, candidate={}, observed={}",
+        context.workflowRun().getId(),
+        candidateStatus,
+        observed);
   }
 
   @Builder

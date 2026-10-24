@@ -21,6 +21,7 @@ import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 
 @DisplayName("Outbox 运维编排:统计, 清理与重投递委托下游, 响应回填租户与计数")
 class DefaultConsoleOutboxOpsApplicationServiceTest {
@@ -47,8 +48,7 @@ class DefaultConsoleOutboxOpsApplicationServiceTest {
 
   private static ConsoleQueryCacheService passThroughCache() {
     ConsoleQueryCacheService cache = mock(ConsoleQueryCacheService.class);
-    when(cache.<Object>getOrLoad(
-            anyString(), any(), org.mockito.ArgumentMatchers.<Class<Object>>any(), any()))
+    when(cache.<Object>getOrLoad(anyString(), any(), ArgumentMatchers.<Class<Object>>any(), any()))
         .thenAnswer(inv -> ((Supplier<?>) inv.getArgument(3)).get());
     return cache;
   }

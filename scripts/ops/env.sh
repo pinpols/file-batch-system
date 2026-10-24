@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：ops 脚本公共变量。默认只读本地 env,生产/远端请显式传 PG* / URL / TOKEN。
+# 用法：由调用脚本 source scripts/ops/env.sh 后使用公共变量或函数。
 # ops 脚本公共变量。默认只读本地 env,生产/远端请显式传 PG* / URL / TOKEN。
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

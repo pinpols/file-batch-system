@@ -58,7 +58,9 @@ class WaitingPartitionDispatchKick {
     try {
       requestedCounter.increment();
       long delayMillis = Math.max(0L, properties.getWaitingDispatchKickDelayMillis());
-      taskScheduler.schedule(this::dispatch, Instant.now().plusMillis(delayMillis));
+      Instant scheduleBaseTime = Instant.now();
+      Instant scheduledAt = scheduleBaseTime.plusMillis(delayMillis);
+      taskScheduler.schedule(this::dispatch, scheduledAt);
     } catch (RuntimeException exception) {
       scheduled.set(false);
       SwallowedExceptionLogger.warn(

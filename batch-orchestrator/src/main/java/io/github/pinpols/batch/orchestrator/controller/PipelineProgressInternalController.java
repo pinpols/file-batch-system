@@ -30,7 +30,8 @@ public class PipelineProgressInternalController {
   public List<PipelineProgressItem> queryByPipeline(
       @RequestParam("tenantId") String tenantId,
       @RequestParam("pipelineInstanceId") Long pipelineInstanceId) {
-    return cache.snapshotByPipeline(tenantId, pipelineInstanceId).stream()
+    List<PipelineSnapshot> snapshots = cache.snapshotByPipeline(tenantId, pipelineInstanceId);
+    return snapshots.stream()
         .map(PipelineProgressInternalController::toPipelineProgressItem)
         .toList();
   }

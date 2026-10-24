@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.infrastructure.realtime.ConsoleRealtimeRedisPublisher;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,7 +37,8 @@ class ConsoleRealtimeRedisPublisherTest {
 
   @BeforeEach
   void setUp() {
-    publisher = new ConsoleRealtimeRedisPublisher(redisTemplate, instanceIdProvider, replayStore);
+    publisher = new ConsoleRealtimeRedisPublisher(
+        redisTemplate, new BatchRedisNamespace(""), instanceIdProvider, replayStore);
   }
 
   @Test
@@ -69,6 +71,26 @@ class ConsoleRealtimeRedisPublisherTest {
 
     verify(redisTemplate)
         .convertAndSend(eq(ConsoleRealtimeRedisPublisher.CHANNEL_KEY), anyString());
+  }
+
+  @Test
+  @DisplayName("实时事件 Pub/Sub channel 使用部署命名空间")
+  void shouldPublishOnNamespacedChannel() {
+    when(instanceIdProvider.instanceId()).thenReturn("instance-namespace");
+    ConsoleRealtimeRedisPublisher namespacedPublisher = new ConsoleRealtimeRedisPublisher(
+        redisTemplate, new BatchRedisNamespace("blue"), instanceIdProvider, replayStore);
+    ConsoleSseEvent event = new ConsoleSseEvent(
+        "t1",
+        "job-instance",
+        "JOB_STATUS",
+        "cursor-namespace",
+        "payload",
+        BatchDateTimeSupport.utcNow());
+
+    namespacedPublisher.publish(event);
+
+    verify(redisTemplate)
+        .convertAndSend(eq("blue:" + ConsoleRealtimeRedisPublisher.CHANNEL_KEY), anyString());
   }
 
   @Test

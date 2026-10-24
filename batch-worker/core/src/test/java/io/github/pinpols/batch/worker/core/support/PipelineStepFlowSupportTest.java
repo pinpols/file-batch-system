@@ -48,7 +48,7 @@ class PipelineStepFlowSupportTest {
   @DisplayName("步骤标记为成功即终止时, 即使后面还有步骤也结束流转")
   void shouldStopOnTerminalSuccessFlag() {
     PipelineStepDefinition terminal = new PipelineStepDefinition(
-        1L, 1L, "T", "t", "ST", 1, "noop", Map.of("terminalOnSuccess", true), 60, "FIXED", 0, true);
+        1L, "T", "t", "ST", 1, "noop", Map.of("terminalOnSuccess", true), 60, "FIXED", 0, true);
     List<PipelineStepDefinition> steps = List.of(terminal, step("NEXT"));
     assertThat(PipelineStepFlowSupport.resolveNextStep(terminal, true, steps, new HashMap<>()))
         .isNull();
@@ -83,6 +83,6 @@ class PipelineStepFlowSupportTest {
 
   private static PipelineStepDefinition step(String code) {
     return new PipelineStepDefinition(
-        1L, 1L, code, code, code, 1, "noop", Map.of(), 60, "FIXED", 0, true);
+        1L, code, code, code, 1, "noop", Map.of(), 60, "FIXED", 0, true);
   }
 }

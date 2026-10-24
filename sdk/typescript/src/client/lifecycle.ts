@@ -301,7 +301,7 @@ export class WorkerLifecycle {
   async #handleAccepted(msg: DispatchMessage): Promise<void> {
     const cancellation = new SimpleCancellationSignal();
     // fixture 24: mint a FRESH key per distinct write — never a fixed claim-{id}.
-    const idemKey = newIdempotencyKey();
+    const claimIdempotencyKey = newIdempotencyKey();
 
     const run = (async (): Promise<void> => {
       try {
@@ -324,7 +324,7 @@ export class WorkerLifecycle {
         const msgInvocationId =
           (msg.runtimeAttributes?.partitionInvocationId as string | undefined) ?? null;
 
-        const claim = await this.#transport.claim(msg.taskId, idemKey, msgInvocationId);
+        const claim = await this.#transport.claim(msg.taskId, claimIdempotencyKey, msgInvocationId);
         if (claim.idempotent) {
           // claim 409 = already claimed (redelivery, or another worker won the
           // race): NOT ours to execute. Skip the handler + report so we never
@@ -347,11 +347,34 @@ export class WorkerLifecycle {
           cancellation,
           options: this.#resumeOptions,
         });
+        let effectiveConfig = claim.effectiveConfig ?? {};
+        if (claim.payload != null && claim.payload !== "") {
+          try {
+            const parsed: unknown = JSON.parse(claim.payload);
+            if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+              throw new Error("payload must be a JSON object");
+            }
+            effectiveConfig = parsed as Record<string, unknown>;
+          } catch (error) {
+            const reason = error instanceof Error ? error.message : "invalid JSON";
+            this.#logger.error("invalid claim payload; expected a JSON object", {
+              taskId: msg.taskId,
+              reason,
+            });
+            await this.#report(msg.taskId, {
+              success: false,
+              errorCode: ErrorCode.EXECUTION_FAILED,
+              resultSummary: "invalid claim payload: expected JSON object",
+              partitionInvocationId: this.#inFlight.get(msg.taskId)?.partitionInvocationId ?? null,
+            });
+            return;
+          }
+        }
         const ctx: TaskContext = {
           taskId: msg.taskId,
-          effectiveConfig: claim.effectiveConfig ?? {},
+          effectiveConfig,
           traceId: claim.traceId ?? (msg.runtimeAttributes?.traceId as string | undefined) ?? "",
-          isDryRun: dryRunAttribute(msg.runtimeAttributes, claim.effectiveConfig),
+          isDryRun: dryRunAttribute(msg.runtimeAttributes, effectiveConfig),
           cancellation,
           progress,
           checkpoint: () => resume.checkpoint(),
@@ -439,7 +462,10 @@ export class WorkerLifecycle {
   async #report(taskId: string, body: ReportBody): Promise<void> {
     // fixture 24: fresh key, never a fixed report-{taskId} (a redelivered task's
     // report would otherwise replay the platform's stale first outcome).
-    await this.#transport.report(taskId, body, newIdempotencyKey());
+    const transport = this.#transport;
+    const report = transport.report;
+    const idempotencyKey = newIdempotencyKey();
+    await report.call(transport, taskId, body, idempotencyKey);
   }
 
   /**
@@ -503,10 +529,13 @@ export class WorkerLifecycle {
       const promises = [...this.#inFlight.values()].map((t) => t.promise);
       const remaining = deadline - Date.now();
       if (remaining <= 0) break;
-      await Promise.race([
-        Promise.allSettled(promises),
-        new Promise((r) => setTimeout(r, Math.min(remaining, 25)).unref?.()),
-      ]);
+      const settledPromises = Promise.allSettled(promises);
+      const pollIntervalMs = Math.min(remaining, 25);
+      const pollDelay = new Promise<void>((resolve) => {
+        const pollTimer = setTimeout(resolve, pollIntervalMs);
+        pollTimer.unref?.();
+      });
+      await Promise.race([settledPromises, pollDelay]);
     }
   }
 }

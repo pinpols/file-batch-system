@@ -395,7 +395,7 @@ Integration and end-to-end tests start PostgreSQL 17 and Apache Kafka automatica
 | [Observability Docker environment](deploy/docker/observability/README.md) | Standalone startup and management for Prometheus / Exporter / OTel Collector / Tempo / Loki / Grafana |
 | [Runtime communication](docs/architecture/runtime-module-communication.md) | Inter-module message protocols and interface specs |
 | [Worker checkpoint how-to](docs/runbook/platform-worker-checkpoint-howto.md) | Checkpoint resume semantics and operational notes |
-| [Design gap audit](docs/archive/architecture/design-gap-audit-2026-04-09.md) | Gap analysis between implementation and design docs |
+| [Design gap audit](docs/archive/audit/design-gap-audit-2026-04-09.md) | Gap analysis between implementation and design docs |
 | [Default runtime parameters](docs/design/runtime-default-parameters.md) | Default scheduler, worker, outbox, and other parameters |
 | [Flyway migrations](db/migration) | Database migration scripts |
 

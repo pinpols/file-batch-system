@@ -8,8 +8,10 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.Statement;
+import net.sf.jsqlparser.statement.select.Limit;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
 import net.sf.jsqlparser.statement.select.SetOperationList;
@@ -44,7 +46,9 @@ public class SqlTransformComputeSqlValidator {
   public String validateUserCheckSelect(String raw) {
     String sql = validate(raw, false);
     Statement statement = parse(sql);
-    List<String> tableNames = List.copyOf(new TablesNamesFinder<Void>().getTables(statement));
+    TablesNamesFinder<Void> tableNamesFinder = new TablesNamesFinder<>();
+    Set<String> discoveredTableNames = tableNamesFinder.getTables(statement);
+    List<String> tableNames = List.copyOf(discoveredTableNames);
     for (String tableName : tableNames) {
       if (!SqlTransformComputePlugin.STAGING_TABLE.equals(tableName.toLowerCase(Locale.ROOT))) {
         throw BizException.of(
@@ -74,12 +78,15 @@ public class SqlTransformComputeSqlValidator {
           "sqlTransformCompute only allows SELECT/WITH queries, got: "
               + statement.getClass().getSimpleName());
     }
-    if (EmptyChecks.isNull(security) || security.isForbidSelectStar()) {
+    boolean selectStarMustBeRejected =
+        EmptyChecks.isNull(security) || security.isForbidSelectStar();
+    if (selectStarMustBeRejected) {
       checkNoSelectStar(select);
     }
-    if (enforceSchemaAllowlist
+    boolean schemaAllowlistMustBeEnforced = enforceSchemaAllowlist
         && EmptyChecks.isNotNull(security)
-        && EmptyChecks.isNotEmpty(security.getAllowedSchemas())) {
+        && EmptyChecks.isNotEmpty(security.getAllowedSchemas());
+    if (schemaAllowlistMustBeEnforced) {
       checkAllowedSchemas(statement, security.getAllowedSchemas());
     }
     if (EmptyChecks.isNotNull(security)
@@ -87,7 +94,9 @@ public class SqlTransformComputeSqlValidator {
       checkNoForbiddenFunctions(statement, security.getForbiddenFunctions());
     }
     // requireLimit 仅对主源 SQL (业务路径) 强制;VALIDATE 阶段读 process_staging 的检查 SQL 表本身已小,豁免。
-    if (enforceSchemaAllowlist && EmptyChecks.isNotNull(security) && security.isRequireLimit()) {
+    boolean mainSourceRequiresLimit =
+        enforceSchemaAllowlist && EmptyChecks.isNotNull(security) && security.isRequireLimit();
+    if (mainSourceRequiresLimit) {
       checkTopLevelLimit(select, security.getMaxLimitRows());
     }
     return sql;
@@ -129,11 +138,19 @@ public class SqlTransformComputeSqlValidator {
   }
 
   private static Long topLimitOf(Select body) {
-    if (body instanceof PlainSelect ps && EmptyChecks.isNotNull(ps.getLimit())) {
-      return numericLimit(ps.getLimit().getRowCount());
+    if (body instanceof PlainSelect ps) {
+      Limit limit = ps.getLimit();
+      if (EmptyChecks.isNotNull(limit)) {
+        Object rowCount = limit.getRowCount();
+        return numericLimit(rowCount);
+      }
     }
-    if (body instanceof SetOperationList sol && EmptyChecks.isNotNull(sol.getLimit())) {
-      return numericLimit(sol.getLimit().getRowCount());
+    if (body instanceof SetOperationList sol) {
+      Limit limit = sol.getLimit();
+      if (EmptyChecks.isNotNull(limit)) {
+        Object rowCount = limit.getRowCount();
+        return numericLimit(rowCount);
+      }
     }
     return null;
   }
@@ -150,7 +167,9 @@ public class SqlTransformComputeSqlValidator {
       return null;
     }
     try {
-      return Long.parseLong(rowCount.toString().trim());
+      String rowCountText = rowCount.toString();
+      String trimmedRowCountText = rowCountText.trim();
+      return Long.parseLong(trimmedRowCountText);
     } catch (NumberFormatException e) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,

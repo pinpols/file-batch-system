@@ -1,5 +1,7 @@
 # ADR-042 · 超容准入:硬拒默认 → 有界队列 + 背压
 
+> **当前适用性（2026-10-24）**：准入按实际Job/分区及其newJobAdmission语义计量；Workflow根不创建虚拟父Job。等待与覆盖/义务、工作池容量是不同边界；不得为统一模型另造嵌套调度或扩容编排。 原决策与历史阶段记录保留。
+
 - **状态**:Accepted(路线图 Phase 2.3)
 - **日期**:2026-06-20
 - **关联**:ADR-003(T1/T2 launch 拆分)、ADR-010(trigger 异步解耦)、ADR-027(范围红线:挑 worker 不挑机器)、V89(`tenant_quota_policy.exceeded_strategy`)

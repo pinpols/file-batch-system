@@ -57,11 +57,13 @@ public class ResultVersionPromoteService {
     }
     ResultVersionEntity promoted = loadOrThrow(tenantId, versionId);
     materializePromotedVersion(promoted);
+    String tenantIdForLog = LogSanitizer.value(tenantId);
+    String businessKeyForLog = LogSanitizer.value(target.businessKey());
     log.info(
         "result_version promoted: tenantId={}, id={}, businessKey={}, versionNo={}",
-        LogSanitizer.value(tenantId),
+        tenantIdForLog,
         versionId,
-        LogSanitizer.value(target.businessKey()),
+        businessKeyForLog,
         target.versionNo());
     return promoted;
   }
@@ -78,11 +80,13 @@ public class ResultVersionPromoteService {
     if (updated == 0) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
     }
+    String tenantIdForLog = LogSanitizer.value(tenantId);
+    String businessKeyForLog = LogSanitizer.value(target.businessKey());
     log.info(
         "result_version rejected: tenantId={}, id={}, businessKey={}, versionNo={}",
-        LogSanitizer.value(tenantId),
+        tenantIdForLog,
         versionId,
-        LogSanitizer.value(target.businessKey()),
+        businessKeyForLog,
         target.versionNo());
     return loadOrThrow(tenantId, versionId);
   }
@@ -99,18 +103,20 @@ public class ResultVersionPromoteService {
   }
 
   private void materializePromotedVersion(ResultVersionEntity promoted) {
-    if (promoted == null
+    boolean promotedVersionIsNotEffective = promoted == null
         || promoted.jobInstanceId() == null
-        || !"EFFECTIVE".equals(promoted.status())) {
+        || !"EFFECTIVE".equals(promoted.status());
+    if (promotedVersionIsNotEffective) {
       return;
     }
     JobInstanceEntity instance =
         jobInstanceMapper.selectById(promoted.tenantId(), promoted.jobInstanceId());
     if (instance == null) {
+      String tenantIdForLog = LogSanitizer.value(promoted.tenantId());
       log.warn(
           "asset partition materialization skipped after promote: job_instance missing,"
               + " tenantId={}, resultVersionId={}, jobInstanceId={}",
-          LogSanitizer.value(promoted.tenantId()),
+          tenantIdForLog,
           promoted.id(),
           promoted.jobInstanceId());
       return;

@@ -5,6 +5,7 @@ import java.time.Instant;
 public record ConsoleWorkflowNodeRunResponse(
     Long id,
     Long workflowRunId,
+    Long jobInstanceId,
     String nodeCode,
     String nodeType,
     Integer runSeq,
@@ -12,6 +13,8 @@ public record ConsoleWorkflowNodeRunResponse(
     Integer retryCount,
     String errorCode,
     String errorMessage,
+    String skipReasonCode,
+    String skipReason,
     Instant startedAt,
     Instant finishedAt,
     Long durationMs) {}

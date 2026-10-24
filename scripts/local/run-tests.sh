@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
+# 用途：本地统一测试入口。
+# 用法：在仓库根目录执行 bash scripts/local/run-tests.sh；参数与前置环境见下方说明及所属 README。
 # =============================================================
-# run-tests.sh — 本地一键测试入口
+# run-tests.sh — 本地统一测试入口
 #
-# 用法：
+# 调用示例：
 #   bash scripts/local/run-tests.sh               # 默认：单元 + 集成（跳过 E2E）
 #   bash scripts/local/run-tests.sh --unit        # 仅单元测试（秒级，无容器）
 #   bash scripts/local/run-tests.sh --it          # 仅集成测试（需 Docker）
@@ -49,6 +51,7 @@ MODE="default"
 declare -a EXTRA_MVN_ARGS=()
 declare -a CORE_TEST_MODULES=(
   batch-common
+  batch-test-support
   batch-trigger
   batch-orchestrator
   batch-worker/core
@@ -116,6 +119,18 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# 完整 E2E 包含真实 Spark 场景，先检查受校验缓存，避免构建后才发现运行时缺失。
+if [[ "$MODE" == "e2e" || "$MODE" == "all" ]]; then
+  # shellcheck source=../lib/python-runtime.sh
+  source "$ROOT_DIR/scripts/lib/python-runtime.sh"
+  batch_require_python || exit 2
+  E2E_CHECK_CMD=("$PYTHON_BIN" "$ROOT_DIR/scripts/local/spark-e2e-runtime.py" --check -- mvn test)
+  if (( ${#EXTRA_MVN_ARGS[@]} > 0 )); then
+    E2E_CHECK_CMD+=("${EXTRA_MVN_ARGS[@]}")
+  fi
+  "${E2E_CHECK_CMD[@]}" || exit 2
+fi
+
 if [ "$MODE" = "unit" ]; then
   MAVEN_THREADS="${MAVEN_THREADS:-1}"
 else
@@ -182,6 +197,17 @@ run_mvn() {
   "${cmd[@]}"
   local ret=$?
   return $ret
+}
+
+run_e2e_mvn() {
+  local mvn_bin
+  mvn_bin="$(batch_resolve_maven_command "$ROOT_DIR")"
+  local -a cmd=("$mvn_bin" -T "$MAVEN_THREADS" --no-transfer-progress "$@")
+  if (( ${#EXTRA_MVN_ARGS[@]} > 0 )); then
+    cmd+=("${EXTRA_MVN_ARGS[@]}")
+  fi
+  printf -- '> %s\n\n' "${cmd[*]}"
+  "$PYTHON_BIN" "$ROOT_DIR/scripts/local/spark-e2e-runtime.py" -- "${cmd[@]}"
 }
 
 run_module_tests() {
@@ -429,7 +455,7 @@ case "$MODE" in
     cleanup_orphan_testcontainers
     {
       maybe_build && \
-      run_mvn test -pl batch-e2e-tests \
+      run_e2e_mvn test -pl batch-e2e-tests \
         -Dsurefire.failIfNoSpecifiedTests=false
     } 2>&1 | tee "$LOG_E2E"
     if [ ${PIPESTATUS[0]} -eq 0 ]; then
@@ -475,7 +501,7 @@ case "$MODE" in
     banner "E2E 测试（*E2eIT）"
     cleanup_orphan_testcontainers
     {
-      run_mvn test -pl batch-e2e-tests \
+      run_e2e_mvn test -pl batch-e2e-tests \
         -Dsurefire.failIfNoSpecifiedTests=false
     } 2>&1 | tee "$LOG_ALL_E2E"
     if [ ${PIPESTATUS[0]} -eq 0 ]; then

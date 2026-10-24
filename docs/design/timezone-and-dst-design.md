@@ -1,5 +1,7 @@
 # 批量平台时区与夏令时设计说明
 
+> **当前顶层日程来源**：`workflow_definition.schedule_type / schedule_expr / timezone / calendar_code`。接纳时冻结原计划、业务日与数据区间，子 JOB 继承；历史章节的实施时间和验收计数不定义当前状态，当前状态见整合方案/验收矩阵。Job 保留的历史调度列不得作为新顶层计划的第二来源。
+
 > **当前实现口径：**本文说明业务日历和调度时区设计；事件时间、Console 展示时区以及文件扫描的 `bizDate` 来源，以[时间与日期语义](./time-date-semantics.md)为准。特别是外部文件的业务日期不一定由日历从接收时刻推导。
 
 ## 1. 背景
@@ -391,7 +393,7 @@ alter table job_definition
 优先级建议：
 
 ```text
-job_definition.schedule_timezone
+workflow_definition.timezone
   ↓ 如果为空
 business_calendar.timezone
   ↓ 如果为空
@@ -864,7 +866,7 @@ JVM / 容器时区只是回退，不是业务时区来源。
 
 ```text
 business_calendar.timezone
-job_definition.schedule_timezone
+workflow_definition.timezone
 ```
 
 禁止业务逻辑依赖：
@@ -1139,7 +1141,7 @@ ZoneId.systemDefault()
 ```text
 数据库事件时间：UTC
 业务日历时区：business_calendar.timezone
-调度解释时区：job_definition.schedule_timezone，默认继承 calendar.timezone
+调度解释时区：workflow_definition.timezone，默认继承 calendar.timezone
 批量日归属：calendar.timezone + cutoff_time
 夏令时处理：calendar/schedule 服务统一裁决
 worker：只接收 bizDate 和 batchDayId，不参与时间解释

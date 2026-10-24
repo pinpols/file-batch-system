@@ -2,6 +2,15 @@
 
 本文定义平台库表、索引、分区和归档的治理边界。它不是一次性审计报告；新增表、索引、分区或归档链路时，应按这里的规则补齐说明与验证。
 
+## V347表生命周期收尾
+
+历史迁移保留原内容，使用增量V347收敛最终结构；版本空位有显式保留号位文件，空库从V1连续执行。当前应用不承诺旧数据库/旧接口兼容，不对运行库执行自动repair。
+
+- 退役旧时间轮运行态、未接通的补偿checkpoint、平台库PROCESS旧副本及两张租户Pipeline定义表，同时清理依赖；业务库PROCESS暂存/代际围栏与Pipeline运行事实继续保留。
+- 退役原子配置、SDK类型目录、DQ规则和Workflow版本的4张无独立生命周期冷镜像；对应热表仍是在线配置/版本历史来源，不新增热清理或隐式丢弃历史。
+- DQ执行结果冷表保留；同Job运行树事务搬运、完整行校验后才能删热行，冲突则回滚，按精确租户/Job可冷热回查。冷证据不自动TTL删除。
+- 各表设计初衷、明确退役理由和验收证据见[本轮记录](../audit/database-table-necessity-review-2026-10-24.md)；运维回查见[恢复手册](../runbook/forensic-replay-howto.md)。
+
 ## 当前结论
 
 当前数据库需要做结构治理，而不是本地容量治理。本地实库数据量很小，但 Flyway 已演进到较高版本，`batch` schema 中表和索引数量较多，后续如果继续按功能堆表、补索引而不定期复盘，会产生职责不清、重复索引和归档策略漂移。
@@ -17,7 +26,7 @@
 
 | 域 | 典型表 | 治理重点 |
 |---|---|---|
-| 定义配置 | `job_definition`、`workflow_definition`、`pipeline_definition`、`file_template_config`、`resource_queue` | 软删除唯一性、配置发布审计、租户隔离 |
+| 定义配置 | `job_definition`、`workflow_definition`、`file_template_config`、`resource_queue` | 软删除唯一性、配置发布审计、租户隔离 |
 | 运行态 | `job_instance`、`job_task`、`job_partition`、`workflow_run`、`pipeline_instance`、`pipeline_step_run` | 分区、终态一致性、热查询索引、归档 |
 | 调度与触发 | `trigger_request`、`trigger_runtime_state`、`trigger_outbox_event`、Quartz 表 | 幂等、misfire、重试、调度窗口 |
 | 运维控制 | `batch_day_replay_session`、`batch_day_replay_entry`、`batch_day_replay_preview_token` | 租户约束、一次性预览消费/提交结果恢复、短期过期清理与状态一致性 |

@@ -167,19 +167,20 @@ public class ReplicaLagMonitor {
       }
     } catch (SQLException ex) {
       if (stopping.get() && isShutdownNoise(ex)) {
+        String shutdownExceptionSummary = SwallowedExceptionLogger.summary(ex);
         log.info(
-            "replica WAL replay lag sample skipped during shutdown: {}",
-            SwallowedExceptionLogger.summary(ex));
+            "replica WAL replay lag sample skipped during shutdown: {}", shutdownExceptionSummary);
         return;
       }
       latestLagSeconds.set(-1.0);
       latestReplicaCount.set(-1);
-      log.warn("failed to sample replica WAL replay lag: {}", SwallowedExceptionLogger.summary(ex));
+      String exceptionSummary = SwallowedExceptionLogger.summary(ex);
+      log.warn("failed to sample replica WAL replay lag: {}", exceptionSummary);
     } catch (RuntimeException ex) {
       if (stopping.get() && isShutdownNoise(ex)) {
+        String shutdownExceptionSummary = SwallowedExceptionLogger.summary(ex);
         log.info(
-            "replica WAL replay lag sample skipped during shutdown: {}",
-            SwallowedExceptionLogger.summary(ex));
+            "replica WAL replay lag sample skipped during shutdown: {}", shutdownExceptionSummary);
         return;
       }
       latestLagSeconds.set(-1.0);
@@ -198,10 +199,11 @@ public class ReplicaLagMonitor {
     Throwable current = throwable;
     while (current != null) {
       String message = current.getMessage();
-      if (message != null
+      boolean isConnectionShutdownMessage = message != null
           && (message.contains("has been closed")
               || message.contains("Connection pool shut down")
-              || message.contains("Interrupted"))) {
+              || message.contains("Interrupted"));
+      if (isConnectionShutdownMessage) {
         return true;
       }
       current = current.getCause();

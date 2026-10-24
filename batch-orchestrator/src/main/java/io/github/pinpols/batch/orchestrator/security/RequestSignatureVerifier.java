@@ -49,9 +49,10 @@ public class RequestSignatureVerifier {
   private final NonceStore nonceStore;
 
   public Result verify(SignedRequest req, long nowMillis) {
-    if (!Texts.hasText(req.timestamp())
+    boolean signatureHeadersAreIncomplete = !Texts.hasText(req.timestamp())
         || !Texts.hasText(req.nonce())
-        || !Texts.hasText(req.signature())) {
+        || !Texts.hasText(req.signature());
+    if (signatureHeadersAreIncomplete) {
       return Result.MISSING_HEADERS;
     }
     if (!hasValidTimestampShape(req.timestamp())) {
@@ -75,8 +76,9 @@ public class RequestSignatureVerifier {
     if (!SecretComparator.constantTimeEquals(expected, req.signature())) {
       return Result.BAD_SIGNATURE;
     }
-    if (!nonceStore.registerIfAbsent(
-        req.tenantId(), req.nonce(), Duration.ofMillis(skewMillis * 2))) {
+    long nonceRetentionMillis = skewMillis * 2;
+    Duration nonceRetention = Duration.ofMillis(nonceRetentionMillis);
+    if (!nonceStore.registerIfAbsent(req.tenantId(), req.nonce(), nonceRetention)) {
       return Result.REPLAY;
     }
     return Result.OK;

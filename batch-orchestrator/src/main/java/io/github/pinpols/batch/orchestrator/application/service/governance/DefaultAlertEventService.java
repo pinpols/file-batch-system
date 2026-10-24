@@ -89,7 +89,8 @@ public class DefaultAlertEventService implements AlertEventService {
   @Override
   @Transactional
   public int escalateOverdue(int slaMinutes, int maxTier, int batchLimit) {
-    if (slaMinutes <= 0 || maxTier <= 0 || batchLimit <= 0) {
+    boolean escalationLimitsAreInvalid = slaMinutes <= 0 || maxTier <= 0 || batchLimit <= 0;
+    if (escalationLimitsAreInvalid) {
       return 0;
     }
     List<AlertEventEntity> overdue =

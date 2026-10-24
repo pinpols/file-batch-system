@@ -54,15 +54,19 @@ class ConsoleAlertRoutingMutationIntegrationTest extends AbstractMutationIntegra
         .expectStatus()
         .isOk();
 
-    var row = jdbcTemplate.queryForMap(
-        "SELECT tenant_id, route_code, severity, receiver FROM batch.alert_routing_config"
-            + " WHERE route_code = ?",
-        code);
+    String alertRoutingConfigSnapshotSql = """
+        select tenant_id, route_code, severity, receiver from batch.alert_routing_config
+        where route_code = ?
+        """;
+    var row = jdbcTemplate.queryForMap(alertRoutingConfigSnapshotSql, code);
     assertThat(row).containsEntry("tenant_id", "int-ar-ta");
     assertThat(row).containsEntry("route_code", code);
     assertThat(row).containsEntry("severity", "WARN");
 
-    jdbcTemplate.update("DELETE FROM batch.alert_routing_config WHERE route_code = ?", code);
+    String deleteAlertRoutingConfigSql = """
+        delete from batch.alert_routing_config where route_code = ?
+    """;
+    jdbcTemplate.update(deleteAlertRoutingConfigSql, code);
   }
 
   @Test
@@ -80,10 +84,10 @@ class ConsoleAlertRoutingMutationIntegrationTest extends AbstractMutationIntegra
         .expectBody(String.class)
         .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
 
-    Long cnt = jdbcTemplate.queryForObject(
-        "SELECT COUNT(*) FROM batch.alert_routing_config WHERE route_code = ?",
-        Long.class,
-        "q q q");
+    String alertRoutingConfigCountSql = """
+        select count(*) from batch.alert_routing_config where route_code = ?
+        """;
+    Long cnt = jdbcTemplate.queryForObject(alertRoutingConfigCountSql, Long.class, "q q q");
     assertThat(cnt).isZero();
   }
 
@@ -125,6 +129,9 @@ class ConsoleAlertRoutingMutationIntegrationTest extends AbstractMutationIntegra
         .expectStatus()
         .value(s -> assertThat(s).isIn(400, 409, 500));
 
-    jdbcTemplate.update("DELETE FROM batch.alert_routing_config WHERE route_code = ?", code);
+    String deleteAlertRoutingConfigSql = """
+        delete from batch.alert_routing_config where route_code = ?
+    """;
+    jdbcTemplate.update(deleteAlertRoutingConfigSql, code);
   }
 }

@@ -1,9 +1,12 @@
 -- 资源标签：支持对 job_definition / workflow_definition / file_channel / file_template 打标签分组。
+
 CREATE TABLE IF NOT EXISTS batch.resource_tag (
     id              BIGSERIAL       PRIMARY KEY,
     tenant_id       VARCHAR(64)     NOT NULL,
-    resource_type   VARCHAR(32)     NOT NULL,          -- JOB, WORKFLOW, FILE_CHANNEL, FILE_TEMPLATE
-    resource_code   VARCHAR(128)    NOT NULL,          -- jobCode / workflowCode / channelCode / templateCode
+    -- JOB, WORKFLOW, FILE_CHANNEL, FILE_TEMPLATE
+    resource_type   VARCHAR(32)     NOT NULL,
+    -- jobCode / workflowCode / channelCode / templateCode
+    resource_code   VARCHAR(128)    NOT NULL,
     tag_key         VARCHAR(64)     NOT NULL,
     tag_value       VARCHAR(256)    NOT NULL DEFAULT '',
     created_by      VARCHAR(64),

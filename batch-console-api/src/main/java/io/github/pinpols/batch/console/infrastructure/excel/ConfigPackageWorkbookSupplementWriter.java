@@ -172,7 +172,10 @@ class ConfigPackageWorkbookSupplementWriter {
       writeBodyCell(row, 6, defaultHintFor(def), bodyStyle);
     }
     sheet.createFreezePane(0, 2);
-    sheet.setAutoFilter(new CellRangeAddress(1, Math.max(1, rowIdx - 1), 0, headers.length - 1));
+    int lastFilterRowIndex = Math.max(1, rowIdx - 1);
+    CellRangeAddress filterRange =
+        new CellRangeAddress(1, lastFilterRowIndex, 0, headers.length - 1);
+    sheet.setAutoFilter(filterRange);
     int[] widths = {10, 30, 22, 42, 50, 42, 46};
     for (int c = 0; c < widths.length; c++) {
       sheet.setColumnWidth(c, widths[c] * 256);
@@ -251,7 +254,10 @@ class ConfigPackageWorkbookSupplementWriter {
     for (int c = 0; c < headers.length; c++) {
       sheet.setColumnWidth(c, 12000);
     }
-    sheet.setAutoFilter(new CellRangeAddress(1, Math.max(1, rowIdx - 1), 0, headers.length - 1));
+    int lastFilterRowIndex = Math.max(1, rowIdx - 1);
+    CellRangeAddress filterRange =
+        new CellRangeAddress(1, lastFilterRowIndex, 0, headers.length - 1);
+    sheet.setAutoFilter(filterRange);
   }
 
   private static void writeBodyCell(Row row, int columnIndex, String value, CellStyle style) {
@@ -289,7 +295,6 @@ class ConfigPackageWorkbookSupplementWriter {
       case ConfigPackageExcelValidator.CHANNEL_SHEET -> "配置 SFTP/OSS/S3/API 等文件渠道。";
       case ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET -> "配置导入/导出文件格式、字段映射、查询。";
       case ConfigPackageExcelValidator.PIPELINE_SHEET -> "配置 Worker 流水线主定义。";
-      case ConfigPackageExcelValidator.STEP_SHEET -> "配置流水线步骤和参数。";
       case ConfigPackageExcelValidator.WF_DEF_SHEET -> "配置工作流主定义。";
       case ConfigPackageExcelValidator.WF_NODE_SHEET -> "配置工作流节点。";
       case ConfigPackageExcelValidator.WF_EDGE_SHEET -> "配置工作流节点依赖边。";
@@ -305,9 +310,6 @@ class ConfigPackageWorkbookSupplementWriter {
       case ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
           ConfigPackageExcelValidator.CHANNEL_SHEET -> "文件类作业和派发步骤会引用，建议先于 pipeline step 填。";
       case ConfigPackageExcelValidator.JOB_SHEET -> "pipeline 和 workflow node 都会引用 job_code。";
-      case ConfigPackageExcelValidator.PIPELINE_SHEET ->
-        "pipeline_step_definition 需要引用 job_code + version。";
-      case ConfigPackageExcelValidator.STEP_SHEET -> "具体执行步骤，依赖 job/pipeline/template/channel。";
       case ConfigPackageExcelValidator.WF_DEF_SHEET ->
         "workflow_node / workflow_edge 共用 workflow_code + version。";
       case ConfigPackageExcelValidator.WF_NODE_SHEET -> "workflow_edge 需要引用 from/to node_code。";

@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
+import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionActiveByTenantCountQuery;
+
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -200,7 +203,7 @@ class DefaultResourceSchedulerTest {
     assertThat(d.getFairnessScore()).isNull();
     verify(jobInstanceMapper, never()).countActiveByTenant(anyString());
     verify(jobPartitionMapper, never())
-        .countActiveByTenant(anyString(), anyString(), anyString(), anyString(), anyString());
+        .countActiveByTenant(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.waitingStatus() != null && parameters.readyStatus() != null && parameters.runningStatus() != null && parameters.retryingStatus() != null));
   }
 
   @Test

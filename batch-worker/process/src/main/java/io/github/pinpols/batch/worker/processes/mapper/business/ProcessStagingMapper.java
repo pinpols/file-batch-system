@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.processes.mapper.business;
 
+import io.github.pinpols.batch.worker.processes.cleanup.ProcessStagingGenerationCandidate;
 import java.time.Instant;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -12,24 +13,59 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface ProcessStagingMapper {
 
-  /**
-   * 删除 staged_at 早于 {@code now() - retentionHours} 的孤儿行，单次最多删 {@code batchSize} 条。
-   *
-   * <p>用 {@code WHERE ctid IN (子查询 LIMIT)} 限制锁范围，避免大表全表锁定。
-   *
-   * @return 实际删除行数
-   */
-  int deleteOrphansOlderThan(
-      @Param("retentionHours") int retentionHours, @Param("batchSize") int batchSize);
+  /** 只读预览下一轮有界的批次日游标扫描。 */
+  List<ProcessStagingGenerationCandidate> listExpiredGenerations(
+      @Param("tenantId") String tenantId,
+      @Param("retentionHours") int retentionHours,
+      @Param("batchSize") int batchSize,
+      @Param("offset") int offset);
 
-  /**
-   * 取当前 staging 中最老一行的 staged_at；表空时返 null（让调用方将"年龄"折算为 0 或 -1）。
-   *
-   * <p>供 Micrometer gauge 观测使用。
-   */
-  Instant selectMinStagedAt();
+  long countExpiredGenerations(
+      @Param("tenantId") String tenantId, @Param("retentionHours") int retentionHours);
 
-  long countOrphansOlderThan(@Param("retentionHours") int retentionHours);
+  /** 供 Console 调用的租户隔离内部端点；所有决策仍由 Orchestrator 负责。 */
+  List<ProcessStagingGenerationCandidate> listActiveGenerationsAfter(
+      @Param("tenantId") String tenantId,
+      @Param("generationId") String generationId,
+      @Param("batchSize") int batchSize);
+
+  long countGenerationRowsOlderThan(
+      @Param("candidate") ProcessStagingGenerationCandidate candidate,
+      @Param("retentionHours") int retentionHours);
+
+  Instant selectOldestGenerationRow(
+      @Param("candidate") ProcessStagingGenerationCandidate candidate);
+
+  /** 用于提前声明预期分组的上游文件清单内部幂等接收入口。 */
+  String selectGenerationStatusForUpdate(ProcessStagingGenerationCandidate candidate);
+
+  /** 封存目标由入口固定，候选身份不携带可覆盖的状态。 */
+  default int sealOpenGeneration(ProcessStagingGenerationCandidate candidate) {
+    final String sealedStatus = "SEALED";
+    return sealOpenGenerationWithStatus(candidate, sealedStatus);
+  }
+
+  int sealOpenGenerationWithStatus(
+      @Param("candidate") ProcessStagingGenerationCandidate candidate,
+      @Param("targetStatus") String targetStatus);
+
+  /** 原 SQL 继续原子核验已封存且无残行，才完成回收。 */
+  default int markGenerationReclaimedIfEmpty(ProcessStagingGenerationCandidate candidate) {
+    final String reclaimedStatus = "RECLAIMED";
+    return markGenerationReclaimedIfEmptyWithStatus(candidate, reclaimedStatus);
+  }
+
+  int markGenerationReclaimedIfEmptyWithStatus(
+      @Param("candidate") ProcessStagingGenerationCandidate candidate,
+      @Param("targetStatus") String targetStatus);
+
+  /** 已持久化作业依赖等待记录的租户隔离只读运维视图。 */
+  String setGenerationRlsContext(@Param("generationId") String generationId);
+
+  /** 某租户日历当前由运维人员控制的自动补扫暂停状态。 */
+  int deleteGenerationRows(
+      @Param("candidate") ProcessStagingGenerationCandidate candidate,
+      @Param("batchSize") int batchSize);
 
   /**
    * 幂等创建一个天级 RANGE 子分区(已存在则 no-op)。
@@ -46,14 +82,4 @@ public interface ProcessStagingMapper {
       @Param("partitionName") String partitionName,
       @Param("fromTs") String fromTs,
       @Param("toTs") String toTs);
-
-  /**
-   * 列出早于 {@code cutoffYmd}(YYYYMMDD)的天级子分区名,不含 DEFAULT 回退分区。
-   *
-   * @param cutoffYmd 截止日,形如 {@code 20260604};严格小于此日的日分区被返回
-   */
-  List<String> listExpiredDailyPartitions(@Param("cutoffYmd") String cutoffYmd);
-
-  /** DROP 一个子分区(瞬间还空间给 OS)。partitionName 由调度器从分区名清单取得,非用户输入。 */
-  void dropPartition(@Param("partitionName") String partitionName);
 }

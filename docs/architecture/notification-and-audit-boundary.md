@@ -32,6 +32,8 @@ BFS 采用两条相互独立的横切链路：
 | `subscription_rule` | 租户订阅哪些业务事件、严重度和 job 范围 |
 | `notification_channel` | 邮件、钉钉、企业微信、Webhook 等业务投递渠道 |
 | `notification_delivery_log` | 业务通知投递结果、重试和最终失败 |
+| `workflow_terminal_notification_receipt` | Workflow 终态消费回执与首次冻结投递范围；不以重复 Kafka 消费重建收件人集合 |
+| `console_push_job_delivery` | Job 终态 Push 消费交付记录；与 Workflow 通知分开 |
 | `NotificationDispatchService` | 按订阅规则生成并投递业务事件通知 |
 | Webhook relay | 持久化投递、退避重试、GIVE_UP 和指标 |
 
@@ -43,6 +45,12 @@ BFS 采用两条相互独立的横切链路：
 - 它不能作为“告警已分组、去重、静默”的运行时证据。
 - 需要修改技术告警路由时，应修改 Alertmanager 模板并按观测栈 runbook 验证。
 - 动态路由迁移暂缓到上线后出现真实告警流量，再基于实际分组、去重和静默需求评估。
+
+### 2.4 终态事实、投递与归档
+
+Job 和 Workflow 使用各自终态事件、消费组和回执。Job 成功不提前宣告 Workflow 成功；重复消费复用已持久化的接纳/投递结果，不能按当前订阅重新扩展首次冻结范围。外部提供商结果未知时保留未知证据，不能把 HTTP 超时视作未执行并盲目重发。
+
+V346 的归档单元是一个终态事实、首次冻结的全部投递及人工审计。先满足整组终态与保留条件，再按同一租户/事件族归档，不能分别清理回执与子投递导致重复消费重新通知。`config_sync_target_receipt`（V345）属于配置同步目标回执，不等同于终态通知成功。提供商和目标环境交付验证仍按验收矩阵记录。
 
 ## 3. 审计与日志
 

@@ -66,7 +66,10 @@ impl<H: TaskHandler> TaskHandler for RetryHandler<H> {
             }
             if !delay.is_zero() {
                 std::thread::sleep(delay);
-                delay = Duration::from_millis(((delay.as_millis() as f64) * multiplier) as u64);
+                let current_delay_millis = delay.as_millis();
+                let scaled_delay_millis = current_delay_millis as f64 * multiplier;
+                let next_delay_millis = scaled_delay_millis as u64;
+                delay = Duration::from_millis(next_delay_millis);
             }
         }
         result
@@ -223,9 +226,9 @@ impl InMemoryIdempotencyStore {
     }
 
     fn delete_if_expired_locked(entries: &mut BTreeMap<String, IdempotencyEntry>, key: &str) {
-        let expired = entries
-            .get(key)
-            .and_then(|entry| entry.expires_at)
+        let current_entry = entries.get(key);
+        let expires_at = current_entry.and_then(|entry| entry.expires_at);
+        let expired = expires_at
             .map(|expires_at| Instant::now() >= expires_at)
             .unwrap_or(false);
         if expired {

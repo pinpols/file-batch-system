@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.console.domain.audit.application;
 
+import io.github.pinpols.batch.console.domain.audit.query.OperationAuditCountQuery;
+import io.github.pinpols.batch.console.domain.audit.query.OperationAuditQuery;
+
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -59,9 +63,9 @@ class OperationAuditQueryServiceTenantGuardTest {
     service = new OperationAuditQueryService(mapper, tenantGuard, new ObjectMapper());
     when(requestMetadataResolver.current())
         .thenThrow(new IllegalStateException("request scope missing"));
-    when(mapper.count(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+    when(mapper.count(org.mockito.ArgumentMatchers.any(OperationAuditCountQuery.class)))
         .thenReturn(0L);
-    when(mapper.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+    when(mapper.query(org.mockito.ArgumentMatchers.any(OperationAuditQuery.class)))
         .thenReturn(List.of());
   }
 
@@ -108,9 +112,9 @@ class OperationAuditQueryServiceTenantGuardTest {
     req.setPageSize(10);
     req.setTenantId("ta"); // 一致即透传
     service.query(req);
-    verify(mapper).count(eq("ta"), any(), any(), any(), any(), any(), any(), any(), any(), any());
+    verify(mapper).count(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "ta")));
     verify(mapper)
-        .query(eq("ta"), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+        .query(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "ta")));
   }
 
   @Test
@@ -138,7 +142,7 @@ class OperationAuditQueryServiceTenantGuardTest {
     req.setPageSize(10);
     req.setTenantId("tb"); // admin 跨租 OK
     service.query(req);
-    verify(mapper).count(eq("tb"), any(), any(), any(), any(), any(), any(), any(), any(), any());
+    verify(mapper).count(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "tb")));
     assertThat(req.getTenantId()).isEqualTo("tb");
   }
 
@@ -157,20 +161,10 @@ class OperationAuditQueryServiceTenantGuardTest {
     service.query(req);
 
     verify(mapper, never())
-        .count(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+        .count(org.mockito.ArgumentMatchers.any(OperationAuditCountQuery.class));
     verify(mapper)
         .query(
-            eq("ta"),
-            any(),
-            any(),
-            any(),
-            any(),
-            any(),
-            any(),
-            any(),
-            any(),
-            eq(100L),
-            eq(new PageRequest(1, 10)));
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "ta") && java.util.Objects.equals(parameters.cursorId(), 100L) && java.util.Objects.equals(parameters.pageRequest(), new PageRequest(1, 10))));
   }
 
   @Test
@@ -188,20 +182,10 @@ class OperationAuditQueryServiceTenantGuardTest {
     service.query(req);
 
     verify(mapper, never())
-        .count(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+        .count(org.mockito.ArgumentMatchers.any(OperationAuditCountQuery.class));
     verify(mapper)
         .query(
-            eq("ta"),
-            any(),
-            any(),
-            any(),
-            any(),
-            any(),
-            any(),
-            any(),
-            any(),
-            eq(null),
-            eq(new PageRequest(1, 10)));
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "ta") && java.util.Objects.equals(parameters.cursorId(), null) && java.util.Objects.equals(parameters.pageRequest(), new PageRequest(1, 10))));
   }
 
   @Test
@@ -210,9 +194,9 @@ class OperationAuditQueryServiceTenantGuardTest {
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(
             new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")), "x"));
-    when(mapper.count(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+    when(mapper.count(org.mockito.ArgumentMatchers.any(OperationAuditCountQuery.class)))
         .thenReturn(1L);
-    when(mapper.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+    when(mapper.query(org.mockito.ArgumentMatchers.any(OperationAuditQuery.class)))
         .thenReturn(List.of(new AuditRow(
             1L,
             "ta",

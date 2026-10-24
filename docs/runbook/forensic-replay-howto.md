@@ -3,7 +3,7 @@
 > ADR-022 forensic_export 已经能导生产证据包,本工具补"回放"侧:把生产包还原到本地 sim 跑当前代码,SQL 比对结果,看新代码是否会改判。
 >
 > 配套脚本:[`scripts/local/replay-forensic-bundle.sh`](../../scripts/local/replay-forensic-bundle.sh) / [`scripts/local/analyze-replay.sh`](../../scripts/local/analyze-replay.sh)
-> 计划文档:[`docs/plans/r3-4-forensic-replay.md`](../plans/r3-4-forensic-replay.md)
+> 计划文档:[`docs/plans/r3-4-forensic-replay-2026-05-29.md`](../plans/r3-4-forensic-replay-2026-05-29.md)
 
 ## 何时用 / 何时不用
 
@@ -32,17 +32,21 @@ curl -s http://localhost:18080/actuator/health | jq .
 
 ### 1. 拉昨日生产 forensic bundle
 
-通过 console 的 ROLE_ADMIN 渠道触发 forensic export(prod) → 下载 zip。
+通过 Console 的 ROLE_ADMIN 已认证会话导出证据包并下载。下面的地址、cookie 文件、CSRF token 和幂等键由当前会话提供；操作人由服务端认证主体确定，不信任请求中的 `requestedBy`。
 
 ```bash
 # 触发(prod console)
-curl -X POST https://console.prod/internal/forensic/export \
+curl -X POST "$CONSOLE_BASE/api/console/forensic/export" \
+  --cookie "$CONSOLE_COOKIE_FILE" \
+  -H "X-XSRF-TOKEN: $CONSOLE_CSRF_TOKEN" \
+  -H "Idempotency-Key: $EXPORT_REQUEST_ID" \
   -H 'Content-Type: application/json' \
   -d '{"tenantId":"ta","bizDateFrom":"2026-05-23","bizDateTo":"2026-05-23",
        "requestedBy":"weekly-replay"}'
 
 # 返回 exportId,等几秒后下载
-curl -OJ https://console.prod/internal/forensic/export/fex_xxx/download?tenantId=ta
+curl --cookie "$CONSOLE_COOKIE_FILE" -OJ \
+  "$CONSOLE_BASE/api/console/forensic/export/fex_xxx/download?tenantId=ta"
 ```
 
 ### 2. 本地 replay
@@ -53,13 +57,13 @@ bash scripts/local/replay-forensic-bundle.sh ./fex_xxx.zip
 
 观察输出:
 - 报告路径打印在 `[Step 5/5]` 行
-- 临时 schema `sim_replay_${exportId}` 保留供排查(跑完手动 `DROP SCHEMA ... CASCADE`)
+- 临时 schema `sim_replay_<exportId片段>_<本轮摘要>` 在成功后自动清理；失败或 `--keep` 时保留现场
 - 解包目录 `build/forensic-replay/<bundle>.<pid>/unpacked/` 保留
 
 退出码:
 - `0`:全部 identical 或仅性能/数量漂移
-- `2`:出现 **status 改判** 或 **error 路径变化**(CI 用 `[[ $? -eq 2 ]]` 报警)
-- `1`:脚本本身错(fail-fast)
+- `2`:出现 **status 改判**、**error 路径变化**或回放结果缺失，保留现场
+- `1` 或其它非零：查询/装载/触发/结果读取失败、已登记摘要不符或等待超时；保留现场，不清理为“成功”
 
 ### 3. 看报告 + 决策
 
@@ -91,7 +95,7 @@ bash scripts/local/replay-forensic-bundle.sh ./fex_xxx.zip
 ```bash
 # 临时 schema(脚本不自动 drop 是故意的:留现场)
 psql -h localhost -p 15432 -U batch_user -d batch_business \
-  -c "DROP SCHEMA IF EXISTS sim_replay_<export_id> CASCADE;"
+  -c "DROP SCHEMA IF EXISTS <脚本输出的本轮schema> CASCADE;"
 
 # 解包目录
 rm -rf build/forensic-replay/<bundle>.<pid>
@@ -101,14 +105,15 @@ rm -rf build/forensic-replay/<bundle>.<pid>
 
 | 选项 / env | 默认 | 含义 |
 |---|---|---|
-| `--keep` | off | 跑完保留 unpacked / 临时 schema(默认本就保留,显式标记不自动清) |
+| `--keep` | off | 成功时也保留临时 schema；解包证据始终保留 |
 | `--no-launch` | off | 只解包 + 装载,不触发 replay(用于先看 manifest / 数据预审) |
 | `REPLAY_COUNT_TOL_PCT` | 5 | processed_count 容差 % |
 | `REPLAY_TIME_TOL_PCT` | 20 | 耗时容差 % |
 | `REPLAY_WAIT_TIMEOUT_SEC` | 300 | 等终态最大秒数 |
 | `REPLAY_WAIT_INTERVAL_SEC` | 3 | 轮询间隔 |
 | `REPLAY_WORK_DIR` | `build/forensic-replay` | 工作目录根 |
-| `CONSOLE_BASE` | `http://localhost:18080` | console-api 地址 |
+| `TRIGGER_BASE` | 共享环境的 `TRIGGER_BASE_URL` | 实际接收 Workflow 启动请求的 Trigger 地址 |
+| `REPLAY_HTTP_TIMEOUT_SEC` | 30 | 单次启动请求最大等待秒数 |
 
 ## 故障排查
 
@@ -116,17 +121,17 @@ rm -rf build/forensic-replay/<bundle>.<pid>
 |---|---|
 | `unzip 失败` | bundle 损坏 — 重下,核对 sha256 |
 | `manifest.exportId 缺失` | 不是 forensic bundle(可能是 OSS 误导出) |
-| `WARN: console-api 健康检查 000` | console-api 未起 — `scripts/local/start-all.sh` |
+| `WARN: Trigger 健康检查 000` | Trigger 未起；启动失败会以非零退出 |
 | `触发失败 jobCode=xxx: STATE_CONFLICT` | orchestrator draining 或租户/job 未导入 sim |
 | 所有行 `missingInReplay` | sim 里没建对应 tenant/job_definition — 先跑 `scripts/sim/03-import-tenants.sh` |
-| `sha256` 不一致 warn | bundle 来自异机(本地 forensic_export_log 无记录) — 信任文件 sha256 即可 |
+| 已登记 `sha256` 不一致 | 同一租户/导出 ID 已有不同摘要，拒绝回放；检查包和来源。异机导出在本地无登记时仅显示本地计算摘要，不冒称已认证来源 |
 | 长时间 pending | launch 进了 PENDING_DEPENDENCY / 调度未排上 — 看 `batch.job_instance.instance_status` |
 
 ## 隐私约束(ADR-022)
 
-- 数据全落在 `sim_replay_*` 临时 schema,不污染 `batch.*` 业务表
+- 原始证据快照写入 `sim_replay_*`；实际回放会通过 Trigger/Workflow/Worker 创建本地运行并执行业务写入。只在指定本地测试环境执行，`--no-launch` 才跳过启动。
 - 报告默认不打印 `params_snapshot` / `result_payload` 原文,只列改动**字段路径**(`payloadDiffPaths`)
-- 如需 raw 数据排查,直接连 `sim_replay_<exportId>.forensic_job_instances.snapshot` JSONB
+- 如需 raw 数据排查,直接连 `<脚本输出的本轮schema>.forensic_job_instances.snapshot` JSONB
 - 跑完务必 `DROP SCHEMA` 清场,尤其工作机外接共享
 
 ## 5 维度 diff 速查表
@@ -139,4 +144,19 @@ rm -rf build/forensic-replay/<bundle>.<pid>
 | 错误 | `(error_code, error_message)` | tuple 不等 |
 | Payload | `result_payload` / `params_snapshot` JSONB | structural diff,列改动路径 |
 
-完整 plan / 设计依据:`docs/plans/r3-4-forensic-replay.md`,ADR-022 §forensic_export。
+完整 plan / 设计依据:`docs/plans/r3-4-forensic-replay-2026-05-29.md`,ADR-022 §forensic_export。
+
+
+## DQ执行证据的冷热回查
+
+V347起，DQ检查结果随Job运行树在同一事务中归档。搬运前锁定实例与检查行，复制后逐行核对完整内容；缺失或冲突时整个事务回滚，热Job及检查证据均保留。规则定义保留在在线 `batch.data_quality_rule`，不依赖独立冷镜像。
+
+归档后使用[只读回查SQL](../../scripts/db/inspect/select-data-quality-evidence.sql)，在已确认的平台数据库连接上提供精确租户及Job实例：
+
+```bash
+psql ... -v tenant_id=ta -v job_instance_id=123 -f scripts/db/inspect/select-data-quality-evidence.sql
+```
+
+该查询和应用Mapper采用相同冷热读取语义，返回规则标识、判定、指标、样本和时间；重复冷/热身份只返回一份。它不把终态Job重新插回热表，不触发Worker执行。历史证据恢复使用现有数据库备份/PITR流程；业务重放使用正式Replay入口，不能把回填运行表当作重放。
+
+遇到归档冲突，按日志中的失败批次定位精确Job和检查ID，对照冷热完整行核查；保留两份证据，不覆盖冷行或手工删除热行来绕过校验。冷表目前不自动删除，随运行证据保留；若新增冷存TTL，必须先定义备份、恢复和引用保护，不能复用热保留期直接清理。

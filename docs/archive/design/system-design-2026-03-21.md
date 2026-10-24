@@ -2,7 +2,7 @@
 
 > ⚠️ **此文件不再含设计正文**。原 8005 行 mega 文档于 **2026-04-26** 拆分到 `docs/{design,architecture,runbook}/` 主干，此处保留**章节标题 + 子节锚点**仅为兼容历史链接（如 `§9.11` 等深链）。
 >
-> - **找具体内容**：参见 [`mega-chapter-map.md`](./mega-chapter-map.md) 章号 → 现位置导航表
+> - **找具体内容**：参见 [`legacy-design-chapter-map.md`](../../design/legacy-design-chapter-map.md) 章号 → 现位置导航表
 > - **找原始正文**：`git show 5b72df9b:docs/archive/design/system-design-2026-03-21.md`（Stage E 改名后的最后完整版本）或更早的 `git log --follow` 历史
 > - **拆分动机**：8000 行单文件难导航 / 协作冲突大 / 实质冻在 2026-04-10 没人维护；详见 [`../README.md`](../README.md) 归档原则
 
@@ -54,7 +54,7 @@
 
 ## 5. 调度与编排总体设计
 
-→ 散落覆盖（详见 [`mega-chapter-map.md`](./mega-chapter-map.md) ch.5）
+→ 散落覆盖（详见 [`legacy-design-chapter-map.md`](../../design/legacy-design-chapter-map.md) ch.5）
 
 ### 5.1 调度总览
 
@@ -88,7 +88,7 @@
 
 ## 7. 执行与分片设计
 
-→ 散落覆盖（详见 [`mega-chapter-map.md`](./mega-chapter-map.md) ch.7）
+→ 散落覆盖（详见 [`legacy-design-chapter-map.md`](../../design/legacy-design-chapter-map.md) ch.7）
 
 ### 7.1 Worker 执行设计
 
@@ -105,7 +105,7 @@
 
 ## 8. 资源调度与运行控制设计
 
-→ 散落覆盖（详见 [`mega-chapter-map.md`](./mega-chapter-map.md) ch.8；§8.2 决策图仍是唯一可视化来源——见 git 历史）
+→ 散落覆盖（详见 [`legacy-design-chapter-map.md`](../../design/legacy-design-chapter-map.md) ch.8；§8.2 决策图仍是唯一可视化来源——见 git 历史）
 
 ### 8.1 资源隔离与优先级设计
 
@@ -142,7 +142,7 @@
 ### 9.7 链路执行引擎设计
 ### 9.8 Worker 映射与执行责任
 
-→ [`../../architecture/worker-plugins.md`](../../architecture/worker-plugins.md) + [`../../runbook/worker-stage-coverage.md`](../../runbook/worker-stage-coverage.md)
+→ [`../../architecture/worker-plugins.md`](../../architecture/worker-plugins.md) + [`worker-stage-coverage-2026-04-25.md`](../../verifications/worker-stage-coverage-2026-04-25.md)
 
 ### 9.9 幂等、重试与补偿要求
 
@@ -154,7 +154,7 @@
 
 ### 9.11 Skip 策略与坏记录处理
 
-→ [`../../design/file-pipeline-design.md`](../../design/file-pipeline-design.md) §错误处理 + 实现 `PreprocessStep` / `ValidateStep`；MinIO 落点 [`../../runbook/minio-lifecycle-policy.md`](../../runbook/minio-lifecycle-policy.md)
+→ [`../../design/file-pipeline-design.md`](../../design/file-pipeline-design.md) §错误处理 + 实现 `PreprocessStep` / `ValidateStep`；MinIO 落点 [`object-storage-lifecycle-policy.md`](../../runbook/object-storage-lifecycle-policy.md)
 
 ### 9.12 边查边写与禁止全量加载的硬约束
 
@@ -162,7 +162,7 @@
 
 ## 10. 文件资产与治理设计
 
-→ 散落覆盖（详见 [`mega-chapter-map.md`](./mega-chapter-map.md) ch.10）
+→ 散落覆盖（详见 [`legacy-design-chapter-map.md`](../../design/legacy-design-chapter-map.md) ch.10）
 
 ### 10.1 统一文件资产管理模型
 
@@ -174,7 +174,7 @@
 
 ### 10.3 文件治理闭环设计
 
-→ [`../../design/delete-strategy.md`](../../design/delete-strategy.md) + [`../../runbook/minio-lifecycle-policy.md`](../../runbook/minio-lifecycle-policy.md) + `FileGovernanceProperties`
+→ [`../../design/delete-strategy.md`](../../design/delete-strategy.md) + [`object-storage-lifecycle-policy.md`](../../runbook/object-storage-lifecycle-policy.md) + `FileGovernanceProperties`
 
 ## 11. 运行质量与 SLA 设计
 
@@ -200,7 +200,7 @@
 
 ## 13. 事务、消息与参数化设计
 
-→ 散落覆盖（详见 [`mega-chapter-map.md`](./mega-chapter-map.md) ch.13；§13.3 参数化原则仅在 git 历史 + LaunchParamResolver 实现）
+→ 散落覆盖（详见 [`legacy-design-chapter-map.md`](../../design/legacy-design-chapter-map.md) ch.13；§13.3 参数化原则仅在 git 历史 + LaunchParamResolver 实现）
 
 ### 13.1 事务设计
 
@@ -258,7 +258,7 @@
 
 ### 16.1 文件链路运行手册补充
 
-→ [`../../runbook/worker-stage-coverage.md`](../../runbook/worker-stage-coverage.md)
+→ [`worker-stage-coverage-2026-04-25.md`](../../verifications/worker-stage-coverage-2026-04-25.md)
 
 ### 16.2 平台监控设计
 
@@ -274,7 +274,7 @@
 
 ### 16.5 调度压测与容量基线指标
 
-→ [`../../runbook/quartz-capacity-baseline.md`](../../runbook/quartz-capacity-baseline.md) + [`../../testing/load-test-report.md`](../../testing/load-test-report.md)
+→ [`../../runbook/quartz-capacity-baseline.md`](../../runbook/quartz-capacity-baseline.md) + [`load-test-report-2026-04-25.md`](../../verifications/load-test-report-2026-04-25.md)
 
 ### 16.6 下游不可用时的熔断、限流与渠道健康
 
@@ -282,7 +282,7 @@
 
 ## 17. 项目结构、模块划分与 POM 设计
 
-→ [`../../design/project-structure-pom.md`](../../design/project-structure-pom.md)
+→ [`project-structure-pom-2026-03-21.md`](project-structure-pom-2026-03-21.md)
 
 ### 17.1 模块与工程结构总览
 ### 17.2 各模块职责与依赖边界
@@ -308,7 +308,7 @@
 
 ### 18.4 压测口径与容量阈值
 
-→ [`../../testing/load-test-report.md`](../../testing/load-test-report.md) + [`../../architecture/scalability-assessment.md`](../../architecture/scalability-assessment.md)
+→ [`load-test-report-2026-04-25.md`](../../verifications/load-test-report-2026-04-25.md) + [`scalability-assessment-2026-07-28.md`](../audit/scalability-assessment-2026-07-28.md)
 
 ### 18.5 滚动升级、版本兼容与变更窗口
 
@@ -320,7 +320,7 @@
 
 ## 19. 实施落地计划
 
-→ [`../../analysis/hardening-backlog.md`](../../analysis/hardening-backlog.md)（v4，按 P0/P1/P2 排期）
+→ [`../../analysis/hardening-backlog.md`](../../plans/hardening-backlog.md)（v4，按 P0/P1/P2 排期）
 
 ### 19.1 实施落地计划
 
@@ -328,7 +328,7 @@
 
 ## 20. 批量调度能力评估
 
-→ [`../../design/capability-assessment.md`](../../design/capability-assessment.md) + [`../../architecture/scalability-assessment.md`](../../architecture/scalability-assessment.md)
+→ [`../../design/capability-assessment.md`](../../design/capability-assessment.md) + [`scalability-assessment-2026-07-28.md`](../audit/scalability-assessment-2026-07-28.md)
 
 ### 20.1 当前评估口径说明
 ### 20.2 评估方法与分级口径
@@ -369,4 +369,4 @@ git show <commit_hash>:docs/design/批量调度系统设计说明.md
 - 留 anchor 锚点是为了**兼容历史链接**（如 `§9.11`），不是保留原文
 - 此举不删文件，**只清空内容**——历史完全在 git 里
 
-详细策略：[`mega-chapter-map.md`](./mega-chapter-map.md) + [`../README.md`](../README.md)
+详细策略：[`legacy-design-chapter-map.md`](../../design/legacy-design-chapter-map.md) + [`../README.md`](../README.md)

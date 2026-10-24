@@ -38,6 +38,8 @@ public final class ConfigPackageExcelSchema {
   public static final String COL_SCHEDULE_TYPE = "schedule_type";
   public static final String COL_SCHEDULE_EXPR = "schedule_expr";
   public static final String COL_DEPENDS_ON_JOB_CODE = "depends_on_job_code";
+  public static final String COL_DEPENDS_ON_JOB_CODES = "depends_on_job_codes";
+  public static final String COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS = "depends_on_biz_date_alignments";
   public static final String COL_CALENDAR_CODE = "calendar_code";
   public static final String COL_QUEUE_CODE = "queue_code";
   public static final String COL_PARAM_SCHEMA = "param_schema";
@@ -51,11 +53,14 @@ public final class ConfigPackageExcelSchema {
   public static final String COL_WORKFLOW_NAME = "workflow_name";
   public static final String COL_WORKFLOW_TYPE = "workflow_type";
   public static final String COL_WORKFLOW_VERSION = "workflow_version";
+  public static final String COL_SINGLE_JOB_CODE = "single_job_code";
+  public static final String COL_SCHEDULE_ENABLED = "schedule_enabled";
+  public static final String COL_TIMEZONE = "timezone";
+  public static final String COL_TRIGGER_MODE = "trigger_mode";
   public static final String COL_NODE_CODE = "node_code";
   public static final String COL_NODE_NAME = "node_name";
   public static final String COL_NODE_TYPE = "node_type";
   public static final String COL_RELATED_JOB_CODE = "related_job_code";
-  public static final String COL_RELATED_PIPELINE_CODE = "related_pipeline_code";
   public static final String COL_NODE_PARAMS = "node_params";
   public static final String COL_EDGE_TYPE = "edge_type";
   public static final String COL_FROM_NODE_CODE = "from_node_code";
@@ -185,6 +190,8 @@ public final class ConfigPackageExcelSchema {
         COL_SCHEDULE_TYPE,
         COL_SCHEDULE_EXPR,
         COL_DEPENDS_ON_JOB_CODE,
+        COL_DEPENDS_ON_JOB_CODES,
+        COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS,
         COL_CALENDAR_CODE,
         COL_WINDOW_CODE,
         COL_RETRY_POLICY,
@@ -321,43 +328,6 @@ public final class ConfigPackageExcelSchema {
     private FileTemplate() {}
   }
 
-  public static final class PipelineDefinition {
-    public static final List<String> COLUMNS = List.of(
-        COL_TENANT_ID,
-        COL_JOB_CODE,
-        COL_PIPELINE_NAME,
-        COL_PIPELINE_TYPE,
-        COL_BIZ_TYPE,
-        COL_WORKER_GROUP,
-        COL_VERSION,
-        COL_ENABLED,
-        COL_DESCRIPTION);
-
-    private PipelineDefinition() {}
-  }
-
-  public static final class PipelineStep {
-    public static final String COL_STEP_ORDER = "step_order";
-    public static final String COL_IMPL_CODE = "impl_code";
-    public static final String COL_STEP_PARAMS = "step_params";
-
-    public static final List<String> COLUMNS = List.of(
-        COL_JOB_CODE,
-        COL_VERSION,
-        COL_STEP_CODE,
-        COL_STEP_NAME,
-        COL_STAGE_CODE,
-        COL_STEP_ORDER,
-        COL_IMPL_CODE,
-        COL_STEP_PARAMS,
-        COL_TIMEOUT_SECONDS,
-        COL_RETRY_POLICY,
-        COL_RETRY_MAX_COUNT,
-        COL_ENABLED);
-
-    private PipelineStep() {}
-  }
-
   public static final class WorkflowDefinition {
     public static final List<String> COLUMNS = List.of(
         COL_TENANT_ID,
@@ -365,7 +335,15 @@ public final class ConfigPackageExcelSchema {
         COL_WORKFLOW_NAME,
         COL_WORKFLOW_TYPE,
         COL_VERSION,
+        COL_SINGLE_JOB_CODE,
         COL_ENABLED,
+        COL_SCHEDULE_ENABLED,
+        COL_SCHEDULE_TYPE,
+        COL_SCHEDULE_EXPR,
+        COL_TIMEZONE,
+        COL_TRIGGER_MODE,
+        COL_CALENDAR_CODE,
+        COL_DEPENDS_ON_JOB_CODE,
         COL_DESCRIPTION);
 
     private WorkflowDefinition() {}
@@ -380,7 +358,6 @@ public final class ConfigPackageExcelSchema {
         COL_NODE_NAME,
         COL_NODE_TYPE,
         COL_RELATED_JOB_CODE,
-        COL_RELATED_PIPELINE_CODE,
         COL_WORKER_GROUP,
         COL_WINDOW_CODE,
         COL_NODE_ORDER,

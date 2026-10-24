@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：生产保留治理计划：只读输出候选量和缺失策略，不执行归档、删除或配置修改。
+# 用法：在仓库根目录执行 bash scripts/ops/plan-production-retention.sh；参数与前置环境见下方说明及所属 README。
 # 生产保留治理计划：只读输出候选量和缺失策略，不执行归档、删除或配置修改。
 set -uo pipefail
 

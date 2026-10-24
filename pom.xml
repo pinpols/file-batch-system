@@ -483,7 +483,7 @@
                     <version>3.28.0</version>
                     <configuration>
                         <rulesets>
-                            <ruleset>${maven.multiModuleProjectDirectory}/build/pmd-ruleset.xml</ruleset>
+                            <ruleset>${maven.multiModuleProjectDirectory}/config/quality/pmd-ruleset.xml</ruleset>
                         </rulesets>
                         <failOnViolation>true</failOnViolation>
                         <printFailingErrors>true</printFailingErrors>
@@ -787,7 +787,7 @@ $1$2 $4 $5(</replacement>
                                 <xmlOutput>true</xmlOutput>
                                 <htmlOutput>true</htmlOutput>
                                 <!-- 聚焦 NP_*(NullPointer) / RCN_*(redundant null check) / UWF_*(unwritten field) -->
-                                <includeFilterFile>${maven.multiModuleProjectDirectory}/build/spotbugs-npe-filter.xml</includeFilterFile>
+                                <includeFilterFile>${maven.multiModuleProjectDirectory}/config/quality/spotbugs-npe-filter.xml</includeFilterFile>
                             </configuration>
                         </plugin>
                     </plugins>

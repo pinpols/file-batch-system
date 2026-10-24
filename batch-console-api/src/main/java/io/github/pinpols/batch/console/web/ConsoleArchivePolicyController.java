@@ -39,9 +39,10 @@ public class ConsoleArchivePolicyController {
   @GetMapping
   public CommonResponse<List<ArchivePolicyResponse>> list(
       @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(archivePolicyService.list(tenantId).stream()
+    List<ArchivePolicyResponse> responses = archivePolicyService.list(tenantId).stream()
         .map(ArchivePolicyResponse::from)
-        .toList());
+        .toList();
+    return responseFactory.success(responses);
   }
 
   @PutMapping

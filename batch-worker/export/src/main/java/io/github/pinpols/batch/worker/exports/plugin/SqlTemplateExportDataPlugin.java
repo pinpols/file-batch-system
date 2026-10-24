@@ -2,11 +2,14 @@ package io.github.pinpols.batch.worker.exports.plugin;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
+import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.exports.config.ExportWorkerConfiguration;
 import io.github.pinpols.batch.worker.exports.config.SqlTemplateExportSecurityProperties;
@@ -38,6 +41,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Component
 public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
 
+  @Override
+  public IdempotencyCapability registrationCallbackIdempotencyCapability() {
+    return IdempotencyCapability.IDEMPOTENT_BY_PLUGIN_LOGIC;
+  }
+
   public static final String PLUGIN_ID = WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE;
 
   private final NamedParameterJdbcTemplate jdbc;
@@ -59,14 +67,17 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
       ExportWorkerConfiguration workerConfiguration) {
     this.businessDataSource = businessDataSource;
     JdbcTemplate template = new JdbcTemplate(businessDataSource);
-    template.setQueryTimeout(
-        Math.max(1, security == null ? 30 : security.getQueryTimeoutSeconds()));
+    int configuredQueryTimeoutSeconds = EmptyChecks.isNull(security) ? 30 : security.getQueryTimeoutSeconds();
+    int effectiveQueryTimeoutSeconds = Math.max(1, configuredQueryTimeoutSeconds);
+    template.setQueryTimeout(effectiveQueryTimeoutSeconds);
     this.jdbc = new NamedParameterJdbcTemplate(template);
     this.objectMapper = objectMapper;
     this.security = security;
     this.workerConfiguration = workerConfiguration;
     this.sqlValidator = new SqlTemplateExportSqlValidator(security);
-    this.txTemplate = new TransactionTemplate(new DataSourceTransactionManager(businessDataSource));
+    DataSourceTransactionManager transactionManager =
+        new DataSourceTransactionManager(businessDataSource);
+    this.txTemplate = new TransactionTemplate(transactionManager);
     this.txTemplate.setReadOnly(true);
   }
 
@@ -118,7 +129,9 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     baseParams.put("region", regionFromSnapshot(context));
 
     // 首页（cursor == null）时执行 EXPLAIN 预检
-    if (cursor == null && security != null && security.isExplainCheckEnabled()) {
+    boolean shouldRunExplainCheck =
+        EmptyChecks.isNull(cursor) && EmptyChecks.isNotNull(security) && security.isExplainCheckEnabled();
+    if (shouldRunExplainCheck) {
       runExplainCheck(baseSql, baseParams, context);
     }
 
@@ -138,7 +151,8 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
 
     final String finalSql = sql;
     final Map<String, Object> finalParams = params;
-    final NamedParameterJdbcTemplate pageJdbc = namedJdbc(resolveFetchSize(context));
+    int fetchSize = resolveFetchSize(context);
+    final NamedParameterJdbcTemplate pageJdbc = namedJdbc(fetchSize);
     List<Map<String, Object>> rows = txTemplate.execute(status -> {
       RlsTenantSessionSupport.applyIfPresent(businessDataSource);
       return pageJdbc.queryForList(finalSql, finalParams);
@@ -162,8 +176,9 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
 
   private NamedParameterJdbcTemplate namedJdbc(int fetchSize) {
     JdbcTemplate template = new JdbcTemplate(businessDataSource);
-    template.setQueryTimeout(
-        Math.max(1, security == null ? 30 : security.getQueryTimeoutSeconds()));
+    int configuredQueryTimeout = EmptyChecks.isNull(security) ? 30 : security.getQueryTimeoutSeconds();
+    int effectiveQueryTimeout = Math.max(1, configuredQueryTimeout);
+    template.setQueryTimeout(effectiveQueryTimeout);
     template.setFetchSize(fetchSize);
     return new NamedParameterJdbcTemplate(template);
   }
@@ -190,9 +205,13 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
       int candidate = n.intValue();
       return candidate > 0 ? candidate : null;
     }
-    if (value != null && Texts.hasText(String.valueOf(value))) {
+    boolean textualValueIsPresent =
+        EmptyChecks.isNotNull(value) && Texts.hasText(String.valueOf(value));
+    if (textualValueIsPresent) {
       try {
-        int candidate = Integer.parseInt(String.valueOf(value).trim());
+        String rawText = String.valueOf(value);
+        String text = rawText.trim();
+        int candidate = Integer.parseInt(text);
         return candidate > 0 ? candidate : null;
       } catch (NumberFormatException ignored) {
         return null;
@@ -210,10 +229,12 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
       if (explainResult.isEmpty()) {
         return;
       }
-      String jsonText =
-          String.valueOf(explainResult.getFirst().values().iterator().next());
+      Map<String, Object> firstExplainRow = explainResult.getFirst();
+      Object planValue = firstExplainRow.values().iterator().next();
+      String jsonText = String.valueOf(planValue);
       JsonNode plan = objectMapper.readTree(jsonText);
-      JsonNode node = plan.path(0).path("Plan");
+      JsonNode explainEntry = plan.path(0);
+      JsonNode node = explainEntry.path("Plan");
 
       double planCost = node.path("Total Cost").asDouble(-1);
       double estimatedRows = node.path("Plan Rows").asDouble(-1);
@@ -263,21 +284,22 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
       String baseSql, String cursorColumn, boolean hasCursor, ExportKeysetRange range) {
     // R2-P2-4 二层防御：之前手动 `"` 拼接 cursorColumn 依赖上游 requireIdentifier 校验。
     // 改为统一走 quotePg（同样调 requireIdentifier 但出于此函数自管），即使未来调用绕过 spec.parse 也安全。
-    String cursorIdent =
-        io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator.quotePg(cursorColumn);
+    String cursorIdent = JdbcMappedSqlValidator.quotePg(cursorColumn);
     StringBuilder where = new StringBuilder();
     if (range != null && range.active()) {
       where.append("WHERE base.%s >= :__loN%n".formatted(cursorIdent));
-      where.append(
-          "AND base.%s %s :__hiN%n".formatted(cursorIdent, range.includeUpper() ? "<=" : "<"));
+      String upperBoundOperator = range.includeUpper() ? "<=" : "<";
+      where.append("AND base.%s %s :__hiN%n".formatted(cursorIdent, upperBoundOperator));
     } else if (range != null && range.partitionCount() > 1) {
-      where.append("WHERE ((hashtext(base.%s::text) %% %d) + %d) %% %d = %d%n"
+      String partitionPredicate =
+          "WHERE ((hashtext(base.%s::text) %% %d) + %d) %% %d = %d%n"
           .formatted(
               cursorIdent,
               range.partitionCount(),
               range.partitionCount(),
               range.partitionCount(),
-              range.partitionNo() - 1));
+              range.partitionNo() - 1);
+      where.append(partitionPredicate);
     }
     if (hasCursor) {
       where
@@ -308,14 +330,18 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
   /** 算游标列 [min,max];非数值列 → 元素 null(planner 据此退 hashtext)。复用只读 RLS tx。 */
   @SuppressWarnings("java:S2077")
   private BigDecimal[] minMax(String baseSql, String cursorColumn, Map<String, Object> baseParams) {
-    String cur = io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator.quotePg(cursorColumn);
+    String cur = JdbcMappedSqlValidator.quotePg(cursorColumn);
     String mmSql =
         "SELECT min(%s) AS lo, max(%s) AS hi FROM (%s) base".formatted(cur, cur, baseSql);
     Map<String, Object> row = txTemplate.execute(status -> {
       RlsTenantSessionSupport.applyIfPresent(businessDataSource);
       return jdbc.queryForMap(mmSql, baseParams);
     });
-    return new BigDecimal[] {toBig(row.get("lo")), toBig(row.get("hi"))};
+    Object rawLowerBound = row.get("lo");
+    BigDecimal lowerBound = toBig(rawLowerBound);
+    Object rawUpperBound = row.get("hi");
+    BigDecimal upperBound = toBig(rawUpperBound);
+    return new BigDecimal[] {lowerBound, upperBound};
   }
 
   private static BigDecimal toBig(Object v) {
@@ -323,7 +349,8 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
       return b;
     }
     if (v instanceof Number n) {
-      return new BigDecimal(n.toString());
+      String numericText = n.toString();
+      return new BigDecimal(numericText);
     }
     return null; // 非数值游标列 → 退 hashtext
   }

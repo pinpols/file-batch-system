@@ -2,6 +2,9 @@ package io.github.pinpols.batch.orchestrator.service.failure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import io.github.pinpols.batch.common.enums.FailureClass;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -11,6 +14,7 @@ import java.sql.SQLTimeoutException;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -25,10 +29,8 @@ class FailureClassifierTest {
   @Test
   @DisplayName("恶意上报含换行时日志不分行,未知类别仍按异常回退分类")
   void shouldSanitizeLog_whenReportedClassContainsLineBreaks() {
-    ch.qos.logback.classic.Logger logger =
-        (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(FailureClassifier.class);
-    var appender =
-        new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    Logger logger = (Logger) LoggerFactory.getLogger(FailureClassifier.class);
+    var appender = new ListAppender<ILoggingEvent>();
     appender.start();
     logger.addAppender(appender);
     try {
@@ -97,6 +99,13 @@ class FailureClassifierTest {
         .isEqualTo(FailureClass.UNKNOWN);
     // 未知 worker 上报字符串 → 走回退（且最终仍是 UNKNOWN）
     assertThat(classifier.classify("WHO_KNOWS", null)).isEqualTo(FailureClass.UNKNOWN);
+  }
+
+  @Test
+  @DisplayName("Worker 显式上报 UNKNOWN 时不应用本地异常推断覆盖")
+  void shouldRespectExplicitUnknownFromWorker() {
+    assertThat(classifier.classify("UNKNOWN", new TimeoutException()))
+        .isEqualTo(FailureClass.UNKNOWN);
   }
 
   @Test

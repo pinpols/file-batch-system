@@ -356,7 +356,7 @@ Stage 6 trigger 去重复核：
 ## 运行约束
 
 - 本轮未跑 Maven 单测/IT，按要求只做系统 API 触发和数据库/对象存储/MockServer 对账。
-- SQL/config 分离已执行边界检查：`bash scripts/ci/check-sql-config-boundaries.sh` 通过。新增造数/配置 fixture 放在 `docs/test-data/*.sql` 或 `docs/test-data/*.json`；shell 脚本只负责加载 fixture、API 编排和动态断言查询。
+- SQL/config 分离已执行边界检查：`bash scripts/ci/check-sql-config-boundaries.sh` 通过。新增造数/配置 fixture 放在 `test-data/sim/*.sql` 或 `test-data/sim/*.json`；shell 脚本只负责加载 fixture、API 编排和动态断言查询。
 - 本地 dispatch 到 `localhost:11080` 需要 `BATCH_SECURITY_BYPASS_MODE=true`，本轮仅对 `worker-dispatch` 本地进程开启，用于本地 sim。
 - `06-verify.sh` 的“近 10 分钟全局状态”可能混入探索失败记录；结论以本报告的精确时间过滤 SQL 为准。
 

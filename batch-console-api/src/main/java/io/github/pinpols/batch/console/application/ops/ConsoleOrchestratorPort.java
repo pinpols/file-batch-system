@@ -1,21 +1,31 @@
 package io.github.pinpols.batch.console.application.ops;
 
+import io.github.pinpols.batch.console.application.ops.command.ForensicExportCommand;
+import io.github.pinpols.batch.console.application.ops.command.CalendarDependencyActionCommand;
+import io.github.pinpols.batch.console.application.ops.command.BatchDayOperationCommand;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.contract.response.ops.AssetPartitionReadinessResponse;
 import io.github.pinpols.batch.console.application.contract.response.ops.CapacityProfileResponse;
 import io.github.pinpols.batch.console.application.contract.response.ops.LineageEvidenceResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayCatchupPreviewResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayHistoricalGapInventoryResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayOperateResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleCalendarDependencyWaitResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleInstanceActionResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleJobDependencyWaitResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsolePartitionActionResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleRetryFailedPartitionsResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunActionResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunSkipNodeResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayReplayRangeRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayReplaySubmitRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.DryRunPlanRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayReplayEntryResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayReplayPreviewResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayReplaySessionResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleDryRunPlanResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleReplayOperationPreviewResponse;
+import io.github.pinpols.batch.console.application.contract.response.ConsoleReplayOperationResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleResultVersionResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleForensicExportResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OutboxCleanupProxyResponse;
@@ -56,7 +66,8 @@ public interface ConsoleOrchestratorPort {
 
   ConsoleWorkflowRunActionResponse workflowRunAction(Long id, String tenantId, String action);
 
-  ConsoleWorkflowRunSkipNodeResponse workflowRunSkipNode(Long id, String tenantId, String nodeCode);
+  ConsoleWorkflowRunSkipNodeResponse workflowRunSkipNode(
+      Long id, String tenantId, String nodeCode, String operatorId, String reason);
 
   ConsoleSchedulerSnapshotResponse schedulerSnapshot(String tenantId);
 
@@ -89,26 +100,31 @@ public interface ConsoleOrchestratorPort {
    *
    * @return key=batchDayId / dayStatus / frozen / releasedLaunchCount
    */
-  ConsoleBatchDayOperateResponse batchDayOperate(
-      String tenantId,
-      String calendarCode,
-      LocalDate bizDate,
-      String action,
-      String operatorId,
-      String reason);
+  ConsoleBatchDayOperateResponse batchDayOperate(BatchDayOperationCommand command);
+
+  ConsoleBatchDayCatchupPreviewResponse previewBatchDayCatchup(
+      String tenantId, String calendarCode);
+
+  ConsoleBatchDayHistoricalGapInventoryResponse inventoryBatchDayHistoricalGaps(
+      String tenantId, String calendarCode, LocalDate fromDate, LocalDate throughDate);
+
+  ConsoleBatchDayCatchupPreviewResponse changeBatchDayCatchupControl(
+      String tenantId, String calendarCode, String action, String operatorId, String reason);
+
+  List<ConsoleCalendarDependencyWaitResponse> listCalendarDependencyWaits(
+      String tenantId, String calendarCode, String waitStatus, int limit);
+
+  List<ConsoleJobDependencyWaitResponse> listJobDependencyWaits(
+      String tenantId, String waitStatus, String jobCode, int limit);
+
+  ConsoleCalendarDependencyWaitResponse requestCalendarDependencyWaitAction(CalendarDependencyActionCommand command);
 
   /**
    * ADR-022 v0.1 转发 forensic 取证导出请求 — 同步生成 bundle，返回 exportId / sha256 / size / 路径。
    *
    * @return key=exportId / status / storagePath / fileSizeBytes / sha256
    */
-  ConsoleForensicExportResponse requestForensicExport(
-      String tenantId,
-      LocalDate bizDateFrom,
-      LocalDate bizDateTo,
-      List<String> jobCodes,
-      String exportFormat,
-      String requestedBy);
+  ConsoleForensicExportResponse requestForensicExport(ForensicExportCommand command);
 
   /**
    * ADR-022 v0.1 转发 forensic 下载请求 — 返回 zip 字节流（content-type=application/octet-stream）。
@@ -120,7 +136,8 @@ public interface ConsoleOrchestratorPort {
   /** 流式下载 forensic bundle，避免 console 将整个 ZIP 缓存在堆内存。 */
   default void downloadForensicExport(String tenantId, String exportId, OutputStream outputStream)
       throws IOException {
-    outputStream.write(downloadForensicExport(tenantId, exportId));
+    byte[] bundle = downloadForensicExport(tenantId, exportId);
+    outputStream.write(bundle);
   }
 
   /** 按 pipelineInstanceId 查询并聚合同一 stage 的并发分片进度。 */
@@ -137,6 +154,27 @@ public interface ConsoleOrchestratorPort {
   CommonResponse<ConsoleBatchDayReplayPreviewResponse> batchDayReplayPreview(
       BatchDayReplaySubmitRequest request);
 
+  CommonResponse<ConsoleReplayOperationPreviewResponse> batchDayReplayRangePreview(
+      BatchDayReplayRangeRequest request);
+
+  CommonResponse<ConsoleReplayOperationResponse> batchDayReplayRangeSubmit(
+      BatchDayReplayRangeRequest request);
+
+  CommonResponse<List<ConsoleReplayOperationResponse>> replayOperationList(
+      String tenantId, int limit);
+
+  CommonResponse<ConsoleReplayOperationResponse> replayOperationDetail(
+      Long operationId, String tenantId);
+
+  CommonResponse<List<ConsoleBatchDayReplaySessionResponse>> replayOperationSessions(
+      Long operationId, String tenantId);
+
+  CommonResponse<ConsoleReplayOperationResponse> replayOperationApprove(
+      Long operationId, String tenantId, String approver);
+
+  CommonResponse<ConsoleReplayOperationResponse> replayOperationCancel(
+      Long operationId, String tenantId);
+
   CommonResponse<List<ConsoleBatchDayReplaySessionResponse>> batchDayReplayList(
       String tenantId, String status, int limit);
 
@@ -151,6 +189,9 @@ public interface ConsoleOrchestratorPort {
 
   CommonResponse<List<ConsoleBatchDayReplayEntryResponse>> batchDayReplayEntries(
       Long sessionId, String tenantId, String status, int limit);
+
+  CommonResponse<ConsoleBatchDayReplaySessionResponse> batchDayReplayRetryFailedSubmission(
+      Long sessionId, Long entryId, String tenantId, String operatorId, String reason);
 
   CommonResponse<List<ConsoleResultVersionResponse>> resultVersions(
       String tenantId, String businessKey, int limit);

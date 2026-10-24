@@ -37,7 +37,9 @@ public class SseTicketService {
     if (!ConsoleRoles.isFormalRoleSet(authorities)) {
       throw new IllegalArgumentException("unsupported console role set");
     }
-    String ticket = UUID.randomUUID().toString().replace("-", "");
+    UUID ticketUuid = UUID.randomUUID();
+    String ticketUuidText = ticketUuid.toString();
+    String ticket = ticketUuidText.replace("-", "");
     String roles = String.join(
         ROLE_SEPARATOR, authorities.stream().filter(Texts::hasText).distinct().toList());
     String value =
@@ -66,7 +68,8 @@ public class SseTicketService {
         }
       }
     }
-    return new TicketPayload(username, tenantId, Collections.unmodifiableSet(roles));
+    Set<String> immutableAuthorities = Collections.unmodifiableSet(roles);
+    return new TicketPayload(username, tenantId, immutableAuthorities);
   }
 
   /** R4-P1-1：ticket 解码结果——含签发时角色集。 */

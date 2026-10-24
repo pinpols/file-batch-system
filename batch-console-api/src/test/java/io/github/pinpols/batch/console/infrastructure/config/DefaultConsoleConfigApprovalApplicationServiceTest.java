@@ -28,6 +28,7 @@ import io.github.pinpols.batch.console.mapper.ConfigReleaseMapper;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.Map;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -100,7 +101,7 @@ class DefaultConsoleConfigApprovalApplicationServiceTest {
     ConfigReleaseApprovalSubmitRequest request = new ConfigReleaseApprovalSubmitRequest();
     request.setTenantId("t1");
 
-    org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.submit(10L, request))
+    Assertions.assertThatThrownBy(() -> service.submit(10L, request))
         .isInstanceOf(IllegalArgumentException.class);
     verify(configApprovalMapper, never()).insert(any(ConfigApprovalInsertParam.class));
     verify(configReleaseMapper, never()).updateConfigReleaseStatus(anyMap());
@@ -142,7 +143,7 @@ class DefaultConsoleConfigApprovalApplicationServiceTest {
     ConfigApprovalActionRequest request = new ConfigApprovalActionRequest();
     request.setTenantId("t1");
 
-    org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.approve(9L, request))
+    Assertions.assertThatThrownBy(() -> service.approve(9L, request))
         .isInstanceOf(BizException.class);
   }
 
@@ -163,7 +164,7 @@ class DefaultConsoleConfigApprovalApplicationServiceTest {
     ConfigApprovalActionRequest request = new ConfigApprovalActionRequest();
     request.setTenantId("t1");
 
-    org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.approve(9L, request))
+    Assertions.assertThatThrownBy(() -> service.approve(9L, request))
         .isInstanceOf(IllegalStateException.class);
     verify(configReleaseMapper, never()).updateConfigReleaseStatus(anyMap());
   }

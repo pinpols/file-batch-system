@@ -46,7 +46,6 @@ class BatchTypeTest {
     assertThat(JobType.EXPORT.batchType()).isEqualTo(BatchType.EXPORT);
     assertThat(JobType.PROCESS.batchType()).isEqualTo(BatchType.PROCESS);
     assertThat(JobType.DISPATCH.batchType()).isEqualTo(BatchType.DISPATCH);
-    assertThat(JobType.WORKFLOW.batchType()).isEqualTo(BatchType.WORKFLOW);
     for (JobType t : JobType.values()) {
       assertThat(t.batchType()).as("%s 投影不能为 null", t).isNotNull();
     }

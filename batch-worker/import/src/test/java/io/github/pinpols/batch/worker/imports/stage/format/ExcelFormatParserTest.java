@@ -233,7 +233,7 @@ class ExcelFormatParserTest {
 
     verify(governanceService, never()).recordSkippedRecord(any(), any());
     verify(governanceService, never())
-        .recordSkippedRecord(any(), any(), anyLong(), any(), any(), any());
+        .recordSkippedRecord(any(), org.mockito.ArgumentMatchers.any(BadRecordCommand.class));
   }
 
   // ── helpers ────────────────────────────────────────────────────────────────

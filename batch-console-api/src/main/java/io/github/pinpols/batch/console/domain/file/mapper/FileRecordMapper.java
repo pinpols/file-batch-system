@@ -3,8 +3,8 @@ package io.github.pinpols.batch.console.domain.file.mapper;
 import io.github.pinpols.batch.console.domain.file.entity.FileRecordEntity;
 import io.github.pinpols.batch.console.domain.file.query.FileRecordQuery;
 import io.github.pinpols.batch.console.domain.file.view.FileRecordStorageView;
+import io.github.pinpols.batch.console.domain.file.view.FileRecordSummaryView;
 import java.util.List;
-import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 public interface FileRecordMapper {
@@ -19,5 +19,5 @@ public interface FileRecordMapper {
   FileRecordStorageView selectFileRecordById(
       @Param("tenantId") String tenantId, @Param("fileId") Long fileId);
 
-  Map<String, Object> selectSummary(@Param("tenantId") String tenantId);
+  FileRecordSummaryView selectSummary(@Param("tenantId") String tenantId);
 }

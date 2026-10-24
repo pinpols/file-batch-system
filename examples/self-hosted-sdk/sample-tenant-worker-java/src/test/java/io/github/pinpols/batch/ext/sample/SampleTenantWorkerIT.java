@@ -181,6 +181,12 @@ class SampleTenantWorkerIT {
   // ─── 复现 main() 的内部 handler(原文件里是 private static,这里独立声明保持等价) ─────
 
   static final class EchoHandler implements SdkTaskHandler {
+    /** 示例仅计算、等待或记录日志；接入真实写入或推送后必须重新评估此声明。 */
+    @Override
+    public boolean isSafeToReplay(SdkTaskContext ctx) {
+      return true;
+    }
+
     @Override
     public String taskType() {
       return "echo";
@@ -193,6 +199,12 @@ class SampleTenantWorkerIT {
   }
 
   static final class SleepHandler implements SdkTaskHandler {
+    /** 示例仅计算、等待或记录日志；接入真实写入或推送后必须重新评估此声明。 */
+    @Override
+    public boolean isSafeToReplay(SdkTaskContext ctx) {
+      return true;
+    }
+
     @Override
     public String taskType() {
       return "sleep";

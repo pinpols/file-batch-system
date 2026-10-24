@@ -18,7 +18,7 @@ import io.github.pinpols.batch.e2e.support.E2eTestSql;
 import io.github.pinpols.batch.e2e.support.verifier.DispatchReceiptVerifier;
 import io.github.pinpols.batch.orchestrator.application.service.task.InstanceManagementApplicationService;
 import io.github.pinpols.batch.orchestrator.application.service.task.InstanceManagementResults.RetryFailedPartitions;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -61,7 +61,7 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
   @TempDir
   private Path dispatchTempDir;
 
-  private final LaunchService launchService;
+  private final WorkflowRunLaunchService launchService;
   private final JdbcTemplate jdbcTemplate;
   private final E2eOutboxPublishSupport outboxPublishSupport;
   private final InstanceManagementApplicationService instanceManagementService;
@@ -69,7 +69,7 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
   private final DataSource businessDataSource;
 
   ImportToExportDeliveryE2eIT(
-      LaunchService launchService,
+      WorkflowRunLaunchService launchService,
       JdbcTemplate jdbcTemplate,
       E2eOutboxPublishSupport outboxPublishSupport,
       InstanceManagementApplicationService instanceManagementService,
@@ -86,6 +86,22 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("导入记录经业务库核对、MinIO 导出和 Dispatch 本地 outbox 完成交付闭环")
   void shouldDeliverImportedRecordThroughExportAndDispatchWorkers() throws Exception {
+    final String selectCountSql = """
+        select count(*)::int from biz.customer_account where tenant_id = ? and customer_no = ?
+    """;
+
+    final String updateFileTemplateConfigSql = """
+        update batch.file_template_config
+        set export_data_ref = 'sql_template_export',
+            default_query_sql = ?,
+            query_param_schema = ?::jsonb
+        where tenant_id = ? and template_code = 'EXP-CUSTOMER-JSON'
+        """;
+    final String selectIdSql = """
+        select id, storage_path from batch.file_record where tenant_id = ? and file_code = ?\s\
+        and file_category = 'OUTPUT' order by id desc limit 1\
+        """;
+
     String unique = "JOURNEY" + Long.toUnsignedString(System.nanoTime());
     String customerNo = "C-" + unique;
     String customerName = "Journey " + unique;
@@ -108,7 +124,7 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
     launchService.launch(new LaunchRequest(
         TENANT,
-        importSeed.jobCode(),
+        importSeed.workflowDefinitionId(),
         LocalDate.of(2026, 1, 15),
         TriggerType.API,
         importSeed.requestId(),
@@ -119,23 +135,19 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
 
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
     Integer importedRows = businessJdbc.queryForObject(
-        "select count(*)::int from biz.customer_account where tenant_id = ? and customer_no = ?",
+        selectCountSql,
         Integer.class,
         TENANT,
         customerNo);
     assertThat(importedRows).isEqualTo(1);
 
-    String exportSql = "SELECT id, customer_no, customer_name, customer_type, credit_limit, "
-        + "currency_code, email, status, open_date FROM biz.customer_account "
-        + "WHERE tenant_id = :tenantId AND source_batch_no = :batchNo ORDER BY id";
+    String exportSql = """
+        SELECT id, customer_no, customer_name, customer_type, credit_limit, currency_code, email, status,\s\
+        open_date FROM biz.customer_account WHERE tenant_id = :tenantId AND source_batch_no = :batchNo\s\
+        ORDER BY id\
+        """;
     jdbcTemplate.update(
-        """
-        update batch.file_template_config
-        set export_data_ref = 'sql_template_export',
-            default_query_sql = ?,
-            query_param_schema = ?::jsonb
-        where tenant_id = ? and template_code = 'EXP-CUSTOMER-JSON'
-        """,
+        updateFileTemplateConfigSql,
         exportSql,
         JsonUtils.toJson(Map.of("sqlTemplateExport", Map.of("cursorColumn", "id"))),
         TENANT);
@@ -151,7 +163,7 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
           "fileCode", "e2e-journey-" + unique);
       launchService.launch(new LaunchRequest(
           TENANT,
-          exportSeed.jobCode(),
+          exportSeed.workflowDefinitionId(),
           LocalDate.of(2026, 1, 15),
           TriggerType.API,
           exportSeed.requestId(),
@@ -161,9 +173,7 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
       awaitTaskSuccess(exportSeed.dedupKey());
 
       List<Map<String, Object>> exportedFiles = jdbcTemplate.queryForList(
-          "select id, storage_path from batch.file_record "
-              + "where tenant_id = ? and file_code = ? and file_category = 'OUTPUT' "
-              + "order by id desc limit 1",
+          selectIdSql,
           TENANT,
           "e2e-journey-" + unique);
       assertThat(exportedFiles).hasSize(1);
@@ -184,15 +194,7 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
   }
 
   private void dispatchExportedFile(Long fileId, String unique) throws Exception {
-    String channelCode = "journey-local-" + unique;
-    String receiptCode = "R-" + unique;
-    Path outboxDirectory = dispatchTempDir.resolve("outbox");
-    Files.createDirectories(outboxDirectory);
-    Path blockedParent = dispatchTempDir.resolve("not-a-directory");
-    Files.writeString(blockedParent, "dispatch target unavailable", StandardCharsets.UTF_8);
-    Path unavailableTarget = blockedParent.resolve("outbox");
-    jdbcTemplate.update(
-        """
+    final String insertFileChannelConfigSql = """
         insert into batch.file_channel_config (
             tenant_id, channel_code, channel_name, channel_type, target_endpoint, auth_type,
             config_json, receipt_policy, timeout_seconds, enabled
@@ -206,7 +208,28 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
             ),
             'NONE', 10, true
         )
-        """,
+        """;
+    final String selectFileStatusSql = """
+        select file_status from batch.file_record where id = ?
+    """;
+    final String updateFileChannelConfigSql = """
+        update batch.file_channel_config\s\
+        set target_endpoint = ?, config_json = jsonb_set(config_json, '{target_endpoint}', to_jsonb(?::text),\s\
+        true) where tenant_id = ? and channel_code = ?\
+        """;
+    final String selectIdSql = """
+        select id from batch.job_instance where tenant_id = ? and dedup_key = ?
+    """;
+
+    String channelCode = "journey-local-" + unique;
+    String receiptCode = "R-" + unique;
+    Path outboxDirectory = dispatchTempDir.resolve("outbox");
+    Files.createDirectories(outboxDirectory);
+    Path blockedParent = dispatchTempDir.resolve("not-a-directory");
+    Files.writeString(blockedParent, "dispatch target unavailable", StandardCharsets.UTF_8);
+    Path unavailableTarget = blockedParent.resolve("outbox");
+    jdbcTemplate.update(
+        insertFileChannelConfigSql,
         TENANT,
         channelCode,
         unavailableTarget.toString(),
@@ -234,7 +257,7 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
           false);
       launchService.launch(new LaunchRequest(
           TENANT,
-          dispatchSeed.jobCode(),
+          dispatchSeed.workflowDefinitionId(),
           LocalDate.of(2026, 1, 15),
           TriggerType.API,
           dispatchSeed.requestId(),
@@ -244,19 +267,17 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
 
       awaitTaskStatus(dispatchSeed.dedupKey(), "FAILED");
       String failedFileStatus = jdbcTemplate.queryForObject(
-          "select file_status from batch.file_record where id = ?", String.class, fileId);
+          selectFileStatusSql, String.class, fileId);
       assertThat(failedFileStatus).isNotEqualTo(FileStatus.DISPATCHED.code());
 
       jdbcTemplate.update(
-          "update batch.file_channel_config set target_endpoint = ?, "
-              + "config_json = jsonb_set(config_json, '{target_endpoint}', to_jsonb(?::text), true) "
-              + "where tenant_id = ? and channel_code = ?",
+          updateFileChannelConfigSql,
           outboxDirectory.toString(),
           outboxDirectory.toString(),
           TENANT,
           channelCode);
       Long dispatchInstanceId = jdbcTemplate.queryForObject(
-          "select id from batch.job_instance where tenant_id = ? and dedup_key = ?",
+          selectIdSql,
           Long.class,
           TENANT,
           dispatchSeed.dedupKey());
@@ -404,16 +425,18 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
   }
 
   private void awaitTaskStatus(String dedupKey, String expectedStatus) {
-    await()
-        .atMost(Duration.ofSeconds(120))
-        .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(() -> {
-          String status = jdbcTemplate.queryForObject("""
+    final String selectTaskStatusSql = """
                       select t.task_status from batch.job_task t
                       join batch.job_instance ji on ji.id = t.job_instance_id
                       where ji.tenant_id = ? and ji.dedup_key = ?
                       order by t.id desc limit 1
-                      """, String.class, TENANT, dedupKey);
+                      """;
+
+    await()
+        .atMost(Duration.ofSeconds(120))
+        .pollInterval(Duration.ofMillis(200))
+        .untilAsserted(() -> {
+          String status = jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, dedupKey);
           assertThat(status).isEqualTo(expectedStatus);
         });
   }

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：集中式空值检查。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-empty-checks.py；参数与前置环境见下方说明及所属 README。
 """阻止生产 Java 新增零散的 null / empty / blank 判断。
 
 统一判断入口是 ``EmptyChecks``。本检查只拦本次 diff 新增的生产代码，避免把历史
@@ -13,6 +15,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 import re
 import subprocess
 import sys
@@ -42,11 +45,6 @@ CHECK_PATTERNS = (
 )
 
 ALLOW_MARKER = re.compile(r"empty-check:\s*allow(?:\s*-\s*(?P<reason>\S.*))?")
-ALLOWED_IDIOMS = (
-    "Objects.requireNonNull",
-    "Objects.requireNonNullElse",
-    "Objects.requireNonNullElseGet",
-)
 GATE_CODE = "EMPTY_CHECKS"
 GATE_NAME = "空值判断统一入口"
 
@@ -56,7 +54,7 @@ def is_production_java(path: str) -> bool:
 
 
 def is_pure_merge_revert(base: str | None) -> bool:
-    """Do not treat restored pre-merge lines as additions in a pure merge revert."""
+    """纯合并回退恢复的是合并前代码，不能将其误计为新增行。"""
     if not base:
         return False
     try:
@@ -132,6 +130,21 @@ def added_lines(base: str | None) -> list[tuple[str, int, str]]:
             line_no += 1
         elif not raw.startswith("-") and line_no:
             line_no += 1
+    if base is None:
+        # 未 git add 的新实现也属于本地工作树新增代码；显式 base 仍只比较提交范围。
+        untracked = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard", "-z", "--", "*.java"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        for relative in untracked.stdout.split("\0"):
+            path = Path(relative)
+            if is_production_java(relative) and path.is_file():
+                additions.extend(
+                    (relative, index, source)
+                    for index, source in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+                )
     return additions
 
 
@@ -159,10 +172,6 @@ def main() -> int:
         if allow:
             if not allow.group("reason"):
                 bad_allows.append((path, line_no, stripped))
-            continue
-        if "EmptyChecks." in source:
-            continue
-        if any(idiom in source for idiom in ALLOWED_IDIOMS):
             continue
         for label, pattern in CHECK_PATTERNS:
             if pattern.search(source):

@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.orchestrator.application.engine;
 
+import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
+
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -85,7 +88,14 @@ class TaskDispatchOutboxServiceMandatoryTest {
     task.setTaskSeq(1);
     task.setTaskPayload("{\"key\":\"val\"}");
 
-    service.writeDispatchEvent(jobInstance, task, null, "trace-2", "evt-key-2", RunMode.RETRY);
+    service.writeDispatchEvent(TaskDispatchEventCommand.builder()
+            .jobInstance(jobInstance)
+            .task(task)
+            .partition(null)
+            .traceId("trace-2")
+            .eventKey("evt-key-2")
+            .runModeOverride(RunMode.RETRY)
+            .build());
 
     var payloadCaptor = ArgumentCaptor.forClass(String.class);
     verify(jobTaskMapper).updatePayload(eq("t1"), eq(20L), payloadCaptor.capture());
@@ -112,13 +122,7 @@ class TaskDispatchOutboxServiceMandatoryTest {
   @DisplayName("带运行模式的写入方法同样声明为强制事务传播")
   void writeDispatchEvent_withRunMode_methodHasMandatoryTransactional() throws Exception {
     Method method = TaskDispatchOutboxService.class.getDeclaredMethod(
-        "writeDispatchEvent",
-        JobInstanceEntity.class,
-        JobTaskEntity.class,
-        JobPartitionEntity.class,
-        String.class,
-        String.class,
-        RunMode.class);
+        "writeDispatchEvent", TaskDispatchEventCommand.class);
     Transactional tx = method.getAnnotation(Transactional.class);
     assertThat(tx).isNotNull();
     assertThat(tx.propagation()).isEqualTo(Propagation.MANDATORY);

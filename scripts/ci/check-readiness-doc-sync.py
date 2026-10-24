@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-"""Guard readiness contract changes against undocumented drift.
-
-The readiness path is a cross-module contract: trigger scheduling, asset
-partition state, OpenAPI, and operator docs must move together. This check is
-intentionally path based and diff-only; semantic validation still belongs in
-unit, IT, and e2e coverage.
-"""
+# 用途：Readiness 契约文档同步。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-readiness-doc-sync.py；参数与前置环境见下方说明及所属 README。
+"""检查 readiness 契约变更是否同步文档。
+该契约横跨 Trigger 调度、资产分区状态、OpenAPI 与运维手册。
+本检查仅按变更路径识别同步要求；行为正确性仍由单元、集成与 E2E 测试验证。"""
 
 from __future__ import annotations
 

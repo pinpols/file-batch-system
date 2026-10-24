@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.config;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.web.BoundedRequestBodyReader;
 import io.github.pinpols.batch.common.web.BoundedRequestBodyReader.RequestBodyLimitExceededException;
 import jakarta.servlet.FilterChain;
@@ -46,7 +47,9 @@ public class ConsoleInternalRequestSizeFilter extends OncePerRequestFilter {
 
     long max = properties.getMaxBodyBytes();
     String uri = request.getRequestURI();
-    if (max <= 0 || uri == null || !uri.startsWith("/internal/") || !isWriteMethod(request)) {
+    boolean shouldBypassBodySizeLimit =
+        max <= 0 || EmptyChecks.isNull(uri) || !uri.startsWith("/internal/") || !isWriteMethod(request);
+    if (shouldBypassBodySizeLimit) {
       chain.doFilter(request, response);
       return;
     }

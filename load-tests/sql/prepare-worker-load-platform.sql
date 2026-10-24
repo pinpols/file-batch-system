@@ -186,272 +186,92 @@ ON CONFLICT (tenant_id, channel_code) DO UPDATE SET
   is_deleted = false,
   updated_at = now();
 
-DELETE FROM batch.pipeline_step_definition
-WHERE pipeline_definition_id IN (
-  SELECT id FROM batch.pipeline_definition
-  WHERE tenant_id = 'default-tenant'
-    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job',
-                     'lt_process_sql_job', 'lt_process_copy_job')
-);
-
-INSERT INTO batch.pipeline_definition (
-    tenant_id, job_code, pipeline_name, pipeline_type, biz_type, worker_group,
-    version, enabled, description, created_at, updated_at
+-- 审批请求和待处理义务由第 22/24 阶段的真实 Quartz 回调生成。
+WITH account_prefix AS (
+  SELECT left(encode(sha256(convert_to(:'run_id', 'UTF8')), 'hex'), 16) || '-ACCT-' AS value
 )
-SELECT
-    'default-tenant', 'import_customer_job', 'Load Test Customer Import Pipeline',
-    'IMPORT', 'LOAD_TEST', 'import', 1, true,
-    'load test customer import pipeline', now(), now()
-WHERE NOT EXISTS (
-  SELECT 1 FROM batch.pipeline_definition
-  WHERE tenant_id = 'default-tenant' AND job_code = 'import_customer_job' AND version = 1
-);
-
-WITH pd AS (
-  SELECT id FROM batch.pipeline_definition
-  WHERE tenant_id = 'default-tenant' AND job_code = 'import_customer_job' AND version = 1
-  ORDER BY id DESC
-  LIMIT 1
-), steps(stage_code, step_order, step_code, step_name, impl_code, step_params, timeout_seconds,
-         retry_policy, retry_max_count) AS (
-  VALUES
-    ('RECEIVE',    1, 'IMPORT_RECEIVE',    'Receive',    'IMPORT_RECEIVE',    '{}'::jsonb, 300, 'NONE', 0),
-    ('PREPROCESS', 2, 'IMPORT_PREPROCESS', 'Preprocess', 'IMPORT_PREPROCESS', '{}'::jsonb, 600, 'NONE', 0),
-    ('PARSE',      3, 'IMPORT_PARSE',      'Parse',      'IMPORT_PARSE',      '{}'::jsonb, 900, 'FIXED', 1),
-    ('VALIDATE',   4, 'IMPORT_VALIDATE',   'Validate',   'IMPORT_VALIDATE',   '{}'::jsonb, 900, 'FIXED', 1),
-    ('LOAD',       5, 'IMPORT_LOAD',       'Load',       'IMPORT_LOAD',       '{}'::jsonb, 1200, 'NONE', 0)
-)
-INSERT INTO batch.pipeline_step_definition (
-    pipeline_definition_id, step_code, step_name, stage_code, step_order,
-    impl_code, step_params, timeout_seconds, retry_policy, retry_max_count,
-    enabled, created_at, updated_at
-)
-SELECT pd.id, steps.step_code, steps.step_name, steps.stage_code, steps.step_order,
-       steps.impl_code, steps.step_params, steps.timeout_seconds, steps.retry_policy,
-       steps.retry_max_count, true, now(), now()
-FROM pd CROSS JOIN steps
-ON CONFLICT (pipeline_definition_id, step_code) DO UPDATE SET
-  step_name = EXCLUDED.step_name,
-  stage_code = EXCLUDED.stage_code,
-  step_order = EXCLUDED.step_order,
-  impl_code = EXCLUDED.impl_code,
-  step_params = EXCLUDED.step_params,
-  timeout_seconds = EXCLUDED.timeout_seconds,
-  retry_policy = EXCLUDED.retry_policy,
-  retry_max_count = EXCLUDED.retry_max_count,
-  enabled = true,
-  updated_at = now();
-
-INSERT INTO batch.pipeline_definition (
-    tenant_id, job_code, pipeline_name, pipeline_type, biz_type, worker_group,
-    version, enabled, description, created_at, updated_at
-)
-SELECT
-    'default-tenant', 'export_settlement_job', 'Load Test Settlement Export Pipeline',
-    'EXPORT', 'LOAD_TEST', 'export', 1, true,
-    'load test settlement export pipeline', now(), now()
-WHERE NOT EXISTS (
-  SELECT 1 FROM batch.pipeline_definition
-  WHERE tenant_id = 'default-tenant' AND job_code = 'export_settlement_job' AND version = 1
-);
-
-WITH pd AS (
-  SELECT id FROM batch.pipeline_definition
-  WHERE tenant_id = 'default-tenant' AND job_code = 'export_settlement_job' AND version = 1
-  ORDER BY id DESC
-  LIMIT 1
-), steps(stage_code, step_order, step_code, step_name, impl_code, step_params, timeout_seconds,
-         retry_policy, retry_max_count) AS (
-  VALUES
-    ('PREPARE',   1, 'EXPORT_PREPARE',  'Prepare',  'EXPORT_PREPARE',  '{"snapshotMode":"BIZ_DATE"}'::jsonb, 300, 'NONE', 0),
-    ('GENERATE',  2, 'EXPORT_GENERATE', 'Generate', 'EXPORT_GENERATE', '{"delimiter":","}'::jsonb, 1200, 'FIXED', 1),
-    ('STORE',     3, 'EXPORT_STORE',    'Store',    'EXPORT_STORE',    '{"bucket":"batch-dev"}'::jsonb, 1200, 'FIXED', 1),
-    ('REGISTER',  4, 'EXPORT_REGISTER', 'Register', 'EXPORT_REGISTER', '{"registerMode":"atomic"}'::jsonb, 300, 'NONE', 0),
-    ('COMPLETE',  5, 'EXPORT_COMPLETE', 'Complete', 'EXPORT_COMPLETE', '{"terminalOnSuccess":true}'::jsonb, 300, 'NONE', 0)
-)
-INSERT INTO batch.pipeline_step_definition (
-    pipeline_definition_id, step_code, step_name, stage_code, step_order,
-    impl_code, step_params, timeout_seconds, retry_policy, retry_max_count,
-    enabled, created_at, updated_at
-)
-SELECT pd.id, steps.step_code, steps.step_name, steps.stage_code, steps.step_order,
-       steps.impl_code, steps.step_params, steps.timeout_seconds, steps.retry_policy,
-       steps.retry_max_count, true, now(), now()
-FROM pd CROSS JOIN steps
-ON CONFLICT (pipeline_definition_id, step_code) DO UPDATE SET
-  step_name = EXCLUDED.step_name,
-  stage_code = EXCLUDED.stage_code,
-  step_order = EXCLUDED.step_order,
-  impl_code = EXCLUDED.impl_code,
-  step_params = EXCLUDED.step_params,
-  timeout_seconds = EXCLUDED.timeout_seconds,
-  retry_policy = EXCLUDED.retry_policy,
-  retry_max_count = EXCLUDED.retry_max_count,
-  enabled = true,
-  updated_at = now();
-
-INSERT INTO batch.pipeline_definition (
-    tenant_id, job_code, pipeline_name, pipeline_type, biz_type, worker_group,
-    version, enabled, description, created_at, updated_at
-)
-SELECT
-    'default-tenant', 'lt_dispatch_local_job', 'Load Test Dispatch Local Pipeline',
-    'DISPATCH', 'LOAD_TEST', 'DISPATCH', 1, true,
-    'load test local dispatch pipeline', now(), now()
-WHERE NOT EXISTS (
-  SELECT 1 FROM batch.pipeline_definition
-  WHERE tenant_id = 'default-tenant' AND job_code = 'lt_dispatch_local_job' AND version = 1
-);
-
-WITH pd AS (
-  SELECT id FROM batch.pipeline_definition
-  WHERE tenant_id = 'default-tenant' AND job_code = 'lt_dispatch_local_job' AND version = 1
-  ORDER BY id DESC
-  LIMIT 1
-), steps(stage_code, step_order, step_code, step_name, impl_code, step_params) AS (
-  VALUES
-    ('PREPARE',    1, 'DISPATCH_PREPARE',    'Prepare',    'DISPATCH_PREPARE',    '{}'::jsonb),
-    ('DISPATCH',   2, 'DISPATCH_DISPATCH',   'Dispatch',   'DISPATCH_DISPATCH',   '{}'::jsonb),
-    ('ACK',        3, 'DISPATCH_ACK',        'Ack',        'DISPATCH_ACK',        '{"onSuccessNextStageCode":"COMPLETE"}'::jsonb),
-    ('RETRY',      4, 'DISPATCH_RETRY',      'Retry',      'DISPATCH_RETRY',      '{"onFailureNextStageCode":"COMPENSATE"}'::jsonb),
-    ('COMPENSATE', 5, 'DISPATCH_COMPENSATE', 'Compensate', 'DISPATCH_COMPENSATE', '{"terminalOnSuccess":true}'::jsonb),
-    ('COMPLETE',   6, 'DISPATCH_COMPLETE',   'Complete',   'DISPATCH_COMPLETE',   '{"terminalOnSuccess":true}'::jsonb)
-)
-INSERT INTO batch.pipeline_step_definition (
-    pipeline_definition_id, step_code, step_name, stage_code, step_order,
-    impl_code, step_params, timeout_seconds, retry_policy, retry_max_count,
-    enabled, created_at, updated_at
-)
-SELECT pd.id, steps.step_code, steps.step_name, steps.stage_code, steps.step_order,
-       steps.impl_code, steps.step_params, 300, 'NONE', 0, true, now(), now()
-FROM pd CROSS JOIN steps;
-
-INSERT INTO batch.pipeline_definition (
-    tenant_id, job_code, pipeline_name, pipeline_type, biz_type, worker_group,
-    version, enabled, description, created_at, updated_at
-)
-SELECT
-    'default-tenant', 'lt_process_sql_job', 'Load Test Process SQL Pipeline',
-    'PROCESS', 'LOAD_TEST', 'PROCESS', 1, true, 'load test sql transform pipeline', now(), now()
-WHERE NOT EXISTS (
-  SELECT 1 FROM batch.pipeline_definition
-  WHERE tenant_id = 'default-tenant' AND job_code = 'lt_process_sql_job'
-);
-
-WITH pd AS (
-  SELECT id FROM batch.pipeline_definition
-  WHERE tenant_id = 'default-tenant' AND job_code = 'lt_process_sql_job'
-  ORDER BY id DESC
-  LIMIT 1
-),
-p AS (
-  SELECT left(regexp_replace(:'run_id', '[^A-Za-z0-9]', '', 'g'), 16) || '-ACCT-' AS account_prefix
-)
-INSERT INTO batch.pipeline_step_definition (
-  pipeline_definition_id, step_code, step_name, stage_code, step_order,
-  impl_code, step_params, timeout_seconds, retry_policy, retry_max_count,
-  enabled, created_at, updated_at
-)
-SELECT id, 'PROCESS_PREPARE', 'Prepare', 'PREPARE', 1,
-  'PROCESS_PREPARE', '{}'::jsonb, 120, 'NONE', 0, true, now(), now() FROM pd
-UNION ALL
-SELECT id, 'PROCESS_COMPUTE', 'Compute', 'COMPUTE', 2,
-  'sqlTransformCompute',
-  jsonb_build_object('sqlTransformCompute', jsonb_build_object(
-    'sourceSql',
-    'select tenant_id, account_id, biz_date, sum(amount) as total_amount, max(event_id) as high_water_mark from biz.process_order_event where tenant_id = :tenantId and biz_date = :bizDate::date and account_id like '''
-      || p.account_prefix || '%'' group by tenant_id, account_id, biz_date',
-    'targetSchema', 'biz',
-    'targetTable', 'process_account_summary',
-    'writeMode', 'UPSERT',
-    'columns', jsonb_build_array(
-      jsonb_build_object('source', 'tenant_id', 'target', 'tenant_id'),
-      jsonb_build_object('source', 'account_id', 'target', 'account_id'),
-      jsonb_build_object('source', 'biz_date', 'target', 'biz_date'),
-      jsonb_build_object('source', 'total_amount', 'target', 'total_amount'),
-      jsonb_build_object('source', 'high_water_mark', 'target', 'high_water_mark')
-    ),
-    'conflictColumns', jsonb_build_array('tenant_id', 'account_id', 'biz_date'),
-    'validations', jsonb_build_array(
-      jsonb_build_object(
-        'name', 'staged_rows_present',
-        'checkSql', 'select count(*) > 0 as pass, ''expected staged rows'' as message from batch.process_staging where batch_key = :batchKey'
+UPDATE batch.job_definition job
+SET default_params = coalesce(job.default_params, '{}'::jsonb) || jsonb_build_object(
+      'processImplCode', 'sqlTransformCompute',
+      'systemPipelineStepParams', jsonb_build_object(
+        'COMPUTE', jsonb_build_object(
+          'sqlTransformCompute', jsonb_build_object(
+            'sourceSql',
+              'SELECT tenant_id, account_id, biz_date, sum(amount) AS total_amount, max(event_id) AS high_water_mark FROM biz.process_order_event WHERE tenant_id = :tenantId AND biz_date = :bizDate::date AND account_id LIKE '
+              || quote_literal(account_prefix.value || '%')
+              || ' GROUP BY tenant_id, account_id, biz_date LIMIT 100000',
+            'targetSchema', 'biz',
+            'targetTable', 'process_account_summary',
+            'writeMode', 'UPSERT',
+            'columns', jsonb_build_array(
+              jsonb_build_object('source', 'tenant_id', 'target', 'tenant_id'),
+              jsonb_build_object('source', 'account_id', 'target', 'account_id'),
+              jsonb_build_object('source', 'biz_date', 'target', 'biz_date'),
+              jsonb_build_object('source', 'total_amount', 'target', 'total_amount'),
+              jsonb_build_object('source', 'high_water_mark', 'target', 'high_water_mark')
+            ),
+            'conflictColumns', jsonb_build_array('tenant_id', 'account_id', 'biz_date'),
+            'validations', jsonb_build_array(
+              jsonb_build_object(
+                'name', 'staged_rows_present',
+                'checkSql', 'SELECT count(*) > 0 AS pass, ''expected staged rows'' AS message FROM batch.process_staging WHERE batch_key = :batchKey'
+              )
+            ),
+            'emptyResultPolicy', 'FAIL',
+            'maxStagedRows', :process_agg_max_staged_rows::bigint
+          )
+        )
       )
     ),
-    'emptyResultPolicy', 'FAIL',
-    'maxStagedRows', :process_agg_max_staged_rows::bigint
-  )),
-  600, 'NONE', 0, true, now(), now() FROM pd CROSS JOIN p
-UNION ALL
-SELECT id, 'PROCESS_VALIDATE', 'Validate', 'VALIDATE', 3,
-  'PROCESS_VALIDATE', '{}'::jsonb, 120, 'NONE', 0, true, now(), now() FROM pd
-UNION ALL
-SELECT id, 'PROCESS_COMMIT', 'Commit', 'COMMIT', 4,
-  'PROCESS_COMMIT', '{}'::jsonb, 300, 'NONE', 0, true, now(), now() FROM pd
-UNION ALL
-SELECT id, 'PROCESS_FEEDBACK', 'Feedback', 'FEEDBACK', 5,
-  'PROCESS_FEEDBACK', '{}'::jsonb, 120, 'NONE', 0, true, now(), now() FROM pd;
+    updated_at = now()
+FROM account_prefix
+WHERE job.tenant_id = 'default-tenant'
+  AND job.job_code = 'lt_process_sql_job';
 
-INSERT INTO batch.pipeline_definition (
-    tenant_id, job_code, pipeline_name, pipeline_type, biz_type, worker_group,
-    version, enabled, description, created_at, updated_at
+WITH account_prefix AS (
+  SELECT left(encode(sha256(convert_to(:'run_id', 'UTF8')), 'hex'), 16) || '-ACCT-' AS value
 )
-SELECT
-    'default-tenant', 'lt_process_copy_job', 'Load Test Process Staging Copy Pipeline',
-    'PROCESS', 'LOAD_TEST', 'PROCESS', 1, true, 'load test one row to one staging row pipeline', now(), now()
-WHERE NOT EXISTS (
-  SELECT 1 FROM batch.pipeline_definition
-  WHERE tenant_id = 'default-tenant' AND job_code = 'lt_process_copy_job'
-);
-
-WITH pd AS (
-  SELECT id FROM batch.pipeline_definition
-  WHERE tenant_id = 'default-tenant' AND job_code = 'lt_process_copy_job'
-  ORDER BY id DESC
-  LIMIT 1
-),
-p AS (
-  SELECT left(regexp_replace(:'run_id', '[^A-Za-z0-9]', '', 'g'), 16) || '-ACCT-' AS account_prefix
-)
-INSERT INTO batch.pipeline_step_definition (
-  pipeline_definition_id, step_code, step_name, stage_code, step_order,
-  impl_code, step_params, timeout_seconds, retry_policy, retry_max_count,
-  enabled, created_at, updated_at
-)
-SELECT id, 'PROCESS_PREPARE', 'Prepare', 'PREPARE', 1,
-  'PROCESS_PREPARE', '{}'::jsonb, 120, 'NONE', 0, true, now(), now() FROM pd
-UNION ALL
-SELECT id, 'PROCESS_COMPUTE', 'Compute', 'COMPUTE', 2,
-  'sqlTransformCompute',
-  jsonb_build_object('sqlTransformCompute', jsonb_build_object(
-    'sourceSql',
-    'select tenant_id, event_id, account_id, biz_date, amount, event_id as high_water_mark from biz.process_order_event where tenant_id = :tenantId and biz_date = :bizDate::date and account_id like '''
-      || p.account_prefix || '%''',
-    'targetSchema', 'biz',
-    'targetTable', 'process_event_copy',
-    'writeMode', 'UPSERT',
-    'stagingMode', 'DIRECT',
-    'columns', jsonb_build_array(
-      jsonb_build_object('source', 'tenant_id', 'target', 'tenant_id'),
-      jsonb_build_object('source', 'event_id', 'target', 'event_id'),
-      jsonb_build_object('source', 'account_id', 'target', 'account_id'),
-      jsonb_build_object('source', 'biz_date', 'target', 'biz_date'),
-      jsonb_build_object('source', 'amount', 'target', 'amount'),
-      jsonb_build_object('source', 'high_water_mark', 'target', 'high_water_mark')
+UPDATE batch.job_definition job
+SET default_params = coalesce(job.default_params, '{}'::jsonb) || jsonb_build_object(
+      'processImplCode', 'sqlTransformCompute',
+      'systemPipelineStepParams', jsonb_build_object(
+        'COMPUTE', jsonb_build_object(
+          'sqlTransformCompute', jsonb_build_object(
+            'sourceSql',
+              'SELECT tenant_id, event_id, account_id, biz_date, amount, event_id AS high_water_mark FROM biz.process_order_event WHERE tenant_id = :tenantId AND biz_date = :bizDate::date AND account_id LIKE '
+              || quote_literal(account_prefix.value || '%')
+              || ' LIMIT ' || :process_copy_max_staged_rows::text,
+            'targetSchema', 'biz',
+            'targetTable', 'process_event_copy',
+            'writeMode', 'UPSERT',
+            'stagingMode', 'DIRECT',
+            'columns', jsonb_build_array(
+              jsonb_build_object('source', 'tenant_id', 'target', 'tenant_id'),
+              jsonb_build_object('source', 'event_id', 'target', 'event_id'),
+              jsonb_build_object('source', 'account_id', 'target', 'account_id'),
+              jsonb_build_object('source', 'biz_date', 'target', 'biz_date'),
+              jsonb_build_object('source', 'amount', 'target', 'amount'),
+              jsonb_build_object('source', 'high_water_mark', 'target', 'high_water_mark')
+            ),
+            'conflictColumns', jsonb_build_array('tenant_id', 'event_id'),
+            'maxStagedRows', :process_copy_max_staged_rows::bigint
+          )
+        )
+      )
     ),
-    'conflictColumns', jsonb_build_array('tenant_id', 'event_id'),
-    'maxStagedRows', :process_copy_max_staged_rows::bigint
-  )),
-  1200, 'NONE', 0, true, now(), now() FROM pd CROSS JOIN p
-UNION ALL
-SELECT id, 'PROCESS_VALIDATE', 'Validate', 'VALIDATE', 3,
-  'PROCESS_VALIDATE', '{}'::jsonb, 120, 'NONE', 0, true, now(), now() FROM pd
-UNION ALL
-SELECT id, 'PROCESS_COMMIT', 'Commit', 'COMMIT', 4,
-  'PROCESS_COMMIT', '{}'::jsonb, 900, 'NONE', 0, true, now(), now() FROM pd
-UNION ALL
-SELECT id, 'PROCESS_FEEDBACK', 'Feedback', 'FEEDBACK', 5,
-  'PROCESS_FEEDBACK', '{}'::jsonb, 120, 'NONE', 0, true, now(), now() FROM pd;
+    updated_at = now()
+FROM account_prefix
+WHERE job.tenant_id = 'default-tenant'
+  AND job.job_code = 'lt_process_copy_job';
+
+-- 业务 PROCESS 配置属于 Job 执行参数；系统 Pipeline 阶段定义是权威来源。
+-- 种子夹具可在同步序列后插入显式 ID。
+SELECT setval(
+  pg_get_serial_sequence('batch.file_record', 'id'),
+  COALESCE(MAX(id), 1),
+  MAX(id) IS NOT NULL
+)
+FROM batch.file_record;
 
 INSERT INTO batch.file_record (
   tenant_id, file_code, biz_type, file_category, file_name, original_file_name,

@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.console.domain.rbac.service;
 
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleApiKeyInsertParam;
+
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -92,15 +95,7 @@ class ConsoleApiKeyServiceTest {
     assertThat(result.entity().getKeyName()).isEqualTo("new-key");
     verify(repository)
         .insert(
-            eq("t1"),
-            eq("new-key"),
-            anyString(),
-            anyString(),
-            anyString(),
-            eq("pbkdf2"),
-            eq("read"),
-            eq(expiresAt),
-            eq("admin"));
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "t1") && java.util.Objects.equals(parameters.keyName(), "new-key") && parameters.keyPrefix() != null && parameters.keyHash() != null && parameters.salt() != null && java.util.Objects.equals(parameters.keyHashAlgo(), "pbkdf2") && java.util.Objects.equals(parameters.scopes(), "read") && java.util.Objects.equals(parameters.expiresAt(), expiresAt) && java.util.Objects.equals(parameters.operator(), "admin")));
   }
 
   @Test

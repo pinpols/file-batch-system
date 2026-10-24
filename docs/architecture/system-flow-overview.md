@@ -7,146 +7,37 @@
 
 ## 1. 一张图看完整链路
 
-> **重要前提（先读这段再看图）**：系统**主入口是 Quartz 定时器**，生产环境 95%+ 的任务由 trigger 模块自动 fire，**根本不经过 console-api**。前台 `USER → CONSOLE → 触发` 是少数场景（联调 / 失败重跑 / 运维介入），看图时把它当辅助入口。
->
-> 下图为了完整性把定时和人工两条入口都画出；生产主路径是 `QZ → TR`，前台入口作为灰色细虚线表示辅助操作。
->
-> **图例**：
-> - 线**主次**：粗实线 `══>` = 生产主路径 / 主数据流 / 写入 / publish；细虚线 `┄┄>` = 读取 / 上报 / 控制信号 / 前台可选入口。
-> - 线**颜色**（按协议分类）：🔵 蓝 = HTTP/REST 同步调用；🟢 绿 = SQL/JDBC 写；🟣 紫 = SQL/JDBC 读；🟠 橙 = Kafka 异步消息；🟡 黄 = Redis（cache / Streams / pub-sub）；🔴 红 = 外部副作用（MinIO PUT / SFTP 投递 / OpenAI）；⚫ 灰 = 控制信号 / 监控 / 心跳 / 前台可选入口。
+定时、人工、文件到达与外部事件均进入显式 Workflow 目标。Quartz 是定时机会计算器，不能从框架注册表推断业务日已履行；各触发来源的占比需用实际运行数据衡量。
 
 ```mermaid
-%%{init: {'flowchart': {'curve': 'linear', 'nodeSpacing': 50, 'rankSpacing': 70, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%
 flowchart LR
-  USER([用户 / 前端]):::user
-  CONSOLE["batch-console-api<br/>(BFF · 鉴权/限流/审计)"]:::svc
-
-  subgraph TRIG ["触发层 · batch-trigger（Quartz JDBC JobStore 集群）"]
-    direction TB
-    QZ[("Quartz JDBC JobStore<br/>QRTZ_*")]:::store
-    TR["QuartzLaunchJob<br/>+ TriggerSchedulerFacade<br/>+ TriggerReconciler"]:::svc
-  end
-
-  subgraph SCH ["调度层 · batch-orchestrator"]
-    direction TB
-    LS[LaunchService]:::svc
-    PA[PartitionLifecycleService]:::svc
-    SEL[DefaultWorkerSelector]:::svc
-    OUT[OutboxPollScheduler]:::svc
-  end
-
-  PDB[("batch_platform<br/>job_* / file_* / workflow_*<br/>outbox_event / worker_registry")]:::store
-  RDS[("Redis<br/>ShedLock / config-cache (pub/sub)<br/>shard-assignment / quota Lua")]:::store
-
-  K[("Kafka<br/>batch.task.dispatch.*")]:::store
-  TKAFKA[("Kafka<br/>batch.trigger.launch.v1<br/>(via trigger_outbox + relay · ADR-010)")]:::store
-
-  subgraph WORKERS ["执行层 · Worker(4 类 pipeline + 专用 SPI)"]
-    direction TB
-    WI["worker-import<br/>RECEIVE → ... → FEEDBACK"]:::worker
-    WE["worker-export<br/>PREPARE → ... → COMPLETE"]:::worker
-    WP["worker-process<br/>PREPARE → COMPUTE → VALIDATE → COMMIT → FEEDBACK<br/>(WAP+bookends · staging 中转)"]:::worker
-    WD["worker-dispatch<br/>PREPARE → ... → COMPLETE"]:::worker
-    WSPI["worker-atomic<br/>原子任务 shell/sql/stored-proc/http<br/>(ADR-029 隔离)"]:::worker
-  end
-
-  subgraph DATA ["数据落地"]
-    direction TB
-    BIZ[("batch_business<br/>biz.*<br/>(可选: BusinessRoutingDataSource<br/>租户→分片, 默认关)")]:::store
-    M[("MinIO<br/>batch-dev")]:::store
-  end
-
-  FS[("外部 target<br/>LOCAL / SFTP / NAS<br/>OSS / API")]:::extern
-
-  %% ─── 触发链路（HTTP 入站 + Quartz 时序触发） ──
-  %% 边 label 直接标流量占比（按触发数估算），让"主入口=定时器"在图里一眼可见
-  USER    ==>|"POST /api/console/triggers/launch<br/>📉 < 5% · 联调 / 重跑 / ops"| CONSOLE
-  CONSOLE ==>|"HTTP forward (MANUAL · < 5%)"| TR
-  QZ      ==>|"cron / fixed-rate fire (SCHEDULED)<br/>📈 生产 95%+ 触发量"| TR
-  TR      ==>|"INSERT trigger_outbox_event<br/>(同事务) → TriggerOutboxRelay"| TKAFKA
-  TKAFKA  ==>|"@KafkaListener consume<br/>→ LaunchApplicationService.launch"| LS
-
-  %% ─── 调度写库（JDBC INSERT） ─────────────────────
-  LS ==>|"INSERT job_instance<br/>+ partition + outbox_event<br/>(同一 tx)"| PDB
-
-  %% ─── orchestrator 内部读 / 写 PDB（控制） ────────
-  PA  -. "write partition status (JDBC)" .-> PDB
-  SEL -. "read worker_registry<br/>+ resource_queue (JDBC)" .-> PDB
-  OUT -. "poll outbox_event (JDBC)" .-> PDB
-
-  %% ─── Redis 辅助：ShedLock + config cache + shard-assignment ──
-  SCH -. "ShedLock + config cache + quota Lua" .-> RDS
-
-  %% ─── outbox → Kafka → workers（异步消息流） ──────
-  OUT ==>|"publish task"| K
-  K ==>|"consume (import)"| WI
-  K ==>|"consume (export)"| WE
-  K ==>|"consume (process)"| WP
-  K ==>|"consume (dispatch)"| WD
-  K ==>|"consume (spi)"| WSPI
-
-  %% ─── worker 上报回 LS（控制信号 HTTP） ───────────
-  WI -. "claim / heartbeat / report (HTTP)" .-> LS
-  WE -. "claim / heartbeat / report (HTTP)" .-> LS
-  WP -. "claim / heartbeat / report (HTTP)" .-> LS
-  WD -. "claim / heartbeat / report (HTTP)" .-> LS
-  WSPI -. "claim / heartbeat / report (HTTP)" .-> LS
-  LS ==>|"UPDATE job_instance<br/>+ partition (状态机, JDBC)"| PDB
-
-  %% ─── worker 数据落地（业务写 / 外部副作用） ─────
-  WI ==>|"INSERT biz.* (JDBC)"| BIZ
-  WE -. "SELECT biz.* (JDBC)" .-> BIZ
-  WE ==>|"PUT object"| M
-  WD -. "GET object" .-> M
-  WD ==>|"deliver (cp / scp / POST)"| FS
-
-  %% ─── 边按协议着色（顺序与上面声明一致；linkStyle index 从 0 起） ──
-  %%   0,1   前台 MANUAL 入口（灰细虚 = 辅助路径，少数场景）：USER→CONSOLE / CONSOLE→TR
-  linkStyle 0,1 stroke:#9e9e9e,stroke-width:1.5px,stroke-dasharray:5 4
-  %%   2     Quartz fire → TR（蓝粗实 = 默认主入口，生产 95%+ 触发量）
-  linkStyle 2 stroke:#1565c0,stroke-width:2.5px
-  %%   3,4   trigger → trigger_kafka → orchestrator（橙 = Kafka 异步，ADR-010 固化路径，MANUAL 与 SCHEDULED 在此汇合）
-  linkStyle 3,4 stroke:#ef6c00,stroke-width:2.5px
-  %%   5     LS → PDB 写（绿）
-  linkStyle 5 stroke:#2e7d32,stroke-width:2.5px
-  %%   6,7,8 PA/SEL/OUT 读 PDB（紫虚）
-  linkStyle 6,7,8 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   9     SCH ↔ Redis（黄虚）
-  linkStyle 9 stroke:#f9a825,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   10..15 Kafka 链(橙) — OUT→K + 5 条 K→worker(import/export/process/dispatch/atomic)
-  linkStyle 10,11,12,13,14,15 stroke:#ef6c00,stroke-width:2.5px
-  %%   16..20 worker → LS 上报(HTTP 蓝虚 = 控制信号,5 条 worker)
-  linkStyle 16,17,18,19,20 stroke:#1565c0,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   21    LS → PDB 状态机更新(绿)
-  linkStyle 21 stroke:#2e7d32,stroke-width:2.5px
-  %%   22    worker-import → biz 写(绿)
-  linkStyle 22 stroke:#2e7d32,stroke-width:2.5px
-  %%   23    worker-export 读 biz(紫虚)
-  linkStyle 23 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   24    worker-export → MinIO(外部红)
-  linkStyle 24 stroke:#c62828,stroke-width:2.5px
-  %%   25    worker-dispatch 读 MinIO(紫虚)
-  linkStyle 25 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   26    worker-dispatch → 外部 target(红)
-  linkStyle 26 stroke:#c62828,stroke-width:2.5px
-
-  classDef user    fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
-  classDef svc     fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;
-  classDef worker  fill:#fff3e0,stroke:#ef6c00,stroke-width:1.5px,color:#e65100;
-  classDef store   fill:#f3e5f5,stroke:#6a1b9a,stroke-width:1.5px,color:#4a148c;
-  classDef extern  fill:#fce4ec,stroke:#ad1457,stroke-width:1.5px,color:#880e4f;
-  classDef flag    fill:#fffde7,stroke:#f9a825,stroke-width:1.5px,color:#f57f17;
+  Q["Quartz / Workflow 日程"] --> T["Trigger：接纳请求与机会记账"]
+  I["Console / 文件到达 / 外部事件"] --> T
+  T --> TO["trigger_request + trigger_outbox_event"]
+  TO --> TK["Kafka：触发消息"]
+  TK --> O["Orchestrator：WorkflowRun 与冻结图"]
+  O --> N["WorkflowNodeRun：控制、等待或 JOB"]
+  N --> J["JOB 节点：JobInstance / Partition / Task"]
+  J --> OB["状态与 outbox_event 同事务"]
+  OB --> K["Kafka：按类型与 Worker 路由"]
+  K --> W["内建 Worker / 自托管 SDK"]
+  W --> C["CLAIM 与 lease/invocation 核验"]
+  C --> E["业务库 / 文件 / 对象存储 / 外部渠道"]
+  E --> R["REPORT / 本地报告恢复"]
+  R --> O
+  O --> F["节点及根终态 / 结果版本 / 终态事件"]
+  B["BatchDay / 机会覆盖 / 输入义务"] -. "准入与结算证据" .-> O
 ```
 
 ### 一句话叙事
 
-1. **触发**：Quartz 定时触发（`SCHEDULED`）或前端 `POST /api/triggers/launch`（`MANUAL`）→ trigger 同事务写 `trigger_request` + `trigger_outbox_event` → `TriggerOutboxRelay` 周期发到 Kafka topic `batch.trigger.launch.v1` → orchestrator `TriggerLaunchConsumer` 消费触发 launch（**ADR-010 固化异步路径，无开关；详见 §1.4**）。
-2. **调度**：orchestrator `LaunchService` 写入 `job_instance` + `job_partition` + `outbox_event`（同一事务）。
-3. **派发**：`OutboxPollScheduler` 把 outbox 事件发到 Kafka `batch.task.dispatch.{import|export|dispatch}` topic。
-4. **执行**：对应类型 worker 消费 task → claim partition → 跑 pipeline 各 stage → 通过 HTTP 上报状态（含 i18n 三元组 + ADR-009 节点 outputs）→ orchestrator 推进状态机 + 落 `workflow_node_run.output` JSONB 列。
-5. **落地**：IMPORT 写 `batch_business.biz.*` 表；EXPORT 把生成的文件 PUT 到 MinIO 并登记 `file_record`；DISPATCH 把 `file_record` 派到外部通道（LOCAL / SFTP / NAS / OSS / API）。
+1. Trigger 固定目标 Workflow、原 fire/event 身份及日期，在事务中写请求与触发 Outbox；Relay 经 Kafka 交给 Orchestrator。
+2. Orchestrator 准备 WorkflowRun、START 节点和冻结图。到达 JOB 节点时，子请求才创建该节点的 JobInstance，控制节点不预建空作业。
+3. 作业执行按配额、窗口、依赖及分区计划创建任务，状态与 Outbox 同事务；消息按五类 Worker 路由。
+4. Worker 收消息后 CLAIM，执行前核验 invocation/冻结配置，按任务类型执行并 REPORT。文件 Pipeline 的阶段与版本来自系统目录。
+5. Orchestrator 聚合作业、节点与 Workflow 终态，独立生成结果、通知和审计证据；BatchDay 结合义务、覆盖、在途工作与结果结算。
 
-> **biz 写/读经可选的租户分片路由层(#473，默认关)**：worker 的 biz 数据源外层包了一层 `BusinessRoutingDataSource`（Spring `AbstractRoutingDataSource`，与 console-api `ReadReplicaRoutingDataSource` 同款模式），按 `BusinessPlacementResolver`（Hash+Silo / DbTable）把当前租户路由到某个 biz 分片。**`batch.datasource.business.routing.enabled=false` 默认 → 走单片 shard-0 = 现库，完全透明无行为变更**(故上图 `batch_business` 仍按单库语义成立)。打开后:`placementSource=CONFIG` 走 yml `shards`,或 `=DB` 走平台库 `business_shard_catalog`(分片拓扑登记)+ `business_tenant_placement`(租户→分片指派)两张表——经 console `/api/console/ops/{shard-catalog,tenant-placements}`(ROLE_ADMIN)维护,worker 侧按 TTL 缓存读取。**这是 biz 数据层的水平扩展杠杆**(配合 PG 原生分区),独立于平台库的 Citus 评估;详见 `scalability-assessment.md` 与 `docs/runbook/biz-tenant-routing.md`。
+业务数据库与平台状态库分开。Worker 可经明确的数据源和租户隔离访问业务库及文件元数据，不能直接推进 Workflow/Job/Task 核心状态；SDK 不获得平台库写权限。
 
 ### 1.4 Trigger → Orchestrator 异步路径（ADR-010，固化无开关）
 
@@ -155,8 +46,8 @@ trigger → orchestrator 调度链走 outbox + Kafka 异步模式（2026-05-02 �
 ```mermaid
 flowchart LR
   TR[trigger]
-  TOX[(trigger_outbox_event<br/>V80, JSONB payload)]
-  RELAY[TriggerOutboxRelay<br/>@Scheduled 200ms<br/>ShedLock 互斥]
+  TOX[("trigger_outbox_event<br/>V80, JSONB payload")]
+  RELAY["TriggerOutboxRelay<br/>@Scheduled 200ms<br/>ShedLock 互斥"]
   KT[Kafka topic<br/>batch.trigger.launch.v1<br/>key=tenantId:requestId]
   TLC[TriggerLaunchConsumer<br/>MANUAL_IMMEDIATE ack]
   LS[orchestrator<br/>LaunchApplicationService.launch]
@@ -166,8 +57,8 @@ flowchart LR
   RELAY ==>|"KafkaTriggerEventPublisher<br/>acks=all + idempotence"| KT
   RELAY -. "UPDATE PUBLISHED / FAILED+退避" .-> TOX
   KT ==>|"@KafkaListener consume"| TLC
-  TLC ==>|"调内部 launch API"| LS
-  LS -. "uk_job_instance_tenant_dedup 防重复" .-> LS
+  TLC ==>|"调用本地 Workflow 根启动服务"| LS
+  LS -. "请求身份 / WorkflowRun 唯一接纳防重复" .-> LS
 
   classDef sync fill:#e3f2fd,stroke:#1565c0;
   classDef async fill:#fff3e0,stroke:#ef6c00;
@@ -187,7 +78,7 @@ flowchart LR
 以下补充其余四条职责：配置管理、查询 / 报表、实时监控、补偿命令。
 
 > **注意**：本节的图**只画 console-api 视角**，所有边都从 `USER` 起。这不代表系统是前台驱动 ——
-> 生产 95%+ 任务由定时器自动 fire 不经 console（详见 §1 主图的 `QZ → TR` 蓝粗实线）。本节只是补充运营 5 条支线，不要据此理解为"系统都靠人点"。
+> 定时任务由 Trigger 自动发起，人工/API/事件入口按各自契约接纳，实际占比取决于租户负载。本节只是补充运营 5 条支线，不要据此理解为"系统都靠人点"。
 
 ```mermaid
 %%{init: {'flowchart': {'curve': 'linear', 'nodeSpacing': 50, 'rankSpacing': 60, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%
@@ -287,7 +178,7 @@ flowchart LR
     SVC1["batch-trigger"]:::svc
     SVC2["batch-orchestrator"]:::svc
     SVC3["batch-console-api"]:::svc
-    SVC4["worker-import / export / dispatch"]:::worker
+    SVC4["worker-import / export / process / dispatch / atomic"]:::worker
   end
 
   OTEL["otel-collector<br/>memory_limiter + batch + resource attr<br/>(deployment.environment / service.namespace)"]:::svc
@@ -361,54 +252,25 @@ flowchart LR
 
 ## 1.7 Workflow DAG 编排 — Worker 之上的另一层
 
-主图把 worker 当独立任务来画。但很多业务是**多 job 编排**：例如「先 IMPORT → 再 EXPORT → 最后 DISPATCH」。
-这种场景由 `workflow_definition` + `workflow_node` + `workflow_edge` 描述拓扑，运行时用
-`workflow_run` + `workflow_node_run` 跟踪。
+单作业与组合图共用同一层DAG；图的层级不是可配置的子Workflow树。
 
 ```mermaid
-%%{init: {'flowchart': {'curve': 'linear', 'nodeSpacing': 40, 'rankSpacing': 60, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%
-flowchart LR
-  subgraph DEF ["配置态（job_definition + workflow_definition）"]
-    direction TB
-    JD[("job_definition<br/>job_code -> workerType")]:::store
-    WD[(workflow_definition<br/>workflow_code)]:::store
-    WN[(workflow_node<br/>type=WorkflowNodeType<br/>+ join_mode=ALL/ANY/N_OF)]:::store
-    WE[(workflow_edge<br/>edge_type=SUCCESS/FAILURE/<br/>CONDITION/ALWAYS)]:::store
-  end
-
-  subgraph RUN ["运行态（每次执行的实例）"]
-    direction TB
-    WR[(workflow_run<br/>run_status 见核心模型)]:::store
-    WNR[(workflow_node_run<br/>每个 node 一行)]:::store
-    JI[(job_instance<br/>node 触发时创建一个)]:::store
-  end
-
-  ENG["WorkflowDispatchService<br/>(orchestrator)"]:::svc
-  WORKER[(Worker 执行池)]:::worker
-
-  WD --> WN
-  WN --> WE
-  WN -.->|"node_type=JOB<br/>引用 related_job_code"| JD
-
-  ENG ==>|"launch workflow_code<br/>→ INSERT workflow_run"| WR
-  ENG ==>|"按 START → ... DAG 推进<br/>每次一个 node"| WNR
-  ENG ==>|"node_type=JOB<br/>→ 拉起子 job_instance"| JI
-  JI -. "走主图 Outbox → Kafka 链路" .-> WORKER
-  WORKER -. "report SUCCESS/FAILED<br/>orchestrator 推进 workflow_node_run<br/>+ 评估 join_mode 决定下一批 node" .-> ENG
-
-  classDef svc     fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;
-  classDef worker  fill:#fff3e0,stroke:#ef6c00,stroke-width:1.5px,color:#e65100;
-  classDef store   fill:#f3e5f5,stroke:#6a1b9a,stroke-width:1.5px,color:#4a148c;
+flowchart TB
+  WD["WorkflowDefinition：日程与图版本"] --> WR["WorkflowRun：冻结图和运行日期"]
+  WD --> G["START → JOB / GATEWAY / WAIT → END"]
+  WR --> NR["WorkflowNodeRun：状态、输出、依赖证据"]
+  NR --> J["JOB 引用 JobDefinition"]
+  J --> JI["按节点创建 JobInstance"]
+  JI --> P["分区 / 任务 / 系统 Pipeline"]
+  P --> W["Outbox → Kafka → CLAIM → EXECUTE → REPORT"]
+  W --> NR
 ```
 
 ### 关键决策点
 
-- **node_type**：以 [`WorkflowNodeType`](../../batch-common/src/main/java/io/github/pinpols/batch/common/enums/WorkflowNodeType.java) 为准；`JOB` 拉起独立子作业，`TASK / FILE_STEP` 在当前作业内派发执行任务，`WAIT` 承载外部条件等待，三者不是别名。
-- **edge_type**：`SUCCESS`（前 node 成功才走）/ `FAILURE`（前 node 失败才走，常用于补偿/通知）/ `CONDITION`（带表达式）/ `ALWAYS`（无视前态）
-- **join_mode** in `workflow_node`：`ALL`（所有入边都满足才触发）/ `ANY`（任一入边满足即触发）/ `N_OF`（指定数量）—— 详见 `docs/architecture/workflow-dependency-guide.md`
-- 与 worker pipeline stage 的关系：**workflow 编排"多个 job"，stage 编排"一个 job 内的多步"**，两层正交
-
----
+- 新图执行节点使用JOB；START/END/GATEWAY就地推进，WAIT持久化轮询。TASK虽在枚举中保留，新根没有旧Job父实例时明确拒绝；FILE_STEP及旧WORKFLOW作业已退役。
+- 条件边和join只描述同一运行内控制关系；跨运行Job结果或整个Workflow成功是另外的持久化依赖，不能从DAG边隐式推导。
+- 同一Job可被多个节点引用，节点各自有独立执行身份。当前不支持嵌套Workflow；START→END和WAIT跳过路径同样需要终态收敛。
 
 ## 1.8 死信旁路（DLQ）— Kafka 隔离 + DB 落盘 + console 重放
 
@@ -424,9 +286,9 @@ DLQ 在本系统里**走两条互补轨**：
 ```mermaid
 %%{init: {'flowchart': {'curve': 'linear', 'nodeSpacing': 50, 'rankSpacing': 60, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%
 flowchart LR
-  subgraph WORKERS ["执行层 · 三类 Worker"]
+  subgraph WORKERS ["执行层 · 五类 Worker"]
     direction TB
-    WI["worker-import / export / dispatch"]:::worker
+    WI["worker-import / export / process / dispatch / atomic"]:::worker
     DLP["DeadLetterPublisher<br/>(D-3 毒丸隔离)"]:::svc
   end
 
@@ -450,7 +312,7 @@ flowchart LR
   %% ─── console 查询 + 重放 ─────────────────────
   USER ==>|"POST /api/console/jobs/dead-letters/replay<br/>+ select for review"| CONSOLE
   CONSOLE -.->|"SELECT (走 read replica)"| DLT
-  CONSOLE ==>|"HTTP /internal/dead-letters/{id}/replay"| ORCH
+  CONSOLE ==>|"审批通过的 DLQ_REPLAY → HTTP /internal/compensations"| ORCH
   ORCH ==>|"markReplaying<br/>+ INSERT outbox(REPLAY)"| DLT
   ORCH ==>|"重新 publish 到原 dispatch topic"| K
   ORCH ==>|"成功 → markReplaySuccess<br/>失败 → markReplayFailure"| DLT
@@ -632,13 +494,13 @@ flowchart LR
 
 - 扩缩机制 + HPA 配置示例 → [`../runbook/autoscaling-strategy.md`](../runbook/autoscaling-strategy.md)
 - HA 兼容性矩阵 + 缩容 4 个隐藏雷 + 部署前 checklist → [`../runbook/ha-elastic-scaling.md`](../runbook/ha-elastic-scaling.md)
-- 千万级承载力评估 + Phase 改造路线 → [`./scalability-assessment.md`](./scalability-assessment.md)
+- 千万级承载力评估 + Phase 改造路线 → [`scalability-assessment-2026-07-28.md`](../archive/audit/scalability-assessment-2026-07-28.md)
 
 ---
 
-## 2. 四类 Worker 的 Stage 流程
+## 2. 四类文件 Worker 的 Stage 流程
 
-每类 worker 都按"固定顺序的 stage 链"跑一个 partition。stage 定义在 `pipeline_step_definition` 表里，与 `job_code` 关联。
+IMPORT、EXPORT、PROCESS、DISPATCH 四类文件 Worker 按固定阶段契约执行；ATOMIC 使用独立任务执行器，不进入文件 Pipeline 阶段循环。阶段与版本由 `SystemPipelineCatalog` 和对应 Worker 实现固定；Job 保存类型化执行参数。DISPATCH 的 ACK、重试和补偿按结果分支推进，不代表每次执行都经过全部阶段。
 
 ### 2.1 IMPORT — 6 stage
 
@@ -765,93 +627,39 @@ flowchart LR
 
 ## 3. 配置如何驱动执行
 
-执行链路完全由数据库表驱动，**没有任何 hard-coded 业务逻辑**。下图展示一个 task 从派发到 worker 拿到所需配置的全部路径：
-
 ```mermaid
 flowchart LR
-  TR[task_payload<br/>含 jobCode + templateCode<br/>+ fileId / content / channelCode] --> WORKER
-
-  subgraph 配置层 [batch_platform 配置表]
-    JD[job_definition<br/>worker_group<br/>retry_policy / retry_max_count<br/>default_params]
-    PSD[pipeline_step_definition<br/>step_code 列表 6/5/6]
-    FTC[file_template_config<br/>field_mappings<br/>validation_rule_set<br/>default_query_sql<br/>query_param_schema]
-    FCC[file_channel_config<br/>channel_type<br/>target_endpoint<br/>config_json]
-  end
-
-  WORKER -- "loadPipeline(jobCode)" --> PSD
-  WORKER -- "loadTemplate(templateCode)" --> FTC
-  WORKER -- "loadChannel(channelCode)" --> FCC
-
-  TR -. "trigger时<br/>orchestrator merge<br/>job_definition.default_params" .-> JD
-  JD -. "提供 retry_policy<br/>给 RetryGovernanceService" .-> RG[RetryGovernanceService]
-  RG -. "失败超过 max → DL" .-> DLT[(dead_letter_task)]
+  WD["Workflow 定义：日程、日历、节点和边"] --> WR["冻结 WorkflowRun"]
+  JD["Job 定义：类型、参数、分片与执行策略"] --> NR["JOB 节点有效配置"]
+  WR --> NR
+  TP["文件模板 / 通道 / Secret版本"] --> NR
+  NR --> SC["SystemPipelineCatalog：类型到固定阶段/版本"]
+  SC --> WK["Worker插件/执行器"]
+  NR --> WK
 ```
 
 ### 3.1 关键映射
 
-| worker 行为 | 决定来源 |
+| 配置 | 生效边界 |
 |---|---|
-| 一个 partition 跑哪条 stage 链 | `pipeline_step_definition.pipeline_definition_id`（按 jobCode 选定 pipeline） |
-| 文件如何 parse / validate / load | `file_template_config`：`field_mappings`、`validation_rule_set`、`query_param_schema.jdbcMappedImport` |
-| 文件如何 export | `file_template_config`：`default_query_sql` + `query_param_schema.sqlTemplateExport` |
-| 文件投递到哪个目标 | `file_channel_config`：`channel_type` + `target_endpoint` + `config_json` |
-| 失败如何重试 | `job_definition`：`retry_policy` (NONE/FIXED/EXPONENTIAL) + `retry_max_count` |
-| 谁来跑这个 partition | `worker_registry` + `DefaultWorkerSelector`（match `worker_group` + `capability_tags`） |
+| Workflow 日程、时区、日历和图 | 顶层接纳与冻结；重复 fire 由持久身份区分，不能用当前时间重新计算旧运行日期 |
+| Job 类型与执行参数 | JOB 节点的有效配置与执行策略；不再配置第二份顶层日程 |
+| 模板、通道与密钥版本 | 在支持的实例/Replay路径捕获和校验；恢复复用冻结版本，撤销与安全准入仍可拒绝执行 |
+| SystemPipelineCatalog | IMPORT/EXPORT/PROCESS/DISPATCH固定阶段；束类型映射到对应文件类型，GENERAL/ATOMIC不创建文件Pipeline |
+| Worker 注册与能力 | 路由和副作用准入；未知Replay能力不能推断为可安全重放 |
 
 ### 3.2 三个表的最小 seed 例子
 
-**EXPORT 模板**（让 `TC_EXPORT_RISK_ALERT` 能跑）：
+配置使用Console正式API或当前配置包，完整示例见[配置包设计](../design/tenant-config-package-excel-9plus2-design.md)及根test-data。新格式不需要租户pipeline_definition/pipeline_step_definition。
 
-```sql
--- file_template_config 一行
-template_code      = 'EXP-RISK-ALERT-JSON'
-template_type      = 'EXPORT'
-file_format_type   = 'JSON'
-default_query_sql  = 'SELECT id, alert_id, ... FROM biz.risk_alert WHERE tenant_id = :tenantId'
-query_param_schema = {
-  "export_data_ref": "sql_template_export",
-  "sqlTemplateExport": { "table":"risk_alert", "schema":"biz",
-                         "columns":["alert_id","entity_id",...] }
-}
-
--- job_definition.default_params 注入 templateCode
-UPDATE batch.job_definition
-SET default_params = '{"templateCode":"EXP-RISK-ALERT-JSON"}'::jsonb
-WHERE tenant_id='tc' AND job_code='TC_EXPORT_RISK_ALERT';
--- ⚠ 修改后必须重启 orchestrator（OrchestratorConfigCacheService 缓存 job_definition）
-```
-
-**IMPORT 模板**（`TC_IMPORT_RISK_SCORE`）：
-
-```sql
-template_code      = 'IMP-RISK-SCORE-JSON'
-template_type      = 'IMPORT'
-file_format_type   = 'JSON'
-field_mappings     = [{"name":"entityId", "required":true, "targetColumn":"entity_id"}, ...]
-query_param_schema = {
-  "jdbcMappedImport": {
-    "table":"risk_score", "schema":"biz",
-    "columnMappings":[{"to":"entity_id","from":"entityId"}, ...],
-    "conflictColumns":["tenant_id","entity_id","score_date"]   -- ON CONFLICT 触发 upsert
-  }
-}
-```
-
-**DISPATCH channel**（`tc_local_archive`）：
-
-```sql
-channel_code     = 'tc_local_archive'
-channel_type     = 'LOCAL'
-target_endpoint  = '/tmp/batch/tc-risk-alert'
-config_json      = '{"mkdirs":true,"targetDir":"/tmp/batch/tc-risk-alert"}'
-receipt_policy   = 'NONE'   -- 不等回执，写文件成功即 ACK
-```
-
----
+最小单作业链需要Workflow定义/图、被JOB节点引用的Job定义，以及该类型实际需要的模板/通道。不要直接更新数据库来绕过版本、租户、审批或配置修订守卫；配置变更仅作用于后续接纳/物化的有效版本。
 
 ## 4. 跟着任务走一遍（三类全程）
 
+下列示例聚焦JOB节点内部；完整入口均先接纳对应Workflow，再按节点创建JobInstance。示例耗时、ID和记录数是历史场景数据，不代表当前容量或验收结果。
+
 下面三个例子都来自 2026-04-25 真实跑通的 instance，`pipeline_step_run` 的耗时是真实数据。
+当前顶层 Trigger 契约以受管单作业 Workflow 的 `workflowDefinitionId` 为目标；示例中的 JobCode 只标识执行内容，不作为根触发字段。
 
 ### 4.1 EXPORT 全程 — `TC_EXPORT_RISK_ALERT`
 
@@ -866,7 +674,7 @@ sequenceDiagram
     participant BIZ as batch_business
     participant M as MinIO
 
-    U->>T: POST /api/triggers/launch<br/>{tenantId:tc,<br/> jobCode:TC_EXPORT_RISK_ALERT}
+    U->>T: POST /api/triggers/launch<br/>{tenantId:tc,<br/> workflowDefinitionId:managed-export-workflow-id}
     T->>O: trigger_outbox_event → Kafka batch.trigger.launch.v1<br/>→ TriggerLaunchConsumer (ADR-010)
     O->>DB: INSERT job_instance(415)<br/>+ partition + outbox_event<br/>(同一 tx)
     O->>K: publish task 425
@@ -909,7 +717,7 @@ sequenceDiagram
     participant BIZ as batch_business
     participant FS as 临时文件<br/>NDJSON
 
-    U->>T: POST /api/triggers/launch<br/>{tenantId:tc, jobCode:TC_IMPORT_RISK_SCORE,<br/> params:{templateCode, content:"[...5 行 JSON...]"}}
+    U->>T: POST /api/triggers/launch<br/>{tenantId:tc, workflowDefinitionId:managed-import-workflow-id,<br/> params:{templateCode, content:"[...5 行 JSON...]"}}
     T->>O: trigger_outbox_event → Kafka batch.trigger.launch.v1<br/>→ TriggerLaunchConsumer (ADR-010)
     O->>DB: INSERT job_instance(416) + partition + outbox<br/>(同一 tx)
     O->>K: publish task 426
@@ -959,7 +767,7 @@ sequenceDiagram
     participant M as MinIO
     participant LFS as LOCAL/SFTP/<br/>NAS/OSS/API
 
-    U->>T: POST /api/triggers/launch<br/>{tenantId:tc, jobCode:TC_DISPATCH_REVIEW,<br/> params:{fileId:1065, channelCode:tc_local_archive}}
+    U->>T: POST /api/triggers/launch<br/>{tenantId:tc, workflowDefinitionId:managed-dispatch-workflow-id,<br/> params:{fileId:1065, channelCode:tc_local_archive}}
     T->>O: trigger_outbox_event → Kafka batch.trigger.launch.v1<br/>→ TriggerLaunchConsumer (ADR-010)
     O->>DB: INSERT job_instance(417) + partition + outbox
     O->>K: publish task 427
@@ -986,7 +794,7 @@ DISPATCH_ACK       SUCCESS  10ms
 DISPATCH_COMPLETE  SUCCESS  8ms
 ```
 
-> 异常路径（DISPATCH_RETRY + DISPATCH_COMPENSATE 怎么跑通）参考 [`../runbook/worker-stage-coverage.md` §3.4](../runbook/worker-stage-coverage.md)，那里有用坏 channel 触发 3 轮 retry 的真实 `pipeline_step_run` 12 行记录。
+> 异常路径（DISPATCH_RETRY + DISPATCH_COMPENSATE 怎么跑通）参考 [`../runbook/worker-stage-coverage.md` §3.4](../verifications/worker-stage-coverage-2026-04-25.md)，那里有用坏 channel 触发 3 轮 retry 的真实 `pipeline_step_run` 12 行记录。
 
 ### 4.4 三个例子的对比
 
@@ -1048,17 +856,17 @@ INSTANCE_STATUS = CREATED → WAITING → READY → RUNNING →
                   SUCCESS / FAILED / PARTIAL_FAILED / CANCELLED / TERMINATED
 ```
 
-`PARTIAL_FAILED` 表示一个 instance 下多个 partition，部分成功部分失败（仅多分区 IMPORT 才会出现）。
+`PARTIAL_FAILED` 表示作业实例的多个分区结果混合；具体触发条件由各类型聚合策略决定，不能等同于整 Workflow 成功。
 
 ---
 
 ## 6. 为什么这样设计 — 几个关键不变量
 
 1. **DB → Outbox → Kafka → CLAIM → EXECUTE → REPORT**：所有任务派发必走这条主链，不允许 worker 直连 DB 改 `job_instance`。Orchestrator 是唯一状态主机。
-2. **outbox_event 必须与状态写入同一事务**：保证"DB 看到的状态"和"Kafka 看到的事件"双向一致；任何一方失败都不丢消息。
+2. **outbox_event 必须与状态写入同一事务**：原子保存状态与待投递事件；Kafka 发布可延迟或重复，由 relay 重试与消费幂等收敛，不承诺跨系统同时可见。
 3. **Worker 必须 CLAIM 才能执行**：partition 通过 `lease_expire_at` 实现 worker 抢占；worker 进程崩溃后租约到期，partition 自动可被其他 worker 接管。
-4. **template / channel 配置都在 DB**：换个文件格式、换个投递通道，只需更新 `file_template_config` / `file_channel_config`，不用改代码或重启 worker。
-5. **Pipeline 是配置不是代码**：`pipeline_step_definition` 决定 worker 跑哪些 stage，理论上可以为不同 jobCode 配置不同的 stage 子集。但实践中三类 worker 的 stage 链是固定模板（IMPORT 6 / EXPORT 5 / DISPATCH 6），改动会引发 step impl 缺失（参考 [worker-stage-coverage.md](../runbook/worker-stage-coverage.md)）。
+4. **模板与渠道有独立配置来源**：新运行按快照引用有效配置；修改当前定义不应悄悄改写排队/重试中的旧运行。密钥撤销等实时安全策略按各自执行边界生效。
+5. **系统 Pipeline 固定阶段与顺序**：当前由 `SystemPipelineCatalog` 按 Job 类型选择阶段，不接受租户定义阶段子集或改序；阶段业务参数进入 Job 冻结快照，不能覆盖控制流。历史阶段实现缺失问题见 [worker-stage-coverage-2026-04-25.md](../verifications/worker-stage-coverage-2026-04-25.md)。
 
 ---
 
@@ -1243,7 +1051,7 @@ Outbox 是**业务事务和 Kafka 投递之间的桥**——双方完全解耦�
 | 仅成功路径推水位 | `applyTaskOutcome` 在 success 分支才调 `updateHighWaterMarkOut`;失败/重试/取消保留旧 OUT |
 | OUT 为 null 不推 | worker 没写 OUT(业务暂不接 INCREMENTAL)就别覆盖旧值;允许"灰度切到 INCREMENTAL 再不推水位"过渡 |
 | OUT 持久化无版本检查 | 水位是单调推进的最终一致字段,并发并不会破坏正确性,SQL 不带 `version = #{expectedVersion}` |
-| IN/OUT 跨子作业不传递 | DAG 的 JOB 节点子作业有自己的 jobDefinition,各自有自己的水位序列;父虚拟任务 `signalParentVirtualTask` 显式传 OUT=null |
+| IN/OUT 跨子作业不传递 | DAG 的 JOB 节点子作业有自己的 jobDefinition,各自有自己的水位序列;终态直接关联所属 NodeRun；不再经父虚拟任务传递水位 |
 | 字段位 v1 schema 可选 | `TaskDispatchMessage.highWaterMarkIn` 是 v1 schema 末尾追加字段;旧 worker Jackson 忽略未知字段 → 滚动升级安全 |
 
 ### 7.8.4 关键代码位
@@ -1278,9 +1086,8 @@ Outbox 是**业务事务和 Kafka 投递之间的桥**——双方完全解耦�
 String hwmIn = (String) ctx.getAttributes().get(PipelineRuntimeKeys.HIGH_WATER_MARK_IN);
 
 // 拼 SQL
-String where = hwmIn == null
-    ? ""  // 首跑/全量
-    : " WHERE update_time > '" + hwmIn + "' ";
+String where = hwmIn == null ? "" : " WHERE update_time > :highWaterMarkIn";
+// 使用命名参数绑定 highWaterMarkIn，禁止把业务水位直接拼入 SQL。
 
 // 跑完业务逻辑后,把本批次最大 update_time 写回
 ctx.getAttributes().put(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, maxUpdateTime.toString());
@@ -1294,7 +1101,7 @@ ctx.getAttributes().put(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, maxUpdateTime.t
 
 ### 7.9.1 用途
 
-PROCESS 是 IMPORT/EXPORT/DISPATCH 之外的第四类 worker,定位"系统内部数据加工"(聚合 / 清洗 / 状态推进)。落地依据:[`docs/design/batch-classification-and-gaps.md`](../design/batch-classification-and-gaps.md) §4.5。
+PROCESS 是 IMPORT/EXPORT/DISPATCH 之外的第四类文件 Worker,定位"系统内部数据加工"(聚合 / 清洗 / 状态推进)。落地依据:[`docs/design/batch-classification-and-gaps.md`](../design/batch-classification-and-gaps.md) §4.5。
 
 不是简单"跑一段 SQL"。默认 JSONB 模式是 **WAP+bookends**(Write-Audit-Publish + 前后置):**先写 staging,后审核,再原子 publish**。与 dbt build / Iceberg branch / Netflix Atlas 的成熟数据平台一致,避免异常数据落到生产 target 表。`stagingMode=DIRECT` 是给无 staging audit 需求的大吞吐 copy 场景的显式快路径,以 `INSERT ... SELECT ... ON CONFLICT` 直接发布。
 
@@ -1302,7 +1109,7 @@ PROCESS 是 IMPORT/EXPORT/DISPATCH 之外的第四类 worker,定位"系统内部
 
 ```mermaid
 flowchart LR
-  CFG[("pipeline_step_definition<br/>step_params.sqlTransformCompute<br/>(sourceSql/targetTable/columns/<br/>conflictColumns/validations/watermark)")]:::store
+  CFG[("Job 冻结参数<br/>系统 Pipeline COMPUTE 配置<br/>(sourceSql/targetTable/columns/<br/>conflictColumns/validations/watermark)")]:::store
   PR[PREPARE<br/>spec.parse + jsqlparser AST<br/>identifier + schema allowlist<br/>查 information_schema.tables]:::stage
   CO["COMPUTE (Write)<br/>JSONB:写 staging<br/>DIRECT:登记快路径"]:::stage
   VL["VALIDATE (Audit)<br/>JSONB:user validations checkSql<br/>DIRECT:跳过 staging 校验"]:::stage
@@ -1342,7 +1149,7 @@ flowchart LR
 
 | 位置 | 职责 |
 |---|---|
-| `batch-worker/process/.../stage/DefaultProcessStageExecutor.java` | 5 段循环 + plugin 解析(扫 step_definition 找 COMPUTE step impl_code 缓存到 context) |
+| `batch-worker/process/.../stage/DefaultProcessStageExecutor.java` | 5 段循环；从系统模板与冻结参数解析 COMPUTE 插件并缓存到 context |
 | `batch-worker/process/.../stage/ProcessComputePlugin.java` | 5 lifecycle 接口 (prepare/compute/validate/commit/feedback,默认 no-op) |
 | `batch-worker/process/.../sql/SqlTransformComputePlugin.java` | 内置插件:解析 spec / JSONB staging 或 DIRECT 发布 / 跑 validations / `jsonb_populate_record` 或 `INSERT...SELECT` 发布 / 清 staging |
 | `batch-worker/process/.../sql/SqlTransformComputeSpec.java` | step_params 解析 + identifier 校验 + `stagingMode` + `validations` 列表 |
@@ -1352,7 +1159,7 @@ flowchart LR
 ### 7.9.5 业务侧使用模板
 
 ```yaml
-# pipeline_step_definition.step_params 示例(YAML 表示,实际是 JSONB)
+# Job 的 PROCESS 类型化执行参数示例（YAML表示）
 sqlTransformCompute:
   sourceSql: |
     SELECT tenant_id, account_id, biz_date,
@@ -1383,7 +1190,7 @@ sqlTransformCompute:
         WHERE batch_key = :batchKey
 ```
 
-业务调用方只需要在 `pipeline_step_definition` 表 INSERT 一行 stage_code=COMPUTE 的记录,impl_code=`sqlTransformCompute`,step_params 写上面 spec。其余 4 个 stage(PREPARE/VALIDATE/COMMIT/FEEDBACK)框架自动 no-op 占位即可——除非你需要自定义验证规则才在 step_params.validations 配。
+业务调用方通过当前 Job 配置提交 COMPUTE 阶段参数与插件选择，并由根运行冻结。阶段由系统模板产生，Worker 合并允许的业务参数；不能 INSERT 租户 Pipeline 定义替换执行链，也不能用参数跳转、减少或重排阶段。具体参数键按 `SystemPipelineStepConfiguration` 与 PROCESS 插件解析契约填写。
 
 ### 7.9.6 与 ExecutionMode.INCREMENTAL(§7.8)的协作
 
@@ -1394,12 +1201,12 @@ PROCESS 与 ExecutionMode 正交:既可以做 FULL 全量(每次重新聚合),�
 | 防护 | 配置 | 默认 | 触发后果 |
 |---|---|---|---|
 | **maxStagedRows**(P1-6) | `step_params.sqlTransformCompute.maxStagedRows` | `1_000_000` | COMPUTE 写完 staging 后 row count > limit 立即失败(`PROCESS_STAGED_OVERFLOW`)+ 同步删本批 staging,target 完全不写,task FAILED |
-| **orphan staging cleanup**(P1-7) | `batch.worker.process.staging-cleanup.{enabled,interval,retentionHours,batchSize}` | enabled=true / 15 分钟 / 24 小时 / 5000 行 | ShedLock 互斥的定时任务,删除 `staged_at < now() - retentionHours` 的孤儿行(VALIDATE 失败保留 / 崩溃残留 / 测试残留),指标 `process_staging_orphan_cleaned_total` + `process_staging_oldest_age_seconds` |
+| **orphan staging cleanup**(P1-7/PART-02) | `batch.worker.process.staging-cleanup.{enabled,deletion-enabled,interval,retention-hours,batch-size,pre-create-days}` | enabled=true / deletion-enabled=false / 15 分钟 / 24 小时 / 5000 行 / 未来 2 天 | ShedLock 调度预建分区；安全回收只处理超期且已被新 generation 取代的旧代，在平台实例锁下确认后，于业务事务封存并分块删除。默认仍关闭；当前代和整分区保留。启动审计使用租户/generation RLS 上下文；暂停/重试/归档、多库、崩溃与容量验证完成前不得启用。 |
 
 > 调优建议:
 >
 > - 业务 SQL 写错或笛卡尔积可能瞬时撑大几千万行,默认 100 万的 `maxStagedRows` 足以拦截大多数事故,生产可按业务体量上调到 500 万 / 1000 万。
-> - VALIDATE 失败需要保留 staging 给运维取证;`retentionHours` 默认 24 小时是 forensics 与磁盘占用的折中,关键业务可调到 72 小时。
+> - `retentionHours` 默认 24 小时是旧 generation 的最短保留；不能单独授权删除当前 generation 或按日期 DROP 分区。
 > - 多 worker 实例只有一个会真正跑 cleanup(ShedLock 互斥);单 worker 部署可以把 enabled 关掉,等手工触发。
 
 ### 7.9.8 边界与重跑语义(P2-1 / P2-2 / P2-7)
@@ -1459,5 +1266,5 @@ public class MyProcessPlugin implements ProcessComputePlugin {
 | 核心实体关系 | [`core-model.md`](./core-model.md) |
 | Worker 插件如何注册 | [`worker-plugins.md`](./worker-plugins.md) |
 | Kafka topic 命名 | [`kafka-topic-plan.md`](./kafka-topic-plan.md) |
-| 真实端到端验证（含 RETRY/COMPENSATE） | [`../runbook/worker-stage-coverage.md`](../runbook/worker-stage-coverage.md) |
-| 编码与字典约定 | [`/docs/agent-baseline.md`](../../docs/agent-baseline.md) |
+| 真实端到端验证（含 RETRY/COMPENSATE） | [`worker-stage-coverage-2026-04-25.md`](../verifications/worker-stage-coverage-2026-04-25.md) |
+| 编码与字典约定 | [`/docs/agent-baseline.md`](../agent-baseline.md) |

@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
@@ -66,12 +67,14 @@ public class ImportTaskExecutor implements BatchTaskExecutor {
 
   @Override
   public TaskCapability capability() {
+    Set<ResourceKind> resources = Set.of(ResourceKind.DISK, ResourceKind.DB, ResourceKind.NET);
+    long timeoutSeconds = timeoutProperties.getCapabilityTimeoutSeconds();
+    Duration capabilityTimeout = Duration.ofSeconds(timeoutSeconds);
     return new TaskCapability(
-        Set.of(ResourceKind.DISK, ResourceKind.DB, ResourceKind.NET),
+        resources,
         false, // 文件 IMPORT 通常一次性,不视为幂等
         true,
-        Duration.ofSeconds(timeoutProperties.getCapabilityTimeoutSeconds()) // import 大文件可能跑久
-        );
+        capabilityTimeout);
   }
 
   @Override
@@ -88,8 +91,12 @@ public class ImportTaskExecutor implements BatchTaskExecutor {
         );
     StepExecutionResponse resp = delegate.execute(req);
     if (resp.success()) {
-      return TaskResult.ok(resp.message() == null ? "ok" : resp.message());
+      String responseMessage = resp.message();
+      String resultMessage = EmptyChecks.isNull(responseMessage) ? "ok" : resp.message();
+      return TaskResult.ok(resultMessage);
     }
-    return TaskResult.fail(resp.message() == null ? resp.code() : resp.message());
+    String responseMessage = resp.message();
+    String failureMessage = EmptyChecks.isNull(responseMessage) ? resp.code() : resp.message();
+    return TaskResult.fail(failureMessage);
   }
 }

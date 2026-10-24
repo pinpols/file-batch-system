@@ -37,8 +37,9 @@ public class S3GovernanceStorage {
             break;
           }
           String objectName = summary.key();
-          if (!includeTemporaryObjects
-              && (objectName.endsWith(".part") || objectName.startsWith("tmp/"))) {
+          boolean temporaryObjectShouldBeExcluded = !includeTemporaryObjects
+              && (objectName.endsWith(".part") || objectName.startsWith("tmp/"));
+          if (temporaryObjectShouldBeExcluded) {
             continue;
           }
           objects.add(new StorageObjectView(
@@ -66,8 +67,9 @@ public class S3GovernanceStorage {
   public String createPresignedDownloadUrl(String bucket, String objectName, int expirySeconds) {
     try {
       String targetBucket = bucket == null || bucket.isBlank() ? properties.getBucket() : bucket;
-      return objectStore.presign(
-          targetBucket, objectName, Duration.ofSeconds(Math.max(60, expirySeconds)));
+      int minimumExpirySeconds = Math.max(60, expirySeconds);
+      Duration expiry = Duration.ofSeconds(minimumExpirySeconds);
+      return objectStore.presign(targetBucket, objectName, expiry);
     } catch (Exception exception) {
       throw new IllegalStateException(
           "failed to create presigned url for object: " + objectName, exception);

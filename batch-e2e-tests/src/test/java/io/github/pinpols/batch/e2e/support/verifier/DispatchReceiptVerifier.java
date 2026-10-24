@@ -54,8 +54,12 @@ public final class DispatchReceiptVerifier implements E2eVerifier {
   // ─── Individual assertions ────────────────────────────────────────────────
 
   private void verifyFileStatus() {
+    final String selectFileStatusSql = """
+        select file_status from batch.file_record where id = ?
+    """;
+
     String status = platformJdbc.queryForObject(
-        "select file_status from batch.file_record where id = ?", String.class, fileId);
+        selectFileStatusSql, String.class, fileId);
     assertThat(status)
         .as(
             "dispatch: file_record.file_status must be '%s' for file id=%d",
@@ -64,16 +68,18 @@ public final class DispatchReceiptVerifier implements E2eVerifier {
   }
 
   private void verifyReceiptRecord() {
-    if (expectedReceiptCode == null && expectedChannelCode == null) {
-      return;
-    }
-    List<Map<String, Object>> receipts = platformJdbc.queryForList("""
+    final String selectReceiptCodeSql = """
             select receipt_code, channel_code, dispatch_status
             from batch.file_dispatch_record
             where tenant_id = ? and file_id = ?
             order by id desc
             limit 1
-            """, tenantId, fileId);
+            """;
+
+    if (expectedReceiptCode == null && expectedChannelCode == null) {
+      return;
+    }
+    List<Map<String, Object>> receipts = platformJdbc.queryForList(selectReceiptCodeSql, tenantId, fileId);
 
     assertThat(receipts)
         .as("dispatch: file_dispatch_record must exist for tenant=%s, fileId=%d", tenantId, fileId)
@@ -94,11 +100,15 @@ public final class DispatchReceiptVerifier implements E2eVerifier {
   }
 
   private void verifyAuditLog() {
+    final String selectCountSql = """
+        select count(*) from batch.file_audit_log where tenant_id = ? and file_id = ?
+    """;
+
     if (expectedMinAuditCount <= 0) {
       return;
     }
     Long auditCount = platformJdbc.queryForObject(
-        "select count(*) from batch.file_audit_log where tenant_id = ? and file_id = ?",
+        selectCountSql,
         Long.class,
         tenantId,
         fileId);

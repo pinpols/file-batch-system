@@ -1,0 +1,3 @@
+interface:
+  display_name: "Worker 流水线审查"
+  short_description: "审查 Worker、dry-run、claim/report、lease、outbox、进度与故障恢复"

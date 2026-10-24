@@ -1,22 +1,24 @@
 package io.github.pinpols.batch.console.domain.file.mapper;
 
 import io.github.pinpols.batch.console.domain.file.query.FilePipelineStepRunQuery;
+import io.github.pinpols.batch.console.domain.file.view.FilePipelineInfoView;
+import io.github.pinpols.batch.console.domain.file.view.FilePipelineProgressStepView;
+import io.github.pinpols.batch.console.domain.file.view.FilePipelineStepRunQueryView;
 import java.util.List;
-import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 public interface FilePipelineStepRunMapper {
 
   String selectTenantIdByPipelineInstanceId(@Param("pipelineInstanceId") Long pipelineInstanceId);
 
-  List<Map<String, Object>> selectByQuery(FilePipelineStepRunQuery query);
+  List<FilePipelineStepRunQueryView> selectByQuery(FilePipelineStepRunQuery query);
 
   long countByQuery(FilePipelineStepRunQuery query);
 
-  List<Map<String, Object>> selectProgressByPipelineInstance(
+  List<FilePipelineProgressStepView> selectProgressByPipelineInstance(
       @Param("tenantId") String tenantId, @Param("pipelineInstanceId") Long pipelineInstanceId);
 
-  /** 缺口2:返回 pipeline 级文件信息(file_id + file_name),文件缺失时 file_name 为 null。 */
-  Map<String, Object> selectFileInfoByPipelineInstance(
+  /** 返回流水线关联的文件信息；文件记录不存在时，文件名为 null。 */
+  FilePipelineInfoView selectFileInfoByPipelineInstance(
       @Param("tenantId") String tenantId, @Param("pipelineInstanceId") Long pipelineInstanceId);
 }

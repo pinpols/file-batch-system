@@ -48,6 +48,8 @@
         <result column="tenant_id" property="tenantId"/>
         <result column="job_definition_id" property="jobDefinitionId"/>
         <result column="trigger_request_id" property="triggerRequestId"/>
+        <result column="parent_workflow_run_id" property="parentWorkflowRunId"/>
+        <result column="parent_node_code" property="parentNodeCode"/>
         <result column="job_code" property="jobCode"/>
         <result column="instance_no" property="instanceNo"/>
         <result column="biz_date" property="bizDate"/>
@@ -71,6 +73,8 @@
         <result column="expected_partition_count" property="expectedPartitionCount"/>
         <result column="success_partition_count" property="successPartitionCount"/>
         <result column="failed_partition_count" property="failedPartitionCount"/>
+        <result column="cancelled_partition_count" property="cancelledPartitionCount"/>
+        <result column="terminated_partition_count" property="terminatedPartitionCount"/>
         <result column="trace_id" property="traceId"/>
         <result column="params_snapshot" property="paramsSnapshot"/>
         <result column="calendar_code" property="calendarCode"/>
@@ -98,9 +102,10 @@
         instance lock -> task -> partition 顺序，禁止持有业务行锁后再等待本锁。
       - pg_advisory_xact_lock 阻塞获取、随事务自动释放,不锁任何行(锁逻辑 hash key),消除 outcome-vs-outcome
         的锁顺序反转、以及旧的「reclaim asc N 行 / outcome desc N 行」环形死锁。
-      - 边界:本 advisory lock 只串行化 outcome-vs-outcome;reclaim 不取它。单 outcome × 单 reclaim 对同一
-        (task, partition) 的行锁子序仍相反，由 PartitionReclaimUnit 对 task 行使用 FOR UPDATE NOWAIT
-        让路解决(见 OutcomeVsReclaimDeadlockIntegrationTest)。
+      - REPORT、lease reclaim、重试重排和实例终态化在取得运行态 task/partition 行锁前均须取得该实例锁；worker 业务副作用
+        若要与 reclaim 串行，也必须在副作用事务期间持有同一事务级锁并重读 invocation。
+      - PartitionReclaimUnit 仍以 task FOR UPDATE NOWAIT 作防御性让路：任何未遵循实例锁协议的维护/旁路写入不能让后台 reclaim
+        等待 task 行锁并形成反向锁环(见 OutcomeVsReclaimDeadlockIntegrationTest)。
       - hashtext 返回 int4,单参重载解析到 pg_advisory_xact_lock(bigint)。
       - 外层 select 常量以保证返回行集给 MyBatis;内层子查询强制求值从而真正加锁。
     -->
@@ -111,6 +116,17 @@
                 hashtext(#{tenantId} || ':' || #{jobInstanceId}::text)
             )
         ) l
+    </select>
+
+    <select id="selectCurrentByWorkflowRequest" resultMap="JobInstanceResultMap">
+        select ji.* from batch.job_instance ji
+        join batch.workflow_node_run n on n.job_instance_id=ji.id and n.node_type='JOB'
+        join batch.workflow_run w on w.id=n.workflow_run_id and w.tenant_id=ji.tenant_id
+        join batch.trigger_request tr on tr.id=w.trigger_request_id and tr.tenant_id=w.tenant_id
+        where ji.tenant_id=#{tenantId} and tr.request_id=#{requestId} and ji.job_code=#{jobCode}
+          and not exists (select 1 from batch.workflow_node_run newer
+              where newer.workflow_run_id=n.workflow_run_id and newer.node_code=n.node_code
+                and newer.run_seq &gt; n.run_seq)
     </select>
 
     <select id="selectByInstanceNo" resultMap="JobInstanceResultMap">
@@ -275,6 +291,8 @@
         set instance_status = #{instanceStatus},
             success_partition_count = #{successPartitionCount},
             failed_partition_count = #{failedPartitionCount},
+            cancelled_partition_count = #{cancelledPartitionCount},
+            terminated_partition_count = #{terminatedPartitionCount},
             result_summary = #{resultSummary,jdbcType=VARCHAR}::jsonb,
             finished_at = #{finishedAt},
             failure_class = #{failureClass,jdbcType=VARCHAR},
@@ -353,7 +371,6 @@
               or (tr.request_status = 'DUPLICATE' and ji.trigger_request_id = tr.id)
           )
           and ji.created_at &lt; #{olderThan}
-          and coalesce(jd.job_type, '') &lt;&gt; 'WORKFLOW'
           and not exists (
               select 1
               from batch.job_partition jp
@@ -411,6 +428,14 @@
         select 1 as locked
         from (
             select pg_advisory_xact_lock(hashtext('global-job-admission'))
+        ) l
+    </select>
+
+    <!-- 全局/共享组锁之后取得；串行化同租户 launch 与 WAITING release 的容量检查和提交。 -->
+    <select id="acquireTenantResourceAdmissionLock" resultType="java.lang.Integer">
+        select 1 as locked
+        from (
+            select pg_advisory_xact_lock(hashtext('tenant-resource-admission:' || #{tenantId}))
         ) l
     </select>
 
@@ -485,23 +510,37 @@
     <select id="selectBatchDayMetrics" resultType="io.github.pinpols.batch.orchestrator.domain.view.BatchDayInstanceMetrics">
         select
             count(1) as "totalCount",
-            coalesce(sum(case when ji.instance_status in ('CREATED', 'WAITING', 'READY', 'RUNNING', 'PAUSED') then 1 else 0 end), 0) as "activeCount",
-            coalesce(sum(case when ji.instance_status = 'SUCCESS' then 1 else 0 end), 0) as "successCount",
-            coalesce(sum(case when ji.instance_status in ('PARTIAL_FAILED', 'FAILED', 'CANCELLED', 'TERMINATED') then 1 else 0 end), 0) as "failedCount"
-        from batch.job_instance ji
-                 join batch.job_definition jd on jd.id = ji.job_definition_id
-        where ji.tenant_id = #{tenantId}
-          and jd.calendar_code = #{calendarCode}
-          and ji.biz_date = #{bizDate}
-          and ji.dry_run = false
+            coalesce(sum(case when wf_run.run_status in ('CREATED', 'RUNNING', 'PAUSED')
+                or exists (
+                    select 1
+                    from batch.workflow_node_run node_run
+                    join batch.job_instance job_instance
+                      on job_instance.tenant_id = wf_run.tenant_id
+                     and job_instance.id = node_run.job_instance_id
+                    where node_run.workflow_run_id = wf_run.id
+                      and job_instance.biz_date is not distinct from wf_run.biz_date
+                      and job_instance.dry_run = wf_run.dry_run
+                      and job_instance.instance_status in (
+                          'CREATED', 'WAITING', 'READY', 'RUNNING', 'PAUSED'
+                      )
+                ) then 1 else 0 end), 0) as "activeCount",
+            coalesce(sum(case when wf_run.run_status = 'SUCCESS' then 1 else 0 end), 0) as "successCount",
+            coalesce(sum(case when wf_run.run_status in ('FAILED', 'TERMINATED') then 1 else 0 end), 0) as "failedCount"
+        from batch.workflow_run wf_run
+                 join batch.workflow_definition wf
+                   on wf.tenant_id = wf_run.tenant_id
+                  and wf.id = wf_run.workflow_definition_id
+        where wf_run.tenant_id = #{tenantId}
+          and wf.calendar_code = #{calendarCode}
+          and wf_run.biz_date = #{bizDate}
+          and wf_run.dry_run = false
     </select>
 
     <select id="selectBatchDayCatchUpCandidates" resultMap="JobInstanceResultMap">
         select distinct on (ji.job_code) ji.*
         from batch.job_instance ji
-                 join batch.job_definition jd on jd.id = ji.job_definition_id
         where ji.tenant_id = #{tenantId}
-          and jd.calendar_code = #{calendarCode}
+          and ji.calendar_code = #{calendarCode}
           and ji.biz_date = #{bizDate}
           and ji.instance_status in ('FAILED', 'PARTIAL_FAILED')
         order by ji.job_code, ji.id desc
@@ -510,9 +549,8 @@
     <select id="selectBatchDayCandidates" resultMap="JobInstanceResultMap">
         select distinct on (ji.job_code) ji.*
         from batch.job_instance ji
-                 join batch.job_definition jd on jd.id = ji.job_definition_id
         where ji.tenant_id = #{tenantId}
-          and jd.calendar_code = #{calendarCode}
+          and ji.calendar_code = #{calendarCode}
           and ji.biz_date = #{bizDate}
         <if test="statuses != null and !statuses.isEmpty()">
             and ji.instance_status in

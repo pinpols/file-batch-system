@@ -41,17 +41,24 @@ public record ConsoleTriggerStatsResponse(
     if (view == null) {
       return null;
     }
+    List<TypeCountEntry> triggerTypeEntries =
+        view.byTriggerType().stream().map(TypeCountEntry::from).toList();
+    List<DayCountEntry> dailyTrendEntries =
+        view.dailyTrend().stream().map(DayCountEntry::from).toList();
     return new ConsoleTriggerStatsResponse(
-        view.byTriggerType().stream().map(TypeCountEntry::from).toList(),
-        view.dailyTrend().stream().map(DayCountEntry::from).toList());
+        triggerTypeEntries, dailyTrendEntries);
   }
 
   public static ConsoleTriggerStatsResponse from(Map<String, Object> row) {
     if (row == null) {
       return null;
     }
-    return new ConsoleTriggerStatsResponse(
-        mapList(row, "byTriggerType").stream().map(TypeCountEntry::from).toList(),
-        mapList(row, "dailyTrend").stream().map(DayCountEntry::from).toList());
+    List<Map<String, Object>> triggerTypeRows = mapList(row, "byTriggerType");
+    List<TypeCountEntry> triggerTypeEntries =
+        triggerTypeRows.stream().map(TypeCountEntry::from).toList();
+    List<Map<String, Object>> dailyTrendRows = mapList(row, "dailyTrend");
+    List<DayCountEntry> dailyTrendEntries =
+        dailyTrendRows.stream().map(DayCountEntry::from).toList();
+    return new ConsoleTriggerStatsResponse(triggerTypeEntries, dailyTrendEntries);
   }
 }

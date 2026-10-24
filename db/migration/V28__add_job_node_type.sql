@@ -1,5 +1,5 @@
 -- =========================================================
--- V27 - Add JOB node type to workflow_node and workflow_node_run
+-- V28：为 workflow_node 和 workflow_node_run 增加 JOB 节点类型。
 -- 说明：
 -- 1) 允许工作流节点引用其他作业作为子任务执行。
 -- 2) 保持定义表与运行态表的 node_type CHECK 约束一致。

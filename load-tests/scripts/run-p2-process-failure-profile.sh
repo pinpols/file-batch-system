@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：运行 Process Worker 故障恢复容量画像。
+# 用法：在仓库根目录执行 bash load-tests/scripts/run-p2-process-failure-profile.sh；参数与前置环境见下方说明及所属 README。
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -91,14 +93,17 @@ launch_copy_job() {
   local request_id="$1"
   local params_file="$2"
   local body_file="$PARAM_DIR/${request_id}.request.json"
+  local workflow_id
+  workflow_id="$(resolve_single_job_workflow_id "$PROCESS_TENANT_ID" lt_process_copy_job)"
   jq -n \
     --arg tenant "$PROCESS_TENANT_ID" \
+    --argjson workflowDefinitionId "$workflow_id" \
     --arg requestId "$request_id" \
     --arg bizDate "$BIZ_DATE" \
     --slurpfile params "$params_file" \
     '{
       tenantId: $tenant,
-      jobCode: "lt_process_copy_job",
+      workflowDefinitionId: $workflowDefinitionId,
       triggerType: "API",
       bizDate: $bizDate,
       requestId: $requestId,

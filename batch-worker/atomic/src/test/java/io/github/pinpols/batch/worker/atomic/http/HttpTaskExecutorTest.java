@@ -6,15 +6,21 @@ import com.sun.net.httpserver.HttpServer;
 import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -323,6 +329,37 @@ class HttpTaskExecutorTest {
 
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("status 404 not in expected");
+      assertThat(r.output())
+          .containsEntry(AtomicErrorCode.OUTPUT_KEY, AtomicErrorCode.EXECUTION_FAILED.name());
+    }
+
+    @Test
+    @DisplayName("非幂等 HTTP 请求收到非预期响应时应标记外部副作用结果不明")
+    void shouldMarkUnknown_whenNonIdempotentHttpResponseIsUnexpected() {
+      AtomicInteger committedEffects = new AtomicInteger();
+      server.createContext("/commit-then-fail", ex -> {
+        committedEffects.incrementAndGet();
+        byte[] body = "upstream committed before returning 503".getBytes(StandardCharsets.UTF_8);
+        ex.sendResponseHeaders(503, body.length);
+        ex.getResponseBody().write(body);
+        ex.close();
+      });
+
+      TaskResult result = executor.execute(ctxWithParams(Map.of(
+          "url",
+          url("/commit-then-fail"),
+          "method",
+          "POST",
+          "body",
+          "side-effect",
+          "expectStatus",
+          200)));
+
+      assertThat(result.success()).isFalse();
+      assertThat(result.output())
+          .containsEntry(
+              AtomicErrorCode.OUTPUT_KEY, AtomicErrorCode.EXTERNAL_OUTCOME_UNKNOWN.name());
+      assertThat(committedEffects).hasValue(1);
     }
 
     @Test
@@ -366,7 +403,7 @@ class HttpTaskExecutorTest {
       props.setMaxResponseBytes(10);
       server.createContext("/big", ex -> {
         byte[] body = new byte[1000];
-        java.util.Arrays.fill(body, (byte) 'X');
+        Arrays.fill(body, (byte) 'X');
         ex.sendResponseHeaders(200, body.length);
         ex.getResponseBody().write(body);
         ex.close();
@@ -422,9 +459,8 @@ class HttpTaskExecutorTest {
       // 服务端是否能在本机回环网络上感知 TCP 断连受内核/客户端缓冲影响,不是 HTTP API 可保证的语义。
       int max = 16;
       final long hugeTotal = 64L * 1024 * 1024; // 64 MiB
-      java.util.concurrent.atomic.AtomicLong written = new java.util.concurrent.atomic.AtomicLong();
-      java.util.concurrent.atomic.AtomicBoolean closed =
-          new java.util.concurrent.atomic.AtomicBoolean();
+      AtomicLong written = new AtomicLong();
+      AtomicBoolean closed = new AtomicBoolean();
       InputStream hugeStream = new InputStream() {
         private long remaining = hugeTotal;
 
@@ -434,7 +470,7 @@ class HttpTaskExecutorTest {
             return -1;
           }
           int count = (int) Math.min(length, remaining);
-          java.util.Arrays.fill(buffer, offset, offset + count, (byte) 'Z');
+          Arrays.fill(buffer, offset, offset + count, (byte) 'Z');
           remaining -= count;
           written.addAndGet(count);
           return count;
@@ -502,6 +538,29 @@ class HttpTaskExecutorTest {
     }
 
     @Test
+    @DisplayName("非幂等 POST 已产生副作用但响应中断时不得在 Worker 内重发")
+    void shouldNotRetryPost_whenResponseIsInterruptedAfterRemoteSideEffect() {
+      props.setMaxRetries(2);
+      AtomicInteger remoteSideEffects = new AtomicInteger();
+      server.createContext("/post-side-effect-response-drop", ex -> {
+        remoteSideEffects.incrementAndGet();
+        byte[] partialResponse = "accepted".getBytes(StandardCharsets.UTF_8);
+        ex.sendResponseHeaders(200, partialResponse.length + 64L);
+        ex.getResponseBody().write(partialResponse);
+        ex.getResponseBody().flush();
+        ex.close();
+      });
+
+      TaskResult result = executor.execute(ctxWithParams(Map.of(
+          "url", url("/post-side-effect-response-drop"),
+          "method", "POST",
+          "body", "perform irreversible remote action")));
+
+      assertThat(result.success()).isFalse();
+      assertThat(remoteSideEffects).hasValue(1);
+    }
+
+    @Test
     @DisplayName("重试耗尽后执行应失败, 并在提示中给出总尝试次数")
     void shouldReportAttemptCount_whenAllRetriesExhausted() {
       // GET 幂等:连接持续失败(I/O 异常)→ 用尽 maxRetries+1 次,fail message 含次数。
@@ -563,8 +622,8 @@ class HttpTaskExecutorTest {
 
       assertThat(r.success()).isTrue();
       @SuppressWarnings("unchecked")
-      Map<String, java.util.List<String>> hdrs =
-          (Map<String, java.util.List<String>>) r.output().get("responseHeaders");
+      Map<String, List<String>> hdrs =
+          (Map<String, List<String>>) r.output().get("responseHeaders");
       // Set-Cookie / Authorization 必须被脱敏(任何大小写形态都不应残留原值)
       hdrs.forEach((name, values) -> {
         String lower = name.toLowerCase(Locale.ROOT);
@@ -582,23 +641,23 @@ class HttpTaskExecutorTest {
     @DisplayName("脱敏规则应忽略大小写, 并覆盖代理认证与旧版会话头")
     void shouldRedactSensitiveHeaders_whenCaseDiffers() {
       // 直接驱动静态 helper,避免 HTTP server 编排成本;case-insensitive 全覆盖。
-      Map<String, java.util.List<String>> in = new java.util.LinkedHashMap<>();
-      in.put("Set-Cookie", java.util.List.of("s=1"));
-      in.put("set-cookie2", java.util.List.of("legacy"));
-      in.put("AUTHORIZATION", java.util.List.of("Bearer abc"));
-      in.put("Proxy-Authorization", java.util.List.of("Basic xx"));
-      in.put("cookie", java.util.List.of("a=b"));
-      in.put("X-Trace-Id", java.util.List.of("t1"));
+      Map<String, List<String>> in = new LinkedHashMap<>();
+      in.put("Set-Cookie", List.of("s=1"));
+      in.put("set-cookie2", List.of("legacy"));
+      in.put("AUTHORIZATION", List.of("Bearer abc"));
+      in.put("Proxy-Authorization", List.of("Basic xx"));
+      in.put("cookie", List.of("a=b"));
+      in.put("X-Trace-Id", List.of("t1"));
 
-      Map<String, java.util.List<String>> out = HttpTaskExecutor.sanitizeResponseHeaders(in);
+      Map<String, List<String>> out = HttpTaskExecutor.sanitizeResponseHeaders(in);
 
       assertThat(out)
-          .containsEntry("Set-Cookie", java.util.List.of("[REDACTED]"))
-          .containsEntry("set-cookie2", java.util.List.of("[REDACTED]"))
-          .containsEntry("AUTHORIZATION", java.util.List.of("[REDACTED]"))
-          .containsEntry("Proxy-Authorization", java.util.List.of("[REDACTED]"))
-          .containsEntry("cookie", java.util.List.of("[REDACTED]"))
-          .containsEntry("X-Trace-Id", java.util.List.of("t1"));
+          .containsEntry("Set-Cookie", List.of("[REDACTED]"))
+          .containsEntry("set-cookie2", List.of("[REDACTED]"))
+          .containsEntry("AUTHORIZATION", List.of("[REDACTED]"))
+          .containsEntry("Proxy-Authorization", List.of("[REDACTED]"))
+          .containsEntry("cookie", List.of("[REDACTED]"))
+          .containsEntry("X-Trace-Id", List.of("t1"));
     }
 
     @Test

@@ -24,6 +24,7 @@ ALTER TABLE batch.trigger_runtime_state
 
 -- NOT VALID:ADD 不扫全表/不阻塞写(只对新写入生效);随后 VALIDATE 用较轻的
 -- SHARE UPDATE EXCLUSIVE 锁补扫存量(允许并发读写)。满足 squawk constraint-missing-not-valid。
+
 ALTER TABLE batch.trigger_runtime_state
     ADD CONSTRAINT ck_trigger_runtime_state_last_status CHECK (
         last_fire_status IS NULL OR last_fire_status IN

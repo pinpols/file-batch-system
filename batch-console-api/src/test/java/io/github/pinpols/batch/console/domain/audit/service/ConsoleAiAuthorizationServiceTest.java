@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import java.util.List;
 import java.util.Set;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -50,8 +51,8 @@ class ConsoleAiAuthorizationServiceTest {
     ConsoleAiAuthorizationService service = newService(List.of("admin"), List.of("ROLE_ADMIN"));
     assertThatThrownBy(service::assertAllowed)
         .isInstanceOf(BizException.class)
-        .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(((BizException) ex).getCode())
-            .isEqualTo(ResultCode.FORBIDDEN));
+        .satisfies(ex ->
+            Assertions.assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.FORBIDDEN));
   }
 
   @Test

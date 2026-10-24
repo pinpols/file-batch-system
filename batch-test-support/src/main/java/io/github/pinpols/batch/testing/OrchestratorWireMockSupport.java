@@ -2,6 +2,7 @@ package io.github.pinpols.batch.testing;
 
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
@@ -21,6 +22,9 @@ public final class OrchestratorWireMockSupport {
           try {
             HttpServer httpServer = HttpServer.create(new InetSocketAddress(0), 0);
             httpServer.createContext("/internal/", exchange -> {
+              try (var requestBody = exchange.getRequestBody()) {
+                requestBody.transferTo(OutputStream.nullOutputStream());
+              }
               byte[] body = "{}".getBytes(StandardCharsets.UTF_8);
               exchange.getResponseHeaders().set("Content-Type", "application/json");
               exchange.sendResponseHeaders(200, body.length);

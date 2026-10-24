@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：在真实服务链路中对自托管 SDK Worker 注入暂停、恢复、取消和排空控制。
+# 用法：在仓库根目录执行 bash scripts/local/sdk-control-e2e.sh；参数与前置环境见下方说明及所属 README。
 # 在真实服务链路中对自托管 SDK Worker 注入暂停、恢复、取消和排空控制。
 set -uo pipefail
 
@@ -28,17 +30,21 @@ sdk_control_pause_proxy() {
 }
 
 sdk_control_launch() {
-  local after_id="$1" deadline instance=""
+  local deadline instance="" workflow_id python_bin
   SDK_E2E_IDEMPOTENCY_KEY="sdk-control-${LANG_ID}-$$-$(date +%s)-$RANDOM"
+  python_bin="${SDK_E2E_PYTHON_BIN:-$(command -v python3 || command -v python)}"
+  workflow_id=$("$python_bin" "$SDK_E2E_ROOT/scripts/sim/launch_contract.py" \
+    "$TENANT" "$SDK_E2E_JOB_CODE") || return 1
   curl -fsS -X POST "${TRIGGER_URL}/api/triggers/launch" \
     -H "X-Internal-Secret: ${BATCH_INTERNAL_SECRET}" \
     -H "Idempotency-Key: ${SDK_E2E_IDEMPOTENCY_KEY}" \
     -H 'Content-Type: application/json' \
-    -d "{\"tenantId\":\"${TENANT}\",\"jobCode\":\"${SDK_E2E_JOB_CODE}\",\"bizDate\":\"$(date +%F)\",\"triggerType\":\"API\"}" >/dev/null || return 1
+    -d "{\"tenantId\":\"${TENANT}\",\"workflowDefinitionId\":${workflow_id},\"bizDate\":\"$(date +%F)\",\"triggerType\":\"API\"}" >/dev/null || return 1
   deadline=$((SECONDS + SDK_E2E_INSTANCE_WAIT_SECONDS))
   while (( SECONDS < deadline )); do
-    instance="$(sdk_e2e_q_file select-latest-job-instance-id-after.sql \
-      -v tenant_id="$TENANT" -v job_code="$SDK_E2E_JOB_CODE" -v after_id="$after_id")"
+    # 同 Job 并发启动时，只允许控制本次请求关联的实例。
+    instance="$(sdk_e2e_q_file select-launched-job-instance-id.sql \
+      -v tenant_id="$TENANT" -v request_id="$SDK_E2E_IDEMPOTENCY_KEY")"
     [[ -n "$instance" ]] && break
     sleep 1
   done

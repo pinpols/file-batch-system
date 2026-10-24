@@ -11,7 +11,6 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.support.StageFailureCode;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
@@ -45,9 +44,6 @@ import org.mockito.quality.Strictness;
 class DefaultDispatchStageExecutorTest {
 
   @Mock
-  private PlatformPipelineDefinitionRepository pipelineDefinitions;
-
-  @Mock
   private PlatformPipelineRunRepository pipelineRuns;
 
   // The step under test
@@ -74,8 +70,7 @@ class DefaultDispatchStageExecutorTest {
       }
     }
     meterRegistry = new SimpleMeterRegistry();
-    executor = new DefaultDispatchStageExecutor(
-        allSteps, pipelineDefinitions, pipelineRuns, meterRegistry);
+    executor = new DefaultDispatchStageExecutor(allSteps, pipelineRuns, meterRegistry);
   }
 
   @Test
@@ -158,7 +153,6 @@ class DefaultDispatchStageExecutorTest {
     DispatchJobContext context = new DispatchJobContext();
     context.setTenantId("t1");
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, List.of());
-    when(pipelineDefinitions.loadPipelineSteps(any())).thenReturn(List.of());
 
     List<DispatchStageResult> results = executor.execute(context);
 
@@ -177,7 +171,6 @@ class DefaultDispatchStageExecutorTest {
     context.setWorkerId("w1");
     context.setDispatchId("d1");
     PipelineStepDefinition step = new PipelineStepDefinition(
-        1L,
         1L,
         "DISPATCH_PREPARE",
         "Dispatch Prepare",

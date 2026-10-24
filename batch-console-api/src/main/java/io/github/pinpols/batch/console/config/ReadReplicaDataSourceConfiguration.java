@@ -72,11 +72,10 @@ public class ReadReplicaDataSourceConfiguration {
     routes.put(ReadReplicaRoutingDataSource.Route.PRIMARY, primary);
     routes.put(ReadReplicaRoutingDataSource.Route.REPLICA, replica);
 
+    int failureThreshold = props.getFailureThreshold();
+    long quarantineMillis = props.getQuarantineSeconds() * 1_000L;
     ReadReplicaRoutingDataSource routing = new ReadReplicaRoutingDataSource(
-        primary,
-        props.getFailureThreshold(),
-        props.getQuarantineSeconds() * 1_000L,
-        meterRegistryProvider);
+        primary, failureThreshold, quarantineMillis, meterRegistryProvider);
     routing.setTargetDataSources(routes);
     routing.setDefaultTargetDataSource(primary);
     routing.afterPropertiesSet();

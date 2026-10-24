@@ -19,7 +19,8 @@ public class ConsoleRequestMetadataResolver {
     if (metadata instanceof ConsoleRequestMetadata consoleRequestMetadata) {
       return consoleRequestMetadata;
     }
-    return new ConsoleRequestMetadata(null, null, null, null, null, request.getRemoteAddr());
+    String clientIp = request.getRemoteAddr();
+    return ConsoleRequestMetadata.withClientIpOnly(clientIp);
   }
 
   public ResponseMeta responseMeta() {

@@ -47,6 +47,62 @@ WHERE tenant_id = :'capacity_tenant_id'
   AND policy_code = 'p2-capacity-profile'
   AND description = 'Ephemeral P2 unbounded-admission capacity policy';
 
+DELETE FROM batch.workflow_edge edge
+USING batch.workflow_definition workflow
+JOIN batch.job_definition job
+  ON job.tenant_id = workflow.tenant_id
+ AND job.id = workflow.single_job_definition_id
+WHERE edge.tenant_id = workflow.tenant_id
+  AND edge.workflow_definition_id = workflow.id
+  AND job.tenant_id = :'capacity_tenant_id'
+  AND job.job_code = 'atomic_sql_demo'
+  AND job.description IN (
+      'P2 local capacity clone with unbounded admission policy',
+      'P2 local capacity definition with unbounded admission policy'
+  )
+  AND workflow.workflow_code = 'JOB-WF-' || job.id;
+
+DELETE FROM batch.workflow_node node
+USING batch.workflow_definition workflow
+JOIN batch.job_definition job
+  ON job.tenant_id = workflow.tenant_id
+ AND job.id = workflow.single_job_definition_id
+WHERE node.tenant_id = workflow.tenant_id
+  AND node.workflow_definition_id = workflow.id
+  AND job.tenant_id = :'capacity_tenant_id'
+  AND job.job_code = 'atomic_sql_demo'
+  AND job.description IN (
+      'P2 local capacity clone with unbounded admission policy',
+      'P2 local capacity definition with unbounded admission policy'
+  )
+  AND workflow.workflow_code = 'JOB-WF-' || job.id;
+
+DELETE FROM batch.workflow_definition_version version
+USING batch.workflow_definition workflow
+JOIN batch.job_definition job
+  ON job.tenant_id = workflow.tenant_id
+ AND job.id = workflow.single_job_definition_id
+WHERE version.workflow_definition_id = workflow.id
+  AND job.tenant_id = :'capacity_tenant_id'
+  AND job.job_code = 'atomic_sql_demo'
+  AND job.description IN (
+      'P2 local capacity clone with unbounded admission policy',
+      'P2 local capacity definition with unbounded admission policy'
+  )
+  AND workflow.workflow_code = 'JOB-WF-' || job.id;
+
+DELETE FROM batch.workflow_definition workflow
+USING batch.job_definition job
+WHERE workflow.tenant_id = job.tenant_id
+  AND workflow.single_job_definition_id = job.id
+  AND workflow.workflow_code = 'JOB-WF-' || job.id
+  AND job.tenant_id = :'capacity_tenant_id'
+  AND job.job_code = 'atomic_sql_demo'
+  AND job.description IN (
+      'P2 local capacity clone with unbounded admission policy',
+      'P2 local capacity definition with unbounded admission policy'
+  );
+
 DELETE FROM batch.job_definition
 WHERE tenant_id = :'capacity_tenant_id'
   AND job_code = 'atomic_sql_demo'

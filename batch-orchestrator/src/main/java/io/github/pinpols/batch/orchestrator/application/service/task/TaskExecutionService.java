@@ -49,6 +49,9 @@ public interface TaskExecutionService {
   boolean renewTaskLease(
       String tenantId, Long taskId, String workerCode, String partitionInvocationId);
 
+  boolean markNonIdempotentExecutionStarted(
+      String tenantId, Long taskId, String workerCode, String partitionInvocationId);
+
   /** ORCH-P4-1：心跳 = 续租 + 进度上报 + 取消感知。详见 {@link TaskAssignmentService#recordHeartbeat}。 */
   TaskAssignmentService.TaskHeartbeatResult recordHeartbeat(
       String tenantId,

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.dispatchs.mapper;
 
+import io.github.pinpols.batch.worker.dispatchs.domain.DispatchRecordSnapshot;
 import io.github.pinpols.batch.worker.dispatchs.domain.PendingReceiptPollRow;
 import java.util.List;
 import java.util.Map;
@@ -11,11 +12,17 @@ public interface FileDispatchMapper {
 
   Map<String, Object> selectChannelConfig(Map<String, Object> params);
 
-  Long selectLatestDispatchRecordId(Map<String, Object> params);
+  boolean isChannelActive(Map<String, Object> params);
+
+  DispatchRecordSnapshot selectLatestDispatchRecord(Map<String, Object> params);
 
   int insertDispatchRecord(Map<String, Object> params);
 
-  int incrementAttempt(Map<String, Object> params);
+  int beginAttempt(Map<String, Object> params);
+
+  int beginVerifiedExternalOutcomeAttempt(Map<String, Object> params);
+
+  int markAttemptFailed(Map<String, Object> params);
 
   int markSent(Map<String, Object> params);
 

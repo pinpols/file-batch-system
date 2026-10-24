@@ -72,6 +72,25 @@
         limit #{limit}
     </select>
 
+    <select id="selectByIdForUpdate" resultMap="ReplayEntryResultMap">
+        select * from batch.batch_day_replay_entry
+        where tenant_id = #{tenantId} and session_id = #{sessionId} and id = #{id}
+        for update
+    </select>
+
+    <update id="retryFailedUnboundWithStatus">
+        update batch.batch_day_replay_entry
+        set status = #{targetStatus}, failure_reason = null, started_at = null,
+            finished_at = null, updated_at = #{now}
+        where tenant_id = #{tenantId} and session_id = #{sessionId} and id = #{id}
+          and status = 'FAILED' and rerun_instance_id is null
+          and not exists (
+              select 1 from batch.trigger_request tr
+              where tr.tenant_id = #{tenantId}
+                and tr.request_id = concat('replay-', #{sessionId}, '-', #{id})
+          )
+    </update>
+
     <update id="claimIfCurrent">
         update batch.batch_day_replay_entry
         set status = #{targetStatus},
@@ -100,19 +119,60 @@
           and started_at &lt; #{cutoff}
     </update>
 
-    <select id="selectByRerunInstanceId" resultMap="ReplayEntryResultMap">
-        select * from batch.batch_day_replay_entry
-        where tenant_id = #{tenantId} and rerun_instance_id = #{rerunInstanceId}
-        limit 1
+    <select id="selectByCurrentExecution" resultMap="ReplayEntryResultMap">
+        select e.* from batch.batch_day_replay_entry e
+        join batch.batch_day_replay_session s on s.id=e.session_id and s.tenant_id=e.tenant_id
+        join batch.job_instance ji on ji.tenant_id=e.tenant_id and ji.replay_session_id=e.session_id
+        join batch.workflow_node_run n on n.job_instance_id=ji.id and n.node_type='JOB'
+        join batch.workflow_run w on w.id=n.workflow_run_id and w.tenant_id=e.tenant_id
+        join batch.trigger_request tr on tr.id=w.trigger_request_id and tr.tenant_id=e.tenant_id
+        where e.tenant_id=#{tenantId} and e.session_id=#{sessionId}
+          and e.job_code=#{jobCode} and ji.job_code=e.job_code and ji.id=#{jobInstanceId}
+          and ji.biz_date=s.biz_date and w.biz_date=s.biz_date
+          and tr.request_id=concat('replay-',e.session_id,'-',e.id)
+          and ji.parent_instance_id is not distinct from e.source_instance_id
+          and not exists (select 1 from batch.workflow_node_run newer
+              where newer.workflow_run_id=n.workflow_run_id and newer.node_code=n.node_code
+                and newer.run_seq &gt; n.run_seq)
     </select>
 
-    <select id="selectBySessionAndSourceInstanceId" resultMap="ReplayEntryResultMap">
-        select * from batch.batch_day_replay_entry
-        where session_id = #{sessionId}
-          and tenant_id = #{tenantId}
-          and source_instance_id = #{sourceInstanceId}
-        limit 1
-    </select>
+    <update id="bindCurrentExecutions">
+        with candidates as (
+            select e.id,min(ji.id) as job_id,count(distinct ji.id) as matches
+            from batch.batch_day_replay_entry e
+            join batch.batch_day_replay_session s on s.id=e.session_id and s.tenant_id=e.tenant_id
+            join batch.job_instance ji on ji.tenant_id=e.tenant_id and ji.replay_session_id=e.session_id and ji.job_code=e.job_code
+            join batch.workflow_node_run n on n.job_instance_id=ji.id and n.node_type='JOB'
+            join batch.workflow_run w on w.id=n.workflow_run_id and w.tenant_id=e.tenant_id
+            join batch.trigger_request tr on tr.id=w.trigger_request_id and tr.tenant_id=e.tenant_id
+            where e.tenant_id=#{tenantId} and e.session_id=#{sessionId} and e.status='RUNNING'
+              and e.rerun_instance_id is null and ji.biz_date=s.biz_date and w.biz_date=s.biz_date
+              and tr.request_id=concat('replay-',e.session_id,'-',e.id)
+              and ji.parent_instance_id is not distinct from e.source_instance_id
+              and not exists (select 1 from batch.workflow_node_run newer
+                  where newer.workflow_run_id=n.workflow_run_id and newer.node_code=n.node_code and newer.run_seq &gt; n.run_seq)
+            group by e.id
+        )
+        update batch.batch_day_replay_entry e set rerun_instance_id=c.job_id,updated_at=#{now}
+        from candidates c where e.tenant_id=#{tenantId} and e.session_id=#{sessionId}
+          and e.id=c.id and c.matches=1 and e.rerun_instance_id is null and e.status='RUNNING'
+    </update>
+
+    <update id="failRejectedLaunches">
+        update batch.batch_day_replay_entry e
+           set status=#{failedStatus},finished_at=#{now},updated_at=#{now},
+               failure_reason=concat('WORKFLOW_LAUNCH_',tr.request_status,': ',tr.request_id)
+          from batch.trigger_request tr
+         where e.tenant_id=#{tenantId} and e.session_id=#{sessionId}
+           and e.rerun_instance_id is null and e.status in ('PENDING','RUNNING')
+           and tr.tenant_id=e.tenant_id and tr.request_id=concat('replay-',e.session_id,'-',e.id)
+           and tr.request_status in
+           <foreach collection="rejectedStatuses" item="status" open="(" separator="," close=")">#{status}</foreach>
+           and not exists (select 1 from batch.workflow_run w
+               join batch.workflow_node_run n on n.workflow_run_id=w.id
+               join batch.job_instance ji on ji.id=n.job_instance_id and ji.tenant_id=w.tenant_id
+               where w.tenant_id=e.tenant_id and w.trigger_request_id=tr.id and ji.job_code=e.job_code)
+    </update>
 
     <update id="updateStatus"
             parameterType="io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplayEntryStatusParam">

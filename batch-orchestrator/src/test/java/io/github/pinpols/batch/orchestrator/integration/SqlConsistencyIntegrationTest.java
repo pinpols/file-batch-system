@@ -57,43 +57,55 @@ class SqlConsistencyIntegrationTest {
       assertUniquePresent(jdbc, "job_instance", "uk_job_instance_tenant_dedup_attempt");
       assertUniquePresent(jdbc, "outbox_event", "uk_outbox_event_key");
       assertUniquePresent(jdbc, "job_definition", "uk_job_definition_tenant_code");
+      assertColumnLength(jdbc, "file_audit_log", "operator_id", 128);
 
       runRuntimeParameterUpsertProbe(dataSource);
     }
   }
 
   private static void assertUniquePresent(JdbcTemplate jdbc, String table, String constraintName) {
-    Long cnt = jdbc.queryForObject("""
+    final String selectCountSql = """
             select count(*) from information_schema.table_constraints tc
             where tc.table_schema = 'batch'
               and tc.table_name = ?
               and tc.constraint_name = ?
               and tc.constraint_type in ('UNIQUE', 'PRIMARY KEY')
-            """, Long.class, table, constraintName);
+            """;
+
+    Long cnt = jdbc.queryForObject(selectCountSql, Long.class, table, constraintName);
     assertThat(cnt).isEqualTo(1L);
   }
 
+  private static void assertColumnLength(
+      JdbcTemplate jdbc, String table, String column, int expectedLength) {
+    final String selectCharacterMaximumLengthSql = """
+            select character_maximum_length
+            from information_schema.columns
+            where table_schema = 'batch'
+              and table_name = ?
+              and column_name = ?
+            """;
+
+    Integer actualLength = jdbc.queryForObject(
+        selectCharacterMaximumLengthSql, Integer.class, table, column);
+    assertThat(actualLength).isEqualTo(expectedLength);
+  }
+
   private static void runRuntimeParameterUpsertProbe(DataSource dataSource) throws Exception {
+    final String insertBatchRuntimeDefaultParameterSql = """
+          insert into batch.batch_runtime_default_parameter (
+              module, parameter_key, default_value, value_type, yaml_path, description
+          ) values (
+              'SQL_CONSISTENCY_IT', 'guard_probe', 'true', 'BOOLEAN', 'n/a',
+              'SqlConsistencyIT idempotent probe'
+          )
+          on conflict (module, parameter_key) do nothing
+          """;
+
     try (Connection c = dataSource.getConnection();
         var st = c.createStatement()) {
-      st.execute("""
-          insert into batch.batch_runtime_default_parameter (
-              module, parameter_key, default_value, value_type, yaml_path, description
-          ) values (
-              'SQL_CONSISTENCY_IT', 'guard_probe', 'true', 'BOOLEAN', 'n/a',
-              'SqlConsistencyIT idempotent probe'
-          )
-          on conflict (module, parameter_key) do nothing
-          """);
-      st.execute("""
-          insert into batch.batch_runtime_default_parameter (
-              module, parameter_key, default_value, value_type, yaml_path, description
-          ) values (
-              'SQL_CONSISTENCY_IT', 'guard_probe', 'true', 'BOOLEAN', 'n/a',
-              'SqlConsistencyIT idempotent probe'
-          )
-          on conflict (module, parameter_key) do nothing
-          """);
+      st.execute(insertBatchRuntimeDefaultParameterSql);
+      st.execute(insertBatchRuntimeDefaultParameterSql);
     }
   }
 }

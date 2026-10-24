@@ -44,9 +44,15 @@ class JdbcMappedImportCompensatorIntegrationTest {
     jdbcTemplate = new JdbcTemplate(dataSource);
     compensator = new JdbcMappedImportCompensator(dataSource, new ObjectMapper());
 
-    jdbcTemplate.execute("DROP SCHEMA IF EXISTS biz CASCADE");
-    jdbcTemplate.execute("CREATE SCHEMA biz");
-    jdbcTemplate.execute("""
+    final String dropSql = """
+        DROP SCHEMA IF EXISTS biz CASCADE
+    """;
+    jdbcTemplate.execute(dropSql);
+    final String createSql = """
+        CREATE SCHEMA biz
+    """;
+    jdbcTemplate.execute(createSql);
+    final String createBizImportCustomerSql = """
         CREATE TABLE biz.import_customer (
           tenant_id text NOT NULL,
           source_batch_no text NOT NULL,
@@ -54,7 +60,8 @@ class JdbcMappedImportCompensatorIntegrationTest {
           customer_name text,
           PRIMARY KEY (tenant_id, source_batch_no, customer_no)
         )
-        """);
+        """;
+    jdbcTemplate.execute(createBizImportCustomerSql);
     // 本 run（t1 / BATCH-1）的 2 行
     insert("t1", "BATCH-1", "C001", "this run a");
     insert("t1", "BATCH-1", "C002", "this run b");
@@ -112,13 +119,19 @@ class JdbcMappedImportCompensatorIntegrationTest {
   }
 
   private void insert(String tenantId, String batchNo, String customerNo, String name) {
+    final String insertBizImportCustomerSql = """
+        INSERT INTO biz.import_customer VALUES (?,?,?,?)
+    """;
     jdbcTemplate.update(
-        "INSERT INTO biz.import_customer VALUES (?,?,?,?)", tenantId, batchNo, customerNo, name);
+        insertBizImportCustomerSql, tenantId, batchNo, customerNo, name);
   }
 
   private int countRows(String tenantId, String batchNo) {
+    final String selectBizImportCustomerSql = """
+        SELECT count(*) FROM biz.import_customer WHERE tenant_id=? AND source_batch_no=?
+    """;
     Integer count = jdbcTemplate.queryForObject(
-        "SELECT count(*) FROM biz.import_customer WHERE tenant_id=? AND source_batch_no=?",
+        selectBizImportCustomerSql,
         Integer.class,
         tenantId,
         batchNo);

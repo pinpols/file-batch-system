@@ -32,19 +32,47 @@ CREATE SCHEMA IF NOT EXISTS batch;
 --
 -- 按 staged_at 天级 RANGE 分区(2026-06 起):staging 行批次写满即清,但 DELETE 不缩文件,
 -- 长期高水位会把堆膨胀到历史最大暂存量并再不回收(实测超过磁盘)。分区后由
--- ProcessStagingOrphanCleaner 预建未来日分区 + DROP 过期日分区(retention-days),
--- DROP 瞬间把空间还给 OS,磁盘占用封顶在「保留窗口内的暂存量」,根治物理膨胀。
+-- ProcessStagingOrphanCleaner 预建未来日分区；按年龄自动删除需显式启用 deletion-enabled，当前默认关闭，
+-- 因任务恢复状态位于平台库、staging 位于业务库，时间保留线本身不能证明批次可删除。容量与安全回收协议见 PART-02。
 -- 注:分区键 staged_at 必须进每个唯一约束 → PRIMARY KEY 加入 staged_at
 -- (row_seq BIGSERIAL 已全局唯一,加 staged_at 不削弱唯一性,仅满足分区约束)。
 -- 已存在的非分区旧表(如 Flyway V75 在 e2e/平台库建的、或历史部署)先 DROP 再重建为分区表:
--- process_staging 是瞬态 WAP 暂存表(稳态 0 存活行,行写于 COMMIT、清于 FEEDBACK),DROP 无业务
--- 数据损失;且 PG 无法把非分区表原地转分区,CREATE IF NOT EXISTS 遇非分区旧表会让后续
+-- process_staging 是 WAP 暂存表，但失败/暂停/重试可能保留可恢复数据；DROP 会丢失这些数据。
+-- 未确认在途和恢复数据已清空前不可运行。本节结构重建仅用于空库初始化；PG 无法把非分区表原地转分区，CREATE IF NOT EXISTS 遇非分区旧表会让后续
 -- "CREATE ... PARTITION OF" 报错(非分区表不能加分区)。CASCADE 仅清其自身索引/分区。
 -- ⚠️ 运维勿在有 in-flight PROCESS 任务时跑本脚本(in-flight staging 会丢,任务幂等重跑)。
 -- 幂等守护:仅当旧表存在且**不是**分区表时才 DROP;已是分区表(正常生产态)绝不 DROP,
 -- 防止运维误跑本脚本(已有库本应跑 migrate-process-staging-to-partitioned.sql)时删掉生产表。
 -- ⚠️ 本文件被 e2e 经 Spring @Sql(ScriptUtils)按分号切割加载,ScriptUtils 不识别 $$ dollar-quote
 -- (会把 DO 块拦腰切断报 "Unterminated dollar quote"),故 DO 体必须用单引号字符串(内部引号翻倍)。
+CREATE TABLE IF NOT EXISTS batch.process_staging_generation (
+    generation_id      UUID PRIMARY KEY,
+    tenant_id          TEXT NOT NULL,
+    job_task_id        BIGINT,
+    batch_key          TEXT NOT NULL,
+    generation_status  TEXT NOT NULL,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    sealed_at          TIMESTAMPTZ,
+    CONSTRAINT ck_process_staging_generation_status
+        CHECK (generation_status IN ('OPEN', 'SEALED', 'RECLAIMED')),
+    CONSTRAINT ck_process_staging_generation_sealed_at
+        CHECK ((generation_status = 'OPEN' AND sealed_at IS NULL)
+            OR (generation_status IN ('SEALED', 'RECLAIMED') AND sealed_at IS NOT NULL)),
+    CONSTRAINT uk_process_staging_generation_identity
+        UNIQUE (tenant_id, generation_id, batch_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_process_staging_generation_tenant_task
+    ON batch.process_staging_generation (tenant_id, job_task_id, created_at);
+
+ALTER TABLE batch.process_staging_generation ENABLE ROW LEVEL SECURITY;
+ALTER TABLE batch.process_staging_generation FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_strict ON batch.process_staging_generation;
+CREATE POLICY tenant_isolation_strict ON batch.process_staging_generation
+    AS PERMISSIVE FOR ALL TO PUBLIC
+    USING (tenant_id = current_setting('app.tenant_id', true))
+    WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
+
 DO '
 DECLARE
     v_relkind CHAR;
@@ -62,14 +90,45 @@ BEGIN
 END';
 CREATE TABLE IF NOT EXISTS batch.process_staging (
     batch_key      TEXT        NOT NULL,
+    staging_generation_id UUID NOT NULL,
     row_seq        BIGSERIAL   NOT NULL,
     tenant_id      TEXT        NOT NULL,
     target_schema  TEXT        NOT NULL,
     target_table   TEXT        NOT NULL,
     payload        JSONB       NOT NULL,
     staged_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (batch_key, row_seq, staged_at)
+    PRIMARY KEY (batch_key, staging_generation_id, row_seq, staged_at),
+    CONSTRAINT fk_process_staging_generation_identity
+        FOREIGN KEY (tenant_id, staging_generation_id, batch_key)
+        REFERENCES batch.process_staging_generation (tenant_id, generation_id, batch_key)
+        ON DELETE NO ACTION
 ) PARTITION BY RANGE (staged_at);
+
+CREATE OR REPLACE FUNCTION batch.guard_process_staging_generation()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS 'BEGIN
+    PERFORM 1
+    FROM batch.process_staging_generation generation
+    WHERE generation.generation_id = NEW.staging_generation_id
+      AND generation.tenant_id = NEW.tenant_id
+      AND generation.batch_key = NEW.batch_key
+      AND generation.generation_status = ''OPEN''
+    FOR SHARE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION ''PROCESS staging generation is missing, mismatched, or sealed''
+            USING ERRCODE = ''23503'',
+                  CONSTRAINT = ''fk_process_staging_generation_open'';
+    END IF;
+    RETURN NEW;
+END';
+
+DROP TRIGGER IF EXISTS trg_process_staging_generation_guard ON batch.process_staging;
+CREATE TRIGGER trg_process_staging_generation_guard
+    BEFORE INSERT OR UPDATE OF batch_key, staging_generation_id, tenant_id
+    ON batch.process_staging
+    FOR EACH ROW
+    EXECUTE FUNCTION batch.guard_process_staging_generation();
 
 -- 回退分区:维护调度滞后(未来日分区还没建)时写入落到 default,绝不因缺分区 INSERT 失败。
 -- 正常 default 近乎为空;运维若发现 default 持续增长 → 维护调度失效信号。
@@ -79,10 +138,14 @@ CREATE TABLE IF NOT EXISTS batch.process_staging_default
 -- 父表建索引 → PG 自动在所有现有 + 未来分区上同名建索引。
 CREATE INDEX IF NOT EXISTS idx_process_staging_batch_key
     ON batch.process_staging (batch_key);
+CREATE INDEX IF NOT EXISTS idx_process_staging_batch_generation
+    ON batch.process_staging (batch_key, staging_generation_id);
 CREATE INDEX IF NOT EXISTS idx_process_staging_tenant_batch
     ON batch.process_staging (tenant_id, batch_key);
+CREATE INDEX IF NOT EXISTS idx_process_staging_tenant_generation
+    ON batch.process_staging (tenant_id, staging_generation_id);
 CREATE INDEX IF NOT EXISTS idx_process_staging_target_batch
-    ON batch.process_staging (tenant_id, target_schema, target_table, batch_key);
+    ON batch.process_staging (tenant_id, target_schema, target_table, batch_key, staging_generation_id);
 CREATE INDEX IF NOT EXISTS idx_process_staging_staged_at
     ON batch.process_staging (staged_at);
 

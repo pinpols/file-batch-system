@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.archive;
 
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -45,16 +46,25 @@ class ArchiveSchedulerHealthReportingTest {
     SuccessInstanceArchiveService service = mock(SuccessInstanceArchiveService.class);
     OrchestratorGracefulShutdown shutdown = mock(OrchestratorGracefulShutdown.class);
     ArchiveSchedulerHealthMetrics metrics = mock(ArchiveSchedulerHealthMetrics.class);
-    when(service.archiveOnce())
-        .thenReturn(SuccessInstanceArchiveService.ArchiveBatchResult.empty(Instant.EPOCH));
-    SuccessInstanceArchiveScheduler scheduler = new SuccessInstanceArchiveScheduler(
-        service, new SuccessInstanceArchiveProperties(), shutdown, metrics);
+    SuccessInstanceArchiveProperties properties = new SuccessInstanceArchiveProperties();
+    properties.setBatchSize(1);
+    SuccessInstanceArchiveService.ArchiveBatchResult fullBatch =
+        new SuccessInstanceArchiveService.ArchiveBatchResult(true, Instant.EPOCH, 1, 1);
+    when(service.archiveNextBatch())
+        .thenReturn(
+            fullBatch,
+            fullBatch,
+            SuccessInstanceArchiveService.ArchiveBatchResult.empty(Instant.EPOCH));
+    SuccessInstanceArchiveScheduler scheduler =
+        new SuccessInstanceArchiveScheduler(service, properties, shutdown, metrics);
 
     scheduler.registerHealthMetric();
     scheduler.archive();
 
     verify(metrics).register("job_instance");
     verify(metrics).markSuccess("job_instance");
+    verify(service).reportIntegrityIssues();
+    verify(service, times(3)).archiveNextBatch();
   }
 
   @Test

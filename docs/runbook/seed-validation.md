@@ -1,7 +1,7 @@
 # 种子数据 + ADR-010 链路验证脚本 — 用法手册
 
 > **脚本**: `scripts/local/validate-seed-scenarios.sh`
-> **目的**: 一键回归 V82-V85 schema + ADR-010 异步链路 + 多租隔离 + 异常路径 + worker 链路覆盖
+> **目的**: 验证当前全新库 Schema、Workflow 根触发、ADR-010 异步链路、多租隔离、异常路径和 Worker 链路。
 > **退出码**: 0 = 全过；非 0 = 至少 1 项 FAIL
 
 ---
@@ -12,7 +12,7 @@
 |---|---|
 | Docker 全栈 healthy | `docker ps` — 7 个 batch-* 容器都是 healthy |
 | 种子数据已加载 | platform_seed.sql + business_seed.sql + multi-tenant-seed.sql |
-| Migration ≥ V86 | `SELECT max(version) FROM batch.flyway_schema_history` |
+| 当前整合库迁移 | `SELECT max(version) FROM batch.flyway_schema_history`，需覆盖当前分支最新迁移 |
 
 如果种子未加载：
 ```bash
@@ -55,7 +55,7 @@ ADVANCED=1 ./scripts/local/validate-seed-scenarios.sh
 STRICT=1 ADVANCED=1 AWAIT_TIMEOUT=120 ./scripts/local/validate-seed-scenarios.sh
 ```
 
-§7 改用 default-tenant 严格 SUCCESS，覆盖 IMPORT / EXPORT / WORKFLOW PIPELINE / DISPATCH / PROCESS 五条 worker happy path。STRICT 会先探活四类 worker（默认端口 18083-18086），需保持 worker 默认注册租户为 `default-tenant`。
+§7 改用 default-tenant 严格 SUCCESS，覆盖 IMPORT / EXPORT / Workflow 中的 Job 节点 / DISPATCH / PROCESS 五个场景（涉及四类文件 Worker）。所有触发均以 Workflow ID 作为根目标；STRICT 会先探活四类 worker（默认端口 18083-18086），需保持 worker 默认注册租户为 `default-tenant`。
 
 ---
 
@@ -66,12 +66,12 @@ STRICT=1 ADVANCED=1 AWAIT_TIMEOUT=120 ./scripts/local/validate-seed-scenarios.sh
 | 0 | 探活 ×3 | ✅ | ✅ | trigger / orchestrator / postgres 可达 |
 | 0.3 | STRICT worker 探活 ×4 | STRICT | STRICT | import / export / dispatch / process worker 可达且按 default-tenant 严格链路运行 |
 | 0.4 | PRE_CLEANUP | ✅ | ✅ | 清所有历史 seedval-* 残留 |
-| 1 | Schema 落地 ×8 | ✅ | ✅ | V82-V85 flyway + 约束定义 + tenant_id 列 |
+| 1 | Schema 落地 | ✅ | ✅ | 当前分支迁移版本、关键约束与租户列 |
 | 2 | 种子基线 ×2 | ✅ | ✅ | job_definition / workflow_node 行数 |
-| 3 | V84 多租隔离 ×1 | ✅ | ✅ | 跨租户同 (wf_def, node_code) 共存 + 同租户唯一 |
+| 3 | Workflow 节点隔离 ×1 | ✅ | ✅ | 租户归属与节点唯一约束 |
 | 4 | 同步 API + 双写 ×2 | ✅ | ✅ | trigger HTTP 200 + trigger_request + trigger_outbox_event 同事务 |
 | 5 | ADR-010 异步链路 ×1 | ✅ | ✅ | TriggerOutboxRelay → Kafka → orch consumer → trigger_request 推 LAUNCHED |
-| 6 | 异常路径 ×5 | ✅ | ✅ | 缺 jobCode / Idempotency-Key / X-Internal-Secret / 重发去重 / 跨租户拒绝 |
+| 6 | 异常路径 | ✅ | ✅ | 缺 Workflow 根目标 / 拒绝旧 Job 根目标 / 缺幂等键或密钥 / 重发去重 / 跨租户拒绝 |
 | 7 | Worker 链路覆盖 | ✅ | ✅ | 默认模式验证 instance 创建；STRICT 验证 default-tenant 五条 worker happy path 到 SUCCESS |
 | 8 | 多租并发 ×1 | ✅ | ✅ | ta + tb 并行 fire 后 tenant_id 不串 |
 | 9.1 | Outbox cleanup API | — | ✅ | POST /internal/outbox/cleanup → 200 |
@@ -97,7 +97,7 @@ STRICT=1 ADVANCED=1 AWAIT_TIMEOUT=120 ./scripts/local/validate-seed-scenarios.sh
 | `LOAD_SEED` | 0 | 1 = 跑前重载 platform/business seed |
 | **`PRE_CLEANUP`** | **1** | 跑前先清所有 seedval-* 历史残留（**默认开**，杜绝积累） |
 | `ADVANCED` | 0 | 1 = 跑 §9 advanced 段（5 项） |
-| `STRICT` | 0 | 1 = §7 改用 default-tenant 严格 SUCCESS（IMPORT/EXPORT/WORKFLOW/DISPATCH/PROCESS） |
+| `STRICT` | 0 | 1 = §7 改用 default-tenant 严格 SUCCESS（IMPORT/EXPORT/Workflow Job 节点/DISPATCH/PROCESS） |
 | `BATCH_WORKER_IMPORT_PORT` | 18083 | STRICT worker-import health 端口 |
 | `BATCH_WORKER_EXPORT_PORT` | 18084 | STRICT worker-export health 端口 |
 | `BATCH_WORKER_DISPATCH_PORT` | 18085 | STRICT worker-dispatch health 端口 |
@@ -114,9 +114,9 @@ STRICT=1 ADVANCED=1 AWAIT_TIMEOUT=120 ./scripts/local/validate-seed-scenarios.sh
 |---|---|
 | IMPORT | 使用 `import_customer_json_v1` 写入 `biz.customer_account` 的 SEEDVAL probe 行 |
 | EXPORT | 临时 seed `biz.settlement_batch`，使用 `export_settlement_v1` 生成文件 |
-| WORKFLOW PIPELINE | 使用 `wf_probe_pipeline` 触发 workflow 到 SUCCESS |
+| Workflow Job 节点 | 使用临时组合 Workflow 运行 EXPORT Job 到 SUCCESS |
 | DISPATCH | 临时 seed `file_record` + `local_dispatch` channel，要求派发 SUCCESS |
-| PROCESS | 临时 seed PROCESS job + pipeline steps，`sqlTransformCompute` 写入 `biz.customer_account` 的 SEEDVAL probe 行 |
+| PROCESS | 临时 seed PROCESS Job 的 `systemPipelineStepParams`，经受管单作业 Workflow 运行并由 `sqlTransformCompute` 写入 `biz.customer_account` 的 SEEDVAL probe 行 |
 
 ta/tb/tc 的 jobs 在 STRICT 模式下不要求 SUCCESS：multi-tenant-seed 里这些租户的 worker_registry 主要用于隔离和链路覆盖，实际严格 worker happy path 统一限定在 default-tenant。
 
@@ -140,8 +140,7 @@ workflow_run, workflow_node_run,
 pipeline_instance, pipeline_step_run,
 file_record, file_dispatch_record,
 outbox_event,
-pipeline_definition, pipeline_step_definition,
-batch.workflow_node (V84 SEEDVAL_PROBE),
+managed workflow_definition, workflow_node, workflow_edge, workflow_run / workflow_node_run,
 biz.settlement_batch, biz.customer_account
 ```
 
@@ -181,13 +180,13 @@ biz.settlement_batch, biz.customer_account
 ```
 **根因**: trigger_request 都没创建。检查：
 - `docker logs batch-trigger` 看 fire 时是否有 ERROR
-- jobCode 是否在 `batch.job_definition` 中 + tenant 匹配
+- workflowDefinitionId 是否属于请求 tenant，且 Workflow 已启用
 
 ### 6.5 §7 STRICT=1 FAIL
 
 先看失败项的 `err=`：
 - worker health 失败：确认 `START_WORKERS=1 bash scripts/local/start-all.sh` 已启动四类 worker，且未把 worker 租户改成 ta/tb/tc。
-- PROCESS 失败：确认脚本创建的 PROBE `pipeline_definition` / `pipeline_step_definition` 没被历史残留或手工数据冲突污染，必要时保持 `PRE_CLEANUP=1` 重跑。
+- PROCESS 失败：确认 PROBE Job 参数中的 `systemPipelineStepParams` 已完整写入，并通过受管单作业 Workflow 触发；必要时保持 `PRE_CLEANUP=1` 重跑。
 - IMPORT / EXPORT / DISPATCH / WORKFLOW 失败：看对应 worker 日志和 `batch.job_instance.error_code/error_message`。
 
 ### 6.6 §11 残留（清理 fail）

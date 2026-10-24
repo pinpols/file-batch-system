@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：比较两份 CycloneDX SBOM 的依赖语义，忽略跨环境的不稳定展示字段。
+# 用法：python3 scripts/ci/compare-sbom.py <入库 SBOM> <新生成 SBOM>。
 """比较两份 CycloneDX SBOM 的依赖语义，忽略跨环境的不稳定展示字段。"""
 
 from __future__ import annotations

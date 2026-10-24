@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 /**
  * 触发器定义加载器,通过 MyBatis Mapper 从持久层读取调度配置。
  *
- * <p>{@link #loadAll} 只返回处于启用状态的调度定义,用于启动时全量注册或对账。 {@link #loadByJobCode} 在找不到对应记录时返回 {@code
+ * <p>{@link #loadAll} 只返回处于启用状态的调度定义,用于启动时全量注册或对账。Workflow 查询在找不到对应记录时返回 {@code
  * null},由调用方决定是否抛出业务异常。
  *
  * <p>R-arch-audit-2026-05-23 P1:历史上本类是接口 + DatabaseTriggerDefinitionLoader 单实现的形式主义，调度器与 quartz
@@ -25,11 +25,19 @@ public class TriggerDefinitionLoader {
     return triggerDefinitionMapper.selectAllScheduledDefinitions();
   }
 
-  public TriggerDescriptor loadByJobCode(String tenantId, String jobCode) {
-    return triggerDefinitionMapper.selectByJobCode(tenantId, jobCode);
+  public List<TriggerDescriptor> loadPendingMisfireDefinitions() {
+    return triggerDefinitionMapper.selectDefinitionsWithPendingMisfires();
   }
 
-  public int setEnabled(String tenantId, String jobCode, boolean enabled) {
-    return triggerDefinitionMapper.updateEnabled(tenantId, jobCode, enabled);
+  public TriggerDescriptor loadByWorkflowCode(String tenantId, String workflowCode) {
+    return triggerDefinitionMapper.selectByWorkflowCode(tenantId, workflowCode);
+  }
+
+  public TriggerDescriptor loadByWorkflowDefinitionId(String tenantId, Long workflowDefinitionId) {
+    return triggerDefinitionMapper.selectByWorkflowDefinitionId(tenantId, workflowDefinitionId);
+  }
+
+  public int setWorkflowScheduleEnabled(String tenantId, String workflowCode, boolean enabled) {
+    return triggerDefinitionMapper.updateWorkflowScheduleEnabled(tenantId, workflowCode, enabled);
   }
 }

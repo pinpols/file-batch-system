@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.controller.response;
 
 import java.time.Instant;
 import java.util.List;
+import lombok.Builder;
 
 public record SchedulerSnapshotResponse(
     Instant generatedAt,
@@ -9,6 +10,7 @@ public record SchedulerSnapshotResponse(
     List<PolicySnapshot> policies,
     List<QueueSnapshot> queues,
     List<WorkerLoadSnapshot> workers) {
+  @Builder
   public record PolicySnapshot(
       String policyCode,
       String fairShareGroup,
@@ -28,6 +30,7 @@ public record SchedulerSnapshotResponse(
       int effectiveTenantJobCap,
       int effectiveTenantPartitionCap) {}
 
+  @Builder
   public record QueueSnapshot(
       String queueCode,
       String fairShareGroup,

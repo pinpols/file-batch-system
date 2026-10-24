@@ -12,9 +12,13 @@ final class DispatchReceiptSupport {
       DispatchCommand command, Map<String, Object> channelConfig, String defaultPolicy) {
     String receiptPolicy =
         String.valueOf(channelConfig.getOrDefault("receipt_policy", defaultPolicy));
-    String externalRequestId = hasText(command.payload().externalRequestId())
-        ? command.payload().externalRequestId()
-        : UUID.randomUUID().toString();
+    String externalRequestId;
+    if (hasText(command.payload().externalRequestId())) {
+      externalRequestId = command.payload().externalRequestId();
+    } else {
+      UUID generatedRequestId = UUID.randomUUID();
+      externalRequestId = generatedRequestId.toString();
+    }
     String receiptCode = hasText(command.payload().receiptCode())
         ? command.payload().receiptCode()
         : "R-" + externalRequestId;

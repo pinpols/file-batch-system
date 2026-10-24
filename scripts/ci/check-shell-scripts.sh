@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：Shell 语法与 ShellCheck。
+# 用法：在仓库根目录执行 bash scripts/ci/check-shell-scripts.sh；参数与前置环境见下方说明及所属 README。
 # 校验仓库 Shell 脚本语法，并要求 ShellCheck warning 为零。
 set -euo pipefail
 

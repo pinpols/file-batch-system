@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
 import java.time.Instant;
 import java.util.Map;
+import lombok.Builder;
 
 /**
  * 批量窗口响应（BatchWindowMapper 行投影）。
@@ -16,6 +17,7 @@ import java.util.Map;
  * <p>MyBatis {@code resultType="map"} 会省略 null 列，历史 wire 不含 null 键 → {@code NON_NULL} 保键集对等。
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Builder
 public record ConsoleBatchWindowResponse(
     Long id,
     @JsonProperty("tenant_id") String tenantId,
@@ -36,20 +38,21 @@ public record ConsoleBatchWindowResponse(
     if (row == null) {
       return null;
     }
-    return new ConsoleBatchWindowResponse(
-        ConsoleResponseFieldReader.longValue(row, "id"),
-        ConsoleResponseFieldReader.stringValue(row, "tenant_id", "tenantId"),
-        ConsoleResponseFieldReader.stringValue(row, "window_code", "windowCode"),
-        ConsoleResponseFieldReader.stringValue(row, "window_name", "windowName"),
-        ConsoleResponseFieldReader.stringValue(row, "timezone"),
-        ConsoleResponseFieldReader.localTimeValue(row, "start_time", "startTime"),
-        ConsoleResponseFieldReader.localTimeValue(row, "end_time", "endTime"),
-        ConsoleResponseFieldReader.stringValue(row, "end_strategy", "endStrategy"),
-        ConsoleResponseFieldReader.stringValue(row, "out_of_window_action", "outOfWindowAction"),
-        ConsoleResponseFieldReader.booleanValue(row, "allow_cross_day", "allowCrossDay"),
-        ConsoleResponseFieldReader.booleanValue(row, "enabled"),
-        ConsoleResponseFieldReader.stringValue(row, "description"),
-        ConsoleResponseFieldReader.instantValue(row, "created_at", "createdAt"),
-        ConsoleResponseFieldReader.instantValue(row, "updated_at", "updatedAt"));
+    return ConsoleBatchWindowResponse.builder()
+        .id(ConsoleResponseFieldReader.longValue(row, "id"))
+        .tenantId(ConsoleResponseFieldReader.stringValue(row, "tenant_id", "tenantId"))
+        .windowCode(ConsoleResponseFieldReader.stringValue(row, "window_code", "windowCode"))
+        .windowName(ConsoleResponseFieldReader.stringValue(row, "window_name", "windowName"))
+        .timezone(ConsoleResponseFieldReader.stringValue(row, "timezone"))
+        .startTime(ConsoleResponseFieldReader.localTimeValue(row, "start_time", "startTime"))
+        .endTime(ConsoleResponseFieldReader.localTimeValue(row, "end_time", "endTime"))
+        .endStrategy(ConsoleResponseFieldReader.stringValue(row, "end_strategy", "endStrategy"))
+        .outOfWindowAction(ConsoleResponseFieldReader.stringValue(row, "out_of_window_action", "outOfWindowAction"))
+        .allowCrossDay(ConsoleResponseFieldReader.booleanValue(row, "allow_cross_day", "allowCrossDay"))
+        .enabled(ConsoleResponseFieldReader.booleanValue(row, "enabled"))
+        .description(ConsoleResponseFieldReader.stringValue(row, "description"))
+        .createdAt(ConsoleResponseFieldReader.instantValue(row, "created_at", "createdAt"))
+        .updatedAt(ConsoleResponseFieldReader.instantValue(row, "updated_at", "updatedAt"))
+        .build();
   }
 }

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.NotificationChannelUpdateRequest;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.NotificationChannelUpsertRequest;
@@ -31,16 +32,62 @@ import io.github.pinpols.batch.console.support.CallbackUrlValidator;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 
 @DisplayName("通知渠道与订阅规则服务: 参数校验, 持久化字段组装与测试发送链路")
 class DefaultConsoleNotificationApplicationServiceTest {
+
+  @DisplayName("创建通知规则前拒绝仅用于告警的事件类型")
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "JOB_SLA_BREACH",
+        " job_sla_violation ",
+        "JOB_SLA_VIOLATION_ESCALATED",
+        "ＪＯＢ＿ＳＬＡ＿ＢＲＥＡＣＨ",
+        "JOB_SLA_\001BREACH"
+      })
+  void shouldRejectAlertOnlyTypesBeforeCreatingRule(String eventType) {
+    when(channelMapper.selectByCode("tenant-a", "email-1"))
+        .thenReturn(Map.of("channelCode", "email-1"));
+    assertThatThrownBy(() -> service.createRule(
+            "tenant-a", ruleUpsert("sla", "email-1", "JOB_FAILED," + eventType, null, null, true)))
+        .isInstanceOfSatisfying(
+            BizException.class,
+            ex -> assertThat(ex.getMessageKey()).isEqualTo("error.notification.sla_alert_channel"));
+    verify(ruleMapper, never()).insert(any());
+  }
+
+  @DisplayName("更新通知规则前拒绝仅用于告警的事件类型")
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "JOB_SLA_BREACH",
+        " job_sla_violation ",
+        "JOB_SLA_VIOLATION_ESCALATED",
+        "ＪＯＢ＿ＳＬＡ＿ＢＲＥＡＣＨ",
+        "JOB_SLA_\001BREACH"
+      })
+  void shouldRejectAlertOnlyTypesBeforeUpdatingRule(String eventType) {
+    when(ruleMapper.selectById("tenant-a", 7L)).thenReturn(Map.of("id", 7L));
+    when(channelMapper.selectByCode("tenant-a", "email-1"))
+        .thenReturn(Map.of("channelCode", "email-1"));
+    assertThatThrownBy(() -> service.updateRule(
+            "tenant-a", 7L, ruleUpsert("sla", "email-1", eventType, null, null, true)))
+        .isInstanceOfSatisfying(
+            BizException.class,
+            ex -> assertThat(ex.getMessageKey()).isEqualTo("error.notification.sla_alert_channel"));
+    verify(ruleMapper, never()).update(any());
+  }
 
   private ConsoleTenantGuard tenantGuard;
   private ConsoleRequestMetadataResolver metadataResolver;
@@ -116,7 +163,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
           BizException bx = (BizException) ex;
           boolean keyMatch = bx.getMessageKey() != null && bx.getMessageKey().contains("not_found");
           boolean argsMatch = bx.getMessageArgs() != null
-              && java.util.Arrays.stream(bx.getMessageArgs())
+              && Arrays.stream(bx.getMessageArgs())
                   .anyMatch(a -> a != null && a.toString().toLowerCase().contains("not found"));
           assertThat(keyMatch || argsMatch)
               .as("messageKey or args should imply not_found")
@@ -153,9 +200,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
     // Critical 回归堵口:WEBHOOK 渠道 url 存前经 CallbackUrlValidator fail-closed,拦字面量内网/元数据 IP,
     // 不让它入库(OkHttp Dns pin 对字面量 IP 短路不生效,此处是主修)。
     when(channelMapper.selectByCode("tenant-a", "hook-1")).thenReturn(null);
-    doThrow(io.github.pinpols.batch.common.exception.BizException.of(
-            io.github.pinpols.batch.common.enums.ResultCode.INVALID_ARGUMENT,
-            "error.callback.restricted_address"))
+    doThrow(BizException.of(ResultCode.INVALID_ARGUMENT, "error.callback.restricted_address"))
         .when(callbackUrlValidator)
         .validate("https://169.254.169.254/latest/meta-data/");
 
@@ -266,7 +311,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
           BizException bx = (BizException) ex;
           boolean keyMatch = bx.getMessageKey() != null && bx.getMessageKey().contains("not_found");
           boolean argsMatch = bx.getMessageArgs() != null
-              && java.util.Arrays.stream(bx.getMessageArgs())
+              && Arrays.stream(bx.getMessageArgs())
                   .anyMatch(a -> a != null && a.toString().toLowerCase().contains("not found"));
           assertThat(keyMatch || argsMatch)
               .as("messageKey or args should imply not_found")
@@ -311,7 +356,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
           BizException bx = (BizException) ex;
           boolean keyMatch = bx.getMessageKey() != null && bx.getMessageKey().contains("not_found");
           boolean argsMatch = bx.getMessageArgs() != null
-              && java.util.Arrays.stream(bx.getMessageArgs())
+              && Arrays.stream(bx.getMessageArgs())
                   .anyMatch(a -> a != null && a.toString().toLowerCase().contains("not found"));
           assertThat(keyMatch || argsMatch)
               .as("messageKey or args should imply not_found")
@@ -359,6 +404,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
     List<ConsoleNotificationDeliveryLogResponse> logs = service.deliveryLogs("tenant-a", 999);
 
     assertThat(logs).hasSize(1);
+    verify(deliveryLogMapper).bindTenant("tenant-a");
     verify(deliveryLogMapper).selectByTenant("tenant-a", 500);
   }
 
@@ -477,8 +523,8 @@ class DefaultConsoleNotificationApplicationServiceTest {
 
     assertThatThrownBy(() -> service.testChannel("tenant-a", "hook-1"))
         .isInstanceOf(BizException.class)
-        .satisfies(ex -> assertThat(((BizException) ex).getCode())
-            .isEqualTo(io.github.pinpols.batch.common.enums.ResultCode.RATE_LIMITED));
+        .satisfies(
+            ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.RATE_LIMITED));
 
     // 拦在建连之前:没有走 webhook 投递,也没写投递日志
     verify(webhookDispatcher, never())

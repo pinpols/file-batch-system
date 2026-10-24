@@ -13,6 +13,8 @@ import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @DisplayName("平台仓储: 聚焦拆分的构造与事务契约, 查询过滤与文件记录写入")
@@ -22,8 +24,7 @@ class PlatformRepositoryTest {
   @DisplayName("仓储拆分后各自保留构造函数, 写入方法使用独立事务与读已提交隔离级别")
   void shouldPreserveConstructorsAndTransactionBoundary_whenRepositoriesAreFocused()
       throws NoSuchMethodException {
-    assertThat(PlatformPipelineDefinitionRepository.class.getConstructor(
-            PlatformFileRuntimeMapper.class))
+    assertThat(PlatformFileTemplateRepository.class.getConstructor(PlatformFileRuntimeMapper.class))
         .isNotNull();
     assertThat(PlatformPipelineRunRepository.class.getConstructor(PlatformFileRuntimeMapper.class))
         .isNotNull();
@@ -37,49 +38,12 @@ class PlatformRepositoryTest {
             .getMethod("startStepRun", Long.class, String.class, String.class, Object.class)
             .getAnnotation(Transactional.class))
         .extracting(Transactional::isolation)
-        .isEqualTo(org.springframework.transaction.annotation.Isolation.READ_COMMITTED);
+        .isEqualTo(Isolation.READ_COMMITTED);
     assertThat(PlatformPipelineRunRepository.class
             .getMethod("startStepRun", Long.class, String.class, String.class, Object.class)
             .getAnnotation(Transactional.class))
         .extracting(Transactional::propagation)
-        .isEqualTo(org.springframework.transaction.annotation.Propagation.REQUIRES_NEW);
-  }
-
-  @Test
-  @DisplayName("查询流水线定义时按租户与作业编码过滤, 查询条件不含流水线编码")
-  void shouldFilterByTenantAndJobCode_whenFindingPipelineDefinition() {
-    PlatformFileRuntimeMapper mapper = mock(PlatformFileRuntimeMapper.class);
-    PlatformPipelineDefinitionRepository repository =
-        new PlatformPipelineDefinitionRepository(mapper);
-
-    when(mapper.selectLatestPipelineDefinition(anyMap()))
-        .thenReturn(Map.of("id", 4601L, "pipeline_type", "IMPORT"));
-
-    PlatformPipelineDefinitionRepository.PipelineDefinitionReference pipelineDefinition =
-        repository.findPipelineDefinition("tenant-a", "job-a");
-
-    assertThat(pipelineDefinition)
-        .isEqualTo(
-            new PlatformPipelineDefinitionRepository.PipelineDefinitionReference(4601L, "IMPORT"));
-    verify(mapper)
-        .selectLatestPipelineDefinition(argThat(params -> "tenant-a".equals(params.get("tenantId"))
-            && "job-a".equals(params.get(PipelineRuntimeKeys.JOB_CODE))
-            && !params.containsKey("pipelineCode")));
-  }
-
-  @Test
-  @DisplayName("缺少租户或作业编码以及查询未命中时不返回流水线定义")
-  void shouldReturnNullWhenPipelineDefinitionIsUnavailable() {
-    PlatformFileRuntimeMapper mapper = mock(PlatformFileRuntimeMapper.class);
-    PlatformPipelineDefinitionRepository repository =
-        new PlatformPipelineDefinitionRepository(mapper);
-
-    assertThat(repository.findPipelineDefinition(" ", "job-a")).isNull();
-    assertThat(repository.findPipelineDefinition("tenant-a", " ")).isNull();
-    when(mapper.selectLatestPipelineDefinition(anyMap())).thenReturn(Map.of()).thenReturn(null);
-
-    assertThat(repository.findPipelineDefinition("tenant-a", "job-a")).isNull();
-    assertThat(repository.findPipelineDefinition("tenant-a", "job-b")).isNull();
+        .isEqualTo(Propagation.REQUIRES_NEW);
   }
 
   @Test
@@ -95,12 +59,13 @@ class PlatformRepositoryTest {
     });
 
     Long pipelineInstanceId = repository.createPipelineInstance(new CreatePipelineInstanceParam(
-        "tenant-a", 4601L, "job-a", "IMPORT", 5201L, 4001L, "VALIDATE", "trace-a"));
+        "tenant-a", "IMPORT", 1, "job-a", "IMPORT", 5201L, 4001L, "VALIDATE", "trace-a"));
 
     assertThat(pipelineInstanceId).isEqualTo(5301L);
     verify(mapper)
         .insertPipelineInstance(argThat(params -> "tenant-a".equals(params.get("tenantId"))
             && "job-a".equals(params.get(PipelineRuntimeKeys.JOB_CODE))
+            && "IMPORT".equals(params.get("systemPipelineCode"))
             && !params.containsKey("pipelineCode")));
   }
 

@@ -47,38 +47,48 @@ final class TaskOutcomeStatePolicy {
       latestByNode.merge(
           nodeRun.getNodeCode(),
           nodeRun,
-          (left, right) -> Optional.ofNullable(right.getRunSeq()).orElse(0)
-                  >= Optional.ofNullable(left.getRunSeq()).orElse(0)
-              ? right
-              : left);
+          TaskOutcomeStatePolicy::preferNodeRunWithGreaterOrEqualSequence);
     }
     Set<String> activeNodes = new LinkedHashSet<>();
     latestByNode.forEach((nodeCode, nodeRun) -> {
       String status = nodeRun.getNodeStatus();
-      if (WorkflowNodeRunStatus.READY.code().equals(status)
-          || WorkflowNodeRunStatus.WAITING_DEPENDENCY.code().equals(status)
-          || WorkflowNodeRunStatus.RUNNING.code().equals(status)) {
+      if (isActiveNodeStatus(status)) {
         activeNodes.add(nodeCode);
       }
     });
     return activeNodes;
   }
 
+  private static boolean isActiveNodeStatus(String status) {
+    return WorkflowNodeRunStatus.READY.code().equals(status)
+        || WorkflowNodeRunStatus.WAITING_DEPENDENCY.code().equals(status)
+        || WorkflowNodeRunStatus.RUNNING.code().equals(status);
+  }
+
+  private static WorkflowNodeRunEntity preferNodeRunWithGreaterOrEqualSequence(
+      WorkflowNodeRunEntity existing, WorkflowNodeRunEntity incoming) {
+    Integer incomingRunSequence = Optional.ofNullable(incoming.getRunSeq()).orElse(0);
+    Integer existingRunSequence = Optional.ofNullable(existing.getRunSeq()).orElse(0);
+    return incomingRunSequence >= existingRunSequence ? incoming : existing;
+  }
+
   static String resolveInstanceEvent(
       long successCount,
       long failedCount,
+      long cancelledCount,
+      long terminatedCount,
       boolean allPartitionsFinished,
-      boolean dagContinues,
       boolean dryRun) {
-    if (!allPartitionsFinished || dagContinues) {
+    if (!allPartitionsFinished) {
       return JobInstanceStatus.RUNNING.code();
     }
-    if (failedCount > 0 && successCount > 0) {
+    long unsuccessfulCount = failedCount + cancelledCount + terminatedCount;
+    if (unsuccessfulCount > 0 && successCount > 0) {
       return dryRun
           ? JobInstanceStatus.FAILED_DRY_RUN.code()
           : JobInstanceStatus.PARTIAL_FAILED.code();
     }
-    if (failedCount > 0) {
+    if (unsuccessfulCount > 0) {
       return dryRun ? JobInstanceStatus.FAILED_DRY_RUN.code() : JobInstanceStatus.FAILED.code();
     }
     return dryRun ? JobInstanceStatus.SUCCESS_DRY_RUN.code() : JobInstanceStatus.SUCCESS.code();
@@ -88,26 +98,26 @@ final class TaskOutcomeStatePolicy {
    * 允许把陈旧的失败终态收敛为成功。
    *
    * <p>失败终态通常不可复活，但重试/补偿可能在旧失败写入后完成最后一个分区。只有当本次实时分区
-   * 统计已经证明全部分区成功且没有 DAG 后继节点时，才允许修正；取消和终止永远不走此路径。
+   * 统计已经证明实例自身全部分区成功时，才允许修正；Workflow 的其他活动节点不改变此 JobInstance
+   * 的执行结果，取消和终止永远不走此路径。
    */
   static boolean shouldPromoteTerminalFailure(
       String currentStatus,
       String resolvedStatus,
       long successCount,
       long failedCount,
-      boolean allPartitionsFinished,
-      boolean dagContinues) {
+      boolean allPartitionsFinished) {
     boolean currentIsFailure = JobInstanceStatus.FAILED.code().equals(currentStatus)
         || JobInstanceStatus.PARTIAL_FAILED.code().equals(currentStatus)
         || JobInstanceStatus.FAILED_DRY_RUN.code().equals(currentStatus);
     boolean resolvedIsSuccess = JobInstanceStatus.SUCCESS.code().equals(resolvedStatus)
         || JobInstanceStatus.SUCCESS_DRY_RUN.code().equals(resolvedStatus);
-    return currentIsFailure
-        && resolvedIsSuccess
-        && successCount > 0
-        && failedCount == 0
-        && allPartitionsFinished
-        && !dagContinues;
+    if (!currentIsFailure || !resolvedIsSuccess) {
+      return false;
+    }
+    boolean partitionsProveSuccessfulCompletion =
+        successCount > 0 && failedCount == 0 && allPartitionsFinished;
+    return partitionsProveSuccessfulCompletion;
   }
 
   static boolean isDryRun(JobInstanceEntity instance) {

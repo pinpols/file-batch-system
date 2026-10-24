@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.infrastructure.config;
 
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
@@ -49,7 +50,8 @@ public class DefaultConsoleTenantConfigInitApplicationService
 
     for (String tenantId : request.getTargetTenantIds()) {
       try {
-        TenantInitResult result = tenantExecutor.execute(tenantId, request, operator, dryRun);
+        TenantInitResult result = RlsTenantContextHolder.runWithTenant(
+            tenantId, () -> tenantExecutor.execute(tenantId, request, operator, dryRun));
         results.add(result);
         if (result.success()) {
           successCount++;
@@ -63,7 +65,8 @@ public class DefaultConsoleTenantConfigInitApplicationService
             LogSanitizer.value(tenantId),
             LogSanitizer.value(batchOperationId),
             SwallowedExceptionLogger.summary(ex));
-        results.add(TenantInitResult.failed(tenantId, ex.getMessage()));
+        String failureMessage = TenantConfigFailureMessages.forFailure(ex);
+        results.add(TenantInitResult.failed(tenantId, failureMessage));
         failureCount++;
       } catch (Exception ex) {
         log.error(
@@ -71,7 +74,8 @@ public class DefaultConsoleTenantConfigInitApplicationService
             LogSanitizer.value(tenantId),
             LogSanitizer.value(batchOperationId),
             ex);
-        results.add(TenantInitResult.failed(tenantId, ex.getMessage()));
+        String failureMessage = TenantConfigFailureMessages.forFailure(ex);
+        results.add(TenantInitResult.failed(tenantId, failureMessage));
         failureCount++;
       }
     }

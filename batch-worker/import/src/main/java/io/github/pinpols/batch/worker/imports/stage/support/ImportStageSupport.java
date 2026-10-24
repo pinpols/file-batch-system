@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.worker.imports.stage.support;
 
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
+import io.github.pinpols.batch.common.context.RunModeSupport;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -12,6 +15,8 @@ import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepo
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
+import io.github.pinpols.batch.worker.imports.domain.ImportStagingFiles;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
@@ -70,7 +75,8 @@ public final class ImportStageSupport {
       if (value instanceof Number number) {
         chunkSize = number.intValue();
       } else if (value != null && Texts.hasText(String.valueOf(value))) {
-        chunkSize = Integer.parseInt(String.valueOf(value));
+        String text = String.valueOf(value);
+        chunkSize = Integer.parseInt(text);
       }
     }
     chunkSize = Math.max(1, chunkSize);
@@ -97,7 +103,8 @@ public final class ImportStageSupport {
   public static Path createStagingFile(ImportJobContext context, String phase) throws Exception {
     String fileId = context == null ? "unknown" : String.valueOf(context.getFileId());
     String workerId = context == null ? "worker" : String.valueOf(context.getWorkerId());
-    return PrivateTempFiles.createTempFile(
+    return createStagingFile(
+        context,
         BatchFileConstants.importStagePrefix(fileId, workerId, phase),
         BatchFileConstants.NDJSON_SUFFIX);
   }
@@ -106,13 +113,23 @@ public final class ImportStageSupport {
   public static Path createValidatedFile(ImportJobContext context) throws Exception {
     String fileId = context == null ? "unknown" : String.valueOf(context.getFileId());
     String workerId = context == null ? "worker" : String.valueOf(context.getWorkerId());
-    return PrivateTempFiles.createTempFile(
+    return createStagingFile(
+        context,
         BatchFileConstants.validatedStagePrefix(fileId, workerId),
         BatchFileConstants.NDJSON_SUFFIX);
   }
 
+  private static Path createStagingFile(ImportJobContext context, String prefix, String suffix)
+      throws IOException {
+    ImportStagingFiles stagingFiles =
+        EmptyChecks.isNull(context) ? null : context.getStagingFiles();
+    return EmptyChecks.isNull(stagingFiles)
+        ? PrivateTempFiles.createTempFile(prefix, suffix)
+        : stagingFiles.createTempFile(prefix, suffix);
+  }
+
   /**
-   * RECOVER 重放和分片导入都会重新经过 PREPROCESS/PARSE/VALIDATE 来重建当前 task 的本地临时文件，但平台 file_record 是全局记录，可能已被其他
+   * RECOVER/RERUN 重放和分片导入都会重新经过 PREPROCESS/PARSE/VALIDATE 来重建当前 task 的本地临时文件，但平台 file_record 是全局记录，可能已被其他
    * task 推进到更后状态。此时不能把状态回退到 PARSING/PARSED/VALIDATED；对"当前状态已达到或超过目标状态"的冲突按幂等处理。NORMAL
    * 非分片模式仍保持严格状态机。
    */
@@ -121,14 +138,17 @@ public final class ImportStageSupport {
       ImportJobContext context,
       String targetStatus,
       Map<String, Object> metadata) {
-    Long fileId =
-        PlatformRuntimeValues.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+    Map<String, Object> attributes = context.getAttributes();
+    Object fileIdValue = attributes.get(PipelineRuntimeKeys.FILE_ID);
+    Long fileId = PlatformRuntimeValues.toLong(fileIdValue);
     try {
       fileRecords.updateFileStatus(fileId, targetStatus, metadata);
     } catch (BizException exception) {
-      if (exception.getCode() != ResultCode.STATE_CONFLICT
-          || (!isRecoverMode(context) && !isPartitionedImport(context))
-          || !fileStatusAlreadyAtOrAfter(fileRecords, fileId, targetStatus)) {
+      boolean recoverableStatusConflict =
+          exception.getCode() == ResultCode.STATE_CONFLICT
+              && (isReplayOrRecoveryMode(context) || isPartitionedImport(context))
+              && fileStatusAlreadyAtOrAfter(fileRecords, fileId, targetStatus);
+      if (!recoverableStatusConflict) {
         throw exception;
       }
       log.info(
@@ -141,19 +161,23 @@ public final class ImportStageSupport {
     }
   }
 
-  public static boolean isRecoverMode(ImportJobContext context) {
+  public static boolean isReplayOrRecoveryMode(ImportJobContext context) {
     if (context == null) {
       return false;
     }
-    Object runMode = context.getAttributes().get(PipelineRuntimeKeys.RUN_MODE);
-    return runMode != null && "RECOVER".equalsIgnoreCase(String.valueOf(runMode));
+    Map<String, Object> attributes = context.getAttributes();
+    RunMode runMode = RunModeSupport.resolve(attributes);
+    return runMode == RunMode.RECOVER || runMode == RunMode.RERUN;
   }
 
   private static boolean isPartitionedImport(ImportJobContext context) {
     if (context == null) {
       return false;
     }
-    return numberValue(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT)) > 1L;
+    Map<String, Object> attributes = context.getAttributes();
+    Object partitionCountValue = attributes.get(PipelineRuntimeKeys.PARTITION_COUNT);
+    long partitionCount = numberValue(partitionCountValue);
+    return partitionCount > 1L;
   }
 
   private static boolean fileStatusAlreadyAtOrAfter(

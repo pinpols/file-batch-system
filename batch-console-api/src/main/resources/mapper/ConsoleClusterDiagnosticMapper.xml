@@ -20,6 +20,64 @@
         </constructor>
     </resultMap>
 
+    <resultMap id="JobInstanceDiagnosticResultMap" type="io.github.pinpols.batch.console.domain.ops.view.cluster.JobInstanceDiagnosticView">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenantId" javaType="java.lang.String"/>
+            <arg column="instanceNo" javaType="java.lang.String"/>
+            <arg column="jobCode" javaType="java.lang.String"/>
+            <arg column="bizDate" javaType="java.time.LocalDate"/>
+            <arg column="instanceStatus" javaType="java.lang.String"/>
+            <arg column="queueCode" javaType="java.lang.String"/>
+            <arg column="workerGroup" javaType="java.lang.String"/>
+            <arg column="traceId" javaType="java.lang.String"/>
+            <arg column="startedAt" javaType="java.time.Instant"/>
+            <arg column="deadlineAt" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="WorkerGroupCapacityResultMap" type="io.github.pinpols.batch.console.domain.ops.view.cluster.WorkerGroupCapacityView">
+        <constructor>
+            <arg column="workerGroup" javaType="java.lang.String"/>
+            <arg column="totalWorkers" javaType="java.lang.Long"/>
+            <arg column="onlineWorkers" javaType="java.lang.Long"/>
+            <arg column="drainingWorkers" javaType="java.lang.Long"/>
+            <arg column="offlineWorkers" javaType="java.lang.Long"/>
+            <arg column="decommissionedWorkers" javaType="java.lang.Long"/>
+            <arg column="currentLoad" javaType="java.lang.Long"/>
+            <arg column="maxConcurrent" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="StatusCountResultMap" type="io.github.pinpols.batch.console.domain.ops.view.cluster.StatusCountView">
+        <constructor>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="count" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="ActiveTaskWorkerIssueResultMap" type="io.github.pinpols.batch.console.domain.ops.view.cluster.ActiveTaskWorkerIssueView">
+        <constructor>
+            <idArg column="taskId" javaType="java.lang.Long"/>
+            <arg column="jobPartitionId" javaType="java.lang.Long"/>
+            <arg column="taskStatus" javaType="java.lang.String"/>
+            <arg column="assignedWorkerCode" javaType="java.lang.String"/>
+            <arg column="heartbeatAt" javaType="java.time.Instant"/>
+            <arg column="workerStatus" javaType="java.lang.String"/>
+            <arg column="workerHeartbeatAt" javaType="java.time.Instant"/>
+            <arg column="reasonCode" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="OutboxStatusCountResultMap" type="io.github.pinpols.batch.console.domain.ops.view.cluster.OutboxStatusCountView">
+        <constructor>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="count" javaType="java.lang.Long"/>
+            <arg column="oldest" javaType="java.time.Instant"/>
+            <arg column="newest" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
     <!-- 平台级 shedlock 表无 tenant_id,全表扫描即可;按 name 排序保证多次调用结果稳定。 -->
     <select id="shedlockAll" resultMap="ShedLockResultMap">
         select name,
@@ -122,7 +180,7 @@
         </foreach>
     </select>
 
-    <select id="selectJobInstanceSummary" resultType="map">
+    <select id="selectJobInstanceSummary" resultMap="JobInstanceDiagnosticResultMap">
         select id as "id",
                tenant_id as "tenantId",
                instance_no as "instanceNo",
@@ -165,7 +223,7 @@
            )
     </select>
 
-    <select id="workerGroupCapacity" resultType="map">
+    <select id="workerGroupCapacity" resultMap="WorkerGroupCapacityResultMap">
         select worker_group as "workerGroup",
                count(1) as "totalWorkers",
                count(*) filter (where status = 'ONLINE') as "onlineWorkers",
@@ -180,7 +238,7 @@
          order by worker_group
     </select>
 
-    <select id="partitionStatusCounts" resultType="map">
+    <select id="partitionStatusCounts" resultMap="StatusCountResultMap">
         select partition_status as "status",
                count(1) as "count"
           from batch.job_partition
@@ -190,7 +248,7 @@
          order by partition_status
     </select>
 
-    <select id="taskStatusCounts" resultType="map">
+    <select id="taskStatusCounts" resultMap="StatusCountResultMap">
         select task_status as "status",
                count(1) as "count"
           from batch.job_task
@@ -200,7 +258,7 @@
          order by task_status
     </select>
 
-    <select id="activeTaskWorkerIssues" resultType="map">
+    <select id="activeTaskWorkerIssues" resultMap="ActiveTaskWorkerIssueResultMap">
         select jt.id as "taskId",
                jt.job_partition_id as "jobPartitionId",
                jt.task_status as "taskStatus",
@@ -252,7 +310,7 @@
            )
     </select>
 
-    <select id="outboxStatusCountsForInstance" resultType="map">
+    <select id="outboxStatusCountsForInstance" resultMap="OutboxStatusCountResultMap">
         select oe.publish_status as "status",
                count(1) as "count",
                min(oe.created_at) as "oldest",

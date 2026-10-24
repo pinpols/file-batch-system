@@ -1,7 +1,10 @@
 package io.github.pinpols.batch.console.domain.workflow.web;
 
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -9,6 +12,7 @@ import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.domain.workflow.application.ConsoleWorkflowTriggerService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionDetailResponse;
@@ -24,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -33,7 +38,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  * <p>覆盖 4 case:成功列出当前版本、降级仍返 1 条(无历史表)、跨租户 404、单版本 detail 成功 + 不存在版本 404。
  */
 @ExtendWith(MockitoExtension.class)
-@DisplayName("ConsoleWorkflowVersions Controller")
+@DisplayName("Workflow 版本快照、比较与恢复接口")
 class ConsoleWorkflowVersionsControllerTest {
 
   @Mock
@@ -56,10 +61,25 @@ class ConsoleWorkflowVersionsControllerTest {
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleWorkflowDefinitionController(service, responseFactory, lockService))
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleWorkflowDefinitionController(
+            service, responseFactory, lockService, mock(ConsoleWorkflowTriggerService.class)))
         .setControllerAdvice(exceptionHandler)
         .build();
+  }
+
+  @Test
+  @DisplayName("全量更新缺少预期版本时 HTTP 拒绝且不调用定义写服务")
+  void shouldRejectFullUpdate_whenExpectedVersionIsMissing() throws Exception {
+    mockMvc
+        .perform(put("/api/console/workflow-definitions/42/full")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"definition":{"tenantId":"ta","workflowCode":"WF_A",
+                  "workflowName":"Workflow A","workflowType":"DAG","enabled":true}}
+                """))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(service, lockService);
   }
 
   @Test
@@ -123,6 +143,13 @@ class ConsoleWorkflowVersionsControllerTest {
         "wf_ok",
         "wf",
         "DAG",
+        null,
+        "MANUAL",
+        null,
+        null,
+        "MANUAL",
+        null,
+        null,
         3,
         Boolean.TRUE,
         null,

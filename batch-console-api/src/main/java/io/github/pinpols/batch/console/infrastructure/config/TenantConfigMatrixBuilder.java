@@ -6,7 +6,6 @@ import io.github.pinpols.batch.console.application.contract.request.config.Confi
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileChannelSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileTemplateSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.JobDefinitionSpec;
-import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.PipelineDefinitionSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigCopyRequest.ConfigType;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigMatrixRequest;
@@ -30,7 +29,6 @@ final class TenantConfigMatrixBuilder {
   private static final Set<ConfigType> MATRIX_CONFIG_TYPES = Set.of(
       ConfigType.JOB_DEFINITION,
       ConfigType.WORKFLOW_DEFINITION,
-      ConfigType.PIPELINE_DEFINITION,
       ConfigType.FILE_CHANNEL,
       ConfigType.FILE_TEMPLATE,
       ConfigType.RESOURCE_QUEUE,
@@ -57,8 +55,13 @@ final class TenantConfigMatrixBuilder {
       rowsByTenantAndJob.put(tenantId, tenantRows);
     }
     rows = rows.stream()
-        .map(row -> withDrift(
-            row, rowsByTenantAndJob.getOrDefault(baselineTenantId, Map.of()).get(row.jobCode())))
+        .map(row -> {
+          Map<String, JobMatrixRow> baselineTenantRows =
+              rowsByTenantAndJob.getOrDefault(baselineTenantId, Map.of());
+          String jobCode = row.jobCode();
+          JobMatrixRow baselineRow = baselineTenantRows.get(jobCode);
+          return withDrift(row, baselineRow);
+        })
         .toList();
     return new TenantConfigMatrixResponse(
         baselineTenantId,
@@ -72,22 +75,21 @@ final class TenantConfigMatrixBuilder {
       String jobCode,
       ConfigSyncBundlePayload bundle,
       TenantConfigReferenceResolver referenceResolver) {
-    Optional<JobDefinitionSpec> maybeJob = Optional.ofNullable(
-        first(filter(bundle.getJobDefinitions(), item -> jobCode.equals(item.getJobCode()))));
+    List<JobDefinitionSpec> matchingJobs =
+        filter(bundle.getJobDefinitions(), item -> jobCode.equals(item.getJobCode()));
+    JobDefinitionSpec firstMatchingJob = first(matchingJobs);
+    Optional<JobDefinitionSpec> maybeJob = Optional.ofNullable(firstMatchingJob);
     if (!maybeJob.isPresent()) {
       return missingJobRow(tenantId, jobCode);
     }
     JobDefinitionSpec job = maybeJob.orElseThrow();
-    List<PipelineDefinitionSpec> relatedPipelines =
-        filter(bundle.getPipelineDefinitions(), item -> jobCode.equals(item.getJobCode()));
     List<WorkflowDefinitionSpec> relatedWorkflows = filter(
         bundle.getWorkflowDefinitions(),
         workflow -> EmptyChecks.isNotNull(workflow.getNodes())
             && workflow.getNodes().stream()
-                .anyMatch(node -> jobCode.equals(node.getRelatedJobCode())
-                    || jobCode.equals(node.getRelatedPipelineCode())));
+                .anyMatch(node -> jobCode.equals(node.getRelatedJobCode())));
     TenantConfigReferenceResolver.References refs =
-        referenceResolver.resolve(job, relatedPipelines, relatedWorkflows);
+        referenceResolver.resolve(job, relatedWorkflows);
     List<String> templateCodes = EmptyChecks.isEmpty(refs.templateCodes())
         ? filter(
                 bundle.getFileTemplates(),
@@ -96,24 +98,24 @@ final class TenantConfigMatrixBuilder {
             .map(FileTemplateSpec::getTemplateCode)
             .toList()
         : refs.templateCodes();
-    return JobMatrixRow.builder()
-        .tenantId(tenantId)
-        .jobCode(jobCode)
-        .exists(true)
-        .enabled(job.getEnabled())
-        .scheduleType(job.getScheduleType())
-        .scheduleExpr(job.getScheduleExpr())
-        .timezone(job.getTimezone())
-        .queueCode(job.getQueueCode())
-        .calendarCode(job.getCalendarCode())
-        .windowCode(job.getWindowCode())
-        .workerGroup(job.getWorkerGroup())
-        .pipelineJobCodes(refs.pipelineJobCodes())
-        .workflowCodes(refs.workflowCodes())
-        .templateCodes(templateCodes)
-        .channelCodes(channelCodes(job, bundle, refs))
-        .driftFields(List.of())
-        .build();
+    JobMatrixRow.JobMatrixRowBuilder rowBuilder = JobMatrixRow.builder();
+    rowBuilder.tenantId(tenantId);
+    rowBuilder.jobCode(jobCode);
+    rowBuilder.exists(true);
+    rowBuilder.enabled(job.getEnabled());
+    rowBuilder.scheduleType(job.getScheduleType());
+    rowBuilder.scheduleExpr(job.getScheduleExpr());
+    rowBuilder.timezone(job.getTimezone());
+    rowBuilder.queueCode(job.getQueueCode());
+    rowBuilder.calendarCode(job.getCalendarCode());
+    rowBuilder.windowCode(job.getWindowCode());
+    rowBuilder.workerGroup(job.getWorkerGroup());
+    rowBuilder.workflowCodes(refs.workflowCodes());
+    rowBuilder.templateCodes(templateCodes);
+    List<String> matchedChannelCodes = channelCodes(job, bundle, refs);
+    rowBuilder.channelCodes(matchedChannelCodes);
+    rowBuilder.driftFields(List.of());
+    return rowBuilder.build();
   }
 
   private static JobMatrixRow missingJobRow(String tenantId, String jobCode) {
@@ -121,7 +123,6 @@ final class TenantConfigMatrixBuilder {
         .tenantId(tenantId)
         .jobCode(jobCode)
         .exists(false)
-        .pipelineJobCodes(List.of())
         .workflowCodes(List.of())
         .templateCodes(List.of())
         .channelCodes(List.of())
@@ -157,7 +158,6 @@ final class TenantConfigMatrixBuilder {
         .calendarCode(row.calendarCode())
         .windowCode(row.windowCode())
         .workerGroup(row.workerGroup())
-        .pipelineJobCodes(row.pipelineJobCodes())
         .workflowCodes(row.workflowCodes())
         .templateCodes(row.templateCodes())
         .channelCodes(row.channelCodes())

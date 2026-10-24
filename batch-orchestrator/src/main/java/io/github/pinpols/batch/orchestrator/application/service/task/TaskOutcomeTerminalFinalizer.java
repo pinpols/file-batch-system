@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.orchestrator.application.engine.JobTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayTerminalReconciler;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionWriter;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
@@ -10,6 +11,7 @@ import io.github.pinpols.batch.orchestrator.observability.JobLifecycleMetricsRec
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 
@@ -25,6 +27,7 @@ import org.springframework.stereotype.Component;
 @Component
 final class TaskOutcomeTerminalFinalizer {
 
+  private final JobTerminalOutboxService terminalOutbox;
   private final JobLifecycleMetricsRecorder jobLifecycleMetricsRecorder;
   private final MeterRegistry meterRegistry;
   private final JobInstanceTerminalChildStateReconciler childStateReconciler;
@@ -36,7 +39,9 @@ final class TaskOutcomeTerminalFinalizer {
       MeterRegistry meterRegistry,
       JobInstanceTerminalChildStateReconciler childStateReconciler,
       ResultVersionWriter resultVersionWriter,
-      BatchDayReplayTerminalReconciler replayTerminalReconciler) {
+      BatchDayReplayTerminalReconciler replayTerminalReconciler,
+      JobTerminalOutboxService terminalOutbox) {
+    this.terminalOutbox = terminalOutbox;
     this.jobLifecycleMetricsRecorder = jobLifecycleMetricsRecorder;
     this.meterRegistry = meterRegistry;
     this.childStateReconciler = childStateReconciler;
@@ -66,9 +71,10 @@ final class TaskOutcomeTerminalFinalizer {
           .increment();
     }
     childStateReconciler.reconcile(command.tenantId(), jobInstance.getId(), instanceStatus);
-    resultVersionWriter.writeOnTerminal(
-        jobInstance,
-        TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(partitions, command));
+    terminalOutbox.writeTerminalEvent(command.tenantId(), jobInstance.getId());
+    Map<String, Object> successfulOutputs =
+        TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(partitions, command);
+    resultVersionWriter.writeOnTerminal(jobInstance, successfulOutputs);
     if (EmptyChecks.isNotNull(jobInstance.getReplaySessionId())) {
       replayTerminalReconciler.reconcileOnTerminal(
           jobInstance.getTenantId(),

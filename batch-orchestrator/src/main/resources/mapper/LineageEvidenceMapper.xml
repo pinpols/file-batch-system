@@ -26,7 +26,6 @@
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
             <arg column="tenant_id" javaType="java.lang.String"/>
-            <arg column="pipeline_definition_id" javaType="java.lang.Long"/>
             <arg column="job_code" javaType="java.lang.String"/>
             <arg column="pipeline_type" javaType="java.lang.String"/>
             <arg column="file_id" javaType="java.lang.Long"/>
@@ -131,8 +130,7 @@
     <select id="selectPipelineInstances" resultMap="PipelineInstanceResultMap">
         select id,
                tenant_id,
-               pipeline_definition_id,
-               job_code,
+                              job_code,
                pipeline_type,
                file_id,
                related_job_instance_id,
@@ -153,8 +151,7 @@
     <select id="selectArchivedPipelineInstances" resultMap="PipelineInstanceResultMap">
         select id,
                tenant_id,
-               pipeline_definition_id,
-               job_code,
+                              job_code,
                pipeline_type,
                file_id,
                related_job_instance_id,

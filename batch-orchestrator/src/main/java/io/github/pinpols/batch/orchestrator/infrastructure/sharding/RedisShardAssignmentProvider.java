@@ -79,11 +79,12 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
       log.info("RedisShardAssignmentProvider startup heartbeat OK: member={}", memberId);
     } catch (RuntimeException ex) {
       coordinationHealthy.set(false);
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
       log.warn(
           "RedisShardAssignmentProvider startup heartbeat FAILED: member={}, err={} "
               + "- DYNAMIC sharding will remain degraded to a single instance until Redis recovers",
           memberId,
-          SwallowedExceptionLogger.summary(ex));
+          causeSummary);
     }
   }
 
@@ -99,10 +100,11 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
       coordinationHealthy.set(true);
     } catch (RuntimeException ex) {
       coordinationHealthy.set(false);
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
       log.warn(
           "Shard coordinator heartbeat failed: member={}, err={}",
           memberId,
-          SwallowedExceptionLogger.summary(ex));
+          causeSummary);
     }
   }
 
@@ -113,10 +115,11 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
     try {
       redis.opsForZSet().remove(membersKey, memberId);
     } catch (RuntimeException ex) {
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
       log.warn(
           "Shard coordinator leave failed: member={}, err={}",
           memberId,
-          SwallowedExceptionLogger.summary(ex));
+          causeSummary);
     }
   }
 
@@ -160,11 +163,14 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
     } catch (RuntimeException ex) {
       coordinationHealthy.set(false);
       ShardAssignment fallback = lastKnown.get();
+      int fallbackShardTotal = fallback.shardTotal();
+      int fallbackShardIndex = fallback.shardIndex();
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
       log.warn(
           "Redis shard coordinator query failed; falling back to the previous assignment total={} index={}: {}",
-          fallback.shardTotal(),
-          fallback.shardIndex(),
-          SwallowedExceptionLogger.summary(ex));
+          fallbackShardTotal,
+          fallbackShardIndex,
+          causeSummary);
       return fallback;
     }
   }

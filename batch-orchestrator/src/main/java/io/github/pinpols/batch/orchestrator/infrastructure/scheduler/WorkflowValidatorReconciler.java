@@ -63,22 +63,19 @@ public class WorkflowValidatorReconciler {
       try {
         // RLS Phase B：validator.validate 走 workflow_node / job_definition / calendar mapper，
         // emitInvalid 写 alert_event；都依赖 holder。try/catch 包在 runWithTenant 外保证 finally 清。
-        boolean hasErrors = RlsTenantContextHolder.runWithTenant(tenantId, () -> {
-          WorkflowValidationResult result = validator.validate(wf.id());
-          if (result.hasErrors()) {
-            emitInvalid(wf, result);
-            return true;
-          }
-          return false;
-        });
+        boolean hasErrors =
+            RlsTenantContextHolder.runWithTenant(
+                tenantId, () -> validateAndEmitInTenant(wf));
         if (hasErrors) {
           invalidCount++;
         }
       } catch (Exception failure) {
+        Long workflowDefId = wf.id();
+        String causeSummary = SwallowedExceptionLogger.summary(failure);
         log.warn(
             "workflow_validator reconcile error: workflowDefId={}, msg={}",
-            wf.id(),
-            SwallowedExceptionLogger.summary(failure));
+            workflowDefId,
+            causeSummary);
       }
     }
     if (invalidCount > 0) {
@@ -87,6 +84,15 @@ public class WorkflowValidatorReconciler {
           enabled.size(),
           invalidCount);
     }
+  }
+
+  private boolean validateAndEmitInTenant(WorkflowDefinitionEntity workflow) {
+    WorkflowValidationResult result = validator.validate(workflow.id());
+    if (result.hasErrors()) {
+      emitInvalid(workflow, result);
+      return true;
+    }
+    return false;
   }
 
   private void emitInvalid(WorkflowDefinitionEntity wf, WorkflowValidationResult result) {

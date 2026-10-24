@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
+import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
+
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -451,7 +454,7 @@ class DefaultFileGovernanceServiceTest {
     verify(jobTaskMapper).resetForRetry("t1", 400L, "READY", 1L);
     verify(taskDispatchOutboxService)
         .writeDispatchEvent(
-            eq(jobInstance), eq(task), eq(partition), any(), anyString(), eq(RunMode.COMPENSATE));
+            org.mockito.ArgumentMatchers.argThat(command -> command != null && java.util.Objects.equals(command.jobInstance(), jobInstance) && java.util.Objects.equals(command.task(), task) && java.util.Objects.equals(command.partition(), partition) && command.eventKey() != null && java.util.Objects.equals(command.runModeOverride(), RunMode.COMPENSATE)));
     ArgumentCaptor<FileGovernanceRepository.FileAuditCommand> auditCaptor =
         ArgumentCaptor.forClass(FileGovernanceRepository.FileAuditCommand.class);
     verify(fileGovernanceRepository).appendAudit(auditCaptor.capture());

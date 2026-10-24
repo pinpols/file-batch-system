@@ -10,6 +10,27 @@ import org.junit.jupiter.api.Test;
 @DisplayName("AlertLabels: alert_event → AM label 映射")
 class AlertLabelsTest {
 
+  @DisplayName("规范标签区分作业且保持跨追踪标识的告警身份")
+  @Test
+  void canonicalLabels_distinguishesJobsButKeepsIdentityAcrossTraceChanges() {
+    AlertEventEntity first = new AlertEventEntity();
+    first.setTenantId("ta");
+    first.setAlertType("JOB_SLA_VIOLATION");
+    first.setSeverity("WARN");
+    first.setDedupFingerprint(AlertFingerprints.build("ta", "JOB_SLA_VIOLATION", "job:101"));
+    AlertEventEntity second = new AlertEventEntity();
+    second.setTenantId("ta");
+    second.setAlertType("JOB_SLA_VIOLATION");
+    second.setSeverity("WARN");
+    second.setDedupFingerprint(AlertFingerprints.build("ta", "JOB_SLA_VIOLATION", "job:102"));
+
+    Map<String, String> firing = AlertLabels.canonicalLabels(first);
+    assertThat(firing).isNotEqualTo(AlertLabels.canonicalLabels(second));
+    first.setTraceId("a-later-observation");
+    first.setStatus("CLOSED");
+    assertThat(AlertLabels.canonicalLabels(first)).isEqualTo(firing);
+  }
+
   @Test
   @DisplayName("severity 词形映射(WARN→warning 是词形差异,非简单 lowercase)")
   void amSeverity_mapsWordForms() {

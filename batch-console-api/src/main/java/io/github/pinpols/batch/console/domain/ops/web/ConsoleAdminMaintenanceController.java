@@ -43,7 +43,9 @@ public class ConsoleAdminMaintenanceController {
 
   @GetMapping("/maintenance")
   public CommonResponse<MaintenanceStatusResponse> get() {
-    return responseFactory.success(toResponse(stateHolder.current()));
+    MaintenanceStateHolder.MaintenanceState state = stateHolder.current();
+    MaintenanceStatusResponse response = toResponse(state);
+    return responseFactory.success(response);
   }
 
   @PutMapping("/maintenance")

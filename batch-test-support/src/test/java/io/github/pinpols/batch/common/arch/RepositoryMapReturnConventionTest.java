@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
  * 守护测试：仓库出参不得**新增** {@code Map<String, Object>}（口径见 docs/coding-conventions.md §1.2）。
  *
  * <p>{@link #BASELINE} 冻结 2026-10-07 已逐条复核的存量出参。存量分两类，理由登记在
- * docs/analysis/java-readability-phase-0-classification-2026-08-12.md §4.2 / §4.3：已符合约定的阶段性行映射
+ * docs/audit/java-readability-phase-0-classification-2026-08-12.md §4.2 / §4.3：已符合约定的阶段性行映射
  * （有 typed view 兜底），以及刻意保留 Map 的动态边界与对外透传（出站报文键名是外部契约）。存量被类型化后应从
  * {@link #BASELINE} 删除；新增出参若确属动态边界，需先在分类总账登记理由再补基线。
  *
@@ -70,7 +70,7 @@ class RepositoryMapReturnConventionTest {
       ORCH_GOV + "#selectProcessingDelaySamples",
       CORE_INFRA + "PlatformFileRecordRepository.java#loadFileRecord",
       CORE_INFRA + "PlatformFileRecordRepository.java#loadFileRecordByStoragePath",
-      CORE_INFRA + "PlatformPipelineDefinitionRepository.java#loadLatestTemplateConfig",
+      CORE_INFRA + "PlatformFileTemplateRepository.java#loadLatestTemplateConfig",
       CORE_INFRA + "PlatformPipelineRunRepository.java#loadLatestSucceededStepOutputSummary",
       DISPATCH_INFRA + "FileDispatchRepository.java#loadChannel",
       DISPATCH_INFRA + "FileDispatchRepository.java#loadFile",
@@ -108,7 +108,7 @@ class RepositoryMapReturnConventionTest {
     assertThat(newEntries)
         .as("Repository 不得新增 Map<String, Object> 出参（docs/coding-conventions.md §1.2）：固定行请改 typed"
             + " record 并用显式 <resultMap><constructor> 映射；确属动态边界或对外透传的，先在"
-            + " docs/analysis/java-readability-phase-0-classification-2026-08-12.md §4.2 登记理由，再补"
+            + " docs/audit/java-readability-phase-0-classification-2026-08-12.md §4.2 登记理由，再补"
             + " BASELINE")
         .isEmpty();
     assertThat(found).as("基线条目应在仓库中仍可解析（若某条已被类型化，请从 BASELINE 删除）").isNotEmpty();

@@ -11,7 +11,7 @@ import io.github.pinpols.batch.e2e.support.E2eOutboxPublishSupport;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
 import io.github.pinpols.batch.e2e.support.E2eTestSql;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -55,13 +55,13 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
 
-  private final LaunchService launchService;
+  private final WorkflowRunLaunchService launchService;
   private final JdbcTemplate jdbcTemplate;
   private final DataSource businessDataSource;
   private final E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   ImportFailurePipelineE2eIT(
-      LaunchService launchService,
+      WorkflowRunLaunchService launchService,
       JdbcTemplate jdbcTemplate,
       @Qualifier("importBusinessDataSource") DataSource businessDataSource,
       E2eOutboxPublishSupport e2eOutboxPublishSupport) {
@@ -74,6 +74,15 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("输入内容不是可解析的 JSON 时解析环节失败, 任务收敛为失败终态, 作业实例终态为失败或部分失败")
   void shouldReportFailed_whenImportContentIsUnparseable() {
+    final String selectTaskStatusSql = """
+                      select t.task_status from batch.job_task t
+                      join batch.job_instance ji on ji.id = t.job_instance_id
+                      where ji.tenant_id = ? and ji.dedup_key = ?
+                      """;
+    final String selectInstanceStatusSql = """
+        select instance_status from batch.job_instance where tenant_id = ? and dedup_key = ?
+    """;
+
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
 
@@ -86,7 +95,7 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
 
     launchService.launch(new LaunchRequest(
         TENANT,
-        seed.jobCode(),
+        seed.workflowDefinitionId(),
         LocalDate.of(2026, 1, 15),
         TriggerType.API,
         seed.requestId(),
@@ -99,17 +108,13 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String status = jdbcTemplate.queryForObject("""
-                      select t.task_status from batch.job_task t
-                      join batch.job_instance ji on ji.id = t.job_instance_id
-                      where ji.tenant_id = ? and ji.dedup_key = ?
-                      """, String.class, TENANT, seed.dedupKey());
+          String status = jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
           assertThat(status).isEqualTo("FAILED");
         });
 
     // Verify job_instance also reflects the failure
     String instanceStatus = jdbcTemplate.queryForObject(
-        "select instance_status from batch.job_instance where tenant_id = ? and dedup_key = ?",
+        selectInstanceStatusSql,
         String.class,
         TENANT,
         seed.dedupKey());
@@ -119,6 +124,17 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("定界文件尾行声明的记录数与合计金额不一致时校验阻断, 任务失败且明细不进入业务表")
   void shouldReportFailed_whenTrailerControlTotalsMismatch() {
+    final String selectCountSql = """
+        select count(*)::int from biz.customer_account where tenant_id = ? and customer_no in (?, ?)
+    """;
+
+    final String selectTaskStatusSql = """
+                      select t.task_status, t.error_code, ji.instance_status
+                      from batch.job_task t
+                      join batch.job_instance ji on ji.id = t.job_instance_id
+                      where ji.tenant_id = ? and ji.dedup_key = ?
+                      """;
+
     String templateCode = "IMP-CONTROL-TOTAL-E2E-" + System.nanoTime();
     insertControlTotalTemplate(templateCode);
 
@@ -138,7 +154,7 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
 
     launchService.launch(new LaunchRequest(
         TENANT,
-        seed.jobCode(),
+        seed.workflowDefinitionId(),
         LocalDate.of(2026, 1, 15),
         TriggerType.API,
         seed.requestId(),
@@ -151,12 +167,7 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          Map<String, Object> row = jdbcTemplate.queryForMap("""
-                      select t.task_status, t.error_code, ji.instance_status
-                      from batch.job_task t
-                      join batch.job_instance ji on ji.id = t.job_instance_id
-                      where ji.tenant_id = ? and ji.dedup_key = ?
-                      """, TENANT, seed.dedupKey());
+          Map<String, Object> row = jdbcTemplate.queryForMap(selectTaskStatusSql, TENANT, seed.dedupKey());
           assertThat(row.get("task_status")).isEqualTo("FAILED");
           assertThat(row.get("instance_status")).isIn("FAILED", "PARTIAL_FAILED");
           assertThat(String.valueOf(row.get("error_code")))
@@ -165,7 +176,7 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
 
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
     Integer importedRows = businessJdbc.queryForObject(
-        "select count(*)::int from biz.customer_account where tenant_id = ? and customer_no in (?, ?)",
+        selectCountSql,
         Integer.class,
         TENANT,
         "CTL-1",
@@ -174,8 +185,7 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
   }
 
   private void insertControlTotalTemplate(String templateCode) {
-    jdbcTemplate.update(
-        """
+    final String insertFileTemplateConfigSql = """
         insert into batch.file_template_config (
           tenant_id, template_code, template_name, template_type, biz_type,
           file_format_type, charset, target_charset, with_bom,
@@ -201,7 +211,10 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
         where tenant_id = ? and template_code = 'IMP-CUSTOMER-CSV'
         order by version desc
         limit 1
-        """,
+        """;
+
+    jdbcTemplate.update(
+        insertFileTemplateConfigSql,
         templateCode,
         "Control total e2e import",
         "{\"present\":true,\"delimiter\":\",\",\"recordType\":\"T\",\"recordTypeIndex\":0,"

@@ -4,6 +4,7 @@ import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAuditLogEnti
 import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiAuditLogQuery;
 import java.time.OffsetDateTime;
 import java.util.List;
+import org.apache.ibatis.annotations.Param;
 
 public interface ConsoleAiAuditLogMapper {
 
@@ -13,5 +14,5 @@ public interface ConsoleAiAuditLogMapper {
 
   long countByQuery(ConsoleAiAuditLogQuery query);
 
-  int deleteBefore(@org.apache.ibatis.annotations.Param("cutoff") OffsetDateTime cutoff);
+  int deleteBefore(@Param("cutoff") OffsetDateTime cutoff);
 }

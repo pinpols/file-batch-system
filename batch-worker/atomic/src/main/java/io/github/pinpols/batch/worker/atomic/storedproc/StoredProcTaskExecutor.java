@@ -172,9 +172,12 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
           ctx.tenantId(),
           ctx.jobCode(),
           ex);
+      String exceptionMessage = ex.getMessage();
+      String failureMessage =
+          EmptyChecks.isNull(exceptionMessage) ? ex.getClass().getSimpleName() : exceptionMessage;
       return AtomicErrorCode.fail(
           AtomicErrorCode.EXECUTION_FAILED,
-          ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage(),
+          failureMessage,
           ex);
     }
   }
@@ -299,7 +302,9 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
       if (o == null) {
         throw new StoredProcValidationException("outParams contains null");
       }
-      String type = String.valueOf(o).trim().toUpperCase(Locale.ROOT);
+      String rawType = String.valueOf(o);
+      String trimmedType = rawType.trim();
+      String type = trimmedType.toUpperCase(Locale.ROOT);
       if (!props.getAllowedOutSqlTypes().contains(type)) {
         throw new StoredProcValidationException(
             "OUT type " + type + " not in allowedOutSqlTypes=" + props.getAllowedOutSqlTypes());
@@ -369,7 +374,8 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
         return execCallableStatement(conn, call, inv, start);
       });
     } catch (SQLException ex) {
-      boolean isTimeout = "57014".equals(ex.getSQLState())
+      boolean hasTimeoutSqlState = "57014".equals(ex.getSQLState());
+      boolean isTimeout = hasTimeoutSqlState
           || (ex.getMessage() != null
               && ex.getMessage().toLowerCase(Locale.ROOT).contains("timeout"));
       return AtomicErrorCode.fail(
@@ -387,7 +393,10 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
         cs.setObject(i + 1, inv.inParams.get(i));
       }
       for (int i = 0; i < inv.outTypes.size(); i++) {
-        cs.registerOutParameter(inv.inParams.size() + i + 1, toSqlType(inv.outTypes.get(i)));
+        int position = inv.inParams.size() + i + 1;
+        String outputType = inv.outTypes.get(i);
+        int sqlType = toSqlType(outputType);
+        cs.registerOutParameter(position, sqlType);
       }
       cs.execute();
 
@@ -413,7 +422,9 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
             outValues.put(key, "<REF_CURSOR>");
           }
         } else {
-          outValues.put(key, truncateIfNeeded(cs.getObject(pos)));
+          Object outputValue = cs.getObject(pos);
+          Object truncatedOutputValue = truncateIfNeeded(outputValue);
+          outValues.put(key, truncatedOutputValue);
         }
       }
 

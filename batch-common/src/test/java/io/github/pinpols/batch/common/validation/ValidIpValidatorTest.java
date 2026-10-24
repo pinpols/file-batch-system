@@ -2,6 +2,8 @@ package io.github.pinpols.batch.common.validation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import jakarta.validation.Payload;
+import java.lang.annotation.Annotation;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -56,7 +58,7 @@ class ValidIpValidatorTest {
   private void init(boolean ipv4Only) {
     validator.initialize(new ValidIp() {
       @Override
-      public Class<? extends java.lang.annotation.Annotation> annotationType() {
+      public Class<? extends Annotation> annotationType() {
         return ValidIp.class;
       }
 
@@ -76,9 +78,9 @@ class ValidIpValidatorTest {
       }
 
       @Override
-      public Class<? extends jakarta.validation.Payload>[] payload() {
+      public Class<? extends Payload>[] payload() {
         @SuppressWarnings("unchecked")
-        Class<? extends jakarta.validation.Payload>[] empty = new Class[0];
+        Class<? extends Payload>[] empty = new Class[0];
         return empty;
       }
     });

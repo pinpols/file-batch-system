@@ -5,6 +5,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.trigger.domain.TriggerSchedulerStatus;
 import io.github.pinpols.batch.trigger.domain.TriggerStatusInfo;
 import io.github.pinpols.batch.trigger.domain.TriggerStatusQueryService;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
@@ -40,5 +41,17 @@ class TriggerStatusControllerTest {
 
     assertThat(response.data()).containsExactly(trigger);
     verify(triggerStatusQueryService).listRegisteredTriggers("tenant-a");
+  }
+
+  @Test
+  @DisplayName("调度器状态查询映射为状态响应")
+  void shouldWrapSchedulerStatus() {
+    when(triggerStatusQueryService.schedulerStatus()).thenReturn("RUNNING");
+
+    CommonResponse<TriggerSchedulerStatus> response =
+        new TriggerStatusController(triggerStatusQueryService, gracefulShutdown).schedulerStatus();
+
+    assertThat(response.data()).isEqualTo(new TriggerSchedulerStatus("RUNNING"));
+    verify(triggerStatusQueryService).schedulerStatus();
   }
 }

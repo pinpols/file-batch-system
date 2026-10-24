@@ -201,25 +201,19 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
     if (state != null) {
       return state;
     }
-    QuotaRuntimeStateEntity created = new QuotaRuntimeStateEntity(
-        null,
-        tenantId,
-        quotaScope,
-        ownerCode,
-        ctx.quotaResetPolicy(),
-        null,
-        null,
-        0,
-        null,
-        ctx.now(),
-        ctx.now(),
-        null);
-    created = refreshState(
-        created,
-        QuotaResetPolicy.from(ctx.quotaResetPolicy()),
-        ctx.now(),
-        ctx.slidingWindowHours(),
-        false);
+    QuotaRuntimeStateEntity created = QuotaRuntimeStateEntity.builder()
+        .tenantId(tenantId)
+        .quotaScope(quotaScope)
+        .ownerCode(ownerCode)
+        .quotaResetPolicy(ctx.quotaResetPolicy())
+        .peakBorrowedCount(0)
+        .createdAt(ctx.now())
+        .updatedAt(ctx.now())
+        .build();
+    QuotaResetPolicy resetPolicy = QuotaResetPolicy.from(ctx.quotaResetPolicy());
+    Instant createdAt = ctx.now();
+    int slidingWindowHours = ctx.slidingWindowHours();
+    created = refreshState(created, resetPolicy, createdAt, slidingWindowHours, false);
     return created;
   }
 
@@ -250,10 +244,11 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
       changed = true;
     }
     if (!effectivePolicy.isRuntimeManaged()) {
-      if (state.peakBorrowedCount() == null
+      boolean quotaStateNeedsReset = state.peakBorrowedCount() == null
           || state.peakBorrowedCount() != 0
           || state.windowStartedAt() != null
-          || state.windowExpiresAt() != null) {
+          || state.windowExpiresAt() != null;
+      if (quotaStateNeedsReset) {
         state = state.withoutRuntimeWindow(normalizedPolicy, state.lastResetAt());
         changed = true;
       }
@@ -269,19 +264,23 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
       ZonedDateTime nowZdt = now.atZone(timezoneProvider.defaultZone());
       Instant windowStart = QuotaResetPolicy.startOfCalendarDay(nowZdt).toInstant();
       Instant windowEnd = windowStart.plus(Duration.ofDays(1));
-      if (!windowStart.equals(state.windowStartedAt())
+      boolean fixedQuotaWindowNeedsReset = !windowStart.equals(state.windowStartedAt())
           || state.windowExpiresAt() == null
-          || !now.isBefore(state.windowExpiresAt())) {
+          || !now.isBefore(state.windowExpiresAt());
+      if (fixedQuotaWindowNeedsReset) {
         state = state.withRefresh(normalizedPolicy, windowStart, windowEnd, 0, now);
         changed = true;
       }
     } else if (effectivePolicy == QuotaResetPolicy.SLIDING_WINDOW) {
       int normalizedHours = Math.max(1, slidingWindowHours);
-      if (state.windowStartedAt() == null
+      boolean quotaWindowHasExpiredOrIsMissing = state.windowStartedAt() == null
           || state.windowExpiresAt() == null
-          || !now.isBefore(state.windowExpiresAt())) {
+          || !now.isBefore(state.windowExpiresAt());
+      if (quotaWindowHasExpiredOrIsMissing) {
+        Duration slidingWindowDuration = Duration.ofHours(normalizedHours);
+        Instant windowExpiresAt = now.plus(slidingWindowDuration);
         state = state.withRefresh(
-            normalizedPolicy, now, now.plus(Duration.ofHours(normalizedHours)), 0, now);
+            normalizedPolicy, now, windowExpiresAt, 0, now);
         changed = true;
       }
     }

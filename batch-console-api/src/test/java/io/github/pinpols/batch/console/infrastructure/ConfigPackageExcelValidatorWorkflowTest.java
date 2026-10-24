@@ -7,9 +7,7 @@ import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapp
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
-import io.github.pinpols.batch.console.domain.job.mapper.StepRegistryQueryMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
-import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator;
 import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore.PackageExcelSession;
 import java.time.Instant;
@@ -247,8 +245,6 @@ class ConfigPackageExcelValidatorWorkflowTest {
   private static ConfigPackageExcelValidator validator() {
     return new ConfigPackageExcelValidator(
         mock(JobDefinitionMapper.class),
-        mock(PipelineDefinitionMapper.class),
-        mock(StepRegistryQueryMapper.class),
         mock(FileTemplateConfigMapper.class),
         mock(ResourceQueueMapper.class),
         mock(BusinessCalendarMapper.class),

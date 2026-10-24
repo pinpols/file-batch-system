@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * ADR-046 文件束:从 launch params 解析「这束有哪些绑定项」。
@@ -39,7 +40,9 @@ public final class BundlePlanParams {
   @SuppressWarnings("unchecked")
   public static List<BundleFile> extract(Map<String, Object> params, JobType bundleType) {
     List<BundleFile> result = new ArrayList<>();
-    if (EmptyChecks.isNull(params) || EmptyChecks.isNull(bundleType) || !bundleType.isBundle()) {
+    boolean bundleParametersAreUnavailable =
+        EmptyChecks.isNull(params) || EmptyChecks.isNull(bundleType) || !bundleType.isBundle();
+    if (bundleParametersAreUnavailable) {
       return result;
     }
     Object raw = params.get(PARAM_BUNDLE_FILES);
@@ -103,7 +106,9 @@ public final class BundlePlanParams {
       return null;
     }
     try {
-      return Long.parseLong(String.valueOf(value).trim());
+      String rawValue = String.valueOf(value);
+      String normalizedValue = rawValue.trim();
+      return Long.parseLong(normalizedValue);
     } catch (NumberFormatException ignored) {
       return null;
     }
@@ -113,7 +118,8 @@ public final class BundlePlanParams {
     if (EmptyChecks.isNull(value)) {
       return null;
     }
-    String s = String.valueOf(value).trim();
-    return s.isEmpty() ? null : s;
+    String rawValue = String.valueOf(value);
+    String trimmedValue = rawValue.trim();
+    return EmptyChecks.isEmpty(Objects.requireNonNull(trimmedValue)) ? null : trimmedValue;
   }
 }

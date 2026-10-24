@@ -62,7 +62,8 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
   // C-2.10: 区分 DONE / PENDING 两种 CONFLICT 场景，便于前端决定是"提示已处理"还是"稍后重试"
   private static final String CONFLICT_DONE_BODY = "{\"code\":\""
       + ResultCode.CONFLICT.code()
-      + "\",\"message\":\"duplicate request, same Idempotency-Key already processed\"}";
+      + "\",\"message\":\"duplicate request, same Idempotency-Key already processed\","
+      + "\"idempotentReplay\":true}";
   private static final String CONFLICT_PENDING_BODY = "{\"code\":\""
       + ResultCode.CONFLICT.code()
       + "\",\"message\":\"request currently being processed, retry after 30s with same"
@@ -126,8 +127,10 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
   void renewPendingLeases() {
     pendingLeases.forEach((owner, lease) -> {
       try {
-        if (!idempotencyStore.compareAndSet(lease.key(), lease.value(), lease.value(), lease.ttl())
-            && pendingLeases.remove(owner, lease)) {
+        boolean leaseOwnershipWasLost =
+            !idempotencyStore.compareAndSet(lease.key(), lease.value(), lease.value(), lease.ttl())
+                && pendingLeases.remove(owner, lease);
+        if (leaseOwnershipWasLost) {
           log.error("idempotency pending ownership lost: key={}", lease.key());
         }
       } catch (DataAccessException ex) {
@@ -158,12 +161,14 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
     String idempotencyKey = request.getHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER);
     if (!Texts.hasText(idempotencyKey)) {
       // 标了 @Idempotent 的方法 fail-close：没 header 直接 400
-      if (handler instanceof HandlerMethod hm
+      boolean handlerIsIdempotent = handler instanceof HandlerMethod hm
           && (hm.getMethodAnnotation(Idempotent.class) != null
-              || hm.getBeanType().isAnnotationPresent(Idempotent.class))) {
+              || hm.getBeanType().isAnnotationPresent(Idempotent.class));
+      if (handlerIsIdempotent) {
+        String requestUriForLog = LogSanitizer.value(request.getRequestURI());
         log.warn(
             "missing Idempotency-Key on @Idempotent endpoint: uri={}",
-            LogSanitizer.value(request.getRequestURI()));
+            requestUriForLog);
         writeJson(response, HttpStatus.BAD_REQUEST, MISSING_KEY_BODY);
         return false;
       }
@@ -187,11 +192,14 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
       return false;
     }
     if (DONE.equals(existing)) {
+      String idempotencyKeyForLog = LogSanitizer.value(idempotencyKey);
+      String requestUriForLog = LogSanitizer.value(request.getRequestURI());
+      String tenantIdForLog = LogSanitizer.value(tenantId);
       log.warn(
           "duplicate idempotency key rejected (already done): key={}, uri={}, tenant={}",
-          LogSanitizer.value(idempotencyKey),
-          LogSanitizer.value(request.getRequestURI()),
-          LogSanitizer.value(tenantId));
+          idempotencyKeyForLog,
+          requestUriForLog,
+          tenantIdForLog);
       writeJson(response, HttpStatus.CONFLICT, CONFLICT_DONE_BODY);
       return false;
     }
@@ -302,17 +310,21 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
       return;
     }
     if (DONE.equals(current)) {
+      String idempotencyKeyForLog = LogSanitizer.value(idempotencyKey);
+      String requestUriForLog = LogSanitizer.value(request.getRequestURI());
       log.warn(
           "duplicate idempotency key rejected (raced to DONE): key={}, uri={}",
-          LogSanitizer.value(idempotencyKey),
-          LogSanitizer.value(request.getRequestURI()));
+          idempotencyKeyForLog,
+          requestUriForLog);
       writeJson(response, HttpStatus.CONFLICT, CONFLICT_DONE_BODY);
       return;
     }
+    String idempotencyKeyForLog = LogSanitizer.value(idempotencyKey);
+    String requestUriForLog = LogSanitizer.value(request.getRequestURI());
     log.warn(
         "concurrent idempotency key rejected (pending): key={}, uri={}",
-        LogSanitizer.value(idempotencyKey),
-        LogSanitizer.value(request.getRequestURI()));
+        idempotencyKeyForLog,
+        requestUriForLog);
     response.setHeader("Retry-After", streamRequest ? "600" : "30");
     writeJson(
         response,
@@ -335,7 +347,8 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
     }
     pendingLeases.remove(owner);
     int status = response.getStatus();
-    if (status >= 200 && status < 300 && ex == null) {
+    boolean requestCompletedSuccessfully = status >= 200 && status < 300 && ex == null;
+    if (requestCompletedSuccessfully) {
       // 成功：升级为 DONE，长 TTL 阻止重复提交
       try {
         if (!idempotencyStore.compareAndSet(redisKey, owner, DONE, IDEMPOTENCY_TTL)) {
@@ -371,8 +384,9 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
 
   private static String durableKey(String redisKey) {
     try {
-      byte[] digest =
-          MessageDigest.getInstance("SHA-256").digest(redisKey.getBytes(StandardCharsets.UTF_8));
+      MessageDigest digestGenerator = MessageDigest.getInstance("SHA-256");
+      byte[] redisKeyBytes = redisKey.getBytes(StandardCharsets.UTF_8);
+      byte[] digest = digestGenerator.digest(redisKeyBytes);
       return "console-http:" + HexFormat.of().formatHex(digest);
     } catch (NoSuchAlgorithmException exception) {
       throw new IllegalStateException(

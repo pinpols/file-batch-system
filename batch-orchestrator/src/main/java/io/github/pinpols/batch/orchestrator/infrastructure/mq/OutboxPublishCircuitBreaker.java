@@ -152,9 +152,10 @@ public class OutboxPublishCircuitBreaker {
       return false;
     }
     // C-5.1: 冷却期结束时进入半开状态，CAS 保证仅一个线程执行探测
-    if (snapshot.openUntilMs() > 0
+    boolean halfOpenProbeWasAcquired = snapshot.openUntilMs() > 0
         && snapshot.openUntilMs() <= now
-        && halfOpenProbing.compareAndSet(false, true)) {
+        && halfOpenProbing.compareAndSet(false, true);
+    if (halfOpenProbeWasAcquired) {
       return true;
     }
     // 快速路径 2：本地已知熔断关闭，且关闭缓存仍有效
@@ -182,7 +183,9 @@ public class OutboxPublishCircuitBreaker {
       return snapshot.openUntilMs() <= now;
     }
     long resolvedOpen = openUntilMs;
-    state.set(new CircuitState(resolvedOpen, now + outboxProperties.getPollIntervalMillis()));
+    long closedCacheExpiresAt = now + outboxProperties.getPollIntervalMillis();
+    CircuitState updatedState = new CircuitState(resolvedOpen, closedCacheExpiresAt);
+    state.set(updatedState);
     return resolvedOpen <= now;
   }
 
@@ -195,12 +198,13 @@ public class OutboxPublishCircuitBreaker {
     long ttlMillis = Math.max(outboxProperties.getCircuitBreakerCooldownMillis(), 60_000L);
     Long openUntilMs;
     try {
+      int nonNegativeFailedPolls = Math.max(publishFailed, 0);
       openUntilMs = redis.evalLong(
           ADVANCE_SCRIPT,
           BatchRedisKeys.outboxCircuit(),
           FIELD_FAILED_POLLS,
           FIELD_OPEN_UNTIL_MS,
-          String.valueOf(Math.max(publishFailed, 0)),
+          String.valueOf(nonNegativeFailedPolls),
           String.valueOf(outboxProperties.getCircuitBreakerFailureThresholdConsecutivePolls()),
           String.valueOf(outboxProperties.getCircuitBreakerCooldownMillis()),
           String.valueOf(now),
@@ -217,7 +221,9 @@ public class OutboxPublishCircuitBreaker {
     }
     // T-2：原子发布新快照
     long resolvedOpen = openUntilMs != null ? openUntilMs : 0L;
-    state.set(new CircuitState(resolvedOpen, now + outboxProperties.getPollIntervalMillis()));
+    long closedCacheExpiresAt = now + outboxProperties.getPollIntervalMillis();
+    CircuitState updatedState = new CircuitState(resolvedOpen, closedCacheExpiresAt);
+    state.set(updatedState);
     // C-5.1: 探测完成后重置半开标记
     if (halfOpenProbing.compareAndSet(true, false)) {
       // 探测成功：cachedOpenUntilMs 已为 0，自然进入关闭状态

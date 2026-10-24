@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：在独立本地 Compose 项目中演练 MinIO 分布式故障恢复。
+# 用法：在仓库根目录执行 bash scripts/local/minio-distributed-ha-drill.sh；参数与前置环境见下方说明及所属 README。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

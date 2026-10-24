@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：P2-4: 创建流复制用户 replicator + 放行 replica 容器在 batch-network 子网的连接。
+# 用法：由对应容器的 entrypoint/init 配置调用；环境参数见容器配置与下方说明。
 # P2-4: 创建流复制用户 replicator + 放行 replica 容器在 batch-network 子网的连接。
 # 主库容器首次启动（数据目录空）时由 postgres 官方 entrypoint 自动调用本脚本。
 #
@@ -25,7 +27,7 @@ if ! awk -v user="$POSTGRES_REPLICATION_USER" \
   '$1 == "host" && $2 == "replication" && $3 == user { found = 1 } END { exit !found }' "$PGHBA"; then
   cat >>"$PGHBA" <<EOF
 
-# P2-4: streaming replication from postgres-replica container
+# 允许 postgres-replica 容器发起流复制连接。
 host replication ${POSTGRES_REPLICATION_USER} 0.0.0.0/0 scram-sha-256
 EOF
   pg_ctl reload -D "$PGDATA" >/dev/null

@@ -175,7 +175,7 @@ Collector 配置应使用对应版本官方镜像执行 `validate`；Prometheus 
    ```
 2. 清理前先确认业务日志与告警指标已归档（如需要保留审计排障时长）。
 3. 清理后重新检查 `docker system df` 与 Prometheus/Loki 就绪状况。
-4. `--include-app-logs` 只清理 `logs/archive/app`，不会触碰 `logs/current/app` 活跃日志。
+4. `--include-app-logs` 只清理 `logs/archive/app-<component>`，不会触碰 `logs/current/app` 活跃日志。
 
 ### Tempo 无链路
 

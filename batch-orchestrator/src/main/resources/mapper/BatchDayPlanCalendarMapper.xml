@@ -22,4 +22,37 @@
             limit 1
         ), 'WORKDAY')
     </select>
+
+    <select id="selectPreviousBusinessDate" resultType="java.time.LocalDate">
+        select candidate.biz_date
+        from batch.business_calendar c
+        cross join lateral (
+            select (#{bizDate}::date - day_offset)::date as biz_date
+            from generate_series(1, 366) as offsets(day_offset)
+        ) candidate
+        left join lateral (
+            select h.day_type
+            from batch.calendar_holiday h
+            where h.tenant_id = c.tenant_id
+              and h.biz_date = candidate.biz_date
+              and (
+                  (h.scope = 'CALENDAR' and h.calendar_id = c.id)
+                  or (h.scope = 'GROUP' and h.group_code = c.group_code)
+              )
+            order by case h.scope when 'CALENDAR' then 0 else 1 end
+            limit 1
+        ) day_rule on true
+        where c.tenant_id = #{tenantId}
+          and c.calendar_code = #{calendarCode}
+          and c.enabled = true
+          and (
+              day_rule.day_type = 'WORKDAY_OVERRIDE'
+              or (
+                  day_rule.day_type is null
+                  and extract(isodow from candidate.biz_date) between 1 and 5
+              )
+          )
+        order by candidate.biz_date desc
+        limit 1
+    </select>
 </mapper>

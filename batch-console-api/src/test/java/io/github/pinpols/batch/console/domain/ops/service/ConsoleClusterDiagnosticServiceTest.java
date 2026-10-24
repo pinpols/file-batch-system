@@ -13,15 +13,20 @@ import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.console.application.ops.ConsoleClusterDiagnosticService;
 import io.github.pinpols.batch.console.domain.ops.mapper.ConsoleClusterDiagnosticMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.WorkerRegistryMapper;
+import io.github.pinpols.batch.console.domain.ops.view.cluster.ActiveTaskWorkerIssueView;
 import io.github.pinpols.batch.console.domain.ops.view.cluster.DeliveryStatusCountView;
+import io.github.pinpols.batch.console.domain.ops.view.cluster.JobInstanceDiagnosticView;
+import io.github.pinpols.batch.console.domain.ops.view.cluster.OutboxStatusCountView;
+import io.github.pinpols.batch.console.domain.ops.view.cluster.StatusCountView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
+import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 
 @DisplayName("集群诊断服务:Worker 一致性, 投递健康, 终态子实例与实例级诊断的判定规则")
 class ConsoleClusterDiagnosticServiceTest {
@@ -45,7 +50,7 @@ class ConsoleClusterDiagnosticServiceTest {
   private static ConsoleQueryCacheService passThroughCache() {
     ConsoleQueryCacheService cache = mock(ConsoleQueryCacheService.class);
     when(cache.<Object>getOrLoad(
-            anyString(), any(), org.mockito.ArgumentMatchers.<TypeReference<Object>>any(), any()))
+            anyString(), any(), ArgumentMatchers.<TypeReference<Object>>any(), any()))
         .thenAnswer(inv -> ((Supplier<?>) inv.getArgument(3)).get());
     return cache;
   }
@@ -163,10 +168,9 @@ class ConsoleClusterDiagnosticServiceTest {
 
   @Test
   @DisplayName("实例诊断:活跃实例无任何子任务时报出无子节点问题, 判定不健康")
-  @SuppressWarnings("unchecked")
   void shouldDiagnoseActiveInstanceWithNoChildren() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    Map<String, Object> instance = instance(7L, JobInstanceStatus.CREATED.code());
+    JobInstanceDiagnosticView instance = instance(7L, JobInstanceStatus.CREATED.code());
     when(diagnosticMapper.selectJobInstanceSummary("tenant-a", 7L)).thenReturn(instance);
     when(diagnosticMapper.partitionStatusCounts("tenant-a", 7L)).thenReturn(List.of());
     when(diagnosticMapper.taskStatusCounts("tenant-a", 7L)).thenReturn(List.of());
@@ -184,13 +188,12 @@ class ConsoleClusterDiagnosticServiceTest {
 
   @Test
   @DisplayName("实例诊断:部分失败按终态处理, 只报活跃子节点且不误报无子节点与无在线 Worker")
-  @SuppressWarnings("unchecked")
   void shouldTreatPartialFailureAsTerminalWhenDiagnosingActiveChildren() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    Map<String, Object> instance = instance(9L, JobInstanceStatus.PARTIAL_FAILED.code());
+    JobInstanceDiagnosticView instance = instance(9L, JobInstanceStatus.PARTIAL_FAILED.code());
     when(diagnosticMapper.selectJobInstanceSummary("tenant-a", 9L)).thenReturn(instance);
     when(diagnosticMapper.partitionStatusCounts("tenant-a", 9L))
-        .thenReturn(List.of(Map.of("status", "RUNNING", "count", 1L)));
+        .thenReturn(List.of(new StatusCountView("RUNNING", 1L)));
     when(diagnosticMapper.taskStatusCounts("tenant-a", 9L)).thenReturn(List.of());
     when(diagnosticMapper.outboxStatusCountsForInstance("tenant-a", 9L)).thenReturn(List.of());
     when(diagnosticMapper.activeTaskWorkerIssues("tenant-a", 9L, 120L)).thenReturn(List.of());
@@ -206,22 +209,20 @@ class ConsoleClusterDiagnosticServiceTest {
 
   @Test
   @DisplayName("实例诊断:同时报出投递未终态与任务心跳陈旧, 两类问题并存")
-  @SuppressWarnings("unchecked")
   void shouldDiagnoseWorkerAndOutboxIssues() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    Map<String, Object> instance = instance(8L, JobInstanceStatus.RUNNING.code());
+    JobInstanceDiagnosticView instance = instance(8L, JobInstanceStatus.RUNNING.code());
     when(diagnosticMapper.selectJobInstanceSummary("tenant-a", 8L)).thenReturn(instance);
     when(diagnosticMapper.partitionStatusCounts("tenant-a", 8L))
-        .thenReturn(List.of(Map.of("status", "RUNNING", "count", 1L)));
+        .thenReturn(List.of(new StatusCountView("RUNNING", 1L)));
     when(diagnosticMapper.taskStatusCounts("tenant-a", 8L))
-        .thenReturn(List.of(Map.of("status", "RUNNING", "count", 1L)));
+        .thenReturn(List.of(new StatusCountView("RUNNING", 1L)));
     when(diagnosticMapper.outboxStatusCountsForInstance("tenant-a", 8L))
-        .thenReturn(List.of(Map.of("status", "FAILED", "count", 2L)));
+        .thenReturn(
+            List.of(new OutboxStatusCountView("FAILED", 2L, Instant.EPOCH, Instant.EPOCH)));
     when(diagnosticMapper.activeTaskWorkerIssues("tenant-a", 8L, 120L))
-        .thenReturn(List.of(Map.of(
-            "taskId", 99L,
-            "reasonCode", "RUNNING_TASK_HEARTBEAT_STALE",
-            "assignedWorkerCode", "w1")));
+        .thenReturn(List.of(new ActiveTaskWorkerIssueView(
+            99L, null, "RUNNING", "w1", null, null, null, "RUNNING_TASK_HEARTBEAT_STALE")));
 
     var result = service.instanceDiagnosis("tenant-a", 8L);
 
@@ -234,19 +235,18 @@ class ConsoleClusterDiagnosticServiceTest {
     return new DeliveryStatusCountView(status, cnt);
   }
 
-  private static Map<String, Object> instance(long id, String status) {
-    return Map.of(
-        "id",
+  private static JobInstanceDiagnosticView instance(long id, String status) {
+    return new JobInstanceDiagnosticView(
         id,
-        "tenantId",
         "tenant-a",
-        "instanceNo",
         "JI-" + id,
-        "jobCode",
         "import_daily",
-        "instanceStatus",
+        null,
         status,
-        "workerGroup",
-        "IMPORT");
+        null,
+        "IMPORT",
+        null,
+        null,
+        null);
   }
 }

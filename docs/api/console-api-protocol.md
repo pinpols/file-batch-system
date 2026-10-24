@@ -1,12 +1,14 @@
-# Console API Protocol
+# Console API 协议
 
-This document is the human-readable contract for the console frontend.
-When the API surface changes, update this file and [console-api.openapi.yaml](./console-api.openapi.yaml) together.
+本文是面向控制台前端的可读契约。
+API 契约发生变化时，请同步更新本文档与 [console-api.openapi.yaml](./console-api.openapi.yaml)。
 
 ## Changelog
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-10-16 | **统一 Workflow 图写入契约**：移除无版本、无设计锁的 `PUT /api/console/workflow-definitions/{id}`；创建仍走 POST，所有图更新统一走 `/full`，必须取得设计锁并提交 `expectedVersion`，服务端按租户和原版本 CAS 更新并追加版本快照。schedule-only 更新仍使用独立版本 CAS。 |
+| 2026-10-14 | **Workflow 调度配置进入定义契约**：Workflow create/full update/detail 增加 `scheduleType`、`scheduleExpr`、`timezone`、`triggerMode`、`calendarCode` 和 `dependsOnJobCode`。字段缺省时更新保留已存调度；显式 `MANUAL` 可清除表达式。版本历史快照同时保存新调度字段，V241 前的快照保留 null，不伪造历史调度。Trigger 权威数据源仍未切换，Job 调度字段暂作兼容来源。 |
 | 2026-10-12 | **维护冻结与实例排空收口**：全冻结期间 `ROLE_ADMIN` 仅保留非写诊断旁路，普通业务写请求仍返回 503；Orchestrator `/internal/orchestrator/drain/enable` 暂停当前实例的 Trigger Launch Kafka listener，`disable` 恢复消费，不影响 OpenLineage listener。 |
 | 2026-10-11 | **控制台管理列表分页补齐**：告警路由、资产新鲜度策略和配置同步日志列表统一支持分页查询，响应使用既有 `PageResponse` envelope；筛选参数与租户隔离语义保持不变。 |
 | 2026-10-11 | **租户配置包 Excel 场景化导入**：增加场景模板、上传、预览、逐行修订、授权应用与幂等写入契约；平台资源分配和运行监控阈值不由租户配置包控制，配置快照在实例创建时固定。预览返回的一次性 `previewToken` 绑定预览内容和内部租户配置修订号；逐行修订必须提交当前 token 并取得新 token，Apply 必须提交最新 token。配置在预览后发生变化时 Apply 返回冲突，用户需重新预览；内部修订号不作为租户填写或维护的配置字段。 |
@@ -93,10 +95,10 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 | 2026-06-03 | **新增 `GET /api/console/queries/pipeline-progress?tenantId&workerCodes=`**(2026-06-03 落地 docs/design/pipeline-stage-progress-display.md):批量查指定 worker 当前 pipeline stage 行级进度,返回 `[{workerCode, rowsProcessed, totalRowsHint, heartbeatAt}]` 列表,**仅 IMPORT LOAD 流式 stage 在跑时有值**(EXPORT GENERATE 是 one-shot 不支持 mid-emit,留 TODO;PROCESS/DISPATCH 是原子 stage 行数无语义,设计明确不做)。配套:SDK wire `HeartbeatRequest` + 平台 `WorkerHeartbeatDto` 末尾追加 `Long rowsProcessed` + `Long totalRowsHint`(2 字段,NON_NULL 序列化,LOAD/GENERATE 之外 stage / 空闲态都是 null);Python SDK `_heartbeat.py` 同步对齐;新增 `PipelineStageProgressSink`(worker 进程级 AtomicReference,LoadStep 每 chunk flush 后 publish,stage 结束/异常 clear);新增 `PipelineStageProgressCache`(orchestrator in-mem ConcurrentHashMap,5min TTL,**不持久化**——进度只关心当前,过期由读侧 lazy 清理);新增内部端点 `GET /internal/pipeline-progress?tenantId&workerCodes=`(orchestrator → console-api,走 `DownstreamFallback.callOrFallback` 失败降级空 list)。FE 已先合 batch-console#55,本 PR 之前 FE 是 fallback 「—」展示,合后真实数据接入 |
 | 2026-06-08 | **修正公开 `GET /api/console/queries/pipeline-progress` 契约为 `?pipelineInstanceId=`**：前端 FilePipelineObservability 按 pipeline instance 拉取 step 进度，返回 `{pipelineInstanceId, steps:[{stepId,pipelineInstanceId,stepCode,stageCode,rowsProcessed,totalRowsHint,lastHeartbeatAt}]}`。console-api 从 `batch.pipeline_step_run` 左连接 `batch.pipeline_progress`，用 pipeline instance 反查 tenant 后走 `ConsoleTenantGuard` 校验。旧 `tenantId&workerCodes` 入口只保留为兼容/内部降级路径，不再作为 OpenAPI 公开契约。 |
 | 2026-06-08 | **新增 `GET /api/console/stream/pipeline-progress/events`**：发布低频命名 SSE 事件 `pipeline-progress-dirty`，payload 只含 `tenantId/pipelineInstanceId/jobInstanceId/reason/version/updatedAt`，不含 `rowsProcessed` 明细。前端收到 dirty 后防抖调用 `GET /api/console/queries/pipeline-progress?pipelineInstanceId=` 拉快照；后台发布器按 `pipelineInstanceId` 节流，默认 5s 扫描、10s 同 pipeline 节流。 |
-| 2026-06-03 | **P1+P2 BE 安全加固**(历史审计见 docs/archive/analysis/2026-06-03-deep-scan-be-security.md):无 path 增删,无 request 字段改;仅响应侧 `GET /api/console/api-keys` / `GET /api-keys/{id}` 不再回写 `keyHash`(此前实际无 FE 消费),新增字段 `salt` / `keyHashAlgo` 均标 `@JsonIgnore` 不外露。配套:① `ApiKeyHasher`(PBKDF2-HMAC-SHA256 600k iter + per-key 16B salt)替代裸 SHA-256,新签发一律 `pbkdf2`,老行登录命中后异步升级(V166 migration:加 `salt VARCHAR(64)` + `key_hash_algo VARCHAR(16) DEFAULT 'sha256'`,`key_hash` widen 256);② `ConsoleAuthenticationFilter` 撤掉"bypass-mode 时 JWT 失败降级到 admin"分支,客户端带 token 必按 token 严判;③ `ConsoleSecurityProperties.@PostConstruct` 启动期拒 CORS origins 含 `*` / `null` / 空白条目,ArchTest `CorsWildcardArchTest` 静态防回退;④ `RlsTenantSessionSupport` 改 `set_config(?,?,true)` PreparedStatement + `[A-Za-z0-9_\-]{1,64}` 形态白名单;⑤ `HttpTaskExecutor` 响应头落 `task_result.output` 前按固定黑名单(Set-Cookie / Authorization / Cookie / Proxy-Authorization)脱敏为 `[REDACTED]` |
+| 2026-06-03 | **P1+P2 BE 安全加固**(历史审计见 docs/archive/audit/deep-scan-be-security-2026-06-03.md):无 path 增删,无 request 字段改;仅响应侧 `GET /api/console/api-keys` / `GET /api-keys/{id}` 不再回写 `keyHash`(此前实际无 FE 消费),新增字段 `salt` / `keyHashAlgo` 均标 `@JsonIgnore` 不外露。配套:① `ApiKeyHasher`(PBKDF2-HMAC-SHA256 600k iter + per-key 16B salt)替代裸 SHA-256,新签发一律 `pbkdf2`,老行登录命中后异步升级(V166 migration:加 `salt VARCHAR(64)` + `key_hash_algo VARCHAR(16) DEFAULT 'sha256'`,`key_hash` widen 256);② `ConsoleAuthenticationFilter` 撤掉"bypass-mode 时 JWT 失败降级到 admin"分支,客户端带 token 必按 token 严判;③ `ConsoleSecurityProperties.@PostConstruct` 启动期拒 CORS origins 含 `*` / `null` / 空白条目,ArchTest `CorsWildcardArchTest` 静态防回退;④ `RlsTenantSessionSupport` 改 `set_config(?,?,true)` PreparedStatement + `[A-Za-z0-9_\-]{1,64}` 形态白名单;⑤ `HttpTaskExecutor` 响应头落 `task_result.output` 前按固定黑名单(Set-Cookie / Authorization / Cookie / Proxy-Authorization)脱敏为 `[REDACTED]` |
 | 2026-06-02 | **新增 `POST /api/console/ops/atomic-task-configs` + `GET ?taskType=`**(Round-1 TOP-8 / R3-5,BE scaffold,FE follow-up):承接 B.2 atomic 节点"可保存配置"诉求,原 console 只展示 `ConsoleAtomicTaskTypeSchemaService` 静态 schema 不存,本次落 V165 新表 `batch.atomic_task_config`(`id` BIGSERIAL / `tenant_id` NOT NULL / `task_type` / `name` / `parameters` JSONB / `created_by` / `created_at`/`updated_at`,UNIQUE `(tenant_id, task_type, name)`,archive 镜像 + ArchiveSchemaDriftCheck 登记)。POST 创建链:租户解析 → `ConsoleAtomicTaskTypeSchemaService` 校验 `taskType` 命中四类内置 + `parameters` key 落 schema + 必填非空 → `SensitiveDataValidator`(#242)拒 password/secret/apiKey 等关键字 → `ObjectMapper` 序列化为 JSONB `::jsonb` 入库,`@Transactional` 在 service。GET 按 `(tenant_id, task_type)` 列,`created_at` 倒序。Controller 返 `CommonResponse<T>`,租户作用域走 `ConsoleTenantGuard.resolveTenant`。新增 console 侧 `AtomicTaskConfigEntity` / `AtomicTaskConfigCreateParam` / `AtomicTaskConfigMapper`(+XML)/ `ConsoleAtomicTaskConfigService` / `ConsoleAtomicTaskConfigController`;i18n `error.atomic_task_config.*` 8 条 + zh_CN。FE 工作流编辑器接入留 follow-up |
 | 2026-06-02 | **Round-3 #8(Round-2 §4 P0 #8):新增 `GET /api/console/ops/atomic-runtime-status`** + atomic worker 暴露 Actuator 端点 `/actuator/atomicruntime`。承接 #252-K1 隐式 prod 默认显式化:`HttpExecutorProdDefaults.applyProdDefaults` 加 `INFO` 启动日志(`ADR-029 prod hardening: enforce-allowlist auto-enabled (was=...)`,显式 / prod-default / 已开三态都打);atomic worker 新增 `AtomicRuntimeStatusService` + `AtomicRuntimeStatusEndpoint` 把 4 个 executor 当前 effective 安全门控(`shell.{enabled,commandWhitelistSize}` / `sql.{enabled,dialect}` / `http.{enabled,enforceAllowlist,enforceAllowlistSource,allowlistHostsSize}` / `storedProc.{enabled,allowedSchemasSize}`)做成只读快照;Console 加 `ConsoleAtomicWorkerClientProperties` + `AtomicWorkerInternalRestClient`(走 `DownstreamFallback` callOrFallback,5s/10s 超时)反向拉取。Operator 角色(TENANT_ADMIN+)+ 菜单 `/ops/atomic-runtime`。返回 `available=false` 时 FE 显示降级 banner |
-| 2026-06-02 | **新增 `GET /api/console/workers/fingerprints` + `/summary`**(SDK Phase 5 / SDK-P5-3,console Lane D):租户视图查看 worker 运行指纹(V163 给 `batch.worker_registry` 加的 `build_id` / `sdk_version` 列,SDK Phase 5 register 已上报)。list 返 `ONLINE` + `DRAINING` worker(`heartbeat_at` 倒序,上限 200),含 `workerCode` / `buildId` / `processId` / `sdkVersion` / `status` / `heartbeatAt`;summary 按 `(buildId, sdkVersion)` 聚合 ONLINE 数,count desc,空值 SQL 层 COALESCE 为字面量 `(unknown)`。供运维灰度切 buildId 时排查与可视化用,取代 SQL 直查。只读、走 console-api 读写分离只读路径,worker_registry 由 orchestrator 写入;租户管理员看本租户、平台管理员可跨租户(`ConsoleTenantGuard.resolveTenant`)。新增 `WorkerFingerprintRow` / `WorkerFingerprintSummaryRow` / `WorkerFingerprintMapper`(+XML)/ `WorkerFingerprintResponse` / `WorkerFingerprintSummaryResponse` / `ConsoleWorkerFingerprintController`。FE 看板页留 follow-up(见 docs/archive/analysis/2026-06-02-* TOP #5) |
+| 2026-06-02 | **新增 `GET /api/console/workers/fingerprints` + `/summary`**(SDK Phase 5 / SDK-P5-3,console Lane D):租户视图查看 worker 运行指纹(V163 给 `batch.worker_registry` 加的 `build_id` / `sdk_version` 列,SDK Phase 5 register 已上报)。list 返 `ONLINE` + `DRAINING` worker(`heartbeat_at` 倒序,上限 200),含 `workerCode` / `buildId` / `processId` / `sdkVersion` / `status` / `heartbeatAt`;summary 按 `(buildId, sdkVersion)` 聚合 ONLINE 数,count desc,空值 SQL 层 COALESCE 为字面量 `(unknown)`。供运维灰度切 buildId 时排查与可视化用,取代 SQL 直查。只读、走 console-api 读写分离只读路径,worker_registry 由 orchestrator 写入;租户管理员看本租户、平台管理员可跨租户(`ConsoleTenantGuard.resolveTenant`)。新增 `WorkerFingerprintRow` / `WorkerFingerprintSummaryRow` / `WorkerFingerprintMapper`(+XML)/ `WorkerFingerprintResponse` / `WorkerFingerprintSummaryResponse` / `ConsoleWorkerFingerprintController`。FE 看板页留 follow-up(见 docs/archive/2026-06-02-* TOP #5) |
 | 2026-06-01 | **新增 `GET /api/console/atomic-task-types/schema` + `GET /api/console/tasks/{taskId}/heartbeat-details`**(FE 2-B / 2-C 读端点前置):前者返回平台内置原子四类(sql/shell/stored_proc/http)的参数 schema + 安全闸**静态目录**(console-api 不依赖 batch-worker-atomic,以静态镜像维护,字段与各 `*TaskExecutor.PARAM_*` + `*ExecutorProperties` 对齐),非租户维度、对所有租户一致,供工作流编辑器渲染内置节点表单。后者按租户读 `batch.job_task`(V161)最新心跳进度:`heartbeat_details` JSONB `::text` 读出后解析为 JSON 透传,无心跳时 details=null,未命中(或跨租户)404;租户作用域在 mapper WHERE 强制。两者均只读,走读写分离只读路径。新增 console 侧 `AtomicTaskTypeSchema` / `ConsoleAtomicTaskTypeSchemaService` / `ConsoleAtomicTaskTypeController`;`JobTaskHeartbeatEntity` / `JobTaskMapper`(+XML)/ `TaskHeartbeatDetailsResponse` / `ConsoleTaskHeartbeatService` / `ConsoleTaskController` |
 | 2026-06-01 | **新增 `GET /api/console/custom-task-types` + `/count` + `/{taskTypeCode}`**(SDK Phase 3 M3.1 / API-P3-1):租户查看 SDK 声明的自定义 taskType(`custom_task_type_registry`,由 worker register 上报 descriptor 维护)。list/count 仅 ACTIVE,按 `last_declared_at` 倒序;detail 返回单条含 `descriptor` JSONB 全文(`::text` 读出原样透传),未命中 404。只读、走读写分离只读路径,租户管理员看本租户、平台管理员可跨租户(`ConsoleTenantGuard.resolveTenant`)。新增 console 侧 `CustomTaskTypeEntity` / `CustomTaskTypeMapper`(+XML)/ `ConsoleCustomTaskTypeController` |
 | 2026-05-31 | **补 `GET /api/console/my-workers` + `GET /api/console/my-workers/count` 到 OpenAPI**(ADR-035 P4 BE):#172 落地 `ConsoleMyWorkerController` 时漏更 yaml,`check-console-openapi-paths.py` 在 main 报红 → full-ci-gate 失败。本次补 OpenAPI 定义恢复绿。两端点都按 `is_self_hosted=true` 过滤,租户管理员看自己 SDK 自托管 worker 列表 + 计数。FE 列表页 P4 后续 |
@@ -555,6 +557,8 @@ Deployment note:
 - `PUT /api/console/pipeline-definitions/{id}`
 - `PATCH /api/console/pipeline-definitions/{id}/enabled`
 - `GET /api/console/pipeline-definitions/events`
+
+`GET` 列表/详情与运行观测继续服务历史定义和排障；`POST`、`PUT`、`PATCH /{id}/enabled` 已退役，返回 `STATE_CONFLICT`。新执行不再由租户定义绑定 Pipeline，系统阶段由 Job 类型决定；Job 和 Workflow 仍是独立、联动的定义。
 - Create and update are transactional: definition and step list are persisted or replaced atomically.
 - Detail response (`PipelineDefinitionDetailResponse`) includes the ordered step list.
 - `GET /api/console/pipeline-definitions/events` is the domain-level realtime entry for pipeline editing screens. It subscribes to the same event hub used by the other realtime console streams, but keeps the route close to the pipeline-definition UX.
@@ -588,7 +592,7 @@ Deployment note:
 
 - `GET /api/console/stream/job-instances/events`
 - `GET /api/console/workflow-runs/events`
-- `POST /api/console/jobs/trigger`
+- `POST /api/console/workflow-definitions/{id}/trigger` — launches a Workflow as the only top-level run target.
 - `POST /api/console/jobs/compensations`
 - `POST /api/console/jobs/compensate`
 - `POST /api/console/jobs/rerun`
@@ -624,13 +628,14 @@ Deployment note:
 ### Triggers
 
 - `GET /api/console/ops/triggers`
-- `POST /api/console/ops/triggers/{jobCode}/register`
-- `POST /api/console/ops/triggers/{jobCode}/unregister`
-- `POST /api/console/ops/triggers/{jobCode}/pause`
-- `POST /api/console/ops/triggers/{jobCode}/resume`
-- `register` loads the job definition from DB and registers it into Quartz; safe to call again to update an existing trigger.
-- `unregister` removes the Quartz job entry; does not affect the job definition record.
-- Trigger list response includes `status`, `previousFireTime`, and `nextFireTime` per job.
+- `POST /api/console/ops/triggers/{workflowCode}/register`
+- `POST /api/console/ops/triggers/{workflowCode}/unregister`
+- `POST /api/console/ops/triggers/{workflowCode}/pause`
+- `POST /api/console/ops/triggers/{workflowCode}/resume`
+- All actions require `tenantId` and address the tenant's Workflow schedule; Console proxies to `/api/triggers/management/workflow/{action}` with `workflowCode`.
+- `register` loads the enabled Workflow definition and reconciles its Quartz trigger; safe to call again to update an existing trigger.
+- `unregister` removes the Workflow schedule from Quartz; it does not affect the Workflow definition or existing Workflow Runs.
+- Trigger list response includes `tenantId`, `workflowCode`, `status`, `previousFireTime`, and `nextFireTime` per Workflow.
 
 ### Meta
 
@@ -783,8 +788,7 @@ Deployment note:
 
 ### Jobs
 
-- `POST /api/console/jobs/trigger` — supports `dryRun: true` in request body for sandbox validation (validates tenant, jobCode, bizDate, triggerType, enabled status without executing)
-- `POST /api/console/jobs/batch-trigger` — batch trigger up to 50 jobs in one request; accepts `List<TriggerRequest>`, requires `Idempotency-Key`
+- Job manual launches use `POST /api/console/workflow-definitions/{id}/trigger` with the Job's managed single-job Workflow ID; no JobCode root launch or batch Job root launch is exposed.
 - `POST /api/console/jobs/compensations`
 - `POST /api/console/jobs/compensate`
 - `POST /api/console/jobs/rerun`
@@ -943,7 +947,7 @@ Deployment note:
 - Supports two modes: `SKIP_EXISTING` (default, create missing only) and `UPSERT` (create or update).
 - Supports `dryRun` mode: when `true`, performs read and validation only without executing writes.
 - Covers all 10 config types: job definitions, workflow definitions, pipeline definitions, file channels, file templates, resource queues, batch windows, business calendars, quota policies, alert routings.
-- Response includes `batchOperationId` for audit correlation, per-tenant results with per-item details (code, action, errorMessage) for each of the 10 config types.
+- Response includes `batchOperationId` for audit correlation, per-tenant results with per-item details (code, action, errorMessage) for each selected config type.
 - Requires `ROLE_ADMIN`.
 - Requires `Idempotency-Key` header.
 
@@ -951,7 +955,7 @@ Deployment note:
 
 - `POST /api/console/config/tenant-copy`
 - Reads configuration from a source tenant and pushes it to one or more target tenants.
-- Request body: `sourceTenantId`, `targetTenantIds` (max 50), optional `configTypes` (subset of `JOB_DEFINITION`, `WORKFLOW_DEFINITION`, `PIPELINE_DEFINITION`, `FILE_CHANNEL`, `FILE_TEMPLATE`, `RESOURCE_QUEUE`, `BATCH_WINDOW`, `BUSINESS_CALENDAR`, `QUOTA_POLICY`, `ALERT_ROUTING`; empty means all 10), optional `jobCodes` (dependency-aware minimal job bundle), `mode` (default `SKIP_EXISTING`), `dryRun`.
+- Request body: `sourceTenantId`, `targetTenantIds` (max 50), optional `configTypes` (subset of `JOB_DEFINITION`, `WORKFLOW_DEFINITION`, `FILE_CHANNEL`, `FILE_TEMPLATE`, `RESOURCE_QUEUE`, `BATCH_WINDOW`, `BUSINESS_CALENDAR`, `QUOTA_POLICY`, `ALERT_ROUTING`; empty means all 9), optional `jobCodes` (dependency-aware minimal job bundle), `mode` (default `SKIP_EXISTING`), `dryRun`.
 - Internally reads source tenant's configs and delegates to the tenant-init logic.
 - Response format is identical to `tenant-init`.
 - Requires `ROLE_ADMIN`.
@@ -1216,14 +1220,14 @@ Notes:
 - Alert routing Excel maintenance is available via the standard upload → preview → apply flow.
 - Notification subscription management is now fully implemented (see above).
 
-## Trigger API
+## Workflow Trigger API
 
-- `POST /api/console/jobs/trigger`
+- `POST /api/console/workflow-definitions/{id}/trigger`
 
 Request headers:
 
 ```http
-Idempotency-Key: tenant-a:job-daily-settlement:2026-03-21:req-001
+Idempotency-Key: tenant-a:workflow-daily-settlement:2026-03-21:req-001
 X-Request-Id: req-001
 X-Trace-Id: trace-001
 X-Operator-Id: admin
@@ -1234,15 +1238,13 @@ Request body:
 ```json
 {
   "tenantId": "tenant-a",
-  "jobCode": "daily-settlement",
   "bizDate": "2026-03-21",
   "triggerType": "MANUAL",
-  "payload": "{\"source\":\"console\"}",
-  "dryRun": false
+  "payload": "{\"source\":\"console\"}"
 }
 ```
 
-When `dryRun` is `true`, the server validates tenant, jobCode existence, enabled status, bizDate format, and triggerType without creating an actual trigger request. `Idempotency-Key` header is not required for dry-run calls.
+The path ID selects the Workflow definition and the body carries its tenant, business date, trigger type, and payload. Job definition detail/list actions resolve the managed single-job Workflow ID before calling this endpoint. Dry-run planning uses the dedicated dry-run API.
 
 ## Compensate API
 

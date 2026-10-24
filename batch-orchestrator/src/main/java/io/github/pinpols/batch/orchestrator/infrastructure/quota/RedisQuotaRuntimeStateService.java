@@ -201,14 +201,18 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
           Long.toString(calendarEndMillis),
           Integer.toString(slidingHours));
     } catch (DataAccessException ex) {
+      String tenantId = request.owner().tenantId();
+      String quotaScope = request.owner().quotaScope();
+      String ownerCode = request.owner().ownerCode();
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
       log.warn(
           "redis quota evaluateAndReserve failed; failureMode={}, tenant={}, scope={}, owner={},"
               + " cause={}",
           redisFailureMode,
-          request.owner().tenantId(),
-          request.owner().quotaScope(),
-          request.owner().ownerCode(),
-          SwallowedExceptionLogger.summary(ex));
+          tenantId,
+          quotaScope,
+          ownerCode,
+          causeSummary);
       if ("FAIL_OPEN".equalsIgnoreCase(redisFailureMode)) {
         return ResourceCheck.allow();
       }
@@ -239,7 +243,8 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
       template.expire(indexKey, INDEX_TTL);
     } catch (DataAccessException ex) {
       // 索引失败不影响主流程；snapshot 拿不到就等下次
-      log.debug("redis quota index update failed: {}", SwallowedExceptionLogger.summary(ex));
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
+      log.debug("redis quota index update failed: {}", causeSummary);
     }
     return ResourceCheck.allow();
   }
@@ -264,13 +269,17 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
     try {
       entries = redis.entries(key);
     } catch (DataAccessException ex) {
+      String safeTenantId = LogSanitizer.value(tenantId);
+      String safeQuotaScope = LogSanitizer.value(quotaScope);
+      String safeOwnerCode = LogSanitizer.value(ownerCode);
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
       log.warn(
           "redis quota describe failed; returning empty snapshot: tenant={}, scope={}, owner={},"
               + " cause={}",
-          LogSanitizer.value(tenantId),
-          LogSanitizer.value(quotaScope),
-          LogSanitizer.value(ownerCode),
-          SwallowedExceptionLogger.summary(ex));
+          safeTenantId,
+          safeQuotaScope,
+          safeOwnerCode,
+          causeSummary);
       return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
     }
     if (entries == null || entries.isEmpty()) {
@@ -278,10 +287,14 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
     }
 
     long nowMillis = BatchDateTimeSupport.utcNow().toEpochMilli();
-    long winEndMillis = parseLong(asString(entries.get("windowExpiresAt")));
-    long winStartMillis = parseLong(asString(entries.get("windowStartedAt")));
-    long lastResetMillis = parseLong(asString(entries.get("lastResetAt")));
-    int peak = (int) parseLong(asString(entries.get("peakBorrowedCount")));
+    String windowExpiresAt = asString(entries.get("windowExpiresAt"));
+    long winEndMillis = parseLong(windowExpiresAt);
+    String windowStartedAt = asString(entries.get("windowStartedAt"));
+    long winStartMillis = parseLong(windowStartedAt);
+    String lastResetAt = asString(entries.get("lastResetAt"));
+    long lastResetMillis = parseLong(lastResetAt);
+    String peakBorrowedCount = asString(entries.get("peakBorrowedCount"));
+    int peak = (int) parseLong(peakBorrowedCount);
     if (winEndMillis > 0 && nowMillis >= winEndMillis) {
       // 窗口已过期：实际可用 burst 全量复位（Redis 端 TTL 到期会清掉，这里读路径同步语义）
       return new QuotaRuntimeSnapshot(

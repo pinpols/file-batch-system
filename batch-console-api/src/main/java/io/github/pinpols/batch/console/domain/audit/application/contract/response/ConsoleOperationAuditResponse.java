@@ -1,13 +1,15 @@
 package io.github.pinpols.batch.console.domain.audit.application.contract.response;
 
-import java.time.Instant;
+import lombok.Builder;
 
+import java.time.Instant;
 /**
  * 通用控制台用户操作审计 — 查询响应 DTO,1:1 对齐 {@code batch.console_operation_audit} 表 + {@link
  * io.github.pinpols.batch.console.domain.audit.support.OperationAuditEvent} 字段。
  *
  * <p>API 暴露给 FE / 运维查「谁哪个时间做了什么」。
  */
+@Builder
 public record ConsoleOperationAuditResponse(
     Long id,
     String tenantId,

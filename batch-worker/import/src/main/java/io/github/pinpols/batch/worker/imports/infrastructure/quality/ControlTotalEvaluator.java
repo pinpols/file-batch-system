@@ -5,6 +5,7 @@ import static io.github.pinpols.batch.worker.imports.infrastructure.quality.Vali
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.firstNonNull;
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.stringValue;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 import java.math.BigDecimal;
@@ -35,7 +36,9 @@ public class ControlTotalEvaluator {
 
   /** 每个 chunk 调用:按 amountField 累加金额到 running sum(仅 controlTotalCheck 启用且配了 amountField 时)。 */
   public void accumulate(ValidationSession session, List<Map<String, Object>> rows) {
-    if (session == null || session.context() == null || rows == null || rows.isEmpty()) {
+    boolean accumulationInputIsIncomplete =
+        EmptyChecks.isNull(session) || EmptyChecks.isNull(session.context()) || EmptyChecks.isNull(rows) || EmptyChecks.isEmpty(rows);
+    if (accumulationInputIsIncomplete) {
       return;
     }
     Map<String, Object> rule = rule(session);
@@ -115,20 +118,24 @@ public class ControlTotalEvaluator {
   }
 
   private String amountField(Map<String, Object> rule) {
-    return stringValue(firstNonNull(rule.get("amountField"), rule.get("amount_field")));
+    Object configuredAmountField = firstNonNull(rule.get("amountField"), rule.get("amount_field"));
+    return stringValue(configuredAmountField);
   }
 
   private BigDecimal declared(ValidationSession session, Map<String, Object> rule) {
-    BigDecimal explicit =
-        decimalValue(firstNonNull(rule.get("expected"), rule.get("expectedTotal")));
+    Object explicitSetting = firstNonNull(rule.get("expected"), rule.get("expectedTotal"));
+    BigDecimal explicit = decimalValue(explicitSetting);
     if (explicit != null) {
       return explicit;
     }
-    return decimalValue(session.context().getAttributes().get(ATTR_DECLARED_CONTROL_TOTAL));
+    Object declaredControlTotal =
+        session.context().getAttributes().get(ATTR_DECLARED_CONTROL_TOTAL);
+    return decimalValue(declaredControlTotal);
   }
 
   private BigDecimal runningSum(ValidationSession session) {
-    BigDecimal value = decimalValue(session.context().getAttributes().get(ATTR_RUNNING_SUM));
+    Object runningSumValue = session.context().getAttributes().get(ATTR_RUNNING_SUM);
+    BigDecimal value = decimalValue(runningSumValue);
     return value == null ? BigDecimal.ZERO : value;
   }
 }

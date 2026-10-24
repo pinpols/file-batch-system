@@ -22,7 +22,8 @@ public class ConfigurationGovernanceCatalog {
       if (EmptyChecks.isNull(input)) {
         throw new IllegalStateException("Missing configuration governance registry: " + RESOURCE);
       }
-      String json = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+      byte[] registryBytes = input.readAllBytes();
+      String json = new String(registryBytes, StandardCharsets.UTF_8);
       RegistryDocument document = JsonUtils.fromJson(json, RegistryDocument.class);
       items = document.configurationProperties().stream()
           .map(item -> new ConfigGovernanceItemResponse(

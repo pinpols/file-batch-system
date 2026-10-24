@@ -2,6 +2,7 @@ package io.github.pinpols.batch.common.event;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -40,8 +41,12 @@ public record DomainEvent(
       throw BizException.of(ResultCode.VALIDATION_ERROR, "error.domain_event.event_key_blank");
     }
     // Map.copyOf 不允许 null 值,但 outbox payload 允许 null(JSON 序列化为 null,业务依赖此语义)
-    payload =
-        payload == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(payload));
+    if (EmptyChecks.isNull(payload)) {
+      payload = Map.of();
+    } else {
+      Map<String, Object> payloadSnapshot = new LinkedHashMap<>(payload);
+      payload = Collections.unmodifiableMap(payloadSnapshot);
+    }
     schemaVersion = schemaVersion == null ? "v1" : schemaVersion;
   }
 

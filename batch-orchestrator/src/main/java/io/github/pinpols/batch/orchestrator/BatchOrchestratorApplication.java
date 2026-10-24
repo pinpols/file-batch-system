@@ -2,12 +2,13 @@ package io.github.pinpols.batch.orchestrator;
 
 import io.github.pinpols.batch.common.config.BatchJsonAutoConfiguration;
 import io.github.pinpols.batch.common.config.BatchKafkaProducerProperties;
+import io.github.pinpols.batch.common.config.KafkaConnectionProperties;
 import io.github.pinpols.batch.common.config.BatchKafkaProducerSupport;
 import io.github.pinpols.batch.common.config.BatchObjectCryptoAutoConfiguration;
 import io.github.pinpols.batch.common.config.BatchStartupSelfCheckAutoConfiguration;
 import io.micrometer.observation.ObservationRegistry;
+import java.util.Map;
 import org.mybatis.spring.annotation.MapperScan;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -47,16 +48,15 @@ public class BatchOrchestratorApplication {
     SpringApplication.run(BatchOrchestratorApplication.class, args);
   }
 
-  @Value("${spring.kafka.bootstrap-servers}")
-  private String bootstrapServers;
-
   // outbox 发布路径 producer:统一走全局 spring.kafka.producer.* 调优(acks=all / 幂等 / delivery
   // & request 超时 / buffer.memory / max.block 背压),不再只设 bootstrap+serializer 而丢掉这些保护。
   @Bean
   public ProducerFactory<String, String> producerFactory(
-      BatchKafkaProducerProperties kafkaProducerProperties) {
-    return new DefaultKafkaProducerFactory<>(
-        BatchKafkaProducerSupport.stringProducerConfig(bootstrapServers, kafkaProducerProperties));
+      BatchKafkaProducerProperties kafkaProducerProperties,
+      KafkaConnectionProperties kafkaConnectionProperties) {
+    Map<String, Object> producerConfig = BatchKafkaProducerSupport.stringProducerConfig(
+        kafkaConnectionProperties.getBootstrapServers(), kafkaProducerProperties);
+    return new DefaultKafkaProducerFactory<>(producerConfig);
   }
 
   @Bean

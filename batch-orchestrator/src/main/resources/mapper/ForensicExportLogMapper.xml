@@ -38,7 +38,8 @@
 
     <insert id="insert"
             parameterType="io.github.pinpols.batch.orchestrator.domain.entity.ForensicExportLogEntity"
-            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+            useGeneratedKeys="false">
+        <!-- 不向不可变 record 回写生成 ID；后续状态与下载均按 tenant/exportId 查询。 -->
         insert into batch.forensic_export_log (
             tenant_id, export_id, biz_date_from, biz_date_to,
             job_codes, scope, export_format, status,

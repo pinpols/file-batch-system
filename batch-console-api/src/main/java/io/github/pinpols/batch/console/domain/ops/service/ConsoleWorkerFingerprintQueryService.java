@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.ops.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.WorkerFingerprintResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.WorkerFingerprintSummaryResponse;
+import io.github.pinpols.batch.console.domain.ops.dto.WorkerCompatibility;
 import io.github.pinpols.batch.console.domain.ops.mapper.WorkerFingerprintMapper;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
@@ -25,10 +26,17 @@ public class ConsoleWorkerFingerprintQueryService {
         "workers:" + ConsoleQueryCacheService.keySegment(resolved) + ":fingerprints",
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
         new TypeReference<List<WorkerFingerprintResponse>>() {},
-        () -> mapper.selectFingerprintsByTenant(resolved).stream()
-            .map(row -> WorkerFingerprintResponse.from(
-                row, compatibilityEvaluator.evaluate(row.getSdkVersion())))
-            .toList());
+        () -> loadFingerprints(resolved));
+  }
+
+  private List<WorkerFingerprintResponse> loadFingerprints(String resolvedTenantId) {
+    return mapper.selectFingerprintsByTenant(resolvedTenantId).stream()
+        .map(row -> {
+          String reportedSdkVersion = row.getSdkVersion();
+          WorkerCompatibility compatibility = compatibilityEvaluator.evaluate(reportedSdkVersion);
+          return WorkerFingerprintResponse.from(row, compatibility);
+        })
+        .toList();
   }
 
   public List<WorkerFingerprintSummaryResponse> summary(String tenantId) {

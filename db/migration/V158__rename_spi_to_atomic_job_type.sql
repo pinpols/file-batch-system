@@ -7,12 +7,15 @@ ALTER TABLE batch.job_definition DROP CONSTRAINT IF EXISTS ck_job_definition_job
 ALTER TABLE batch.job_task DROP CONSTRAINT IF EXISTS ck_job_task_type;
 
 -- 存量数据迁移(热表)
+
 UPDATE batch.job_definition SET job_type = 'ATOMIC' WHERE job_type = 'SPI';
 UPDATE batch.job_task SET task_type = 'ATOMIC' WHERE task_type = 'SPI';
 -- worker_group 路由值随 worker 注册值一起改('spi' → 'atomic')
+
 UPDATE batch.job_definition SET worker_group = 'atomic' WHERE worker_group = 'spi';
 
 -- 冷表存量同步(archive.job_task_archive 无 CHECK,仅数据一致性)
+
 UPDATE archive.job_task_archive SET task_type = 'ATOMIC' WHERE task_type = 'SPI';
 
 ALTER TABLE batch.job_definition

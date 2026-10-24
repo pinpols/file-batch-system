@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.imports.infrastructure.quality;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.math.BigDecimal;
 import java.util.Map;
@@ -54,16 +55,21 @@ public final class TrailerControlRecord {
   /** {@code trailerTemplate.present=true} 时按分隔符切 trailer 行取声明值;空模板 / 非 present 返回空记录。 */
   public static TrailerControlRecord parse(
       String trailerLine, Map<String, Object> trailerTemplate) {
-    if (trailerLine == null
-        || trailerTemplate == null
-        || trailerTemplate.isEmpty()
-        || !boolOr(trailerTemplate.get("present"), false)) {
+    if (EmptyChecks.isNull(trailerLine) || EmptyChecks.isNull(trailerTemplate) || EmptyChecks.isEmpty(trailerTemplate)) {
+      return new TrailerControlRecord(null, null);
+    }
+    boolean present = boolOr(trailerTemplate.get("present"), false);
+    if (!present) {
       return new TrailerControlRecord(null, null);
     }
     String delimiter = strOr(trailerTemplate.get("delimiter"), ",");
     String[] fields = trailerLine.split(Pattern.quote(delimiter), -1);
-    Long count = fieldLong(fields, intOr(trailerTemplate.get("recordCountIndex"), -1));
-    BigDecimal total = fieldDecimal(fields, intOr(trailerTemplate.get("controlTotalIndex"), -1));
+    Object rawRecordCountIndex = trailerTemplate.get("recordCountIndex");
+    int recordCountIndex = intOr(rawRecordCountIndex, -1);
+    Long count = fieldLong(fields, recordCountIndex);
+    Object rawControlTotalIndex = trailerTemplate.get("controlTotalIndex");
+    int controlTotalIndex = intOr(rawControlTotalIndex, -1);
+    BigDecimal total = fieldDecimal(fields, controlTotalIndex);
     return new TrailerControlRecord(count, total);
   }
 
@@ -73,7 +79,8 @@ public final class TrailerControlRecord {
       return null;
     }
     try {
-      return Long.parseLong(raw.trim());
+      String trimmedValue = raw.trim();
+      return Long.parseLong(trimmedValue);
     } catch (NumberFormatException ignored) {
       SwallowedExceptionLogger.info(
           TrailerControlRecord.class, "catch:NumberFormatException", ignored);
@@ -87,7 +94,8 @@ public final class TrailerControlRecord {
       return null;
     }
     try {
-      return new BigDecimal(raw.trim());
+      String trimmedValue = raw.trim();
+      return new BigDecimal(trimmedValue);
     } catch (NumberFormatException ignored) {
       SwallowedExceptionLogger.info(
           TrailerControlRecord.class, "catch:NumberFormatException", ignored);
@@ -100,9 +108,15 @@ public final class TrailerControlRecord {
   }
 
   private static String strOr(Object value, String fallback) {
-    return value == null || !Texts.hasText(String.valueOf(value))
-        ? fallback
-        : String.valueOf(value);
+    if (EmptyChecks.isNull(value)) {
+      return fallback;
+    }
+    String presenceText = String.valueOf(value);
+    if (!Texts.hasText(presenceText)) {
+      return fallback;
+    }
+    String resultText = String.valueOf(value);
+    return resultText;
   }
 
   private static int intOr(Object value, int fallback) {
@@ -110,7 +124,12 @@ public final class TrailerControlRecord {
       return number.intValue();
     }
     try {
-      return value == null ? fallback : Integer.parseInt(String.valueOf(value).trim());
+      if (EmptyChecks.isNull(value)) {
+        return fallback;
+      }
+      String rawText = String.valueOf(value);
+      String text = rawText.trim();
+      return Integer.parseInt(text);
     } catch (NumberFormatException ignored) {
       return fallback;
     }

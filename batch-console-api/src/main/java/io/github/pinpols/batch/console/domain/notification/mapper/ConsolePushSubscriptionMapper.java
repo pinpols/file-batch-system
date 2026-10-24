@@ -3,10 +3,13 @@ package io.github.pinpols.batch.console.domain.notification.mapper;
 import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushSubscriptionEntity;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.apache.ibatis.annotations.Param;
 
 /** {@code batch.console_push_subscription} MyBatis 映射。 */
 public interface ConsolePushSubscriptionMapper {
+  Optional<ConsolePushSubscriptionEntity> findByTenantAndId(
+      @Param("tenantId") String tenantId, @Param("id") Long id);
 
   /** 推送侧批量查:某租户某用户的全部活跃订阅(多设备各一条)。 */
   List<ConsolePushSubscriptionEntity> findByTenantAndUser(
@@ -27,11 +30,11 @@ public interface ConsolePushSubscriptionMapper {
       @Param("username") String username,
       @Param("endpoint") String endpoint);
 
-  /** 推送收到 410/404 时调:按 endpoint 全删(跨租户,因为同一物理设备 endpoint 唯一)。 */
-  int deleteAllByEndpoint(@Param("endpoint") String endpoint);
+  /** Provider 回执只更新发送时的原订阅凭据版本。 */
+  int touchIfUnchanged(@Param("row") ConsolePushSubscriptionEntity row, @Param("ts") Instant ts);
 
-  /** 更新最近一次实际推送时间(成功后) */
-  int touchLastPushedAt(@Param("id") Long id, @Param("ts") Instant ts);
+  /** Provider 的过期回执不得删除发送后已更新的设备凭据。 */
+  int deleteIfUnchanged(@Param("row") ConsolePushSubscriptionEntity row);
 
   /** 长时间未刷新的过期订阅(默认 60 天)清理,可由定时任务调。 */
   int deleteIfStaleSince(@Param("staleBefore") Instant staleBefore);

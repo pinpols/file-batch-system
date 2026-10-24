@@ -26,35 +26,35 @@ class QuotaRuntimeStateSnapshotWriter {
     if (burstLimit <= 0) {
       return 0;
     }
+    QuotaRuntimeStateService.QuotaReservationOwner owner =
+        new QuotaRuntimeStateService.QuotaReservationOwner(tenantId, scope, ownerCode);
+    QuotaRuntimeStateService.QuotaDescribeRequest request =
+        new QuotaRuntimeStateService.QuotaDescribeRequest(owner, policy, burstLimit, 24);
     QuotaRuntimeStateService.QuotaRuntimeSnapshot snap =
-        quotaRuntimeStateService.describe(new QuotaRuntimeStateService.QuotaDescribeRequest(
-            new QuotaRuntimeStateService.QuotaReservationOwner(tenantId, scope, ownerCode),
-            policy,
-            burstLimit,
-            24));
-    if (snap == null
+        quotaRuntimeStateService.describe(request);
+    boolean hasNoActiveBorrowedQuota = snap == null
         || snap.peakBorrowedCount() == null
         || snap.peakBorrowedCount() == 0
-        || snap.windowExpiresAt() == null) {
+        || snap.windowExpiresAt() == null;
+    if (hasNoActiveBorrowedQuota) {
       return 0;
     }
     Instant now = BatchDateTimeSupport.utcNow();
     QuotaRuntimeStateEntity existing =
         quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner(tenantId, scope, ownerCode);
     if (existing == null) {
-      QuotaRuntimeStateEntity toInsert = new QuotaRuntimeStateEntity(
-          null,
-          tenantId,
-          scope,
-          ownerCode,
-          snap.quotaResetPolicy(),
-          snap.windowStartedAt(),
-          snap.windowExpiresAt(),
-          snap.peakBorrowedCount(),
-          snap.lastResetAt(),
-          now,
-          now,
-          null);
+      QuotaRuntimeStateEntity toInsert = QuotaRuntimeStateEntity.builder()
+          .tenantId(tenantId)
+          .quotaScope(scope)
+          .ownerCode(ownerCode)
+          .quotaResetPolicy(snap.quotaResetPolicy())
+          .windowStartedAt(snap.windowStartedAt())
+          .windowExpiresAt(snap.windowExpiresAt())
+          .peakBorrowedCount(snap.peakBorrowedCount())
+          .lastResetAt(snap.lastResetAt())
+          .createdAt(now)
+          .updatedAt(now)
+          .build();
       quotaRuntimeStateMapper.insert(toInsert);
       return 1;
     }

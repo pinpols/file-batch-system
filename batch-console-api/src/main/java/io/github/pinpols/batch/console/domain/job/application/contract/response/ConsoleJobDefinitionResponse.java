@@ -1,14 +1,19 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.response;
 
+import lombok.Builder;
+
 import com.fasterxml.jackson.annotation.JsonFormat;
 import java.time.Instant;
 import java.time.LocalTime;
-
+import java.util.List;
+@Builder
 public record ConsoleJobDefinitionResponse(
     Long id,
     String tenantId,
     String jobCode,
     String dependsOnJobCode,
+    List<String> dependsOnJobCodes,
+    List<JobDependencyRuleResponse> jobDependencyRules,
     String jobName,
     String jobType,
     String bizType,
@@ -44,4 +49,5 @@ public record ConsoleJobDefinitionResponse(
     Boolean enabled,
     String description,
     Instant createdAt,
-    Instant updatedAt) {}
+    Instant updatedAt,
+    Long defaultWorkflowDefinitionId) {}

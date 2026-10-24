@@ -39,8 +39,7 @@ spring:
       org:
         quartz:
           scheduler:
-            # 调度器实例名（便于识别）
-            instanceName: BatchTriggerScheduler
+            # 实例名由 QuartzMisfireRecoveryConfiguration 按部署命名空间派生，隔离共享 JobStore。
           jobStore:
             # Spring LocalDataSourceJobStore 在当前 JDBC/Hikari 组合下会留下空闲事务，
             # 导致下一轮 QRTZ_LOCKS 获取被自己阻塞。固定使用 Quartz 自己管理提交/回滚的 JobStoreTX；

@@ -3,6 +3,8 @@ package io.github.pinpols.batch.console.domain.rbac.support;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import com.nimbusds.jose.jwk.source.JWKSource;
+import com.nimbusds.jose.proc.SecurityContext;
 import io.github.pinpols.batch.common.config.BatchProfileSupport;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -173,18 +175,23 @@ public class ConsoleJwtService {
       // 兜 prod fail-fast 的第二层,防"漏开 prod profile 就用默认密钥签发 token"(审计 #4)。
       String jwtSecret = properties.getJwtSecret();
       String lower = EmptyChecks.isNull(jwtSecret) ? "" : jwtSecret.toLowerCase(Locale.ROOT);
-      if (!Texts.hasText(jwtSecret)
+      boolean jwtSecretIsEmptyOrWeak =
+          !Texts.hasText(jwtSecret)
           || lower.contains("change-me")
           || lower.contains("change_me")
-          || jwtSecret.length() < 32) {
+          || jwtSecret.length() < 32;
+      if (jwtSecretIsEmptyOrWeak) {
         log.warn(
             "Non-production profile: batch.console.security.jwt-secret still uses a default or weak secret; inject a real secret via env / "
                 + "secret manager with at least 32 characters (production-like profiles fail fast)");
       }
     }
     SecretKey key = signingKey();
-    this.cachedEncoder.set(new NimbusJwtEncoder(new ImmutableSecret<>(key)));
-    this.cachedDecoder.set(buildDecoder(key));
+    JWKSource<SecurityContext> encoderSecret = new ImmutableSecret<>(key);
+    NimbusJwtEncoder encoder = new NimbusJwtEncoder(encoderSecret);
+    this.cachedEncoder.set(encoder);
+    JwtDecoder decoder = buildDecoder(key);
+    this.cachedDecoder.set(decoder);
   }
 
   /**
@@ -209,8 +216,8 @@ public class ConsoleJwtService {
   /** 签发访问令牌及过期时间。 */
   public ConsoleAuthTokenResponse issueToken(
       String username, String tenantId, Set<String> authorities) {
-    return issueToken(
-        username, tenantId, authorities, sessionRegistry.currentSessionVersion(username, tenantId));
+    long sessionVersion = sessionRegistry.currentSessionVersion(username, tenantId);
+    return issueToken(username, tenantId, authorities, sessionVersion);
   }
 
   /** 签发访问令牌及过期时间。 */
@@ -227,7 +234,8 @@ public class ConsoleJwtService {
     }
     Instant issuedAt = BatchDateTimeSupport.utcNow();
     Instant expiresAt = issuedAt.plus(properties.getJwtTtl());
-    String jti = UUID.randomUUID().toString();
+    UUID tokenId = UUID.randomUUID();
+    String jti = tokenId.toString();
     HttpServletRequest currentRequest = currentRequest();
     JwtClaimsSet.Builder claimsBuilder = JwtClaimsSet.builder()
         .issuer(properties.getJwtIssuer())
@@ -292,9 +300,10 @@ public class ConsoleJwtService {
     // P0-3:logout 后写入的 jti 黑名单,命中即拒绝(token TTL 内即时失效)。
     String jti = jwt.getClaimAsString(CLAIM_JTI);
     ConsoleTokenRevocationStore revocationStore = tokenRevocationStoreProvider.getIfAvailable();
-    if (EmptyChecks.isNotNull(jti)
+    boolean tokenIsRevoked = EmptyChecks.isNotNull(jti)
         && EmptyChecks.isNotNull(revocationStore)
-        && revocationStore.isRevoked(jti)) {
+        && revocationStore.isRevoked(jti);
+    if (tokenIsRevoked) {
       throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
     }
     // P2-2:IP/UA 软绑定。签发时绑定 hash,异地异机访问只打 WARN(不 deny)— 移动网 IP 抖动 / UA
@@ -350,9 +359,10 @@ public class ConsoleJwtService {
     }
     String currentIp = hashClientIp(req);
     String currentUa = hashUserAgent(req);
-    if (EmptyChecks.isNotNull(storedIp)
+    boolean tokenIpHasChanged = EmptyChecks.isNotNull(storedIp)
         && EmptyChecks.isNotNull(currentIp)
-        && !storedIp.equals(currentIp)) {
+        && !storedIp.equals(currentIp);
+    if (tokenIpHasChanged) {
       // 同 (username,tenant,storedIp→currentIp) 组合 5 分钟内只记一次,避免 e2e/同浏览器多 tab 产生日志噪音
       String key = "ip|" + username + "|" + tenantId + "|" + storedIp + "→" + currentIp;
       if (EmptyChecks.isNull(driftLogSuppressor.getIfPresent(key))) {
@@ -363,9 +373,10 @@ public class ConsoleJwtService {
             tenantId);
       }
     }
-    if (EmptyChecks.isNotNull(storedUa)
+    boolean tokenUserAgentHasChanged = EmptyChecks.isNotNull(storedUa)
         && EmptyChecks.isNotNull(currentUa)
-        && !storedUa.equals(currentUa)) {
+        && !storedUa.equals(currentUa);
+    if (tokenUserAgentHasChanged) {
       String key = "ua|" + username + "|" + tenantId + "|" + storedUa + "→" + currentUa;
       if (EmptyChecks.isNull(driftLogSuppressor.getIfPresent(key))) {
         driftLogSuppressor.put(key, Boolean.TRUE);
@@ -401,7 +412,9 @@ public class ConsoleJwtService {
       synchronized (this) {
         e = cachedEncoder.get();
         if (e == null) {
-          e = new NimbusJwtEncoder(new ImmutableSecret<>(signingKey()));
+          SecretKey key = signingKey();
+          JWKSource<SecurityContext> encoderSecret = new ImmutableSecret<>(key);
+          e = new NimbusJwtEncoder(encoderSecret);
           cachedEncoder.set(e);
         }
       }
@@ -416,7 +429,8 @@ public class ConsoleJwtService {
         d = cachedDecoder.get();
         if (d == null) {
           // R4-P2-6：fallback 路径走 buildDecoder，与 @PostConstruct 一致带 clock skew validator
-          d = buildDecoder(signingKey());
+          SecretKey key = signingKey();
+          d = buildDecoder(key);
           cachedDecoder.set(d);
         }
       }
@@ -426,8 +440,10 @@ public class ConsoleJwtService {
 
   private SecretKey signingKey() {
     try {
-      byte[] keyBytes = MessageDigest.getInstance(CryptoAlgorithms.SHA_256)
-          .digest(properties.getJwtSecret().getBytes(StandardCharsets.UTF_8));
+      MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
+      String jwtSecret = properties.getJwtSecret();
+      byte[] secretBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
+      byte[] keyBytes = digest.digest(secretBytes);
       return new SecretKeySpec(keyBytes, CryptoAlgorithms.HMAC_SHA256);
     } catch (NoSuchAlgorithmException exception) {
       throw new IllegalStateException("SHA-256 is not available", exception);

@@ -30,7 +30,7 @@ public class TenantConfigCopyRequest {
   @Size(max = 50, message = "targetTenantIds must not exceed 50")
   private List<@Size(min = 1, max = 64) String> targetTenantIds;
 
-  /** 要复制的配置类型。为空则复制全部 10 类。 */
+  /** 要复制的配置类型。为空则复制全部支持的配置类型。 */
   private Set<ConfigType> configTypes;
 
   /** 非空时按 jobCode 构建最小依赖配置包，而不是复制整类配置。 */
@@ -47,7 +47,6 @@ public class TenantConfigCopyRequest {
   public enum ConfigType {
     JOB_DEFINITION,
     WORKFLOW_DEFINITION,
-    PIPELINE_DEFINITION,
     FILE_CHANNEL,
     FILE_TEMPLATE,
     RESOURCE_QUEUE,
@@ -66,7 +65,8 @@ public class TenantConfigCopyRequest {
       if (value == null) {
         return null;
       }
-      String upper = value.trim().toUpperCase();
+      String trimmedValue = value.trim();
+      String upper = trimmedValue.toUpperCase();
       try {
         return ConfigType.valueOf(upper);
       } catch (IllegalArgumentException ignored) {

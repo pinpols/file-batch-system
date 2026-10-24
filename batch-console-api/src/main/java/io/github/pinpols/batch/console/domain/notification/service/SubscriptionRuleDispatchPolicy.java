@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.notification.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
@@ -32,18 +33,54 @@ final class SubscriptionRuleDispatchPolicy {
   private final MeterRegistry meterRegistry;
 
   String normalizeEventType(String eventType) {
-    return eventType == null ? "UNKNOWN" : eventType.trim().toUpperCase(Locale.ROOT);
+    if (EmptyChecks.isNull(eventType)) {
+      return "UNKNOWN";
+    }
+    String trimmedEventType = eventType.trim();
+    return trimmedEventType.toUpperCase(Locale.ROOT);
   }
 
   @SuppressWarnings("unchecked")
   Map<String, Object> asDataMap(Object data) {
-    return data instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
+    if (data instanceof Map<?, ?> map) {
+      return (Map<String, Object>) map;
+    }
+    if (EmptyChecks.isNull(data)
+        || data instanceof CharSequence
+        || data instanceof Number
+        || data instanceof Boolean
+        || data instanceof Enum<?>) {
+      return Map.of();
+    }
+    try {
+      return JsonUtils.toMap(data);
+    } catch (RuntimeException exception) {
+      SwallowedExceptionLogger.info(
+          SubscriptionRuleDispatchPolicy.class, "event-payload-map-conversion-failed", exception);
+      return Map.of();
+    }
   }
 
   boolean matches(Map<String, Object> rule, String eventType, Map<String, Object> dataMap) {
-    return eventTypeMatches(stringValue(rule, "event_types"), eventType)
-        && filterMatches(stringValue(rule, "severity_filter"), dataMap, SEVERITY_KEYS)
-        && filterMatches(stringValue(rule, "job_code_filter"), dataMap, JOB_CODE_KEYS);
+    return matchesRule(rule, eventType, dataMap);
+  }
+
+  static boolean matchesRule(
+      Map<String, Object> rule, String eventType, Map<String, Object> dataMap) {
+    String configuredEventTypes = stringValue(rule, "event_types");
+    boolean eventTypeIsMatched = eventTypeMatches(configuredEventTypes, eventType);
+    if (!eventTypeIsMatched) {
+      return false;
+    }
+
+    String severityFilter = stringValue(rule, "severity_filter");
+    boolean severityIsMatched = filterMatches(severityFilter, dataMap, SEVERITY_KEYS);
+    if (!severityIsMatched) {
+      return false;
+    }
+
+    String jobCodeFilter = stringValue(rule, "job_code_filter");
+    return filterMatches(jobCodeFilter, dataMap, JOB_CODE_KEYS);
   }
 
   boolean withinSendRateLimit(
@@ -113,9 +150,10 @@ final class SubscriptionRuleDispatchPolicy {
       return true;
     }
     try {
+      String destinationFingerprint = Hashes.sha256Short(destination);
+      String destinationRateLimitKey = "notify:dest:" + tenantId + ":" + destinationFingerprint;
       boolean allowed = sendRateLimiter.tryAcquire(
-          "notify:dest:" + tenantId + ":" + Hashes.sha256Short(destination),
-          MAX_SENDS_PER_DESTINATION_PER_MINUTE);
+          destinationRateLimitKey, MAX_SENDS_PER_DESTINATION_PER_MINUTE);
       if (!allowed) {
         recordDrop("dest_ratelimit");
         log.warn(
@@ -161,7 +199,7 @@ final class SubscriptionRuleDispatchPolicy {
     }
   }
 
-  private boolean eventTypeMatches(String configuredEventTypes, String eventType) {
+  static boolean eventTypeMatches(String configuredEventTypes, String eventType) {
     if (configuredEventTypes == null || configuredEventTypes.isBlank()) {
       return false;
     }
@@ -171,7 +209,8 @@ final class SubscriptionRuleDispatchPolicy {
     return splitUpper(configuredEventTypes).contains(eventType);
   }
 
-  private boolean filterMatches(String filter, Map<String, Object> dataMap, List<String> dataKeys) {
+  private static boolean filterMatches(
+      String filter, Map<String, Object> dataMap, List<String> dataKeys) {
     if (filter == null || filter.isBlank()) {
       return true;
     }
@@ -183,7 +222,7 @@ final class SubscriptionRuleDispatchPolicy {
     return actual != null && allowed.contains(actual.toUpperCase(Locale.ROOT));
   }
 
-  private String firstNonNull(Map<String, Object> dataMap, List<String> keys) {
+  private static String firstNonNull(Map<String, Object> dataMap, List<String> keys) {
     for (String key : keys) {
       Object value = dataMap.get(key);
       if (value != null) {
@@ -193,7 +232,7 @@ final class SubscriptionRuleDispatchPolicy {
     return null;
   }
 
-  private List<String> splitUpper(String csv) {
+  private static List<String> splitUpper(String csv) {
     return Arrays.stream(csv.split(","))
         .map(String::trim)
         .filter(value -> !value.isBlank())

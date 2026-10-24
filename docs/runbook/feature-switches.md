@@ -2,7 +2,7 @@
 
 > 汇总跨模块运行时能力开关：配置 key、实际默认、启用条件、风险、验证和回滚。索引随实现持续维护，不再用固定数量描述范围。
 >
-> 配套阅读：[`docs/architecture/rework-classification.md`](../architecture/rework-classification.md) Phase 2 章节、[`docs/coding-conventions.md` §13.3](../coding-conventions.md) 配置归属决策。
+> 配套阅读：[`docs/archive/plans/rework-classification-2026-04-25.md`](../archive/plans/rework-classification-2026-04-25.md) Phase 2 章节、[`docs/coding-conventions.md` §13.3](../coding-conventions.md) 配置归属决策。
 
 ---
 
@@ -424,7 +424,7 @@ SELECT owner_type, owner_id, peak_borrowed, updated_at
 - `placement-source=CONFIG`(默认):hash 池化 + `silo-overrides`;`=TABLE`:读 `batch.business_tenant_placement`(在线维护,console `/api/console/ops/tenant-placements`,表命中优先 hash 回退)。
 - `shards[*]`(key+url+账密)凭据走 secrets,**不入表**;`shard-max-pool-size` 控每片池;`placement-cache-ttl-ms` 默认 5s(**0=每次查库仅测试用**)。
 - `enabled=true` 但 `shards[*]` 为空时启动直接失败，禁止静默退回单库造成“配置看似启用”的假象。
-- 仅 import/export/process 三 worker 持有 biz 数据源;dispatch/atomic/SDK 不涉及。
+- 这套业务库分片装配仅接入 import/export/process 三类 Worker；dispatch/atomic 未接入，SDK 数据源由租户自行配置。这不限制 ATOMIC 或 SDK 按自身执行合同访问业务数据库。
 - **Fail-open**:placement 表读失败时已有缓存保留 stale(silo 路由仍对),冷启动退 hash;未知 placement key **硬失败**(关 lenientFallback,防静默落 shard-0 污染)。
 
 完整设计 / 开片 / 账户 / 凭据注入见 [`biz-tenant-routing.md`](./biz-tenant-routing.md)。验证:`scripts/local/sim-harness.sh verify-data`(两片真实 PG 活体) + 单测 `*PlacementResolver*Test` / `BusinessRoutingDataSource*Test`。
@@ -462,7 +462,7 @@ Console 使用无状态 JWT：每次认证重建不应按有状态会话的“�
 | `deploy/docker/compose/app.yml` | 公共开关必须显式透传并提供与应用一致的 `:-xxx` 默认 |
 | `.env.example` | 列出该开关 + 默认值 + 一行作用说明 |
 | 本文档（`feature-switches.md`） | §1 索引表 + §3 详述节 |
-| `docs/architecture/rework-classification.md` | Phase 2 表格的"开关"列 |
+| `docs/archive/plans/rework-classification-2026-04-25.md` | Phase 2 表格的"开关"列 |
 | `docs/changelog.md` | **仅当**改的是 docs/agent-baseline.md 已有规范条款时记一条 |
 
 ---

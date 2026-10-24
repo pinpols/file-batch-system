@@ -1,6 +1,8 @@
 # ADR-017 · 结果版本（result_version）主模型
 
-- **Status**: Accepted（Stage 1-5 已落 V108 + Writer / Query / Promote / Retention；Stage 6 console UI 待接入）
+> **当前适用性（2026-10-24）**：结果版本以产生它的 JobInstance 为执行事实；一个 EFFECTIVE Job 结果不代表整个 WorkflowRun 成功。闸门保存的依赖版本引用不等于任意外部消费者已固定读取该版本。正文阶段/UI进度只保留原核查时点，不作为当前验收统计。 原决策与历史阶段记录保留。
+
+- **Status**: Accepted（Stage 1-5 已落 V108 + Writer / Query / Promote / Retention；历史Stage 6 UI状态见原实施记录，当前验收另核）
 - **Date**: 2026-05-06（Accepted: 2026-05-06）
 - **Supersedes**: —
 - **Related**: ADR-009（workflow 节点 output 上报机制）/ ADR-018（跨批量日 DAG 依赖，依赖本 ADR 取上游 EFFECTIVE 版本）/ ADR-020（批量日维度重放，依赖本 ADR 做版本路由）/ §14.3.2（设计层缺口）

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：ADR-sim 4day · P0 清空异常数据(保留所有 config)。
+# 用法：在仓库根目录执行 bash scripts/sim-4day/00-clean.sh；参数与前置环境见下方说明及所属 README。
 # ADR-sim 4day · P0 清空异常数据(保留所有 config)
 # - 平台库 batch.* 运行时表:显式 allowlist + CASCADE(config 永远是 FK 父表,不会被截断)
 # - 业务库 batch_business 的 biz.* 数据表

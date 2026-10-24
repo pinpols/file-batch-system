@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：分析多租户压测结果的资源公平性。
+# 用法：在仓库根目录执行 python3 load-tests/scripts/p2_multitenant_fairness.py；参数与前置环境见下方说明及所属 README。
 import concurrent.futures
 import json
 import os
@@ -13,15 +15,13 @@ import uuid
 
 RUN_ID = os.environ["RUN_ID"]
 TRIGGER_BASE_URL = os.environ["TRIGGER_BASE_URL"].rstrip("/")
-ORCHESTRATOR_BASE_URL = os.environ["ORCHESTRATOR_BASE_URL"].rstrip("/")
 INTERNAL_SECRET = os.environ["INTERNAL_SECRET"]
 BIZ_DATE = os.environ["BIZ_DATE"]
 TOTAL = int(os.environ.get("FAIRNESS_TOTAL_REQUESTS", "6000"))
 CONCURRENCY = int(os.environ.get("FAIRNESS_CONCURRENCY", "96"))
 LAUNCH_WEIGHTS = os.environ.get("FAIRNESS_LAUNCH_WEIGHTS", "p2fa:1,p2fb:1,p2fc:1")
 WAIT_SECONDS = int(os.environ.get("FAIRNESS_WAIT_SECONDS", "1200"))
-# Trigger 入口会创建异步 Orchestrator 消费所需的 trigger_request。
-# 仅预置 trigger_request 测试数据时，才使用 Orchestrator 直连模式。
+# 顶层启动必须经过 Trigger，使准入流程持久化 Workflow 目标。
 MODE = os.environ.get("FAIRNESS_MODE", "trigger")
 
 
@@ -53,11 +53,41 @@ def planned_requests():
     return counts
 
 
-def launch_one(tenant, seq):
+def sql_literal(value):
+    return "'" + value.replace("'", "''") + "'"
+
+
+def resolve_workflow_ids(tenants):
+    tenant_list = ",".join(sql_literal(tenant) for tenant in tenants)
+    raw = psql(f"""
+        select jd.tenant_id || '|' || wd.id
+        from batch.job_definition jd
+        join batch.workflow_definition wd
+          on wd.tenant_id = jd.tenant_id
+         and wd.single_job_definition_id = jd.id
+         and wd.enabled
+        where jd.tenant_id in ({tenant_list})
+          and jd.job_code = 'atomic_sql_demo'
+          and jd.enabled
+        order by jd.tenant_id, wd.id
+    """)
+    resolved = {}
+    for line in raw.splitlines():
+        tenant, workflow_id = line.split("|", 1)
+        if tenant in resolved:
+            raise RuntimeError(f"multiple enabled single-job Workflows for tenant={tenant}")
+        resolved[tenant] = int(workflow_id)
+    missing = sorted(set(tenants) - set(resolved))
+    if missing:
+        raise RuntimeError(f"missing explicit single-job Workflow for tenants: {','.join(missing)}")
+    return resolved
+
+
+def launch_one(tenant, seq, workflow_definition_id):
     request_id = f"{RUN_ID}-{tenant}-{seq}-{uuid.uuid4().hex[:8]}"
     body = {
         "tenantId": tenant,
-        "jobCode": "atomic_sql_demo",
+        "workflowDefinitionId": workflow_definition_id,
         "triggerType": "API",
         "bizDate": BIZ_DATE,
         "requestId": request_id,
@@ -70,10 +100,7 @@ def launch_one(tenant, seq):
             }
         },
     }
-    if MODE == "orchestrator":
-        url = f"{ORCHESTRATOR_BASE_URL}/internal/orchestrator/launch"
-    else:
-        url = f"{TRIGGER_BASE_URL}/api/triggers/launch"
+    url = f"{TRIGGER_BASE_URL}/api/triggers/launch"
     req = urllib.request.Request(
         url,
         data=json.dumps(body).encode(),
@@ -121,33 +148,20 @@ def psql(sql):
 
 
 def terminal_counts(tenants):
-    tenant_list = ",".join(f"'{tenant}'" for tenant in tenants)
-    if MODE == "orchestrator":
-        sql = f"""
-        select tenant_id || '|' || count(*) || '|' ||
-               count(*) filter (where instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED','REJECTED'))
-        from batch.job_instance
-        where tenant_id in ({tenant_list})
-          and coalesce(
-              params_snapshot #>> '{{requestParams,metadata,runId}}',
-              params_snapshot #>> '{{effectiveParams,metadata,runId}}',
-              params_snapshot #>> '{{metadata,runId}}',
-              params_snapshot #>> '{{runId}}'
-          ) = '{RUN_ID}'
-        group by tenant_id
-        order by tenant_id
-        """
-    else:
-        sql = f"""
+    tenant_list = ",".join(sql_literal(tenant) for tenant in tenants)
+    run_id = sql_literal(RUN_ID)
+    sql = f"""
         select tr.tenant_id || '|' || count(*) || '|' ||
-               count(*) filter (where instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED','REJECTED'))
+               count(wr.id) filter (where wr.run_status in ('SUCCESS','FAILED','TERMINATED'))
         from batch.trigger_request tr
-        left join batch.job_instance ji on ji.id = tr.related_job_instance_id
+        left join batch.workflow_run wr
+          on wr.tenant_id = tr.tenant_id and wr.trigger_request_id = tr.id
         where tr.tenant_id in ({tenant_list})
-          and tr.request_id like '{RUN_ID}%'
+          and tr.workflow_definition_id is not null
+          and tr.request_id like {run_id} || '%'
         group by tr.tenant_id
         order by tr.tenant_id
-        """
+    """
     raw = psql(sql)
     counts = {}
     for line in raw.splitlines():
@@ -167,7 +181,13 @@ def interleaved_tasks(plan):
 
 
 def main():
+    if MODE != "trigger":
+        raise ValueError(
+            "FAIRNESS_MODE must be 'trigger': Workflow launches require persisted Trigger admission"
+        )
     plan = planned_requests()
+    tenants = [tenant for tenant, _ in plan]
+    workflows = resolve_workflow_ids(tenants)
     print(f"plan={plan} total={TOTAL} concurrency={CONCURRENCY} mode={MODE}", flush=True)
     tasks = queue.Queue()
     for tenant, seq in interleaved_tasks(plan):
@@ -182,7 +202,7 @@ def main():
                 tenant, seq = tasks.get_nowait()
             except queue.Empty:
                 return local
-            local.append(launch_one(tenant, seq))
+            local.append(launch_one(tenant, seq, workflows[tenant]))
             tasks.task_done()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENCY) as pool:

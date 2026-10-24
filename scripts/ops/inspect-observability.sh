@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：服务巡检：健康检查、指标、Kafka lag 和基础设施 exporter 指标。
+# 用法：在仓库根目录执行 bash scripts/ops/inspect-observability.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # inspect-observability.sh - 服务巡检：健康检查、指标、Kafka lag 和基础设施 exporter 指标
 # 说明：

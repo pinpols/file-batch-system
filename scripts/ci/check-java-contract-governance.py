@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：Java 固定契约与协议值治理。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-java-contract-governance.py；参数与前置环境见下方说明及所属 README。
 """固定 Java 边界、有限域字面量及协议键复用的精准增量守卫。"""
 from __future__ import annotations
 

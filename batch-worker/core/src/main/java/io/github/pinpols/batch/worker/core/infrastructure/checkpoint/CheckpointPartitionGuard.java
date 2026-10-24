@@ -75,7 +75,8 @@ public final class CheckpointPartitionGuard {
         return null;
       }
     }
-    String text = String.valueOf(value).trim();
+    String rawText = String.valueOf(value);
+    String text = rawText.trim();
     if (text.isEmpty()) {
       return null;
     }

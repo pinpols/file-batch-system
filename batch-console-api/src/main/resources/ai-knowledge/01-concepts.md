@@ -15,7 +15,6 @@
 - **Pipeline** = 文件处理流水线(IMPORT/EXPORT/PROCESS/DISPATCH 固定 stage 顺序),数据在 `pipeline_*` 表,worker 内部记录,运维一般不介入。Pipeline 顺序由平台控制,但固定步骤内部存在显式插件/策略点:Import load、Export data/format、Process compute、Dispatch channel adapter。
 - **Workflow** = 用户编排的 DAG(任意 Job 组合 + GATEWAY 分支 + 补偿 + 审批),数据在 `workflow_*` 表,支持人工干预。
 - **Job** = 单个执行单元,数据在 `job_*` 表。
-- 跨域引用是单向的:`workflow_node.related_pipeline_code → pipeline_definition.job_code`,不反向。
 
 ## 插件 / SPI 边界
 - 大任务类型 SPI 由 `BatchTaskExecutorRegistry` 按 `taskType()` 注册;同一个 taskType 重复注册会启动失败,不允许外部插件静默覆盖 `IMPORT / EXPORT / PROCESS / DISPATCH / ATOMIC` 主链。

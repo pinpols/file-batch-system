@@ -14,5 +14,8 @@ public interface TaskExecutionWrapper {
   /** 透传 {@link TaskExecutionClient#claimBatch}(ADR-046 P2 切片 2.3):一次往返认领 K 个。 */
   List<TaskClaimResult> claimBatch(List<TaskClaimItem> items);
 
+  /** 批量 CLAIM 成功后先登记所有待执行租约，使续租器覆盖当前批次中仍在排队的任务。 */
+  void registerClaimedBatch(List<PulledTask> tasks);
+
   WorkerExecutionResult execute(PulledTask task);
 }

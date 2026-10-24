@@ -25,10 +25,6 @@
         log_masking_enabled, content_encryption_enabled, encryption_key_ref,
         download_requires_approval, masking_rule_set, export_data_ref, load_target_ref, is_deleted
     </sql>
-    <sql id="pipelineStepDefinitionColumns">
-        id, pipeline_definition_id, step_code, step_name, stage_code, step_order, impl_code,
-        step_params, timeout_seconds, retry_policy, retry_max_count, enabled, created_at, updated_at
-    </sql>
 
     <select id="selectFileRecord" resultType="map">
         select <include refid="fileRecordColumns"/>
@@ -69,24 +65,6 @@
         limit 1
     </select>
 
-    <select id="selectLatestPipelineDefinition" resultType="map">
-        select id, pipeline_type
-        from batch.pipeline_definition
-        where tenant_id = #{tenantId}
-          and job_code = #{jobCode}
-        order by version desc
-        limit 1
-    </select>
-
-    <select id="selectPipelineStepDefinitions" resultType="map">
-        select <include refid="pipelineStepDefinitionColumns"/>
-        from batch.pipeline_step_definition
-        where pipeline_definition_id = #{pipelineDefinitionId}
-        <if test="enabledOnly != null and enabledOnly">
-            and enabled = true
-        </if>
-        order by step_order asc, step_code asc
-    </select>
 
     <!--
       重试时 worker 会对同一 job_instance 再次进 doExecute → 又调本 INSERT,
@@ -96,14 +74,25 @@
     -->
     <insert id="insertPipelineInstance" parameterType="map" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.pipeline_instance (
-            tenant_id, pipeline_definition_id, job_code, pipeline_type,
+            tenant_id, system_pipeline_code, system_pipeline_version,
+            job_code, pipeline_type,
             file_id, related_job_instance_id, current_stage, run_status,
             trace_id, started_at, created_at, updated_at
-        ) values (
-            #{tenantId}, #{pipelineDefinitionId}, #{jobCode}, #{pipelineType},
+        ) select
+            #{tenantId}, #{systemPipelineCode}, #{systemPipelineVersion},
+            #{jobCode}, #{pipelineType},
             #{fileId}, #{relatedJobInstanceId}, #{currentStage}, #{runStatus},
             #{traceId}, current_timestamp, current_timestamp, current_timestamp
-        )
+        where (CAST(#{fileId,jdbcType=BIGINT} AS bigint) is null or exists (
+            select 1 from batch.file_record file_record
+            where file_record.tenant_id = #{tenantId}
+              and file_record.id = #{fileId}
+        ))
+          and (CAST(#{relatedJobInstanceId,jdbcType=BIGINT} AS bigint) is null or exists (
+            select 1 from batch.job_instance job_instance
+            where job_instance.tenant_id = #{tenantId}
+              and job_instance.id = #{relatedJobInstanceId}
+        ))
         on conflict (related_job_instance_id)
           where related_job_instance_id is not null
           do update set
@@ -114,13 +103,20 @@
             started_at = current_timestamp,
             finished_at = null,
             updated_at = current_timestamp
+          where batch.pipeline_instance.tenant_id = excluded.tenant_id
     </insert>
 
     <update id="bindFileToPipelineInstance">
         update batch.pipeline_instance
         set file_id = #{fileId},
             updated_at = current_timestamp
-        where id = #{pipelineInstanceId}
+        where tenant_id = #{tenantId}
+          and id = #{pipelineInstanceId}
+          and exists (
+            select 1 from batch.file_record file_record
+            where file_record.tenant_id = #{tenantId}
+              and file_record.id = #{fileId}
+          )
     </update>
 
     <update id="updatePipelineStage">
@@ -312,22 +308,46 @@
             error_code, error_message, error_key, error_args,
             error_stage, is_skipped, skip_action, raw_record,
             source_row_num, source_column, created_at
-        ) values (
+        ) select
             #{tenantId}, #{fileId}, #{pipelineInstanceId}, #{pipelineStepRunId}, #{recordNo},
             #{errorCode}, #{errorMessage}, #{errorKey}, #{errorArgs,jdbcType=VARCHAR}::jsonb,
             #{errorStage}, #{isSkipped}, #{skipAction},
             #{rawRecordJson,jdbcType=VARCHAR}::jsonb,
             #{sourceRowNum,jdbcType=BIGINT}, #{sourceColumn,jdbcType=VARCHAR}, current_timestamp
-        )
+        where (CAST(#{fileId,jdbcType=BIGINT} AS bigint) is null or exists (
+            select 1 from batch.file_record file_record
+            where file_record.tenant_id = #{tenantId}
+              and file_record.id = #{fileId}
+        ))
+          and (CAST(#{pipelineInstanceId,jdbcType=BIGINT} AS bigint) is null or exists (
+            select 1 from batch.pipeline_instance pipeline_instance
+            where pipeline_instance.tenant_id = #{tenantId}
+              and pipeline_instance.id = #{pipelineInstanceId}
+        ))
+          and (CAST(#{pipelineStepRunId,jdbcType=BIGINT} AS bigint) is null or exists (
+            select 1 from batch.pipeline_step_run step_run
+            where step_run.id = #{pipelineStepRunId}
+              and step_run.pipeline_instance_id = #{pipelineInstanceId}
+        ))
     </insert>
 
     <insert id="insertFileAuditLog">
         insert into batch.file_audit_log (
             tenant_id, file_id, operation_type, operation_result,
             operator_type, operator_id, trace_id, evidence_ref, detail_summary, created_at
-        ) values (
+        ) select
             #{tenantId}, #{fileId}, #{operationType}, #{operationResult},
             #{operatorType}, #{operatorId}, #{traceId}, #{evidenceRef}, #{detailSummaryJson,jdbcType=VARCHAR}::jsonb, current_timestamp
+        where exists (
+            select 1 from batch.file_record file_record
+            where file_record.tenant_id = #{tenantId}
+              and file_record.id = #{fileId}
         )
+        on conflict (
+            tenant_id, file_id, evidence_ref, (detail_summary ->> 'channelCode')
+        ) where operation_type = 'DISPATCH_COMPLETE'
+          and evidence_ref is not null
+          and detail_summary ->> 'channelCode' is not null
+        do nothing
     </insert>
 </mapper>

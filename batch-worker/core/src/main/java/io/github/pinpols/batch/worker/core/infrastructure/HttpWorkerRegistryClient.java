@@ -11,6 +11,7 @@ import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.support.WorkerRegistryClient;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
 import org.springframework.boot.http.client.HttpClientSettings;
 import org.springframework.core.env.Environment;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -91,19 +93,23 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
     synchronized (this) {
       current = this.restClient.get();
       if (current == null) {
-        current = restClientBuilderProvider
+        RestClient.Builder clientBuilder = restClientBuilderProvider
             .getObject()
             .baseUrl(resolveBaseUrl())
-            .defaultHeader("X-Internal-Secret", securityProperties.getInternalSecret())
-            // R7-A2-P1：JDK 默认 HttpURLConnection 无超时。worker loop 单线程调
-            // heartbeat / register / unregister，orchestrator GC pause / DB stall 任一
-            // 阻塞都会让 worker loop 永久挂起 — orchestrator 端 lease 又会过期 → 同 task
-            // 被另一 worker 重抢，造成 double-exec。给 5s/10s 短超时让 worker 快速回退。
-            .requestFactory(ClientHttpRequestFactoryBuilder.detect()
-                .build(HttpClientSettings.defaults()
-                    .withConnectTimeout(Duration.ofSeconds(5))
-                    .withReadTimeout(Duration.ofSeconds(10))))
-            .build();
+            .defaultHeader("X-Internal-Secret", securityProperties.getInternalSecret());
+        // R7-A2-P1：JDK 默认 HttpURLConnection 无超时。worker loop 单线程调
+        // heartbeat / register / unregister，orchestrator GC pause / DB stall 任一
+        // 阻塞都会让 worker loop 永久挂起 — orchestrator 端 lease 又会过期 → 同 task
+        // 被另一 worker 重抢，造成 double-exec。给 5s/10s 短超时让 worker 快速回退。
+        HttpClientSettings clientSettings = HttpClientSettings.defaults();
+        Duration connectTimeout = Duration.ofSeconds(5);
+        clientSettings = clientSettings.withConnectTimeout(connectTimeout);
+        Duration readTimeout = Duration.ofSeconds(10);
+        clientSettings = clientSettings.withReadTimeout(readTimeout);
+        ClientHttpRequestFactoryBuilder<?> requestFactoryBuilder =
+            ClientHttpRequestFactoryBuilder.detect();
+        ClientHttpRequestFactory requestFactory = requestFactoryBuilder.build(clientSettings);
+        current = clientBuilder.requestFactory(requestFactory).build();
         this.restClient.set(current);
       }
       return current;
@@ -112,7 +118,9 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
 
   private String resolveBaseUrl() {
     String configuredBaseUrl = properties.getBaseUrl();
-    if (Texts.hasText(configuredBaseUrl) && !configuredBaseUrl.contains("${")) {
+    boolean configuredBaseUrlIsUsable =
+        Texts.hasText(configuredBaseUrl) && !configuredBaseUrl.contains("${");
+    if (configuredBaseUrlIsUsable) {
       return configuredBaseUrl;
     }
     String localPort = environment.getProperty("local.server.port");
@@ -130,24 +138,26 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
   private WorkerHeartbeatDto toHeartbeatDto(
       WorkerRegistration registration, boolean includeCapabilities) {
     OffsetDateTime lastHeartbeatAt = registration.getLastHeartbeatAt();
-    return WorkerHeartbeatDto.builder()
+    WorkerHeartbeatDto.WorkerHeartbeatDtoBuilder heartbeatBuilder = WorkerHeartbeatDto.builder()
         .tenantId(registration.getTenantId())
         .workerCode(registration.getWorkerId())
         .workerGroup(registration.getWorkerGroup())
         .status(registration.getStatus())
         .hostName(registration.getHost())
         // worker 实际监听端口：AbstractWorkerLoop 已解析为 Spring 运行时绑定端口（见 resolveWorkerPort）。
-        .port(registration.getPort())
-        .heartbeatAt(
-            EmptyChecks.isNull(lastHeartbeatAt)
-                ? BatchDateTimeSupport.utcNow()
-                : lastHeartbeatAt.toInstant())
+        .port(registration.getPort());
+    Instant heartbeatAt = EmptyChecks.isNull(lastHeartbeatAt)
+        ? BatchDateTimeSupport.utcNow()
+        : lastHeartbeatAt.toInstant();
+    return heartbeatBuilder
+        .heartbeatAt(heartbeatAt)
         .capabilityTags(registration.getCapabilityTags())
         .currentLoad(registration.getCurrentLoad())
         .maxConcurrent(registration.getMaxConcurrent())
         .workerPoolCode(registration.getWorkerCode())
         .pipelineProgress(pipelineStageProgressRegistry.snapshots())
         .taskCapabilities(includeCapabilities ? registration.getTaskCapabilities() : null)
+        .replayCapabilities(includeCapabilities ? registration.getReplayCapabilities() : null)
         // hostIp / processId / buildId / sdkVersion / taskTypes / protocolVersion 保持缺省 null：
         // file-pipeline worker 非 BYO 自托管 SDK，不上报运行指纹、自定义 taskType 与 wire 协议版本
         // （协议门禁只针对外部 SDK worker 上报的 protocolVersion）。
@@ -158,9 +168,9 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
     if (EmptyChecks.isNull(registration) || EmptyChecks.isNull(response)) {
       return;
     }
-    boolean shouldDrain = response.shouldDrain()
+    boolean responseRequiresDrain = response.shouldDrain()
         || WorkerHeartbeatResponse.STATUS_DRAINING.equals(response.platformStatus());
-    if (shouldDrain) {
+    if (responseRequiresDrain) {
       registration.setStatus(WorkerRegistryStatus.DRAINING.code());
     } else if (WorkerHeartbeatResponse.STATUS_NORMAL.equals(response.platformStatus())) {
       registration.setStatus(WorkerRegistryStatus.ONLINE.code());

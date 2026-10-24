@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：第三方依赖许可证审查。
+# 用法：在仓库根目录执行 bash scripts/ci/check-dependency-licenses.sh；参数与前置环境见下方说明及所属 README。
 # scripts/ci/check-dependency-licenses.sh
 #
 # 拦截新依赖引入的不允许 license(GPL / AGPL / 无 CPE 的强 copyleft 等)。
@@ -15,7 +17,7 @@
 #   3. 若命中 → 打印命中行 + exit 1;否则 exit 0
 #
 # 红线 license(命中即 fail):
-#   - GNU General Public License (GPL) without "Classpath Exception" / "CPE"
+# 禁止未附带 Classpath Exception/CPE 的 GNU GPL 许可证。
 #   - GNU Affero General Public License (AGPL)
 #   - 任何 Commons-Clause / SSPL(Server-Side Public License)
 #   - Business Source License / Elastic License / CC-BY-NC 等商用限制许可

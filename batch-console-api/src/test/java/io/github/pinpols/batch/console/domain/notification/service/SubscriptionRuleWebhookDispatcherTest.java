@@ -221,6 +221,35 @@ class SubscriptionRuleWebhookDispatcherTest {
   }
 
   @Test
+  @DisplayName("记录型事件载荷的 severity 命中订阅规则时投递")
+  void shouldDeliver_whenRecordPayloadMatchesSeverityFilter() {
+    Map<String, Object> rule = Map.of(
+        "tenant_id", "tenant-a",
+        "channel_code", "ops-hook",
+        "channel_type", "WEBHOOK",
+        "event_types", "ALERT_ESCALATED",
+        "severity_filter", "CRITICAL",
+        "config_json", "{\"url\":\"https://hook.example.com/in\"}");
+    when(subscriptionRuleMapper.selectEnabledByEventType("tenant-a", "ALERT_ESCALATED"))
+        .thenReturn(List.of(rule));
+    when(webhookDispatcher.attemptDelivery(any(), any(), any()))
+        .thenReturn(WebhookDeliveryResult.ok());
+
+    newDispatcher()
+        .dispatch(
+            "tenant-a",
+            "ALERT_ESCALATED",
+            "alerts",
+            "cursor-1",
+            new EscalationPayload("CRITICAL", 42L),
+            Instant.now());
+
+    verify(webhookDispatcher, timeout(2000)).attemptDelivery(any(), any(), any());
+  }
+
+  private record EscalationPayload(String severity, long alertId) {}
+
+  @Test
   @DisplayName("不同租户同名渠道的限流与去重键各自带租户前缀, 互不共享窗口")
   void shouldTenantScopeRateLimitKeys_whenSameChannelCodeAcrossTenants() {
     // 两租户可合法配置同名 channelCode(唯一约束是 (tenant_id, channel_code))。

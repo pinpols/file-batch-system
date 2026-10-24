@@ -7,7 +7,10 @@ import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleUsageD
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleUsageDailyMapper.DailyUsageRow;
 import io.github.pinpols.batch.console.shared.usage.ConsoleUsageRecorder;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.Locale;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
@@ -36,17 +39,23 @@ public class ConsoleUsageDailyRecorder implements ConsoleUsageRecorder {
     mapper.setTenantContext(tenantId);
     ZoneId zone = timezoneProvider.defaultZone();
     String metricCode = metricCode(action);
+    ZonedDateTime statDateTime = createdAt.atZone(zone);
+    LocalDate statDate = statDateTime.toLocalDate();
+    long successfulOperations = success ? 1L : 0L;
+    long failedOperations = success ? 0L : 1L;
+    ZonedDateTime createdDateTime = createdAt.atZone(zone);
+    OffsetDateTime zonedCreatedAt = createdDateTime.toOffsetDateTime();
     mapper.insertDaily(new DailyUsageRow(
-        createdAt.atZone(zone).toLocalDate(),
+        statDate,
         tenantId,
         SOURCE,
         metricCode,
         "",
         "",
         1L,
-        success ? 1L : 0L,
-        success ? 0L : 1L,
-        createdAt.atZone(zone).toOffsetDateTime()));
+        successfulOperations,
+        failedOperations,
+        zonedCreatedAt));
   }
 
   private String metricCode(String action) {
@@ -55,6 +64,7 @@ public class ConsoleUsageDailyRecorder implements ConsoleUsageRecorder {
     }
     String normalized = action.toLowerCase(Locale.ROOT);
     String metric = "operation." + normalized;
-    return metric.substring(0, Math.min(96, metric.length()));
+    int maxMetricEndIndex = Math.min(96, metric.length());
+    return metric.substring(0, maxMetricEndIndex);
   }
 }

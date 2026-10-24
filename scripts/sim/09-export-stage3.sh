@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：export-stage3.sh:Export 业务分支系统级验证。
+# 用法：在仓库根目录执行 bash scripts/sim/09-export-stage3.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # 09-export-stage3.sh:Export 业务分支系统级验证
 #
@@ -26,13 +28,13 @@ batch_require_python
 
 echo "==> apply bootstrap(export format runtime config)"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
-  -v ON_ERROR_STOP=1 -v mockserver_host_port="${MOCKSERVER_HOST_PORT:-11080}" \
-  -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
+  -v ON_ERROR_STOP=1 -v mockserver_host_port="${MOCKSERVER_HOST_PORT}" \
+  -f /dev/stdin < test-data/sim/sim-e2e-bootstrap.sql >/dev/null
 
 echo "==> seed small export source rows"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
   -v ON_ERROR_STOP=1 -v batch_no="$BATCH_NO" -f /dev/stdin \
-  < docs/test-data/sim-stage3-export-source.sql >/dev/null
+  < test-data/sim/sim-stage3-export-source.sql >/dev/null
 
 START_TS="$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -tA -f /dev/stdin < "$SIM_SQL_DIR/select-current-timestamp.sql")"
@@ -43,6 +45,7 @@ import json
 import os
 import subprocess
 import time
+from scripts.sim.launch_contract import workflow_id_for_fixture
 import urllib.request
 from pathlib import Path
 
@@ -78,7 +81,7 @@ def launch(label, template_code, batch_no):
     rid = f"sim-stage3-{label}-{int(time.time()*1000)%100000000}"
     body = {
         "tenantId": "ta",
-        "jobCode": "TA_EXPORT_REPORT",
+        "workflowDefinitionId": workflow_id_for_fixture("ta", "TA_EXPORT_REPORT"),
         "triggerType": "API",
         "bizDate": BIZ,
         "requestId": rid,
@@ -109,6 +112,24 @@ def launch(label, template_code, batch_no):
 
 for label, template_code, batch_no, expected in SCENARIOS:
     launch(label, template_code, batch_no)
+    # 每个租户/Workflow/bizDate 至多允许一个活跃的根 WorkflowRun。等待
+    # 此导出进入终态后，再为同一 Workflow 启动下一个模板。
+    deadline = time.time() + 180
+    while time.time() < deadline:
+        out = psql_file(
+            "count-export-stage3-terminal-template.sql",
+            {
+                "tenant_id": "ta",
+                "start_ts": START_TS,
+                "template_code": template_code,
+            },
+            tuples=True,
+        )
+        if int((out.stdout or "0").strip() or "0") > 0:
+            break
+        time.sleep(3)
+    else:
+        raise RuntimeError(f"export did not reach terminal state: {label}")
 
 print("==> wait worker terminal states", flush=True)
 deadline = time.time() + 180

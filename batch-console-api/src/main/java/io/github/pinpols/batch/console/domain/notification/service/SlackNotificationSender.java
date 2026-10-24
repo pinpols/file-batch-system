@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
@@ -61,42 +62,57 @@ public class SlackNotificationSender implements NotificationSender {
     }
     String body;
     try {
-      body = objectMapper.writeValueAsString(Map.of("text", buildSummary(message)));
+      String summary = buildSummary(message);
+      Map<String, String> payload = Map.of("text", summary);
+      body = objectMapper.writeValueAsString(payload);
     } catch (RuntimeException | IOException e) {
+      String tenantIdForLog = LogSanitizer.value(message.tenantId());
+      String channelCodeForLog = LogSanitizer.value(message.channelCode());
+      String exceptionTypeForLog = e.getClass().getSimpleName();
       log.warn(
           "[slack] payload serialize failed tenant={} channel={} ex={}",
-          LogSanitizer.value(message.tenantId()),
-          LogSanitizer.value(message.channelCode()),
-          e.getClass().getSimpleName());
+          tenantIdForLog,
+          channelCodeForLog,
+          exceptionTypeForLog);
       return WebhookDeliveryResult.failure(null, e.getClass().getSimpleName());
     }
 
     try {
-      OutboundHttpResponse response = httpTransport.execute(OutboundHttpRequest.post(
+      OutboundHttpContent httpContent = new OutboundHttpContent(body, JSON_MEDIA_TYPE);
+      OutboundHttpRequest request = OutboundHttpRequest.post(
           url,
           Map.of(),
-          body,
-          JSON_MEDIA_TYPE,
+          httpContent,
           CONNECT_TIMEOUT,
           REQUEST_TIMEOUT,
-          OutboundAddressPolicy.GUARDED));
+          OutboundAddressPolicy.GUARDED);
+      OutboundHttpResponse response = httpTransport.execute(request);
       int status = response.statusCode();
       String responseBody = response.body() == null ? "" : response.body();
-      if (status >= 200 && status < 300 && "ok".equals(responseBody.trim())) {
+      boolean successfulHttpStatus = status >= 200 && status < 300;
+      boolean responseConfirmsSlackSuccess =
+          successfulHttpStatus && "ok".equals(responseBody.trim());
+      if (responseConfirmsSlackSuccess) {
         return WebhookDeliveryResult.ok();
       }
+      String tenantIdForLog = LogSanitizer.value(message.tenantId());
+      String channelCodeForLog = LogSanitizer.value(message.channelCode());
       log.warn(
           "[slack] delivery rejected tenant={} channel={} status={}",
-          LogSanitizer.value(message.tenantId()),
-          LogSanitizer.value(message.channelCode()),
+          tenantIdForLog,
+          channelCodeForLog,
           status);
-      return WebhookDeliveryResult.failure(status, truncate(responseBody, ERROR_SUMMARY_MAX_CHARS));
+      String errorSummary = truncate(responseBody, ERROR_SUMMARY_MAX_CHARS);
+      return WebhookDeliveryResult.failure(status, errorSummary);
     } catch (RuntimeException | IOException e) {
+      String tenantIdForLog = LogSanitizer.value(message.tenantId());
+      String channelCodeForLog = LogSanitizer.value(message.channelCode());
+      String exceptionTypeForLog = e.getClass().getSimpleName();
       log.warn(
           "[slack] delivery failed tenant={} channel={} ex={}",
-          LogSanitizer.value(message.tenantId()),
-          LogSanitizer.value(message.channelCode()),
-          e.getClass().getSimpleName());
+          tenantIdForLog,
+          channelCodeForLog,
+          exceptionTypeForLog);
       return WebhookDeliveryResult.failure(null, e.getClass().getSimpleName());
     }
   }
@@ -122,7 +138,8 @@ public class SlackNotificationSender implements NotificationSender {
         message.payload() == null ? message.channelCode() : message.payload().eventType();
     String detail = message.payloadJson() == null ? "" : message.payloadJson();
     String summary = (eventType == null ? "" : eventType) + " " + detail;
-    return truncate(summary.trim(), SUMMARY_MAX_CHARS);
+    String trimmedSummary = summary.trim();
+    return truncate(trimmedSummary, SUMMARY_MAX_CHARS);
   }
 
   private String truncate(String text, int maxChars) {

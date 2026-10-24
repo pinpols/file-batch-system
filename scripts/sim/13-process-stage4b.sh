@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
+# 用途：process-stage4b.sh:Process 幂等重跑/失败恢复业务分支验证。
+# 用法：在仓库根目录执行 bash scripts/sim/13-process-stage4b.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # 13-process-stage4b.sh:Process 幂等重跑/失败恢复业务分支验证
 #
 # 覆盖:
-#   - 稳定 batchKey 重跑前清理同 key 残留 staging
+#   - 相同 batchKey 下旧 generation 的 staging 不会泄漏到新运行
 #   - JSONB staging -> UPSERT target 幂等更新,不重复
-#   - COMMIT/FEEDBACK 后 staging 清理为 0
+#   - COMMIT/FEEDBACK 后当前 generation 的 staging 清理完成
 #
 # 前置:Stage 4 基础 fixture 已存在(TA_PROCESS_STAGE4_JSONB)。
-# SQL seed 独立放在 docs/test-data,脚本只负责编排、触发、轮询、断言。
+# SQL seed 独立放在 test-data/sim,脚本只负责编排、触发、轮询、断言。
 # =========================================================
 set -euo pipefail
 
@@ -35,13 +37,14 @@ fi
 echo "==> seed process source v1 + stale staging"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
   -v ON_ERROR_STOP=1 -v biz_date="$BIZ_DATE" \
-  -f /dev/stdin < docs/test-data/sim-stage4b-process-source-v1.sql >/dev/null
+  -f /dev/stdin < test-data/sim/sim-stage4b-process-source-v1.sql >/dev/null
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
   -v ON_ERROR_STOP=1 -v batch_key="$BATCH_KEY" \
-  -f /dev/stdin < docs/test-data/sim-stage4b-process-stale-staging.sql >/dev/null
+  -f /dev/stdin < test-data/sim/sim-stage4b-process-stale-staging.sql >/dev/null
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/process-stage4b.log"
 import json, os, subprocess, sys, time, urllib.request
+from scripts.sim.launch_contract import workflow_id_for_fixture
 
 BASE = os.environ["TRIGGER_BASE"]
 SECRET = os.environ["INTERNAL_SECRET"]
@@ -73,7 +76,7 @@ def launch(label):
     rid = f"sim-stage4b-{label}-{int(time.time()*1000)%100000000}"
     body = {
         "tenantId": "ta",
-        "jobCode": "TA_PROCESS_STAGE4_JSONB",
+        "workflowDefinitionId": workflow_id_for_fixture("ta", "TA_PROCESS_STAGE4_JSONB"),
         "triggerType": "API",
         "bizDate": BIZ,
         "requestId": rid,
@@ -125,7 +128,7 @@ print("==> switch source to v2 and rerun same batchKey", flush=True)
 run([
     "docker", "exec", "-i", os.environ["PG_CONTAINER"], "psql", "-U", os.environ["POSTGRES_USER"],
     "-d", os.environ["BUSINESS_DB"], "-v", "ON_ERROR_STOP=1", "-v", f"biz_date={BIZ}", "-f", "/dev/stdin"
-], input=open("docs/test-data/sim-stage4b-process-source-v2.sql").read())
+], input=open("test-data/sim/sim-stage4b-process-source-v2.sql").read())
 
 rid2 = launch("rerun")
 wait_success(rid2)
@@ -150,8 +153,18 @@ staging_out = psql(
     staging_variables, tuples=True)
 summary = (target_out.stdout or "").strip() + "|" + (staging_out.stdout or "").strip()
 print(f"\n-- assertion_summary --\n{summary}", flush=True)
-if summary != "2|400.00|3|203|0":
-    print("❌ Process Stage4b assertion failed, expected 2|400.00|3|203|0", flush=True)
+if summary != "2|400.00|3|203|1":
+    print("❌ Process Stage4b assertion failed, expected 2|400.00|3|203|1 (only the isolated stale generation remains)", flush=True)
+    sys.exit(1)
+
+psql(
+    os.environ["BUSINESS_DB"], "cleanup-process-stage4b-stale-generation.sql",
+    {"tenant_id": "ta", "batch_key": BATCH_KEY})
+remaining = psql(
+    os.environ["BUSINESS_DB"], "count-process-stage4b-staging.sql",
+    staging_variables, tuples=True)
+if (remaining.stdout or "").strip() != "0":
+    print("❌ Process Stage4b fixture cleanup left staging rows", flush=True)
     sys.exit(1)
 
 print(f"\n==> Stage 4b process scenario PASS: batchNo={BATCH} batchKey={BATCH_KEY}", flush=True)

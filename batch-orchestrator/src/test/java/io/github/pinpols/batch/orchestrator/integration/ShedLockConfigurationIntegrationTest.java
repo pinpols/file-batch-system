@@ -3,11 +3,14 @@ package io.github.pinpols.batch.orchestrator.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.config.MeteredLockProvider;
+import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
+import io.github.pinpols.batch.common.redis.BatchRedisNamespaceSerializer;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -22,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 /**
  * 集成冒烟：确认 ShedLock 在 Flyway 与测试基础设施之后仍可正常装配。
@@ -31,7 +35,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
  */
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+    webEnvironment = SpringBootTest.WebEnvironment.NONE,
+    properties = "batch.kafka.namespace=shedlock-isolation-test")
 @DisplayName("分布式锁配置:锁表迁移结果,锁提供者装配类型,以及互斥获取与到期重入行为")
 class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
 
@@ -44,15 +49,19 @@ class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   DataSource dataSource;
 
+  @Autowired
+  StringRedisTemplate redisTemplate;
+
   @Test
   @DisplayName("数据库迁移后锁表存在,且装配的锁提供者为 Redis 实现并注入数据源")
   void shouldCreateShedLockTableFromFlywayAndConfigureRedisLockProvider() {
-    Integer tableCount = jdbcTemplate.queryForObject("""
+    String shedLockTableCountSql = """
             select count(*)
             from information_schema.tables
             where table_schema = 'batch'
               and table_name = 'shedlock'
-            """, Integer.class);
+            """;
+    Integer tableCount = jdbcTemplate.queryForObject(shedLockTableCountSql, Integer.class);
 
     assertThat(tableCount).isEqualTo(1);
     assertThat(lockProvider)
@@ -60,6 +69,51 @@ class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
             MeteredLockProvider.class,
             provider -> assertThat(provider.providerType()).isEqualTo("redis"));
     assertThat(dataSource).isNotNull();
+  }
+
+  @Test
+  @DisplayName("部署命名空间隔离 Redis ShedLock key,同时保留应用级前缀")
+  void shouldNamespaceRedisLockKeyByDeployment() {
+    String lockName = "it-lock-namespace-" + System.nanoTime();
+    Optional<SimpleLock> lock = lockProvider.lock(new LockConfiguration(
+        BatchDateTimeSupport.utcNow(), lockName, Duration.ofSeconds(20), Duration.ZERO));
+    StringRedisTemplate rawTemplate =
+        new StringRedisTemplate(redisTemplate.getConnectionFactory());
+    rawTemplate.afterPropertiesSet();
+
+    assertThat(lock).isPresent();
+    Set<String> lockKeys = rawTemplate.keys("*" + lockName);
+    assertThat(lockKeys)
+        .isNotEmpty()
+        .allMatch(key -> key.startsWith(
+            "job-lock:shedlock:shedlock-isolation-test:batch-orchestrator:"));
+    lock.ifPresent(SimpleLock::unlock);
+  }
+
+  @Test
+  @DisplayName("StringRedisTemplate 的所有业务 key 自动按部署隔离且跨 namespace 不可见")
+  void shouldNamespaceTemplateKeysAndHideThemFromOtherDeployments() {
+    String logicalKey = "it-template-namespace-" + System.nanoTime();
+    String physicalKey = "shedlock-isolation-test:" + logicalKey;
+    StringRedisTemplate rawTemplate =
+        new StringRedisTemplate(redisTemplate.getConnectionFactory());
+    rawTemplate.afterPropertiesSet();
+    StringRedisTemplate otherNamespaceTemplate =
+        new StringRedisTemplate(redisTemplate.getConnectionFactory());
+    otherNamespaceTemplate.setKeySerializer(
+        new BatchRedisNamespaceSerializer(new BatchRedisNamespace("other-deployment")));
+    otherNamespaceTemplate.afterPropertiesSet();
+
+    try {
+      redisTemplate.opsForValue().set(logicalKey, "namespaced-value", Duration.ofSeconds(30));
+
+      assertThat(redisTemplate.opsForValue().get(logicalKey)).isEqualTo("namespaced-value");
+      assertThat(otherNamespaceTemplate.opsForValue().get(logicalKey)).isNull();
+      assertThat(rawTemplate.opsForValue().get(physicalKey)).isEqualTo("namespaced-value");
+      assertThat(rawTemplate.opsForValue().get(logicalKey)).isNull();
+    } finally {
+      redisTemplate.delete(logicalKey);
+    }
   }
 
   @Test

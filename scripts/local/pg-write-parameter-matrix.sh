@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：针对 import COPY/UPSERT 跑一个小而可重复的 PG 写参数矩阵。
+# 用法：在仓库根目录执行 bash scripts/local/pg-write-parameter-matrix.sh；参数与前置环境见下方说明及所属 README。
 # 针对 import COPY/UPSERT 跑一个小而可重复的 PG 写参数矩阵。
 #
 # 范围:

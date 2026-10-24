@@ -4,7 +4,7 @@
 >
 > **当前发布流程以 [`releasing.md`](../../runbook/releasing.md) 为唯一权威源**;本文件仅作为未来恢复 GitOps 时的历史蓝图保留,**不要按此执行**。
 >
-> 前置环境搭建见 [gitops-onboarding-2026-05-22.md](../../runbook/gitops-onboarding-2026-05-22.md)。
+> 前置环境搭建见 [gitops-onboarding.md](../../runbook/gitops-onboarding.md)。
 
 ---
 
@@ -157,6 +157,6 @@ helm rollback batch-platform <revision> -n batch-prod
 
 ## 7. 相关文档
 
-- [gitops-onboarding-2026-05-22.md](../../runbook/gitops-onboarding-2026-05-22.md)(环境搭建)
+- [gitops-onboarding.md](../../runbook/gitops-onboarding.md)(环境搭建)
 - [ci-cd-followup-2026-05-22.md](../../runbook/ci-cd-followup-2026-05-22.md)(CI/CD 跟进)
 - [incident-response.md](../../runbook/incident-response.md)(事故响应)

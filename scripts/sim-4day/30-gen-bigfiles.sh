@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：ADR-sim 4day · P3 大文件:生成几个大 CSV 投到 MinIO ingress,演示大文件摄取(扫描器登记 + 真实体积)。
+# 用法：在仓库根目录执行 bash scripts/sim-4day/30-gen-bigfiles.sh；参数与前置环境见下方说明及所属 README。
 # ADR-sim 4day · P3 大文件:生成几个大 CSV 投到 MinIO ingress,演示大文件摄取(扫描器登记 + 真实体积)。
 # 注:本环境 import 真加载走「内联 content」(40-run-day),大文件主要演示 ingest/scan/登记大对象;
 #     体积可观(默认 customer 80万行≈70MB / transaction 150万行≈120MB / risk 50万行≈30MB)。

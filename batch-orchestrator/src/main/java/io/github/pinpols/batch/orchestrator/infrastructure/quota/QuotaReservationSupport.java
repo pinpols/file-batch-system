@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.quota;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService.QuotaReservationRequest;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.QuotaResetPolicy;
@@ -13,13 +14,15 @@ final class QuotaReservationSupport {
   private QuotaReservationSupport() {}
 
   static Precheck precheck(QuotaReservationRequest request) {
-    if (request == null
+    boolean reservationRequestIsNotApplicable =
+        EmptyChecks.isNull(request)
         || request.owner() == null
         || !Texts.hasText(request.owner().tenantId())
         || !Texts.hasText(request.owner().quotaScope())
         || !Texts.hasText(request.owner().ownerCode())
         || request.policy() == null
-        || request.policy().baseCap() <= 0) {
+        || request.policy().baseCap() <= 0;
+    if (reservationRequestIsNotApplicable) {
       return Precheck.notApplicable();
     }
     int normalizedBurst = Math.max(0, request.policy().burstLimit());

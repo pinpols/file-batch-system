@@ -87,29 +87,31 @@ class ApprovalCommandQueryIntegrationTest extends AbstractIntegrationTest {
 
   private void insertApproval(
       String tenantId, String approvalNo, String approvalType, String actionType, String status) {
-    jdbcTemplate.update("""
-        INSERT INTO batch.approval_command
-          (tenant_id, approval_no, approval_type, action_type, target_type, target_id, payload_json,
-           approval_status, requester_id, source_trace_id, source_idempotency_key, approval_reason,
-           created_at, updated_at)
-        VALUES (?, ?, ?, ?, 'JOB', '1', '{}'::jsonb,
-                ?, 'u1', 'trace-1', 'idem-1', 'reason',
-                now(), now())
-        """, tenantId, approvalNo, approvalType, actionType, status);
+    final String insertApprovalSql = """
+    INSERT INTO batch.approval_command
+    (tenant_id, approval_no, approval_type, action_type, target_type, target_id, payload_json,
+    approval_status, requester_id, source_trace_id, source_idempotency_key, approval_reason,
+    created_at, updated_at)
+    VALUES (?, ?, ?, ?, 'JOB', '1', '{}'::jsonb,
+    ?, 'u1', 'trace-1', 'idem-1', 'reason',
+    now(), now())
+    """;
+    jdbcTemplate.update(insertApprovalSql, tenantId, approvalNo, approvalType, actionType, status);
   }
 
   private void insertApprovalRich(
       String tenantId, String approvalNo, String requesterId, String targetType, String targetId) {
+    final String insertRichApprovalSql = """
+    INSERT INTO batch.approval_command
+    (tenant_id, approval_no, approval_type, action_type, target_type, target_id, payload_json,
+    approval_status, requester_id, source_trace_id, source_idempotency_key, approval_reason,
+    created_at, updated_at)
+    VALUES (?, ?, 'DOWNLOAD', 'DOWNLOAD', ?, ?, '{}'::jsonb,
+    'PENDING', ?, ?, ?, 'reason',
+    now(), now())
+    """;
     jdbcTemplate.update(
-        """
-        INSERT INTO batch.approval_command
-          (tenant_id, approval_no, approval_type, action_type, target_type, target_id, payload_json,
-           approval_status, requester_id, source_trace_id, source_idempotency_key, approval_reason,
-           created_at, updated_at)
-        VALUES (?, ?, 'DOWNLOAD', 'DOWNLOAD', ?, ?, '{}'::jsonb,
-                'PENDING', ?, ?, ?, 'reason',
-                now(), now())
-        """,
+        insertRichApprovalSql,
         tenantId,
         approvalNo,
         targetType,

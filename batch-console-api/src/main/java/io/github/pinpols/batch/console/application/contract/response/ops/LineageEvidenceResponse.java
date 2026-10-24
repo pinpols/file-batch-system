@@ -1,13 +1,13 @@
 package io.github.pinpols.batch.console.application.contract.response.ops;
 
+import lombok.Builder;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
-import lombok.Builder;
-
 /** BFS 结果版本的固定证据契约，只有文件 metadata 保留动态 JSON。 */
 public record LineageEvidenceResponse(
     ResultVersion resultVersion,
@@ -61,7 +61,6 @@ public record LineageEvidenceResponse(
   public record PipelineInstance(
       Long id,
       @JsonProperty("tenant_id") String tenantId,
-      @JsonProperty("pipeline_definition_id") Long pipelineDefinitionId,
       @JsonProperty("job_code") String jobCode,
       @JsonProperty("pipeline_type") String pipelineType,
       @JsonProperty("file_id") Long fileId,

@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.orchestrator.domain.scheduling;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 
 public enum QuotaResetPolicy {
@@ -13,7 +15,9 @@ public enum QuotaResetPolicy {
       return NONE;
     }
     try {
-      return QuotaResetPolicy.valueOf(value.trim().toUpperCase());
+      String trimmedValue = value.trim();
+      String normalizedValue = trimmedValue.toUpperCase();
+      return QuotaResetPolicy.valueOf(normalizedValue);
     } catch (IllegalArgumentException ex) {
       SwallowedExceptionLogger.info(QuotaResetPolicy.class, "catch:IllegalArgumentException", ex);
 
@@ -26,6 +30,8 @@ public enum QuotaResetPolicy {
   }
 
   public static ZonedDateTime startOfCalendarDay(ZonedDateTime dateTime) {
-    return dateTime.toLocalDate().atStartOfDay(dateTime.getZone());
+    LocalDate calendarDate = dateTime.toLocalDate();
+    ZoneId timeZone = dateTime.getZone();
+    return calendarDate.atStartOfDay(timeZone);
   }
 }

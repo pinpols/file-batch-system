@@ -161,6 +161,15 @@
         where tenant_id = #{tenantId}
           and id = #{id}
           and version = #{expectedVersion}
+          and (
+              #{relatedFileId,jdbcType=BIGINT} is null
+              or exists (
+                  select 1
+                    from batch.file_record file
+                   where file.id = #{relatedFileId,jdbcType=BIGINT}
+                     and file.tenant_id = #{tenantId}
+              )
+          )
     </update>
 
     <update id="resetForRetryByJobTaskId">

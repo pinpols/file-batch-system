@@ -62,17 +62,21 @@ class ConsoleFileTemplateMutationIntegrationTest extends AbstractMutationIntegra
         .expectStatus()
         .isOk();
 
-    var row = jdbcTemplate.queryForMap(
-        "SELECT tenant_id, template_code, template_type, charset, encrypt_type"
-            + " FROM batch.file_template_config WHERE template_code = ?",
-        code);
+    String fileTemplateSnapshotSql = """
+        select tenant_id, template_code, template_type, charset, encrypt_type
+        from batch.file_template_config where template_code = ?
+        """;
+    var row = jdbcTemplate.queryForMap(fileTemplateSnapshotSql, code);
     assertThat(row).containsEntry("tenant_id", "int-ft-ta");
     assertThat(row).containsEntry("template_code", code);
     assertThat(row).containsEntry("template_type", "IMPORT");
     assertThat(row).containsEntry("charset", "UTF-8");
     assertThat(row).containsEntry("encrypt_type", "NONE");
 
-    jdbcTemplate.update("DELETE FROM batch.file_template_config WHERE template_code = ?", code);
+    String deleteFileTemplateConfigSql = """
+        delete from batch.file_template_config where template_code = ?
+    """;
+    jdbcTemplate.update(deleteFileTemplateConfigSql, code);
   }
 
   @Test
@@ -90,10 +94,10 @@ class ConsoleFileTemplateMutationIntegrationTest extends AbstractMutationIntegra
         .expectBody(String.class)
         .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
 
-    Long cnt = jdbcTemplate.queryForObject(
-        "SELECT COUNT(*) FROM batch.file_template_config WHERE template_code = ?",
-        Long.class,
-        "q q q");
+    String fileTemplateCountSql = """
+        select count(*) from batch.file_template_config where template_code = ?
+        """;
+    Long cnt = jdbcTemplate.queryForObject(fileTemplateCountSql, Long.class, "q q q");
     assertThat(cnt).isZero();
   }
 
@@ -135,6 +139,9 @@ class ConsoleFileTemplateMutationIntegrationTest extends AbstractMutationIntegra
         .expectStatus()
         .value(s -> assertThat(s).isIn(400, 409, 500));
 
-    jdbcTemplate.update("DELETE FROM batch.file_template_config WHERE template_code = ?", code);
+    String deleteFileTemplateConfigSql = """
+        delete from batch.file_template_config where template_code = ?
+    """;
+    jdbcTemplate.update(deleteFileTemplateConfigSql, code);
   }
 }

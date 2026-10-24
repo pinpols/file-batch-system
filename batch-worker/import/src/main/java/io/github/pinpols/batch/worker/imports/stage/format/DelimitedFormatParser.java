@@ -5,6 +5,7 @@ import com.univocity.parsers.csv.CsvParserSettings;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
@@ -60,7 +61,8 @@ public class DelimitedFormatParser implements FormatParser {
         : headerRows > 0;
     String delimiter = resolveDelimiter(importPayload, templateConfig);
 
-    CsvParser parser = new CsvParser(buildSettings(delimiter));
+    CsvParserSettings parserSettings = buildSettings(delimiter);
+    CsvParser parser = new CsvParser(parserSettings);
     // 无表头时按位置绑定:列名取模板 field_mappings 的 name 顺序(模板缺省才回退硬编码示例 schema);
     // 有表头时此初值会被文件首行覆盖(见下方 withHeader 分支)。
     List<String> headers = support.positionalHeaders(templateConfig);
@@ -73,7 +75,9 @@ public class DelimitedFormatParser implements FormatParser {
       int nonBlankLineNo = 0;
       while ((row = parser.parseNext()) != null) {
         nonBlankLineNo++;
-        if ((withHeader || headerRows > 0) && nonBlankLineNo <= Math.max(headerRows, 1)) {
+        boolean lineBelongsToHeader =
+            (withHeader || headerRows > 0) && nonBlankLineNo <= Math.max(headerRows, 1);
+        if (lineBelongsToHeader) {
           if (nonBlankLineNo == 1) {
             headers = toHeaders(row);
             // 与 Excel 对齐:配了 field_mappings 时,required 列必须在文件表头里找到——
@@ -174,9 +178,11 @@ public class DelimitedFormatParser implements FormatParser {
       if (src == null || !Texts.hasText(String.valueOf(src))) {
         continue;
       }
-      String source = String.valueOf(src).trim();
+      String rawSource = String.valueOf(src);
+      String source = rawSource.trim();
       // 大小写/下划线容错:与 LOAD 的 from↔表头匹配一致
-      if (!headerKeys.contains(ParseSupport.matchKey(source))) {
+      String sourceMatchKey = ParseSupport.matchKey(source);
+      if (!headerKeys.contains(sourceMatchKey)) {
         missing.add(source);
       }
     }
@@ -193,7 +199,12 @@ public class DelimitedFormatParser implements FormatParser {
     if (value instanceof Boolean b) {
       return b;
     }
-    return value != null && "true".equalsIgnoreCase(String.valueOf(value).trim());
+    if (EmptyChecks.isNull(value)) {
+      return false;
+    }
+    String rawText = String.valueOf(value);
+    String text = rawText.trim();
+    return "true".equalsIgnoreCase(text);
   }
 
   private static boolean isAllBlank(String[] row) {

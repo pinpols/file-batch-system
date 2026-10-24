@@ -47,11 +47,9 @@ public class DistributedLockAspect {
     String lockKey = resolveKey(ann, method, pjp.getArgs(), signature);
 
     Instant now = BatchDateTimeSupport.utcNow();
-    LockConfiguration config = new LockConfiguration(
-        now,
-        lockKey,
-        Duration.ofSeconds(ann.leaseSeconds()),
-        Duration.ofSeconds(ann.atLeastSeconds()));
+    Duration lockAtMostFor = Duration.ofSeconds(ann.leaseSeconds());
+    Duration lockAtLeastFor = Duration.ofSeconds(ann.atLeastSeconds());
+    LockConfiguration config = new LockConfiguration(now, lockKey, lockAtMostFor, lockAtLeastFor);
 
     Throwable[] thrown = new Throwable[1];
     Object[] result = new Object[1];

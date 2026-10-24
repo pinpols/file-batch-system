@@ -1,4 +1,5 @@
 -- 记录 Worker 注册时声明的执行器能力，供 Console 运维展示；调度仍使用 capability_tags。
+
 ALTER TABLE batch.worker_registry
     ADD COLUMN task_capabilities JSONB;
 

@@ -2,7 +2,10 @@ package io.github.pinpols.batch.orchestrator.infrastructure.timeout;
 
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.orchestrator.application.service.task.WorkflowRunResumeProgressor;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
@@ -23,13 +26,13 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * workflow_run stuck 回退（参考 docs/archive/analysis/orchestrator-vs-industry-2026-05-03.md §2.2）。
+ * workflow_run stuck 回退（参考 docs/archive/audit/orchestrator-vs-industry-2026-05-03.md §2.2）。
  *
  * <p>主路径靠 {@code DefaultTaskOutcomeService} 反向推进 workflow_run；如果 task outcome 永远不来 （task 全 stuck /
  * partition 已 reclaim 但 workflow_run 没收到信号），workflow_run 会永远 RUNNING。
  *
- * <p>本 reconciler 周期扫 RUNNING 中且 {@code updated_at} 早于 stuck threshold 的 workflow_run，对每个 候选检查所有
- * {@code workflow_node_run}：
+ * <p>本 reconciler 周期扫 RUNNING 中且 {@code updated_at} 早于 stuck threshold 的 workflow_run，先根据已持久化的成功节点重放
+ * 未完成的 DAG 推进（覆盖进程在 resume 状态提交后丢失 after-commit 回调的窗口），再检查节点状态：
  *
  * <ul>
  *   <li>有 node 仍 READY/RUNNING → 不动（可能正常长跑或下游正在推进，由 timeout enforcer / lease reclaim 回退）
@@ -40,7 +43,7 @@ import org.springframework.stereotype.Component;
  *       </ul>
  * </ul>
  *
- * <p>CAS 守护 expectedStatuses=[RUNNING]，命中 0 行说明并发已推进，安静跳过。
+ * <p>CAS 守护 expectedStatuses=[RUNNING]，命中 0 行说明并发已推进，安静跳过。现有节点派发幂等围栏防止恢复扫描重复创建任务。
  */
 @Slf4j
 @Component
@@ -57,6 +60,7 @@ public class WorkflowRunStuckReconciler {
 
   private final WorkflowRunMapper workflowRunMapper;
   private final WorkflowNodeRunMapper workflowNodeRunMapper;
+  private final WorkflowRunResumeProgressor workflowRunResumeProgressor;
   private final BatchOrchestratorGovernanceProperties governance;
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final MeterRegistry meterRegistry;
@@ -89,14 +93,12 @@ public class WorkflowRunStuckReconciler {
       int finalized = 0;
       int skipped = 0;
       for (WorkflowRunEntity wr : candidates) {
-        FinalizeAction action = decideFinalization(wr);
-        if (action == FinalizeAction.SKIP) {
-          skipped++;
-          continue;
-        }
-        boolean ok = applyFinalize(wr, action);
-        if (ok) {
+        CandidateResult result =
+            RlsTenantContextHolder.runWithTenant(wr.getTenantId(), () -> reconcileCandidate(wr));
+        if (result == CandidateResult.FINALIZED) {
           finalized++;
+        } else if (result == CandidateResult.ACTIVE_NODES) {
+          skipped++;
         }
       }
       if (finalized > 0 || skipped > 0) {
@@ -112,6 +114,26 @@ public class WorkflowRunStuckReconciler {
     } finally {
       running.set(false);
     }
+  }
+
+  private CandidateResult reconcileCandidate(WorkflowRunEntity candidate) {
+    // 进程可能在恢复状态提交后、事务提交回调触发 DAG
+    // 推进前停止。先根据已持久化的成功节点运行记录协调，
+    // 再判断过期根运行是否应进入终态；派发守卫会安全处理已活动节点。
+    workflowRunResumeProgressor.resume(candidate.getTenantId(), candidate.getId());
+    WorkflowRunEntity refreshed =
+        workflowRunMapper.selectById(candidate.getTenantId(), candidate.getId());
+    boolean refreshedRunIsMissingOrNotRunning =
+        EmptyChecks.isNull(refreshed)
+            || !WorkflowRunStatus.RUNNING.code().equals(refreshed.getRunStatus());
+    if (refreshedRunIsMissingOrNotRunning) {
+      return CandidateResult.NO_ACTION;
+    }
+    FinalizeAction action = decideFinalization(refreshed);
+    if (action == FinalizeAction.SKIP) {
+      return CandidateResult.ACTIVE_NODES;
+    }
+    return applyFinalize(refreshed, action) ? CandidateResult.FINALIZED : CandidateResult.NO_ACTION;
   }
 
   private FinalizeAction decideFinalization(WorkflowRunEntity wr) {
@@ -175,5 +197,11 @@ public class WorkflowRunStuckReconciler {
     SUCCESS,
     FAIL,
     SKIP
+  }
+
+  private enum CandidateResult {
+    FINALIZED,
+    ACTIVE_NODES,
+    NO_ACTION
   }
 }

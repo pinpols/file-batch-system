@@ -6,6 +6,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.infrastructure.realtime.ConsoleRealtimeRedisPubSubConsumer;
 import io.github.pinpols.batch.console.infrastructure.realtime.ConsoleRealtimeRedisPublisher;
@@ -52,6 +53,7 @@ class ConsoleRealtimeRedisPubSubConsumerTest {
     when(instanceIdProvider.instanceId()).thenReturn("console-a");
     consumer = new ConsoleRealtimeRedisPubSubConsumer(
         redisTemplate,
+        new BatchRedisNamespace(""),
         realtimeEventHub,
         summaryRealtimeStream,
         instanceIdProvider,

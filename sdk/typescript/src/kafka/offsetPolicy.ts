@@ -47,7 +47,9 @@ export function offsetAction(
 ): OffsetAction {
   if (disposition === "commit") {
     // kafkajs commits the NEXT offset to read (i.e. current + 1).
-    return { type: "commit", topic, partition, offset: (BigInt(offset) + 1n).toString() };
+    const nextOffset = BigInt(offset) + 1n;
+    const nextOffsetText = nextOffset.toString();
+    return { type: "commit", topic, partition, offset: nextOffsetText };
   }
   if (disposition === "withhold") {
     // ceiling is the record's OWN offset — a later commit must never cross it.
@@ -63,7 +65,9 @@ export function offsetAction(
  */
 export function loweredCeiling(current: string | undefined, recordOffset: string): string {
   if (current === undefined) return recordOffset;
-  return BigInt(recordOffset) < BigInt(current) ? recordOffset : current;
+  const recordOffsetValue = BigInt(recordOffset);
+  const currentCeilingValue = BigInt(current);
+  return recordOffsetValue < currentCeilingValue ? recordOffset : current;
 }
 
 /**
@@ -78,7 +82,9 @@ export function commitBlockedByWithheld(
   recordOffset: string,
 ): boolean {
   if (ceiling === undefined) return false;
-  return BigInt(recordOffset) >= BigInt(ceiling);
+  const recordOffsetValue = BigInt(recordOffset);
+  const ceilingValue = BigInt(ceiling);
+  return recordOffsetValue >= ceilingValue;
 }
 
 /**

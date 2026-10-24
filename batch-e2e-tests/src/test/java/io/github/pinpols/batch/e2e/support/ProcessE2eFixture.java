@@ -2,17 +2,19 @@ package io.github.pinpols.batch.e2e.support;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.enums.SystemPipelineTaskKeys;
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * PROCESS e2e 共享 fixture：业务行 seed、pipeline_definition + pipeline_step_definition seed、 SQL
- * transform spec 构造，避免 happy 与 failure 两个 IT 类重复维护。
+ * PROCESS e2e 共享 fixture：业务行 seed、作业执行参数配置和 SQL transform spec 构造，避免 happy
+ * 与 failure 两个 IT 类重复维护。
  *
- * <p>业务 schema 由 {@link E2eBusinessSchema} 在独立 e2eBusinessDataSource 上加载，本类只负责行级 seed / 清理 /
- * pipeline 定义注入。pipeline 定义本身写入平台库，业务行和 process staging 写入业务库。
+ * <p>业务 schema 由 {@link E2eBusinessSchema} 在独立 e2eBusinessDataSource 上加载。本类不写入租户 Pipeline
+ * 定义；场景参数保存在 Job 默认执行参数中，由系统 Pipeline 执行。
  */
 public final class ProcessE2eFixture {
 
@@ -20,102 +22,129 @@ public final class ProcessE2eFixture {
 
   /** 清空 PROCESS 业务表行 + staging，确保测试间互相独立。表本身由 E2eBusinessSchema 创建。 */
   public static void cleanProcessRows(JdbcTemplate jdbcTemplate) {
-    jdbcTemplate.execute("delete from biz.process_order_event");
-    jdbcTemplate.execute("delete from biz.process_account_summary");
-    jdbcTemplate.execute("delete from batch.process_staging");
+    final String deleteProcessOrderEventSql = """
+        delete from biz.process_order_event
+    """;
+    final String deleteProcessAccountSummarySql = """
+        delete from biz.process_account_summary
+    """;
+    final String deleteProcessStagingSql = """
+        delete from batch.process_staging
+    """;
+
+    jdbcTemplate.execute(deleteProcessOrderEventSql);
+    jdbcTemplate.execute(deleteProcessAccountSummarySql);
+    jdbcTemplate.execute(deleteProcessStagingSql);
   }
 
   /** 写入 sqlTransform e2e 的演示数据：A=10+20、B=7。 */
   public static void seedDemoOrderEvents(JdbcTemplate jdbcTemplate, String tenantId) {
-    jdbcTemplate.update("""
-        insert into biz.process_order_event values
-          (?, 'A', date '2026-01-15', 1, 10.00),
-          (?, 'A', date '2026-01-15', 2, 20.00),
-          (?, 'B', date '2026-01-15', 3, 7.00)
-        """, tenantId, tenantId, tenantId);
+    seedDemoOrderEvents(jdbcTemplate, tenantId, LocalDate.of(2026, 1, 15));
   }
 
-  /** 写入 sqlTransform PROCESS pipeline 定义（5 stage：PREPARE/COMPUTE/VALIDATE/COMMIT/FEEDBACK）。 */
-  public static Long seedSqlTransformPipelineDefinition(
+  /** 按测试业务日写入 sqlTransform e2e 的演示数据：A=10+20、B=7。 */
+  public static void seedDemoOrderEvents(
+      JdbcTemplate jdbcTemplate, String tenantId, LocalDate bizDate) {
+    final String insertProcessOrderEventSql = """
+        insert into biz.process_order_event values
+          (?, 'A', ?, 1, 10.00),
+          (?, 'A', ?, 2, 20.00),
+          (?, 'B', ?, 3, 7.00)
+        """;
+
+    jdbcTemplate.update(
+        insertProcessOrderEventSql,
+        tenantId,
+        bizDate,
+        tenantId,
+        bizDate,
+        tenantId,
+        bizDate);
+  }
+
+  /** 配置系统 PROCESS Pipeline 的 SQL transform 运行参数。 */
+  public static void configureSqlTransformJobParameters(
       JdbcTemplate jdbcTemplate,
       ObjectMapper objectMapper,
       String tenantId,
       String jobCode,
       List<Map<String, Object>> validations)
       throws JsonProcessingException {
-    Long pipelineDefinitionId =
-        insertPipelineDefinition(jdbcTemplate, tenantId, jobCode, "e2e wap sql transform pipeline");
     Map<String, Object> spec = sqlTransformSpec();
     if (!validations.isEmpty()) {
       spec.put("validations", validations);
     }
-    Map<String, Object> stepParams = Map.of("sqlTransformCompute", spec);
-
-    insertProcessSteps(
-        jdbcTemplate,
-        pipelineDefinitionId,
-        List.of(
-            new ProcessStepSeed("PROCESS_PREPARE", "PREPARE", "PROCESS_PREPARE", "{}"),
-            new ProcessStepSeed(
-                "PROCESS_COMPUTE",
-                "COMPUTE",
-                "sqlTransformCompute",
-                objectMapper.writeValueAsString(stepParams)),
-            new ProcessStepSeed("PROCESS_VALIDATE", "VALIDATE", "PROCESS_VALIDATE", "{}"),
-            new ProcessStepSeed("PROCESS_COMMIT", "COMMIT", "PROCESS_COMMIT", "{}"),
-            new ProcessStepSeed("PROCESS_FEEDBACK", "FEEDBACK", "PROCESS_FEEDBACK", "{}")));
-    return pipelineDefinitionId;
+    Map<String, Object> params = Map.of(
+        "processImplCode",
+        "sqlTransformCompute",
+        SystemPipelineTaskKeys.STEP_PARAMS,
+        Map.of("COMPUTE", Map.of("sqlTransformCompute", spec)));
+    updateJobParameters(jdbcTemplate, objectMapper, tenantId, jobCode, params);
   }
 
-  /** 写入自定义 plugin 路径的 PROCESS pipeline 定义（只重写 COMPUTE 的 implCode，其他 stage 默认 no-op）。 */
-  public static Long seedCustomPluginPipelineDefinition(
+  /** 为 PROCESS 重试生命周期 E2E 配置确定性的账户到分区路由。 */
+  public static void configurePartitionedSqlTransformJobParameters(
+      JdbcTemplate jdbcTemplate, ObjectMapper objectMapper, String tenantId, String jobCode)
+      throws JsonProcessingException {
+    Map<String, Object> spec = sqlTransformSpec();
+    spec.put("sourceSql", """
+        select tenant_id,
+               account_id,
+               biz_date,
+               sum(amount) as total_amount,
+               max(event_id) as high_water_mark
+        from biz.process_order_event
+        where tenant_id = :tenantId
+          and biz_date = cast(:bizDate as date)
+          and case account_id when 'A' then 1 else 2 end = :partitionNo
+        group by tenant_id, account_id, biz_date
+        """);
+    Map<String, Object> params = Map.of(
+        "processImplCode",
+        "sqlTransformCompute",
+        SystemPipelineTaskKeys.STEP_PARAMS,
+        Map.of("COMPUTE", Map.of("sqlTransformCompute", spec)));
+    updateJobParameters(jdbcTemplate, objectMapper, tenantId, jobCode, params);
+  }
+
+  /** 配置系统 PROCESS Pipeline 的自定义 COMPUTE 插件参数。 */
+  public static void configureCustomPluginJobParameters(
       JdbcTemplate jdbcTemplate,
+      ObjectMapper objectMapper,
       String tenantId,
       String jobCode,
       String customComputeImplCode,
-      String computeStepParamsJson) {
-    Long pipelineDefinitionId = insertPipelineDefinition(
-        jdbcTemplate, tenantId, jobCode, "e2e custom plugin process pipeline");
-    insertProcessSteps(
-        jdbcTemplate,
-        pipelineDefinitionId,
-        List.of(
-            new ProcessStepSeed("PROCESS_PREPARE", "PREPARE", "PROCESS_PREPARE", "{}"),
-            new ProcessStepSeed(
-                "PROCESS_COMPUTE", "COMPUTE", customComputeImplCode, computeStepParamsJson),
-            new ProcessStepSeed("PROCESS_VALIDATE", "VALIDATE", "PROCESS_VALIDATE", "{}"),
-            new ProcessStepSeed("PROCESS_COMMIT", "COMMIT", "PROCESS_COMMIT", "{}"),
-            new ProcessStepSeed("PROCESS_FEEDBACK", "FEEDBACK", "PROCESS_FEEDBACK", "{}")));
-    return pipelineDefinitionId;
+      String computeStepParamsJson)
+      throws JsonProcessingException {
+    Map<String, Object> computeParams = objectMapper.readValue(
+        computeStepParamsJson,
+        objectMapper.getTypeFactory().constructMapType(Map.class, String.class, Object.class));
+    Map<String, Object> params = Map.of(
+        "processImplCode",
+        customComputeImplCode,
+        SystemPipelineTaskKeys.STEP_PARAMS,
+        Map.of("COMPUTE", Map.of(customComputeImplCode, computeParams)));
+    updateJobParameters(jdbcTemplate, objectMapper, tenantId, jobCode, params);
   }
 
-  private static Long insertPipelineDefinition(
-      JdbcTemplate jdbcTemplate, String tenantId, String jobCode, String pipelineName) {
-    return jdbcTemplate.queryForObject("""
-        insert into batch.pipeline_definition (
-            tenant_id, job_code, pipeline_name, pipeline_type, biz_type, worker_group, version, enabled
-        ) values (?, ?, ?, 'PROCESS', 'E2E', 'PROCESS', 1, true)
-        returning id
-        """, Long.class, tenantId, jobCode, pipelineName);
-  }
+  private static void updateJobParameters(
+      JdbcTemplate jdbcTemplate,
+      ObjectMapper objectMapper,
+      String tenantId,
+      String jobCode,
+      Map<String, Object> parameters)
+      throws JsonProcessingException {
+    final String updateJobDefinitionSql = """
+        update batch.job_definition
+           set default_params = coalesce(default_params, '{}'::jsonb) || ?::jsonb,
+               updated_at = current_timestamp
+         where tenant_id = ? and job_code = ?
+        """;
 
-  private static void insertProcessSteps(
-      JdbcTemplate jdbcTemplate, Long pipelineDefinitionId, List<ProcessStepSeed> steps) {
-    for (int i = 0; i < steps.size(); i++) {
-      ProcessStepSeed step = steps.get(i);
-      jdbcTemplate.update(
-          """
-          insert into batch.pipeline_step_definition (
-              pipeline_definition_id, step_code, step_name, stage_code, step_order, impl_code, step_params
-          ) values (?, ?, ?, ?, ?, ?, ?::jsonb)
-          """,
-          pipelineDefinitionId,
-          step.stepCode(),
-          step.stepCode(),
-          step.stageCode(),
-          i + 1,
-          step.implCode(),
-          step.stepParamsJson());
+    int updated =
+        jdbcTemplate.update(updateJobDefinitionSql, objectMapper.writeValueAsString(parameters), tenantId, jobCode);
+    if (updated != 1) {
+      throw new IllegalStateException("Expected one PROCESS Job definition to update");
     }
   }
 
@@ -147,7 +176,4 @@ public final class ProcessE2eFixture {
     spec.put("watermarkColumn", "high_water_mark");
     return spec;
   }
-
-  private record ProcessStepSeed(
-      String stepCode, String stageCode, String implCode, String stepParamsJson) {}
 }

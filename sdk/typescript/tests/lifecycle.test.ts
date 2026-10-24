@@ -19,7 +19,9 @@ const baseConfig = {
 };
 
 test("lifecycle: start registers, starts schedulers, then runs claim→execute→report", async () => {
-  const platform = new FakePlatform({ claim: { effectiveConfig: { k: "v" }, traceId: "trace-1" } });
+  const platform = new FakePlatform({
+    claim: { payload: '{"k":"authoritative","crossDay":{"upstream":{"resultVersionId":3}}}', effectiveConfig: { k: "stale" }, traceId: "trace-1" },
+  });
   platform.feedMessages({
     taskId: "task-1",
     tenantId: "tenant-A",
@@ -61,7 +63,8 @@ test("lifecycle: start registers, starts schedulers, then runs claim→execute�
   assert.equal(body.success, true);
   assert.deepEqual(body.outputs, { rows: 3 });
   assert.equal(body.resultSummary, "ok");
-  assert.equal(seenCtx?.effectiveConfig.k, "v");
+  assert.equal(seenCtx?.effectiveConfig.k, "authoritative");
+  assert.deepEqual(seenCtx?.effectiveConfig.crossDay, { upstream: { resultVersionId: 3 } });
   assert.equal(seenCtx?.traceId, "trace-1");
   assert.equal(seenCtx?.isDryRun, true);
 

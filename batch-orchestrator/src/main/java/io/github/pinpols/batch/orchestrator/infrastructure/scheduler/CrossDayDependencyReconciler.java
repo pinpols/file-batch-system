@@ -3,10 +3,11 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
-import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.CrossDayDependencyResolver;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.CrossDayDependencyResolver.ResolutionResult;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
@@ -14,7 +15,6 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Workflo
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
 import io.github.pinpols.batch.orchestrator.config.CrossDayDependencyReconcileProperties;
 import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateNodeRunStatusParam;
@@ -57,23 +57,24 @@ public class CrossDayDependencyReconciler {
   static final String ALERT_TYPE_TIMEOUT = "BATCH_WORKFLOW_CROSS_DAY_DEP_TIMEOUT";
 
   private final OrchestratorWorkflowMappers workflowMappers;
-  private final OrchestratorJobMappers jobMappers;
   private final CrossDayDependencyResolver crossDayDependencyResolver;
   private final ObjectProvider<WorkflowNodeDispatchService> dispatchServiceProvider;
   private final AlertEventService alertEventService;
   private final CrossDayDependencyReconcileProperties properties;
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final BatchDateTimeSupport dateTimeSupport;
+  private final SecretPayloadProtector secretPayloadProtector;
 
   @Scheduled(fixedDelayString = "${batch.workflow.cross-day-dep.poll-interval-millis:60000}")
-  @SchedulerLock(name = "cross_day_dep_reconcile", lockAtMostFor = "PT5M", lockAtLeastFor = "PT30S")
+  @SchedulerLock(name = "cross_day_dep_reconcile", lockAtMostFor = "PT5M", lockAtLeastFor = "PT0S")
   public void scheduledReconcile() {
     if (!properties.isEnabled() || gracefulShutdown.isDraining()) {
       return;
     }
     Instant now = dateTimeSupport.nowInstant();
-    List<WorkflowNodeRunEntity> waiting = workflowMappers.workflowNodeRunMapper.selectByNodeStatus(
-        STATUS_WAITING_DEPENDENCY, properties.getBatchSize());
+    List<WorkflowNodeRunEntity> waiting =
+        workflowMappers.workflowNodeRunMapper.selectLatestByNodeStatus(
+            STATUS_WAITING_DEPENDENCY, properties.getBatchSize());
     if (waiting == null || waiting.isEmpty()) {
       return;
     }
@@ -94,7 +95,7 @@ public class CrossDayDependencyReconciler {
     // workflow_node_run 实体本身没 tenantId 字段；用 RLS-bypass 的 selectByIdAnyTenant 先解出 tenant，
     // 之后所有 mapper / dispatchNode / alertEventService 调用都在 runWithTenant 内做，保证 RLS Phase B 通过。
     WorkflowRunEntity workflowRun = loadWorkflowRun(nodeRun.getWorkflowRunId());
-    if (workflowRun == null || workflowRun.getRelatedJobInstanceId() == null) {
+    if (EmptyChecks.isNull(workflowRun)) {
       return;
     }
     String tenantId = workflowRun.getTenantId();
@@ -108,45 +109,42 @@ public class CrossDayDependencyReconciler {
   /** 已绑定 RLS 后的真实 reconcile 主体。所有 mapper 调用都依赖此处的 holder。 */
   private void reconcileOneBound(
       WorkflowNodeRunEntity nodeRun, WorkflowRunEntity workflowRun, Instant now) {
-    JobInstanceEntity jobInstance = jobMappers.jobInstanceMapper.selectById(
-        workflowRun.getTenantId(), workflowRun.getRelatedJobInstanceId());
-    if (jobInstance == null) {
-      return;
-    }
     WorkflowNodeEntity workflowNode =
         workflowMappers.workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(
             workflowRun.getWorkflowDefinitionId(), nodeRun.getNodeCode());
-    if (workflowNode == null
+    boolean nodeHasNoCrossDayDependencies = workflowNode == null
         || workflowNode.getCrossDayDependencies() == null
-        || workflowNode.getCrossDayDependencies().isBlank()) {
+        || workflowNode.getCrossDayDependencies().isBlank();
+    if (nodeHasNoCrossDayDependencies) {
       // 依赖被人工清掉或节点定义改了 → 直接 fail（保守，避免无依据再 dispatch）
       markFailed(nodeRun, "CROSS_DAY_DEP_SPEC_MISSING", now);
       return;
     }
     ResolutionResult result = crossDayDependencyResolver.resolve(
-        jobInstance.getTenantId(),
-        jobInstance.getBizDate(),
-        workflowNode.getCrossDayDependencies());
+        workflowRun.getTenantId(),
+        workflowRun.getBizDate(),
+        workflowNode.getCrossDayDependencies(),
+        Boolean.TRUE.equals(workflowRun.getDryRun()));
     if (result.isResolved()) {
       log.info(
           "cross_day_dep resolved: tenantId={}, workflowRunId={}, nodeCode={}",
-          jobInstance.getTenantId(),
+          workflowRun.getTenantId(),
           workflowRun.getId(),
           nodeRun.getNodeCode());
-      dispatchServiceProvider
-          .getObject()
-          .dispatchNode(
-              jobInstance,
-              workflowRun,
-              new WorkflowDagService.DagNodeResolution(
-                  nodeRun.getNodeCode(), nodeRun.getNodeType()),
-              null,
-              workflowRun.getTraceId());
+      WorkflowNodeDispatchService dispatchService = dispatchServiceProvider.getObject();
+      WorkflowDagService.DagNodeResolution resolution =
+          new WorkflowDagService.DagNodeResolution(
+              nodeRun.getNodeCode(), nodeRun.getNodeType());
+      String sourcePayload = EmptyChecks.isNull(nodeRun.getSourcePayloadProtected())
+          ? null
+          : secretPayloadProtector.reveal(nodeRun.getSourcePayloadProtected());
+      String traceId = workflowRun.getTraceId();
+      dispatchService.dispatchNode(null, workflowRun, resolution, sourcePayload, traceId);
       return;
     }
     if (result.isFailed()) {
       markFailed(nodeRun, result.getFailureCode(), now);
-      emitTimeoutAlert(jobInstance, workflowRun, nodeRun, "FAILED:" + result.getFailureCode());
+      emitTimeoutAlert(workflowRun, nodeRun, "FAILED:" + result.getFailureCode());
       return;
     }
     // WAITING — 看是否超时
@@ -161,7 +159,7 @@ public class CrossDayDependencyReconciler {
     Instant deadline = nodeRun.getStartedAt().plus(Duration.ofSeconds(timeoutSeconds));
     if (now.isAfter(deadline)) {
       markFailed(nodeRun, "CROSS_DAY_DEP_TIMEOUT", now);
-      emitTimeoutAlert(jobInstance, workflowRun, nodeRun, "TIMEOUT");
+      emitTimeoutAlert(workflowRun, nodeRun, "TIMEOUT");
     }
   }
 
@@ -189,24 +187,23 @@ public class CrossDayDependencyReconciler {
   }
 
   private void emitTimeoutAlert(
-      JobInstanceEntity jobInstance,
-      WorkflowRunEntity workflowRun,
-      WorkflowNodeRunEntity nodeRun,
-      String reason) {
+      WorkflowRunEntity workflowRun, WorkflowNodeRunEntity nodeRun, String reason) {
     Map<String, Object> detail = new LinkedHashMap<>();
-    detail.put("tenantId", jobInstance.getTenantId());
+    detail.put("tenantId", workflowRun.getTenantId());
     detail.put("workflowRunId", workflowRun.getId());
     detail.put("workflowDefinitionId", workflowRun.getWorkflowDefinitionId());
     detail.put("nodeCode", nodeRun.getNodeCode());
     detail.put(
         "bizDate",
-        jobInstance.getBizDate() == null ? null : jobInstance.getBizDate().toString());
+        EmptyChecks.isNull(workflowRun.getBizDate())
+            ? null
+            : workflowRun.getBizDate().toString());
     detail.put("waitingReason", nodeRun.getErrorMessage());
     detail.put("reason", reason);
     String resourceKey =
-        jobInstance.getTenantId() + ":" + workflowRun.getId() + ":" + nodeRun.getNodeCode();
+        workflowRun.getTenantId() + ":" + workflowRun.getId() + ":" + nodeRun.getNodeCode();
     AlertEmitRequest request = AlertEmitRequest.builder()
-        .tenantId(jobInstance.getTenantId())
+        .tenantId(workflowRun.getTenantId())
         .serviceName("batch-orchestrator")
         .alertType(ALERT_TYPE_TIMEOUT)
         .severity("ERROR")

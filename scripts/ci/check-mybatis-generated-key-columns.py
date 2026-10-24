@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：MyBatis generated key 列限制。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-mybatis-generated-key-columns.py；参数与前置环境见下方说明及所属 README。
 """守护 MyBatis 自增主键只向 PostgreSQL 请求实际需要的列。
 
 PostgreSQL JDBC 在 ``useGeneratedKeys=true`` 且未声明 ``keyColumn`` 时，会把

@@ -35,7 +35,8 @@ public final class SdkVersions {
       return null;
     }
     try {
-      return Integer.parseInt(trimmed.substring(start, end));
+      String majorVersionText = trimmed.substring(start, end);
+      return Integer.parseInt(majorVersionText);
     } catch (NumberFormatException ex) {
       return null;
     }

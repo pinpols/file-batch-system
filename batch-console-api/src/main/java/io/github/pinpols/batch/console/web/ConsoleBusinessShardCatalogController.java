@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.contract.response.BusinessShardCatalogResponse;
+import io.github.pinpols.batch.console.domain.entity.BusinessShardCatalogEntity;
 import io.github.pinpols.batch.console.domain.param.BusinessShardCatalogUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleBusinessShardCatalogService;
@@ -45,8 +46,10 @@ public class ConsoleBusinessShardCatalogController {
 
   @GetMapping
   public CommonResponse<List<BusinessShardCatalogResponse>> list() {
-    return responseFactory.success(
-        catalogService.list().stream().map(BusinessShardCatalogResponse::from).toList());
+    List<BusinessShardCatalogEntity> catalogEntries = catalogService.list();
+    List<BusinessShardCatalogResponse> responses =
+        catalogEntries.stream().map(BusinessShardCatalogResponse::from).toList();
+    return responseFactory.success(responses);
   }
 
   @PutMapping
@@ -56,7 +59,7 @@ public class ConsoleBusinessShardCatalogController {
       aggregateId = "#request.placementKey")
   public CommonResponse<Void> upsert(@Valid @RequestBody UpsertShardCatalogRequest request) {
     String operator = requestMetadataResolver.current().operatorId();
-    catalogService.upsert(BusinessShardCatalogUpsertParam.builder()
+    BusinessShardCatalogUpsertParam upsertParam = BusinessShardCatalogUpsertParam.builder()
         .placementKey(request.placementKey())
         .host(request.host())
         .port(request.port())
@@ -66,7 +69,8 @@ public class ConsoleBusinessShardCatalogController {
         .enabled(request.enabled())
         .description(request.description())
         .operator(operator)
-        .build());
+        .build();
+    catalogService.upsert(upsertParam);
     return responseFactory.success(null);
   }
 

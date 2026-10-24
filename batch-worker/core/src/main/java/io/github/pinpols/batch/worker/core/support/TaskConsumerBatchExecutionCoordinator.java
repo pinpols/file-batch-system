@@ -52,10 +52,12 @@ final class TaskConsumerBatchExecutionCoordinator {
       try {
         message = JsonUtils.fromJson(payload, TaskDispatchMessage.class);
       } catch (Exception parseEx) {
+        String workerType = workerTypeSupplier.get();
+        String errorSummary = SwallowedExceptionLogger.summary(parseEx);
         log.error(
             "{} batch payload parse failed — publishing only this payload to DLQ: error={}",
-            workerTypeSupplier.get(),
-            SwallowedExceptionLogger.summary(parseEx),
+            workerType,
+            errorSummary,
             parseEx);
         if (!publishToDlq.apply(payload, parseEx.getMessage())) {
           return false;
@@ -89,12 +91,15 @@ final class TaskConsumerBatchExecutionCoordinator {
           continue;
         }
         if (TaskConsumerFailurePolicy.isTransientOrchestratorFailure(execution.error())) {
+          String workerType = workerTypeSupplier.get();
+          Long taskId = EmptyChecks.isNull(execution.message()) ? null : execution.message().taskId();
+          String errorSummary = SwallowedExceptionLogger.summary(execution.error());
           log.warn(
               "{} batch item transient failure (5xx/network) — NOT committing, will retry whole"
                   + " batch: taskId={}, error={}",
-              workerTypeSupplier.get(),
-              execution.message() == null ? null : execution.message().taskId(),
-              SwallowedExceptionLogger.summary(execution.error()));
+              workerType,
+              taskId,
+              errorSummary);
           return false;
         }
         String payload = originalPayload(execution, group);
@@ -108,13 +113,17 @@ final class TaskConsumerBatchExecutionCoordinator {
           allDlq = false;
           continue;
         }
+        String workerType = workerTypeSupplier.get();
+        Long taskId = EmptyChecks.isNull(execution.message()) ? null : execution.message().taskId();
+        String errorSummary = SwallowedExceptionLogger.summary(execution.error());
+        Throwable failure = execution.error();
         log.error(
             "{} batch item execution failed — publishing only this payload to DLQ: taskId={},"
                 + " error={}",
-            workerTypeSupplier.get(),
-            execution.message() == null ? null : execution.message().taskId(),
-            SwallowedExceptionLogger.summary(execution.error()),
-            execution.error());
+            workerType,
+            taskId,
+            errorSummary,
+            failure);
         if (!publishToDlq.apply(payload, execution.error().getMessage())) {
           allDlq = false;
         }

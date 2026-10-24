@@ -15,7 +15,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  *   <li>{@code partitionInvocationId} —— ADR-014:可选;mismatched invocation 平台 reject
  * </ul>
  *
- * <p>Phase 0 ({@code docs/plans/sdk-roadmap-2026-h2.md} §2)— SDK 协议演进基础。
+ * <p>Phase 0 ({@code docs/plans/sdk-h2-roadmap-2026-05-31.md} §2)— SDK 协议演进基础。
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)

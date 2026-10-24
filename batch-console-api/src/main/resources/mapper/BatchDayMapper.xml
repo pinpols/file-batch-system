@@ -1,7 +1,50 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.job.mapper.BatchDayMapper">
-    <select id="selectByQuery" resultType="map">
+    <resultMap id="batchDayViewResultMap"
+               type="io.github.pinpols.batch.console.domain.job.view.BatchDayView">
+        <constructor>
+            <arg column="bizDate" javaType="java.time.LocalDate"/>
+            <arg column="dayStatus" javaType="java.lang.String"/>
+            <arg column="openAt" javaType="java.time.Instant"/>
+            <arg column="cutoffAt" javaType="java.time.Instant"/>
+            <arg column="settledAt" javaType="java.time.Instant"/>
+            <arg column="slaDeadlineAt" javaType="java.time.Instant"/>
+            <arg column="lateCount" javaType="java.lang.Integer"/>
+            <arg column="catchupCount" javaType="java.lang.Integer"/>
+            <arg column="totalJobCount" javaType="java.lang.Long"/>
+            <arg column="successJobCount" javaType="java.lang.Long"/>
+            <arg column="failedJobCount" javaType="java.lang.Long"/>
+            <arg column="inFlightJobCount" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+    <resultMap id="scheduledOccurrenceViewResultMap"
+               type="io.github.pinpols.batch.console.domain.job.view.BatchDayScheduledOccurrenceView">
+        <constructor>
+            <arg column="workflowDefinitionId" javaType="java.lang.Long"/>
+            <arg column="workflowCode" javaType="java.lang.String"/>
+            <arg column="catchUpPolicy" javaType="java.lang.String"/>
+            <arg column="scheduleVersion" javaType="java.lang.Integer"/>
+            <arg column="scheduledFireTime" javaType="java.time.Instant"/>
+            <arg column="bizDate" javaType="java.time.LocalDate"/>
+            <arg column="occurrenceStatus" javaType="java.lang.String"/>
+            <arg column="requestId" javaType="java.lang.String"/>
+            <arg column="lastRejectionReason" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+    <resultMap id="batchDayJobSummaryViewResultMap"
+               type="io.github.pinpols.batch.console.domain.job.view.BatchDayJobSummaryView">
+        <constructor>
+            <arg column="jobCode" javaType="java.lang.String"/>
+            <arg column="totalJobCount" javaType="java.lang.Long"/>
+            <arg column="successJobCount" javaType="java.lang.Long"/>
+            <arg column="failedJobCount" javaType="java.lang.Long"/>
+            <arg column="inFlightJobCount" javaType="java.lang.Long"/>
+            <arg column="catchupCount" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="batchDayViewResultMap">
         select
             bdi.biz_date as "bizDate",
             bdi.day_status as "dayStatus",
@@ -64,7 +107,7 @@
         </if>
     </select>
 
-    <select id="selectWindow" resultType="map">
+    <select id="selectWindow" resultMap="batchDayViewResultMap">
         select
             bdi.biz_date as "bizDate",
             bdi.day_status as "dayStatus",
@@ -102,7 +145,30 @@
           and bdi.biz_date = #{bizDate}
     </select>
 
-    <select id="selectJobSummaries" resultType="map">
+    <select id="selectScheduledOccurrences" resultMap="scheduledOccurrenceViewResultMap">
+        select
+            occurrence.workflow_definition_id as "workflowDefinitionId",
+            occurrence.workflow_code as "workflowCode",
+            coalesce(calendar.catch_up_policy, 'NONE') as "catchUpPolicy",
+            occurrence.schedule_version as "scheduleVersion",
+            occurrence.scheduled_fire_time as "scheduledFireTime",
+            occurrence.biz_date as "bizDate",
+            occurrence.occurrence_status as "occurrenceStatus",
+            occurrence.request_id as "requestId",
+            occurrence.last_rejection_reason as "lastRejectionReason"
+        from batch.scheduled_occurrence occurrence
+        left join batch.business_calendar calendar
+          on calendar.tenant_id = occurrence.tenant_id
+         and calendar.calendar_code = occurrence.calendar_code
+         and calendar.enabled = true
+        where occurrence.tenant_id = #{tenantId}
+          and occurrence.calendar_code = #{calendarCode}
+          and occurrence.biz_date = #{bizDate}
+        order by occurrence.scheduled_fire_time desc,
+                 occurrence.workflow_definition_id asc
+    </select>
+
+    <select id="selectJobSummaries" resultMap="batchDayJobSummaryViewResultMap">
         select
             ji.job_code as "jobCode",
             count(1) as "totalJobCount",

@@ -200,7 +200,8 @@ class StoredProcTaskExecutorTest {
       TaskResult result = executor.execute(ctxWithParams(Map.of("procedureName", "p")));
 
       assertThat(result.success()).isTrue();
-      verify(conn).prepareCall("{call p()}");
+      final String sqlPSql = "{call p()}";
+      verify(conn).prepareCall(sqlPSql);
     }
 
     @Test
@@ -219,7 +220,8 @@ class StoredProcTaskExecutorTest {
 
       assertThat(r.success()).isTrue();
       // 2 in + 2 out = 4 placeholders
-      verify(conn).prepareCall("{call batch.proc(?,?,?,?)}");
+      final String sqlBatchProcSql = "{call batch.proc(?,?,?,?)}";
+      verify(conn).prepareCall(sqlBatchProcSql);
       verify(cs).setObject(1, 1);
       verify(cs).setObject(2, "x");
       verify(cs).registerOutParameter(3, Types.INTEGER);

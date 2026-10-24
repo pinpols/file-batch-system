@@ -50,8 +50,10 @@ public class DispatchChannelHealthRepository {
     Map<String, Object> params = new HashMap<>();
     params.put(P_TENANT_ID, tenantId);
     params.put(P_CHANNEL_CODE, channelCode);
-    params.put(P_NOW, toTimestamp(now));
-    params.put("newNextProbeAt", toTimestamp(newNextProbeAt));
+    Timestamp probeTime = toTimestamp(now);
+    params.put(P_NOW, probeTime);
+    Timestamp nextProbeTime = toTimestamp(newNextProbeAt);
+    params.put("newNextProbeAt", nextProbeTime);
     return mapper.tryClaimHalfOpenProbe(params) > 0;
   }
 
@@ -63,8 +65,10 @@ public class DispatchChannelHealthRepository {
     params.put(P_TENANT_ID, cmd.tenantId());
     params.put(P_CHANNEL_CODE, cmd.channelCode());
     params.put(P_CHANNEL_TYPE, cmd.channelType());
-    params.put(P_NOW, toTimestamp(cmd.now()));
-    params.put(P_NEXT_PROBE_AT, toTimestamp(cmd.nextProbeAt()));
+    Timestamp probeTime = toTimestamp(cmd.now());
+    params.put(P_NOW, probeTime);
+    Timestamp nextProbeTime = toTimestamp(cmd.nextProbeAt());
+    params.put(P_NEXT_PROBE_AT, nextProbeTime);
     params.put(P_PROBE_MESSAGE, cmd.probeMessage());
     params.put(P_PROBE_EVIDENCE, cmd.probeEvidence());
     mapper.upsertSuccess(params);
@@ -82,9 +86,12 @@ public class DispatchChannelHealthRepository {
     params.put(P_TENANT_ID, cmd.tenantId());
     params.put(P_CHANNEL_CODE, cmd.channelCode());
     params.put(P_CHANNEL_TYPE, cmd.channelType());
-    params.put(P_NOW, toTimestamp(cmd.now()));
-    params.put("firstFailureBackoffAt", toTimestamp(cmd.nextProbeAt()));
-    params.put("failureThreshold", Math.max(1, cmd.failureThreshold()));
+    Timestamp probeTime = toTimestamp(cmd.now());
+    params.put(P_NOW, probeTime);
+    Timestamp firstFailureBackoffAt = toTimestamp(cmd.nextProbeAt());
+    params.put("firstFailureBackoffAt", firstFailureBackoffAt);
+    int minimumFailureThreshold = Math.max(1, cmd.failureThreshold());
+    params.put("failureThreshold", minimumFailureThreshold);
     params.put(P_PROBE_MESSAGE, cmd.probeMessage());
     params.put(P_PROBE_EVIDENCE, cmd.probeEvidence());
     return mapper.upsertFailureAndBump(params);
@@ -94,10 +101,12 @@ public class DispatchChannelHealthRepository {
     Map<String, Object> params = new HashMap<>();
     params.put(P_TENANT_ID, cmd.tenantId());
     params.put(P_CHANNEL_CODE, cmd.channelCode());
-    params.put(P_NOW, toTimestamp(cmd.now()));
+    Timestamp probeTime = toTimestamp(cmd.now());
+    params.put(P_NOW, probeTime);
     // Citus:next_probe_at 由调用方(Java)按新 count 算好指数退避后传入,不再在 SQL 里
     // 用 power(2, consecutive_failures) 这类带列引用的函数(分布式 UPDATE 不允许)。
-    params.put("newNextProbeAt", toTimestamp(cmd.nextProbeAt()));
+    Timestamp nextProbeTime = toTimestamp(cmd.nextProbeAt());
+    params.put("newNextProbeAt", nextProbeTime);
     params.put("expectedFailures", expectedFailures);
     return mapper.recalcBackoff(params) > 0;
   }
@@ -107,7 +116,8 @@ public class DispatchChannelHealthRepository {
   }
 
   public long countProbeOverdue(Instant now) {
-    return mapper.countProbeOverdue(toTimestamp(now));
+    Timestamp probeTime = toTimestamp(now);
+    return mapper.countProbeOverdue(probeTime);
   }
 
   public void upsertHealth(DispatchChannelHealthSnapshot s) {
@@ -117,28 +127,43 @@ public class DispatchChannelHealthRepository {
     params.put(P_CHANNEL_TYPE, s.channelType());
     params.put("healthStatus", s.healthStatus());
     params.put("consecutiveFailures", s.consecutiveFailures());
-    params.put("lastProbeAt", toTimestamp(s.lastProbeAt()));
-    params.put("lastSuccessAt", toTimestamp(s.lastSuccessAt()));
-    params.put("lastFailureAt", toTimestamp(s.lastFailureAt()));
-    params.put(P_NEXT_PROBE_AT, toTimestamp(s.nextProbeAt()));
+    Timestamp lastProbeAt = toTimestamp(s.lastProbeAt());
+    params.put("lastProbeAt", lastProbeAt);
+    Timestamp lastSuccessAt = toTimestamp(s.lastSuccessAt());
+    params.put("lastSuccessAt", lastSuccessAt);
+    Timestamp lastFailureAt = toTimestamp(s.lastFailureAt());
+    params.put("lastFailureAt", lastFailureAt);
+    Timestamp nextProbeAt = toTimestamp(s.nextProbeAt());
+    params.put(P_NEXT_PROBE_AT, nextProbeAt);
     params.put(P_PROBE_MESSAGE, s.probeMessage());
     params.put(P_PROBE_EVIDENCE, s.probeEvidence());
     mapper.upsertHealth(params);
   }
 
   private DispatchChannelHealthSnapshot toSnapshot(Map<String, Object> row) {
+    String tenantId = stringValue(row.get("tenant_id"));
+    String channelCode = stringValue(row.get("channel_code"));
+    String channelType = stringValue(row.get("channel_type"));
+    String healthStatus = stringValue(row.get("health_status"));
+    int consecutiveFailures = intValue(row.get("consecutive_failures"));
+    Instant lastProbeAt = instantValue(row.get("last_probe_at"));
+    Instant lastSuccessAt = instantValue(row.get("last_success_at"));
+    Instant lastFailureAt = instantValue(row.get("last_failure_at"));
+    Instant nextProbeAt = instantValue(row.get("next_probe_at"));
+    String probeMessage = stringValue(row.get("probe_message"));
+    String probeEvidence = stringValue(row.get("probe_evidence"));
     return new DispatchChannelHealthSnapshot(
-        stringValue(row.get("tenant_id")),
-        stringValue(row.get("channel_code")),
-        stringValue(row.get("channel_type")),
-        stringValue(row.get("health_status")),
-        intValue(row.get("consecutive_failures")),
-        instantValue(row.get("last_probe_at")),
-        instantValue(row.get("last_success_at")),
-        instantValue(row.get("last_failure_at")),
-        instantValue(row.get("next_probe_at")),
-        stringValue(row.get("probe_message")),
-        stringValue(row.get("probe_evidence")));
+        tenantId,
+        channelCode,
+        channelType,
+        healthStatus,
+        consecutiveFailures,
+        lastProbeAt,
+        lastSuccessAt,
+        lastFailureAt,
+        nextProbeAt,
+        probeMessage,
+        probeEvidence);
   }
 
   private Timestamp toTimestamp(Instant instant) {
@@ -160,7 +185,8 @@ public class DispatchChannelHealthRepository {
     if (value == null) {
       return 0;
     }
-    String text = String.valueOf(value).trim();
+    String rawText = String.valueOf(value);
+    String text = rawText.trim();
     return text.isEmpty() ? 0 : Integer.parseInt(text);
   }
 
@@ -174,7 +200,8 @@ public class DispatchChannelHealthRepository {
     if (value == null) {
       return null;
     }
-    String text = String.valueOf(value).trim();
+    String rawText = String.valueOf(value);
+    String text = rawText.trim();
     return text.isEmpty() ? null : Instant.parse(text);
   }
 }

@@ -8,6 +8,7 @@ import javax.sql.DataSource;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
+import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
@@ -39,8 +40,11 @@ class DispatchSecretVersionMapperIntegrationTest {
     postgresDataSource.setPassword(POSTGRES.getPassword());
     dataSource = postgresDataSource;
     jdbcTemplate = new JdbcTemplate(dataSource);
-    jdbcTemplate.execute("create schema batch");
-    jdbcTemplate.execute("""
+    final String createSql = """
+        create schema batch
+    """;
+    jdbcTemplate.execute(createSql);
+    final String createBatchSecretVersionSql = """
         create table batch.secret_version (
           id bigserial primary key,
           tenant_id varchar(64) not null,
@@ -53,8 +57,9 @@ class DispatchSecretVersionMapperIntegrationTest {
           effective_to_at timestamptz,
           secret_payload jsonb not null
         )
-        """);
-    jdbcTemplate.execute("""
+        """;
+    jdbcTemplate.execute(createBatchSecretVersionSql);
+    final String createBatchConfigChangeLogSql = """
         create table batch.config_change_log (
           change_action varchar(32) not null,
           constraint ck_config_change_log_action
@@ -63,14 +68,14 @@ class DispatchSecretVersionMapperIntegrationTest {
               'SUBMIT_APPROVAL', 'APPROVE', 'REJECT'
             ))
         )
-        """);
+        """;
+    jdbcTemplate.execute(createBatchConfigChangeLogSql);
     new ResourceDatabasePopulator(
             new ClassPathResource("db/migration/V234__secret_version_dispatch_revocation.sql"))
         .execute(dataSource);
 
-    org.apache.ibatis.session.Configuration configuration =
-        new org.apache.ibatis.session.Configuration(
-            new Environment("dispatch-secret-it", new JdbcTransactionFactory(), dataSource));
+    Configuration configuration = new Configuration(
+        new Environment("dispatch-secret-it", new JdbcTransactionFactory(), dataSource));
     String mapperPath = "mapper/DispatchSecretVersionMapper.xml";
     try (var mapperXml = Resources.getResourceAsStream(mapperPath)) {
       new XMLMapperBuilder(mapperXml, configuration, mapperPath, configuration.getSqlFragments())
@@ -87,15 +92,19 @@ class DispatchSecretVersionMapperIntegrationTest {
   @Test
   @DisplayName("只返回同租户的固定版本,并在撤销或到期后立即拒绝读取")
   void selectsPinnedVersion_whenVersionIsValidAndRejectsAfterExpiry() {
-    jdbcTemplate.update("""
+    final String insertBatchSecretVersionSql = """
         insert into batch.secret_version (
           id, tenant_id, secret_ref, secret_name, version_no, secret_status,
           current_version, effective_from_at, effective_to_at, secret_payload
         ) values
-          (101, 'tenant-a', 'dispatch/key', 'key', 1, 'ROLLED_BACK', false, null, null, '{"format":"BATCHENC_BASE64_V1"}'),
-          (102, 'tenant-b', 'dispatch/key', 'key', 1, 'PUBLISHED', true, null, null, '{"format":"other-tenant"}'),
-          (103, 'tenant-a', 'dispatch/key', 'key', 2, 'PUBLISHED', true, null, current_timestamp - interval '1 second', '{"format":"expired"}')
-        """);
+          (101, 'tenant-a', 'dispatch/key', 'key', 1, 'ROLLED_BACK', false, null, null,\s\
+          '{"format":"BATCHENC_BASE64_V1"}'),
+          (102, 'tenant-b', 'dispatch/key', 'key', 1, 'PUBLISHED', true, null, null,\s\
+          '{"format":"other-tenant"}'),
+          (103, 'tenant-a', 'dispatch/key', 'key', 2, 'PUBLISHED', true, null, current_timestamp - interval\s\
+          '1 second', '{"format":"expired"}')
+        """;
+    jdbcTemplate.update(insertBatchSecretVersionSql);
     try (SqlSession session = sqlSessionFactory.openSession()) {
       DispatchSecretVersionMapper mapper = session.getMapper(DispatchSecretVersionMapper.class);
 
@@ -105,21 +114,28 @@ class DispatchSecretVersionMapperIntegrationTest {
       assertThat(mapper.selectPayloadForDispatch("tenant-a", 102L)).isNull();
       assertThat(mapper.selectPayloadForDispatch("tenant-a", 103L)).isNull();
 
-      jdbcTemplate.update("""
+      final String updateBatchSecretVersionSql = """
           update batch.secret_version
              set revoked_at = current_timestamp, revoked_by = 'operator', revoke_reason = 'compromised'
            where id = 101
-          """);
+          """;
+      jdbcTemplate.update(updateBatchSecretVersionSql);
       session.clearCache();
       assertThat(mapper.selectPayloadForDispatch("tenant-a", 101L)).isNull();
       session.commit();
     }
-    assertThat(jdbcTemplate.queryForObject("""
+    final String selectInformationSchemaColumnsSql = """
         select count(*)
           from information_schema.columns
          where table_schema = 'batch' and table_name = 'secret_version'
            and column_name in ('revoked_at', 'revoked_by', 'revoke_reason')
-        """, Integer.class)).isEqualTo(3);
-    jdbcTemplate.update("insert into batch.config_change_log(change_action) values ('REVOKE')");
+        """;
+    Integer selectedColumnsCount =
+        jdbcTemplate.queryForObject(selectInformationSchemaColumnsSql, Integer.class);
+    assertThat(selectedColumnsCount).isEqualTo(3);
+    final String insertBatchConfigChangeLogSql = """
+        insert into batch.config_change_log(change_action) values ('REVOKE')
+    """;
+    jdbcTemplate.update(insertBatchConfigChangeLogSql);
   }
 }

@@ -1,5 +1,7 @@
 # ADR-046 · 文件束聚合 —— 在单文件单元之上加一层批量编排(File Bundle Aggregation)
 
+> **当前适用性（2026-10-24）**：BUNDLE_IMPORT/BUNDLE_EXPORT/BUNDLE_DISPATCH 继续按 manifest 展开 Job 分区，并复用对应系统 Pipeline；与多 Workflow 批量发起、Worker 批量 report 是不同层次，不得混为一个批处理开关。 原决策背景与阶段记录保留，正式关闭状态以当前验收矩阵为准。
+
 - **Status**: Accepted；bundle 基础迁移（V183/V184）、编排入口及集成测试已存在。方案中最初的分阶段计划是历史记录；各 profile 的完整能力与生产性能结论仍须分别以测试/压测证据确认（复核：2026-10-08）
 - **Related**: ADR-040(清单驱动到达组,**分组种子之一**)、ADR-002(transactional outbox)、ADR-027(资源亲和范围红线,**边界对照**)、配置批量导入(`/config/tenant-package` Excel 配置包,**配置模型复用**)、`docs/analysis`(吞吐瓶颈实测:瓶颈在控制面消费 + claim/report 争用,非 PG)、PR #465(launch 消费并发 +50%)
 - **Plan**: 本文的原始分阶段方案保留为设计历史。当前实现入口包括 `BundlePlanParams`、`BundleArrivalLauncher`、V183/V184 及 bundle 集成测试；批量 CLAIM/REPORT、各 Worker profile 和性能收益应以各自当前实现与专项验证为准，不从设计目标推定全部达成。

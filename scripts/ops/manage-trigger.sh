@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：Trigger 管理 API 运维入口。
+# 用法：在仓库根目录执行 bash scripts/ops/manage-trigger.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # manage-trigger.sh - Trigger 管理 API 运维入口
 #
@@ -13,7 +15,7 @@
 #     bash scripts/ops/manage-trigger.sh pause-tenant t1
 #   BATCH_TRIGGER_MANAGEMENT_DRY_RUN=false \
 #   BATCH_INTERNAL_SECRET="$SECRET" \
-#     bash scripts/ops/manage-trigger.sh pause-job t1 DAILY_IMPORT
+#     bash scripts/ops/manage-trigger.sh pause-workflow t1 DAILY_IMPORT_FLOW
 # =========================================================
 
 set -euo pipefail
@@ -30,10 +32,10 @@ usage() {
   cat >&2 <<'EOF'
 Usage:
   manage-trigger.sh status
-  manage-trigger.sh register TENANT_ID JOB_CODE
-  manage-trigger.sh unregister TENANT_ID JOB_CODE
-  manage-trigger.sh pause-job TENANT_ID JOB_CODE
-  manage-trigger.sh resume-job TENANT_ID JOB_CODE
+  manage-trigger.sh register TENANT_ID WORKFLOW_CODE
+  manage-trigger.sh unregister TENANT_ID WORKFLOW_CODE
+  manage-trigger.sh pause-workflow TENANT_ID WORKFLOW_CODE
+  manage-trigger.sh resume-workflow TENANT_ID WORKFLOW_CODE
   manage-trigger.sh pause-all
   manage-trigger.sh resume-all
   manage-trigger.sh pause-tenant TENANT_ID
@@ -82,15 +84,16 @@ main() {
 
   case "$action" in
     status) path="/api/triggers/management/scheduler-status" ;;
-    register|unregister|pause-job|resume-job)
+    register|unregister|pause-workflow|resume-workflow)
       [[ $# -eq 2 ]] || usage
       method=POST
-      local tenant_id="$1" job_code="$2"
+      local tenant_id="$1" workflow_code="$2"
+      [[ "$tenant_id" =~ ^[A-Za-z0-9._-]+$ && "$workflow_code" =~ ^[A-Za-z0-9._-]+$ ]] || usage
       case "$action" in
-        register) path="/api/triggers/management/register?tenantId=$tenant_id&jobCode=$job_code" ;;
-        unregister) path="/api/triggers/management/unregister?tenantId=$tenant_id&jobCode=$job_code" ;;
-        pause-job) path="/api/triggers/management/pause?tenantId=$tenant_id&jobCode=$job_code" ;;
-        resume-job) path="/api/triggers/management/resume?tenantId=$tenant_id&jobCode=$job_code" ;;
+        register) path="/api/triggers/management/workflow/register?tenantId=$tenant_id&workflowCode=$workflow_code" ;;
+        unregister) path="/api/triggers/management/workflow/unregister?tenantId=$tenant_id&workflowCode=$workflow_code" ;;
+        pause-workflow) path="/api/triggers/management/workflow/pause?tenantId=$tenant_id&workflowCode=$workflow_code" ;;
+        resume-workflow) path="/api/triggers/management/workflow/resume?tenantId=$tenant_id&workflowCode=$workflow_code" ;;
       esac
       ;;
     pause-all|resume-all|drain-enable|drain-disable)

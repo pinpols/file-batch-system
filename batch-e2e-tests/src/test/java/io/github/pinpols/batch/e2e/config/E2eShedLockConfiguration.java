@@ -6,6 +6,7 @@ import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,7 +24,8 @@ public class E2eShedLockConfiguration {
 
   @Bean
   public LockProvider lockProvider(
-      DataSource dataSource, @Value("${batch.shedlock.auto-create:true}") boolean autoCreateTable) {
+      @Qualifier("dataSource") DataSource dataSource,
+      @Value("${batch.shedlock.auto-create:true}") boolean autoCreateTable) {
     return ShedLockProviderFactory.jdbcTemplateLockProvider(dataSource, autoCreateTable);
   }
 

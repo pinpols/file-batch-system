@@ -1,5 +1,7 @@
 # ADR-020 · 批量日维度重放（batch_day_replay_session）
 
+> **当前适用性（2026-10-24）**：批量日重放会话仍是聚合/追踪对象；操作范围、预览审批、失败节点/整图与日期区间重放由 ADR-049 的 ReplayOperation 合同约束，不能直接重置旧终态。 原决策背景与阶段记录保留，正式关闭状态以当前验收矩阵为准。
+
 - **Status**: Implemented（V110-V202；重放与整批量日 dry-run 共用 session/entry）
 - **Date**: 2026-05-06（Accepted: 2026-05-06）
 - **Supersedes**: —
@@ -14,6 +16,16 @@
 - dry-run 强制 `DRY_RUN_ONLY`，禁止 `OUTPUTS_ONLY` 和结果晋升；
 - Console、OpenAPI 与前端页面已展示模式、候选来源和计划快照；功能由
   `batch.replay.dry-run.enabled=false` 默认关闭。
+
+## 2026-10-20 Workflow 根运行整合校准
+
+本节覆盖下文早期启动流程中的直接 rerun 与计数累加描述；整合验收范围以 [R25 计划](../../plans/workflow-daily-integration-plan-2026-10-14.md#r25-重放与补偿启动的收口契约2026-10-20) 为准。
+
+- 历史候选按 JobInstance 冻结的日历和业务日选择，避免 Workflow 接管日历后遗漏无 Job 日历配置的历史运行。
+- 派发器通过 JOB/BATCH 补偿将根 TriggerRequest、冻结 LaunchRequest 与 Outbox 同事务受理，由既有 Kafka Launch 消费者启动 Workflow；受理不要求子 Job 已存在。
+- 条目通过 `replay-{sessionId}-{entryId}` 根请求、当前 JOB 节点及实际执行 Job 精确关联，不能用来源实例或同编码作业猜测执行。
+- 终态回填加入 REPORT 事务；同会话先加锁，再从条目重算计数。dry-run 只接受对应演练终态，正式结果不因演练成功而完成。
+- 启动请求明确拒收且没有执行时，条目失败并收口会话；暂时的消息传输故障由既有 Outbox 恢复。操作与诊断见[补偿处置手册](../../runbook/compensation-cleanup.md#jobbatch-补偿的异步受理)。
 
 ## 背景
 

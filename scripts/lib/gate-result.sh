@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：本地提交检查与 CI 门禁共用的分组、模式控制和结果输出格式。
+# 用法：由调用脚本 source scripts/lib/gate-result.sh 后使用公共变量或函数。
 # 本地提交检查与 CI 门禁共用的分组、模式控制和结果输出格式。
 
 gate_mode_valid() {

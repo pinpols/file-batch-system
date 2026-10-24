@@ -3,6 +3,7 @@ package io.github.pinpols.batch.trigger.infrastructure.kafka;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,7 +17,9 @@ class KafkaTriggerLaunchLagQueryAdapterTest {
   @DisplayName("关闭 AdminClient 后再采样 lag 必须直接抛 IllegalStateException,不得重新建立 Kafka 连接")
   void stoppedAdapter_refusesToSampleLag() {
     KafkaTriggerLaunchLagQueryAdapter adapter = new KafkaTriggerLaunchLagQueryAdapter(
-        mock(KafkaAdmin.class), new TriggerOutboxRelayProperties());
+        mock(KafkaAdmin.class),
+        new TriggerOutboxRelayProperties(),
+        new BatchKafkaTopicNamespace(""));
 
     adapter.closeAdminClient();
 

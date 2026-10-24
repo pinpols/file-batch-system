@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：运行 SDK 契约 fixture 测试套件(硬校验)。
+# 用法：在仓库根目录执行 bash sdk/python/scripts/run-contract.sh；参数与前置环境见下方说明及所属 README。
 # 运行 SDK 契约 fixture 测试套件(硬校验)。
 #
 # 从 docs/api/sdk-contract-fixtures/ 发现 fixture,对 python 决策核做真实断言。

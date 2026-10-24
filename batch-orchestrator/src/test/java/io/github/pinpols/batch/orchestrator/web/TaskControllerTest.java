@@ -31,6 +31,7 @@ import io.github.pinpols.batch.orchestrator.controller.TaskController;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -155,6 +156,8 @@ class TaskControllerTest {
         100L,
         null,
         null,
+        null,
+        List.of(),
         null);
     // PERF(5.2b): claim 复用 assignWorker 返回的 task 实体拉 config
     when(taskExecutionService.loadEffectiveConfig(eq("t1"), same(task))).thenReturn(config);
@@ -346,8 +349,8 @@ class TaskControllerTest {
   void shouldReturn200WithPerTaskResultsForRenewBatch() throws Exception {
     // PERF(5.3): renewBatch 走 set-based renewLeaseBatch,一次下发、逐项结果与入参对齐
     when(taskExecutionService.renewLeaseBatch(any()))
-        .thenReturn(java.util.List.of(
-            new TaskHeartbeatResult(true, false), new TaskHeartbeatResult(false, false)));
+        .thenReturn(
+            List.of(new TaskHeartbeatResult(true, false), new TaskHeartbeatResult(false, false)));
 
     mockMvc
         .perform(post("/internal/tasks/leases/renew-batch")

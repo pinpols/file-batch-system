@@ -7,12 +7,14 @@
         <result column="command_no" property="commandNo"/>
         <result column="compensation_type" property="compensationType"/>
         <result column="target_id" property="targetId"/>
+        <result column="source_workflow_run_id" property="sourceWorkflowRunId"/>
         <result column="job_code" property="jobCode"/>
         <result column="biz_date" property="bizDate"/>
         <result column="batch_no" property="batchNo"/>
         <result column="related_job_instance_id" property="relatedJobInstanceId"/>
         <result column="related_file_id" property="relatedFileId"/>
         <result column="approval_id" property="approvalId"/>
+        <result column="request_fingerprint" property="requestFingerprint"/>
         <result column="operator_id" property="operatorId"/>
         <result column="reason" property="reason"/>
         <result column="strategy" property="strategy"/>
@@ -34,12 +36,14 @@
             command_no,
             compensation_type,
             target_id,
+            source_workflow_run_id,
             job_code,
             biz_date,
             batch_no,
             related_job_instance_id,
             related_file_id,
             approval_id,
+            request_fingerprint,
             operator_id,
             reason,
             strategy,
@@ -56,12 +60,14 @@
             #{commandNo},
             #{compensationType},
             #{targetId},
+            #{sourceWorkflowRunId},
             #{jobCode},
             #{bizDate},
             #{batchNo},
             #{relatedJobInstanceId},
             #{relatedFileId},
             #{approvalId},
+            #{requestFingerprint},
             #{operatorId},
             #{reason},
             #{strategy},
@@ -90,6 +96,23 @@
           and command_no = #{commandNo}
     </select>
 
+    <select id="selectByTenantAndApprovalId" resultMap="CompensationCommandResultMap">
+        select *
+        from (
+            select command.*, 0 as archive_order
+            from batch.compensation_command command
+            where command.tenant_id = #{tenantId}
+              and command.approval_id = #{approvalId}
+            union all
+            select command.*, 1 as archive_order
+            from archive.compensation_command_archive command
+            where command.tenant_id = #{tenantId}
+              and command.approval_id = #{approvalId}
+        ) commands
+        order by archive_order
+        limit 1
+    </select>
+
     <update id="updateStatus">
         update batch.compensation_command
         set command_status = #{commandStatus},
@@ -115,13 +138,8 @@
     </select>
 
     <update id="markStaleRunningFailed">
-        update batch.compensation_command
-        set command_status = #{failedStatus},
-            error_code = #{errorCode},
-            error_message = #{errorMessage},
-            finished_at = CURRENT_TIMESTAMP
-        where id in (
-            select id
+        with stale_commands as (
+            select id, tenant_id
             from batch.compensation_command
             where command_status = #{runningStatus}
               and created_at &lt; #{cutoff}
@@ -129,5 +147,14 @@
             limit #{limit}
             for update skip locked
         )
+        update batch.compensation_command
+        set command_status = #{failedStatus},
+            error_code = #{errorCode},
+            error_message = #{errorMessage},
+            finished_at = CURRENT_TIMESTAMP
+        from stale_commands
+        where batch.compensation_command.id = stale_commands.id
+          and batch.compensation_command.tenant_id = stale_commands.tenant_id
+          and batch.compensation_command.command_status = #{runningStatus}
     </update>
 </mapper>

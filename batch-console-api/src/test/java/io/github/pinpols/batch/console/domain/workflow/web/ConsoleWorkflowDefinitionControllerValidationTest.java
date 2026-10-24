@@ -5,12 +5,16 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.domain.workflow.application.ConsoleWorkflowTriggerService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -55,11 +59,19 @@ class ConsoleWorkflowDefinitionControllerValidationTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleWorkflowDefinitionController(service, responseFactory, lockService))
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleWorkflowDefinitionController(
+            service, responseFactory, lockService, mock(ConsoleWorkflowTriggerService.class)))
         .setControllerAdvice(exceptionHandler)
         .setValidator(validator)
         .build();
+  }
+
+  @Test
+  @DisplayName("触发结果核对缺少原幂等键时拒绝，不创建新的触发")
+  void shouldRejectReceiptLookup_whenIdempotencyKeyIsMissing() throws Exception {
+    mockMvc.perform(get("/api/console/workflow-definitions/23/trigger-status")
+            .param("tenantId", "ta"))
+        .andExpect(status().isBadRequest());
   }
 
   @Test
@@ -137,5 +149,36 @@ class ConsoleWorkflowDefinitionControllerValidationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
     verify(service).create(ArgumentMatchers.any());
+  }
+
+  @Test
+  @DisplayName("定时暂停只更新 Workflow schedule 开关，不调用定义启停")
+  void patches_schedule_enabled_independently() throws Exception {
+    mockMvc
+        .perform(patch("/api/console/workflow-definitions/17/schedule-enabled")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"ta\",\"enabled\":false}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("SUCCESS"));
+    verify(service).toggleScheduleEnabled(17L, "ta", false);
+    verify(service, never()).toggleEnabled(17L, "ta", false);
+  }
+
+  @Test
+  @DisplayName("无效 Cron 调度表达式在保存前拒绝，不触碰 Workflow 定义")
+  void rejects_invalid_schedule_expression() throws Exception {
+    mockMvc
+        .perform(put("/api/console/workflow-definitions/17/schedule")
+            .contentType(APPLICATION_JSON)
+            .content("""
+                {"tenantId":"ta","expectedVersion":2,"scheduleType":"CRON",
+                 "scheduleExpr":"not a cron","timezone":"Asia/Shanghai",
+                 "triggerMode":"SCHEDULED"}
+                """))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    verify(service, never())
+        .updateSchedule(
+            ArgumentMatchers.eq(17L), ArgumentMatchers.any(), ArgumentMatchers.anyString());
   }
 }

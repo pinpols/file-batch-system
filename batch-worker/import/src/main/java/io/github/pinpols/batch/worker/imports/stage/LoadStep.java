@@ -3,13 +3,16 @@ package io.github.pinpols.batch.worker.imports.stage;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.FileStatus;
+import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.exception.WorkerConfigException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.plugin.ImportLoadContext;
 import io.github.pinpols.batch.common.plugin.ImportLoadPlugin;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.service.DryRunGuard;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -20,6 +23,7 @@ import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.CheckpointP
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPosition;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingStage;
+import io.github.pinpols.batch.worker.core.support.TaskExecutionClient;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
@@ -69,23 +73,7 @@ public class LoadStep implements ImportStageStep {
   private final WorkerCheckpointProperties checkpointProperties;
   private final ProcessingPositionStore positionStore;
   private final PipelineStageProgressRegistry progressRegistry;
-
-  public LoadStep(
-      ImportLoadPluginRegistry importLoadPluginRegistry,
-      PlatformFileRecordRepository fileRecords,
-      ImportWorkerConfiguration workerConfiguration,
-      ObjectMapper objectMapper,
-      WorkerCheckpointProperties checkpointProperties,
-      ProcessingPositionStore positionStore) {
-    this(
-        importLoadPluginRegistry,
-        fileRecords,
-        workerConfiguration,
-        objectMapper,
-        checkpointProperties,
-        positionStore,
-        new PipelineStageProgressRegistry());
-  }
+  private final TaskExecutionClient taskExecutionClient;
 
   @Autowired
   public LoadStep(
@@ -95,7 +83,8 @@ public class LoadStep implements ImportStageStep {
       ObjectMapper objectMapper,
       WorkerCheckpointProperties checkpointProperties,
       ProcessingPositionStore positionStore,
-      PipelineStageProgressRegistry progressRegistry) {
+      PipelineStageProgressRegistry progressRegistry,
+      TaskExecutionClient taskExecutionClient) {
     this.importLoadPluginRegistry = importLoadPluginRegistry;
     this.fileRecords = fileRecords;
     this.workerConfiguration = workerConfiguration;
@@ -103,6 +92,7 @@ public class LoadStep implements ImportStageStep {
     this.checkpointProperties = checkpointProperties;
     this.positionStore = positionStore;
     this.progressRegistry = progressRegistry;
+    this.taskExecutionClient = taskExecutionClient;
   }
 
   @Override
@@ -124,7 +114,8 @@ public class LoadStep implements ImportStageStep {
     String validatedRecordsPath =
         stringValue(context.getAttributes().get(PipelineRuntimeKeys.VALIDATED_RECORDS_PATH));
     if (Texts.hasText(validatedRecordsPath)) {
-      return executeStreaming(context, Path.of(validatedRecordsPath));
+      Path validatedRecordsFile = Path.of(validatedRecordsPath);
+      return executeStreaming(context, validatedRecordsFile);
     }
     return missingPayload(context);
   }
@@ -135,7 +126,10 @@ public class LoadStep implements ImportStageStep {
     }
     Map<String, Object> attrs = context.getAttributes();
     try {
-      if (numberValue(attrs.get(KEY_SKIPPED_COUNT)) > 0 && Files.size(validatedRecordsPath) == 0L) {
+      boolean hasSkippedRowsAndNoValidatedPayload =
+          numberValue(attrs.get(KEY_SKIPPED_COUNT)) > 0
+              && Files.size(validatedRecordsPath) == 0L;
+      if (hasSkippedRowsAndNoValidatedPayload) {
         return markLoaded(context, 0L);
       }
       ImportPayload importPayload =
@@ -144,21 +138,27 @@ public class LoadStep implements ImportStageStep {
       String sourceFileName = fileRecord instanceof Map<?, ?> row && row.get(KEY_FILE_NAME) != null
           ? String.valueOf(row.get(KEY_FILE_NAME))
           : context.getFileId();
-      ImportLoadPlugin plugin =
-          importLoadPluginRegistry.require(resolveLoadTargetRef(context, importPayload));
+      String loadTargetRef = resolveLoadTargetRef(context);
+      ImportLoadPlugin plugin = importLoadPluginRegistry.require(loadTargetRef);
+      IdempotencyCapability idempotencyCapability = plugin.idempotencyCapability();
       ImportLoadContext loadCtx = buildLoadContext(context, importPayload, sourceFileName);
       boolean partitionReplaceCopy = isPartitionReplaceCopy(plugin, loadCtx);
       boolean partitionStageSwapCopy = isPartitionStageSwapCopy(plugin, loadCtx);
+      boolean checkpointDegraded = checkpointDegradedByMultiPartition(context);
+      LoadPluginExecutionFence executionFence = new LoadPluginExecutionFence(
+          taskExecutionClient, context, idempotencyCapability, partitionReplaceCopy);
       if (partitionReplaceCopy) {
         requireSinglePartitionForPartitionReplace(context);
         requireCheckpointDisabledForPartitionReplace(plugin);
+        if (!executionFence.authorizeBeforeSideEffect()) {
+          throw new NonIdempotentExecutionFenceException();
+        }
         ((GenericJdbcMappedImportLoadPlugin) plugin).preparePartitionReplace(loadCtx);
-      } else if (!checkpointDegradedByMultiPartition(context)) {
+      } else if (!checkpointDegraded) {
         // ADR-038 R3-3:续跑开关开时,plugin 必须自报幂等能力(NONE/UNKNOWN 拒跑)。跨库无 1PC,
         // 崩溃窗口重做最后一个 chunk 的数据安全完全靠 plugin 幂等回退。
-        // 多分区降级时续跑不会启用(见 checkpointDegradedByMultiPartition),补偿窗口不存在,不做该前置拒跑
-        // —— 否则默认开关翻 true 后,多分区 + 非幂等 plugin 的既有任务会被无益地拒跑。
-        requireIdempotentPluginIfCheckpointEnabled(plugin);
+        // 多分区降级时仍在首次写入前持久化非幂等围栏,避免失败后被 Orchestrator 自动重放。
+        requireIdempotentPluginIfCheckpointEnabled(plugin, idempotencyCapability);
       }
       int chunkSize = resolveChunkSize(context);
 
@@ -167,63 +167,80 @@ public class LoadStep implements ImportStageStep {
       if (ckpt != null && ckpt.completed()) {
         // 该实例的 LOAD 已整体完成,幂等跳过(防止重派后重复 loadChunk)。
         deleteQuietly(validatedRecordsPath);
-        deleteQuietly(resolvePath(attrs.get(PipelineRuntimeKeys.PARSED_RECORDS_PATH)));
+        Object parsedRecordsPathValue = attrs.get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
+        Path parsedRecordsPath = resolvePath(parsedRecordsPathValue);
+        deleteQuietly(parsedRecordsPath);
         // 幂等跳过:loaded_count 用已写库记录数,不能用 startLineNo(completed 态 positionMarker 为
         // null,parseLineNo 返回 0,会把审计 loaded_count 覆写成 0)。
         return markLoaded(context, ckpt.processedCount());
       }
-      long loadedCount =
-          loadValidatedRecords(context, validatedRecordsPath, chunkSize, plugin, loadCtx, ckpt);
+      LoadExecution loadExecution =
+          new LoadExecution(context, plugin, loadCtx, ckpt, executionFence);
+      long loadedCount = loadValidatedRecords(validatedRecordsPath, chunkSize, loadExecution);
       if (partitionStageSwapCopy) {
         ((GenericJdbcMappedImportLoadPlugin) plugin).finishPartitionStageSwap(loadCtx);
       }
       completeCheckpoint(ckpt);
-      commit(context, importPayload, loadedCount);
+      commit(context, loadedCount);
       progressRegistry.clear(context, stage().name());
       deleteQuietly(validatedRecordsPath);
-      deleteQuietly(resolvePath(attrs.get(PipelineRuntimeKeys.PARSED_RECORDS_PATH)));
+      Object parsedRecordsPathValue = attrs.get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
+      Path parsedRecordsPath = resolvePath(parsedRecordsPathValue);
+      deleteQuietly(parsedRecordsPath);
       return ImportStageResult.success(stage());
     } catch (Exception ex) {
-      // 失败也清掉当前 task/stage 的进度，避免下一次心跳继续展示已失败任务。
-      progressRegistry.clear(context, stage().name());
-      // M-5: 失败时故意不删除暂存文件（validatedRecordsPath / PARSED_RECORDS_PATH），
-      // 便于运维检查或重放记录，无需重跑之前的 pipeline 阶段。
-      // 加载失败多为模板/数据问题(坏 SQL、缺表、配置非法),message 已表达根因;ERROR 留一行,堆栈降 DEBUG,
-      // 避免大量数据级失败产生日志噪音。失败已封装进 ImportStageResult + 死信,不丢信息。
-      Object fid = attrs.get(PipelineRuntimeKeys.FILE_ID);
-      log.error(
-          "load stage (streaming) failed: tenantId={}, fileId={}, message={}",
-          context.getTenantId(),
-          fid,
-          SwallowedExceptionLogger.summary(ex));
-      log.debug(
-          "load stage (streaming) failed stack: tenantId={}, fileId={}",
-          context.getTenantId(),
-          fid,
-          ex);
-      boolean configError = ex instanceof WorkerConfigException;
-      return ImportStageResult.failure(
-          stage(),
-          configError ? "IMPORT_LOAD_CONFIG_INVALID" : "IMPORT_LOAD_FAILED",
-          configError ? "error.import.load.config_invalid" : "error.import.load.failed",
-          new Object[] {ex.getMessage()},
-          ex.getMessage(),
-          objectMapper);
+      return streamingFailure(context, attrs, ex);
     }
   }
 
+  /** 失败只清心跳进度，保留暂存文件和既有位点，随后按原错误契约归类与记录诊断。 */
+  private ImportStageResult streamingFailure(
+      ImportJobContext context, Map<String, Object> attrs, Exception ex) {
+    // 失败也清掉当前 task/stage 的进度，避免下一次心跳继续展示已失败任务。
+    progressRegistry.clear(context, stage().name());
+    // M-5: 失败时故意不删除暂存文件（validatedRecordsPath / PARSED_RECORDS_PATH），
+    // 便于运维检查或重放记录，无需重跑之前的 pipeline 阶段。
+    // 加载失败多为模板/数据问题(坏 SQL、缺表、配置非法),message 已表达根因;ERROR 留一行,堆栈降 DEBUG,
+    // 避免大量数据级失败产生日志噪音。失败已封装进 ImportStageResult + 死信,不丢信息。
+    Object fid = attrs.get(PipelineRuntimeKeys.FILE_ID);
+    log.error(
+        "load stage (streaming) failed: tenantId={}, fileId={}, message={}",
+        context.getTenantId(),
+        fid,
+        SwallowedExceptionLogger.summary(ex));
+    log.debug(
+        "load stage (streaming) failed stack: tenantId={}, fileId={}",
+        context.getTenantId(),
+        fid,
+        ex);
+    boolean configError = ex instanceof WorkerConfigException;
+    if (ex instanceof NonIdempotentExecutionFenceException) {
+      return ImportStageResult.failure(
+          stage(), TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN, ex.getMessage());
+    }
+    ImportStage failureStage = stage();
+    String failureCode = configError ? "IMPORT_LOAD_CONFIG_INVALID" : "IMPORT_LOAD_FAILED";
+    String failureMessageKey = configError
+        ? "error.import.load.config_invalid"
+        : "error.import.load.failed";
+    String localizedMessageArgument = ex.getMessage();
+    String fallbackMessage = ex.getMessage();
+    return ImportStageResult.failure(
+        failureStage,
+        failureCode,
+        failureMessageKey,
+        new Object[] {localizedMessageArgument},
+        fallbackMessage,
+        objectMapper);
+  }
+
   private long loadValidatedRecords(
-      ImportJobContext context,
-      Path validatedRecordsPath,
-      int chunkSize,
-      ImportLoadPlugin plugin,
-      ImportLoadContext loadCtx,
-      CheckpointHandle ckpt)
-      throws Exception {
-    long skipLines = ckpt == null ? 0L : ckpt.startLineNo();
+      Path validatedRecordsPath, int chunkSize, LoadExecution loadExecution) throws Exception {
+    CheckpointHandle checkpoint = loadExecution.checkpoint();
+    long skipLines = EmptyChecks.isNull(checkpoint) ? 0L : checkpoint.startLineNo();
     long currentLineNo = skipLines;
     // loaded_count 初值用已写库记录数,不能用 startLineNo(行号含空行 → 续跑后 loaded_count 虚增)。
-    long loadedCount = ckpt == null ? 0L : ckpt.processedCount();
+    long loadedCount = EmptyChecks.isNull(checkpoint) ? 0L : checkpoint.processedCount();
     try (BufferedReader reader =
         Files.newBufferedReader(validatedRecordsPath, StandardCharsets.UTF_8)) {
       // 续跑:跳过上次已处理到的行号(空行也算行,保持与首跑一致的行号语义)
@@ -240,78 +257,78 @@ public class LoadStep implements ImportStageStep {
         if (!Texts.hasText(line)) {
           continue;
         }
-        chunk.add(objectMapper.readValue(line, MAP_TYPE));
+        Map<String, Object> parsedRecord = objectMapper.readValue(line, MAP_TYPE);
+        chunk.add(parsedRecord);
         if (chunk.size() >= chunkSize) {
-          loadedCount =
-              flushAndAdvance(context, plugin, loadCtx, ckpt, chunk, currentLineNo, loadedCount);
+          loadedCount = flushAndAdvance(loadExecution, chunk, currentLineNo, loadedCount);
         }
       }
       if (!chunk.isEmpty()) {
-        loadedCount =
-            flushAndAdvance(context, plugin, loadCtx, ckpt, chunk, currentLineNo, loadedCount);
+        loadedCount = flushAndAdvance(loadExecution, chunk, currentLineNo, loadedCount);
       }
     }
     return loadedCount;
   }
 
   private long flushAndAdvance(
-      ImportJobContext context,
-      ImportLoadPlugin plugin,
-      ImportLoadContext loadCtx,
-      CheckpointHandle ckpt,
+      LoadExecution loadExecution,
       List<Map<String, Object>> chunk,
       long currentLineNo,
       long loadedCount)
       throws Exception {
-    int written = flushChunk(plugin, loadCtx, chunk);
+    int written = flushChunk(loadExecution, chunk);
     long updatedLoadedCount = loadedCount + written;
-    advanceCheckpoint(ckpt, currentLineNo, written);
+    advanceCheckpoint(loadExecution.checkpoint(), currentLineNo, written);
     // 流式进度上报(docs/design/pipeline-stage-progress-display.md):totalRowsHint=null
     // 因为预扫整文件估总行数代价大于收益(百万行+一次 O(n) I/O),FE 退化为只显计数器不显 ETA。
-    progressRegistry.publish(context, stage().name(), updatedLoadedCount, null);
+    progressRegistry.publish(loadExecution.context(), stage().name(), updatedLoadedCount, null);
     chunk.clear();
     return updatedLoadedCount;
   }
 
-  private int flushChunk(
-      ImportLoadPlugin plugin, ImportLoadContext loadCtx, List<Map<String, Object>> chunk)
+  private int flushChunk(LoadExecution loadExecution, List<Map<String, Object>> chunk)
       throws Exception {
-    plugin.loadChunk(loadCtx, chunk);
+    if (!loadExecution.executionFence().authorizeBeforeSideEffect()) {
+      throw new NonIdempotentExecutionFenceException();
+    }
+    loadExecution.plugin().loadChunk(loadExecution.loadContext(), chunk);
     return chunk.size();
   }
 
   /**
-   * ADR-038 R3-3:续跑开关开时,前置校验 plugin 的幂等能力。{@link IdempotencyCapability#NONE} / {@link
+   * ADR-038 R3-3:单分区续跑启用时,前置校验 plugin 的幂等能力。{@link IdempotencyCapability#NONE} / {@link
    * IdempotencyCapability#UNKNOWN} 直接 throw {@link WorkerConfigException} 拒跑 —— 跨库无 1PC,崩溃窗口重做
-   * chunk 会双写。开关关时不校验(plugin 不会被重做)。
+   * chunk 会双写。续跑关闭或因多分区降级时,非幂等 plugin 必须在首个外部副作用前持久化执行围栏;失败后按
+   * {@code EXTERNAL_OUTCOME_UNKNOWN} 处理,避免自动重放。
    *
    * <p>详见 {@code docs/runbook/platform-worker-checkpoint-howto.md} §前置校验。
    *
-   * <p>已知局限(ADR-038 P2-1,YAGNI 后置):本校验按 <b>plugin 粒度</b>(plugin 自报 {@code
-   * idempotencyCapability()})。但真实幂等取决于<b>模板级</b> {@code conflict_columns} —— 同一 {@code
-   * IDEMPOTENT_BY_UNIQUE_CONSTRAINT} plugin,若某模板未配唯一约束列,崩溃窗口重做 chunk 仍会双写。当前靠 {@code
-   * JdbcMappedImportSecurityProperties.strictIdempotency=true} 在 plugin 内兜底(无 conflict_columns
-   * 直接拒跑),故 plugin 粒度校验+strict 兜底组合已闭合安全窗口。若后续要更细的诊断,可把校验下沉到 spec 级 (按模板 conflict_columns 判定);改动涉及
-   * plugin SPI 扩展,收益有限,暂只记为已知局限。
+   * <p>能力声明按 plugin 粒度，但 generic JDBC mapped plugin 还会在实际写入前按模板校验：{@code BATCH_UPSERT}
+   * 必须声明 {@code conflictColumns}，分区替换策略不允许进入 checkpoint 路径。自定义 plugin 只有在所有受支持模板和
+   * 执行策略均可安全重放时，才能声明幂等能力。
    */
-  private void requireIdempotentPluginIfCheckpointEnabled(ImportLoadPlugin plugin) {
+  private void requireIdempotentPluginIfCheckpointEnabled(
+      ImportLoadPlugin plugin, IdempotencyCapability capability) {
     if (checkpointProperties == null || !checkpointProperties.isEnabled()) {
       return;
     }
-    IdempotencyCapability cap = plugin.idempotencyCapability();
-    if (cap == IdempotencyCapability.IDEMPOTENT_BY_UNIQUE_CONSTRAINT
-        || cap == IdempotencyCapability.IDEMPOTENT_BY_PLUGIN_LOGIC) {
+    if (isReplaySafe(capability)) {
       return;
     }
     throw new WorkerConfigException(
         "ADR-038 checkpoint is enabled (batch.worker.checkpoint.enabled=true), but plugin "
             + plugin.id()
             + " does not declare an idempotency capability (idempotencyCapability="
-            + cap
+            + capability
             + "). Without a cross-database 1PC, replaying a chunk after a crash can write duplicates. "
             + "Override idempotencyCapability() in the plugin to return IDEMPOTENT_BY_UNIQUE_CONSTRAINT/"
-            + "IDEMPOTENT_BY_PLUGIN_LOGIC, or disable checkpointing. "
+            + "IDEMPOTENT_BY_PLUGIN_LOGIC, or disable checkpointing and rely on the persisted execution fence. "
             + "See docs/runbook/platform-worker-checkpoint-howto.md for the prerequisite validation.");
+  }
+
+  private static boolean isReplaySafe(IdempotencyCapability capability) {
+    return capability == IdempotencyCapability.IDEMPOTENT_BY_UNIQUE_CONSTRAINT
+        || capability == IdempotencyCapability.IDEMPOTENT_BY_PLUGIN_LOGIC;
   }
 
   private boolean isPartitionReplaceCopy(ImportLoadPlugin plugin, ImportLoadContext loadCtx) {
@@ -425,7 +442,9 @@ public class LoadStep implements ImportStageStep {
       return 0L;
     }
     try {
-      return Math.max(0L, Long.parseLong(marker.trim()));
+      String lineNumberText = marker.trim();
+      long lineNumber = Long.parseLong(lineNumberText);
+      return Math.max(0L, lineNumber);
     } catch (NumberFormatException ex) {
       // 位点损坏(理论上不应发生)— 退化为 0,从头跑(plugin 幂等回退)
       return 0L;
@@ -442,12 +461,91 @@ public class LoadStep implements ImportStageStep {
       long processedCount,
       boolean completed) {}
 
+  private record LoadExecution(
+      ImportJobContext context,
+      ImportLoadPlugin plugin,
+      ImportLoadContext loadContext,
+      CheckpointHandle checkpoint,
+      LoadPluginExecutionFence executionFence) {}
+
+  /** 重放安全性未知的 Import 插件写入前，先持久化重试围栏。 */
+  private static final class LoadPluginExecutionFence {
+
+    private final TaskExecutionClient taskExecutionClient;
+    private final String tenantId;
+    private final Long taskId;
+    private final String workerId;
+    private final String partitionInvocationId;
+    private final boolean replaySafe;
+    private boolean confirmed;
+
+    private LoadPluginExecutionFence(
+        TaskExecutionClient taskExecutionClient,
+        ImportJobContext context,
+        IdempotencyCapability capability,
+        boolean forceBeforeDestructiveReplacement) {
+      this.taskExecutionClient = taskExecutionClient;
+      this.tenantId = context.getTenantId();
+      this.taskId = parseTaskId(context.getAttributes().get(PipelineRuntimeKeys.TASK_ID));
+      this.workerId = context.getWorkerId();
+      Object invocationValue =
+          context.getAttributes().get(PipelineRuntimeKeys.PARTITION_INVOCATION_ID);
+      this.partitionInvocationId = invocationValue instanceof String value ? value : null;
+      // 插件整体能力不足以证明破坏性的分区删除或交换在部分写入后
+      // 仍可安全重放；这些策略必须使用持久化围栏。
+      this.replaySafe = !forceBeforeDestructiveReplacement && isReplaySafe(capability);
+    }
+
+    private boolean authorizeBeforeSideEffect() {
+      if (replaySafe || confirmed) {
+        return true;
+      }
+      boolean hasPersistedExecutionIdentity = EmptyChecks.isNotNull(taskId)
+          && Texts.hasText(tenantId)
+          && Texts.hasText(workerId)
+          && Texts.hasText(partitionInvocationId);
+      if (!hasPersistedExecutionIdentity || EmptyChecks.isNull(taskExecutionClient)) {
+        return false;
+      }
+      try {
+        confirmed = taskExecutionClient.markNonIdempotentExecutionStarted(
+            tenantId, taskId, workerId, partitionInvocationId);
+      } catch (RuntimeException exception) {
+        SwallowedExceptionLogger.warn(
+            LoadStep.class, "catch:nonIdempotentPluginExecutionFence", exception);
+      }
+      return confirmed;
+    }
+
+    private static Long parseTaskId(Object value) {
+      if (EmptyChecks.isNull(value)) {
+        return null;
+      }
+      try {
+        return PlatformRuntimeValues.toLong(value);
+      } catch (NumberFormatException exception) {
+        return null;
+      }
+    }
+  }
+
+  private static final class NonIdempotentExecutionFenceException extends Exception {
+
+    private static final long serialVersionUID = 1L;
+
+    private NonIdempotentExecutionFenceException() {
+      super("non-idempotent Import plugin execution fence was not confirmed");
+    }
+  }
+
   /**
    * VALIDATED_RECORDS_PATH 缺失或暂存文件不存在时:全部记录被 skip 则视为成功;否则 fail。 (ADR-038 P3:Legacy
    * customerPayloads 路径已下线,所有写入方必须走 streaming 路径。)
    */
   private ImportStageResult missingPayload(ImportJobContext context) {
-    if (context != null && numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT)) > 0) {
+    boolean allRecordsWereSkipped =
+        EmptyChecks.isNotNull(context) && numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT)) > 0;
+    if (allRecordsWereSkipped) {
       return markLoaded(context, 0L);
     }
     return ImportStageResult.failure(
@@ -463,29 +561,34 @@ public class LoadStep implements ImportStageStep {
    * P1: 提取 streaming / legacy 共用的 attribute 写入 + file_status 更新(原约 22 行,两侧逐字段对称)。 loadedCount
    * 由调用方传入即可,其他统计仍从 attributes 读最新值。
    */
-  private void commit(ImportJobContext context, ImportPayload importPayload, long loadedCount) {
+  private void commit(ImportJobContext context, long loadedCount) {
     Map<String, Object> attrs = context.getAttributes();
     attrs.put(KEY_LOADED_COUNT, loadedCount);
-    attrs.put(
+    long previousSuccessCount = numberValue(attrs.get(ImportRuntimeKeys.SUCCESS_COUNT));
+    long updatedSuccessCount = previousSuccessCount + loadedCount;
+    attrs.put(ImportRuntimeKeys.SUCCESS_COUNT, updatedSuccessCount);
+    String loadedStatus = FileStatus.LOADED.code();
+    long successCount = numberValue(attrs.get(ImportRuntimeKeys.SUCCESS_COUNT));
+    long skippedCount = numberValue(attrs.get(KEY_SKIPPED_COUNT));
+    long badRecordCount = badRecordCount(context);
+    boolean manualReviewRequired =
+        Boolean.TRUE.equals(attrs.get(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED));
+    String loadTargetRef = resolveLoadTargetRef(context);
+    Map<String, Object> fileStatusMetadata = Map.of(
+        KEY_LOADED_COUNT,
+        loadedCount,
         ImportRuntimeKeys.SUCCESS_COUNT,
-        numberValue(attrs.get(ImportRuntimeKeys.SUCCESS_COUNT)) + loadedCount);
+        successCount,
+        KEY_SKIPPED_COUNT,
+        skippedCount,
+        "badRecordCount",
+        badRecordCount,
+        ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED,
+        manualReviewRequired,
+        "loadTargetRef",
+        loadTargetRef);
     ImportStageSupport.updateFileStatusRecoverAware(
-        fileRecords,
-        context,
-        FileStatus.LOADED.code(),
-        Map.of(
-            KEY_LOADED_COUNT,
-            loadedCount,
-            ImportRuntimeKeys.SUCCESS_COUNT,
-            numberValue(attrs.get(ImportRuntimeKeys.SUCCESS_COUNT)),
-            KEY_SKIPPED_COUNT,
-            numberValue(attrs.get(KEY_SKIPPED_COUNT)),
-            "badRecordCount",
-            badRecordCount(context),
-            ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED,
-            Boolean.TRUE.equals(attrs.get(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED)),
-            "loadTargetRef",
-            resolveLoadTargetRef(context, importPayload)));
+        fileRecords, context, loadedStatus, fileStatusMetadata);
   }
 
   private ImportLoadContext buildLoadContext(
@@ -502,13 +605,17 @@ public class LoadStep implements ImportStageStep {
     String region = importPayload != null && importPayload.metadata() != null
         ? metaString(importPayload.metadata(), "region")
         : null;
+    String tenantId = context.getTenantId();
+    String jobCode = context.getJobCode();
+    Object traceIdValue =
+        context.getAttributes().getOrDefault(PipelineRuntimeKeys.TRACE_ID, context.getWorkerId());
+    String traceId = String.valueOf(traceIdValue);
+    String workerId = context.getWorkerId();
     return new ImportLoadContext(
-        context.getTenantId(),
-        context.getJobCode(),
-        String.valueOf(context
-            .getAttributes()
-            .getOrDefault(PipelineRuntimeKeys.TRACE_ID, context.getWorkerId())),
-        context.getWorkerId(),
+        tenantId,
+        jobCode,
+        traceId,
+        workerId,
         sourceFileName,
         batchNo,
         context.getBizDate(),
@@ -520,14 +627,31 @@ public class LoadStep implements ImportStageStep {
 
   private static String metaString(Map<String, Object> meta, String key) {
     Object v = meta == null ? null : meta.get(key);
-    return v == null ? null : String.valueOf(v).trim();
+    if (EmptyChecks.isNull(v)) {
+      return null;
+    }
+    String rawText = String.valueOf(v);
+    return rawText.trim();
   }
 
-  private String resolveLoadTargetRef(ImportJobContext context, ImportPayload importPayload) {
-    Map<String, Object> tc = templateConfigMap(context);
-    Object v = tc.get("load_target_ref");
-    if (v != null && Texts.hasText(String.valueOf(v))) {
-      return String.valueOf(v).trim();
+  ReplayCapabilityDeclaration replayCapability(Map<String, Object> frozenTemplateConfig) {
+    String loadTargetRef = resolveLoadTargetRef(frozenTemplateConfig);
+    return importLoadPluginRegistry.replayCapability(loadTargetRef, frozenTemplateConfig);
+  }
+
+  private String resolveLoadTargetRef(ImportJobContext context) {
+    Map<String, Object> templateConfig = templateConfigMap(context);
+    return resolveLoadTargetRef(templateConfig);
+  }
+
+  private String resolveLoadTargetRef(Map<String, Object> templateConfig) {
+    Map<String, Object> resolvedConfig =
+        EmptyChecks.isNull(templateConfig) ? Map.of() : templateConfig;
+    Object v = resolvedConfig.get("load_target_ref");
+    String presenceText = EmptyChecks.isNull(v) ? null : String.valueOf(v);
+    if (EmptyChecks.isNotNull(v) && Texts.hasText(presenceText)) {
+      String rawLoadTarget = String.valueOf(v);
+      return rawLoadTarget.trim();
     }
     return WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED;
   }
@@ -543,22 +667,25 @@ public class LoadStep implements ImportStageStep {
   }
 
   private ImportStageResult markLoaded(ImportJobContext context, long loadedCount) {
+    String loadedStatus = FileStatus.LOADED.code();
+    long successCount = numberValue(context.getAttributes().get(ImportRuntimeKeys.SUCCESS_COUNT));
+    long skippedCount = numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT));
+    long badRecordCount = badRecordCount(context);
+    boolean manualReviewRequired = Boolean.TRUE.equals(
+        context.getAttributes().get(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED));
+    Map<String, Object> fileStatusMetadata = Map.of(
+        KEY_LOADED_COUNT,
+        loadedCount,
+        ImportRuntimeKeys.SUCCESS_COUNT,
+        successCount,
+        KEY_SKIPPED_COUNT,
+        skippedCount,
+        "badRecordCount",
+        badRecordCount,
+        ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED,
+        manualReviewRequired);
     ImportStageSupport.updateFileStatusRecoverAware(
-        fileRecords,
-        context,
-        FileStatus.LOADED.code(),
-        Map.of(
-            KEY_LOADED_COUNT,
-            loadedCount,
-            ImportRuntimeKeys.SUCCESS_COUNT,
-            numberValue(context.getAttributes().get(ImportRuntimeKeys.SUCCESS_COUNT)),
-            KEY_SKIPPED_COUNT,
-            numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT)),
-            "badRecordCount",
-            badRecordCount(context),
-            ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED,
-            Boolean.TRUE.equals(
-                context.getAttributes().get(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED))));
+        fileRecords, context, loadedStatus, fileStatusMetadata);
     context.getAttributes().put(KEY_LOADED_COUNT, loadedCount);
     return ImportStageResult.success(stage());
   }

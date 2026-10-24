@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogMarkRetryFailureParam;
+
+
 import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -76,6 +79,8 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
   private final LockingTaskExecutor lockingTaskExecutor;
   private final Counter giveUpCounter;
   private final WebhookRelayProperties properties;
+  private final TerminalNotificationDeliveryService terminalDeliveries;
+  private final TerminalNotificationArchiveService terminalArchives;
 
   private final AtomicBoolean running = new AtomicBoolean(false);
   private final AtomicBoolean stopping = new AtomicBoolean(false);
@@ -88,12 +93,16 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
       WebhookDispatcher dispatcher,
       LockingTaskExecutor lockingTaskExecutor,
       MeterRegistry meterRegistry,
-      WebhookRelayProperties properties) {
+      WebhookRelayProperties properties,
+      TerminalNotificationDeliveryService terminalDeliveries,
+      TerminalNotificationArchiveService terminalArchives) {
     this.deliveryLogRepository = deliveryLogRepository;
     this.subscriptionRepository = subscriptionRepository;
     this.dispatcher = dispatcher;
     this.lockingTaskExecutor = lockingTaskExecutor;
     this.properties = properties;
+    this.terminalDeliveries = terminalDeliveries;
+    this.terminalArchives = terminalArchives;
     this.giveUpCounter = Counter.builder("batch_webhook_delivery_give_up_total")
         .description("Webhook 行被 relay 标 GIVE_UP 的累计次数(达到 absolute-max-attempts)")
         .tags(Tags.empty())
@@ -183,7 +192,7 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
       if (stopping.get()) {
         return;
       }
-      lockingTaskExecutor.executeWithLock((Runnable) this::pollLocked, lockConfig());
+      lockingTaskExecutor.executeWithLock((Runnable) this::pollAndArchiveLocked, lockConfig());
     } catch (DataAccessException dae) {
       if (isShutdownNoise(dae)) {
         log.info(
@@ -213,11 +222,12 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
     Throwable current = throwable;
     while (current != null) {
       String message = current.getMessage();
-      if (message != null
+      boolean isConnectionShutdownMessage = message != null
           && (message.contains("LettuceConnectionFactory is STOPPING")
               || message.contains("LettuceConnectionFactory has been STOPPED")
               || message.contains("has been closed")
-              || message.contains("Connection pool shut down"))) {
+              || message.contains("Connection pool shut down"));
+      if (isConnectionShutdownMessage) {
         return true;
       }
       current = current.getCause();
@@ -225,10 +235,17 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
     return false;
   }
 
+  private void pollAndArchiveLocked() {
+    pollLocked();
+    // 归档失败不能阻止本轮既有通知重试；关闭检查仍由归档服务执行。
+    terminalArchives.poll(stopping::get);
+  }
+
   private void pollLocked() {
     if (stopping.get()) {
       return;
     }
+    terminalDeliveries.poll(stopping::get);
     Instant now = BatchDateTimeSupport.utcNow();
     List<WebhookDeliveryLogEntity> batch =
         deliveryLogRepository.findEligibleRetries(now, properties.getBatchSize());
@@ -323,8 +340,15 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
 
     Instant nextRetryAt =
         BatchDateTimeSupport.utcNow().plusSeconds(computeBackoffSeconds(nextAttempt));
+    ConsoleWebhookDeliveryLogMarkRetryFailureParam consoleWebhookDeliveryLogMarkRetryFailureParam = ConsoleWebhookDeliveryLogMarkRetryFailureParam.builder()
+        .id(row.getId())
+        .attempt(nextAttempt)
+        .httpStatus(result.httpStatus())
+        .responseBody(result.errorSummary())
+        .nextRetryAt(nextRetryAt)
+        .build();
     deliveryLogRepository.markRetryFailure(
-        row.getId(), nextAttempt, result.httpStatus(), result.errorSummary(), nextRetryAt);
+        consoleWebhookDeliveryLogMarkRetryFailureParam);
     log.debug(
         "WebhookDeliveryRelay retry failed; scheduling the next attempt: id={} tenantId={} attempt={} nextRetryAt={}",
         row.getId(),

@@ -53,7 +53,7 @@ BFS 的定位必须先固定,否则"学习优秀系统"很容易滑成范围膨�
 1. **已明确取舍**:调度器、DAG、配置中心、限流、观测、Checkpoint、Retry、Compensation、AI、容量画像。
 2. **需要特别防止误读**:通知能力是“Alertmanager 技术告警 + BFS 业务通知”两层模型；`alert_routing_config` 已有配置表但当前不生效，不能宣传为动态路由已完成。
 3. **当前文档状态**:通知与审计的统一边界已收敛到 [`notification-and-audit-boundary.md`](../architecture/notification-and-audit-boundary.md)；治理表、日志采集和 Checkpoint 仍由各自的细节文档维护，实现状态以代码、测试和路线图的最新核查为准。
-4. **历史文档优先级**:[`maturity-assessment.md`](../architecture/maturity-assessment.md) 明确是 2026-04-26 历史快照，其中的 Wheel 行动项不代表当前决策；当前调度结论以 ADR-033 的 `Superseded` 状态和本节为准。
+4. **历史文档优先级**:[`maturity-assessment-2026-04-26.md`](../archive/audit/maturity-assessment-2026-04-26.md) 明确是 2026-04-26 历史快照，其中的 Wheel 行动项不代表当前决策；当前调度结论以 ADR-033 的 `Superseded` 状态和本节为准。
 
 ## 2. 总体结论
 

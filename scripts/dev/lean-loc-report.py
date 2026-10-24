@@ -1,18 +1,12 @@
 #!/usr/bin/env python3
-"""Generate a low-inflation source size report.
-
-The old docs/stats snapshots used physical lines (`cat | wc -l`). This script
-keeps that number for comparison, but leads with a leaner logical count:
-
-* Git-tracked files only.
-* Excludes docs, generated/build outputs, vendored dependencies and archived
-  analysis material.
-* Splits production, test, scripts, config and SQL fixtures.
-* Counts Java/Go/Rust/TypeScript/C-like files by statements/blocks after
-  stripping comments, so formatting line wraps do not inflate the main number.
-* Counts Python with the AST statement tree.
-* Counts Shell/YAML/SQL as non-empty non-comment lines or SQL statements.
-"""
+# 用途：按生产、测试与辅助资产生成代码量统计。
+# 用法：在仓库根目录执行 python3 scripts/dev/lean-loc-report.py；参数与前置环境见下方说明及所属 README。
+"""生成排除格式膨胀的源码规模报告。
+保留历史物理行数供比较，主要统计口径如下：
+- 只统计 Git 跟踪文件，排除文档、构建生成物、第三方依赖及归档分析材料。
+- 分开统计生产、测试、脚本、配置与 SQL fixture。
+- Java/Go/Rust/TypeScript 等按去注释后的语句与代码块统计，避免换行增加主指标。
+- Python 使用 AST 语句树；Shell/YAML/SQL 使用非空非注释行或 SQL 语句。"""
 
 from __future__ import annotations
 
@@ -154,7 +148,7 @@ def language(path: pathlib.Path) -> str:
 
 def group(path: pathlib.Path) -> str:
     text = path.as_posix()
-    if "/src/test/" in text or "/tests/" in text or text.endswith("_test.go") or text.endswith(".test.ts"):
+    if text.startswith("test-data/") or "/src/test/" in text or "/tests/" in text or text.endswith("_test.go") or text.endswith(".test.ts"):
         return "test"
     if text.startswith("scripts/") or "/scripts/" in text:
         return "script"
@@ -371,7 +365,7 @@ def main() -> None:
     today = dt.date.today().isoformat()
     report_date = today
     commit = run_git(["rev-parse", "--short=9", "HEAD"])
-    rerun_target = f"docs/stats/loc-{today}-lean.md"
+    rerun_target = f"docs/archive/stats/loc-lean-{today}.md"
     if args.write:
         output_for_command = args.write if args.write.is_absolute() else ROOT / args.write
         if output_for_command.name == "loc-current-lean.md":

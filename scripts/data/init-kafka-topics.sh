@@ -1,4 +1,6 @@
 #!/bin/sh
+# 用途：初始化 Kafka topics。
+# 用法：在仓库根目录执行 bash scripts/data/init-kafka-topics.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # init-kafka-topics.sh - 初始化 Kafka topics
 # 说明：
@@ -27,8 +29,8 @@
 #   KAFKA_TOPIC_MIN_INSYNC_REPLICAS=2      # ← 配 RF=3 + producer acks=all，在途事件 0 丢
 #   KAFKA_PARTITIONS_DISPATCH=40
 #   KAFKA_PARTITIONS_RESULT=20
-#   KAFKA_PARTITIONS_RETRY=10
-#   KAFKA_PARTITIONS_DEAD_LETTER=5
+# --enable-preview：检查 java、javac 与 Maven compilerArg 参数。
+# <enablePreview>true：检查 Maven 编译器配置。
 #
 # 副本因子 / min.insync.replicas 均可配，默认值保持 dev 单 broker 行为不变：
 #   - KAFKA_TOPIC_REPLICATION_FACTOR：默认 1；prod 设 3。
@@ -43,7 +45,9 @@ SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 
 bootstrap_server="${KAFKA_BOOTSTRAP_SERVER:-$BATCH_DEFAULT_KAFKA_CONTAINER_BOOTSTRAP}"
 kafka_container_bin_dir="${KAFKA_CONTAINER_BIN_DIR:-$BATCH_DEFAULT_KAFKA_CONTAINER_BIN_DIR}"
-default_topics="batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.process,batch.task.dispatch.dispatch,batch.task.dispatch.atomic,batch.task.result,batch.task.retry,batch.task.dead-letter,batch.trigger.launch.v1,batch.verifier.failure.v1,batch.workflow.terminal.v1"
+topic_namespace="${BATCH_KAFKA_NAMESPACE:-}"
+batch_validate_kafka_namespace "$topic_namespace"
+default_topics="batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.process,batch.task.dispatch.dispatch,batch.task.dispatch.atomic,batch.task.result,batch.task.retry,batch.task.dead-letter,batch.trigger.launch.v1,batch.verifier.failure.v1,batch.workflow.terminal.v1,batch.job.terminal.v1"
 default_direct_topics="batch.task.dispatch.import.node.import-node-1,batch.task.dispatch.export.node.export-node-1,batch.task.dispatch.process.node.process-node-1,batch.task.dispatch.dispatch.node.dispatch-node-1,batch.task.dispatch.atomic.node.atomic-node-1"
 # 平台核心 topic 和内置 worker direct topic 永远必须存在。KAFKA_TOPICS 与
 # KAFKA_DIRECT_WORKER_TOPICS 都只追加自定义 topic，不能因旧的 gitignored .env 覆盖而漏掉
@@ -109,7 +113,7 @@ resolve_partitions() {
       echo "${partitions_retry}" ;;
     *.dead-letter)
       echo "${partitions_dead_letter}" ;;
-    batch.trigger.launch.v1)
+    *.trigger.launch.v1)
       echo "${partitions_trigger_launch}" ;;
     *)
       echo "${default_partitions}" ;;
@@ -127,7 +131,7 @@ resolve_retention_ms() {
       echo "${KAFKA_TOPIC_RETENTION_MS_RETRY:-${KAFKA_TOPIC_RETENTION_MS:-}}" ;;
     *.dead-letter)
       echo "${KAFKA_TOPIC_RETENTION_MS_DEAD_LETTER:-${KAFKA_TOPIC_RETENTION_MS:-}}" ;;
-    batch.trigger.launch.v1)
+    *.trigger.launch.v1)
       echo "${KAFKA_TOPIC_RETENTION_MS_TRIGGER_LAUNCH:-${KAFKA_TOPIC_RETENTION_MS:-}}" ;;
     *)
       echo "${KAFKA_TOPIC_RETENTION_MS:-}" ;;
@@ -214,6 +218,8 @@ IFS=','
 for raw_topic in $topics_csv; do
   topic="$(echo "${raw_topic}" | tr -d '[:space:]')"
   [ -n "${topic}" ] || continue
+
+  topic="$(batch_namespace_kafka_name "$topic" "$topic_namespace")"
 
   partitions="$(resolve_partitions "${topic}")"
   retention_ms="$(resolve_retention_ms "${topic}")"

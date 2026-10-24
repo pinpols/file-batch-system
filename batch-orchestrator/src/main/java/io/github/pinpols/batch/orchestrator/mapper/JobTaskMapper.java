@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import io.github.pinpols.batch.orchestrator.domain.param.JobTaskPromoteStatusParam;
+import io.github.pinpols.batch.orchestrator.domain.query.JobTaskActiveByAssignedWorkerQuery;
+
+
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.orchestrator.domain.context.TaskOutcomePersistenceContext;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -8,6 +12,7 @@ import io.github.pinpols.batch.orchestrator.domain.param.FinishTaskParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateTaskStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.query.JobTaskQuery;
 import io.github.pinpols.batch.orchestrator.domain.query.NodePartitionAssignment;
+import java.time.LocalDate;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -20,9 +25,19 @@ public interface JobTaskMapper {
 
   JobTaskEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
+  /** CLAIM 读取必须同时满足父 Job 和关联 Workflow 的执行准入，包含同 Worker 的重试响应。 */
+  JobTaskEntity selectForWorkerClaim(@Param("tenantId") String tenantId, @Param("id") Long id);
+
   /** REPORT 热路径一次读取 task 与所属 partition，避免同事务连续两次主键查询。 */
   TaskOutcomePersistenceContext selectOutcomePersistenceContext(
       @Param("tenantId") String tenantId, @Param("id") Long id);
+
+  /** 外部工作开始前，为当前任务所有者持久化非幂等执行围栏。 */
+  int markNonIdempotentExecutionStarted(
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("workerCode") String workerCode,
+      @Param("partitionInvocationId") String partitionInvocationId);
 
   JobTaskEntity selectByPartitionAndSeq(
       @Param("tenantId") String tenantId,
@@ -30,6 +45,16 @@ public interface JobTaskMapper {
       @Param("taskSeq") Integer taskSeq);
 
   List<JobTaskEntity> selectByQuery(JobTaskQuery query);
+
+  /** 按不可变来源 JobInstance 快速检查重放安全，不加载任务载荷。 */
+  boolean existsUnknownExternalOutcomeForJobInstance(
+      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
+
+  /** 请求以 Job 和业务日定位时，快速检查批量重放安全。 */
+  boolean existsUnknownExternalOutcomeForJobBizDate(
+      @Param("tenantId") String tenantId,
+      @Param("jobCode") String jobCode,
+      @Param("bizDate") LocalDate bizDate);
 
   /**
    * perf: 仅取 (job_partition_id, workflowNodeCode) 轻量投影,给 report 链路按 DAG 节点做分区计数用。
@@ -47,20 +72,19 @@ public interface JobTaskMapper {
       @Param("readyStatus") String readyStatus);
 
   List<JobTaskEntity> selectActiveByAssignedWorker(
-      @Param("tenantId") String tenantId,
-      @Param("assignedWorkerCode") String assignedWorkerCode,
-      @Param("runningStatus") String runningStatus,
-      @Param("readyStatus") String readyStatus,
-      @Param("createdStatus") String createdStatus);
+      JobTaskActiveByAssignedWorkerQuery parameters);
 
   /** 便捷重载：RUNNING / READY / CREATED 默认集合（所有调用方均用此组合）。 */
   default List<JobTaskEntity> selectActiveByAssignedWorker(String tenantId, String workerCode) {
+    JobTaskActiveByAssignedWorkerQuery jobTaskActiveByAssignedWorkerQuery = JobTaskActiveByAssignedWorkerQuery.builder()
+        .tenantId(tenantId)
+        .assignedWorkerCode(workerCode)
+        .runningStatus(TaskStatus.RUNNING.code())
+        .readyStatus(TaskStatus.READY.code())
+        .createdStatus(TaskStatus.CREATED.code())
+        .build();
     return selectActiveByAssignedWorker(
-        tenantId,
-        workerCode,
-        TaskStatus.RUNNING.code(),
-        TaskStatus.READY.code(),
-        TaskStatus.CREATED.code());
+        jobTaskActiveByAssignedWorkerQuery);
   }
 
   int updateStatus(UpdateTaskStatusParam param);
@@ -78,6 +102,27 @@ public interface JobTaskMapper {
       @Param("readyStatus") String readyStatus,
       @Param("expectedVersion") Long expectedVersion);
 
+  int markExternalOutcomeResolution(
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("expectedVersion") Long expectedVersion);
+
+  int bindExternalOutcomeResolutionToWorkflowRequest(
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("sourceVersion") Long sourceVersion,
+      @Param("workflowTriggerRequestId") Long workflowTriggerRequestId);
+
+  /**
+   * 租约回收专用复位：允许父 Job/Workflow 处于 PAUSED，以恢复暂停前已派发的在途任务；
+   * 普通重试和人工重排队必须使用 {@link #resetForRetry}，暂停期间会被拒绝。
+   */
+  int resetForLeaseReclaim(
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("readyStatus") String readyStatus,
+      @Param("expectedVersion") Long expectedVersion);
+
   /**
    * 尝试用 {@code FOR UPDATE NOWAIT} 立即取得某 task 行的行锁,取不到(行正被并发事务持有)立即抛 {@link
    * org.springframework.dao.CannotAcquireLockException}(PostgreSQL SQLState 55P03),<b>绝不等待</b>。
@@ -89,11 +134,7 @@ public interface JobTaskMapper {
   Long lockForReclaimNoWait(@Param("tenantId") String tenantId, @Param("id") Long id);
 
   int promoteStatus(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("fromStatus") String fromStatus,
-      @Param("toStatus") String toStatus,
-      @Param("expectedVersion") Long expectedVersion);
+      JobTaskPromoteStatusParam parameters);
 
   /**
    * 以状态和版本 CAS 终结任务，并返回数据库中的最终行。

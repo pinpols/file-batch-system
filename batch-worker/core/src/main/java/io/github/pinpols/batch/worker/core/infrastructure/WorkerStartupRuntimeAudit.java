@@ -191,14 +191,21 @@ public class WorkerStartupRuntimeAudit {
     String name = contributor.name();
     try {
       WorkerStartupAuditContributor.WorkerStartupAuditResult result = contributor.audit();
-      put(results, name, auditContributorDetails(result.healthy(), result.details(), null));
+      boolean healthyForDetails = result.healthy();
+      Map<String, Object> contributorDetails = result.details();
+      Map<String, Object> auditDetails =
+          auditContributorDetails(healthyForDetails, contributorDetails, null);
+      put(results, name, auditDetails);
       if (!result.healthy()) {
         unhealthy.add(name);
       }
     } catch (RuntimeException ex) {
       SwallowedExceptionLogger.warn(WorkerStartupRuntimeAudit.class, "catch:RuntimeException", ex);
 
-      put(results, name, auditContributorDetails(false, Map.of(), ex.getClass().getSimpleName()));
+      Map<String, Object> emptyDetails = Map.of();
+      String failureType = ex.getClass().getSimpleName();
+      Map<String, Object> auditDetails = auditContributorDetails(false, emptyDetails, failureType);
+      put(results, name, auditDetails);
       unhealthy.add(name);
     }
   }

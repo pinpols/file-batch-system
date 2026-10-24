@@ -33,9 +33,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
@@ -115,7 +117,7 @@ class AbstractTaskConsumerTest {
     boolean result = consumer.doConsumeBatch(List.of(good, bad));
 
     assertThat(result).isTrue();
-    verify(dlq).publish(org.mockito.ArgumentMatchers.eq(bad), any(), any(), any());
+    verify(dlq).publish(ArgumentMatchers.eq(bad), any(), any(), any());
     @SuppressWarnings("unchecked")
     ArgumentCaptor<List<TaskDispatchMessage>> cap = ArgumentCaptor.forClass(List.class);
     verify(executor).executeBatchDetailed(cap.capture(), anyString());
@@ -140,7 +142,7 @@ class AbstractTaskConsumerTest {
     boolean result = consumer.doConsumeBatch(List.of(p1, p2));
 
     assertThat(result).isTrue();
-    verify(dlq).publish(org.mockito.ArgumentMatchers.eq(p2), any(), any(), any());
+    verify(dlq).publish(ArgumentMatchers.eq(p2), any(), any(), any());
   }
 
   @Test
@@ -161,9 +163,8 @@ class AbstractTaskConsumerTest {
     boolean result = consumer.doConsumeBatch(List.of(firstPayload, secondPayload));
 
     assertThat(result).isTrue();
-    verify(dlq).publish(org.mockito.ArgumentMatchers.eq(firstPayload), any(), any(), any());
-    verify(dlq, never())
-        .publish(org.mockito.ArgumentMatchers.eq(secondPayload), any(), any(), any());
+    verify(dlq).publish(ArgumentMatchers.eq(firstPayload), any(), any(), any());
+    verify(dlq, never()).publish(ArgumentMatchers.eq(secondPayload), any(), any(), any());
   }
 
   @Test
@@ -547,7 +548,7 @@ class AbstractTaskConsumerTest {
     props.setSubscribeMode(WorkerKafkaSubscribeProperties.Mode.DIRECT_ONLY);
     setSubscribeProperties(consumer, props);
 
-    org.assertj.core.api.Assertions.assertThatThrownBy(consumer::topicPattern)
+    Assertions.assertThatThrownBy(consumer::topicPattern)
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("DIRECT_ONLY")
         .hasMessageContaining("worker code");

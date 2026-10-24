@@ -51,4 +51,18 @@ class NodePartitionProgressCalculatorTest {
     assertThat(result.successCount()).isEqualTo(1);
     assertThat(result.allFinished()).isTrue();
   }
+
+  @Test
+  @DisplayName("取消分区是节点终态失败, 不能让工作流节点永久等待")
+  void shouldTreatCancelledPartitionAsFinishedFailure() {
+    NodePartitionProgressCalculator.Result result = NodePartitionProgressCalculator.calculate(
+        List.of(new PartitionStatusRef(1L, PartitionStatus.CANCELLED.code())),
+        List.of(new NodePartitionAssignment(1L, "LOAD")),
+        "LOAD",
+        null);
+
+    assertThat(result.cancelledCount()).isEqualTo(1);
+    assertThat(result.unsuccessfulCount()).isEqualTo(1);
+    assertThat(result.allFinished()).isTrue();
+  }
 }

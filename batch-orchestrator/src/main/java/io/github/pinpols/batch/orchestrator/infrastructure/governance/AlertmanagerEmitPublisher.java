@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.governance;
 
+import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
@@ -16,6 +17,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import jakarta.annotation.PreDestroy;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -79,9 +81,9 @@ public class AlertmanagerEmitPublisher {
           new ThreadPoolExecutor.AbortPolicy());
       this.executor = pool;
       this.alertsUri = stripTrailingSlash(props.getEndpoint()) + ALERTS_PATH;
-      log.info(
-          "AlertmanagerEmitPublisher enabled: endpoint={}",
-          SecretMasking.maskEndpoint(props.getEndpoint()));
+      String endpointForLog = props.getEndpoint();
+      String sanitizedEndpoint = SecretMasking.maskEndpoint(endpointForLog);
+      log.info("AlertmanagerEmitPublisher enabled: endpoint={}", sanitizedEndpoint);
     } else {
       this.executor = null;
       this.alertsUri = null;
@@ -131,15 +133,20 @@ public class AlertmanagerEmitPublisher {
 
   private void sendQuietly(AlertEventEntity entity) {
     try {
-      String body = JsonUtils.toJson(List.of(buildPostableAlert(entity)));
-      OutboundHttpResponse response = httpTransport.execute(OutboundHttpRequest.post(
+      Map<String, Object> alert = buildPostableAlert(entity);
+      List<Map<String, Object>> alerts = List.of(alert);
+      String body = JsonUtils.toJson(alerts);
+      Duration connectTimeout = Duration.ofMillis(props.getConnectTimeoutMillis());
+      Duration requestTimeout = Duration.ofMillis(props.getTimeoutMillis());
+      OutboundHttpContent httpContent = new OutboundHttpContent(body, "application/json; charset=utf-8");
+      OutboundHttpRequest request = OutboundHttpRequest.post(
           alertsUri,
           Map.of(),
-          body,
-          "application/json; charset=utf-8",
-          Duration.ofMillis(props.getConnectTimeoutMillis()),
-          Duration.ofMillis(props.getTimeoutMillis()),
-          OutboundAddressPolicy.TRUSTED));
+          httpContent,
+          connectTimeout,
+          requestTimeout,
+          OutboundAddressPolicy.TRUSTED);
+      OutboundHttpResponse response = httpTransport.execute(request);
       if (response.isSuccessful()) {
         recordEmitMetric("success");
       } else {
@@ -149,7 +156,7 @@ public class AlertmanagerEmitPublisher {
             response.statusCode(),
             entity.getAlertType());
       }
-    } catch (RuntimeException | java.io.IOException ex) {
+    } catch (RuntimeException | IOException ex) {
       recordEmitMetric("failed");
       SwallowedExceptionLogger.warn(AlertmanagerEmitPublisher.class, "catch:am_emit", ex);
     }
@@ -158,8 +165,8 @@ public class AlertmanagerEmitPublisher {
   /**
    * 把 alert_event 行映射成 AM PostableAlert（labels + annotations + startsAt）。
    *
-   * <p>labels 全是低基数枚举（alertname/tenant/severity/service/alert_group/team），可进 group_by；高基数的
-   * resource_key / trace_id / alert_id 一律进 annotations（§4/§8 基数守则）。不带 endsAt = firing。
+   * <p>fingerprint label 区分告警实体，不加入 group_by；通知仍按低基数枚举分组。
+   * resource_key / trace_id / alert_id 留在 annotations。不带 endsAt = firing。
    */
   Map<String, Object> buildPostableAlert(AlertEventEntity entity) {
     // 与 close 桥接的 resolved 共用同一套规范 label 集(AlertLabels.canonicalLabels),保证 firing/resolved

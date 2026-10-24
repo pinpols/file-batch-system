@@ -53,7 +53,8 @@ class OrchestratorApprovalClientTest {
             .uri(anyString(), any(Object[].class))
             .retrieve()
             .body(ApprovalRecordResponse.class))
-        .thenReturn(new ApprovalRecordResponse(new ApprovalRecord(status, targetType, targetId)));
+        .thenReturn(new ApprovalRecordResponse(
+            new ApprovalRecord(status, targetType, targetId, null, null)));
   }
 
   private RestClient.RequestBodySpec stubSubmit(ApprovalSubmitResponse response) {
@@ -125,12 +126,14 @@ class OrchestratorApprovalClientTest {
   }
 
   @Test
-  @DisplayName("显式声明不绑定目标时,仅校验审批状态而不校验目标")
-  void shouldSkipBinding_whenExplicitNone() {
-    // none() 是既有作业运维路径的显式过渡声明：仅校验状态,不校验目标。
+  @DisplayName("缺少文件目标时必须拒绝，不能退化为只校验审批状态")
+  void shouldRejectMissingTarget_whenApprovalIsApproved() {
     stubApprovalRecord("APPROVED", "JOB", "999");
-    assertThatCode(() -> client.requireApprovedApproval("t1", "AP-1", ApprovalTargetBinding.none()))
-        .doesNotThrowAnyException();
+    assertThatThrownBy(
+            () -> client.requireApprovedApproval("t1", "AP-1", ApprovalTargetBinding.file(null)))
+        .isInstanceOfSatisfying(
+            BizException.class,
+            failure -> assertThat(failure.getCode()).isEqualTo(ResultCode.FORBIDDEN));
   }
 
   // ── submitApproval ──────────────────────────────────────────────────────

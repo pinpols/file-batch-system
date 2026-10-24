@@ -1,5 +1,4 @@
--- DANGER: 删除并重建取证回放 schema。仅限本地取证回放库，确认 schema 名称和数据备份。
-DROP SCHEMA IF EXISTS :"replay_schema" CASCADE;
+-- 每次回放使用独占 namespace；若意外重名则失败，绝不覆盖先前保留的现场。
 CREATE SCHEMA :"replay_schema";
 
 CREATE TABLE :"replay_schema".forensic_job_instances (
@@ -12,9 +11,14 @@ CREATE TABLE :"replay_schema".forensic_job_instances (
 
 CREATE INDEX ON :"replay_schema".forensic_job_instances (tenant_id, job_code, biz_date);
 
+CREATE TABLE :"replay_schema".forensic_replay_requests (
+  tenant_id TEXT NOT NULL,
+  request_id TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, request_id)
+);
+
 CREATE TABLE :"replay_schema".forensic_day_audits (
   id        BIGINT,
   tenant_id TEXT,
   snapshot  JSONB NOT NULL
 );
--- DANGER: 删除并重建取证回放 schema。仅限本地取证回放库，执行前确认 schema 名称和数据已备份。

@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
+# 用途：atomic-stage5c.sh:Atomic SSRF rejection / timeout / cancel 验证。
+# 用法：在仓库根目录执行 bash scripts/sim/21-atomic-stage5c.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # 21-atomic-stage5c.sh:Atomic SSRF rejection / timeout / cancel 验证
 #
 # 覆盖:
 #   - HTTP executor 稳定拒绝 loopback endpoint(SSRF 防护)
 #   - HTTP 成功传输由 HttpTaskExecutor 本地 HTTP server 集成测试覆盖
-#   - SQL executor statement_timeout 触发 TIMEOUT 失败分类
-#   - task cancel API 对 RUNNING shell 任务置 cancel_requested,验证最终语义
+#   - SQL executor statement_timeout 触发有副作用可能性的 UNKNOWN 失败关闭
+#   - task cancel API 对 RUNNING shell 任务置 cancel_requested；非幂等执行以 UNKNOWN 收口
 #
-# 参数配置位于 docs/test-data/sim-stage5c-atomic-params.json,脚本只负责编排和断言。
+# 参数配置位于 test-data/sim/sim-stage5c-atomic-params.json,脚本只负责编排和断言。
 # =========================================================
 set -euo pipefail
 
@@ -24,6 +26,7 @@ batch_require_python
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/atomic-stage5c.log"
 import json, os, subprocess, sys, time, urllib.error, urllib.request
+from scripts.sim.launch_contract import workflow_id_for_fixture
 
 BASE = os.environ["TRIGGER_BASE"]
 ORCH = os.environ["ORCH_BASE"]
@@ -35,7 +38,7 @@ PG_CONTAINER = os.environ["PG_CONTAINER"]
 PG_USER = os.environ["POSTGRES_USER"]
 PLATFORM_DB = os.environ["PLATFORM_DB"]
 SQL_DIR = os.path.join(os.getcwd(), "scripts", "sim", "sql")
-PARAMS_FILE = "docs/test-data/sim-stage5c-atomic-params.json"
+PARAMS_FILE = "test-data/sim/sim-stage5c-atomic-params.json"
 
 with open(PARAMS_FILE, "r", encoding="utf-8") as fh:
     ATOMIC_PARAMS = json.load(fh)
@@ -75,7 +78,7 @@ def launch(job, label, params):
     rid = f"sim-stage5c-{label}-{int(time.time()*1000)%100000000}"
     body = {
         "tenantId": TENANT,
-        "jobCode": job,
+        "workflowDefinitionId": workflow_id_for_fixture(TENANT, job),
         "triggerType": "API",
         "bizDate": BIZ,
         "requestId": rid,
@@ -182,7 +185,7 @@ if len(parts) != 3:
     print("❌ Atomic Stage5c malformed summary", flush=True)
     sys.exit(1)
 http_ok = parts[0].startswith("FAILED:SECURITY_REJECTED:")
-timeout_ok = parts[1].startswith("FAILED:TIMEOUT:") or parts[1].startswith("FAILED:WORKER_EXECUTION_TIMEOUT:")
+timeout_ok = parts[1].startswith("FAILED:EXTERNAL_OUTCOME_UNKNOWN:")
 cancel_marked = parts[2].startswith("FAILED:FAILED:") and parts[2].endswith(":true") and cancel_http == "200"
 if not http_ok or not timeout_ok or not cancel_marked:
     print(

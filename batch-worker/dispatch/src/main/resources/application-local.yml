@@ -1,5 +1,5 @@
 server:
-  port: 18085
+  port: ${BATCH_WORKER_DISPATCH_PORT:18085}
 
 spring:
   main:

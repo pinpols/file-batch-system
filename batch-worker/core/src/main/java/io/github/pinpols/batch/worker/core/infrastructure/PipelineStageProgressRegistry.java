@@ -69,7 +69,8 @@ public class PipelineStageProgressRegistry {
       return null;
     }
     try {
-      return Long.valueOf(String.valueOf(value));
+      String numericText = String.valueOf(value);
+      return Long.valueOf(numericText);
     } catch (NumberFormatException ignored) {
       return null;
     }

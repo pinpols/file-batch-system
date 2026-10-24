@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.dispatchs.mapper;
 
+import java.sql.Timestamp;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,5 +57,5 @@ public interface DispatchChannelHealthMapper {
 
   long countByHealthStatus(@Param("healthStatus") String healthStatus);
 
-  long countProbeOverdue(@Param("now") java.sql.Timestamp now);
+  long countProbeOverdue(@Param("now") Timestamp now);
 }

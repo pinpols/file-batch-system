@@ -8,6 +8,7 @@ import static io.github.pinpols.batch.console.domain.ops.application.contract.re
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.Instant;
 import java.util.Map;
+import lombok.Builder;
 
 /**
  * ConfigRelease 审批详情响应（submit / approve / reject / detail 四端点同构，均 return detail(...)）。
@@ -26,6 +27,7 @@ public record ConsoleConfigApprovalDetailResponse(
 
   /** 单条 config_approval 行投影（键为 mapper 别名 camelCase）。 */
   @JsonInclude(JsonInclude.Include.NON_NULL)
+  @Builder
   public record ApprovalRow(
       Long id,
       String tenantId,
@@ -44,19 +46,20 @@ public record ConsoleConfigApprovalDetailResponse(
       if (row == null) {
         return null;
       }
-      return new ApprovalRow(
-          longValue(row, "id"),
-          stringValue(row, "tenantId"),
-          longValue(row, "releaseId"),
-          stringValue(row, "approvalStatus"),
-          stringValue(row, "requestedBy"),
-          instantValue(row, "requestedAt"),
-          stringValue(row, "reviewedBy"),
-          instantValue(row, "reviewedAt"),
-          stringValue(row, "reviewComment"),
-          instantValue(row, "expiredAt"),
-          instantValue(row, "createdAt"),
-          instantValue(row, "updatedAt"));
+      return ApprovalRow.builder()
+          .id(longValue(row, "id"))
+          .tenantId(stringValue(row, "tenantId"))
+          .releaseId(longValue(row, "releaseId"))
+          .approvalStatus(stringValue(row, "approvalStatus"))
+          .requestedBy(stringValue(row, "requestedBy"))
+          .requestedAt(instantValue(row, "requestedAt"))
+          .reviewedBy(stringValue(row, "reviewedBy"))
+          .reviewedAt(instantValue(row, "reviewedAt"))
+          .reviewComment(stringValue(row, "reviewComment"))
+          .expiredAt(instantValue(row, "expiredAt"))
+          .createdAt(instantValue(row, "createdAt"))
+          .updatedAt(instantValue(row, "updatedAt"))
+          .build();
     }
   }
 
@@ -64,12 +67,14 @@ public record ConsoleConfigApprovalDetailResponse(
     if (row == null) {
       return null;
     }
+    Long releaseId = longValue(row, "releaseId");
+    String tenantId = stringValue(row, "tenantId");
+    String configType = stringValue(row, "configType");
+    String configKey = stringValue(row, "configKey");
+    String configStatus = stringValue(row, "configStatus");
+    Map<String, Object> approvalFields = asMap(row.get("approval"));
+    ApprovalRow approval = ApprovalRow.from(approvalFields);
     return new ConsoleConfigApprovalDetailResponse(
-        longValue(row, "releaseId"),
-        stringValue(row, "tenantId"),
-        stringValue(row, "configType"),
-        stringValue(row, "configKey"),
-        stringValue(row, "configStatus"),
-        ApprovalRow.from(asMap(row.get("approval"))));
+        releaseId, tenantId, configType, configKey, configStatus, approval);
   }
 }

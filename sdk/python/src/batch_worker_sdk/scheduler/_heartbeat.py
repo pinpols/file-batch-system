@@ -65,7 +65,8 @@ class DispatcherLike(Protocol):
 
 def _utc_now_iso() -> str:
     """RFC 3339 时间戳,与 Java ``Instant.now().toString()`` 字符串一致。"""
-    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    timestamp = datetime.now(UTC).isoformat()
+    return timestamp.replace("+00:00", "Z")
 
 
 class HeartbeatScheduler:

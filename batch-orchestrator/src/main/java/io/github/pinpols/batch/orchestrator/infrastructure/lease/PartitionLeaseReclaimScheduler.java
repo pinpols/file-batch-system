@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.lease;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -97,7 +98,8 @@ public class PartitionLeaseReclaimScheduler {
           break;
         }
         try {
-          reclaimUnit.reclaim(partition);
+          RlsTenantContextHolder.runWithTenant(
+              partition.getTenantId(), () -> reclaimUnit.reclaim(partition));
         } catch (ReclaimRetryableException retryable) {
           log.warn(
               "partition reclaim rolled back, will retry next cycle: {}",
@@ -149,7 +151,8 @@ public class PartitionLeaseReclaimScheduler {
           "orphan-sweep found {} dead-state partitions (READY + RUNNING task)", orphans.size());
       for (JobPartitionEntity partition : orphans) {
         try {
-          reclaimUnit.reclaim(partition);
+          RlsTenantContextHolder.runWithTenant(
+              partition.getTenantId(), () -> reclaimUnit.reclaim(partition));
         } catch (ReclaimRetryableException retryable) {
           log.warn("orphan-sweep retryable: {}", SwallowedExceptionLogger.summary(retryable));
         } catch (RuntimeException unexpected) {

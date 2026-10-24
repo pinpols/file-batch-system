@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：集成测试覆盖。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-integration-test-coverage.py；参数与前置环境见下方说明及所属 README。
 """校验 full-ci-gate 的 Maven verify shard 覆盖所有主 reactor 集成测试模块。"""
 
 from __future__ import annotations

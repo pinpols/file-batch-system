@@ -22,6 +22,7 @@ import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.mock.env.MockEnvironment;
@@ -121,6 +122,52 @@ class HttpTaskExecutionClientTest {
               .counter()
               .count())
           .isEqualTo(1.0d);
+    }
+  }
+
+  @Test
+  @DisplayName("单任务认领遇到 404 时返回未认领, 不重试并可由消费端安全跳过")
+  void shouldTreatSingleClaimNotFoundAsUnclaimed() throws Exception {
+    try (MockWebServer server = new MockWebServer()) {
+      server.enqueue(new MockResponse.Builder().code(404).build());
+      server.start();
+
+      HttpTaskExecutionClient client = newClient(server.getPort());
+
+      assertThat(client.claim("ta", 296L, "import-node-1")).isEmpty();
+      assertThat(server.getRequestCount()).isEqualTo(1);
+      assertThat(server.takeRequest().getUrl().encodedPath())
+          .isEqualTo("/internal/tasks/296/claim");
+    }
+  }
+
+  @Test
+  @DisplayName("非幂等开始标记绑定当前任务租约,冲突时拒绝执行")
+  void shouldPersistNonIdempotentStartForCurrentLease() throws Exception {
+    try (MockWebServer server = new MockWebServer()) {
+      server.enqueue(new MockResponse.Builder().code(204).build());
+      server.enqueue(new MockResponse.Builder().code(409).build());
+      server.start();
+
+      HttpTaskExecutionClient client = newClient(server.getPort());
+
+      assertThat(client.markNonIdempotentExecutionStarted("t1", 41L, "w-1", "inv-41"))
+          .isTrue();
+      assertThat(client.markNonIdempotentExecutionStarted("t1", 42L, "w-2", "inv-42"))
+          .isFalse();
+      assertThat(server.getRequestCount()).isEqualTo(2);
+
+      var accepted = server.takeRequest();
+      assertThat(accepted.getMethod()).isEqualTo("POST");
+      assertThat(accepted.getUrl().encodedPath())
+          .isEqualTo("/internal/tasks/41/non-idempotent-started");
+      assertThat(accepted.getBody().utf8())
+          .contains(
+              "\"tenantId\":\"t1\"",
+              "\"workerId\":\"w-1\"",
+              "\"partitionInvocationId\":\"inv-41\"");
+      assertThat(server.takeRequest().getUrl().encodedPath())
+          .isEqualTo("/internal/tasks/42/non-idempotent-started");
     }
   }
 
@@ -372,7 +419,7 @@ class HttpTaskExecutionClientTest {
 
       SimpleMeterRegistry registry = new SimpleMeterRegistry();
       WorkerReportOutboxCoordinator coordinator = mock(WorkerReportOutboxCoordinator.class);
-      when(coordinator.enqueue(org.mockito.ArgumentMatchers.any())).thenReturn(false);
+      when(coordinator.enqueue(ArgumentMatchers.any())).thenReturn(false);
       @SuppressWarnings("unchecked")
       ObjectProvider<WorkerReportOutboxCoordinator> coordinatorProvider =
           mock(ObjectProvider.class);
@@ -436,6 +483,44 @@ class HttpTaskExecutionClientTest {
       assertThat(out.get(2L).renewed()).isFalse();
       assertThat(out.get(2L).cancelRequested()).isFalse();
       assertThat(server.getRequestCount()).isEqualTo(1);
+    }
+  }
+
+  @Test
+  @DisplayName("批量续租降级到单条心跳时仍透传取消请求")
+  void shouldPreserveCancellationWhenBatchRenewFallsBackToSingleRenew() throws Exception {
+    try (MockWebServer server = new MockWebServer()) {
+      server.enqueue(new MockResponse.Builder().code(404).build());
+      server.enqueue(new MockResponse.Builder()
+          .code(200)
+          .setHeader("Content-Type", "application/json")
+          .body("{\"cancelRequested\":true}")
+          .build());
+      server.start();
+
+      OrchestratorTaskClientProperties props = clientProperties(server.getPort());
+      @SuppressWarnings("unchecked")
+      ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator = mock(ObjectProvider.class);
+      when(noopCoordinator.getIfAvailable()).thenReturn(null);
+      HttpTaskExecutionClient client = new HttpTaskExecutionClient(
+          props,
+          new BatchSecurityProperties(),
+          restClientBuilderProvider(),
+          new MockEnvironment(),
+          null,
+          noopCoordinator,
+          new WorkerLeaseProperties(),
+          new WorkerBatchClaimProperties());
+
+      Map<Long, TaskLeaseRenewResult> result =
+          client.renewLeasesBatch(List.of(new TaskLeaseRenewItem("t1", 19L, "w1", "inv-19")));
+
+      assertThat(result.get(19L).renewed()).isTrue();
+      assertThat(result.get(19L).cancelRequested()).isTrue();
+      assertThat(server.getRequestCount()).isEqualTo(2);
+      assertThat(server.takeRequest().getUrl().encodedPath())
+          .isEqualTo("/internal/tasks/leases/renew-batch");
+      assertThat(server.takeRequest().getUrl().encodedPath()).isEqualTo("/internal/tasks/19/renew");
     }
   }
 

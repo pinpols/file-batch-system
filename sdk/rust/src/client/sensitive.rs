@@ -74,7 +74,9 @@ impl SensitiveValidator {
     {
         let mut offending = Vec::new();
         for (key, value) in entries {
-            if self.is_sensitive_key(key) && !value.trim().is_empty() {
+            let is_sensitive_value_violation =
+                self.is_sensitive_key(key) && !value.trim().is_empty();
+            if is_sensitive_value_violation {
                 offending.push(key.to_string());
             }
         }

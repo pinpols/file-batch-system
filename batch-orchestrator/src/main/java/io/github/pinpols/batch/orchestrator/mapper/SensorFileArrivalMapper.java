@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import io.github.pinpols.batch.orchestrator.domain.query.SensorFileArrivalLatestArrivalQuery;
+
+
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -23,10 +27,7 @@ public interface SensorFileArrivalMapper {
    * @return 命中行 {@code {fileId, fileName, arrivalTime}}，未命中返 null
    */
   Map<String, Object> selectLatestArrival(
-      @Param("tenantId") String tenantId,
-      @Param("namePattern") String namePattern,
-      @Param("sourceType") String sourceType,
-      @Param("since") OffsetDateTime since);
+      SensorFileArrivalLatestArrivalQuery parameters);
 
   /** 调试用：返回最近 N 条匹配，方便排查 sensor 误判。 */
   List<Map<String, Object>> recentMatches(

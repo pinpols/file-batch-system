@@ -2,26 +2,31 @@ package io.github.pinpols.batch.orchestrator.application.trigger;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionDispatchService;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.service.LaunchValidationService;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -57,6 +62,7 @@ public class StaleCreatedLaunchRecoveryScheduler {
   private final TriggerRequestMapper triggerRequestMapper;
   private final PartitionDispatchService partitionDispatchService;
   private final LaunchService launchService;
+  private final LaunchValidationService launchValidationService;
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final MeterRegistry meterRegistry;
   private final StaleCreatedLaunchRecoveryProperties properties;
@@ -71,8 +77,10 @@ public class StaleCreatedLaunchRecoveryScheduler {
     if (gracefulShutdown.isDraining()) {
       return;
     }
-    Instant olderThan =
-        BatchDateTimeSupport.utcNow().minusSeconds(Math.max(properties.getMinAgeSeconds(), 0));
+    Instant recoveryCheckTime = BatchDateTimeSupport.utcNow();
+    long configuredMinAgeSeconds = properties.getMinAgeSeconds();
+    long minAgeSeconds = Math.max(configuredMinAgeSeconds, 0);
+    Instant olderThan = recoveryCheckTime.minusSeconds(minAgeSeconds);
     int limit = Math.max(properties.getBatchSize(), 1);
     List<JobInstanceEntity> candidates =
         jobInstanceMapper.selectStaleCreatedLaunchCandidates(olderThan, limit);
@@ -83,7 +91,8 @@ public class StaleCreatedLaunchRecoveryScheduler {
     int failed = 0;
     for (JobInstanceEntity jobInstance : candidates) {
       try {
-        if (recoverOne(jobInstance)) {
+        if (RlsTenantContextHolder.runWithTenant(
+            jobInstance.getTenantId(), () -> recoverOne(jobInstance))) {
           recovered++;
         }
       } catch (RuntimeException ex) {
@@ -115,11 +124,14 @@ public class StaleCreatedLaunchRecoveryScheduler {
     }
 
     Map<String, Object> effectiveParams = effectiveParams(jobInstance);
-    LaunchRequest request = LaunchRequest.builder()
+    LaunchRequest.LaunchRequestBuilder requestBuilder = LaunchRequest.builder()
         .tenantId(jobInstance.getTenantId())
         .jobCode(jobInstance.getJobCode())
-        .bizDate(jobInstance.getBizDate())
-        .triggerType(TriggerType.valueOf(jobInstance.getTriggerType()))
+        .bizDate(jobInstance.getBizDate());
+    String triggerTypeCode = jobInstance.getTriggerType();
+    TriggerType triggerType = TriggerType.valueOf(triggerTypeCode);
+    LaunchRequest request = requestBuilder
+        .triggerType(triggerType)
         .requestId(triggerRequest.getRequestId())
         .traceId(jobInstance.getTraceId())
         .params(effectiveParams)
@@ -129,9 +141,17 @@ public class StaleCreatedLaunchRecoveryScheduler {
         .dryRun(Boolean.TRUE.equals(jobInstance.getDryRun()))
         .build();
 
+    LaunchValidationService.LaunchLoadResult validatedLaunch = launchValidationService.load(request);
+    JobDefinitionEntity executionDefinition = validatedLaunch.jobDefinition();
+    boolean recoveredDefinitionIdentityDoesNotMatch = EmptyChecks.isNull(executionDefinition)
+        || !Objects.equals(jobInstance.getJobDefinitionId(), executionDefinition.id())
+        || !Objects.equals(jobInstance.getJobDefinitionVersion(), executionDefinition.version());
+    if (recoveredDefinitionIdentityDoesNotMatch) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
+    }
     PartitionDispatchService.DispatchRequest dispatchRequest =
         new PartitionDispatchService.DispatchRequest(
-            request, effectiveParams, jobInstance.getTraceId());
+            request, effectiveParams, jobInstance.getTraceId(), executionDefinition);
     PartitionDispatchService.DispatchRuntime dispatchRuntime =
         new PartitionDispatchService.DispatchRuntime(
             jobInstance, null, List.of(), BatchDateTimeSupport.utcNow());
@@ -177,15 +197,21 @@ public class StaleCreatedLaunchRecoveryScheduler {
   private BizException findPermanentBundleFailure(RuntimeException exception) {
     Throwable current = exception;
     while (EmptyChecks.isNotNull(current)) {
-      if (current instanceof BizException bizException
-          && "error.partition.dispatch_business_error".equals(bizException.getMessageKey())
-          && EmptyChecks.isNotEmpty(bizException.getMessageArgs())
-          && "ADR-046_BUNDLE_INVALID".equals(String.valueOf(bizException.getMessageArgs()[0]))) {
+      if (current instanceof BizException bizException && isPermanentBundleFailure(bizException)) {
         return bizException;
       }
       current = current.getCause();
     }
     return null;
+  }
+
+  private boolean isPermanentBundleFailure(BizException exception) {
+    if (!"error.partition.dispatch_business_error".equals(exception.getMessageKey())
+        || !EmptyChecks.isNotEmpty(exception.getMessageArgs())) {
+      return false;
+    }
+    String failureReason = String.valueOf(exception.getMessageArgs()[0]);
+    return "ADR-046_BUNDLE_INVALID".equals(failureReason);
   }
 
   private boolean isRecoverableRequestStatus(

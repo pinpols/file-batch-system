@@ -4,7 +4,7 @@
 **关联 ADR**:[ADR-035](../architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md) · [ADR-036](../architecture/adr/ADR-036-sdk-task-handler-templates.md) · [ADR-029](../architecture/adr/ADR-029-dedicated-spi-worker.md)
 **关联模块**:`batch-worker-{core,import,export,process,dispatch,atomic}` · `batch-worker-sdk`
 
-> 本文档讲清两种 worker 的**边界、互补关系、混用方式、选型决策**。属架构基线,长期维护;具体协议字段在 [`docs/api/`](../api/),具体演进历史在 ADR-035。
+> 本文档讲清两种 worker 的**边界、互补关系、混用方式、选型决策**。属架构基线,长期维护;具体协议字段在 [`docs/api/`](../api),具体演进历史在 ADR-035。
 
 ---
 
@@ -104,27 +104,9 @@ orchestrator 派单按 `taskType` 路由到对应 worker pool / Kafka topic:
 
 当前没有 `FIXED_DELAY`、`ONE_SHOT` 或 `ON_WORKFLOW_COMPLETE` schedule type。一次性、上游完成和文件到达场景应通过 API / EVENT / CATCH_UP 等现有来源进入统一 launch 链，不能把概念示例写成已支持的定义枚举。
 
-**典型配置**:
+**配置关系**：先按 [taskType 配置](sdk-task-type-configuration.md) 登记并验证 Job 的执行类型与 Worker 路由，再在 Workflow 中以 `JOB.related_job_code` 引用该 Job。日程写在 Workflow definition（如 `CRON`、表达式和时区），图包含 START、JOB、END 及对应边。
 
-```yaml
-job_definition:
-  # WORKFLOW 作业按 job_code 查找同租户、同名且已启用的 workflow_definition
-  job_code: tenant_xyz_import_wf
-  job_type: WORKFLOW
-  schedule_type: CRON
-  schedule_expr: "0 0 2 * * ?"           # 每天 2:00
-  timezone: Asia/Shanghai
-
-workflow_definition:
-  workflow_code: tenant_xyz_import_wf
-  nodes:
-    - taskType: tenant_xyz_import        # ← 派到自托管 SDK
-```
-
-每天 2:00 `batch-trigger` fire → orchestrator launch → 派单到租户 SDK。**租户进程零定时代码**。
-
-`WORKFLOW` 类型作业的 `job_code` 必须与目标 `workflow_code` 一致；当前 launch 链不使用
-`execution_handler` 建立两者关联。
+每天计划触发接纳一个 WorkflowRun；到达 JOB 节点时创建 JobInstance，再经 Outbox/Kafka 派给匹配的 Worker。`WORKFLOW` 不是当前 JobType，job_code 不必与 workflow_code 同名，Worker 进程不自行配置 cron。实际导入字段与校验以当前模板和 DTO 为准。
 
 #### B. 编排能力(`workflow_definition` 全支持)
 
@@ -132,11 +114,11 @@ workflow_definition:
 - ✅ **重试策略**:`retry_policy` (max_attempts / backoff / initial_delay) 全部生效
 - ✅ **GATEWAY 条件分支**:基于 `SdkTaskResult.outputs` 字段决策
 - ✅ **补偿 / Saga**:补偿节点同样派到自托管
-- ✅ **审批节点**:审批未通过前 SDK 不会被派单,自动等
-- ✅ **Fan-out 分片**:`partitionInvocationId` 分发到多副本 SDK 并发执行
+- **高风险操作审批**：属于操作命令域，不是图内节点类型；通过审批后仍受租户与运行准入约束
+- **Job 分区/分片**：按冻结分区计划执行；`partitionInvocationId` 是 CLAIM 尝试围栏，不是分片数或动态节点展开配置。旧 TASK fanOut 不属于新根图能力
 - ✅ **优先级 / 亲和性**(ADR-027 范围内):自托管 worker pool 是合法目标
 - ✅ **SLA 监控 / 超时告警**:基于 `created_at` / `started_at` / `completed_at`
-- ✅ **手动重跑 / 跳过 / 强制完成**:console 运维动作全可用
+- **运维操作**：按对象、当前状态、权限和 ReplayOperation 支持范围开放；不能据此承诺任意节点均可跳过或强制成功
 
 #### C. 为什么自托管也能享受这些
 
@@ -198,7 +180,7 @@ WAIT/REJECT 路径**根本不会发出 Kafka 消息**,SDK 自然收不到。所�
 要让某 job 拥有"批量行为"(Day-1 没结清 Day-2 等待 / 拒绝):
 
 1. `business_calendar.day_rollover_policy` ∈ {`WAIT_PREVIOUS_DAY`, `REJECT_IF_PREVIOUS_OPEN`}
-2. `job_definition.calendar_code` 非空 + `previous_day_dependency_scope` ≠ `NONE`
+2. 根 Workflow 的 `calendar_code` 已配置，并按已确认的前日依赖策略接纳
 3. 触发时 `LaunchRequest.bizDate` 非空
 
 配置矩阵 + 自动释放时序 + 排查指引 → [`docs/runbook/batch-day-gate-howto.md`](../runbook/batch-day-gate-howto.md)。
@@ -213,7 +195,7 @@ WAIT/REJECT 路径**根本不会发出 Kafka 消息**,SDK 自然收不到。所�
 
 | 能力 | 原因 |
 |---|---|
-| 内置 Pipeline taskType(IMPORT/EXPORT/PROCESS/DISPATCH/FILE_STEP) | 平台 worker 独占,SDK 注册被 `TaskTypeRegistry` reject |
+| 内置 Pipeline taskType(IMPORT/EXPORT/PROCESS/DISPATCH) | 平台 worker 独占,SDK 注册被 `TaskTypeRegistry` reject |
 | 直写 `file_record` / `pipeline_instance` / `pipeline_stage_*` | docs/agent-baseline.md 红线:Worker 不能直接写状态机表 |
 | Pipeline stage 级生命周期事件 | 平台只看 task 终态 + counts(ADR-035 §6 路径 3) |
 | `batch_day` 业务日历联动 | 平台 worker 用 `BatchDateService`,SDK 不暴露 |
@@ -282,7 +264,7 @@ WAIT/REJECT 路径**根本不会发出 Kafka 消息**,SDK 自然收不到。所�
 |---|---|
 | `ConsoleOrchestratorProxyService` 运维(outbox cleanup / republish) | ❌ |
 | Dry-run / 对账 / Forensic(ADR-021/022/026) | ❌ |
-| 修改 `workflow_definition` / `trigger_definition` | ⚠️ 走 console-api 凭账号,SDK 不能改 |
+| 修改 `workflow_definition` / 日程配置 | ⚠️ 走 console-api 凭账号,SDK 不能改 |
 | 查看其他租户任务 | ❌ 多租隔离强制 |
 | 管理 worker 池容量 | ❌ 自家 SDK 进程扩缩容是租户运维事 |
 

@@ -60,11 +60,10 @@ final class TaskOutcomeSummaryBuilder {
       JobInstanceEntity jobInstance,
       List<JobPartitionEntity> partitions,
       TaskOutcomeCommand command) {
+    long successfulPartitionCount = countByStatus(partitions, PartitionStatus.SUCCESS.code());
+    long failedPartitionCount = countFailedPartitions(partitions);
     return buildJobInstanceResultSummary(
-        jobInstance,
-        countByStatus(partitions, PartitionStatus.SUCCESS.code()),
-        countFailedPartitions(partitions),
-        command);
+        jobInstance, successfulPartitionCount, failedPartitionCount, command);
   }
 
   /**

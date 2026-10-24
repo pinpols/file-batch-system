@@ -2,8 +2,8 @@
 
 > **协议契约权威源(双轨)**:本文与 [`docs/api/orchestrator-internal.openapi.yaml`](../api/orchestrator-internal.openapi.yaml) 是 wire 层协议的两份权威源 ——
 > 本文给**读者视图**(故障感知矩阵 + 时序约束 + 错误码语义 + 重试退避规则),yaml 给**机器视图**(端点 / schema / response code)。
-> Java SDK 和未来 BYO(Bring-Your-Own)SDK(Go / Python / Node / .NET)必须基于这两份生成 / 校验实现。BYO 接入指南见
-> [`docs/sdk/byo-sdk-guide.md`](byo-sdk-guide.md);language-agnostic 契约 fixtures 见 [`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures/)。
+> Java SDK、仓库内其它四语言 SDK 及外部 BYO(Bring-Your-Own)SDK必须基于这两份生成 / 校验实现。BYO 接入指南见
+> [`docs/sdk/byo-sdk-guide.md`](byo-sdk-guide.md);language-agnostic 契约 fixtures 见 [`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures)。
 
 > 配套 [`docs/sdk/quickstart.md`](quickstart.md) 与 [`docs/sdk/troubleshooting.md`](troubleshooting.md)。本文是「运行期视图」:把 ADR-035 的协议节、配置节、生命周期节合成一张全景图,让租户接入或调参时不需翻多处。
 
@@ -24,7 +24,7 @@
                               ▲                            │
                               │                            ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│  Kafka topic `batch.task.dispatch.<tenant>.*` ── 数据面,异步,单向投递   │
+│  Kafka topic `batch.task.dispatch.<taskType>[.<route>][.node.<workerId>]` ── 数据面,异步,单向投递   │
 │  consumer group 独立 per tenant,wildcard 订阅 + capacity-aware pause     │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
@@ -37,7 +37,7 @@
 | `POST /internal/tasks/{id}/claim` | SDK → orch | 收 Kafka 消息后 | 每 task 1 | `TaskDispatcher.claim()` | `TaskController.claim()` |
 | `POST /internal/tasks/{id}/report` | SDK → orch | task 终态时 | 每 task 1 | `TaskDispatcher.report()` | `TaskController.report()` |
 | `POST /internal/tasks/{id}/renew` | SDK → orch | `LeaseRenewalScheduler` | 60s 默认 | `LeaseRenewalScheduler.tick()` | `TaskController.renew()` |
-| Kafka `batch.task.dispatch.<tenant>.*` | orch → SDK | orch 投递 → SDK poll | 持续 | `KafkaTaskConsumer.poll()` | producer in `*OrchestratorService` |
+| Kafka `batch.task.dispatch.<taskType>[.<route>][.node.<workerId>]` | orch → SDK | orch 投递 → SDK poll | 持续 | `KafkaTaskConsumer.poll()` | producer in `*OrchestratorService` |
 
 注册体中的可选 `maxConcurrent` 是 Worker 本地执行器的物理并发上限。五语言 SDK 的默认
 注册路径都会从 `maxConcurrentTasks` 上报该值，平台据此初始化或重注册校准
@@ -45,9 +45,23 @@
 避免覆盖平台通过 heartbeat directive 临时下调的运行容量。
 
 **为什么 HTTP + Kafka 不合并?** ADR-035 §3:
-- HTTP 同步天然适合 register / claim / report 这类「需要返回值」的控制流(orch 给 SDK lease ttl、effective config、cancel flag)
+- HTTP 同步天然适合 register / claim / report 这类「需要返回值」的控制流(orch 给 SDK effective config、cancel flag)
 - Kafka 异步天然适合 dispatch:orch 不关心 SDK 何时拿到,Kafka 保留 + at-least-once + tenant 隔离 + 横向扩展
 - 反向 push 故意没做:避免每个租户 SDK 暴露入向端口,降低边界面积
+
+### 路由与执行配置
+
+上述方括号表示可选后缀，不是可直接使用的订阅正则。`BatchTopicResolver` 先按 taskType 选择 base，再按部署模式追加租户或优先级；`KafkaOutboxPublisher` 在定向派单时追加 `.node.<selectedWorkerId>`，命名空间由部署配置统一提供。SDK 必须配置与发布端一致的正则与 ACL，不能使用租户在 taskType 之前的旧示例。
+
+CLAIM 返回完整 `EffectiveTaskConfig`：身份/任务载荷取自持久化任务，执行模式、重试、超时来自实例冻结快照，分区计划包含 shard/range/expectedRows，数据区间沿根运行继承。`dependencyResultSnapshot` 是闸门证据，业务消费者须显式固定/校验读取版本。
+
+批量 claim/report 保留逐项身份与结果；上报逐项独立事务，不能把 HTTP 200 当整批业务成功。批量优化与 Workflow 多选运行、BUNDLE manifest 分区分别属于不同层次。
+
+### Replay 的附加能力合同
+
+平台注册 DTO 接受可选 `replayCapabilities`，CLAIM 可返回 `replayExecutionGuard`。声明含 pluginId/version、外部副作用类别、幂等能力/键域、恢复协议与合同版本。执行前须核对批准声明与实际插件；未知、NONE 或不匹配不能授权安全重放。非幂等执行器在副作用前调用开始标记入口，外部结果未知时先对账。
+
+这些是平台新增合同，不代表仓库内五语言 SDK 均已实现。当前 SDK 源码未消费上述 Replay 字段，基础 30 份 conformance fixture 也未覆盖它们；通用 SDK 路径应保持未知能力失败关闭。支持矩阵与补充验证见 [sdk-parity-matrix.md](sdk-parity-matrix.md)。
 
 ## 2. 控制反向回流(orch → SDK)
 
@@ -87,7 +101,6 @@ SDK 收到后 `TaskDispatcher.applyPlatformDirective()`:
 
 ```java
 {
-  "leaseUntil": "2026-06-02T10:30:00Z",
   "cancelRequested": true     // 平台要求取消该 task
 }
 ```
@@ -118,15 +131,15 @@ SDK 收到后 `TaskDispatcher.applyPlatformDirective()`:
 ```
 启动:
   SDK ──register──► orch  落 worker_registry, status=ONLINE
-  SDK ──Kafka.subscribe──► broker  (wildcard `batch.task.dispatch.<tenant>.*`)
+  SDK ──Kafka.subscribe──► broker  (wildcard `batch.task.dispatch.<taskType>[.<route>][.node.<workerId>]`)
   SDK 启 HeartbeatScheduler  (30s 周期, fixedDelay)
   SDK 启 LeaseRenewalScheduler  (60s 周期, fixedRate)
 
 每个任务:
   orch ──Kafka dispatch──► SDK
   SDK 收到 → claim ──HTTP POST /internal/tasks/{id}/claim──► orch
-                              ◄── { effectiveConfig, leaseUntil }
-  SDK handler.execute(ctx)    (ctx 持有 CancellationSignal + ProgressReporter)
+                              ◄── EffectiveTaskConfig (含可选 dependencyResultSnapshot)
+  SDK handler.execute(ctx)    (ctx 持有 CancellationSignal + ProgressReporter + 依赖闸门观察到的版本引用)
   SDK ──report──► orch        SUCCESS / FAILED / TERMINATED 终态
 
 心跳(每 30s):
@@ -161,7 +174,7 @@ SDK 收到后 `TaskDispatcher.applyPlatformDirective()`:
 
 **最常见配错**:`leaseRenewInterval >= orch lease ttl`,可能导致任务被回收。Java SDK 启动时会校验 heartbeat、lease renew 和 HTTP timeout 之间的时序关系，但 SDK 不知道服务端实际 lease TTL，无法跨服务校验该值；部署时仍须按服务端 TTL 配置并复核。运维排查见 [`troubleshooting.md`](troubleshooting.md)。
 
-## 6. 已知限制与持续治理项(初始清单来自历史深度审查 [`docs/archive/analysis/2026-06-02-sdk-atomic-fe-deep-review.md`](../archive/analysis/2026-06-02-sdk-atomic-fe-deep-review.md))
+## 6. 已知限制与持续治理项(初始清单来自历史深度审查 [`docs/archive/audit/sdk-atomic-fe-deep-review-2026-06-02.md`](../archive/audit/sdk-atomic-fe-deep-review-2026-06-02.md))
 
 | 短板 | 现状 | 改进进度 |
 |---|---|---|

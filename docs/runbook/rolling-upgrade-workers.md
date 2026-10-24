@@ -85,7 +85,7 @@
 ```bash
 ./mvnw -pl batch-console-api -am -DskipTests -DskipITs package
 python3 scripts/ci/check-observability-contract.py
-bash -n scripts/staging/verify-worker-rolling-upgrade.sh
+bash -n scripts/ops/verify-worker-rolling-upgrade.sh
 ```
 
 滚动升级脚本只读取 rollout、Pod 和事件状态，不主动删除 Pod、不强制回滚，也不改变当前集群。真实 staging 仍必须按上文步骤验证 drain、lease 接管、Kafka lag 收敛和业务结果对账。

@@ -7,6 +7,7 @@ import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAuditLogMapp
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.concurrent.Executors;
@@ -48,9 +49,11 @@ public class ConsoleAiAuditRetentionJob {
 
   private void purge() {
     try {
-      OffsetDateTime cutoff = OffsetDateTime.ofInstant(
-              BatchDateTimeSupport.utcNow(), ZoneOffset.UTC)
-          .minus(Duration.ofDays(properties.getAuditRetentionDays()));
+      Instant currentInstant = BatchDateTimeSupport.utcNow();
+      OffsetDateTime currentUtcTime = OffsetDateTime.ofInstant(currentInstant, ZoneOffset.UTC);
+      int retentionDays = properties.getAuditRetentionDays();
+      Duration retentionPeriod = Duration.ofDays(retentionDays);
+      OffsetDateTime cutoff = currentUtcTime.minus(retentionPeriod);
       int deleted = mapper.deleteBefore(cutoff);
       log.info("AI audit retention completed: cutoff={}, deleted={}", cutoff, deleted);
     } catch (RuntimeException exception) {

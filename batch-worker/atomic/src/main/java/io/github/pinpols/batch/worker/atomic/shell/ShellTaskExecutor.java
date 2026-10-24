@@ -18,6 +18,7 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileAttribute;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -106,7 +107,8 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
 
   /** 包私有测试钩子:生成下一个 invocation id(单调递增,两次调用必不相同)。 */
   static String nextInvocationId() {
-    return Long.toString(INVOCATION_SEQ.incrementAndGet());
+    long invocationSequence = INVOCATION_SEQ.incrementAndGet();
+    return Long.toString(invocationSequence);
   }
 
   @Override
@@ -183,10 +185,10 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
           ctx.tenantId(),
           ctx.jobCode(),
           ex);
-      return AtomicErrorCode.fail(
-          AtomicErrorCode.EXECUTION_FAILED,
-          ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage(),
-          ex);
+      String exceptionMessage = ex.getMessage();
+      String failureMessage =
+          EmptyChecks.isNull(exceptionMessage) ? ex.getClass().getSimpleName() : ex.getMessage();
+      return AtomicErrorCode.fail(AtomicErrorCode.EXECUTION_FAILED, failureMessage, ex);
     }
   }
 
@@ -302,14 +304,17 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
   private Path createIsolatedWorkdir(TaskContext ctx) {
     try {
       // 子进程可写业务中间数据;根和工作目录均须私有,随机目录名不能替代访问控制。
-      OwnerOnlyFiles.createDirectories(props.getWorkdirBase());
-      String subdir = String.format(
-          "%s-%s-%s",
-          safeForPath(ctx.tenantId()),
-          safeForPath(ctx.jobCode()),
-          UUID.randomUUID().toString().substring(0, 8));
-      Path dir = props.getWorkdirBase().resolve(subdir);
-      Files.createDirectory(dir, OwnerOnlyFiles.attributes(props.getWorkdirBase(), true));
+      Path workdirBase = props.getWorkdirBase();
+      OwnerOnlyFiles.createDirectories(workdirBase);
+      String safeTenantId = safeForPath(ctx.tenantId());
+      String safeJobCode = safeForPath(ctx.jobCode());
+      UUID randomDirectoryId = UUID.randomUUID();
+      String randomDirectoryIdText = randomDirectoryId.toString();
+      String randomDirectorySuffix = randomDirectoryIdText.substring(0, 8);
+      String subdir = String.format("%s-%s-%s", safeTenantId, safeJobCode, randomDirectorySuffix);
+      Path dir = workdirBase.resolve(subdir);
+      FileAttribute<?>[] privateDirectoryAttributes = OwnerOnlyFiles.attributes(workdirBase, true);
+      Files.createDirectory(dir, privateDirectoryAttributes);
       OwnerOnlyFiles.protectExisting(dir, true);
       return dir;
     } catch (IOException e) {
@@ -393,9 +398,10 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
       long duration = System.currentTimeMillis() - start;
 
       if (!finished) {
+        long timeoutSeconds = inv.timeout.toSeconds();
         return AtomicErrorCode.fail(
             AtomicErrorCode.TIMEOUT,
-            "timed out after " + inv.timeout.toSeconds() + "s",
+            "timed out after " + timeoutSeconds + "s",
             new ShellTimeoutException(inv.timeout));
       }
 
@@ -471,9 +477,12 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
               buf.write(tmp, 0, n);
             }
           } catch (IOException e) {
-            log.warn("{}: reader IO error: {}", name, SwallowedExceptionLogger.summary(e));
+            String causeSummary = SwallowedExceptionLogger.summary(e);
+            log.warn("{}: reader IO error: {}", name, causeSummary);
           }
-          result.set(new ReaderResult(buf.toString(), truncated));
+          String outputText = buf.toString();
+          ReaderResult readerResult = new ReaderResult(outputText, truncated);
+          result.set(readerResult);
         },
         name);
     t.setDaemon(true);

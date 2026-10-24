@@ -1,18 +1,25 @@
 # Kafka Topic 设计规范
 
+> **当前 wire 口径**：新顶层运行事件携带 Workflow 目标；JOB 执行经持久化任务派发。`TaskDispatchMessage` 是瘦身提示，`schemaVersion` 为字符串 `v1`/`v2`，完整业务配置由 CLAIM 返回。下方通用 envelope/重试示例用于解释事件类型，不表示每个 topic 都套用同一外层；实际字段以各 DTO 和[内部 OpenAPI](../api/orchestrator-internal.openapi.yaml)为准。
+>
+> base topic 后可按配置追加租户/优先级及 `.node.<selectedWorkerId>`，命名空间统一由部署配置提供，SDK 订阅与 ACL 必须对齐发布端。Job 与 Workflow 终态分别发布，消费组/回执独立。
+
 ## 主题命名
 
 - `batch.task.dispatch.import`
 - `batch.task.dispatch.export`
 - `batch.task.dispatch.process`
 - `batch.task.dispatch.dispatch`
+- `batch.task.dispatch.atomic`
+- `batch.job.terminal.v1`
+- `batch.workflow.terminal.v1`
 - `batch.trigger.launch.v1`
 - `batch.task.result`
 - `batch.task.retry`
 - `batch.task.dead-letter`
 - `batch.outbox.event`
 
-> 注:worker 心跳走 HTTP（`POST /api/workers/{workerCode}/heartbeat`，见 `WorkerController`），不经 Kafka。`BatchTopics.WORKER_HEARTBEAT` 常量仅作消息类型登记保留,无实际心跳 topic 生产/消费。
+> 注:worker 心跳走 HTTP（`POST /internal/workers/{workerCode}/heartbeat`，见 `WorkerController`），不经 Kafka。`BatchTopics.WORKER_HEARTBEAT` 常量仅作消息类型登记保留,无实际心跳 topic 生产/消费。
 
 ## Key 设计
 
@@ -21,7 +28,7 @@
 - Retry topics: `tenantId:jobCode:instanceNo:partitionId:attemptNo`
 - Dead-letter topics: `tenantId:jobCode:instanceNo:partitionId:taskId`
 - Outbox topics: `tenantId:eventName:aggregateType:aggregateId`
-- Trigger launch (`batch.trigger.launch.v1`): `tenantId:jobCode`
+- Trigger launch (`batch.trigger.launch.v1`): `tenantId:requestId`; launch roots identify a Workflow with `workflowDefinitionId` and do not accept a JobCode root.
 
 ## 事件体字段
 
@@ -54,7 +61,7 @@
 
 本项目当前采用 **JSON + `schemaVersion`** 的轻量方案（不依赖 Schema Registry）。
 
-### Envelope（所有 topic 通用外层）
+### 历史通用 Envelope 示意（不适用于所有 DTO）
 
 - `schemaVersion`: integer，消息体版本（向后兼容：仅新增可选字段；不删除/不改类型）
 - `messageType`: string，消息类型（建议枚举：`TASK_DISPATCH` / `TASK_RESULT` / `TASK_RETRY` / `TASK_DEAD_LETTER` / `OUTBOX_EVENT` / `WORKER_HEARTBEAT`）

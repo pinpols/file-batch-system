@@ -26,8 +26,8 @@ class ApiKeyAsyncMaintenance {
     try {
       mapper.touchLastUsedAt(id);
     } catch (Exception ex) {
-      log.debug(
-          "touch last_used_at failed for keyId={}: {}", id, SwallowedExceptionLogger.summary(ex));
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
+      log.debug("touch last_used_at failed for keyId={}: {}", id, causeSummary);
     }
   }
 
@@ -41,8 +41,8 @@ class ApiKeyAsyncMaintenance {
         log.info("api_key keyId={} upgraded sha256 → pbkdf2", id);
       }
     } catch (Exception ex) {
-      log.debug(
-          "api_key keyId={} kdf upgrade swallowed: {}", id, SwallowedExceptionLogger.summary(ex));
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
+      log.debug("api_key keyId={} kdf upgrade swallowed: {}", id, causeSummary);
     }
   }
 }

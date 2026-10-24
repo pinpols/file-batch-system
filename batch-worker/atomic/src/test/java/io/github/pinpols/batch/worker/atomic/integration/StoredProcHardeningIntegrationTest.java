@@ -61,24 +61,44 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
   @BeforeEach
   void setUp() {
     jdbc = new JdbcTemplate(dataSource);
-    jdbc.execute("DROP SCHEMA IF EXISTS spi_it CASCADE");
-    jdbc.execute("CREATE SCHEMA spi_it");
-    jdbc.execute("CREATE TABLE spi_it.marker(id serial primary key, note text)");
+    final String dropSql = """
+        DROP SCHEMA IF EXISTS spi_it CASCADE
+    """;
+    jdbc.execute(dropSql);
+    final String createSql = """
+        CREATE SCHEMA spi_it
+    """;
+    jdbc.execute(createSql);
+    final String createSpiItMarkerSql = """
+        CREATE TABLE spi_it.marker(id serial primary key, note text)
+    """;
+    jdbc.execute(createSpiItMarkerSql);
     // 真 PROCEDURE(prokind 'p' → 原生 CALL)
-    jdbc.execute("CREATE PROCEDURE spi_it.it_proc() LANGUAGE plpgsql AS $$ BEGIN"
-        + " INSERT INTO spi_it.marker(note) VALUES ('proc'); END $$");
+    final String createSpiItMarkerSqlValue1 = """
+        CREATE PROCEDURE spi_it.it_proc() LANGUAGE plpgsql AS $$ BEGIN INSERT INTO spi_it.marker(note)\s\
+        VALUES ('proc'); END $$\
+        """;
+    jdbc.execute(createSpiItMarkerSqlValue1);
     // 真 FUNCTION 返回 void(prokind 'f' → {call} 转义)
-    jdbc.execute("CREATE FUNCTION spi_it.it_fn_void() RETURNS void LANGUAGE plpgsql AS $$ BEGIN"
-        + " INSERT INTO spi_it.marker(note) VALUES ('fn'); END $$");
+    final String createSpiItMarkerSqlValue2 = """
+        CREATE FUNCTION spi_it.it_fn_void() RETURNS void LANGUAGE plpgsql AS $$ BEGIN INSERT INTO\s\
+        spi_it.marker(note) VALUES ('fn'); END $$\
+        """;
+    jdbc.execute(createSpiItMarkerSqlValue2);
     // OUT refcursor 的 PROCEDURE,游标覆盖 50 行(测 maxRefCursorRows 截断)
-    jdbc.execute(
-        "CREATE PROCEDURE spi_it.it_proc_cursor(OUT c refcursor) LANGUAGE plpgsql AS $$ BEGIN"
-            + " OPEN c FOR SELECT g FROM generate_series(1,50) g; END $$");
+    final String createGenerateSeriesSql = """
+        CREATE PROCEDURE spi_it.it_proc_cursor(OUT c refcursor) LANGUAGE plpgsql AS $$ BEGIN OPEN c FOR SELECT g\s\
+        FROM generate_series(1,50) g; END $$\
+        """;
+    jdbc.execute(createGenerateSeriesSql);
   }
 
   @AfterEach
   void tearDown() {
-    jdbc.execute("DROP SCHEMA IF EXISTS spi_it CASCADE");
+    final String dropSqlValue3 = """
+        DROP SCHEMA IF EXISTS spi_it CASCADE
+    """;
+    jdbc.execute(dropSqlValue3);
   }
 
   private StoredProcTaskExecutor executor(StoredProcExecutorProperties p) {
@@ -103,9 +123,11 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
   void shouldInvokeNativeCall_whenTargetIsProcedure() {
     TaskResult r = executor(props()).execute(ctx(Map.of("procedureName", "spi_it.it_proc")));
     assertThat(r.success()).isTrue();
-    assertThat(jdbc.queryForObject(
-            "select count(*) from spi_it.marker where note='proc'", Integer.class))
-        .isEqualTo(1);
+    final String selectSpiItMarkerSql = """
+        select count(*) from spi_it.marker where note='proc'
+    """;
+    Integer selectedMarkerCount = jdbc.queryForObject(selectSpiItMarkerSql, Integer.class);
+    assertThat(selectedMarkerCount).isEqualTo(1);
   }
 
   @Test
@@ -113,9 +135,11 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
   void shouldInvokeCallEscape_whenTargetIsFunction() {
     TaskResult r = executor(props()).execute(ctx(Map.of("procedureName", "spi_it.it_fn_void")));
     assertThat(r.success()).isTrue();
-    assertThat(jdbc.queryForObject(
-            "select count(*) from spi_it.marker where note='fn'", Integer.class))
-        .isEqualTo(1);
+    final String selectSpiItMarkerSqlValue4 = """
+        select count(*) from spi_it.marker where note='fn'
+    """;
+    Integer selectedMarkerCount = jdbc.queryForObject(selectSpiItMarkerSqlValue4, Integer.class);
+    assertThat(selectedMarkerCount).isEqualTo(1);
   }
 
   @Test
@@ -158,12 +182,24 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
     // verifyExecutePrivilege=true 时 has_function_privilege 应判定无权 → fail,message 含权限字样。
     String role = "spi_lowpriv_" + Long.toHexString(System.nanoTime());
     String pwd = "lp_pwd";
-    jdbc.execute("CREATE PROCEDURE spi_it.it_proc_restricted() LANGUAGE plpgsql AS $$ BEGIN"
-        + " INSERT INTO spi_it.marker(note) VALUES ('restricted'); END $$");
+    final String createSpiItMarkerSqlValue5 = """
+        CREATE PROCEDURE spi_it.it_proc_restricted() LANGUAGE plpgsql AS $$ BEGIN INSERT INTO\s\
+        spi_it.marker(note) VALUES ('restricted'); END $$\
+        """;
+    jdbc.execute(createSpiItMarkerSqlValue5);
     // PG 过程默认对 PUBLIC 授予 EXECUTE;先收回再建低权限角色,使其确实无权。
-    jdbc.execute("REVOKE EXECUTE ON PROCEDURE spi_it.it_proc_restricted() FROM PUBLIC");
-    jdbc.execute("CREATE ROLE " + role + " LOGIN PASSWORD '" + pwd + "'");
-    jdbc.execute("GRANT USAGE ON SCHEMA spi_it TO " + role);
+    final String revokePUBLICSql = """
+        REVOKE EXECUTE ON PROCEDURE spi_it.it_proc_restricted() FROM PUBLIC
+    """;
+    jdbc.execute(revokePUBLICSql);
+    final String createRoleSql = """
+        CREATE ROLE %s LOGIN PASSWORD '%s'
+    """.formatted(role, pwd);
+    jdbc.execute(createRoleSql);
+    final String grantSchemaUsageSql = """
+        GRANT USAGE ON SCHEMA spi_it TO %s
+    """.formatted(role);
+    jdbc.execute(grantSchemaUsageSql);
 
     String baseUrl;
     try (Connection conn = dataSource.getConnection()) {
@@ -182,8 +218,14 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
       assertThat(r.message()).containsIgnoringCase("EXECUTE privilege");
     } finally {
       // 先回收授权(GRANT USAGE 会让角色被对象依赖,直接 DROP 会报 2BP01)。
-      jdbc.execute("REVOKE ALL ON SCHEMA spi_it FROM " + role);
-      jdbc.execute("DROP ROLE IF EXISTS " + role);
+      final String revokeSql = """
+          REVOKE ALL ON SCHEMA spi_it FROM %s
+      """.formatted(role);
+      jdbc.execute(revokeSql);
+      final String dropRoleSql = """
+          DROP ROLE IF EXISTS %s
+      """.formatted(role);
+      jdbc.execute(dropRoleSql);
     }
   }
 
@@ -200,9 +242,10 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("默认不允许定义者权限过程, 应拒绝调用以防越权提权")
   void shouldRejectSecurityDefiner_whenNotExplicitlyAllowed() {
-    jdbc.execute(
-        "CREATE PROCEDURE spi_it.it_proc_def() LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN END"
-            + " $$");
+    final String createSqlValue6 = """
+        CREATE PROCEDURE spi_it.it_proc_def() LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN END $$\
+        """;
+    jdbc.execute(createSqlValue6);
     // allowSecurityDefiner 默认 false → SECURITY DEFINER 过程被拒(防借 owner 提权)。
     TaskResult r = executor(props()).execute(ctx(Map.of("procedureName", "spi_it.it_proc_def")));
     assertThat(r.success()).isFalse();
@@ -211,9 +254,10 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("显式允许后, 定义者权限过程应可正常调用")
   void shouldAllowSecurityDefiner_whenExplicitlyEnabled() {
-    jdbc.execute(
-        "CREATE PROCEDURE spi_it.it_proc_def2() LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN END"
-            + " $$");
+    final String createSqlValue7 = """
+        CREATE PROCEDURE spi_it.it_proc_def2() LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN END $$\
+        """;
+    jdbc.execute(createSqlValue7);
     StoredProcExecutorProperties p = props();
     p.setAllowSecurityDefiner(true);
     TaskResult r = executor(p).execute(ctx(Map.of("procedureName", "spi_it.it_proc_def2")));

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.mq.MqMessage;
 import io.github.pinpols.batch.common.mq.MqMessagePublisher;
@@ -39,7 +40,8 @@ class DeadLetterPublisherTest {
     @SuppressWarnings("unchecked")
     ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
     when(provider.getIfAvailable()).thenReturn(registry);
-    publisher = new DeadLetterPublisher(mqMessagePublisher, provider);
+    publisher =
+        new DeadLetterPublisher(mqMessagePublisher, provider, new BatchKafkaTopicNamespace(""));
   }
 
   @Test

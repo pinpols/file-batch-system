@@ -16,13 +16,15 @@ public final class AlertFingerprints {
     String type = alertType == null ? "" : alertType;
     String resource = resourceKey == null ? "" : resourceKey;
     String raw = tenant + "|" + type + "|" + resource;
-    return sha256Hex(raw).substring(0, 64);
+    String fingerprintHex = sha256Hex(raw);
+    return fingerprintHex.substring(0, 64);
   }
 
   private static String sha256Hex(String value) {
     try {
       MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-      byte[] hash = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+      byte[] encodedValue = value.getBytes(StandardCharsets.UTF_8);
+      byte[] hash = digest.digest(encodedValue);
       StringBuilder builder = new StringBuilder(hash.length * 2);
       for (byte b : hash) {
         builder.append(String.format("%02x", b));

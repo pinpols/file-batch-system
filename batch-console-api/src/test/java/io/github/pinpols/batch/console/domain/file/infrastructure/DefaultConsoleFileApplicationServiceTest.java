@@ -85,7 +85,7 @@ class DefaultConsoleFileApplicationServiceTest {
         ArgumentCaptor.forClass(ApprovalTargetBinding.class);
     verify(approvalClient).requireApprovedApproval(eq("t1"), eq("AP-100"), captor.capture());
     assertThat(captor.getValue()).isEqualTo(ApprovalTargetBinding.file(100L));
-    assertThat(captor.getValue().enforced()).isTrue();
+    assertThat(captor.getValue().targetId()).isEqualTo("100");
   }
 
   @Test

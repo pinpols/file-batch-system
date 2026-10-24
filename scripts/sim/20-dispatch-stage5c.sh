@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：dispatch-stage5c.sh:Dispatch LOCAL / NAS stub / SFTP manifest 验证。
+# 用法：在仓库根目录执行 bash scripts/sim/20-dispatch-stage5c.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # 20-dispatch-stage5c.sh:Dispatch LOCAL / NAS stub / SFTP manifest 验证
 #
@@ -7,7 +9,7 @@
 #   - NAS 渠道在 local profile 下写 stub 信封并标记 transportStub=true
 #   - SFTP 渠道真上传文件 + sidecar manifest(.chk)
 #
-# SQL seed 独立放在 docs/test-data,脚本只负责编排、造实际文件、触发、轮询、断言。
+# SQL seed 独立放在 test-data/sim,脚本只负责编排、造实际文件、触发、轮询、断言。
 # SFTP 在本地需要 dispatch worker 带 BATCH_SECURITY_SSRF_GUARD_ALLOW_PRIVATE=true
 # 启动,否则 DNS guard 会拒绝 127.0.0.1 / 私网地址。
 # =========================================================
@@ -25,6 +27,8 @@ export SFTP_HOST SFTP_PORT
 export SOURCE_DIR="${SOURCE_DIR:-/tmp/batch/stage5c-source}"
 export STORAGE_PATH="$SOURCE_DIR/$BATCH_NO.json"
 mkdir -p "$REPORT_DIR" "$SOURCE_DIR" /tmp/batch/stage5c-local /tmp/batch/stage5c-nas
+SFTP_KNOWN_HOSTS_PATH="$(sim_sftp_known_hosts_path)" || exit 1
+sim_write_sftp_known_hosts "$SFTP_KNOWN_HOSTS_PATH" "$SFTP_HOST" "$SFTP_PORT"
 
 batch_require_python
 SQL_DIR="$ROOT/scripts/sim/sql"
@@ -39,10 +43,11 @@ docker exec "$SFTP_CONTAINER" sh -lc 'rm -f /home/tb/outbound/stage5c-dispatch.j
 echo "==> seed dispatch stage5c fixtures"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -v sftp_host="$SFTP_HOST" -v sftp_port="$SFTP_PORT" \
-  -f /dev/stdin < docs/test-data/sim-stage5c-dispatch-channels-platform.sql >/dev/null
+  -v sftp_known_hosts_path="$SFTP_KNOWN_HOSTS_PATH" \
+  -f /dev/stdin < test-data/sim/sim-stage5c-dispatch-channels-platform.sql >/dev/null
 FILE_ID="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -v batch_no="$BATCH_NO" -v biz_date="$BIZ_DATE" -v storage_path="$STORAGE_PATH" \
-  -t -A -f /dev/stdin < docs/test-data/sim-stage5c-dispatch-file.sql | tail -1)"
+  -t -A -f /dev/stdin < test-data/sim/sim-stage5c-dispatch-file.sql | tail -1)"
 export FILE_ID
 START_TS="$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -tA -v ON_ERROR_STOP=1 -f /dev/stdin < "$SQL_DIR/select-current-timestamp.sql")"
@@ -50,6 +55,8 @@ export START_TS
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/dispatch-stage5c.log"
 import glob, json, os, subprocess, sys, time, urllib.request
+from datetime import date, timedelta
+from scripts.sim.launch_contract import workflow_id_for_fixture
 
 BASE = os.environ["TRIGGER_BASE"]
 SECRET = os.environ["INTERNAL_SECRET"]
@@ -78,14 +85,14 @@ def psql(sql_file, variables=None, tuples=False, capture_output=True):
             args, check=True, capture_output=capture_output,
             text=True, input=sql.read())
 
-def launch(channel):
+def launch(channel, biz_date):
     rid = f"sim-stage5c-{channel}-{int(time.time()*1000)%100000000}"
     request_ids[channel] = rid
     body = {
         "tenantId": "tb",
-        "jobCode": JOB,
+        "workflowDefinitionId": workflow_id_for_fixture("tb", JOB),
         "triggerType": "API",
-        "bizDate": BIZ,
+        "bizDate": biz_date,
         "requestId": rid,
         "params": {
             "fileId": FILE_ID,
@@ -114,8 +121,13 @@ def launch(channel):
             print(text[:500], flush=True)
             raise RuntimeError(f"launch failed: {channel}")
 
-for channel in CHANNELS:
-    launch(channel)
+base_biz_date = date.fromisoformat(BIZ) + timedelta(days=1)
+for index, channel in enumerate(CHANNELS):
+    # 按租户/Workflow/业务日进行幂等准入；每个
+    # 通道必须使用自己的触发记录，以便测试其派发传输。使用未来业务
+    # 日期，确保重复运行 SIM 时不会重新开启之前已结算的日期。
+    channel_biz_date = (base_biz_date + timedelta(days=index)).isoformat()
+    launch(channel, channel_biz_date)
 
 deadline = time.time() + 180
 while time.time() < deadline:

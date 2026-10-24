@@ -7,6 +7,7 @@ io.github.pinpols.batch.common.config.ProductionRuntimeConfigurationGuard
 io.github.pinpols.batch.common.config.ReadReplicaCredentialGuard
 io.github.pinpols.batch.common.config.BatchSchedulingAutoConfiguration
 io.github.pinpols.batch.common.config.BatchJsonAutoConfiguration
+io.github.pinpols.batch.common.config.BatchKafkaNamespaceAutoConfiguration
 io.github.pinpols.batch.common.config.BatchTimezoneAutoConfiguration
 io.github.pinpols.batch.common.config.BatchObjectCryptoAutoConfiguration
 io.github.pinpols.batch.common.config.BatchRuntimeIdentityAutoConfiguration

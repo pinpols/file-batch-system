@@ -24,7 +24,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
- * P2: ConsoleTriggerController register/unregister/pause/resume 4 个动作正确透传 jobCode+tenantId 到 proxy。
+ * P2: ConsoleTriggerController register/unregister/pause/resume 4 个动作正确透传 workflowCode+tenantId 到 proxy。
  */
 @DisplayName("触发器控制器: 列表查询与注册、暂停、恢复动作的转发")
 class ConsoleTriggerControllerTest {
@@ -47,7 +47,7 @@ class ConsoleTriggerControllerTest {
   }
 
   @Test
-  @DisplayName("查询触发器列表, 回包保留下游返回的作业编码")
+  @DisplayName("查询 Workflow 调度列表, 回包保留下游返回的 Workflow 编码")
   void shouldDelegateTriggerList_whenListRequested() throws Exception {
     when(proxy.triggerList())
         .thenReturn(List.of(new ConsoleTriggerStatusResponse(
@@ -55,34 +55,34 @@ class ConsoleTriggerControllerTest {
     mockMvc
         .perform(get("/api/console/ops/triggers"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data[0].jobCode").value("J1"));
+        .andExpect(jsonPath("$.data[0].workflowCode").value("J1"));
   }
 
   @Test
-  @DisplayName("注册动作下发的租户与作业编码与请求一致")
+  @DisplayName("注册动作下发的租户与 Workflow 编码与请求一致")
   void shouldPassTenantAndJobCode_whenRegisterRequested() throws Exception {
-    when(proxy.triggerAction("ta", "JOB_A", "register"))
-        .thenReturn(new ConsoleTriggerActionResponse("ta", "JOB_A", "ok"));
+    when(proxy.triggerAction("ta", "WF_A", "register"))
+        .thenReturn(new ConsoleTriggerActionResponse("ta", "WF_A", "ok"));
     mockMvc
-        .perform(post("/api/console/ops/triggers/JOB_A/register").param("tenantId", "ta"))
+        .perform(post("/api/console/ops/triggers/WF_A/register").param("tenantId", "ta"))
         .andExpect(status().isOk());
-    verify(proxy).triggerAction("ta", "JOB_A", "register");
+    verify(proxy).triggerAction("ta", "WF_A", "register");
   }
 
   @Test
   @DisplayName("暂停与恢复分别按各自动作下发, 两次调用互不串用")
   void shouldUseDistinctActions_whenPauseAndResumeRequested() throws Exception {
-    when(proxy.triggerAction("ta", "JOB_A", "pause"))
-        .thenReturn(new ConsoleTriggerActionResponse("ta", "JOB_A", "paused"));
-    when(proxy.triggerAction("ta", "JOB_A", "resume"))
-        .thenReturn(new ConsoleTriggerActionResponse("ta", "JOB_A", "resumed"));
+    when(proxy.triggerAction("ta", "WF_A", "pause"))
+        .thenReturn(new ConsoleTriggerActionResponse("ta", "WF_A", "paused"));
+    when(proxy.triggerAction("ta", "WF_A", "resume"))
+        .thenReturn(new ConsoleTriggerActionResponse("ta", "WF_A", "resumed"));
     mockMvc
-        .perform(post("/api/console/ops/triggers/JOB_A/pause").param("tenantId", "ta"))
+        .perform(post("/api/console/ops/triggers/WF_A/pause").param("tenantId", "ta"))
         .andExpect(status().isOk());
     mockMvc
-        .perform(post("/api/console/ops/triggers/JOB_A/resume").param("tenantId", "ta"))
+        .perform(post("/api/console/ops/triggers/WF_A/resume").param("tenantId", "ta"))
         .andExpect(status().isOk());
-    verify(proxy).triggerAction("ta", "JOB_A", "pause");
-    verify(proxy).triggerAction("ta", "JOB_A", "resume");
+    verify(proxy).triggerAction("ta", "WF_A", "pause");
+    verify(proxy).triggerAction("ta", "WF_A", "resume");
   }
 }

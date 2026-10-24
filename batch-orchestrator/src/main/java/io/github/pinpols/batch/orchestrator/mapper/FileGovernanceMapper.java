@@ -25,6 +25,8 @@ public interface FileGovernanceMapper {
 
   List<Map<String, Object>> selectArrivalGovernanceCandidates(Map<String, Object> params);
 
+  Map<String, Object> selectArrivalGroupBacklogMetrics();
+
   List<Map<String, Object>> selectArrivalGroupSummaries(Map<String, Object> params);
 
   List<Map<String, Object>> selectArrivalGroupFiles(Map<String, Object> params);
@@ -48,6 +50,8 @@ public interface FileGovernanceMapper {
   int updateFileStatus(Map<String, Object> params);
 
   int updateFileMetadata(Map<String, Object> params);
+
+  int updateArrivalGroupMetadataIfNonTerminal(Map<String, Object> params);
 
   int markFileArrivalConfirmed(Map<String, Object> params);
 

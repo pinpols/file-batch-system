@@ -41,7 +41,8 @@ public final class PrivateTempFiles {
 
   /** 在进程私有目录创建 owner-only 临时文件。 */
   public static Path createTempFile(String prefix, String suffix) throws IOException {
-    return createTempFile(privateDirectory(), prefix, suffix);
+    Path directory = privateDirectory();
+    return createTempFile(directory, prefix, suffix);
   }
 
   /** 为不可续跑的临时副本持有进程锁，清理器不能删除仍在使用的文件。 */
@@ -77,25 +78,32 @@ public final class PrivateTempFiles {
 
   public record LockedTempFile(Path path, Path lockPath, FileChannel channel, FileLock lock)
       implements AutoCloseable {
-    @Override
-    public void close() throws IOException {
+    /** 运行结束后释放清理保护,保留数据文件供失败取证或后续过期清理。 */
+    public void releaseLock() throws IOException {
       try {
         try {
-          lock.close();
+          if (lock.isValid()) {
+            lock.close();
+          }
         } finally {
           channel.close();
         }
       } finally {
-        try {
-          Files.deleteIfExists(path);
-        } finally {
-          Files.deleteIfExists(lockPath);
-        }
+        Files.deleteIfExists(lockPath);
+      }
+    }
+
+    @Override
+    public void close() throws IOException {
+      try {
+        releaseLock();
+      } finally {
+        Files.deleteIfExists(path);
       }
     }
   }
 
-  /** 只清理指定前缀的直接子文件；锁仍被持有时保留，不递归触碰可续跑目录。 */
+  /** 只清理指定前缀的过期子文件及孤立锁；锁仍被持有时保留，不递归触碰可续跑目录。 */
   public static int deleteStaleUnlockedFiles(String prefix, Instant cutoff) throws IOException {
     int deleted = 0;
     try (DirectoryStream<Path> paths = Files.newDirectoryStream(privateDirectory(), prefix + "*")) {
@@ -112,11 +120,13 @@ public final class PrivateTempFiles {
     Path lockPath = path.resolveSibling(path.getFileName() + LOCK_SUFFIX);
     try {
       if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
-          || path.getFileName().toString().endsWith(LOCK_SUFFIX)
           || !Files.getLastModifiedTime(path, LinkOption.NOFOLLOW_LINKS)
               .toInstant()
               .isBefore(cutoff)) {
         return false;
+      }
+      if (path.getFileName().toString().endsWith(LOCK_SUFFIX)) {
+        return deleteOrphanedLockFile(path);
       }
       if (Files.exists(lockPath, LinkOption.NOFOLLOW_LINKS)) {
         try (FileChannel channel =
@@ -136,6 +146,25 @@ public final class PrivateTempFiles {
     } catch (OverlappingFileLockException | NoSuchFileException unavailable) {
       return false;
     }
+  }
+
+  private static boolean deleteOrphanedLockFile(Path lockPath) throws IOException {
+    String name = lockPath.getFileName().toString();
+    String payloadFileName = name.substring(0, name.length() - LOCK_SUFFIX.length());
+    Path payloadPath = lockPath.resolveSibling(payloadFileName);
+    // 数据已被 LOAD 删除或分区过滤移动时仍可能在持锁；.lock 后缀的数据本身也可有自己的锁。
+    if (Files.exists(payloadPath, LinkOption.NOFOLLOW_LINKS)
+        || Files.exists(lockPath.resolveSibling(name + LOCK_SUFFIX), LinkOption.NOFOLLOW_LINKS)) {
+      return false;
+    }
+    try (FileChannel channel =
+            FileChannel.open(lockPath, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
+        FileLock lock = channel.tryLock()) {
+      if (EmptyChecks.isNull(lock)) {
+        return false;
+      }
+    }
+    return !Files.exists(payloadPath, LinkOption.NOFOLLOW_LINKS) && Files.deleteIfExists(lockPath);
   }
 
   /** 在进程私有目录创建 owner-only 临时工作目录。 */

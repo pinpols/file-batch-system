@@ -51,7 +51,8 @@ public class CachedBodyHttpServletRequest extends HttpServletRequestWrapper {
 
   @Override
   public BufferedReader getReader() {
-    return new BufferedReader(
-        new InputStreamReader(new ByteArrayInputStream(cachedBody), StandardCharsets.UTF_8));
+    ByteArrayInputStream bodyStream = new ByteArrayInputStream(cachedBody);
+    InputStreamReader bodyReader = new InputStreamReader(bodyStream, StandardCharsets.UTF_8);
+    return new BufferedReader(bodyReader);
   }
 }

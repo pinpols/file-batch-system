@@ -191,14 +191,16 @@ public class ConsoleAiTools {
           + "影响排序、对同类反复告警(看 occurrenceCount 去重归并)、概括当前告警态势并给处置/升级建议。"
           + "用户问『现在有哪些告警 / 该先处理哪个 / 告警态势 / 要不要升级』这类问题时调用。无需参数。")
   public String getOpenAlerts() {
-    return renderAlerts(queryAlerts("OPEN"), "当前租户暂无未决(OPEN)告警。");
+    List<ConsoleAlertEventResponse> alerts = queryAlerts("OPEN");
+    return renderAlerts(alerts, "当前租户暂无未决(OPEN)告警。");
   }
 
   @Tool(
       description = "列出当前租户最近的告警事件(不限状态,含 OPEN/ACKED/SUPPRESSED/CLOSED),用于回顾近期告警态势、"
           + "识别反复出现(occurrenceCount 高)或已处置的告警。用户问『最近有哪些告警 / 告警历史 / 某类告警是不是反复出现』时调用。无需参数。")
   public String getRecentAlerts() {
-    return renderAlerts(queryAlerts(null), "当前租户近期无告警记录。");
+    List<ConsoleAlertEventResponse> alerts = queryAlerts(null);
+    return renderAlerts(alerts, "当前租户近期无告警记录。");
   }
 
   private List<ConsoleAlertEventResponse> queryAlerts(String status) {
@@ -244,7 +246,10 @@ public class ConsoleAiTools {
   }
 
   private String renderInstance(ConsoleJobInstanceResponse instance) {
-    return """
+    String displayFailureClass = nullToDash(instance.failureClass());
+    String displayTraceId = nullToDash(instance.traceId());
+    String displayResultSummary = truncate(instance.resultSummary(), 500);
+    String formattedInstance = """
         id=%s
         jobCode=%s
         instanceNo=%s
@@ -262,14 +267,15 @@ public class ConsoleAiTools {
         instance.jobCode(),
         instance.instanceNo(),
         instance.instanceStatus(),
-        nullToDash(instance.failureClass()),
+        displayFailureClass,
         instance.bizDate(),
         instance.startedAt(),
         instance.finishedAt(),
         instance.retryFlag(),
         instance.rerunFlag(),
-        nullToDash(instance.traceId()),
-        truncate(instance.resultSummary(), 500)).stripTrailing();
+        displayTraceId,
+        displayResultSummary);
+    return formattedInstance.stripTrailing();
   }
 
   private String renderLog(ConsoleJobExecutionLogResponse log) {

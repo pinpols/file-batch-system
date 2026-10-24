@@ -95,12 +95,15 @@ class SdkAbstractTypedDispatchHandler[ParamsT: BaseModel, OutputT: BaseModel, Ta
             except Exception as item_ex:
                 counts.inc_failed()
                 _log.warning("typed dispatch item failed: %s", item_ex)
-        return self._result(params, counts, f"dispatched {counts.success()}/{counts.total()}")
+        success_count = counts.success()
+        total_count = counts.total()
+        default_message = f"dispatched {success_count}/{total_count}"
+        return self._result(params, counts, default_message)
 
     def _result(self, params: ParamsT, counts: SdkRowResult, default_message: str) -> SdkTaskResult:
         output = self.summarize(params, counts)
         if output is None:
-            return SdkTaskResult.success_with(output=counts.to_output(), message=default_message)
-        return SdkTaskResult.success_with(
-            output=SdkTypedParameters.serialize(output), message=default_message
-        )
+            counts_output = counts.to_output()
+            return SdkTaskResult.success_with(output=counts_output, message=default_message)
+        serialized_output = SdkTypedParameters.serialize(output)
+        return SdkTaskResult.success_with(output=serialized_output, message=default_message)

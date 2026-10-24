@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.exports.config.ExportConfigValueSupport;
 import java.util.Map;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -29,28 +30,28 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn) {
     if (templateConfig == null || templateConfig.isEmpty()) {
       throw new WorkerConfigException("template config missing");
     }
-    String detailSql = textValue(firstNonNull(
+    Object rawDetailSql = firstNonNull(
         templateConfig.get("default_query_sql"),
         templateConfig.get("defaultQuerySql"),
         templateConfig.get("detail_query_sql"),
-        templateConfig.get("detailQuerySql")));
+        templateConfig.get("detailQuerySql"));
+    String detailSql = textValue(rawDetailSql);
     if (detailSql == null) {
       throw new WorkerConfigException("default_query_sql is required for sql_template_export");
     }
 
     Map<String, Object> schemaMap = ExportConfigValueSupport.toMap(
         templateConfig.get("query_param_schema"), objectMapper, SqlTemplateExportSpec.class);
+    Object rawSpec = firstNonNull(
+        schemaMap.get("sqlTemplateExport"),
+        schemaMap.get("sql_template_export"),
+        templateConfig.get("sql_template_export"),
+        templateConfig.get("sqlTemplateExport"));
     Map<String, Object> spec = ExportConfigValueSupport.toMap(
-        firstNonNull(
-            schemaMap.get("sqlTemplateExport"),
-            schemaMap.get("sql_template_export"),
-            templateConfig.get("sql_template_export"),
-            templateConfig.get("sqlTemplateExport")),
-        objectMapper,
-        SqlTemplateExportSpec.class);
+        rawSpec, objectMapper, SqlTemplateExportSpec.class);
 
-    String cursorColumn =
-        textValue(firstNonNull(spec.get("cursorColumn"), spec.get("cursor_column")));
+    Object rawCursorColumn = firstNonNull(spec.get("cursorColumn"), spec.get("cursor_column"));
+    String cursorColumn = textValue(rawCursorColumn);
     if (!Texts.hasText(cursorColumn)) {
       cursorColumn = "id";
     }
@@ -78,9 +79,10 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn) {
     if (sql == null || name == null) {
       return false;
     }
-    return Pattern.compile("\\b" + Pattern.quote(name) + "\\b", Pattern.CASE_INSENSITIVE)
-        .matcher(sql)
-        .find();
+    Pattern identifierPattern =
+        Pattern.compile("\\b" + Pattern.quote(name) + "\\b", Pattern.CASE_INSENSITIVE);
+    Matcher identifierMatcher = identifierPattern.matcher(sql);
+    return identifierMatcher.find();
   }
 
   private static Object firstNonNull(Object... values) {

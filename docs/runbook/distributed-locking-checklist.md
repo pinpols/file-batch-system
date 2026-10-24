@@ -2,7 +2,7 @@
 
 > 项目里有 4 种"分布式协调"机制，**用法不能混淆**。本文档锁死边界，给后续维护者一个 decision tree。
 >
-> 配套阅读：[ADR-002 transactional-outbox](../architecture/adr/ADR-002-transactional-outbox.md)、[docs/agent-baseline.md §模块边界 / §架构硬约束](../../docs/agent-baseline.md)。
+> 配套阅读：[ADR-002 transactional-outbox](../architecture/adr/ADR-002-transactional-outbox.md)、[docs/agent-baseline.md §模块边界 / §架构硬约束](../agent-baseline.md)。
 
 ---
 
@@ -85,16 +85,19 @@ grep -rn "@SchedulerLock" --include='*.java' batch-*/src/main
 
 ### 红线 D — environment 前缀必须正确
 
-ShedLock Redis provider 由 [BatchShedLockAutoConfiguration](../../batch-common/src/main/java/io/github/pinpols/batch/common/config/BatchShedLockAutoConfiguration.java) 统一创建，`batch.shedlock.redis.key-prefix-env` 默认取 `${spring.application.name}`。实际 Redis key 为 `job-lock:shedlock:<env>:<lockName>`。**如果 dev / staging / prod 共用一套 Redis，这个前缀必须显式区分环境**，否则跨环境串号。
+ShedLock Redis provider 由 [BatchShedLockAutoConfiguration](../../batch-common/src/main/java/io/github/pinpols/batch/common/config/BatchShedLockAutoConfiguration.java) 统一创建，`batch.shedlock.redis.key-prefix-env` 默认取 `${spring.application.name}`。设置 `batch.kafka.namespace`（环境变量 `BATCH_KAFKA_NAMESPACE`）后，服务级前缀会变为 `<namespace>:<service>`，实际 Redis key 为 `job-lock:shedlock:<namespace>:<service>:<lockName>`；namespace 为空时仍为 `job-lock:shedlock:<service>:<lockName>`。**如果 dev / staging / prod 共用一套 Redis，namespace 必须在部署间唯一**，否则跨部署串号。
 
 部署前检查：
 
 ```bash
 # 在每个环境的容器里
-echo $SPRING_APPLICATION_NAME
-echo $BATCH_SHEDLOCK_REDIS_ENV
-# 同一 Redis 集群里必须让每个环境的 BATCH_SHEDLOCK_REDIS_ENV 不同；
-# 如果未设置，则至少确认各服务 spring.application.name 不同，且 Redis 不跨环境共用。
+deployment_namespace="${BATCH_KAFKA_NAMESPACE:-}"
+service_name="${SPRING_APPLICATION_NAME:-}"
+lock_environment="${BATCH_SHEDLOCK_REDIS_ENV:-}"
+printf 'namespace=%s service=%s lock-env=%s\n' \
+  "$deployment_namespace" "$service_name" "$lock_environment"
+# 同一 Redis 集群里的部署必须使用不同 BATCH_KAFKA_NAMESPACE；
+# 未设置 namespace 时只适用于单部署/隔离 Redis，BATCH_SHEDLOCK_REDIS_ENV 仍可额外细分服务环境。
 ```
 
 ---
@@ -274,4 +277,4 @@ public void recoverLaunches() { ... }
 - [ADR-006 compensation-requires-new](../architecture/adr/ADR-006-compensation-requires-new.md) — 重试 / 补偿走 `REQUIRES_NEW`，与乐观锁 retry 循环协作
 - [ADR-010 trigger-async-decoupling](../architecture/adr/ADR-010-trigger-async-decoupling.md) — trigger outbox + Kafka，相同 SKIP LOCKED 模式复用
 - [docs/runbook/feature-switches.md](feature-switches.md) — 配置开关运维
-- [docs/agent-baseline.md §架构硬约束](../../docs/agent-baseline.md) — 状态主机 / outbox 同事务约束
+- [docs/agent-baseline.md §架构硬约束](../agent-baseline.md) — 状态主机 / outbox 同事务约束

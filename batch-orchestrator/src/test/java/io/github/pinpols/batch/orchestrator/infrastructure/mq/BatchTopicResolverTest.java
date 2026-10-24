@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.mq;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.config.BatchMqTopicsProperties;
 import io.github.pinpols.batch.orchestrator.config.MqRoutingProperties;
@@ -21,7 +22,7 @@ class BatchTopicResolverTest {
   void setUp() {
     topics = new BatchMqTopicsProperties();
     routing = new MqRoutingProperties();
-    resolver = new BatchTopicResolver(topics, routing);
+    resolver = new BatchTopicResolver(topics, routing, new BatchKafkaTopicNamespace(""));
   }
 
   @Test
@@ -76,6 +77,17 @@ class BatchTopicResolverTest {
     routing.setMode(MqRoutingProperties.Mode.TENANT);
     String topic = resolver.resolve("IMPORT", message("ta:1$bad", "HIGH"));
     assertThat(topic).endsWith(".ta_1_bad");
+  }
+
+  @Test
+  @DisplayName("命名空间统一前缀基础主题和租户分流主题")
+  void shouldPrefixNamespacedTopicBeforeAppendingTenantSuffix() {
+    BatchTopicResolver namespacedResolver = new BatchTopicResolver(
+        topics, routing, new BatchKafkaTopicNamespace("run-a"));
+    routing.setMode(MqRoutingProperties.Mode.TENANT);
+
+    assertThat(namespacedResolver.resolve("EXPORT", message("ta", "NORMAL")))
+        .isEqualTo("run-a." + topics.getExportDispatch() + ".ta");
   }
 
   private static TaskDispatchMessage message(String tenantId, String priorityBand) {

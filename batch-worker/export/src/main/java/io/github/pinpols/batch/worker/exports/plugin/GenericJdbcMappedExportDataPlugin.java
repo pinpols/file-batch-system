@@ -1,9 +1,13 @@
 package io.github.pinpols.batch.worker.exports.plugin;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.enums.JobType;
+import io.github.pinpols.batch.common.enums.SystemPipelineCatalog;
 import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
+import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -25,6 +29,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Component
 public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
 
+  @Override
+  public IdempotencyCapability registrationCallbackIdempotencyCapability() {
+    return IdempotencyCapability.IDEMPOTENT_BY_PLUGIN_LOGIC;
+  }
+
   private final JdbcTemplate jdbcTemplate;
   private final DataSource businessDataSource;
   private final ObjectMapper objectMapper;
@@ -43,13 +52,30 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
     this.jdbcTemplate = new JdbcTemplate(businessDataSource);
     this.objectMapper = objectMapper;
     this.securityProperties = securityProperties;
-    this.txTemplate = new TransactionTemplate(new DataSourceTransactionManager(businessDataSource));
+    DataSourceTransactionManager transactionManager =
+        new DataSourceTransactionManager(businessDataSource);
+    this.txTemplate = new TransactionTemplate(transactionManager);
     this.txTemplate.setReadOnly(true);
   }
 
   @Override
   public String id() {
     return WorkerPluginIds.EXPORT_DATA_JDBC_MAPPED;
+  }
+
+  @Override
+  public ReplayCapabilityDeclaration replayCapabilityDeclaration() {
+    int semanticVersion = SystemPipelineCatalog.forJobType(JobType.EXPORT)
+        .orElseThrow(() -> new IllegalStateException("EXPORT system pipeline is missing"))
+        .semanticVersion();
+    return new ReplayCapabilityDeclaration(
+        id(),
+        Integer.toString(semanticVersion),
+        List.of("BUSINESS_DATABASE_READ"),
+        IdempotencyCapability.IDEMPOTENT_BY_PLUGIN_LOGIC,
+        "tenantId:batchNo:templateCode:partitionNo:partitionCount",
+        "read-only-jdbc-query-v1",
+        ReplayCapabilityDeclaration.CURRENT_CONTRACT_VERSION);
   }
 
   @Override
@@ -73,10 +99,14 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
       RlsTenantSessionSupport.applyIfPresent(businessDataSource);
       return jdbcTemplate.queryForList(sql, context.tenantId(), context.batchNo());
     });
-    if (EmptyChecks.isEmpty(rows) || EmptyChecks.isNull(rows.get(0))) {
+    if (EmptyChecks.isEmpty(rows)) {
       return Map.of();
     }
-    return new LinkedHashMap<>(rows.get(0));
+    Map<String, Object> firstRow = rows.get(0);
+    if (EmptyChecks.isNull(firstRow)) {
+      return Map.of();
+    }
+    return new LinkedHashMap<>(firstRow);
   }
 
   @Override
@@ -100,16 +130,19 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
       }
     }
     if (!orderColumnSelected) {
-      cols.append(JdbcMappedSqlValidator.quotePg(spec.detailOrderByColumn()))
-          .append(" as __cursor_value__,");
+      String detailOrderByColumn = spec.detailOrderByColumn();
+      String quotedOrderByColumn = JdbcMappedSqlValidator.quotePg(detailOrderByColumn);
+      cols.append(quotedOrderByColumn).append(" as __cursor_value__,");
     }
     cols.setLength(cols.length() - 1);
     String fk = JdbcMappedSqlValidator.quotePg(spec.detailFkColumn());
     String ob = JdbcMappedSqlValidator.quotePg(spec.detailOrderByColumn());
     ExportKeysetRange keysetRange =
         keysetRangePlanner.resolve(context, () -> minMax(spec, batchId));
+    String detailColumnsSql = cols.toString();
+    DetailSql detailSql = new DetailSql(detailColumnsSql, fq, fk, ob);
     PagedQuery pq = buildDetailQuery(
-        new DetailSql(cols.toString(), fq, fk, ob), batchId, cursor, pageSize, keysetRange);
+        detailSql, batchId, cursor, pageSize, keysetRange);
     final String finalSql = pq.sql();
     final Object[] sqlArgs = pq.args();
     List<Map<String, Object>> rows = txTemplate.execute(status -> {
@@ -182,7 +215,9 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
     }
     sql.append(" ORDER BY ").append(ob).append(" ASC LIMIT ?");
     args.add(pageSize);
-    return new PagedQuery(sql.toString(), args.toArray());
+    String querySql = sql.toString();
+    Object[] queryArgs = args.toArray();
+    return new PagedQuery(querySql, queryArgs);
   }
 
   // 兼容旧签名:转调新重载。
@@ -206,7 +241,11 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
       RlsTenantSessionSupport.applyIfPresent(businessDataSource);
       return jdbcTemplate.queryForMap(sql, batchId);
     });
-    return new BigDecimal[] {toBig(row.get("lo")), toBig(row.get("hi"))};
+    Object rawLowerBound = row.get("lo");
+    BigDecimal lowerBound = toBig(rawLowerBound);
+    Object rawUpperBound = row.get("hi");
+    BigDecimal upperBound = toBig(rawUpperBound);
+    return new BigDecimal[] {lowerBound, upperBound};
   }
 
   private static BigDecimal toBig(Object v) {
@@ -214,7 +253,8 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
       return b;
     }
     if (v instanceof Number n) {
-      return new BigDecimal(n.toString());
+      String numericText = n.toString();
+      return new BigDecimal(numericText);
     }
     return null;
   }

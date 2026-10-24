@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.stateful;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
@@ -11,7 +12,9 @@ public final class StatefulBackendIdentity {
   private StatefulBackendIdentity() {}
 
   public static String database(String jdbcUrl) {
-    return "jdbc=" + normalized(sanitizeJdbcLocation(jdbcUrl));
+    String sanitizedJdbcLocation = sanitizeJdbcLocation(jdbcUrl);
+    String normalizedLocation = normalized(sanitizedJdbcLocation);
+    return "jdbc=" + normalizedLocation;
   }
 
   public static String redis(
@@ -37,13 +40,20 @@ public final class StatefulBackendIdentity {
   }
 
   public static String filesystem(String root, String bucket) {
-    String normalizedRoot =
-        hasText(root) ? Path.of(root).toAbsolutePath().normalize().toString() : "";
+    String normalizedRoot = "";
+    if (hasText(root)) {
+      Path rootPath = Path.of(root);
+      Path absoluteRoot = rootPath.toAbsolutePath();
+      Path normalizedPath = absoluteRoot.normalize();
+      normalizedRoot = normalizedPath.toString();
+    }
     return "root=" + normalizedRoot + "|bucket=" + normalized(bucket);
   }
 
   public static String sqlite(Path path) {
-    return "path=" + path.toAbsolutePath().normalize();
+    Path absolutePath = path.toAbsolutePath();
+    Path normalizedPath = absolutePath.normalize();
+    return "path=" + normalizedPath;
   }
 
   private static String sanitizeJdbcLocation(String jdbcUrl) {
@@ -91,7 +101,11 @@ public final class StatefulBackendIdentity {
   }
 
   private static String normalized(String value) {
-    return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    if (EmptyChecks.isNull(value)) {
+      return "";
+    }
+    String trimmedValue = value.trim();
+    return trimmedValue.toLowerCase(Locale.ROOT);
   }
 
   private static boolean hasText(String value) {

@@ -21,37 +21,41 @@ import org.springframework.web.bind.annotation.*;
 public class TriggerManagementController {
 
   private static final String KEY_TENANT_ID = "tenantId";
-  private static final String KEY_JOB_CODE = "jobCode";
-
   private final TriggerRegistrationService triggerRegistrationService;
   private final TriggerGracefulShutdown gracefulShutdown;
 
-  @PostMapping("/register")
-  public CommonResponse<TriggerActionResult> register(
-      @RequestParam(KEY_TENANT_ID) String tenantId, @RequestParam(KEY_JOB_CODE) String jobCode) {
-    triggerRegistrationService.registerByJobCode(tenantId, jobCode);
-    return CommonResponse.success(new TriggerActionResult(tenantId, jobCode, "REGISTERED"));
+  @PostMapping("/workflow/register")
+  public CommonResponse<TriggerActionResult> registerWorkflow(
+      @RequestParam(KEY_TENANT_ID) String tenantId,
+      @RequestParam("workflowCode") String workflowCode) {
+    triggerRegistrationService.registerByWorkflowCode(tenantId, workflowCode);
+    return CommonResponse.success(
+        new TriggerActionResult(tenantId, null, workflowCode, "REGISTERED"));
   }
 
-  @PostMapping("/unregister")
-  public CommonResponse<TriggerActionResult> unregister(
-      @RequestParam(KEY_TENANT_ID) String tenantId, @RequestParam(KEY_JOB_CODE) String jobCode) {
-    triggerRegistrationService.unregisterByJobCode(tenantId, jobCode);
-    return CommonResponse.success(new TriggerActionResult(tenantId, jobCode, "UNREGISTERED"));
+  @PostMapping("/workflow/unregister")
+  public CommonResponse<TriggerActionResult> unregisterWorkflow(
+      @RequestParam(KEY_TENANT_ID) String tenantId,
+      @RequestParam("workflowCode") String workflowCode) {
+    triggerRegistrationService.unregisterByWorkflowCode(tenantId, workflowCode);
+    return CommonResponse.success(
+        new TriggerActionResult(tenantId, null, workflowCode, "UNREGISTERED"));
   }
 
-  @PostMapping("/pause")
-  public CommonResponse<TriggerActionResult> pause(
-      @RequestParam(KEY_TENANT_ID) String tenantId, @RequestParam(KEY_JOB_CODE) String jobCode) {
-    triggerRegistrationService.pauseByJobCode(tenantId, jobCode);
-    return CommonResponse.success(new TriggerActionResult(tenantId, jobCode, "PAUSED"));
+  @PostMapping("/workflow/pause")
+  public CommonResponse<TriggerActionResult> pauseWorkflow(
+      @RequestParam(KEY_TENANT_ID) String tenantId,
+      @RequestParam("workflowCode") String workflowCode) {
+    triggerRegistrationService.pauseByWorkflowCode(tenantId, workflowCode);
+    return CommonResponse.success(new TriggerActionResult(tenantId, null, workflowCode, "PAUSED"));
   }
 
-  @PostMapping("/resume")
-  public CommonResponse<TriggerActionResult> resume(
-      @RequestParam(KEY_TENANT_ID) String tenantId, @RequestParam(KEY_JOB_CODE) String jobCode) {
-    triggerRegistrationService.resumeByJobCode(tenantId, jobCode);
-    return CommonResponse.success(new TriggerActionResult(tenantId, jobCode, "NORMAL"));
+  @PostMapping("/workflow/resume")
+  public CommonResponse<TriggerActionResult> resumeWorkflow(
+      @RequestParam(KEY_TENANT_ID) String tenantId,
+      @RequestParam("workflowCode") String workflowCode) {
+    triggerRegistrationService.resumeByWorkflowCode(tenantId, workflowCode);
+    return CommonResponse.success(new TriggerActionResult(tenantId, null, workflowCode, "NORMAL"));
   }
 
   @PostMapping("/pause-all")

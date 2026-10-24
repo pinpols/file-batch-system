@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
 import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutorRegistry;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.worker.atomic.config.AtomicWorkerConfiguration;
@@ -56,6 +57,11 @@ public class AtomicWorkerLoop extends AbstractWorkerLoop {
   @Override
   protected List<WorkerTaskCapabilityDto> taskCapabilities() {
     return taskExecutorRegistry.capabilitySnapshot();
+  }
+
+  @Override
+  protected List<ReplayCapabilityDeclaration> replayCapabilities() {
+    return taskExecutorRegistry.replayCapabilityCatalog();
   }
 
   @Scheduled(fixedDelayString = "${batch.worker.atomic.heartbeat-interval-millis:15000}")

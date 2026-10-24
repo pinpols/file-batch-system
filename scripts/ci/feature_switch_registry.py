@@ -1,3 +1,5 @@
+# 用途：提供功能开关注册表的加载与解析能力。
+# 用法：由功能开关守卫导入 feature_switch_registry 模块并调用其公共函数。
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -19,12 +21,9 @@ class FeatureSwitch:
 
 
 def load_feature_switches(path: Path = REGISTRY_PATH) -> list[FeatureSwitch]:
-    """Load the restricted YAML shape used by feature-switch-registry.yml.
-
-    The CI image should not need PyYAML just to parse a flat registry. This parser
-    intentionally supports only the small subset used by the file:
-    top-level ``switches`` list, scalar fields, and list fields.
-    """
+    """读取 feature-switch-registry.yml 使用的受限 YAML 结构。
+    平面注册表无需额外引入 PyYAML；解析器只支持当前文件需要的顶层 switches 列表、
+    标量字段及列表字段，不充当通用 YAML 解析器。"""
 
     switches: list[dict[str, object]] = []
     current: dict[str, object] | None = None

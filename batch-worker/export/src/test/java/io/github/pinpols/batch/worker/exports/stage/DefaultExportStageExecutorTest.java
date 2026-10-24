@@ -9,9 +9,9 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.support.StageFailureCode;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
@@ -47,9 +47,6 @@ import org.springframework.beans.factory.ObjectProvider;
 class DefaultExportStageExecutorTest {
 
   @Mock
-  private PlatformPipelineDefinitionRepository pipelineDefinitions;
-
-  @Mock
   private PlatformPipelineRunRepository pipelineRuns;
 
   // The step under test
@@ -79,8 +76,46 @@ class DefaultExportStageExecutorTest {
     @SuppressWarnings("unchecked")
     ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
     when(meterRegistryProvider.getIfAvailable()).thenReturn(meterRegistry);
-    executor = new DefaultExportStageExecutor(
-        allSteps, pipelineDefinitions, pipelineRuns, meterRegistryProvider);
+    executor = new DefaultExportStageExecutor(allSteps, pipelineRuns, meterRegistryProvider);
+  }
+
+  @Test
+  @DisplayName("回放能力由真实 PREPARE 模板与 GENERATE 阶段插件配置解析")
+  @SuppressWarnings("unchecked")
+  void replayCapability_resolvesFrozenTemplateFromPrepareAndSelectedGenerateStep() {
+    PrepareStep configuredPrepareStep = mock(PrepareStep.class);
+    when(configuredPrepareStep.stage()).thenReturn(ExportStage.PREPARE);
+    when(configuredPrepareStep.implCode()).thenReturn("EXPORT_PREPARE");
+    when(configuredPrepareStep.stepCode()).thenReturn("EXPORT_PREPARE");
+    when(configuredPrepareStep.stepName()).thenReturn("Prepare");
+    GenerateStep configuredGenerateStep = mock(GenerateStep.class);
+    when(configuredGenerateStep.stage()).thenReturn(ExportStage.GENERATE);
+    when(configuredGenerateStep.implCode()).thenReturn("EXPORT_GENERATE");
+    when(configuredGenerateStep.stepCode()).thenReturn("EXPORT_GENERATE");
+    when(configuredGenerateStep.stepName()).thenReturn("Generate");
+    Map<String, Object> frozenTemplateConfig = Map.of("export_data_ref", "settlement-export");
+    ExportJobContext context = buildContext();
+    when(configuredPrepareStep.resolveTemplateConfig(context)).thenReturn(frozenTemplateConfig);
+    ReplayCapabilityDeclaration expected = ReplayCapabilityDeclaration.unknown("settlement-export");
+    when(configuredGenerateStep.replayCapability(frozenTemplateConfig)).thenReturn(expected);
+    List<ExportStageStep> configuredSteps = new ArrayList<>();
+    configuredSteps.add(configuredPrepareStep);
+    configuredSteps.add(configuredGenerateStep);
+    for (ExportStage stage : ExportStage.values()) {
+      if (stage != ExportStage.PREPARE && stage != ExportStage.GENERATE) {
+        configuredSteps.add(stubStep(stage));
+      }
+    }
+    ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
+    when(meterRegistryProvider.getIfAvailable()).thenReturn(meterRegistry);
+    DefaultExportStageExecutor replayExecutor =
+        new DefaultExportStageExecutor(configuredSteps, pipelineRuns, meterRegistryProvider);
+
+    ReplayCapabilityDeclaration actual = replayExecutor.resolveReplayCapability(context);
+
+    assertThat(actual).isEqualTo(expected);
+    verify(configuredPrepareStep).resolveTemplateConfig(context);
+    verify(configuredGenerateStep).replayCapability(frozenTemplateConfig);
   }
 
   @Test
@@ -178,7 +213,6 @@ class DefaultExportStageExecutorTest {
     ExportJobContext context = new ExportJobContext();
     context.setTenantId("t1");
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, List.of());
-    when(pipelineDefinitions.loadPipelineSteps(any())).thenReturn(List.of());
 
     List<ExportStageResult> results = executor.execute(context);
 
@@ -197,7 +231,6 @@ class DefaultExportStageExecutorTest {
     context.setWorkerId("w1");
     context.setJobCode("JOB_001");
     PipelineStepDefinition step = new PipelineStepDefinition(
-        1L,
         1L,
         "EXPORT_PREPARE",
         "Export Prepare",

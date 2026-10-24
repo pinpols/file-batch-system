@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.console.domain.rbac.service;
 
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleOidcIdentityInsertParam;
+
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -38,7 +41,9 @@ public class ConsoleOidcIdentityService {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.console.oidc.identity_invalid");
     }
     String subject = request.subject();
-    if (EmptyChecks.isBlank(subject) || subject.length() > 255 || !isAscii(subject)) {
+    boolean oidcSubjectIsInvalid =
+        EmptyChecks.isBlank(subject) || subject.length() > 255 || !isAscii(subject);
+    if (oidcSubjectIsInvalid) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.console.oidc.identity_invalid");
     }
     ConsoleUserAccountEntity account = userAccountMapper
@@ -47,8 +52,15 @@ public class ConsoleOidcIdentityService {
         .orElseThrow(() ->
             BizException.of(ResultCode.NOT_FOUND, "error.account.not_found", request.username()));
     try {
+      ConsoleOidcIdentityInsertParam consoleOidcIdentityInsertParam = ConsoleOidcIdentityInsertParam.builder()
+          .tenantId(tenantId)
+          .accountId(account.getId())
+          .issuer(properties.getIssuerUri())
+          .subject(subject)
+          .linkedBy(linkedBy)
+          .build();
       identityMapper.insert(
-          tenantId, account.getId(), properties.getIssuerUri(), subject, linkedBy);
+          consoleOidcIdentityInsertParam);
     } catch (DuplicateKeyException exception) {
       throw BizException.of(ResultCode.CONFLICT, "error.console.oidc.identity_conflict");
     }
@@ -68,9 +80,10 @@ public class ConsoleOidcIdentityService {
   }
 
   private void requireConfiguredTenant(String tenantId) {
-    if (!properties.isEnabled()
+    boolean oidcTenantIsNotEnabled = !properties.isEnabled()
         || EmptyChecks.isNull(tenantId)
-        || !tenantId.equals(properties.getTenantId())) {
+        || !tenantId.equals(properties.getTenantId());
+    if (oidcTenantIsNotEnabled) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.console.oidc.provider_unavailable");
     }
   }

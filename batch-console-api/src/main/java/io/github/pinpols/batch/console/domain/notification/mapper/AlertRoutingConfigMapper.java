@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.console.domain.notification.mapper;
 
+import io.github.pinpols.batch.console.domain.notification.query.AlertRoutingConfigCountQuery;
+import io.github.pinpols.batch.console.domain.notification.query.AlertRoutingConfigQuery;
+
+
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.console.domain.param.AlertRoutingConfigUpsertParam;
 import java.util.List;
@@ -9,21 +13,10 @@ import org.apache.ibatis.annotations.Param;
 public interface AlertRoutingConfigMapper {
 
   List<Map<String, Object>> selectByQuery(
-      @Param("tenantId") String tenantId,
-      @Param("keyword") String keyword,
-      @Param("routeCode") String routeCode,
-      @Param("team") String team,
-      @Param("severity") String severity,
-      @Param("enabled") Boolean enabled,
-      @Param("pageRequest") PageRequest pageRequest);
+      AlertRoutingConfigQuery parameters);
 
   long countByQuery(
-      @Param("tenantId") String tenantId,
-      @Param("keyword") String keyword,
-      @Param("routeCode") String routeCode,
-      @Param("team") String team,
-      @Param("severity") String severity,
-      @Param("enabled") Boolean enabled);
+      AlertRoutingConfigCountQuery parameters);
 
   Map<String, Object> selectByUniqueKey(
       @Param("tenantId") String tenantId, @Param("routeCode") String routeCode);

@@ -13,6 +13,7 @@ import io.github.pinpols.batch.orchestrator.application.scheduler.TenantSchedule
 import io.github.pinpols.batch.orchestrator.application.service.dq.DataQualityRuleApplicationService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.WorkerDrainGovernanceService;
 import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayService;
+import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayRangeOperationService;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionPromoteService;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionQueryService;
 import io.github.pinpols.batch.orchestrator.controller.request.DataQualityRuleRequest;
@@ -44,7 +45,8 @@ class ControllerEntityBoundaryBehaviorTest {
   @DisplayName("批次日重放的写入、查询和明细端点都返回响应 DTO")
   void shouldMapEveryBatchDayReplayEndpoint() {
     BatchDayReplayService replayService = mock(BatchDayReplayService.class);
-    BatchDayReplayController controller = new BatchDayReplayController(replayService);
+    BatchDayReplayController controller = new BatchDayReplayController(
+        replayService, mock(BatchDayReplayRangeOperationService.class));
     BatchDayReplaySessionEntity session = replaySession();
     BatchDayReplayEntryEntity entry = replayEntry();
 

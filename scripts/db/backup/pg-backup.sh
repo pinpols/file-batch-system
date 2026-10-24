@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：PostgreSQL 每日基准备份 + 两库逻辑导出(+ 可选 WAL 归档清理)。
+# 用法：在仓库根目录执行 bash scripts/db/backup/pg-backup.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # pg-backup.sh — PostgreSQL 每日基准备份 + 两库逻辑导出(+ 可选 WAL 归档清理)
 #

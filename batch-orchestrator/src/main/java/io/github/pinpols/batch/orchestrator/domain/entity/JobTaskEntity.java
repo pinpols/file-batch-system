@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.domain.entity;
 import io.github.pinpols.batch.common.i18n.AbstractLocalizedErrorEntity;
 import io.github.pinpols.batch.common.persistence.Stateful;
 import java.time.Instant;
+import java.time.LocalDate;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -13,6 +14,7 @@ public class JobTaskEntity extends AbstractLocalizedErrorEntity implements State
   private Long id;
   private String tenantId;
   private Long jobInstanceId;
+  private LocalDate jobInstanceBizDate;
   private Long jobPartitionId;
   private String taskType;
   private Integer taskSeq;
@@ -55,6 +57,18 @@ public class JobTaskEntity extends AbstractLocalizedErrorEntity implements State
 
   /** ORCH-P4-2 派单期拷自 workflow_node.task_timeout_seconds；TaskTimeoutEnforcer 据此软取消超时 task。 */
   private Integer taskTimeoutSeconds;
+
+  /** 首次启动非幂等执行器；副作用发生前设置，并保留供恢复使用。 */
+  private Instant nonIdempotentStartedAt;
+
+  /** 操作员核实未知外部动作未执行时，对应失败尝试的版本。 */
+  private Long externalOutcomeResolutionVersion;
+
+  /** 根启动 Workflow 请求；Worker 必须从该请求对应的子 Job 消费未执行核实授权。 */
+  private Long externalOutcomeResolutionTriggerRequestId;
+
+  /** 首次获批外部重试的消费时间；Worker 崩溃后也不重置。 */
+  private Instant externalOutcomeResolutionConsumedAt;
 
   @Override
   public String getStatus() {

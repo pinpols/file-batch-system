@@ -6,6 +6,9 @@
 # 排障/管理脚本在 compose vs K8s 行为分叉。统一后 actuator / logs / SSH 进容器排查所有指向 1808X。
 # 库地址、Kafka、MinIO 使用 Docker 网络名（postgres-primary:5432、kafka:29092、minio:9000）；15432 仅宿主机映射。
 x-app-runtime-env: &app-runtime-env
+  BATCH_BATCH_DAY_DEPENDENCY_WAIT_TIMEOUT_SECONDS: ${BATCH_BATCH_DAY_DEPENDENCY_WAIT_TIMEOUT_SECONDS:-86400}
+  BATCH_JOB_DEPENDENCY_WAIT_TIMEOUT_SECONDS: ${BATCH_JOB_DEPENDENCY_WAIT_TIMEOUT_SECONDS:-86400}
+  BATCH_BATCH_DAY_CATCHUP_DAYS_PER_SCAN: ${BATCH_BATCH_DAY_CATCHUP_DAYS_PER_SCAN:-14}
   BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
   TZ: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
   BATCH_LOCALE: ${BATCH_LOCALE:-C.UTF-8}
@@ -28,6 +31,7 @@ x-app-runtime-env: &app-runtime-env
   SPRING_DATA_REDIS_HOST: ${COMPOSE_REDIS_HOST:-valkey}
   SPRING_DATA_REDIS_PORT: ${COMPOSE_REDIS_PORT:-6379}
   SPRING_KAFKA_BOOTSTRAP_SERVERS: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+  BATCH_KAFKA_NAMESPACE: ${BATCH_KAFKA_NAMESPACE:-}
   BATCH_DATASOURCE_BUSINESS_URL: ${BATCH_DATASOURCE_BUSINESS_URL:-jdbc:postgresql://postgres-primary:5432/batch_business?stringtype=unspecified&reWriteBatchedInserts=true}
   BATCH_DATASOURCE_BUSINESS_USERNAME: ${BATCH_DATASOURCE_BUSINESS_USERNAME:-${BATCH_BUSINESS_DB_USERNAME:-batch_business_writer}}
   BATCH_DATASOURCE_BUSINESS_PASSWORD: ${BATCH_DATASOURCE_BUSINESS_PASSWORD:-${BATCH_BUSINESS_DB_PASSWORD}}
@@ -228,7 +232,7 @@ services:
       dockerfile: deploy/docker/Dockerfile.app
       args:
         MODULE: batch-console-api
-    container_name: batch-console-api
+    container_name: ${CONSOLE_API_CONTAINER:-batch-console-api}
     restart: unless-stopped
     # Docker Desktop 默认不会把 VM 总内存作为单个应用的容器配额。显式限制后，
     # JAVA_OPTS 中的 MaxRAMPercentage/InitialRAMPercentage 才会按本服务预算计算，
@@ -319,7 +323,7 @@ services:
       dockerfile: deploy/docker/Dockerfile.app
       args:
         MODULE: batch-trigger
-    container_name: batch-trigger
+    container_name: ${TRIGGER_CONTAINER:-batch-trigger}
     restart: unless-stopped
     # trigger 同时承载 HTTP 准入、Quartz 与 outbox relay，保留高于普通 worker 的预算。
     mem_limit: ${BATCH_TRIGGER_MEMORY_LIMIT:-768m}
@@ -375,7 +379,7 @@ services:
       dockerfile: deploy/docker/Dockerfile.app
       args:
         MODULE: batch-orchestrator
-    container_name: batch-orchestrator
+    container_name: ${ORCHESTRATOR_CONTAINER:-batch-orchestrator}
     restart: unless-stopped
     # 控制面拥有 Kafka consumer、调度与状态机事务，独立给出较高且有上界的本地预算。
     mem_limit: ${BATCH_ORCHESTRATOR_MEMORY_LIMIT:-1024m}
@@ -437,7 +441,7 @@ services:
       dockerfile: deploy/docker/Dockerfile.app
       args:
         MODULE: batch-worker-import
-    container_name: batch-worker-import
+    container_name: ${WORKER_IMPORT_CONTAINER:-batch-worker-import}
     restart: unless-stopped
     mem_limit: ${BATCH_WORKER_IMPORT_MEMORY_LIMIT:-512m}
     environment:
@@ -496,7 +500,7 @@ services:
       dockerfile: deploy/docker/Dockerfile.app
       args:
         MODULE: batch-worker-export
-    container_name: batch-worker-export
+    container_name: ${WORKER_EXPORT_CONTAINER:-batch-worker-export}
     restart: unless-stopped
     mem_limit: ${BATCH_WORKER_EXPORT_MEMORY_LIMIT:-512m}
     environment:
@@ -555,7 +559,7 @@ services:
       dockerfile: deploy/docker/Dockerfile.app
       args:
         MODULE: batch-worker-process
-    container_name: batch-worker-process
+    container_name: ${WORKER_PROCESS_CONTAINER:-batch-worker-process}
     restart: unless-stopped
     mem_limit: ${BATCH_WORKER_PROCESS_MEMORY_LIMIT:-512m}
     environment:
@@ -614,7 +618,7 @@ services:
       dockerfile: deploy/docker/Dockerfile.app
       args:
         MODULE: batch-worker-dispatch
-    container_name: batch-worker-dispatch
+    container_name: ${WORKER_DISPATCH_CONTAINER:-batch-worker-dispatch}
     restart: unless-stopped
     mem_limit: ${BATCH_WORKER_DISPATCH_MEMORY_LIMIT:-512m}
     environment:
@@ -680,7 +684,7 @@ services:
       dockerfile: deploy/docker/Dockerfile.app
       args:
         MODULE: batch-worker-atomic
-    container_name: batch-worker-atomic
+    container_name: ${WORKER_ATOMIC_CONTAINER:-batch-worker-atomic}
     restart: unless-stopped
     mem_limit: ${BATCH_WORKER_ATOMIC_MEMORY_LIMIT:-512m}
     environment:

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.e2e.apps;
 import io.github.pinpols.batch.common.config.BatchClockConfig;
 import io.github.pinpols.batch.common.config.BatchJsonAutoConfiguration;
 import io.github.pinpols.batch.common.config.BatchObjectCryptoAutoConfiguration;
+import io.github.pinpols.batch.common.logging.HttpRequestMdcAutoConfiguration;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.e2e.config.E2eBusinessDataSourceConfiguration;
@@ -11,12 +12,18 @@ import io.github.pinpols.batch.e2e.config.E2ePlatformDataSourceConfiguration;
 import io.github.pinpols.batch.e2e.config.E2ePlatformMybatisConfiguration;
 import io.github.pinpols.batch.e2e.config.E2eShedLockConfiguration;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunReportLock;
+import io.github.pinpols.batch.orchestrator.config.WorkflowSensorDataSourceConfiguration;
+import io.github.pinpols.batch.orchestrator.infrastructure.sensor.DbRowExistsSensorPolicy;
 import io.github.pinpols.batch.worker.dispatchs.BatchWorkerDispatchApplication;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchStepExecutionAdapter;
 import io.github.pinpols.batch.worker.exports.BatchWorkerExportApplication;
 import io.github.pinpols.batch.worker.exports.infrastructure.ExportStepExecutionAdapter;
 import io.github.pinpols.batch.worker.imports.BatchWorkerImportApplication;
+import io.github.pinpols.batch.worker.imports.config.BusinessDataSourceConfiguration;
+import io.github.pinpols.batch.worker.imports.config.PlatformDataSourceConfiguration;
 import java.util.concurrent.Executor;
+import javax.sql.DataSource;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.ai.model.anthropic.autoconfigure.AnthropicChatAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration;
@@ -25,9 +32,11 @@ import org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfigura
 import org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -36,6 +45,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.FullyQualifiedAnnotationBeanNameGenerator;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -43,7 +53,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 @Configuration
 @EnableAutoConfiguration(
     exclude = {
-      io.github.pinpols.batch.common.logging.HttpRequestMdcAutoConfiguration.class,
+      HttpRequestMdcAutoConfiguration.class,
       AnthropicChatAutoConfiguration.class,
       OpenAiChatAutoConfiguration.class,
       OpenAiAudioSpeechAutoConfiguration.class,
@@ -60,7 +70,8 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
   E2eBusinessDataSourceConfiguration.class,
   E2eImportWorkerDataSourceConfiguration.class,
   E2ePlatformMybatisConfiguration.class,
-  E2eShedLockConfiguration.class
+  E2eShedLockConfiguration.class,
+  WorkflowRunReportLock.class
 })
 @ComponentScan(
     basePackages = {
@@ -114,12 +125,16 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
           classes = DispatchStepExecutionAdapter.class),
       @ComponentScan.Filter(
           type = FilterType.ASSIGNABLE_TYPE,
-          classes =
-              io.github.pinpols.batch.worker.imports.config.PlatformDataSourceConfiguration.class),
+          classes = PlatformDataSourceConfiguration.class),
       @ComponentScan.Filter(
           type = FilterType.ASSIGNABLE_TYPE,
-          classes =
-              io.github.pinpols.batch.worker.imports.config.BusinessDataSourceConfiguration.class)
+          classes = BusinessDataSourceConfiguration.class),
+      @ComponentScan.Filter(
+          type = FilterType.ASSIGNABLE_TYPE,
+          classes = WorkflowSensorDataSourceConfiguration.class),
+      @ComponentScan.Filter(
+          type = FilterType.ASSIGNABLE_TYPE,
+          classes = DbRowExistsSensorPolicy.class)
     })
 @ImportAutoConfiguration({
   BatchJsonAutoConfiguration.class,
@@ -168,5 +183,12 @@ public class E2eConsoleImportApplication {
     executor.setThreadNamePrefix("e2e-app-task-");
     executor.initialize();
     return executor;
+  }
+
+  @Bean(name = "transactionManager")
+  @ConditionalOnMissingBean(name = "transactionManager")
+  public DataSourceTransactionManager transactionManager(
+      @Qualifier("dataSource") DataSource dataSource) {
+    return new DataSourceTransactionManager(dataSource);
   }
 }

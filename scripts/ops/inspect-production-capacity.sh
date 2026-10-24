@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：生产容量治理只读巡检：PostgreSQL 热表/保留、Kafka topic 保留、对象存储桶容量。
+# 用法：在仓库根目录执行 bash scripts/ops/inspect-production-capacity.sh；参数与前置环境见下方说明及所属 README。
 # 生产容量治理只读巡检：PostgreSQL 热表/保留、Kafka topic 保留、对象存储桶容量。
 # 默认不修复、不清理、不重置 offset。生产执行时请显式传真实 PG/Kafka/对象存储地址。
 set -uo pipefail

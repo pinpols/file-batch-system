@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,7 +42,7 @@ class TaskCapabilityTest {
   @Test
   @DisplayName("外部集合事后变更:已构造实例的资源类型不受影响")
   void shouldDefensivelyCopyResourceKinds() {
-    var mutable = new java.util.HashSet<>(Set.of(ResourceKind.CPU));
+    var mutable = new HashSet<>(Set.of(ResourceKind.CPU));
     TaskCapability cap = new TaskCapability(mutable, false, false, Duration.ofSeconds(1));
     mutable.add(ResourceKind.NET);
     assertThat(cap.resourceKinds()).containsExactly(ResourceKind.CPU);

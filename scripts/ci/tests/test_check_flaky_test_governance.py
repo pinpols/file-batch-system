@@ -1,3 +1,5 @@
+# 用途：回归验证flaky 测试隔离治理。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_check_flaky_test_governance.py。
 import datetime as dt
 import importlib.util
 import tempfile

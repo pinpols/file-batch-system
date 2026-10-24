@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：公共环境入口。只能被 source,不要直接执行。
+# 用法：由调用脚本 source scripts/lib/env-common.sh 后使用公共变量或函数。
 # 公共环境入口。只能被 source,不要直接执行。
 # 调用方可通过环境变量或 COMPOSE_ENV_FILE 显式注入外部地址；未显式注入时，
 # 才加载仓库本地默认值，方便开发机和 Compose 环境复用同一套脚本。
@@ -69,6 +71,43 @@ batch_parse_host_port() {
   export BATCH_PARSED_HOST BATCH_PARSED_PORT
 }
 
+# 对齐脚本监听端口与 local profile 实际消费的 Spring 环境键。
+# Compose 的宿主映射与容器端口允许不同；裸 JVM 启动前显式要求两者一致。
+batch_configure_local_jvm_port_env() {
+  local strict="${1:-false}" spec script_name app_name default_name script_port app_port
+  for spec in \
+      CONSOLE_API_PORT:BATCH_CONSOLE_API_PORT:BATCH_DEFAULT_CONSOLE_PORT \
+      TRIGGER_PORT:BATCH_TRIGGER_PORT:BATCH_DEFAULT_TRIGGER_PORT \
+      ORCHESTRATOR_PORT:BATCH_ORCHESTRATOR_PORT:BATCH_DEFAULT_ORCHESTRATOR_PORT \
+      WORKER_IMPORT_PORT:BATCH_WORKER_IMPORT_PORT:BATCH_DEFAULT_WORKER_IMPORT_PORT \
+      WORKER_EXPORT_PORT:BATCH_WORKER_EXPORT_PORT:BATCH_DEFAULT_WORKER_EXPORT_PORT \
+      WORKER_DISPATCH_PORT:BATCH_WORKER_DISPATCH_PORT:BATCH_DEFAULT_WORKER_DISPATCH_PORT \
+      WORKER_PROCESS_PORT:BATCH_WORKER_PROCESS_PORT:BATCH_DEFAULT_WORKER_PROCESS_PORT \
+      WORKER_ATOMIC_PORT:BATCH_WORKER_ATOMIC_PORT:BATCH_DEFAULT_WORKER_ATOMIC_PORT; do
+    IFS=: read -r script_name app_name default_name <<<"$spec"
+    script_port="${!script_name:-}"
+    app_port="${!app_name:-}"
+    script_port="${script_port:-${app_port:-${!default_name}}}"
+    app_port="${app_port:-$script_port}"
+    if [[ "$strict" == true ]]; then
+      if [[ ! "$script_port" =~ ^[0-9]{1,5}$ || "$script_port" != "$app_port" ]]; then
+        echo "ERROR: $script_name and $app_name must use the same valid host port" >&2
+        return 1
+      fi
+      if (( 10#$script_port < 1 || 10#$script_port > 65535 )); then
+        echo "ERROR: $script_name and $app_name have an invalid host port" >&2
+        return 1
+      fi
+    fi
+    export "$script_name=$script_port" "$app_name=$app_port"
+  done
+}
+
+batch_configure_local_jvm_control_plane_env() {
+  export BATCH_ORCHESTRATOR_BASE_URL="${BATCH_ORCHESTRATOR_BASE_URL:-${ORCH_BASE:-http://localhost:${ORCHESTRATOR_PORT:-$BATCH_DEFAULT_ORCHESTRATOR_PORT}}}"
+  export BATCH_TRIGGER_BASE_URL="${BATCH_TRIGGER_BASE_URL:-${TRIGGER_BASE:-http://localhost:${TRIGGER_PORT:-$BATCH_DEFAULT_TRIGGER_PORT}}}"
+}
+
 batch_load_default_env() {
   if [[ -n "${BATCH_ENV_LOADED:-}" ]]; then
     return 0
@@ -106,14 +145,8 @@ batch_load_default_env() {
   export PLATFORM_DB="${PLATFORM_DB:-$POSTGRES_DB}"
   export BUSINESS_DB="${BUSINESS_DB:-$BUSINESS_DB_NAME}"
 
-  export CONSOLE_API_PORT="${CONSOLE_API_PORT:-${CONSOLE_PORT:-$BATCH_DEFAULT_CONSOLE_PORT}}"
-  export TRIGGER_PORT="${TRIGGER_PORT:-$BATCH_DEFAULT_TRIGGER_PORT}"
-  export ORCHESTRATOR_PORT="${ORCHESTRATOR_PORT:-$BATCH_DEFAULT_ORCHESTRATOR_PORT}"
-  export WORKER_IMPORT_PORT="${WORKER_IMPORT_PORT:-$BATCH_DEFAULT_WORKER_IMPORT_PORT}"
-  export WORKER_EXPORT_PORT="${WORKER_EXPORT_PORT:-$BATCH_DEFAULT_WORKER_EXPORT_PORT}"
-  export WORKER_DISPATCH_PORT="${WORKER_DISPATCH_PORT:-$BATCH_DEFAULT_WORKER_DISPATCH_PORT}"
-  export WORKER_PROCESS_PORT="${WORKER_PROCESS_PORT:-$BATCH_DEFAULT_WORKER_PROCESS_PORT}"
-  export WORKER_ATOMIC_PORT="${WORKER_ATOMIC_PORT:-$BATCH_DEFAULT_WORKER_ATOMIC_PORT}"
+  export CONSOLE_API_PORT="${CONSOLE_API_PORT:-${BATCH_CONSOLE_API_PORT:-${CONSOLE_PORT:-$BATCH_DEFAULT_CONSOLE_PORT}}}"
+  batch_configure_local_jvm_port_env
 
   export CONSOLE_BASE="${CONSOLE_BASE:-http://localhost:${CONSOLE_API_PORT}}"
   export TRIGGER_BASE="${TRIGGER_BASE:-http://localhost:${TRIGGER_PORT}}"
@@ -136,6 +169,7 @@ batch_load_default_env() {
   export BATCH_S3_SECRET_KEY="${BATCH_S3_SECRET_KEY:-${MINIO_ROOT_PASSWORD:-$BATCH_DEFAULT_MINIO_SECRET_KEY}}"
 
   export KAFKA_HOST_PORT="${KAFKA_HOST_PORT:-$BATCH_DEFAULT_KAFKA_HOST_PORT}"
+  export MOCKSERVER_HOST_PORT="${MOCKSERVER_HOST_PORT:-$BATCH_DEFAULT_MOCKSERVER_HOST_PORT}"
   export KAFKA_HOST_BOOTSTRAP="${KAFKA_HOST_BOOTSTRAP:-$(batch_format_host_port "${KAFKA_HOST:-localhost}" "$KAFKA_HOST_PORT")}"
   export KAFKA_CONTAINER_BOOTSTRAP="${KAFKA_CONTAINER_BOOTSTRAP:-$BATCH_DEFAULT_KAFKA_CONTAINER_BOOTSTRAP}"
 
@@ -270,6 +304,7 @@ batch_configure_local_jvm_redis_env() {
 }
 
 batch_configure_local_jvm_runtime_env() {
+  batch_configure_local_jvm_port_env
   batch_configure_local_jvm_database_env
   batch_configure_local_jvm_redis_env
 }

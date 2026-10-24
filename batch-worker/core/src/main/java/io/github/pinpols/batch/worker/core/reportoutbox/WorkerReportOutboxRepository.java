@@ -1,5 +1,11 @@
 package io.github.pinpols.batch.worker.core.reportoutbox;
 
+import io.github.pinpols.batch.worker.core.param.WorkerReportOutboxPgGiveUpRowParam;
+import io.github.pinpols.batch.worker.core.param.WorkerReportOutboxPgUpdateGiveUpParam;
+import io.github.pinpols.batch.worker.core.param.WorkerReportOutboxPgUpdateRetryParam;
+import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.param.WorkerReportOutboxSqliteUpdateRetryParam;
+
+
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -217,11 +223,13 @@ public class WorkerReportOutboxRepository {
 
     @Override
     public WorkerReportOutboxStats stats(long staleUpdatedAtBeforeExclusive) {
+      long newCount = mapper.countByStatus(STATUS_NEW);
+      long publishingCount = mapper.countByStatus(STATUS_PUBLISHING);
+      long giveUpCount = mapper.countByStatus(STATUS_GIVE_UP);
+      long stalePublishingCount =
+          mapper.countStalePublishing(STATUS_PUBLISHING, staleUpdatedAtBeforeExclusive);
       return new WorkerReportOutboxStats(
-          mapper.countByStatus(STATUS_NEW),
-          mapper.countByStatus(STATUS_PUBLISHING),
-          mapper.countByStatus(STATUS_GIVE_UP),
-          mapper.countStalePublishing(STATUS_PUBLISHING, staleUpdatedAtBeforeExclusive));
+          newCount, publishingCount, giveUpCount, stalePublishingCount);
     }
 
     @Override
@@ -236,19 +244,41 @@ public class WorkerReportOutboxRepository {
 
     @Override
     public int updateGiveUp(long id, int nextAttempts, long nowEpochMillis) {
+      WorkerReportOutboxPgUpdateGiveUpParam workerReportOutboxPgUpdateGiveUpParam = WorkerReportOutboxPgUpdateGiveUpParam.builder()
+          .id(id)
+          .publishStatus(STATUS_GIVE_UP)
+          .attemptCount(nextAttempts)
+          .updatedAt(nowEpochMillis)
+          .statusPublishing(STATUS_PUBLISHING)
+          .build();
       return mapper.updateGiveUp(
-          id, STATUS_GIVE_UP, nextAttempts, nowEpochMillis, STATUS_PUBLISHING);
+          workerReportOutboxPgUpdateGiveUpParam);
     }
 
     @Override
     public int updateRetry(long id, int nextAttempts, long nextAt, long nowEpochMillis) {
+      WorkerReportOutboxPgUpdateRetryParam workerReportOutboxPgUpdateRetryParam = WorkerReportOutboxPgUpdateRetryParam.builder()
+          .id(id)
+          .attemptCount(nextAttempts)
+          .nextAttemptAt(nextAt)
+          .updatedAt(nowEpochMillis)
+          .publishStatus(STATUS_NEW)
+          .statusPublishing(STATUS_PUBLISHING)
+          .build();
       return mapper.updateRetry(
-          id, nextAttempts, nextAt, nowEpochMillis, STATUS_NEW, STATUS_PUBLISHING);
+          workerReportOutboxPgUpdateRetryParam);
     }
 
     @Override
     public int giveUpRow(long id, long nowEpochMillis, int maxAttempts) {
-      return mapper.giveUpRow(id, STATUS_GIVE_UP, nowEpochMillis, maxAttempts, STATUS_PUBLISHING);
+      WorkerReportOutboxPgGiveUpRowParam workerReportOutboxPgGiveUpRowParam = WorkerReportOutboxPgGiveUpRowParam.builder()
+          .id(id)
+          .publishStatus(STATUS_GIVE_UP)
+          .now(nowEpochMillis)
+          .maxAttempts(maxAttempts)
+          .statusPublishing(STATUS_PUBLISHING)
+          .build();
+      return mapper.giveUpRow(workerReportOutboxPgGiveUpRowParam);
     }
   }
 
@@ -278,11 +308,13 @@ public class WorkerReportOutboxRepository {
 
     @Override
     public WorkerReportOutboxStats stats(long staleUpdatedAtBeforeExclusive) {
+      long newCount = mapper.countByStatus(STATUS_NEW);
+      long publishingCount = mapper.countByStatus(STATUS_PUBLISHING);
+      long giveUpCount = mapper.countByStatus(STATUS_GIVE_UP);
+      long stalePublishingCount =
+          mapper.countStalePublishing(STATUS_PUBLISHING, staleUpdatedAtBeforeExclusive);
       return new WorkerReportOutboxStats(
-          mapper.countByStatus(STATUS_NEW),
-          mapper.countByStatus(STATUS_PUBLISHING),
-          mapper.countByStatus(STATUS_GIVE_UP),
-          mapper.countStalePublishing(STATUS_PUBLISHING, staleUpdatedAtBeforeExclusive));
+          newCount, publishingCount, giveUpCount, stalePublishingCount);
     }
 
     @Override
@@ -302,7 +334,14 @@ public class WorkerReportOutboxRepository {
 
     @Override
     public int updateRetry(long id, int nextAttempts, long nextAt, long nowEpochMillis) {
-      return mapper.updateRetry(id, nextAttempts, nextAt, nowEpochMillis, STATUS_NEW);
+      WorkerReportOutboxSqliteUpdateRetryParam workerReportOutboxSqliteUpdateRetryParam = WorkerReportOutboxSqliteUpdateRetryParam.builder()
+          .id(id)
+          .attemptCount(nextAttempts)
+          .nextAttemptAt(nextAt)
+          .updatedAt(nowEpochMillis)
+          .publishStatus(STATUS_NEW)
+          .build();
+      return mapper.updateRetry(workerReportOutboxSqliteUpdateRetryParam);
     }
 
     @Override

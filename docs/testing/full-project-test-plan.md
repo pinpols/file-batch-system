@@ -1,7 +1,7 @@
 # 全项目完整功能与整体测试计划
 
 > 文档性质：测试计划与历史基线，不是当前缺陷清单。阶段性“未完成 / 未覆盖”只表示当时的验证范围；当前有效事项以
-> [`../analysis/todo-master.md`](../analysis/todo-master.md) 为准。真实 staging、生产 HA 和灾备证据仍须以最新验证记录为准。
+> [`../analysis/todo-master.md`](../plans/todo-master.md) 为准。真实 staging、生产 HA 和灾备证据仍须以最新验证记录为准。
 
 > 当前 CI 职责核查（2026-10-10）：本文后续阶段计划与“staging gate 已接入部署/负载验证”等历史描述不是当前 workflow 状态。当前 PR、main、每周 E2E、SIM/strict 的触发和职责以 [`../runbook/ci.md`](../runbook/ci.md) 为准；`staging-gate.yml` 仅手动执行 E2E，不执行 staging 部署、负载测试或巡检。
 
@@ -11,7 +11,7 @@
 
 
 完整功能与整体测试实施计划见：`docs/testing/full-project-test-plan.md`
-Phase 1 测试覆盖矩阵见：`docs/testing/phase-coverage.md`
+Phase 1 测试覆盖矩阵见：`docs/archive/testing/phase-coverage-2026-09-11.md`
 统一回归入口与门禁说明见：`docs/testing/release-gate.md`
 
 目标是覆盖核心链路和典型失败场景，但不把测试数量扩成全组合穷举。建议按三层拆分：单元测试负责纯逻辑，集成测试负责模块协作，端到端测试只保留少量主路径。
@@ -142,8 +142,8 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
 ---
 
 
-Phase 1 盘点结果见：`docs/testing/phase-coverage.md`
-Phase 2 P0 回归范围见：`docs/testing/phase-coverage.md`
+Phase 1 盘点结果见：`docs/archive/testing/phase-coverage-2026-09-11.md`
+Phase 2 P0 回归范围见：`docs/archive/testing/phase-coverage-2026-09-11.md`
 统一回归入口与门禁说明见：`docs/testing/release-gate.md`
 
 ## 目标
@@ -164,15 +164,15 @@ Phase 2 P0 回归范围见：`docs/testing/phase-coverage.md`
 仓库内已具备以下基础资产，且其中大部分已落地完成：
 
 - 单元测试、集成测试、E2E 的分层策略文档：`docs/testing/full-project-test-plan.md`
-- 三条主链路与失败分支的历史 E2E 矩阵：`docs/archive/testing/e2e-coverage-2026-05-03.md`；当前覆盖盘点见 `docs/testing/coverage-gap-analysis.md`
+- 三条主链路与失败分支的历史 E2E 矩阵：`docs/archive/testing/e2e-coverage-2026-05-03.md`；当前覆盖盘点见 `docs/archive/testing/coverage-gap-analysis-2026-04-08.md`
 - 本地 E2E 执行脚本：`scripts/local/run-tests.sh --e2e`
 - 统一回归入口：`scripts/ci/run-full-regression.sh`
 - 门禁与 staging 说明：`docs/testing/release-gate.md`
-- 压测模块与容量文档：`load-tests/`、[`load-test-report.md`](./load-test-report.md)、[`load-test-dimensions.md`](./load-test-dimensions.md)；真实环境数据须以带日期的验证报告为证
+- 压测模块与容量文档：`load-tests/`、[`load-test-report-2026-04-25.md`](../verifications/load-test-report-2026-04-25.md)、[`load-test-dimensions.md`](./load-test-dimensions.md)；真实环境数据须以带日期的验证报告为证
 - 本地巡检与自愈脚本：`scripts/ops/inspect-*.sh`、`scripts/ops/heal-*.sh`
 - Helm 生产部署产物：`helm/batch-platform/`
-- Phase 1 盘点矩阵：`docs/testing/phase-coverage.md`
-- Phase 2 P0 回归范围：`docs/testing/phase-coverage.md`
+- Phase 1 盘点矩阵：`docs/archive/testing/phase-coverage-2026-09-11.md`
+- Phase 2 P0 回归范围：`docs/archive/testing/phase-coverage-2026-09-11.md`
 - console-api 核心 HTTP smoke：`batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ConsoleHttpIntegrationIT.java`
 - console-api Excel 导入/导出 controller 测试：`ConsoleFileTemplateExcelControllerTest`、`ConsoleFileChannelExcelControllerTest`、`ConsoleWorkflowExcelControllerTest`、`ConsoleJobDefinitionExcelControllerTest`、`ConsoleReportExcelControllerTest`
 - console-api Excel 导入/导出 service 负向测试：`DefaultConsoleFileTemplateExcelApplicationServiceTest`、`DefaultConsoleFileChannelExcelApplicationServiceTest`、`DefaultConsoleWorkflowExcelApplicationServiceTest`、`DefaultConsoleJobDefinitionExcelApplicationServiceTest`
@@ -194,7 +194,7 @@ Phase 2 P0 回归范围见：`docs/testing/phase-coverage.md`
 
 ### 1. 测试范围矩阵
 
-已完成，见 `docs/testing/phase-coverage.md`。
+已完成，见 `docs/archive/testing/phase-coverage-2026-09-11.md`。
 
 当前要做的是持续维护矩阵和增量缺口，而不是重新起一份新矩阵。
 
@@ -272,7 +272,7 @@ Phase 2 P0 回归范围见：`docs/testing/phase-coverage.md`
 - `ConsoleQuerySimulation`
 - `CapacityBaselineSimulation`
 
-并将结果写入带日期的验证报告；可参考 [`load-test-report.md`](./load-test-report.md) 的结构。`load-test-capacity-baseline.md` 是旧计划中的目标路径，当前不存在。
+并将结果写入带日期的验证报告；可参考 [`load-test-report-2026-04-25.md`](../verifications/load-test-report-2026-04-25.md) 的结构。`load-test-capacity-baseline.md` 是旧计划中的目标路径，当前不存在。
 
 ### 6. 部署、升级与回滚验证
 
@@ -320,11 +320,11 @@ Phase 2 P0 回归范围见：`docs/testing/phase-coverage.md`
 
 交付物：
 
-- `docs/testing/phase-coverage.md`
+- `docs/archive/testing/phase-coverage-2026-09-11.md`
 
 ### Phase 2：P0 功能回归补齐（已完成首轮）
 
-Phase 2 的详细收敛内容已拆到 `docs/testing/phase-coverage.md`。
+Phase 2 的详细收敛内容已拆到 `docs/archive/testing/phase-coverage-2026-09-11.md`。
 
 本节只保留结论：
 
@@ -336,7 +336,7 @@ Phase 2 的详细收敛内容已拆到 `docs/testing/phase-coverage.md`。
 当前可执行入口：
 
 - `scripts/ci/run-full-regression.sh`
-- `docs/testing/phase-coverage.md`
+- `docs/archive/testing/phase-coverage-2026-09-11.md`
 
 ### Phase 3：系统联调与故障演练（待完成）
 
@@ -369,7 +369,7 @@ Phase 2 的详细收敛内容已拆到 `docs/testing/phase-coverage.md`。
 - `docs/testing/release-gate.md`
 - `scripts/ci/run-full-regression.sh --with-deploy-smoke`
 - `docs/testing/release-gate.md`
-- `docs/testing/phase-coverage.md`
+- `docs/archive/testing/phase-coverage-2026-09-11.md`
 
 当前已完成的 Phase 3 本地执行入口：
 

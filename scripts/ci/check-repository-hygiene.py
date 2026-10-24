@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：检查仓库中的本机产物与受控文件布局。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-repository-hygiene.py；参数与前置环境见下方说明及所属 README。
 """阻止本机配置、生成物和个人绝对路径进入版本控制。"""
 
 from __future__ import annotations
@@ -11,7 +13,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 GATE_CODE = "REPOSITORY_HYGIENE"
 GATE_NAME = "仓库卫生"
-ALLOWED_BUILD_FILES = {"build/pmd-ruleset.xml", "build/spotbugs-npe-filter.xml"}
 FORBIDDEN_ROOT_FILES = {"qodana.yaml": "已由现有 Java 质量门禁替代的 Qodana 配置"}
 TEXT_SUFFIXES = {".java", ".kt", ".py", ".sh", ".md", ".xml", ".yml", ".yaml", ".properties", ".toml", ".json"}
 ABSOLUTE_PATH = re.compile(r"/Users/|/var/folders/|[A-Za-z]:\\\\Users\\\\")
@@ -46,7 +47,7 @@ def main() -> int:
             errors.append(f"tracked environment secret file: {relative}")
         if relative.startswith(("logs/", "reports/", "target/")) or "/target/" in relative:
             errors.append(f"tracked generated output: {relative}")
-        if relative.startswith("build/") and relative not in ALLOWED_BUILD_FILES:
+        if relative.startswith("build/"):
             errors.append(f"tracked build output: {relative}")
 
         if path.suffix not in TEXT_SUFFIXES or relative.startswith("docs/archive/"):

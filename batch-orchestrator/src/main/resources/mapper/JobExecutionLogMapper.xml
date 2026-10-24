@@ -15,8 +15,16 @@
         <result column="created_at" property="createdAt"/>
     </resultMap>
 
-    <insert id="insert" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity"
+    <insert id="insertWithInstanceReferenceGuard" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity"
             useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        with matching_instance as materialized (
+            select job_instance.id
+              from batch.job_instance job_instance
+             where #{jobInstanceId,jdbcType=BIGINT} is not null
+               and job_instance.tenant_id = #{tenantId}
+               and job_instance.id = #{jobInstanceId,jdbcType=BIGINT}
+             for key share
+        )
         insert into batch.job_execution_log (
             tenant_id,
             job_instance_id,
@@ -27,7 +35,8 @@
             message,
             detail_ref,
             extra_json
-        ) values (
+        )
+        select
             #{tenantId},
             #{jobInstanceId},
             #{jobPartitionId},
@@ -37,7 +46,8 @@
             #{message},
             #{detailRef},
             #{extraJson,jdbcType=VARCHAR}::jsonb
-        )
+        where #{jobInstanceId,jdbcType=BIGINT} is null
+           or (select count(*) from matching_instance) = 1
     </insert>
 
     <select id="selectByQuery" resultMap="JobExecutionLogResultMap">

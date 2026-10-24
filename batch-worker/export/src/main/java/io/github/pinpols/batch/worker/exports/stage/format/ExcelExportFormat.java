@@ -66,7 +66,8 @@ public class ExcelExportFormat extends AbstractExportFormat {
     // POI 的 sheet XML 与模板 ZIP 同样包含业务数据；线程局部作用域覆盖生成和关闭，随后恢复原策略。
     GenerationResult result = TempFile.withStrategy(PRIVATE_TEMP_FILES, () -> {
       try {
-        return new GenerationResult(generateWorkbook(ctx), null);
+        long recordCount = generateWorkbook(ctx);
+        return new GenerationResult(recordCount, null);
       } catch (Exception failure) {
         return new GenerationResult(0, failure);
       }
@@ -81,7 +82,14 @@ public class ExcelExportFormat extends AbstractExportFormat {
   private record GenerationResult(long recordCount, Exception failure) {}
 
   private long generateWorkbook(ExportFormatContext ctx) throws Exception {
-    Long batchIdLong = ctx.batchId() == null ? null : Long.valueOf(String.valueOf(ctx.batchId()));
+    Long batchIdLong;
+    if (EmptyChecks.isNull(ctx.batchId())) {
+      batchIdLong = null;
+    } else {
+      Object rawBatchId = ctx.batchId();
+      String batchIdText = String.valueOf(rawBatchId);
+      batchIdLong = Long.valueOf(batchIdText);
+    }
     ExportDataPlugin.DetailPage firstPage =
         ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), null);
     List<ColumnLayout> columns =

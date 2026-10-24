@@ -1,5 +1,12 @@
 package io.github.pinpols.batch.console.application.ops;
 
+import io.github.pinpols.batch.console.domain.job.query.BatchDayQuery;
+import io.github.pinpols.batch.console.domain.job.view.BatchDayJobSummaryView;
+import io.github.pinpols.batch.console.domain.job.view.BatchDayScheduledOccurrenceView;
+import io.github.pinpols.batch.console.domain.job.view.BatchDayView;
+import io.github.pinpols.batch.console.domain.ops.query.OutboxDeliveryLogCountQuery;
+
+
 import static io.github.pinpols.batch.console.shared.query.ConsoleQuerySupport.*;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -35,6 +42,7 @@ import io.github.pinpols.batch.console.domain.job.application.contract.response.
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDaySummaryResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayWindowResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleRetryScheduleResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleScheduledOccurrenceResponse;
 import io.github.pinpols.batch.console.domain.job.entity.PendingCatchUpEntity;
 import io.github.pinpols.batch.console.domain.job.query.PendingCatchUpQuery;
 import io.github.pinpols.batch.console.domain.notification.application.contract.query.AlertEventQueryRequest;
@@ -58,6 +66,8 @@ import io.github.pinpols.batch.console.shared.view.ConsolePendingCatchUpResponse
 import io.github.pinpols.batch.console.shared.view.ConsoleWorkerRegistryResponse;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
@@ -83,22 +93,27 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
     AuditLogQuery query = new AuditLogQuery();
-    query.setTenantId(resolveTenant(tenantGuard, request.getTenantId()));
+    String tenantId = resolveTenant(tenantGuard, request.getTenantId());
+    query.setTenantId(tenantId);
     query.setOperationType(request.getOperationType());
     query.setOperationResult(request.getOperationResult());
     query.setOperatorId(request.getOperatorId());
-    query.setFileId(parseLong(request.getFileId(), "fileId"));
+    String fileIdText = request.getFileId();
+    Long fileId = parseLong(fileIdText, "fileId");
+    query.setFileId(fileId);
     query.setTraceId(request.getTraceId());
-    query.setFromTime(parseFlexibleInstant(
-        firstNonBlank(request.getFromTime(), request.getStartTime()),
-        "fromTime",
-        timezoneProvider.defaultZone()));
-    query.setToTime(parseFlexibleInstant(
-        firstNonBlank(request.getToTime(), request.getEndTime()),
-        "toTime",
-        timezoneProvider.defaultZone()));
+    String fromTimeText = firstNonBlank(request.getFromTime(), request.getStartTime());
+    ZoneId fromTimeZone = timezoneProvider.defaultZone();
+    Instant fromTime = parseFlexibleInstant(fromTimeText, "fromTime", fromTimeZone);
+    query.setFromTime(fromTime);
+    String toTimeText = firstNonBlank(request.getToTime(), request.getEndTime());
+    ZoneId toTimeZone = timezoneProvider.defaultZone();
+    Instant toTime = parseFlexibleInstant(toTimeText, "toTime", toTimeZone);
+    query.setToTime(toTime);
     query.setPageRequest(pageRequest);
-    query.setCursorId(decodeCursorId(request.getCursor()));
+    String cursor = request.getCursor();
+    Long cursorId = decodeCursorId(cursor);
+    query.setCursorId(cursorId);
     List<Map<String, Object>> rows = opsMappers.auditLogMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(pageRequest, rows, this::toAuditLogResponse, row -> longValue(row, "id"));
@@ -119,12 +134,13 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
-    OutboxRetryLogQuery query = new OutboxRetryLogQuery(
-        resolveTenant(tenantGuard, request.getTenantId()),
-        request.getRetryStatus(),
-        request.getEventKey(),
-        pageRequest,
-        decodeCursorId(request.getCursor()));
+    String tenantId = resolveTenant(tenantGuard, request.getTenantId());
+    String retryStatus = request.getRetryStatus();
+    String eventKey = request.getEventKey();
+    String cursor = request.getCursor();
+    Long cursorId = decodeCursorId(cursor);
+    OutboxRetryLogQuery query =
+        new OutboxRetryLogQuery(tenantId, retryStatus, eventKey, pageRequest, cursorId);
     List<Map<String, Object>> rows = opsMappers.outboxRetryLogMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(
@@ -142,26 +158,30 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
+    String tenantId = resolveTenant(tenantGuard, request.getTenantId());
+    String deliveryStatus = request.getDeliveryStatus();
+    String eventType = request.getEventType();
+    String eventKey = request.getEventKey();
+    String traceId = request.getTraceId();
+    String cursor = request.getCursor();
+    Long cursorId = decodeCursorId(cursor);
     OutboxDeliveryLogQuery query = new OutboxDeliveryLogQuery(
-        resolveTenant(tenantGuard, request.getTenantId()),
-        request.getDeliveryStatus(),
-        request.getEventType(),
-        request.getEventKey(),
-        request.getTraceId(),
-        pageRequest,
-        decodeCursorId(request.getCursor()));
+        tenantId, deliveryStatus, eventType, eventKey, traceId, pageRequest, cursorId);
     List<Map<String, Object>> rows = opsMappers.outboxDeliveryLogMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(
           pageRequest, rows, this::toOutboxDeliveryResponse, row -> longValue(row, "id"));
     }
+    OutboxDeliveryLogCountQuery outboxDeliveryLogCountQuery = OutboxDeliveryLogCountQuery.builder()
+        .tenantId(query.tenantId())
+        .deliveryStatus(query.deliveryStatus())
+        .eventType(query.eventType())
+        .eventKey(query.eventKey())
+        .traceId(query.traceId())
+        .pageRequest(query.pageRequest())
+        .build();
     long total = opsMappers.outboxDeliveryLogMapper.countByQuery(
-        query.tenantId(),
-        query.deliveryStatus(),
-        query.eventType(),
-        query.eventKey(),
-        query.traceId(),
-        query.pageRequest());
+        outboxDeliveryLogCountQuery);
     return page(pageRequest, total, rows, this::toOutboxDeliveryResponse);
   }
 
@@ -171,16 +191,27 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
+    String requestedTenantId = request.getTenantId();
+    String tenantId = resolveTenant(tenantGuard, requestedTenantId);
+    String sessionId = request.getSessionId();
+    String operatorId = request.getOperatorId();
+    String promptCategory = request.getPromptCategory();
+    String promptDecision = request.getPromptDecision();
+    String fromTimeText = request.getFromTime();
+    Instant fromTime = parseInstant(fromTimeText, "fromTime");
+    String toTimeText = request.getToTime();
+    Instant toTime = parseInstant(toTimeText, "toTime");
+    Long cursorId = decodeCursorId(request.getCursor());
     ConsoleAiAuditLogQuery query = new ConsoleAiAuditLogQuery(
-        resolveTenant(tenantGuard, request.getTenantId()),
-        request.getSessionId(),
-        request.getOperatorId(),
-        request.getPromptCategory(),
-        request.getPromptDecision(),
-        parseInstant(request.getFromTime(), "fromTime"),
-        parseInstant(request.getToTime(), "toTime"),
+        tenantId,
+        sessionId,
+        operatorId,
+        promptCategory,
+        promptDecision,
+        fromTime,
+        toTime,
         pageRequest,
-        decodeCursorId(request.getCursor()));
+        cursorId);
     List<ConsoleAiAuditLogEntity> rows = opsMappers.consoleAiAuditLogMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(
@@ -196,13 +227,14 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
-    DeadLetterTaskQuery query = new DeadLetterTaskQuery(
-        resolveTenant(tenantGuard, request.getTenantId()),
-        request.getSourceType(),
-        request.getReplayStatus(),
-        request.getTraceId(),
-        pageRequest,
-        decodeCursorId(request.getCursor()));
+    String requestedTenantId = request.getTenantId();
+    String tenantId = resolveTenant(tenantGuard, requestedTenantId);
+    String sourceType = request.getSourceType();
+    String replayStatus = request.getReplayStatus();
+    String traceId = request.getTraceId();
+    Long cursorId = decodeCursorId(request.getCursor());
+    DeadLetterTaskQuery query =
+        new DeadLetterTaskQuery(tenantId, sourceType, replayStatus, traceId, pageRequest, cursorId);
     List<DeadLetterTaskEntity> rows = opsMappers.deadLetterTaskMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(
@@ -218,13 +250,14 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
+    String requestedTenantId = request.getTenantId();
+    String tenantId = resolveTenant(tenantGuard, requestedTenantId);
+    String relatedType = request.getRelatedType();
+    String retryPolicy = request.getRetryPolicy();
+    String retryStatus = request.getRetryStatus();
+    Long cursorId = decodeCursorId(request.getCursor());
     RetryScheduleQuery query = new RetryScheduleQuery(
-        resolveTenant(tenantGuard, request.getTenantId()),
-        request.getRelatedType(),
-        request.getRetryPolicy(),
-        request.getRetryStatus(),
-        pageRequest,
-        decodeCursorId(request.getCursor()));
+        tenantId, relatedType, retryPolicy, retryStatus, pageRequest, cursorId);
     List<RetryScheduleEntity> rows = opsMappers.retryScheduleMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(
@@ -241,14 +274,15 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
+    String requestedTenantId = request.getTenantId();
+    String tenantId = resolveTenant(tenantGuard, requestedTenantId);
+    String workflowCode = request.getWorkflowCode();
+    String requestId = request.getRequestId();
+    String bizDate = request.getBizDate();
+    String keyword = request.getKeyword();
+    Long cursorId = decodeCursorId(request.getCursor());
     PendingCatchUpQuery query = new PendingCatchUpQuery(
-        resolveTenant(tenantGuard, request.getTenantId()),
-        request.getJobCode(),
-        request.getRequestId(),
-        request.getBizDate(),
-        request.getKeyword(),
-        pageRequest,
-        decodeCursorId(request.getCursor()));
+        tenantId, workflowCode, requestId, bizDate, keyword, pageRequest, cursorId);
     List<PendingCatchUpEntity> rows = opsMappers.pendingCatchUpMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(
@@ -261,11 +295,11 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
   @Override
   public PageResponse<ConsoleWorkerRegistryResponse> workers(WorkerRegistryQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-    WorkerRegistryQuery query = new WorkerRegistryQuery(
-        resolveTenant(tenantGuard, request.getTenantId()),
-        request.getWorkerGroup(),
-        request.getStatus(),
-        pageRequest);
+    String requestedTenantId = request.getTenantId();
+    String tenantId = resolveTenant(tenantGuard, requestedTenantId);
+    String workerGroup = request.getWorkerGroup();
+    String status = request.getStatus();
+    WorkerRegistryQuery query = new WorkerRegistryQuery(tenantId, workerGroup, status, pageRequest);
     List<WorkerRegistryEntity> rows = opsMappers.workerRegistryMapper.selectByQuery(query);
     long total = opsMappers.workerRegistryMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toWorkerRegistryResponse);
@@ -277,16 +311,21 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
+    String tenantId = resolveTenant(tenantGuard, request.getTenantId());
+    String severity = request.getSeverity();
+    String status = request.getStatus();
+    String alertType = request.getAlertType();
+    String traceId = request.getTraceId();
+    String startDateText = request.getStartDate();
+    ZoneId startDateZone = timezoneProvider.defaultZone();
+    Instant startDate = parseFlexibleInstant(startDateText, "startDate", startDateZone);
+    String endDateText = request.getEndDate();
+    ZoneId endDateZone = timezoneProvider.defaultZone();
+    Instant endDate = parseFlexibleInstant(endDateText, "endDate", endDateZone);
+    String cursor = request.getCursor();
+    Long cursorId = decodeCursorId(cursor);
     AlertEventQuery query = new AlertEventQuery(
-        resolveTenant(tenantGuard, request.getTenantId()),
-        request.getSeverity(),
-        request.getStatus(),
-        request.getAlertType(),
-        request.getTraceId(),
-        parseFlexibleInstant(request.getStartDate(), "startDate", timezoneProvider.defaultZone()),
-        parseFlexibleInstant(request.getEndDate(), "endDate", timezoneProvider.defaultZone()),
-        pageRequest,
-        decodeCursorId(request.getCursor()));
+        tenantId, severity, status, alertType, traceId, startDate, endDate, pageRequest, cursorId);
     List<AlertEventEntity> rows = opsMappers.alertEventMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(pageRequest, rows, this::toAlertEventResponse, AlertEventEntity::getId);
@@ -301,8 +340,14 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     String tenantId = resolveTenant(tenantGuard, request.getTenantId());
     LocalDate fromBizDate = parseLocalDate(request.getFrom(), "from");
     LocalDate toBizDate = parseLocalDate(request.getTo(), "to");
-    List<Map<String, Object>> rows = opsMappers.batchDayMapper.selectByQuery(
-        tenantId, request.getCalendarCode(), fromBizDate, toBizDate, pageRequest);
+    BatchDayQuery batchDayQuery = BatchDayQuery.builder()
+        .tenantId(tenantId)
+        .calendarCode(request.getCalendarCode())
+        .fromBizDate(fromBizDate)
+        .toBizDate(toBizDate)
+        .pageRequest(pageRequest)
+        .build();
+    List<BatchDayView> rows = opsMappers.batchDayMapper.selectByQuery(batchDayQuery);
     long total = opsMappers.batchDayMapper.countByQuery(
         tenantId, request.getCalendarCode(), fromBizDate, toBizDate);
     List<ConsoleBatchDayResponse> responses = rows.stream()
@@ -316,11 +361,10 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
       String bizDate, BatchDayWindowQueryRequest request) {
     String tenantId = resolveTenant(tenantGuard, request.getTenantId());
     LocalDate parsedBizDate = parseLocalDate(bizDate, "bizDate");
-    return toBatchDayWindowResponse(
-        tenantId,
-        request.getCalendarCode(),
-        parsedBizDate,
-        opsMappers.batchDayMapper.selectWindow(tenantId, request.getCalendarCode(), parsedBizDate));
+    String calendarCode = request.getCalendarCode();
+    BatchDayView batchDayWindow =
+        opsMappers.batchDayMapper.selectWindow(tenantId, calendarCode, parsedBizDate);
+    return toBatchDayWindowResponse(tenantId, calendarCode, parsedBizDate, batchDayWindow);
   }
 
   @Override
@@ -328,7 +372,8 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
       ApprovalCommandQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
     ApprovalCommandQuery query = new ApprovalCommandQuery();
-    query.setTenantId(resolveTenant(tenantGuard, request.getTenantId()));
+    String tenantId = resolveTenant(tenantGuard, request.getTenantId());
+    query.setTenantId(tenantId);
     query.setApprovalNo(request.getApprovalNo());
     query.setApprovalType(request.getApprovalType());
     query.setActionType(request.getActionType());
@@ -342,52 +387,57 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
   }
 
   private ConsoleAuditLogResponse toAuditLogResponse(Map<String, Object> row) {
-    return new ConsoleAuditLogResponse(
-        longValue(row, "id"),
-        stringValue(row, "tenant_id"),
-        longValue(row, "file_id"),
-        stringValue(row, "operation_type"),
-        stringValue(row, "operation_result"),
-        stringValue(row, "operator_type"),
-        stringValue(row, "operator_id"),
-        stringValue(row, "trace_id"),
-        stringValue(row, "evidence_ref"),
-        stringValue(row, "detail_summary"),
-        instantValue(row, "created_at"));
+    return ConsoleAuditLogResponse.builder()
+        .id(longValue(row, "id"))
+        .tenantId(stringValue(row, "tenant_id"))
+        .fileId(longValue(row, "file_id"))
+        .operationType(stringValue(row, "operation_type"))
+        .operationResult(stringValue(row, "operation_result"))
+        .operatorType(stringValue(row, "operator_type"))
+        .operatorId(stringValue(row, "operator_id"))
+        .traceId(stringValue(row, "trace_id"))
+        .evidenceRef(stringValue(row, "evidence_ref"))
+        .detailSummary(stringValue(row, "detail_summary"))
+        .createdAt(instantValue(row, "created_at"))
+        .build();
   }
 
   private ConsoleOutboxRetryLogResponse toOutboxRetryResponse(Map<String, Object> row) {
-    return new ConsoleOutboxRetryLogResponse(
-        longValue(row, "id"),
-        longValue(row, "outbox_event_id"),
-        stringValue(row, "tenant_id"),
-        stringValue(row, "event_type"),
-        stringValue(row, "event_key"),
-        stringValue(row, "retry_status"),
-        intValue(row, "retry_count"),
-        stringValue(row, "retry_policy"),
-        instantValue(row, "next_retry_at"),
-        instantValue(row, "created_at"),
-        instantValue(row, "updated_at"));
+    return ConsoleOutboxRetryLogResponse.builder()
+        .id(longValue(row, "id"))
+        .outboxEventId(longValue(row, "outbox_event_id"))
+        .tenantId(stringValue(row, "tenant_id"))
+        .eventType(stringValue(row, "event_type"))
+        .eventKey(stringValue(row, "event_key"))
+        .retryStatus(stringValue(row, "retry_status"))
+        .retryCount(intValue(row, "retry_count"))
+        .retryPolicy(stringValue(row, "retry_policy"))
+        .nextRetryAt(instantValue(row, "next_retry_at"))
+        .createdAt(instantValue(row, "created_at"))
+        .updatedAt(instantValue(row, "updated_at"))
+        .build();
   }
 
   private ConsoleOutboxDeliveryLogResponse toOutboxDeliveryResponse(Map<String, Object> row) {
-    String errorMessage = localizedErrorRenderer.render(
-        stringValue(row, "error_key"),
-        SecretMasking.maskSensitiveJson(rawStringValue(row, "error_args")),
-        stringValue(row, "error_message"));
-    return new ConsoleOutboxDeliveryLogResponse(
-        longValue(row, "id"),
-        stringValue(row, "tenant_id"),
-        stringValue(row, "event_type"),
-        stringValue(row, "event_key"),
-        stringValue(row, "trace_id"),
-        stringValue(row, "delivery_status"),
-        stringValue(row, "target_topic"),
-        intValue(row, "delivery_attempt"),
-        errorMessage,
-        instantValue(row, "created_at"),
-        instantValue(row, "updated_at"));
+    String errorKey = stringValue(row, "error_key");
+    String rawErrorArgs = rawStringValue(row, "error_args");
+    String displayableErrorArgs = SecretMasking.maskSensitiveJson(rawErrorArgs);
+    String fallbackErrorMessage = stringValue(row, "error_message");
+    String errorMessage =
+        localizedErrorRenderer.render(errorKey, displayableErrorArgs, fallbackErrorMessage);
+    return ConsoleOutboxDeliveryLogResponse.builder()
+        .id(longValue(row, "id"))
+        .tenantId(stringValue(row, "tenant_id"))
+        .eventType(stringValue(row, "event_type"))
+        .eventKey(stringValue(row, "event_key"))
+        .traceId(stringValue(row, "trace_id"))
+        .deliveryStatus(stringValue(row, "delivery_status"))
+        .targetTopic(stringValue(row, "target_topic"))
+        .deliveryAttempt(intValue(row, "delivery_attempt"))
+        .errorMessage(errorMessage)
+        .createdAt(instantValue(row, "created_at"))
+        .updatedAt(instantValue(row, "updated_at"))
+        .build();
   }
 
   private AiAuditLogResponse toAiAuditLogResponse(ConsoleAiAuditLogEntity entity) {
@@ -401,9 +451,15 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     row.setPromptCategory(entity.getPromptCategory());
     row.setPromptDecision(entity.getPromptDecision());
     row.setModelName(entity.getModelName());
-    row.setPromptPreview(ConsoleTextSanitizer.safeDisplay(entity.getPromptPreview(), 512));
-    row.setResponsePreview(ConsoleTextSanitizer.safeDisplay(entity.getResponsePreview(), 512));
-    row.setRefusalReason(ConsoleTextSanitizer.safeDisplay(entity.getRefusalReason(), 512));
+    String promptPreview = entity.getPromptPreview();
+    String safePromptPreview = ConsoleTextSanitizer.safeDisplay(promptPreview, 512);
+    row.setPromptPreview(safePromptPreview);
+    String responsePreview = entity.getResponsePreview();
+    String safeResponsePreview = ConsoleTextSanitizer.safeDisplay(responsePreview, 512);
+    row.setResponsePreview(safeResponsePreview);
+    String refusalReason = entity.getRefusalReason();
+    String safeRefusalReason = ConsoleTextSanitizer.safeDisplay(refusalReason, 512);
+    row.setRefusalReason(safeRefusalReason);
     row.setPromptTokens(entity.getPromptTokens());
     row.setCompletionTokens(entity.getCompletionTokens());
     row.setEstimatedCostUsd(entity.getEstimatedCostUsd());
@@ -413,58 +469,86 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
   }
 
   private ConsoleApprovalCommandResponse toApprovalResponse(ApprovalCommandEntity entity) {
-    return new ConsoleApprovalCommandResponse(
-        entity.getId(),
-        display(entity.getTenantId()),
-        display(entity.getApprovalNo()),
-        display(entity.getApprovalType()),
-        display(entity.getActionType()),
-        display(entity.getTargetType()),
-        display(entity.getTargetId()),
-        SecretMasking.maskSensitiveJson(entity.getPayloadJson()),
-        display(entity.getApprovalStatus()),
-        display(entity.getRequesterId()),
-        display(entity.getApproverId()),
-        display(entity.getRejectionReason()),
-        display(entity.getApprovalReason()),
-        display(entity.getSourceTraceId()),
-        display(entity.getSourceIdempotencyKey()),
-        entity.getApprovedAt(),
-        entity.getExecutedAt(),
-        entity.getCreatedAt(),
-        entity.getUpdatedAt());
+    String rawPayloadJson = entity.getPayloadJson();
+    String maskedPayloadJson = SecretMasking.maskSensitiveJson(rawPayloadJson);
+    Long id = entity.getId();
+    String tenantId = display(entity.getTenantId());
+    String approvalNo = display(entity.getApprovalNo());
+    String approvalType = display(entity.getApprovalType());
+    String actionType = display(entity.getActionType());
+    String targetType = display(entity.getTargetType());
+    String targetId = display(entity.getTargetId());
+    String approvalStatus = display(entity.getApprovalStatus());
+    String requesterId = display(entity.getRequesterId());
+    String approverId = display(entity.getApproverId());
+    String rejectionReason = display(entity.getRejectionReason());
+    String approvalReason = display(entity.getApprovalReason());
+    String sourceTraceId = display(entity.getSourceTraceId());
+    String sourceIdempotencyKey = display(entity.getSourceIdempotencyKey());
+    OffsetDateTime approvedAt = entity.getApprovedAt();
+    OffsetDateTime executedAt = entity.getExecutedAt();
+    OffsetDateTime createdAt = entity.getCreatedAt();
+    OffsetDateTime updatedAt = entity.getUpdatedAt();
+    return ConsoleApprovalCommandResponse.builder()
+        .id(id)
+        .tenantId(tenantId)
+        .approvalNo(approvalNo)
+        .approvalType(approvalType)
+        .actionType(actionType)
+        .targetType(targetType)
+        .targetId(targetId)
+        .payloadJson(maskedPayloadJson)
+        .approvalStatus(approvalStatus)
+        .requesterId(requesterId)
+        .approverId(approverId)
+        .rejectionReason(rejectionReason)
+        .approvalReason(approvalReason)
+        .sourceTraceId(sourceTraceId)
+        .sourceIdempotencyKey(sourceIdempotencyKey)
+        .approvedAt(approvedAt)
+        .executedAt(executedAt)
+        .createdAt(createdAt)
+        .updatedAt(updatedAt)
+        .build();
   }
 
   private ConsoleBatchDayResponse toBatchDayResponse(
-      String tenantId, String calendarCode, Map<String, Object> row) {
-    LocalDate bizDate = localDateValue(row, "bizDate");
+      String tenantId, String calendarCode, BatchDayView row) {
+    LocalDate bizDate = row.bizDate();
     List<ConsoleBatchDaySummaryResponse> summaries =
         loadBatchDaySummaries(tenantId, calendarCode, bizDate);
     List<ConsoleBatchDaySummaryResponse> catchupSummary = summaries.stream()
         .filter(
             summary -> safeInt(summary.failedJobCount()) > 0 || safeInt(summary.catchupCount()) > 0)
         .toList();
-    return new ConsoleBatchDayResponse(
-        bizDate,
-        stringValue(row, "dayStatus"),
-        instantValue(row, "openAt"),
-        instantValue(row, "cutoffAt"),
-        instantValue(row, "settledAt"),
-        instantValue(row, "slaDeadlineAt"),
-        resolveSlaStatus(instantValue(row, "slaDeadlineAt"), instantValue(row, "settledAt")),
-        intValue(row, "totalJobCount"),
-        intValue(row, "successJobCount"),
-        intValue(row, "failedJobCount"),
-        intValue(row, "inFlightJobCount"),
-        intValue(row, "lateCount"),
-        intValue(row, "catchupCount"),
-        catchupSummary);
+    String dayStatus = row.dayStatus();
+    Instant openAt = row.openAt();
+    Instant cutoffAt = row.cutoffAt();
+    Instant settledAt = row.settledAt();
+    Instant slaDeadlineAt = row.slaDeadlineAt();
+    String slaStatus = resolveSlaStatus(slaDeadlineAt, settledAt);
+    return ConsoleBatchDayResponse.builder()
+        .bizDate(bizDate)
+        .dayStatus(dayStatus)
+        .openAt(openAt)
+        .cutoffAt(cutoffAt)
+        .settledAt(settledAt)
+        .slaDeadlineAt(slaDeadlineAt)
+        .slaStatus(slaStatus)
+        .totalJobCount(intValue(row.totalJobCount()))
+        .successJobCount(intValue(row.successJobCount()))
+        .failedJobCount(intValue(row.failedJobCount()))
+        .inFlightJobCount(intValue(row.inFlightJobCount()))
+        .lateCount(row.lateCount())
+        .catchupCount(row.catchupCount())
+        .catchupSummary(catchupSummary)
+        .build();
   }
 
   private ConsoleBatchDayWindowResponse toBatchDayWindowResponse(
-      String tenantId, String calendarCode, LocalDate bizDate, Map<String, Object> row) {
-    Instant cutoffAt = instantValue(row, "cutoffAt");
-    Instant slaDeadlineAt = instantValue(row, "slaDeadlineAt");
+      String tenantId, String calendarCode, LocalDate bizDate, BatchDayView row) {
+    Instant cutoffAt = row == null ? null : row.cutoffAt();
+    Instant slaDeadlineAt = row == null ? null : row.slaDeadlineAt();
     Instant now = BatchDateTimeSupport.utcNow();
     Long timeUntilCutoffSeconds =
         cutoffAt == null ? null : ChronoUnit.SECONDS.between(now, cutoffAt);
@@ -472,15 +556,23 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         resolveLateArrivalWindowClosesAt(tenantId, calendarCode, cutoffAt);
     List<ConsoleBatchDaySummaryResponse> jobs =
         loadBatchDaySummaries(tenantId, calendarCode, bizDate);
+    List<ConsoleScheduledOccurrenceResponse> scheduledOccurrences =
+        opsMappers
+            .batchDayMapper
+            .selectScheduledOccurrences(tenantId, calendarCode, bizDate)
+            .stream()
+            .map(this::toScheduledOccurrenceResponse)
+            .toList();
     return new ConsoleBatchDayWindowResponse(
         bizDate,
-        stringValue(row, "dayStatus"),
+        row == null ? null : row.dayStatus(),
         cutoffAt,
         slaDeadlineAt,
         now,
         timeUntilCutoffSeconds,
         lateArrivalWindowClosesAt,
-        jobs);
+        jobs,
+        scheduledOccurrences);
   }
 
   private List<ConsoleBatchDaySummaryResponse> loadBatchDaySummaries(
@@ -488,7 +580,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     if (bizDate == null) {
       return List.of();
     }
-    List<Map<String, Object>> rows =
+    List<BatchDayJobSummaryView> rows =
         opsMappers.batchDayMapper.selectJobSummaries(tenantId, calendarCode, bizDate);
     if (rows == null || rows.isEmpty()) {
       return List.of();
@@ -496,14 +588,32 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     return rows.stream().map(this::toBatchDaySummaryResponse).toList();
   }
 
-  private ConsoleBatchDaySummaryResponse toBatchDaySummaryResponse(Map<String, Object> row) {
+  private ConsoleBatchDaySummaryResponse toBatchDaySummaryResponse(BatchDayJobSummaryView row) {
     return new ConsoleBatchDaySummaryResponse(
-        stringValue(row, "jobCode"),
-        intValue(row, "totalJobCount"),
-        intValue(row, "successJobCount"),
-        intValue(row, "failedJobCount"),
-        intValue(row, "inFlightJobCount"),
-        intValue(row, "catchupCount"));
+        row.jobCode(),
+        intValue(row.totalJobCount()),
+        intValue(row.successJobCount()),
+        intValue(row.failedJobCount()),
+        intValue(row.inFlightJobCount()),
+        intValue(row.catchupCount()));
+  }
+
+  private ConsoleScheduledOccurrenceResponse toScheduledOccurrenceResponse(
+      BatchDayScheduledOccurrenceView occurrence) {
+    return new ConsoleScheduledOccurrenceResponse(
+        occurrence.workflowDefinitionId(),
+        occurrence.workflowCode(),
+        occurrence.catchUpPolicy(),
+        occurrence.scheduleVersion(),
+        occurrence.scheduledFireTime(),
+        occurrence.bizDate(),
+        occurrence.occurrenceStatus(),
+        occurrence.requestId(),
+        occurrence.lastRejectionReason());
+  }
+
+  private Integer intValue(Number value) {
+    return value == null ? null : value.intValue();
   }
 
   private int safeInt(Integer value) {
@@ -542,94 +652,137 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
   }
 
   private ConsoleAlertEventResponse toAlertEventResponse(AlertEventEntity entity) {
-    return new ConsoleAlertEventResponse(
-        entity.getId(),
-        display(entity.getTenantId()),
-        display(entity.getServiceName()),
-        display(entity.getAlertType()),
-        display(entity.getSeverity()),
-        display(entity.getTitle()),
-        ConsoleTextSanitizer.safeDisplay(SecretMasking.maskSensitiveJson(entity.getDetailJson())),
-        display(entity.getDedupFingerprint()),
-        entity.getOccurrenceCount(),
-        entity.getFirstSeenAt(),
-        entity.getLastSeenAt(),
-        display(entity.getTraceId()),
-        display(entity.getStatus()),
-        entity.getCreatedAt(),
-        entity.getUpdatedAt());
+    Long id = entity.getId();
+    String tenantId = display(entity.getTenantId());
+    String serviceName = display(entity.getServiceName());
+    String alertType = display(entity.getAlertType());
+    String severity = display(entity.getSeverity());
+    String title = display(entity.getTitle());
+    String detailJson = entity.getDetailJson();
+    String maskedDetailJson = SecretMasking.maskSensitiveJson(detailJson);
+    String displayDetailJson = ConsoleTextSanitizer.safeDisplay(maskedDetailJson);
+    String dedupFingerprint = display(entity.getDedupFingerprint());
+    String traceId = display(entity.getTraceId());
+    String status = display(entity.getStatus());
+    return ConsoleAlertEventResponse.builder()
+        .id(id)
+        .tenantId(tenantId)
+        .serviceName(serviceName)
+        .alertType(alertType)
+        .severity(severity)
+        .title(title)
+        .detailJson(displayDetailJson)
+        .dedupFingerprint(dedupFingerprint)
+        .occurrenceCount(entity.getOccurrenceCount())
+        .firstSeenAt(entity.getFirstSeenAt())
+        .lastSeenAt(entity.getLastSeenAt())
+        .traceId(traceId)
+        .status(status)
+        .createdAt(entity.getCreatedAt())
+        .updatedAt(entity.getUpdatedAt())
+        .build();
   }
 
   private ConsoleDeadLetterTaskResponse toDeadLetterTaskResponse(DeadLetterTaskEntity entity) {
-    return new ConsoleDeadLetterTaskResponse(
-        entity.getId(),
-        display(entity.getTenantId()),
-        display(entity.getSourceType()),
-        entity.getSourceId(),
-        display(entity.getDeadLetterReason()),
-        display(entity.getPayloadRef()),
-        display(entity.getReplayStatus()),
-        entity.getReplayCount(),
-        entity.getLastReplayAt(),
-        display(entity.getLastReplayResult()),
-        display(entity.getTraceId()),
-        entity.getCreatedAt(),
-        entity.getUpdatedAt());
+    String tenantId = display(entity.getTenantId());
+    String sourceType = display(entity.getSourceType());
+    String deadLetterReason = display(entity.getDeadLetterReason());
+    String errorClass = display(entity.getErrorClass());
+    String payloadRef = display(entity.getPayloadRef());
+    String replayStatus = display(entity.getReplayStatus());
+    String lastReplayResult = display(entity.getLastReplayResult());
+    String traceId = display(entity.getTraceId());
+    return ConsoleDeadLetterTaskResponse.builder()
+        .id(entity.getId())
+        .tenantId(tenantId)
+        .sourceType(sourceType)
+        .sourceId(entity.getSourceId())
+        .deadLetterReason(deadLetterReason)
+        .errorClass(errorClass)
+        .payloadRef(payloadRef)
+        .replayStatus(replayStatus)
+        .replayCount(entity.getReplayCount())
+        .lastReplayAt(entity.getLastReplayAt())
+        .lastReplayResult(lastReplayResult)
+        .traceId(traceId)
+        .createdAt(entity.getCreatedAt())
+        .updatedAt(entity.getUpdatedAt())
+        .build();
   }
 
   private ConsoleRetryScheduleResponse toRetryScheduleResponse(RetryScheduleEntity entity) {
     String lastErrorMessage = localizedErrorRenderer.render(
         entity.getLastErrorKey(), entity.getLastErrorArgs(), entity.getLastErrorMessage());
-    return new ConsoleRetryScheduleResponse(
-        entity.getId(),
-        display(entity.getTenantId()),
-        display(entity.getRelatedType()),
-        entity.getRelatedId(),
-        display(entity.getRetryPolicy()),
-        entity.getRetryCount(),
-        entity.getMaxRetryCount(),
-        entity.getNextRetryAt(),
-        display(entity.getRetryStatus()),
-        display(entity.getDedupKey()),
-        display(entity.getLastErrorCode()),
-        display(lastErrorMessage),
-        entity.getCreatedAt(),
-        entity.getUpdatedAt());
+    String tenantId = display(entity.getTenantId());
+    String relatedType = display(entity.getRelatedType());
+    String retryPolicy = display(entity.getRetryPolicy());
+    String retryStatus = display(entity.getRetryStatus());
+    String dedupKey = display(entity.getDedupKey());
+    String lastErrorCode = display(entity.getLastErrorCode());
+    String displayLastErrorMessage = display(lastErrorMessage);
+    return ConsoleRetryScheduleResponse.builder()
+        .id(entity.getId())
+        .tenantId(tenantId)
+        .relatedType(relatedType)
+        .relatedId(entity.getRelatedId())
+        .retryPolicy(retryPolicy)
+        .retryCount(entity.getRetryCount())
+        .maxRetryCount(entity.getMaxRetryCount())
+        .nextRetryAt(entity.getNextRetryAt())
+        .retryStatus(retryStatus)
+        .dedupKey(dedupKey)
+        .lastErrorCode(lastErrorCode)
+        .lastErrorMessage(displayLastErrorMessage)
+        .createdAt(entity.getCreatedAt())
+        .updatedAt(entity.getUpdatedAt())
+        .build();
   }
 
   private ConsolePendingCatchUpResponse toPendingCatchUpResponse(PendingCatchUpEntity entity) {
-    return new ConsolePendingCatchUpResponse(
-        entity.getId(),
-        display(entity.getTenantId()),
-        display(entity.getRequestId()),
-        display(entity.getJobCode()),
-        entity.getBizDate(),
-        display(entity.getRequestStatus()),
-        display(entity.getTraceId()),
-        entity.getCreatedAt(),
-        entity.getUpdatedAt(),
-        entity.getApprovalNo(),
-        entity.getApprovalStatus());
+    String tenantId = display(entity.getTenantId());
+    String requestId = display(entity.getRequestId());
+    String workflowCode = display(entity.getWorkflowCode());
+    String requestStatus = display(entity.getRequestStatus());
+    String traceId = display(entity.getTraceId());
+    return ConsolePendingCatchUpResponse.builder()
+        .id(entity.getId())
+        .tenantId(tenantId)
+        .requestId(requestId)
+        .workflowCode(workflowCode)
+        .bizDate(entity.getBizDate())
+        .requestStatus(requestStatus)
+        .traceId(traceId)
+        .createdAt(entity.getCreatedAt())
+        .updatedAt(entity.getUpdatedAt())
+        .approvalNo(entity.getApprovalNo())
+        .approvalStatus(entity.getApprovalStatus())
+        .build();
   }
 
   private ConsoleWorkerRegistryResponse toWorkerRegistryResponse(WorkerRegistryEntity entity) {
-    return new ConsoleWorkerRegistryResponse(
-        entity.getId(),
-        display(entity.getTenantId()),
-        display(entity.getWorkerCode()),
-        display(entity.getWorkerGroup()),
-        entity.getCapabilityTagsJson(),
-        entity.getResourceTag(),
-        display(entity.getStatus()),
-        entity.getHeartbeatAt(),
-        null,
-        entity.getDrainStartedAt(),
-        entity.getDrainDeadlineAt(),
-        entity.getPort(),
-        EmptyChecks.isNull(entity.getTaskCapabilitiesJson())
-            ? List.of()
-            : JsonUtils.fromJson(
-                entity.getTaskCapabilitiesJson(),
-                new TypeReference<List<WorkerTaskCapabilityDto>>() {}));
+    String tenantId = display(entity.getTenantId());
+    String workerCode = display(entity.getWorkerCode());
+    String workerGroup = display(entity.getWorkerGroup());
+    String status = display(entity.getStatus());
+    String taskCapabilitiesJson = entity.getTaskCapabilitiesJson();
+    List<WorkerTaskCapabilityDto> taskCapabilities = EmptyChecks.isNull(taskCapabilitiesJson)
+        ? List.of()
+        : JsonUtils.fromJson(
+            taskCapabilitiesJson, new TypeReference<List<WorkerTaskCapabilityDto>>() {});
+    return ConsoleWorkerRegistryResponse.builder()
+        .id(entity.getId())
+        .tenantId(tenantId)
+        .workerCode(workerCode)
+        .workerGroup(workerGroup)
+        .capabilityTags(entity.getCapabilityTagsJson())
+        .resourceTag(entity.getResourceTag())
+        .status(status)
+        .heartbeatAt(entity.getHeartbeatAt())
+        .currentLoad(null)
+        .drainStartedAt(entity.getDrainStartedAt())
+        .drainDeadlineAt(entity.getDrainDeadlineAt())
+        .port(entity.getPort())
+        .taskCapabilities(taskCapabilities)
+        .build();
   }
 }

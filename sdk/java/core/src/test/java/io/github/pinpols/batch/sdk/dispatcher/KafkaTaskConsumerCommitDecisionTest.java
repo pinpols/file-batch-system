@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 
 /** SDK Kafka offset 契约:只有已接收/终态坏消息提交 offset,可恢复拒收不提交。 */
 @DisplayName("Kafka 消费位移决策 — 仅接收成功或终态坏消息提交位移,可恢复拒收不提交")
@@ -71,7 +72,7 @@ class KafkaTaskConsumerCommitDecisionTest {
     TopicPartition tp = new TopicPartition("batch.task.dispatch.tx.t0", 0);
     assertThat(keepGoing).as("RETRY_LATER defers the current partition").isFalse();
     verify(consumer, never())
-        .commitSync(org.mockito.ArgumentMatchers.<Map<TopicPartition, OffsetAndMetadata>>any());
+        .commitSync(ArgumentMatchers.<Map<TopicPartition, OffsetAndMetadata>>any());
     verify(consumer).seek(tp, 11);
     verify(consumer).pause(Set.of(tp));
   }
@@ -113,7 +114,7 @@ class KafkaTaskConsumerCommitDecisionTest {
     doThrow(new IllegalStateException("broker timeout"))
         .doNothing()
         .when(consumer)
-        .commitSync(org.mockito.ArgumentMatchers.anyMap());
+        .commitSync(ArgumentMatchers.anyMap());
     TopicPartition failed = new TopicPartition("batch.task.dispatch.tx.t0", 0);
     TopicPartition healthy = new TopicPartition("batch.task.dispatch.tx.t1", 0);
 
@@ -177,7 +178,7 @@ class KafkaTaskConsumerCommitDecisionTest {
     assertThat(laterKeepsGoing).isTrue();
     verify(dispatcher).onMessage(any());
     verify(consumer, never())
-        .commitSync(org.mockito.ArgumentMatchers.<Map<TopicPartition, OffsetAndMetadata>>any());
+        .commitSync(ArgumentMatchers.<Map<TopicPartition, OffsetAndMetadata>>any());
     verify(consumer, never()).seek(tp, 5);
     verify(consumer, never()).pause(Set.of(tp));
   }

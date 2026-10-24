@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Validate production Helm values keep the platform fail-closed by default.
-
-The chart intentionally keeps development defaults permissive.  This check makes
-the production overlay an executable contract so a release cannot silently fall
-back to development security, quota, or network settings.
-"""
+# 用途：生产 Helm overlay 安全。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-production-overlay-safety.py；参数与前置环境见下方说明及所属 README。
+"""检查生产 Helm overlay 默认保持失败关闭。
+Chart 允许开发环境使用宽松默认值；生产 overlay 必须显式约束安全、配额与网络，
+防止发布时静默回落到开发配置。"""
 
 from __future__ import annotations
 
@@ -38,7 +37,7 @@ def get(values: dict, *path: str):
 
 
 def is_true(value: object) -> bool:
-    """Accept YAML booleans and the string form used by existing env-bound values."""
+    """兼容 YAML 布尔值及现有环境变量绑定使用的字符串布尔值。"""
     return value is True or (isinstance(value, str) and value.strip().lower() == "true")
 
 

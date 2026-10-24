@@ -27,6 +27,7 @@ import java.util.regex.Pattern;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.common.errors.WakeupException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -176,8 +177,7 @@ class KafkaConsumerCloseJoinTest {
         .when(consumer)
         .poll(any());
     doAnswer(inv -> {
-          when(consumer.poll(any()))
-              .thenThrow(new org.apache.kafka.common.errors.WakeupException());
+          when(consumer.poll(any())).thenThrow(new WakeupException());
           return null;
         })
         .when(consumer)

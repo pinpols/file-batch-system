@@ -81,6 +81,13 @@ class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("投递持续失败时按配置上限耗尽重试,事件进入放弃终态,投递次数等于上限,审计表出现已耗尽记录")
   void retryExhaustion_marksGiveUp_andWritesExhaustedAuditRecord() {
+    final String selectPublishStatusSql = """
+        select publish_status from batch.outbox_event where id = ?
+    """;
+    final String selectPublishAttemptSql = """
+        select publish_attempt from batch.outbox_event where id = ?
+    """;
+
     // publisher always fails
     when(outboxPublisher.publish(any())).thenReturn(CompletableFuture.completedFuture(false));
 
@@ -93,7 +100,7 @@ class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
           E2eStatusLogger.logOutboxSnapshot(
               jdbcTemplate, "t1", eventKey(event), "OutboxForwarderRetryE2eIT");
           String status = jdbcTemplate.queryForObject(
-              "select publish_status from batch.outbox_event where id = ?",
+              selectPublishStatusSql,
               String.class,
               event.getId());
           assertThat(status).isEqualTo(OutboxPublishStatus.GIVE_UP.code());
@@ -101,7 +108,7 @@ class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
 
     // publish_attempt should equal max-retry-attempts
     Integer attempt = jdbcTemplate.queryForObject(
-        "select publish_attempt from batch.outbox_event where id = ?",
+        selectPublishAttemptSql,
         Integer.class,
         event.getId());
     assertThat(attempt).isEqualTo(2);
@@ -119,6 +126,10 @@ class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("首次投递失败后下一次成功,事件最终进入已发布终态,审计表保留至少一条失败轨迹记录")
   void transientFailure_thenRecovery_eventIsPublishedEventually() {
+    final String selectPublishStatusSql = """
+        select publish_status from batch.outbox_event where id = ?
+    """;
+
     // fail on first publish attempt, succeed on the second
     when(outboxPublisher.publish(any()))
         .thenReturn(CompletableFuture.completedFuture(false))
@@ -133,7 +144,7 @@ class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
           E2eStatusLogger.logOutboxSnapshot(
               jdbcTemplate, "t1", eventKey(event), "OutboxForwarderRetryE2eIT");
           String status = jdbcTemplate.queryForObject(
-              "select publish_status from batch.outbox_event where id = ?",
+              selectPublishStatusSql,
               String.class,
               event.getId());
           assertThat(status).isEqualTo(OutboxPublishStatus.PUBLISHED.code());

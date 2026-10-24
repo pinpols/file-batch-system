@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：数据库脚本安全。
+# 用法：在仓库根目录执行 bash scripts/ci/check-db-scripts-safety.sh；参数与前置环境见下方说明及所属 README。
 # 守护手工 SQL 中可能破坏数据库状态的操作(squawk 守 db/migration 的盲区补全)。
 #
 # 背景:check-migration-safety.sh 只 squawk 扫 Flyway 的 db/migration/*.sql。但 batch_business

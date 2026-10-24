@@ -23,6 +23,13 @@ public class WorkflowDefinitionVersionEntity {
   private String workflowName;
   private String workflowType;
   private Boolean enabled;
+  private Boolean scheduleEnabled;
+  private String scheduleType;
+  private String scheduleExpr;
+  private String timezone;
+  private String triggerMode;
+  private String calendarCode;
+  private String dependsOnJobCode;
 
   /** nodes JSONB 全文(::text 读出),反序列化由调用方负责。 */
   private String nodesJson;

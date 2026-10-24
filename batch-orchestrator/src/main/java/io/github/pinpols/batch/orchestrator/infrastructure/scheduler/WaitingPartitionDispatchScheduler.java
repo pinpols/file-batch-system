@@ -185,8 +185,9 @@ public class WaitingPartitionDispatchScheduler {
     }
     JobDefinitionEntity jobDefinition = configCacheService.findEnabledJobDefinition(
         jobInstance.getTenantId(), jobInstance.getJobCode());
-    ResourceSchedulingDecision decision =
-        resourceScheduler.schedule(buildRequest(jobInstance, partition, task, jobDefinition));
+    ResourceSchedulingRequest schedulingRequest =
+        buildRequest(jobInstance, partition, task, jobDefinition);
+    ResourceSchedulingDecision decision = resourceScheduler.preview(schedulingRequest);
     if (!decision.isDispatchable()) {
       log.debug(
           "skip partitionId={}: not dispatchable, reason={}, route={}",
@@ -208,11 +209,12 @@ public class WaitingPartitionDispatchScheduler {
       JobTaskEntity task,
       JobInstanceEntity jobInstance,
       ResourceSchedulingDecision decision) {
-    if (partition == null
+    boolean waitingDispatchContextIncomplete = EmptyChecks.isNull(partition)
         || task == null
         || jobInstance == null
         || decision == null
-        || !decision.isDispatchable()) {
+        || !decision.isDispatchable();
+    if (waitingDispatchContextIncomplete) {
       return;
     }
     BatchMdc.withTenantAndTrace(jobInstance.getTenantId(), jobInstance.getTraceId(), () -> {
@@ -263,8 +265,6 @@ public class WaitingPartitionDispatchScheduler {
     request.setRequestedPartitionCount(1);
     request.setNewJobAdmission(
         JobInstanceStatus.WAITING.code().equals(jobInstance.getInstanceStatus()));
-    // 本轮 schedule 只负责给候选排序；executeDispatch 会在 REQUIRES_NEW 事务内重新取得公平组锁并校验。
-    request.setEnforceFairShareAdmission(false);
     request.setWaitingSince(
         partition.getUpdatedAt() == null ? partition.getCreatedAt() : partition.getUpdatedAt());
     // windowCode 同理：优先读 partition（sub-job 的 window），否则回退到 workflow 的 job_definition

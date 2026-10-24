@@ -32,7 +32,8 @@ class MapperStatusWriteConventionTest {
   private static final Pattern STATEMENT_BLOCK =
       Pattern.compile("(?is)<(insert|update|select)\\b[^>]*id=\"([^\"]+)\"[^>]*>(.*?)</\\1>");
   private static final Pattern FIXED_STATUS_ASSIGNMENT =
-      Pattern.compile("(?i)\\b(?:[a-z][a-z0-9_]*_status|status)\\s*=\\s*'[A-Z][A-Z0-9_]*'");
+      Pattern.compile("(?im)(?:^|,)\\s*(?:[a-z][a-z0-9_]*\\.)?(?:[a-z][a-z0-9_]*_status|status)"
+          + "\\s*=\\s*'[A-Z][A-Z0-9_]*'");
   private static final Pattern SET_KEYWORD = Pattern.compile("(?i)\\bset\\b");
   private static final Pattern WHERE_KEYWORD = Pattern.compile("(?i)\\bwhere\\b");
 
@@ -79,7 +80,7 @@ class MapperStatusWriteConventionTest {
     String xml = Files.readString(file, StandardCharsets.UTF_8);
     String relative = REPO_ROOT.relativize(file).toString().replace('\\', '/');
     for (String violation : fixedAssignments(xml)) {
-      violations.add(relative + "#" + violation);
+      violations.add(relative + "#" + violation.trim().replaceFirst("^,\\s*", ""));
     }
   }
 
@@ -100,7 +101,8 @@ class MapperStatusWriteConventionTest {
           whereIndex < 0 ? updateSql.substring(setEnd) : updateSql.substring(setEnd, whereIndex);
       Matcher assignmentMatcher = FIXED_STATUS_ASSIGNMENT.matcher(assignments);
       while (assignmentMatcher.find()) {
-        violations.add(statementId + ":" + assignmentMatcher.group());
+        violations.add(
+            statementId + ":" + assignmentMatcher.group().trim().replaceFirst("^,\\s*", ""));
       }
     }
     return violations;

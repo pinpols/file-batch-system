@@ -51,19 +51,28 @@ public class ConsoleMenuRegistry {
     Map<String, Set<String>> configuredGroupAuthorities = new HashMap<>();
     Map<String, Set<String>> configuredItemAuthorities = new HashMap<>();
     for (ConsoleMenuProperties.GroupDef g : props.getGroups()) {
-      configuredGroupAuthorities.put(g.getKey(), normalizeAuthorities(g.getAuthorities()));
+      String groupAuthorityKey = g.getKey();
+      List<String> groupAuthorityConfig = g.getAuthorities();
+      Set<String> normalizedGroupAuthorities = normalizeAuthorities(groupAuthorityConfig);
+      configuredGroupAuthorities.put(groupAuthorityKey, normalizedGroupAuthorities);
       List<MenuItem> items = new ArrayList<>();
       for (ConsoleMenuProperties.ItemDef i : g.getChildren()) {
-        configuredItemAuthorities.put(i.getPath(), normalizeAuthorities(i.getAuthorities()));
-        items.add(
-            new MenuItem(i.getTitle(), i.getPath(), i.getIcon(), normalizeRole(i.getMinRole())));
+        String itemAuthorityKey = i.getPath();
+        List<String> itemAuthorityConfig = i.getAuthorities();
+        Set<String> normalizedItemAuthorities = normalizeAuthorities(itemAuthorityConfig);
+        configuredItemAuthorities.put(itemAuthorityKey, normalizedItemAuthorities);
+        String itemTitle = i.getTitle();
+        String itemPath = i.getPath();
+        String itemIcon = i.getIcon();
+        String itemMinRole = normalizeRole(i.getMinRole());
+        items.add(new MenuItem(itemTitle, itemPath, itemIcon, itemMinRole));
       }
-      groups.add(new MenuGroup(
-          g.getKey(),
-          g.getTitle(),
-          g.getIcon(),
-          normalizeRole(g.getMinRole()),
-          List.copyOf(items)));
+      String groupKey = g.getKey();
+      String groupTitle = g.getTitle();
+      String groupIcon = g.getIcon();
+      String groupMinRole = normalizeRole(g.getMinRole());
+      List<MenuItem> groupItems = List.copyOf(items);
+      groups.add(new MenuGroup(groupKey, groupTitle, groupIcon, groupMinRole, groupItems));
     }
     this.allGroups = List.copyOf(groups);
     this.groupAuthorities = Map.copyOf(configuredGroupAuthorities);
@@ -93,7 +102,11 @@ public class ConsoleMenuRegistry {
   }
 
   private static String normalizeRole(String role) {
-    return EmptyChecks.isNull(role) ? ACCESS_ADMIN : role.trim().toUpperCase(Locale.ROOT);
+    if (EmptyChecks.isNull(role)) {
+      return ACCESS_ADMIN;
+    }
+    String trimmedRole = role.trim();
+    return trimmedRole.toUpperCase(Locale.ROOT);
   }
 
   private static Set<String> normalizeAuthorities(List<String> authorities) {
@@ -102,7 +115,10 @@ public class ConsoleMenuRegistry {
     }
     Set<String> normalized = authorities.stream()
         .filter(EmptyChecks::isNotBlank)
-        .map(authority -> authority.trim().toUpperCase(Locale.ROOT))
+        .map(authority -> {
+          String trimmedAuthority = authority.trim();
+          return trimmedAuthority.toUpperCase(Locale.ROOT);
+        })
         .collect(Collectors.toUnmodifiableSet());
     if (!ConsoleRoles.ALL.containsAll(normalized)) {
       throw new IllegalArgumentException("menu authorities contain unsupported console roles");

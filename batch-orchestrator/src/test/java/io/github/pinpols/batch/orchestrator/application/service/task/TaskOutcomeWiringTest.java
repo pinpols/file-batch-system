@@ -3,7 +3,9 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOutboxService;
+import io.github.pinpols.batch.orchestrator.application.engine.JobTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.application.engine.VerifierFailureOutboxService;
 import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
@@ -12,7 +14,11 @@ import io.github.pinpols.batch.orchestrator.application.service.version.ResultVe
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeTerminalFinalizer;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunReportLock;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleEventMapper;
+import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.observability.JobLifecycleMetricsRecorder;
 import io.github.pinpols.batch.orchestrator.service.failure.FailureClassifier;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -30,10 +36,12 @@ class TaskOutcomeWiringTest {
           TaskOutcomeNodeRunRecorder.class,
           TaskOutcomeTerminalFinalizer.class,
           TaskOutcomeDagProgressor.class,
-          TaskOutcomeParentTaskSignaler.class,
-          TaskOutcomeWorkflowFinalizer.class)
+          TaskOutcomeWorkflowFinalizer.class,
+          WorkflowRunReportLock.class)
       .withBean(OrchestratorJobMappers.class, () -> mock(OrchestratorJobMappers.class))
       .withBean(OrchestratorWorkflowMappers.class, () -> mock(OrchestratorWorkflowMappers.class))
+      .withBean(WorkflowDefinitionMapper.class, () -> mock(WorkflowDefinitionMapper.class))
+      .withBean(BatchDayInstanceMapper.class, () -> mock(BatchDayInstanceMapper.class))
       .withBean(RetryGovernanceService.class, () -> mock(RetryGovernanceService.class))
       .withBean(VerifierFailureOutboxService.class, () -> mock(VerifierFailureOutboxService.class))
       .withBean(CountContinuityOutboxService.class, () -> mock(CountContinuityOutboxService.class))
@@ -41,7 +49,11 @@ class TaskOutcomeWiringTest {
       .withBean(LifecycleEventMapper.class, () -> mock(LifecycleEventMapper.class))
       .withBean(
           WorkflowTerminalOutboxService.class, () -> mock(WorkflowTerminalOutboxService.class))
+      .withBean(JobTerminalOutboxService.class, () -> mock(JobTerminalOutboxService.class))
       .withBean(WorkflowDagService.class, () -> mock(WorkflowDagService.class))
+      .withBean(
+          WorkflowNodeTerminalFinalizer.class, () -> mock(WorkflowNodeTerminalFinalizer.class))
+      .withBean(SecretPayloadProtector.class, () -> mock(SecretPayloadProtector.class))
       .withBean(
           JobInstanceTerminalChildStateReconciler.class,
           () -> mock(JobInstanceTerminalChildStateReconciler.class))
@@ -61,16 +73,18 @@ class TaskOutcomeWiringTest {
           assertThat(context)
               .hasNotFailed()
               .hasSingleBean(DefaultTaskOutcomeService.class)
-              .hasSingleBean(TaskOutcomeInstanceProgressor.class);
+              .hasSingleBean(TaskOutcomeInstanceProgressor.class)
+              .hasSingleBean(WorkflowRunReportLock.class);
           assertThat(DefaultTaskOutcomeService.class.getConstructors()).hasSize(1);
           SimpleMeterRegistry registry = context.getBean(SimpleMeterRegistry.class);
           assertThat(registry.find("batch.orchestrator.cas.miss").counter()).isNotNull();
           assertThat(registry.find("batch.report.advisory_lock.wait").timer()).isNotNull();
           assertThat(context.getBean(DefaultTaskOutcomeService.class))
-              .extracting("nodeRunRecorder", "instanceProgressor")
+              .extracting("nodeRunRecorder", "instanceProgressor", "workflowRunReportLock")
               .containsExactly(
                   context.getBean(TaskOutcomeNodeRunRecorder.class),
-                  context.getBean(TaskOutcomeInstanceProgressor.class));
+                  context.getBean(TaskOutcomeInstanceProgressor.class),
+                  context.getBean(WorkflowRunReportLock.class));
         });
   }
 

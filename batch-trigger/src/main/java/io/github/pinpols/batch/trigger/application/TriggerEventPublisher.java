@@ -31,7 +31,8 @@ public interface TriggerEventPublisher {
    */
   default CompletableFuture<PublishResult> publishAsync(
       String topic, String messageKey, LaunchEnvelope envelope, String traceId) {
-    return CompletableFuture.completedFuture(publish(topic, messageKey, envelope, traceId));
+    PublishResult publishResult = publish(topic, messageKey, envelope, traceId);
+    return CompletableFuture.completedFuture(publishResult);
   }
 
   /**
@@ -50,7 +51,8 @@ public interface TriggerEventPublisher {
     }
 
     public static PublishResult fail(String errorMessage) {
-      return new PublishResult(false, truncate(errorMessage));
+      String truncatedErrorMessage = truncate(errorMessage);
+      return new PublishResult(false, truncatedErrorMessage);
     }
 
     private static String truncate(String message) {

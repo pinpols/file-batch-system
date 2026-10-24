@@ -1,16 +1,18 @@
 package io.github.pinpols.batch.worker.exports.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.domain.ExportPayload;
@@ -40,9 +42,6 @@ class ExportStepExecutionAdapterTest {
   private PlatformFileRecordRepository runtimeRepository;
 
   @Mock
-  private PlatformPipelineDefinitionRepository pipelineDefinitions;
-
-  @Mock
   private PlatformPipelineRunRepository pipelineRuns;
 
   private ExportStepExecutionAdapter adapter;
@@ -52,7 +51,6 @@ class ExportStepExecutionAdapterTest {
     adapter = new ExportStepExecutionAdapter(
         stageExecutor,
         new ObjectMapper(),
-        pipelineDefinitions,
         pipelineRuns,
         runtimeRepository,
         emptyProvider(),
@@ -64,6 +62,28 @@ class ExportStepExecutionAdapterTest {
   void shouldMatchExportPipeline_whenDescribingAdapter() {
     assertThat(adapter.pipelineType()).isEqualTo(ExportWorkerType.EXPORT);
     assertThat(adapter.initialStage()).isEqualTo(ExportStage.PREPARE.name());
+  }
+
+  @Test
+  @DisplayName("回放预检使用固定系统 Pipeline 与原始请求上下文")
+  void shouldResolveReplayCapabilityFromPinnedExportRequest() {
+    when(stageExecutor.defaultStepDefinitions()).thenReturn(exportStageTemplates());
+    ReplayCapabilityDeclaration expected = ReplayCapabilityDeclaration.unknown("export-plugin");
+    when(stageExecutor.resolveReplayCapability(any())).thenReturn(expected);
+    Map<String, Object> attributes = Map.of(
+        PipelineRuntimeKeys.PAYLOAD,
+        "{\"systemPipelineCode\":\"EXPORT\",\"systemPipelineVersion\":1,"
+            + "\"templateCode\":\"TPL_A\",\"operationType\":\"WORKFLOW_RUN\","
+            + "\"frozenFileTemplateProtected\":\"protected-template\"}",
+        PipelineRuntimeKeys.BIZ_DATE,
+        "2026-10-23");
+    StepExecutionRequest request =
+        new StepExecutionRequest("tenant-a", "job-export", "EXPORT", "worker-1", attributes);
+
+    ReplayCapabilityDeclaration actual = adapter.resolveReplayCapability(request);
+
+    assertThat(actual).isEqualTo(expected);
+    verify(stageExecutor).resolveReplayCapability(any(ExportJobContext.class));
   }
 
   @Test
@@ -137,6 +157,19 @@ class ExportStepExecutionAdapterTest {
   private static StepExecutionRequest request(Map<String, Object> attributes) {
     return new StepExecutionRequest(
         "tenant-a", "job-export", "EXPORT_PREPARE", "worker-1", attributes);
+  }
+
+  private static List<PipelineStepTemplate> exportStageTemplates() {
+    return List.of("PREPARE", "GENERATE", "STORE", "REGISTER", "COMPLETE").stream()
+        .map(stage -> PipelineStepTemplate.builder()
+            .stageCode(stage)
+            .stepCode(stage)
+            .stepName(stage)
+            .stepOrder(1)
+            .implCode(stage)
+            .enabled(true)
+            .build())
+        .toList();
   }
 
   @SuppressWarnings("unchecked")

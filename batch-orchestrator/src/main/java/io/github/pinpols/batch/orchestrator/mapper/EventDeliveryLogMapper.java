@@ -8,5 +8,7 @@ public interface EventDeliveryLogMapper {
 
   int insert(EventDeliveryLogEntity entity);
 
+  int insertIntoArchive(EventDeliveryLogEntity entity);
+
   List<EventDeliveryLogEntity> selectByQuery(EventDeliveryLogQuery query);
 }

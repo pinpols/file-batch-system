@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
+# 用途：统一本地日志布局:。
+# 用法：由调用脚本 source scripts/lib/logging.sh 后使用公共变量或函数。
 # 统一本地日志布局:
 #   logs/current/<kind>/      常驻进程当前日志(app/docker)
 #   logs/runs/<kind>/<run>/   一次性任务日志(test/be-acceptance/sim)
-#   logs/archive/<kind>/      常驻日志归档(按 kind 分目录)
+#   logs/archive/<kind>-<component>/ 常驻应用日志归档(按组件分目录)
+#   logs/archive/<kind>/      其他常驻日志归档
 #   logs/archive/legacy/      首次迁移旧目录时的历史归档
-#   logs/pids/                本地进程 pid 文件
+#   .local/run/pids/           本地进程 pid 文件；logs/start-all.pids 仅保留兼容软链
 
 log_stamp() {
   date +%Y%m%d-%H%M%S
@@ -33,8 +36,7 @@ log_init_layout() {
     "$root/logs/current" \
     "$root/logs/runs" \
     "$root/logs/archive" \
-    "$root/logs/archive/legacy" \
-    "$root/logs/pids"
+    "$root/logs/archive/legacy"
 }
 
 log_archive_legacy_path() {
@@ -93,13 +95,18 @@ log_reconcile_current_dir() {
   local root="$1"
   local kind="$2"
   local current="$root/logs/current/$kind"
-  local archive="$root/logs/archive/$kind"
   [[ -d "$current" ]] || return 0
-  mkdir -p "$archive"
 
-  local file base destination collision
+  local file base component archive destination collision
   while IFS= read -r -d '' file; do
     base="$(basename "$file")"
+    if [[ "$kind" == app ]]; then
+      component="${base%%.*}"
+      archive="$root/logs/archive/app-$component"
+    else
+      archive="$root/logs/archive/$kind"
+    fi
+    mkdir -p "$archive"
     destination="$archive/$base"
     collision=1
     while [[ -e "$destination" ]]; do
@@ -147,7 +154,11 @@ log_archive_active_log_file() {
     return 0
   fi
 
-  log_dir="$root/logs/archive/$kind"
+  if [[ "$kind" == app ]]; then
+    log_dir="$root/logs/archive/app-$name"
+  else
+    log_dir="$root/logs/archive/$kind"
+  fi
   mkdir -p "$log_dir"
   archive_stamp="$(log_stamp)"
   suffix="$(log_git_sha "$root")"
@@ -172,9 +183,19 @@ log_find_archived_log_files() {
   local root="$1"
   local kind="$2"
   local retention_days="$3"
-  local archive_dir="$root/logs/archive/$kind"
+  local archive_dir="$root/logs/archive/$kind" component_dir
 
-  if [[ -d "$archive_dir" ]]; then
+  if [[ "$kind" == app ]]; then
+    # 先锁定父请求，再锁定子等待记录，与启动/拒绝准入时的锁顺序一致。
+    # 迁移期间需同时包含旧版扁平目录，以及当前布局所用的
+    if [[ -d "$archive_dir" ]]; then
+      find "$archive_dir" -maxdepth 1 -type f -name '*.log' -mtime "+${retention_days}" -print0
+    fi
+    for component_dir in "$root/logs/archive/app-"*; do
+      [[ -d "$component_dir" ]] || continue
+      find "$component_dir" -maxdepth 1 -type f -name '*.log' -mtime "+${retention_days}" -print0
+    done
+  elif [[ -d "$archive_dir" ]]; then
     find "$archive_dir" -maxdepth 1 -type f -name '*.log' -mtime "+${retention_days}" -print0
   fi
 }
@@ -182,10 +203,18 @@ log_find_archived_log_files() {
 log_pid_file() {
   local root="$1"
   local filename="${2:-start-all.pids}"
-  local target="$root/logs/pids/$filename"
+  local target="$root/.local/run/pids/$filename"
+  local previous="$root/logs/pids/$filename"
   local legacy="$root/logs/$filename"
 
   log_init_layout "$root"
+  mkdir -p "$(dirname "$target")"
+  if [[ -f "$previous" && ! -e "$target" ]]; then
+    mv "$previous" "$target"
+  fi
+  if [[ -d "$root/logs/pids" ]]; then
+    rmdir "$root/logs/pids" 2>/dev/null || true
+  fi
   if [[ -L "$legacy" ]]; then
     rm -f "$legacy"
   elif [[ -f "$legacy" && ! -f "$target" ]]; then

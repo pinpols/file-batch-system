@@ -73,13 +73,11 @@ public class ConsoleLoginService {
     String tenantId = account.tenantId();
     long sessionVersion = sessionRegistry.nextSessionVersion(account.username(), tenantId);
     // 登录响应带 mustChangePassword 提示标记；该标记不限制控制台访问或业务写操作。
-    return jwtService
-        .issueToken(
-            account.username(),
-            tenantId,
-            new LinkedHashSet<>(account.authorities()),
-            sessionVersion)
-        .withMustChangePassword(account.mustChangePassword());
+    LinkedHashSet<String> authoritiesSnapshot = new LinkedHashSet<>(account.authorities());
+    ConsoleAuthTokenResponse authToken =
+        jwtService.issueToken(account.username(), tenantId, authoritiesSnapshot, sessionVersion);
+    boolean mustChangePassword = account.mustChangePassword();
+    return authToken.withMustChangePassword(mustChangePassword);
   }
 
   /** 从 request metadata 取客户端 IP(已按 trust-forwarded-headers 解析);非 Servlet 上下文回退空串。 */

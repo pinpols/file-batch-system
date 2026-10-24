@@ -15,6 +15,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import java.time.Instant;
@@ -23,6 +24,7 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.PriorityQueue;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
@@ -108,10 +110,7 @@ public class FilesystemObjectStore implements BatchObjectStore {
     try {
       OwnerOnlyFiles.createDirectories(target.getParent());
       temp = target.resolveSibling(target.getFileName() + TEMP_SUFFIX_MARKER + UUID.randomUUID());
-      try (FileChannel ch = FileChannel.open(
-          temp,
-          java.util.Set.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE),
-          OwnerOnlyFiles.attributes(temp, false))) {
+      try (FileChannel ch = openOwnerOnlyTempFile(temp)) {
         OwnerOnlyFiles.protectExisting(temp, false);
         ExactSizeInputStream exact =
             ExactSizeInputStream.exact(in, "filesystem", bucket, key, size);
@@ -151,10 +150,7 @@ public class FilesystemObjectStore implements BatchObjectStore {
       OwnerOnlyFiles.createDirectories(dst.getParent());
       temp = dst.resolveSibling(dst.getFileName() + TEMP_SUFFIX_MARKER + UUID.randomUUID());
       try (InputStream in = Files.newInputStream(src);
-          FileChannel ch = FileChannel.open(
-              temp,
-              java.util.Set.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE),
-              OwnerOnlyFiles.attributes(temp, false))) {
+          FileChannel ch = openOwnerOnlyTempFile(temp)) {
         OwnerOnlyFiles.protectExisting(temp, false);
         in.transferTo(Channels.newOutputStream(ch));
         // 与 put 路径保持同一持久性语义：发布前先把临时文件内容刷盘。
@@ -173,6 +169,13 @@ public class FilesystemObjectStore implements BatchObjectStore {
       cleanupTemp(temp);
       throw mapException("copy", bucket, srcKey, ex);
     }
+  }
+
+  private static FileChannel openOwnerOnlyTempFile(Path temp) throws IOException {
+    Set<StandardOpenOption> creationOptions =
+        Set.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+    FileAttribute<?>[] ownerOnlyAttributes = OwnerOnlyFiles.attributes(temp, false);
+    return FileChannel.open(temp, creationOptions, ownerOnlyAttributes);
   }
 
   @FunctionalInterface
@@ -281,8 +284,9 @@ public class FilesystemObjectStore implements BatchObjectStore {
         }
         long size = Files.size(p);
         FileTime mtime = Files.getLastModifiedTime(p);
-        smallestKeys.add(new ObjectSummary(
-            relKey, size, mtime.toInstant(), syntheticEtag(size, mtime.toInstant())));
+        Instant lastModified = mtime.toInstant();
+        String etag = syntheticEtag(size, lastModified);
+        smallestKeys.add(new ObjectSummary(relKey, size, lastModified, etag));
         if (smallestKeys.size() > maxKeys + 1) {
           smallestKeys.poll();
         }
@@ -314,7 +318,8 @@ public class FilesystemObjectStore implements BatchObjectStore {
     if (effectiveTtl.isNegative() || effectiveTtl.isZero()) {
       throw new ObjectStoreException("filesystem presign ttl must be positive");
     }
-    Instant expiresAt = Instant.now().plus(effectiveTtl);
+    Instant now = Instant.now();
+    Instant expiresAt = now.plus(effectiveTtl);
     String sig = FilesystemPresignTokens.sign(bucket, key, expiresAt, presignSecret);
     return FilesystemPresignTokens.buildUrl(
         downloadBaseUrl, bucket, key, expiresAt.getEpochSecond(), sig);
@@ -355,7 +360,9 @@ public class FilesystemObjectStore implements BatchObjectStore {
     if (bucket == null || bucket.isBlank()) {
       throw new ObjectStoreException("filesystem bucket must not be blank");
     }
-    if (bucket.contains("..") || bucket.contains("/") || bucket.contains("\\")) {
+    boolean bucketContainsPathTraversal =
+        bucket.contains("..") || bucket.contains("/") || bucket.contains("\\");
+    if (bucketContainsPathTraversal) {
       throw new ObjectStoreException("filesystem bucket name illegal: " + bucket);
     }
     Path bucketRoot = root.resolve(bucket).normalize();
@@ -366,7 +373,9 @@ public class FilesystemObjectStore implements BatchObjectStore {
   }
 
   private String relativeKey(Path bucketRoot, Path path) {
-    return bucketRoot.relativize(path).toString().replace('\\', '/');
+    Path relativePath = bucketRoot.relativize(path);
+    String relativeKey = relativePath.toString();
+    return relativeKey.replace('\\', '/');
   }
 
   private Path resolvePrefixScanRoot(Path bucketRoot, String safePrefix) {

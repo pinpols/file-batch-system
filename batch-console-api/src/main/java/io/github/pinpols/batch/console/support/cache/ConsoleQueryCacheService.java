@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.support.cache;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -13,6 +14,7 @@ import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.stereotype.Service;
 
 /**
@@ -56,6 +58,7 @@ public class ConsoleQueryCacheService {
 
   private final Counter readFailureCounter;
   private final Counter writeFailureCounter;
+  private final BatchRedisNamespace redisNamespace;
 
   /** Meta 枚举（纯静态数据）。 */
   public static final Duration META_ENUM_TTL = Duration.ofMinutes(30);
@@ -78,8 +81,11 @@ public class ConsoleQueryCacheService {
   private final StringRedisTemplate redisTemplate;
 
   public ConsoleQueryCacheService(
-      StringRedisTemplate redisTemplate, ObjectProvider<MeterRegistry> meterRegistryProvider) {
+      StringRedisTemplate redisTemplate,
+      ObjectProvider<MeterRegistry> meterRegistryProvider,
+      BatchRedisNamespace redisNamespace) {
     this.redisTemplate = redisTemplate;
+    this.redisNamespace = redisNamespace;
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
     this.readFailureCounter = registry == null // empty-check: allow - Sonar 需识别可选注册表为空分支
         ? null
@@ -127,7 +133,9 @@ public class ConsoleQueryCacheService {
     T result = loader.get();
     try {
       if (EmptyChecks.isNotNull(result)) {
-        redisTemplate.opsForValue().set(fullKey, JsonUtils.toJson(result), ttl);
+        ValueOperations<String, String> valueOperations = redisTemplate.opsForValue();
+        String resultJson = JsonUtils.toJson(result);
+        valueOperations.set(fullKey, resultJson, ttl);
       }
     } catch (Exception e) {
       increment(writeFailureCounter);
@@ -152,7 +160,8 @@ public class ConsoleQueryCacheService {
       return;
     }
     String pattern = PREFIX + keyPrefix + "*";
-    long deleted = RedisKeyUtils.scanAndDelete(redisTemplate, pattern, SCAN_BATCH_SIZE);
+    long deleted =
+        RedisKeyUtils.scanAndDelete(redisTemplate, pattern, SCAN_BATCH_SIZE, redisNamespace);
     if (deleted > 0) {
       log.debug("evicted {} cache keys with prefix: {}", deleted, logValue(keyPrefix));
     }
@@ -183,7 +192,8 @@ public class ConsoleQueryCacheService {
       return "_";
     }
     String trimmed = value.trim();
-    StringBuilder out = new StringBuilder(Math.min(trimmed.length(), MAX_KEY_SEGMENT_LENGTH));
+    int initialCapacity = Math.min(trimmed.length(), MAX_KEY_SEGMENT_LENGTH);
+    StringBuilder out = new StringBuilder(initialCapacity);
     boolean changed = false;
     for (int i = 0; i < trimmed.length() && out.length() < MAX_KEY_SEGMENT_LENGTH; i++) {
       char c = trimmed.charAt(i);
@@ -218,6 +228,11 @@ public class ConsoleQueryCacheService {
   }
 
   private static String logValue(String value) {
-    return value == null ? "" : value.replace('\r', '_').replace('\n', '_').replace('\t', '_');
+    if (EmptyChecks.isNull(value)) {
+      return "";
+    }
+    String withoutCarriageReturns = value.replace('\r', '_');
+    String withoutLineFeeds = withoutCarriageReturns.replace('\n', '_');
+    return withoutLineFeeds.replace('\t', '_');
   }
 }

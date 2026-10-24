@@ -2,13 +2,18 @@ package io.github.pinpols.batch.console.domain.job.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
 import io.github.pinpols.batch.console.domain.job.param.JobMonitoringPolicyUpsertParam;
 import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.util.Map;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
+import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
@@ -37,9 +42,31 @@ class JobMonitoringPolicyMapperIntegrationTest {
     dataSource.setUser(POSTGRES.getUsername());
     dataSource.setPassword(POSTGRES.getPassword());
     jdbcTemplate = new JdbcTemplate(dataSource);
-    jdbcTemplate.execute("create schema batch");
-    jdbcTemplate.execute("create table batch.job_definition (id bigint primary key)");
-    jdbcTemplate.execute("""
+    String createBatchSchemaSql = """
+        create schema batch
+    """;
+    jdbcTemplate.execute(createBatchSchemaSql);
+    String createJobDefinitionTableSql = """
+        create table batch.job_definition (id bigint primary key)
+    """;
+    jdbcTemplate.execute(createJobDefinitionTableSql);
+    String extendJobDefinitionTableSql = """
+        alter table batch.job_definition
+          add column tenant_id varchar(64), add column job_code varchar(128),
+          add column job_name varchar(256), add column depends_on_job_code varchar(128),
+          add column trigger_mode varchar(32), add column queue_code varchar(128),
+          add column worker_group varchar(128), add column schedule_expr varchar(256),
+          add column calendar_code varchar(128), add column window_code varchar(128),
+          add column retry_policy varchar(256), add column retry_max_count integer,
+          add column timeout_seconds integer, add column shard_strategy varchar(64),
+          add column execution_mode varchar(32), add column watermark_field varchar(128),
+          add column execution_handler varchar(256), add column param_schema text,
+          add column priority integer, add column enabled boolean, add column description text,
+          add column version integer not null default 1, add column updated_by varchar(64),
+          add column updated_at timestamptz not null default current_timestamp
+        """;
+    jdbcTemplate.execute(extendJobDefinitionTableSql);
+    String createMonitoringPolicyTableSql = """
         create table batch.job_monitoring_policy (
           tenant_id varchar(64) not null,
           job_definition_id bigint not null references batch.job_definition(id) on delete cascade,
@@ -58,12 +85,15 @@ class JobMonitoringPolicyMapperIntegrationTest {
           completion_deadline_updated_at timestamptz not null default current_timestamp,
           unique (tenant_id, job_definition_id)
         )
-        """);
-    jdbcTemplate.update("insert into batch.job_definition(id) values (1)");
+        """;
+    jdbcTemplate.execute(createMonitoringPolicyTableSql);
+    String insertJobDefinitionSql = """
+        insert into batch.job_definition(id) values (1)
+    """;
+    jdbcTemplate.update(insertJobDefinitionSql);
 
-    org.apache.ibatis.session.Configuration configuration =
-        new org.apache.ibatis.session.Configuration(
-            new Environment("job-monitoring-policy-it", new JdbcTransactionFactory(), dataSource));
+    Configuration configuration = new Configuration(
+        new Environment("job-monitoring-policy-it", new JdbcTransactionFactory(), dataSource));
     parseMapper(configuration, "mapper/CommonFragments.xml");
     parseMapper(configuration, "mapper/JobDefinitionMapper.xml");
     sqlSessionFactory = new SqlSessionFactoryBuilder().build(configuration);
@@ -92,8 +122,11 @@ class JobMonitoringPolicyMapperIntegrationTest {
           .completionDeadlineSeverity("WARN")
           .updatedBy("operator")
           .build());
-      jdbcTemplate.update(
-          "update batch.job_monitoring_policy set completion_deadline_updated_at = current_timestamp - interval '1 hour'");
+      String backdateCompletionDeadlineSql = """
+          update batch.job_monitoring_policy
+             set completion_deadline_updated_at = current_timestamp - interval '1 hour'
+          """;
+      jdbcTemplate.update(backdateCompletionDeadlineSql);
       OffsetDateTime originalBaseline = readCompletionBaseline();
 
       mapper.upsertJobMonitoringPolicy(JobMonitoringPolicyUpsertParam.builder()
@@ -141,21 +174,60 @@ class JobMonitoringPolicyMapperIntegrationTest {
           .updatedBy("operator")
           .build());
       assertThat(readCompletionBaseline()).isAfter(clockBaseline);
-      assertThat(jdbcTemplate.queryForObject(
-              "select dependency_completion_window_seconds from batch.job_monitoring_policy",
-              Integer.class))
-          .isEqualTo(1200);
+      String selectDependencyCompletionWindowSql = """
+          select dependency_completion_window_seconds from batch.job_monitoring_policy
+      """;
+      Integer selectedDependencyCompletionWindowSeconds =
+          jdbcTemplate.queryForObject(selectDependencyCompletionWindowSql, Integer.class);
+      assertThat(selectedDependencyCompletionWindowSeconds).isEqualTo(1200);
     }
   }
 
-  private static OffsetDateTime readCompletionBaseline() {
-    return jdbcTemplate.queryForObject(
-        "select completion_deadline_updated_at from batch.job_monitoring_policy",
-        OffsetDateTime.class);
+  @DisplayName("作业维护更新 SQL 持久化执行处理器、参数 schema 与优先级")
+  @Test
+  void shouldPersistEditableExecutionFields() {
+    String insertEditableJobDefinitionSql = """
+        insert into batch.job_definition (
+          id, tenant_id, job_code, execution_handler, param_schema, priority
+        ) values (2, 'tenant-a', 'JOB_EDIT', 'old-handler', '{"type":"string"}', 3)
+        """;
+    jdbcTemplate.update(insertEditableJobDefinitionSql);
+    JobDefinitionMaintenanceUpdateParam param = new JobDefinitionMaintenanceUpdateParam();
+    param.setTenantId("tenant-a");
+    param.setJobCode("JOB_EDIT");
+    param.setJobName("job edit");
+    param.setTriggerMode("MANUAL");
+    param.setExecutionHandler("new-handler");
+    param.setParamSchema("{\"type\":\"object\"}");
+    param.setPriority(7);
+    param.setEnabled(true);
+    param.setUpdatedBy("tester");
+
+    try (SqlSession session = sqlSessionFactory.openSession(true)) {
+      JobDefinitionMapper mapper = session.getMapper(JobDefinitionMapper.class);
+      assertThat(mapper.updateJobDefinitionMaintenance(param)).isEqualTo(1);
+    }
+
+    String selectEditableJobDefinitionSql = """
+        select execution_handler, param_schema, priority from batch.job_definition where id = 2
+    """;
+    Map<String, Object> persisted = jdbcTemplate.queryForMap(selectEditableJobDefinitionSql);
+    assertThat(persisted)
+        .containsEntry("execution_handler", "new-handler")
+        .containsEntry("priority", 7);
+    Map<String, Object> schema = JsonUtils.fromJson(
+        persisted.get("param_schema").toString(), new TypeReference<Map<String, Object>>() {});
+    assertThat(schema).isEqualTo(Map.of("type", "object"));
   }
 
-  private static void parseMapper(
-      org.apache.ibatis.session.Configuration configuration, String resource) throws Exception {
+  private static OffsetDateTime readCompletionBaseline() {
+    String selectCompletionDeadlineBaselineSql = """
+        select completion_deadline_updated_at from batch.job_monitoring_policy
+    """;
+    return jdbcTemplate.queryForObject(selectCompletionDeadlineBaselineSql, OffsetDateTime.class);
+  }
+
+  private static void parseMapper(Configuration configuration, String resource) throws Exception {
     try (var input = Resources.getResourceAsStream(resource)) {
       new XMLMapperBuilder(input, configuration, resource, configuration.getSqlFragments()).parse();
     }

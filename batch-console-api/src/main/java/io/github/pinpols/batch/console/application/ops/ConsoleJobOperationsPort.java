@@ -1,9 +1,17 @@
 package io.github.pinpols.batch.console.application.ops;
 
+import io.github.pinpols.batch.common.dto.ScheduledOccurrenceCatchUpResponse;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.console.shared.command.ApprovalSubmitContext;
 import io.github.pinpols.batch.console.shared.command.CompensationPayload;
 import io.github.pinpols.batch.console.shared.command.ConsoleLaunchCommand;
+import io.github.pinpols.batch.console.shared.command.ConsoleScheduledOccurrenceCatchUpCommand;
+import io.github.pinpols.batch.console.shared.command.ConsoleWorkflowLaunchCommand;
+import io.github.pinpols.batch.console.application.contract.request.WorkflowNodeReplayPreviewRequest;
+import io.github.pinpols.batch.console.application.contract.request.WorkflowRunReplayRequest;
+import io.github.pinpols.batch.console.application.contract.response.ConsoleWorkflowNodeReplayPreviewResponse;
+import io.github.pinpols.batch.console.application.contract.response.ConsoleWorkflowRunReplayPreviewResponse;
+import io.github.pinpols.batch.console.shared.command.CompensationCommandRequest;
 import java.time.LocalDate;
 import java.util.Map;
 
@@ -18,13 +26,29 @@ public interface ConsoleJobOperationsPort {
 
   String delegateLaunch(ConsoleLaunchCommand command);
 
+  String delegateWorkflowLaunch(ConsoleWorkflowLaunchCommand command);
+
+  ScheduledOccurrenceCatchUpResponse delegateScheduledOccurrenceCatchUp(
+      ConsoleScheduledOccurrenceCatchUpCommand command);
+
   String submitCompensation(CompensationPayload payload, String idempotencyKey);
+
+  ConsoleWorkflowNodeReplayPreviewResponse previewWorkflowNodeReplay(
+      WorkflowNodeReplayPreviewRequest request);
+
+  Long createPendingWorkflowNodeReplay(CompensationCommandRequest request);
+
+  ConsoleWorkflowRunReplayPreviewResponse previewWorkflowRunReplay(
+      WorkflowRunReplayRequest request);
+
+  Long createPendingWorkflowRunReplay(WorkflowRunReplayRequest request);
 
   String triggerRecovery(String tenantId, String uriTemplate, Long targetId, String idempotencyKey);
 
   String submitApproval(ApprovalSubmitContext context);
 
-  void requireApprovedApproval(String tenantId, String approvalNo);
+  void requireApprovedApproval(
+      String tenantId, String approvalNo, String actionType, Object executionPayload);
 
   boolean hasText(String text);
 

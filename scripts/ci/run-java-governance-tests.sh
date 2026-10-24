@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：Java 架构与约定检查。
+# 用法：在仓库根目录执行 bash scripts/ci/run-java-governance-tests.sh；参数与前置环境见下方说明及所属 README。
 # Java 架构/约定守卫统一入口：供本地 pre-push 与 PR/Full/Staging Gate 共用。
 set -euo pipefail
 

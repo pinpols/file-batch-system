@@ -1,5 +1,10 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
+import io.github.pinpols.batch.orchestrator.domain.param.WorkflowRunMarkRunningParam;
+
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -11,14 +16,16 @@ import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
-import io.github.pinpols.batch.orchestrator.application.scheduler.GlobalJobAdmission;
+import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionLifecycleService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
+import io.github.pinpols.batch.orchestrator.domain.param.MarkInstanceRunningParam;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -33,26 +40,27 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 @DisplayName("等待中分区的派发推进:限流与容量准入全部通过后才释放分区并写入派发事件")
+@ExtendWith(MockitoExtension.class)
 class WaitingPartitionDispatcherTest {
 
-  private final JobInstanceMapper jobInstanceMapper =
-      org.mockito.Mockito.mock(JobInstanceMapper.class);
-  private final WorkflowRunMapper workflowRunMapper =
-      org.mockito.Mockito.mock(WorkflowRunMapper.class);
-  private final TaskDispatchOutboxService taskDispatchOutboxService =
-      org.mockito.Mockito.mock(TaskDispatchOutboxService.class);
-  private final PartitionLifecycleService partitionLifecycleService =
-      org.mockito.Mockito.mock(PartitionLifecycleService.class);
-  private final TenantActionRateLimiter tenantActionRateLimiter =
-      org.mockito.Mockito.mock(TenantActionRateLimiter.class);
-  private final OrchestratorConfigCacheService configCacheService =
-      org.mockito.Mockito.mock(OrchestratorConfigCacheService.class);
-  private final FairShareGroupAdmissionGuard fairShareGroupAdmissionGuard =
-      org.mockito.Mockito.mock(FairShareGroupAdmissionGuard.class);
-  private final GlobalJobAdmission globalJobAdmission =
-      org.mockito.Mockito.mock(GlobalJobAdmission.class);
+  @Mock private JobInstanceMapper jobInstanceMapper;
+  @Mock private WorkflowRunMapper workflowRunMapper;
+  @Mock private TaskDispatchOutboxService taskDispatchOutboxService;
+  @Mock private PartitionLifecycleService partitionLifecycleService;
+  @Mock private TenantActionRateLimiter tenantActionRateLimiter;
+  @Mock private OrchestratorConfigCacheService configCacheService;
+  @Mock private ResourceScheduler resourceScheduler;
+  @Mock private JobPartitionMapper jobPartitionMapper;
+  @Mock private JobTaskMapper jobTaskMapper;
+  @Mock private JobStepInstanceMapper jobStepInstanceMapper;
+  @Mock private TriggerRequestMapper triggerRequestMapper;
+  @Mock private WorkflowNodeMapper workflowNodeMapper;
+  @Mock private WorkflowNodeRunMapper workflowNodeRunMapper;
 
   private WaitingPartitionDispatcher dispatcher;
 
@@ -60,14 +68,14 @@ class WaitingPartitionDispatcherTest {
   void setUp() {
     OrchestratorJobMappers jobMappers = new OrchestratorJobMappers(
         jobInstanceMapper,
-        org.mockito.Mockito.mock(JobPartitionMapper.class),
-        org.mockito.Mockito.mock(JobTaskMapper.class),
-        org.mockito.Mockito.mock(JobStepInstanceMapper.class),
-        org.mockito.Mockito.mock(TriggerRequestMapper.class));
+        jobPartitionMapper,
+        jobTaskMapper,
+        jobStepInstanceMapper,
+        triggerRequestMapper);
     OrchestratorWorkflowMappers workflowMappers = new OrchestratorWorkflowMappers(
-        org.mockito.Mockito.mock(WorkflowNodeMapper.class),
+        workflowNodeMapper,
         workflowRunMapper,
-        org.mockito.Mockito.mock(WorkflowNodeRunMapper.class));
+        workflowNodeRunMapper);
     dispatcher = new WaitingPartitionDispatcher(
         jobMappers,
         workflowMappers,
@@ -75,8 +83,7 @@ class WaitingPartitionDispatcherTest {
         partitionLifecycleService,
         tenantActionRateLimiter,
         configCacheService,
-        globalJobAdmission,
-        fairShareGroupAdmissionGuard);
+        resourceScheduler);
   }
 
   @Test
@@ -105,8 +112,7 @@ class WaitingPartitionDispatcherTest {
     workflowRun.setCurrentNodeCode("export");
     when(jobInstanceMapper.selectById("tenant-a", 7L)).thenReturn(instance);
     when(tenantActionRateLimiter.tryConsume(eq("tenant-a"), any())).thenReturn(true);
-    when(globalJobAdmission.hasCapacity()).thenReturn(true);
-    when(fairShareGroupAdmissionGuard.hasCapacity(any())).thenReturn(true);
+    when(resourceScheduler.schedule(any())).thenReturn(dispatchDecision());
     when(partitionLifecycleService.releaseForDispatch(any(), any(), any(), any()))
         .thenReturn(true);
     when(jobInstanceMapper.markRunning(any())).thenReturn(1);
@@ -115,16 +121,14 @@ class WaitingPartitionDispatcherTest {
     dispatcher.executeDispatch(partition(), task(), instance, dispatchDecision());
 
     verify(taskDispatchOutboxService).writeDispatchEvent(eq(instance), any(), any(), any(), any());
-    ArgumentCaptor<io.github.pinpols.batch.orchestrator.domain.param.MarkInstanceRunningParam>
-        runningParam = ArgumentCaptor.forClass(
-            io.github.pinpols.batch.orchestrator.domain.param.MarkInstanceRunningParam.class);
+    ArgumentCaptor<MarkInstanceRunningParam> runningParam =
+        ArgumentCaptor.forClass(MarkInstanceRunningParam.class);
     verify(jobInstanceMapper).markRunning(runningParam.capture());
-    org.junit.jupiter.api.Assertions.assertEquals(
-        "tenant-a", runningParam.getValue().getTenantId());
-    org.junit.jupiter.api.Assertions.assertEquals(1L, instance.getVersion());
+    assertThat(runningParam.getValue().getTenantId()).isEqualTo("tenant-a");
+    assertThat(instance.getVersion()).isEqualTo(1L);
     verify(workflowRunMapper)
         .markRunning(
-            eq("tenant-a"), eq(99L), eq(WorkflowRunStatus.RUNNING.code()), eq("export"), any());
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "tenant-a") && java.util.Objects.equals(parameters.id(), 99L) && java.util.Objects.equals(parameters.runStatus(), WorkflowRunStatus.RUNNING.code()) && java.util.Objects.equals(parameters.currentNodeCode(), "export")));
   }
 
   @Test
@@ -133,11 +137,9 @@ class WaitingPartitionDispatcherTest {
     JobInstanceEntity instance = waitingInstance();
     when(jobInstanceMapper.selectById("tenant-a", 7L)).thenReturn(instance);
     when(tenantActionRateLimiter.tryConsume(eq("tenant-a"), any())).thenReturn(true);
-    when(globalJobAdmission.hasCapacity()).thenReturn(true);
-    TenantQuotaPolicyEntity quotaPolicy = new TenantQuotaPolicyEntity(
-        1L, "tenant-a", "p", 0, 0, 0, 1, "settlement", 0, 0, "NONE", 1, true, "QUEUE_DEFER");
-    when(configCacheService.findEnabledQuotaPolicy("tenant-a")).thenReturn(quotaPolicy);
-    when(fairShareGroupAdmissionGuard.hasCapacity(quotaPolicy)).thenReturn(false);
+    ResourceSchedulingDecision blocked = new ResourceSchedulingDecision();
+    blocked.setReasonCode("FAIR_SHARE_GROUP_JOB_LIMIT");
+    when(resourceScheduler.schedule(any())).thenReturn(blocked);
 
     dispatcher.executeDispatch(partition(), task(), instance, dispatchDecision());
 
@@ -152,12 +154,12 @@ class WaitingPartitionDispatcherTest {
     JobInstanceEntity instance = waitingInstance();
     when(jobInstanceMapper.selectById("tenant-a", 7L)).thenReturn(instance);
     when(tenantActionRateLimiter.tryConsume(eq("tenant-a"), any())).thenReturn(true);
-    when(globalJobAdmission.hasCapacity()).thenReturn(false);
+    when(resourceScheduler.schedule(any())).thenReturn(new ResourceSchedulingDecision());
 
     dispatcher.executeDispatch(partition(), task(), instance, dispatchDecision());
 
     verify(partitionLifecycleService, never()).releaseForDispatch(any(), any(), any(), any());
-    verify(fairShareGroupAdmissionGuard, never()).hasCapacity(any());
+    verify(jobInstanceMapper, never()).markRunning(any());
   }
 
   @Test
@@ -169,13 +171,16 @@ class WaitingPartitionDispatcherTest {
     currentRunning.setVersion(1L);
     when(jobInstanceMapper.selectById("tenant-a", 7L)).thenReturn(currentRunning);
     when(tenantActionRateLimiter.tryConsume(eq("tenant-a"), any())).thenReturn(true);
-    when(fairShareGroupAdmissionGuard.hasCapacity(any())).thenReturn(true);
+    when(resourceScheduler.schedule(any())).thenReturn(dispatchDecision());
     when(partitionLifecycleService.releaseForDispatch(any(), any(), any(), any()))
         .thenReturn(true);
 
     dispatcher.executeDispatch(partition(), task(), staleWaitingSnapshot, dispatchDecision());
 
-    verify(globalJobAdmission, never()).hasCapacity();
+    ArgumentCaptor<ResourceSchedulingRequest> request =
+        ArgumentCaptor.forClass(ResourceSchedulingRequest.class);
+    verify(resourceScheduler).schedule(request.capture());
+    assertThat(request.getValue().isNewJobAdmission()).isFalse();
     verify(jobInstanceMapper, never()).markRunning(any());
     verify(taskDispatchOutboxService)
         .writeDispatchEvent(eq(currentRunning), any(), any(), any(), any());
@@ -193,6 +198,22 @@ class WaitingPartitionDispatcherTest {
 
     verify(tenantActionRateLimiter, never()).tryConsume(any(), any());
     verify(partitionLifecycleService, never()).releaseForDispatch(any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("父实例推进发生版本冲突时抛错,让释放与派发事件所在事务回滚")
+  void shouldFailTransaction_whenParentActivationLosesCas() {
+    JobInstanceEntity instance = waitingInstance();
+    when(jobInstanceMapper.selectById("tenant-a", 7L)).thenReturn(instance);
+    when(tenantActionRateLimiter.tryConsume(eq("tenant-a"), any())).thenReturn(true);
+    when(resourceScheduler.schedule(any())).thenReturn(dispatchDecision());
+    when(partitionLifecycleService.releaseForDispatch(any(), any(), any(), any()))
+        .thenReturn(true);
+
+    assertThatThrownBy(() ->
+        dispatcher.executeDispatch(partition(), task(), instance, dispatchDecision()))
+        .isInstanceOf(BizException.class);
+    verify(workflowRunMapper, never()).markRunning(org.mockito.ArgumentMatchers.any(WorkflowRunMarkRunningParam.class));
   }
 
   private static JobInstanceEntity waitingInstance() {
@@ -222,6 +243,7 @@ class WaitingPartitionDispatcherTest {
 
   private static ResourceSchedulingDecision dispatchDecision() {
     ResourceSchedulingDecision decision = new ResourceSchedulingDecision();
+    decision.setDispatchable(true);
     decision.setFairnessScore(12L);
     decision.setTenantWeight(1);
     decision.setQueueWeight(1);

@@ -16,6 +16,7 @@ import io.github.pinpols.batch.common.rls.RlsProperties;
 import io.github.pinpols.batch.common.rls.RlsStartupFailFastCheck;
 import io.github.pinpols.batch.common.tenant.routing.MyBatisTenantPlacementRepository;
 import javax.sql.DataSource;
+import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
 import org.springframework.boot.jdbc.autoconfigure.DataSourceProperties;
@@ -78,8 +79,7 @@ public final class WorkerDataSourceSupport {
     if (mappers.length > 0) {
       factoryBean.setMapperLocations(mappers);
     }
-    org.apache.ibatis.session.Configuration configuration =
-        new org.apache.ibatis.session.Configuration();
+    Configuration configuration = new Configuration();
     configuration.setMapUnderscoreToCamelCase(true);
     factoryBean.setConfiguration(configuration);
     return factoryBean.getObject();
@@ -95,9 +95,7 @@ public final class WorkerDataSourceSupport {
       BatchPgSessionProperties pgSessionProperties,
       BusinessRoutingProperties routingProperties,
       BusinessTenantPlacementMapper placementMapper,
-      Environment environment,
-      String defaultAppName) {
-    String appName = ApplicationNameProvider.resolve(environment, defaultAppName);
+      String appName) {
     return BusinessDataSourceBuilder.build(
         hikariConfig,
         properties,

@@ -31,11 +31,15 @@ public class BatchSchedulingAutoConfiguration {
   public TaskScheduler taskScheduler(
       BatchSchedulingProperties properties, ObjectProvider<ErrorHandler> errorHandlerProvider) {
     ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
-    scheduler.setPoolSize(Math.max(1, properties.getPoolSize()));
+    int requestedPoolSize = properties.getPoolSize();
+    int poolSize = Math.max(1, requestedPoolSize);
+    scheduler.setPoolSize(poolSize);
     scheduler.setThreadNamePrefix(properties.getThreadNamePrefix());
     scheduler.setPhase(properties.getPhase());
     scheduler.setWaitForTasksToCompleteOnShutdown(properties.isWaitForTasksToCompleteOnShutdown());
-    scheduler.setAwaitTerminationSeconds(Math.max(0, properties.getAwaitTerminationSeconds()));
+    int requestedShutdownWaitSeconds = properties.getAwaitTerminationSeconds();
+    int shutdownWaitSeconds = Math.max(0, requestedShutdownWaitSeconds);
+    scheduler.setAwaitTerminationSeconds(shutdownWaitSeconds);
     scheduler.setContinueExistingPeriodicTasksAfterShutdownPolicy(
         properties.isContinueExistingPeriodicTasksAfterShutdown());
     scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(
@@ -70,17 +74,24 @@ public class BatchSchedulingAutoConfiguration {
 
     private static boolean isRecoverable(Throwable t) {
       for (Throwable cur = t; cur != null; cur = cur.getCause()) {
-        if (cur instanceof DataAccessException
-            || cur instanceof RedisConnectionFailureException
-            || cur instanceof RedisSystemException
-            || cur instanceof ConnectException
-            || cur instanceof SocketTimeoutException
-            || cur instanceof UnknownHostException
-            || cur instanceof ClosedChannelException) {
+        if (isTransientDataStoreFailure(cur) || isTransientConnectionFailure(cur)) {
           return true;
         }
       }
       return false;
+    }
+
+    private static boolean isTransientDataStoreFailure(Throwable failure) {
+      return failure instanceof DataAccessException
+          || failure instanceof RedisConnectionFailureException
+          || failure instanceof RedisSystemException;
+    }
+
+    private static boolean isTransientConnectionFailure(Throwable failure) {
+      return failure instanceof ConnectException
+          || failure instanceof SocketTimeoutException
+          || failure instanceof UnknownHostException
+          || failure instanceof ClosedChannelException;
     }
 
     private static String rootCauseMessage(Throwable t) {

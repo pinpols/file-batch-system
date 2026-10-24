@@ -29,11 +29,17 @@ public record ConsoleOutboxHealthResponse(
     if (row == null) {
       return null;
     }
+    Long pendingEvents = longValue(row, "pendingEvents");
+    Long activeEvents = longValue(row, "activeEvents");
+    Long stalePublishingEvents = longValue(row, "stalePublishingEvents");
+    Object rawDeliveryStats = row.get("deliveryStats");
+    List<Map<String, Object>> deliveryStatRows = mapList(rawDeliveryStats);
+    List<DeliveryStat> deliveryStats = deliveryStatRows.stream().map(DeliveryStat::from).toList();
     return new ConsoleOutboxHealthResponse(
-        longValue(row, "pendingEvents"),
-        longValue(row, "activeEvents"),
-        longValue(row, "stalePublishingEvents"),
-        mapList(row.get("deliveryStats")).stream().map(DeliveryStat::from).toList(),
+        pendingEvents,
+        activeEvents,
+        stalePublishingEvents,
+        deliveryStats,
         booleanValue(row, "healthy"));
   }
 }

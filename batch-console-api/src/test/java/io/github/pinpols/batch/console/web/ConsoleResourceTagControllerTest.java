@@ -14,6 +14,7 @@ import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.rbac.entity.ResourceTagEntity;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleResourceTagService;
+import io.github.pinpols.batch.console.domain.rbac.service.ResourceTagUpsertInput;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
@@ -119,7 +120,15 @@ class ConsoleResourceTagControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-    verify(tagService).upsert("t1", "JOB", "job-001", "env", "prod", "operator-1");
+    ResourceTagUpsertInput tagInput = ResourceTagUpsertInput.builder()
+        .tenantId("t1")
+        .resourceType("JOB")
+        .resourceCode("job-001")
+        .tagKey("env")
+        .tagValue("prod")
+        .operator("operator-1")
+        .build();
+    verify(tagService).upsert(tagInput);
   }
 
   @Test

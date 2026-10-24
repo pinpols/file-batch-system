@@ -102,9 +102,14 @@ public class RedisTenantConfigExcelStore implements TenantConfigPackageExcelImpo
 
   @Override
   public String save(PackageExcelSession session) {
-    String token = UUID.randomUUID().toString().replace("-", "");
-    redisTemplate.execute(
-        SAVE, List.of(key(token)), encode(session), Long.toString(SESSION_TTL.toMillis()));
+    UUID tokenUuid = UUID.randomUUID();
+    String tokenUuidText = tokenUuid.toString();
+    String token = tokenUuidText.replace("-", "");
+    String redisKey = key(token);
+    List<String> keys = List.of(redisKey);
+    String payload = encode(session);
+    String ttlMillis = Long.toString(SESSION_TTL.toMillis());
+    redisTemplate.execute(SAVE, keys, payload, ttlMillis);
     return token;
   }
 
@@ -116,7 +121,9 @@ public class RedisTenantConfigExcelStore implements TenantConfigPackageExcelImpo
 
   @Override
   public PreviewSnapshot issuePreviewSnapshot(String uploadToken, long configurationRevision) {
-    String previewToken = UUID.randomUUID().toString().replace("-", "");
+    UUID previewTokenUuid = UUID.randomUUID();
+    String previewTokenUuidText = previewTokenUuid.toString();
+    String previewToken = previewTokenUuidText.replace("-", "");
     String stored = redisTemplate.execute(
         ISSUE_PREVIEW_SNAPSHOT,
         List.of(key(uploadToken)),
@@ -131,10 +138,12 @@ public class RedisTenantConfigExcelStore implements TenantConfigPackageExcelImpo
     if (tokenSeparator < 0) {
       throw new IllegalStateException("invalid config upload preview snapshot");
     }
-    return new PreviewSnapshot(
-        decode(stored.substring(0, tokenSeparator)),
-        stored.substring(tokenSeparator + 1, revisionSeparator),
-        Long.parseLong(stored.substring(revisionSeparator + 1)));
+    String encodedUploadToken = stored.substring(0, tokenSeparator);
+    PackageExcelSession session = decode(encodedUploadToken);
+    String storedPreviewToken = stored.substring(tokenSeparator + 1, revisionSeparator);
+    String revisionText = stored.substring(revisionSeparator + 1);
+    long storedRevision = Long.parseLong(revisionText);
+    return new PreviewSnapshot(session, storedPreviewToken, storedRevision);
   }
 
   @Override
@@ -148,13 +157,12 @@ public class RedisTenantConfigExcelStore implements TenantConfigPackageExcelImpo
     if (EmptyChecks.isNull(previewToken) || EmptyChecks.isNull(applyOwnerToken)) {
       return false;
     }
-    return Long.valueOf(1)
-        .equals(redisTemplate.execute(
-            CLAIM_APPLY,
-            List.of(key(uploadToken)),
-            previewToken,
-            applyOwnerToken,
-            Long.toString(APPLY_TTL.toMillis())));
+    Long successResult = Long.valueOf(1);
+    List<String> keys = List.of(key(uploadToken));
+    String applyTtlMillis = Long.toString(APPLY_TTL.toMillis());
+    Long claimResult =
+        redisTemplate.execute(CLAIM_APPLY, keys, previewToken, applyOwnerToken, applyTtlMillis);
+    return successResult.equals(claimResult);
   }
 
   @Override
@@ -164,9 +172,10 @@ public class RedisTenantConfigExcelStore implements TenantConfigPackageExcelImpo
     String owner = redisTemplate.<String, String>opsForHash().get(sessionKey, "apply_owner");
     String revision =
         redisTemplate.<String, String>opsForHash().get(sessionKey, "preview_config_revision");
-    if (!"APPLYING".equals(state)
+    boolean applyOwnershipIsInvalid = !"APPLYING".equals(state)
         || !applyOwnerToken.equals(owner)
-        || EmptyChecks.isNull(revision)) {
+        || EmptyChecks.isNull(revision);
+    if (applyOwnershipIsInvalid) {
       throw new IllegalStateException("config upload apply claim lost its preview revision");
     }
     return Long.parseLong(revision);
@@ -182,15 +191,20 @@ public class RedisTenantConfigExcelStore implements TenantConfigPackageExcelImpo
     if (EmptyChecks.isNull(expectedPreviewToken) || EmptyChecks.isNull(replacementPreviewToken)) {
       return false;
     }
-    return Long.valueOf(1)
-        .equals(redisTemplate.execute(
-            REPLACE_SESSION,
-            List.of(key(uploadToken)),
-            expectedPreviewToken,
-            encode(session),
-            replacementPreviewToken,
-            Long.toString(configurationRevision),
-            Long.toString(SESSION_TTL.toMillis())));
+    Long successResult = Long.valueOf(1);
+    List<String> keys = List.of(key(uploadToken));
+    String encodedSession = encode(session);
+    String configurationRevisionText = Long.toString(configurationRevision);
+    String sessionTtlMillis = Long.toString(SESSION_TTL.toMillis());
+    Long replaceResult = redisTemplate.execute(
+        REPLACE_SESSION,
+        keys,
+        expectedPreviewToken,
+        encodedSession,
+        replacementPreviewToken,
+        configurationRevisionText,
+        sessionTtlMillis);
+    return successResult.equals(replaceResult);
   }
 
   @Override
@@ -200,11 +214,9 @@ public class RedisTenantConfigExcelStore implements TenantConfigPackageExcelImpo
 
   @Override
   public void releaseApply(String uploadToken, String applyOwnerToken) {
-    redisTemplate.execute(
-        RELEASE_APPLY,
-        List.of(key(uploadToken)),
-        applyOwnerToken,
-        Long.toString(SESSION_TTL.toMillis()));
+    List<String> keys = List.of(key(uploadToken));
+    String sessionTtlMillis = Long.toString(SESSION_TTL.toMillis());
+    redisTemplate.execute(RELEASE_APPLY, keys, applyOwnerToken, sessionTtlMillis);
   }
 
   @Override
@@ -230,7 +242,8 @@ public class RedisTenantConfigExcelStore implements TenantConfigPackageExcelImpo
         throw new IllegalStateException("config upload session payload is not encrypted");
       }
       byte[] json = cryptoService.decrypt(ciphertext);
-      return objectMapper.readValue(new String(json, StandardCharsets.UTF_8), SESSION_TYPE);
+      String sessionJson = new String(json, StandardCharsets.UTF_8);
+      return objectMapper.readValue(sessionJson, SESSION_TYPE);
     } catch (Exception exception) {
       throw new IllegalStateException(
           "failed to decode encrypted config upload session", exception);

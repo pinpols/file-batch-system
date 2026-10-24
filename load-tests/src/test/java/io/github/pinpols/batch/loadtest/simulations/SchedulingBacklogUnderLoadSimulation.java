@@ -59,7 +59,7 @@ public class SchedulingBacklogUnderLoadSimulation extends Simulation {
       """
             {
               "tenantId": "%s",
-              "jobCode": "%s",
+              "workflowDefinitionId": %s,
               "bizDate": "%s",
               "triggerType": "API",
               "params": %s
@@ -67,7 +67,7 @@ public class SchedulingBacklogUnderLoadSimulation extends Simulation {
             """
           .formatted(
               GatlingConfig.TENANT_ID,
-              GatlingConfig.JOB_CODE,
+              GatlingConfig.requiredWorkflowDefinitionId(),
               GatlingConfig.BIZ_DATE,
               GatlingConfig.LAUNCH_PARAMS_JSON);
 

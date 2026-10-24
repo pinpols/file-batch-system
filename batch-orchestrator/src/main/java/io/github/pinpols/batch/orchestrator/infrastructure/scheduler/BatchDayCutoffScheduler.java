@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
@@ -68,11 +69,12 @@ public class BatchDayCutoffScheduler {
     }
 
     for (BatchDayInstanceEntity candidate : candidates) {
-      if (candidate == null
+      boolean cutoffCandidateIncomplete = EmptyChecks.isNull(candidate)
           || candidate.tenantId() == null
           || candidate.calendarCode() == null
           || candidate.bizDate() == null
-          || Boolean.TRUE.equals(candidate.frozen())) {
+          || Boolean.TRUE.equals(candidate.frozen());
+      if (cutoffCandidateIncomplete) {
         continue;
       }
       String tenantId = candidate.tenantId();
@@ -81,22 +83,25 @@ public class BatchDayCutoffScheduler {
       }
       // RLS Phase B：resolveCutoffAt 走 config cache（可能回源 DB）+ applyCutoff 在 short tx 内写
       // batch_day_instance + audit log；统一绑租户后再处理，保证两段都在 holder 作用域内。
-      RlsTenantContextHolder.runWithTenant(tenantId, () -> {
-        Instant cutoffAt = candidate.cutoffAt();
-        if (cutoffAt == null) {
-          cutoffAt =
-              resolveCutoffAt(candidate.tenantId(), candidate.calendarCode(), candidate.bizDate());
-        }
-        if (cutoffAt == null) {
-          return;
-        }
-        if (!now.isBefore(cutoffAt)) {
-          Instant cutoffAtFinal = cutoffAt;
-          // 每个候选行一笔 short tx：CAS 更新 + 审计日志同事务原子。
-          TransactionTemplate tx = new TransactionTemplate(transactionManager);
-          tx.executeWithoutResult(status -> applyCutoff(candidate, cutoffAtFinal, now));
-        }
-      });
+      RlsTenantContextHolder.runWithTenant(
+          tenantId, () -> advanceCandidateInTenant(candidate, now));
+    }
+  }
+
+  private void advanceCandidateInTenant(BatchDayInstanceEntity candidate, Instant now) {
+    Instant cutoffAt = candidate.cutoffAt();
+    if (EmptyChecks.isNull(cutoffAt)) {
+      cutoffAt =
+          resolveCutoffAt(candidate.tenantId(), candidate.calendarCode(), candidate.bizDate());
+    }
+    if (EmptyChecks.isNull(cutoffAt)) {
+      return;
+    }
+    if (!now.isBefore(cutoffAt)) {
+      Instant cutoffAtFinal = cutoffAt;
+      // 每个候选行一笔 short tx：CAS 更新 + 审计日志同事务原子。
+      TransactionTemplate tx = new TransactionTemplate(transactionManager);
+      tx.executeWithoutResult(status -> applyCutoff(candidate, cutoffAtFinal, now));
     }
   }
 
@@ -150,7 +155,8 @@ public class BatchDayCutoffScheduler {
     extra.put("operatorType", AuditLogConstants.OPERATOR_TYPE_SYSTEM);
     extra.put("cutoffAt", to.cutoffAt() == null ? null : to.cutoffAt().toString());
     extra.put("at", now.toString());
-    logEntity.setExtraJson(JsonUtils.toJson(extra));
+    String extraJson = JsonUtils.toJson(extra);
+    logEntity.setExtraJson(extraJson);
     jobExecutionLogMapper.insert(logEntity);
   }
 }

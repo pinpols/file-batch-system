@@ -76,16 +76,17 @@ public class BatchShedLockAutoConfiguration {
   public LockProvider redisLockProvider(
       RedisConnectionFactory connectionFactory,
       BatchShedLockProperties properties,
+      KafkaNamespaceProperties deploymentNamespace,
       Environment environment,
       ObjectProvider<MeterRegistry> meterRegistryProvider) {
     // 未显式配置 batch.shedlock.redis.key-prefix-env 时,用 spring.application.name 做 env prefix
     // (每服务一份命名空间);两者都缺省时回退 default。
     // 本类经 auto-configuration imports 装配,测试切片可能不做组件扫描,故用静态 resolve 而非注入
     // ApplicationNameProvider bean。
-    String configuredEnv = properties.getRedis().getKeyPrefixEnv();
-    String environmentName = Texts.hasText(configuredEnv)
-        ? configuredEnv
-        : ApplicationNameProvider.resolve(environment, "default");
+    String environmentName = redisEnvironmentName(
+        properties.getRedis().getKeyPrefixEnv(),
+        ApplicationNameProvider.resolve(environment, "default"),
+        deploymentNamespace.getNamespace());
     LockProvider provider =
         ShedLockProviderFactory.redisLockProvider(connectionFactory, environmentName);
     log.info(
@@ -93,6 +94,17 @@ public class BatchShedLockAutoConfiguration {
         provider.getClass().getSimpleName(),
         environmentName);
     return observe(provider, "redis", meterRegistryProvider);
+  }
+
+  static String redisEnvironmentName(
+      String configuredEnvironment, String applicationName, String deploymentNamespace) {
+    String serviceEnvironment =
+        Texts.hasText(configuredEnvironment) ? configuredEnvironment.trim() : applicationName;
+    if (!Texts.hasText(deploymentNamespace)) {
+      return Texts.hasText(serviceEnvironment) ? serviceEnvironment : "default";
+    }
+    String namespace = deploymentNamespace.trim();
+    return namespace + ":" + (Texts.hasText(serviceEnvironment) ? serviceEnvironment : "default");
   }
 
   // 不加 @ConditionalOnBean(LockProvider.class)：condition 评估发生在 bean 注册前，

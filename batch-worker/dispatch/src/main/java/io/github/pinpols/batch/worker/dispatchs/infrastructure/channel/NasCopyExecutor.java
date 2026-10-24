@@ -38,7 +38,9 @@ final class NasCopyExecutor {
       TimeUnit.SECONDS,
       new SynchronousQueue<>(),
       runnable -> {
-        Thread thread = new Thread(runnable, "nas-copy-" + THREAD_INDEX.incrementAndGet());
+        long threadNumber = THREAD_INDEX.incrementAndGet();
+        String threadName = "nas-copy-" + threadNumber;
+        Thread thread = new Thread(runnable, threadName);
         thread.setDaemon(true);
         return thread;
       },
@@ -92,7 +94,8 @@ final class NasCopyExecutor {
       if (cause instanceof UncheckedIOException uncheckedIOException) {
         throw uncheckedIOException.getCause();
       }
-      throw new IOException("NAS Files.copy failed", EmptyChecks.isNull(cause) ? exception : cause);
+      Throwable failureCause = EmptyChecks.isNull(cause) ? exception : cause;
+      throw new IOException("NAS Files.copy failed", failureCause);
     }
   }
 

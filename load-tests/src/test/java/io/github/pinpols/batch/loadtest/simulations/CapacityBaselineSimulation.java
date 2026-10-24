@@ -42,7 +42,7 @@ import static io.gatling.javaapi.http.HttpDsl.*;
  * <p>Run:
  * <pre>
  *   mvn gatling:test -Dsimulation=CapacityBaselineSimulation \
- *       -DjobCode=E2E_IMPORT_LOAD -DtenantId=t1
+ *       -DworkflowDefinitionId=123 -DtenantId=t1
  * </pre>
  */
 public class CapacityBaselineSimulation extends Simulation {
@@ -79,13 +79,13 @@ public class CapacityBaselineSimulation extends Simulation {
     private final String launchBody = """
             {
               "tenantId": "%s",
-              "jobCode": "%s",
+              "workflowDefinitionId": %s,
               "bizDate": "%s",
               "triggerType": "API",
               "params": {}
             }
             """
-                .formatted(GatlingConfig.TENANT_ID, GatlingConfig.JOB_CODE, GatlingConfig.BIZ_DATE);
+                .formatted(GatlingConfig.TENANT_ID, GatlingConfig.requiredWorkflowDefinitionId(), GatlingConfig.BIZ_DATE);
 
     // ── Write scenario (30 %) — job launch ─────────────────────────────────────
 

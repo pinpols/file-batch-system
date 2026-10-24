@@ -55,7 +55,9 @@ public class ObjectStorageBackendGuard implements ApplicationRunner, Ordered {
   }
 
   StatefulBackendGuard.DesiredBackend desiredBackend() {
-    String backend = backendProperties.getBackend().trim().toLowerCase();
+    String configuredBackend = backendProperties.getBackend();
+    String trimmedBackend = configuredBackend.trim();
+    String backend = trimmedBackend.toLowerCase();
     String identity =
         switch (backend) {
           case ObjectStorageBackends.S3 ->

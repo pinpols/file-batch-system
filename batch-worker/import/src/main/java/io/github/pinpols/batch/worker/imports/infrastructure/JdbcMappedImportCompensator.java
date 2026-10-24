@@ -65,8 +65,9 @@ public class JdbcMappedImportCompensator implements PipelineCompensator {
     this.businessDataSource = importBusinessDataSource;
     this.jdbcTemplate = new JdbcTemplate(importBusinessDataSource);
     this.objectMapper = objectMapper;
-    this.txTemplate =
-        new TransactionTemplate(new DataSourceTransactionManager(importBusinessDataSource));
+    DataSourceTransactionManager transactionManager =
+        new DataSourceTransactionManager(importBusinessDataSource);
+    this.txTemplate = new TransactionTemplate(transactionManager);
   }
 
   @Override
@@ -162,7 +163,9 @@ public class JdbcMappedImportCompensator implements PipelineCompensator {
     // spec.schema() 已是模板声明的目标 schema;LOAD 阶段 validateIdentifiers 已按 securityProperties 白名单校验过。
     // 补偿阶段无 securityProperties，这里复用同一 schema 做 requireInAllowlist 的形态 + 一致性回退
     // （仅允许删与 LOAD 同一 schema，不放大范围）。
-    return List.of(spec.schema().trim().toLowerCase(Locale.ROOT));
+    String trimmedSchema = spec.schema().trim();
+    String normalizedSchema = trimmedSchema.toLowerCase(Locale.ROOT);
+    return List.of(normalizedSchema);
   }
 
   /**
@@ -181,10 +184,12 @@ public class JdbcMappedImportCompensator implements PipelineCompensator {
       }
     }
     if (batchNoColumn != null) {
-      return new RunScope(batchNoColumn, resolveBatchNo(attributes));
+      String runValue = resolveBatchNo(attributes);
+      return new RunScope(batchNoColumn, runValue);
     }
     if (traceIdColumn != null) {
-      return new RunScope(traceIdColumn, resolveTraceId(attributes));
+      String runValue = resolveTraceId(attributes);
+      return new RunScope(traceIdColumn, runValue);
     }
     return null;
   }

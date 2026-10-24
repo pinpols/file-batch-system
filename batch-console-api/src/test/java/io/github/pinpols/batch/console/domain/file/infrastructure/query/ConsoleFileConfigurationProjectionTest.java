@@ -17,9 +17,11 @@ import io.github.pinpols.batch.console.domain.file.mapper.FilePipelineStepRunMap
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.query.FilePipelineStepRunQuery;
 import io.github.pinpols.batch.console.domain.file.support.ConsoleFileQueryMappers;
+import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
+import io.github.pinpols.batch.console.domain.file.view.FilePipelineStepRunQueryView;
+import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -51,12 +53,20 @@ class ConsoleFileConfigurationProjectionTest {
   @Test
   @DisplayName("渠道和模板查询使用具名投影映射并保留响应标识")
   void shouldProjectChannelAndTemplateRows() {
-    when(channelMapper.selectByQuery(anyString(), any(), any(), any(), any()))
-        .thenReturn(List.of(Map.of("id", 11L, "tenant_id", "tenant-a", "channel_code", "SFTP")));
+    when(channelMapper.selectByQuery(org.mockito.ArgumentMatchers.argThat(
+            parameters -> parameters != null && parameters.tenantId() != null)))
+        .thenReturn(List.of(FileChannelConfigQueryView.builder()
+            .id(11L)
+            .tenantId("tenant-a")
+            .channelCode("SFTP")
+            .build()));
     when(channelMapper.countByQuery(anyString(), any(), any(), any())).thenReturn(1L);
     when(templateMapper.selectByQuery(any()))
-        .thenReturn(
-            List.of(Map.of("id", 12L, "tenant_id", "tenant-a", "template_code", "IMPORT_CSV")));
+        .thenReturn(List.of(FileTemplateConfigQueryView.builder()
+            .id(12L)
+            .tenantId("tenant-a")
+            .templateCode("IMPORT_CSV")
+            .build()));
     when(templateMapper.countByQuery(any())).thenReturn(1L);
 
     var channels = service.fileChannels(new FileChannelQueryRequest());
@@ -73,13 +83,14 @@ class ConsoleFileConfigurationProjectionTest {
   @DisplayName("文件流水线步骤摘要在响应中递归遮罩凭据字段")
   void shouldMaskCredentialsInPipelineStepSummaries() {
     when(stepRunMapper.selectByQuery(any(FilePipelineStepRunQuery.class)))
-        .thenReturn(List.of(Map.of(
-            "id", 1L,
-            "pipeline_instance_id", 12L,
-            "step_code", "LOAD",
-            "stage_code", "LOAD",
-            "input_summary", "{\"source\":\"upload.csv\",\"auth\":{\"clientSecret\":\"raw\"}}",
-            "output_summary", "{\"rows\":5,\"auth\":{\"password\":\"raw\"}}")));
+        .thenReturn(List.of(FilePipelineStepRunQueryView.builder()
+            .id(1L)
+            .pipelineInstanceId(12L)
+            .stepCode("LOAD")
+            .stageCode("LOAD")
+            .inputSummary("{\"source\":\"upload.csv\",\"auth\":{\"clientSecret\":\"raw\"}}")
+            .outputSummary("{\"rows\":5,\"auth\":{\"password\":\"raw\"}}")
+            .build()));
     when(stepRunMapper.countByQuery(any(FilePipelineStepRunQuery.class))).thenReturn(1L);
 
     FilePipelineStepQueryRequest request = new FilePipelineStepQueryRequest();

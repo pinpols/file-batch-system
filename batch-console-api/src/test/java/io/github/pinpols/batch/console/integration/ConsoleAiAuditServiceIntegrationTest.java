@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiTurnStartInput;
 import io.github.pinpols.batch.console.domain.audit.command.AiAuditCommand;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAuditLogEntity;
 import io.github.pinpols.batch.console.domain.audit.infrastructure.ai.ConsoleAiConversationService;
@@ -18,6 +19,7 @@ import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiConversation
 import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiAuditLogQuery;
 import io.github.pinpols.batch.console.domain.audit.support.ConsoleAiAuditService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import java.math.BigDecimal;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -188,7 +190,13 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
     String tenantId = "ai-conversation-it-" + BatchDateTimeSupport.utcEpochMillis();
     ConsoleAiConversationService.StartedTurn started = null;
     try {
-      started = conversationService.beginTurn(tenantId, "operator-a", null, "v1", "查询失败的作业实例");
+      ConsoleAiTurnStartInput turnInput = ConsoleAiTurnStartInput.builder()
+          .tenantId(tenantId)
+          .ownerUserId("operator-a")
+          .contextVersion("v1")
+          .prompt("查询失败的作业实例")
+          .build();
+      started = conversationService.beginTurn(turnInput);
       conversationService.completeTurn(ConsoleAiConversationService.TurnCompletion.builder()
           .tenantId(tenantId)
           .conversationId(started.conversationId())
@@ -198,17 +206,18 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
           .modelName("test-provider:test-model")
           .promptTokens(20)
           .completionTokens(10)
-          .estimatedCostUsd(new java.math.BigDecimal("0.00100000"))
+          .estimatedCostUsd(new BigDecimal("0.00100000"))
           .build());
 
       String conversationId = started.conversationId();
       String encryptedPrompt = new TransactionTemplate(transactionManager).execute(status -> {
         conversationMapper.setTenantContext(tenantId);
+        String encryptedPromptSql = """
+            SELECT prompt_text FROM batch.console_ai_turn
+            WHERE tenant_id = ? AND conversation_id = ?
+            """;
         return jdbcTemplate.queryForObject(
-            "SELECT prompt_text FROM batch.console_ai_turn WHERE tenant_id = ? AND conversation_id = ?",
-            String.class,
-            tenantId,
-            conversationId);
+            encryptedPromptSql, String.class, tenantId, conversationId);
       });
       assertThat(encryptedPrompt).isNotEqualTo("查询失败的作业实例");
 

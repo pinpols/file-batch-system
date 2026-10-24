@@ -10,8 +10,8 @@ import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
@@ -38,10 +38,10 @@ class DispatchStepExecutionAdapterTest {
   private DispatchStageExecutor stageExecutor;
 
   @Mock
-  private PlatformFileRecordRepository fileRecords;
+  private DispatchReplayCapabilityResolver replayCapabilityResolver;
 
   @Mock
-  private PlatformPipelineDefinitionRepository pipelineDefinitions;
+  private PlatformFileRecordRepository fileRecords;
 
   @Mock
   private PlatformPipelineRunRepository pipelineRuns;
@@ -52,8 +52,8 @@ class DispatchStepExecutionAdapterTest {
   void setUp() {
     adapter = new DispatchStepExecutionAdapter(
         stageExecutor,
+        replayCapabilityResolver,
         new ObjectMapper(),
-        pipelineDefinitions,
         pipelineRuns,
         fileRecords,
         emptyProvider(),
@@ -97,6 +97,17 @@ class DispatchStepExecutionAdapterTest {
 
     assertThat(adapter.executeStages(context)).isSameAs(expected);
     verify(stageExecutor).execute(context);
+  }
+
+  @Test
+  @DisplayName("重放能力解析委派给精确配置解析器")
+  void shouldResolveReplayCapabilityFromFrozenDispatchConfiguration() {
+    StepExecutionRequest request = request(Map.of());
+    ReplayCapabilityDeclaration declaration = DispatchReplayCapability.declaration();
+    when(replayCapabilityResolver.resolve(request)).thenReturn(declaration);
+
+    assertThat(adapter.resolveReplayCapability(request)).isSameAs(declaration);
+    verify(replayCapabilityResolver).resolve(request);
   }
 
   @Test

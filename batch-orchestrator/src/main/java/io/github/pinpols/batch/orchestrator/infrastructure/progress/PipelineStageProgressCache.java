@@ -57,7 +57,8 @@ public class PipelineStageProgressCache {
         .map(item -> {
           TaskKey key =
               new TaskKey(tenantId, item.pipelineInstanceId(), item.taskId(), item.stageCode());
-          taskStore.put(key, new Snapshot(item.rowsProcessed(), item.totalRowsHint(), heartbeatAt));
+          Snapshot snapshot = new Snapshot(item.rowsProcessed(), item.totalRowsHint(), heartbeatAt);
+          taskStore.put(key, snapshot);
           taskOwners.put(key, workerKey);
           return key;
         })

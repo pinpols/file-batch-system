@@ -15,12 +15,19 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleApprovalApplicationService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.util.List;
+import java.util.Set;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -36,6 +43,9 @@ class ConsoleApprovalControllerTest {
 
   @BeforeEach
   void setUp() {
+    SecurityContextHolder.getContext()
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            new ConsolePrincipal("authenticated-user", "t1", Set.of("ROLE_ADMIN")), "", List.of()));
     ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
     ConsoleApiExceptionHandler exceptionHandler =
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
@@ -48,8 +58,7 @@ class ConsoleApprovalControllerTest {
 
     // R4-P0-2：Controller 现在依赖 ConsoleTenantGuard 强校验请求体 tenantId。
     // 测试用 mock guard，resolveTenant 简单返回入参（与原 body 直传等价）。
-    io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard tenantGuard =
-        mock(io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard.class);
+    ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
     when(tenantGuard.resolveTenant(any())).thenAnswer(inv -> inv.getArgument(0));
 
     mockMvc = MockMvcBuilders.standaloneSetup(
@@ -57,6 +66,11 @@ class ConsoleApprovalControllerTest {
         .setControllerAdvice(exceptionHandler)
         .setValidator(validator)
         .build();
+  }
+
+  @AfterEach
+  void clearSecurityContext() {
+    SecurityContextHolder.clearContext();
   }
 
   @Test
@@ -75,7 +89,7 @@ class ConsoleApprovalControllerTest {
   }
 
   @Test
-  @DisplayName("审批成功:通过后返回成功响应, 并以租户与审批人参数调用服务")
+  @DisplayName("审批成功:操作人取认证主体用户名而不信任请求体")
   void shouldApproveAndReturnCommonResponseOnSuccess() throws Exception {
     when(approvalApplicationService.approve(anyString(), anyString(), anyString(), anyString()))
         .thenReturn("OK");
@@ -91,7 +105,7 @@ class ConsoleApprovalControllerTest {
         .andExpect(jsonPath("$.code").value("SUCCESS"))
         .andExpect(jsonPath("$.data").value("OK"));
 
-    verify(approvalApplicationService).approve("t1", "appr-001", "u1", "ok");
+    verify(approvalApplicationService).approve("t1", "appr-001", "authenticated-user", "ok");
   }
 
   @Test

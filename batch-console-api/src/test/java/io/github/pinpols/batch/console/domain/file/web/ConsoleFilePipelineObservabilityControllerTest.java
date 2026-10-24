@@ -65,7 +65,6 @@ class ConsoleFilePipelineObservabilityControllerTest {
             List.of(new ConsoleFilePipelineResponse(
                 1L,
                 "t1",
-                1001L,
                 "file-001",
                 "IMPORT",
                 2001L,
@@ -94,7 +93,6 @@ class ConsoleFilePipelineObservabilityControllerTest {
         .thenReturn(new ConsoleFilePipelineResponse(
             1L,
             "t1",
-            1001L,
             "file-001",
             "IMPORT",
             2001L,

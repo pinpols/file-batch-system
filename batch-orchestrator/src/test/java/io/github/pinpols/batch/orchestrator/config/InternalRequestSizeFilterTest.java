@@ -8,6 +8,7 @@ import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
@@ -46,8 +47,7 @@ class InternalRequestSizeFilterTest {
     filter(1024).doFilter(post("/internal/tasks/report", 4096), res, chain);
 
     assertThat(res.getStatus()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE.value());
-    verify(chain, never())
-        .doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    verify(chain, never()).doFilter(ArgumentMatchers.any(), ArgumentMatchers.any());
   }
 
   @Test
@@ -58,8 +58,7 @@ class InternalRequestSizeFilterTest {
 
     filter(1024).doFilter(req, res, chain);
 
-    verify(chain)
-        .doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(res));
+    verify(chain).doFilter(ArgumentMatchers.any(), ArgumentMatchers.eq(res));
   }
 
   @Test
@@ -82,8 +81,7 @@ class InternalRequestSizeFilterTest {
     filter(1024).doFilter(req, res, chain);
 
     assertThat(res.getStatus()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE.value());
-    verify(chain, never())
-        .doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    verify(chain, never()).doFilter(ArgumentMatchers.any(), ArgumentMatchers.any());
   }
 
   @Test

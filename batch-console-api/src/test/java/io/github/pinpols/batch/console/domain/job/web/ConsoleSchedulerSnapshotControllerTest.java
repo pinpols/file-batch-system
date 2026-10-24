@@ -15,6 +15,7 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotResponse;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -54,15 +55,43 @@ class ConsoleSchedulerSnapshotControllerTest {
   @Test
   @DisplayName("查询实时快照返回成功, 回包携带租户与快照内容")
   void shouldReturn200WhenGetLiveSnapshot() throws Exception {
+    Instant windowStartedAt = Instant.parse("2026-10-21T00:00:00Z");
+    Instant windowExpiresAt = Instant.parse("2026-10-22T00:00:00Z");
+    ConsoleSchedulerSnapshotResponse.PolicySnapshot policy =
+        new ConsoleSchedulerSnapshotResponse.PolicySnapshot(
+            "settlement-policy",
+            "settlement",
+            2,
+            3,
+            1,
+            4,
+            "SLIDING",
+            1,
+            2,
+            windowStartedAt,
+            windowExpiresAt,
+            8,
+            4,
+            6,
+            7,
+            4,
+            14);
     when(orchestratorProxyService.schedulerSnapshot(anyString()))
         .thenReturn(new ConsoleSchedulerSnapshotResponse(
-            BatchDateTimeSupport.utcNow(), "t1", List.of(), List.of(), List.of()));
+            BatchDateTimeSupport.utcNow(), "t1", List.of(policy), List.of(), List.of()));
 
     mockMvc
         .perform(get("/api/console/scheduler/snapshot").param("tenantId", "t1"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.tenantId").value("t1"));
+        .andExpect(jsonPath("$.data.tenantId").value("t1"))
+        .andExpect(jsonPath("$.data.policies[0].activeJobs").value(4))
+        .andExpect(jsonPath("$.data.policies[0].activePartitions").value(6))
+        .andExpect(jsonPath("$.data.policies[0].groupActiveJobs").value(7))
+        .andExpect(jsonPath("$.data.policies[0].effectiveTenantJobCap").value(4))
+        .andExpect(jsonPath("$.data.policies[0].effectiveTenantPartitionCap").value(14))
+        .andExpect(
+            jsonPath("$.data.policies[0].quotaResetWindowExpiresAt").value("2026-10-22T00:00:00Z"));
   }
 
   @Test

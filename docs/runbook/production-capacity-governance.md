@@ -293,7 +293,7 @@ Kafka 增长主要由 topic retention、segment、消费 lag 和副本因子决�
 
 关联 runbook：
 
-- [对象存储生命周期策略](./minio-lifecycle-policy.md)
+- [对象存储生命周期策略](object-storage-lifecycle-policy.md)
 - [S3 后端](./object-storage-s3-backends.md)
 - [Filesystem](./object-storage-filesystem.md)
 

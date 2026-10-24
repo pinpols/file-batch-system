@@ -25,6 +25,7 @@ public class DryRunController {
 
   @PostMapping("/plan")
   public CommonResponse<DryRunPlanResult> plan(@RequestBody DryRunPlanRequest request) {
-    return CommonResponse.success(dryRunPlanService.plan(request));
+    DryRunPlanResult plan = dryRunPlanService.plan(request);
+    return CommonResponse.success(plan);
   }
 }

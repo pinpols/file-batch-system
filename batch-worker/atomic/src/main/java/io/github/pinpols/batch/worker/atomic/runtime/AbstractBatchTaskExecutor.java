@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -57,26 +58,29 @@ public abstract class AbstractBatchTaskExecutor implements BatchTaskExecutor {
       after(ctx, result);
       return result == null ? TaskResult.fail("executor returned null TaskResult", null) : result;
     } catch (Exception t) {
+      String executorName = this.getClass().getSimpleName();
+      String currentTaskType = taskType();
+      String taskId = EmptyChecks.isNull(ctx) ? null : ctx.taskInstanceId();
+      String causeSummary = SwallowedExceptionLogger.summary(t);
       log.error(
           "SPI executor {} failed (taskType={}, taskId={}): {}",
-          this.getClass().getSimpleName(),
-          taskType(),
-          ctx == null ? null : ctx.taskInstanceId(),
-          SwallowedExceptionLogger.summary(t),
+          executorName,
+          currentTaskType,
+          taskId,
+          causeSummary,
           t);
-      return TaskResult.fail(
-          t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage(), t);
+      String failureMessage =
+          EmptyChecks.isNull(t.getMessage()) ? t.getClass().getSimpleName() : t.getMessage();
+      return TaskResult.fail(failureMessage, t);
     } finally {
       if (started) {
         try {
           cleanup(ctx);
         } catch (Exception cleanupEx) {
           // cleanup 异常不掩盖原结果,只 log
-          log.warn(
-              "SPI executor {} cleanup() failed: {}",
-              this.getClass().getSimpleName(),
-              SwallowedExceptionLogger.summary(cleanupEx),
-              cleanupEx);
+          String executorName = this.getClass().getSimpleName();
+          String causeSummary = SwallowedExceptionLogger.summary(cleanupEx);
+          log.warn("SPI executor {} cleanup() failed: {}", executorName, causeSummary, cleanupEx);
         }
       }
     }

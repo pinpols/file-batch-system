@@ -23,3 +23,11 @@ python3 scripts/codegen/gen-error-codes-dict.py --check
 `messages_zh_CN.properties`，防止 i18n key 漂移。
 
 依赖：Python 3.8+、PyYAML。
+
+## 脚本与配套 SQL 索引
+
+本表登记本目录的执行入口、公共模块及配套 SQL；测试代码通过测试命令执行。新增、移动或删除资产时同步跳转和用途，SQL 正文保持独立维护。
+
+| 文件 | 用途 / 调用归属 |
+|---|---|
+| [gen-error-codes-dict.py](gen-error-codes-dict.py) | 错误码字典同步。 |

@@ -14,7 +14,6 @@ import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.observability.ConsoleQueryApplicationService;
-import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFilePipelineResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobInstanceResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobStepInstanceResponse;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertEventResponse;
@@ -72,6 +71,17 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("旧Pipeline查询别名完全移除，不重定向或返回文件运行数据")
+  void shouldNotExposeRetiredPipelineQueryAliases() throws Exception {
+    mockMvc
+        .perform(get("/api/console/queries/pipeline-definitions").param("tenantId", "t1"))
+        .andExpect(status().isNotFound());
+    mockMvc
+        .perform(get("/api/console/queries/pipeline-definitions/1").param("tenantId", "t1"))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
   @DisplayName("流水线进度查询:已下线的 Worker 编码参数被拒绝")
   void shouldRejectRemovedWorkerCodeProgressQuery() throws Exception {
     mockMvc
@@ -89,26 +99,23 @@ class ConsoleQueryControllerTest {
             1L,
             1,
             20,
-            List.of(new ConsoleApprovalCommandResponse(
-                1L,
-                "t1",
-                "appr-001",
-                "DOWNLOAD",
-                "DOWNLOAD",
-                "FILE",
-                "1001",
-                "{}",
-                "PENDING",
-                "req-1",
-                null,
-                null,
-                null,
-                "trace-1",
-                "idem-1",
-                OffsetDateTime.ofInstant(Instant.EPOCH, ZoneOffset.UTC),
-                null,
-                OffsetDateTime.ofInstant(Instant.EPOCH, ZoneOffset.UTC),
-                OffsetDateTime.ofInstant(Instant.EPOCH, ZoneOffset.UTC)))));
+            List.of(ConsoleApprovalCommandResponse.builder()
+                .id(1L)
+                .tenantId("t1")
+                .approvalNo("appr-001")
+                .approvalType("DOWNLOAD")
+                .actionType("DOWNLOAD")
+                .targetType("FILE")
+                .targetId("1001")
+                .payloadJson("{}")
+                .approvalStatus("PENDING")
+                .requesterId("req-1")
+                .sourceTraceId("trace-1")
+                .sourceIdempotencyKey("idem-1")
+                .approvedAt(OffsetDateTime.ofInstant(Instant.EPOCH, ZoneOffset.UTC))
+                .createdAt(OffsetDateTime.ofInstant(Instant.EPOCH, ZoneOffset.UTC))
+                .updatedAt(OffsetDateTime.ofInstant(Instant.EPOCH, ZoneOffset.UTC))
+                .build()));
 
     mockMvc
         .perform(get("/api/console/queries/approvals").param("tenantId", "t1"))
@@ -126,22 +133,23 @@ class ConsoleQueryControllerTest {
             1L,
             1,
             20,
-            List.of(new ConsoleAlertEventResponse(
-                1L,
-                "t1",
-                "console-api",
-                "FILE_ERROR",
-                "HIGH",
-                "file failed",
-                "{\"k\":\"v\"}",
-                "dedup-1",
-                2,
-                Instant.EPOCH,
-                Instant.EPOCH,
-                "trace-1",
-                "OPEN",
-                Instant.EPOCH,
-                Instant.EPOCH))));
+            List.of(ConsoleAlertEventResponse.builder()
+                .id(1L)
+                .tenantId("t1")
+                .serviceName("console-api")
+                .alertType("FILE_ERROR")
+                .severity("HIGH")
+                .title("file failed")
+                .detailJson("{\"k\":\"v\"}")
+                .dedupFingerprint("dedup-1")
+                .occurrenceCount(2)
+                .firstSeenAt(Instant.EPOCH)
+                .lastSeenAt(Instant.EPOCH)
+                .traceId("trace-1")
+                .status("OPEN")
+                .createdAt(Instant.EPOCH)
+                .updatedAt(Instant.EPOCH)
+                .build()));
 
     mockMvc
         .perform(get("/api/console/queries/alerts").param("tenantId", "t1"))
@@ -159,18 +167,19 @@ class ConsoleQueryControllerTest {
             1L,
             1,
             20,
-            List.of(new ConsoleAuditLogResponse(
-                1L,
-                "t1",
-                1001L,
-                "FILE_UPLOAD",
-                "SUCCESS",
-                "OPERATOR",
-                "u1",
-                "trace-1",
-                "evidence-1",
-                "summary",
-                Instant.EPOCH))));
+            List.of(ConsoleAuditLogResponse.builder()
+                .id(1L)
+                .tenantId("t1")
+                .fileId(1001L)
+                .operationType("FILE_UPLOAD")
+                .operationResult("SUCCESS")
+                .operatorType("OPERATOR")
+                .operatorId("u1")
+                .traceId("trace-1")
+                .evidenceRef("evidence-1")
+                .detailSummary("summary")
+                .createdAt(Instant.EPOCH)
+                .build()));
 
     mockMvc
         .perform(get("/api/console/queries/execution-logs").param("tenantId", "t1"))
@@ -201,17 +210,6 @@ class ConsoleQueryControllerTest {
         .perform(get("/api/console/queries/file-pipelines")
             .param("tenantId", "t1")
             .param("keyword", "failed"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.total").value(0));
-  }
-
-  @Test
-  @DisplayName("历史流水线定义查询:返回分页且总数为 0")
-  void shouldReturnLegacyPipelineDefinitionsPage() throws Exception {
-    when(queryApplicationService.filePipelines(any())).thenReturn(emptyPage());
-
-    mockMvc
-        .perform(get("/api/console/queries/pipeline-definitions").param("tenantId", "t1"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.total").value(0));
   }
@@ -341,34 +339,6 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
-  @DisplayName("历史流水线定义详情:返回作业编码与运行状态")
-  void shouldReturnLegacyPipelineDefinitionsDetail() throws Exception {
-    when(queryApplicationService.filePipelineDetail(anyString(), anyLong()))
-        .thenReturn(new ConsoleFilePipelineResponse(
-            1L,
-            "t1",
-            1001L,
-            "file-001",
-            "IMPORT",
-            2001L,
-            3001L,
-            "RECEIVE",
-            "PARSE",
-            "SUCCESS",
-            "trace-1",
-            Instant.EPOCH,
-            Instant.EPOCH,
-            Instant.EPOCH,
-            Instant.EPOCH));
-
-    mockMvc
-        .perform(get("/api/console/queries/pipeline-definitions/1").param("tenantId", "t1"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.jobCode").value("file-001"))
-        .andExpect(jsonPath("$.data.runStatus").value("SUCCESS"));
-  }
-
-  @Test
   @DisplayName("AI 审计查询:返回分页且总数为 0")
   void shouldReturnAiAuditsPage() throws Exception {
     when(queryApplicationService.aiAuditLogs(any())).thenReturn(emptyPage());
@@ -387,18 +357,19 @@ class ConsoleQueryControllerTest {
             1,
             1,
             20,
-            List.of(new ConsoleOutboxRetryLogResponse(
-                31L,
-                41L,
-                "t1",
-                "JOB_FAILED",
-                "event-1",
-                "FAILED",
-                2,
-                "EXPONENTIAL",
-                Instant.EPOCH,
-                Instant.EPOCH,
-                Instant.EPOCH))));
+            List.of(ConsoleOutboxRetryLogResponse.builder()
+                .id(31L)
+                .outboxEventId(41L)
+                .tenantId("t1")
+                .eventType("JOB_FAILED")
+                .eventKey("event-1")
+                .retryStatus("FAILED")
+                .retryCount(2)
+                .retryPolicy("EXPONENTIAL")
+                .nextRetryAt(Instant.EPOCH)
+                .createdAt(Instant.EPOCH)
+                .updatedAt(Instant.EPOCH)
+                .build()));
 
     mockMvc
         .perform(get("/api/console/queries/outbox-retries").param("tenantId", "t1"))
@@ -423,34 +394,30 @@ class ConsoleQueryControllerTest {
   @DisplayName("作业实例详情:返回实例编号与实例状态")
   void shouldReturnJobInstanceDetail() throws Exception {
     when(queryApplicationService.jobInstance(anyString(), anyLong()))
-        .thenReturn(new ConsoleJobInstanceResponse(
-            11L,
-            "t1",
-            "job-001",
-            "inst-001",
-            LocalDate.of(2026, Month.MARCH, 29),
-            "MANUAL",
-            "SUCCESS",
-            "batch-1",
-            "operator-1",
-            false,
-            false,
-            null,
-            null,
-            null,
-            "queue-1",
-            "worker-group-1",
-            5,
-            "trace-1",
-            "{}",
-            "ok",
-            Instant.EPOCH,
-            3600,
-            null,
-            Instant.EPOCH,
-            Instant.EPOCH,
-            false,
-            null));
+        .thenReturn(ConsoleJobInstanceResponse.builder()
+            .id(11L)
+            .tenantId("t1")
+            .jobCode("job-001")
+            .instanceNo("inst-001")
+            .bizDate(LocalDate.of(2026, Month.MARCH, 29))
+            .triggerType("MANUAL")
+            .instanceStatus("SUCCESS")
+            .batchNo("batch-1")
+            .operatorId("operator-1")
+            .rerunFlag(false)
+            .retryFlag(false)
+            .queueCode("queue-1")
+            .workerGroup("worker-group-1")
+            .priority(5)
+            .traceId("trace-1")
+            .paramsSnapshot("{}")
+            .resultSummary("ok")
+            .deadlineAt(Instant.EPOCH)
+            .expectedDurationSeconds(3600)
+            .startedAt(Instant.EPOCH)
+            .finishedAt(Instant.EPOCH)
+            .dryRun(false)
+            .build());
 
     mockMvc
         .perform(get("/api/console/queries/instances/11").param("tenantId", "t1"))
@@ -463,23 +430,20 @@ class ConsoleQueryControllerTest {
   @DisplayName("作业步骤实例详情:返回步骤编码与步骤状态")
   void shouldReturnJobStepInstanceDetail() throws Exception {
     when(queryApplicationService.jobStepInstance(anyString(), anyLong()))
-        .thenReturn(new ConsoleJobStepInstanceResponse(
-            21L,
-            "t1",
-            11L,
-            1L,
-            1001L,
-            "step-1",
-            "MAIN",
-            "SUCCESS",
-            0,
-            null,
-            "ok",
-            null,
-            null,
-            null,
-            Instant.EPOCH,
-            Instant.EPOCH));
+        .thenReturn(ConsoleJobStepInstanceResponse.builder()
+            .id(21L)
+            .tenantId("t1")
+            .jobInstanceId(11L)
+            .jobPartitionId(1L)
+            .jobTaskId(1001L)
+            .stepCode("step-1")
+            .stepType("MAIN")
+            .stepStatus("SUCCESS")
+            .retryCount(0)
+            .resultSummary("ok")
+            .startedAt(Instant.EPOCH)
+            .finishedAt(Instant.EPOCH)
+            .build());
 
     mockMvc
         .perform(get("/api/console/queries/job-step-instances/21").param("tenantId", "t1"))
@@ -520,11 +484,14 @@ class ConsoleQueryControllerTest {
         .thenReturn(new ConsoleWorkflowNodeRunResponse(
             41L,
             31L,
+            null,
             "node-1",
             "MAIN",
             1,
             "SUCCESS",
             0,
+            null,
+            null,
             null,
             null,
             Instant.EPOCH,
@@ -542,34 +509,29 @@ class ConsoleQueryControllerTest {
   @DisplayName("批量实例状态查询:按多个实例编号返回实例编号与实例状态")
   void shouldReturnBatchInstanceStatus() throws Exception {
     when(queryApplicationService.batchInstanceStatus(anyString(), any()))
-        .thenReturn(List.of(new ConsoleJobInstanceResponse(
-            11L,
-            "t1",
-            "IMPORT_JOB",
-            "INS-001",
-            LocalDate.of(2026, Month.MARCH, 29),
-            "MANUAL",
-            "RUNNING",
-            "batch-1",
-            "operator-1",
-            false,
-            false,
-            null,
-            null,
-            null,
-            "queue-1",
-            "worker-group-1",
-            5,
-            "trace-1",
-            "{}",
-            "running",
-            Instant.EPOCH,
-            3600,
-            null,
-            Instant.EPOCH,
-            null,
-            false,
-            null)));
+        .thenReturn(List.of(ConsoleJobInstanceResponse.builder()
+            .id(11L)
+            .tenantId("t1")
+            .jobCode("IMPORT_JOB")
+            .instanceNo("INS-001")
+            .bizDate(LocalDate.of(2026, Month.MARCH, 29))
+            .triggerType("MANUAL")
+            .instanceStatus("RUNNING")
+            .batchNo("batch-1")
+            .operatorId("operator-1")
+            .rerunFlag(false)
+            .retryFlag(false)
+            .queueCode("queue-1")
+            .workerGroup("worker-group-1")
+            .priority(5)
+            .traceId("trace-1")
+            .paramsSnapshot("{}")
+            .resultSummary("running")
+            .deadlineAt(Instant.EPOCH)
+            .expectedDurationSeconds(3600)
+            .startedAt(Instant.EPOCH)
+            .dryRun(false)
+            .build()));
 
     mockMvc
         .perform(get("/api/console/queries/instances/batch-status")

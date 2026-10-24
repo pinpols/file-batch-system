@@ -105,7 +105,9 @@ public abstract class SdkAbstractTypedProcessHandler<P, I, R, O> extends SdkAbst
       if (!buf.isEmpty()) {
         flush(input, ctx, buf);
       }
-      ctx.commitCoordinator().markCompleted(breakPosition(input, List.of()));
+      List<R> emptyBatch = List.of();
+      Map<String, Object> completedBreakPosition = breakPosition(input, emptyBatch);
+      ctx.commitCoordinator().markCompleted(completedBreakPosition);
       return result(input, counts, "processed " + counts.success() + " rows");
     } catch (SdkTaskStoppedException stopped) {
       throw stopped; // 决策三:协作取消穿透到模板顶层,业务不得吞。
@@ -118,7 +120,8 @@ public abstract class SdkAbstractTypedProcessHandler<P, I, R, O> extends SdkAbst
     upsert(input, ctx, buf);
     // ADR-037 决策二 + 三:业务写 + 断点保存 + 限流上报三合一;提交后命中取消则在安全点抛停止。
     ctx.commitCoordinator().recordBatch(buf.size(), 0);
-    ctx.commit(breakPosition(input, buf));
+    Map<String, Object> batchBreakPosition = breakPosition(input, buf);
+    ctx.commit(batchBreakPosition);
     buf.clear();
   }
 
@@ -127,6 +130,7 @@ public abstract class SdkAbstractTypedProcessHandler<P, I, R, O> extends SdkAbst
     if (output == null) {
       return SdkTaskResult.ok(defaultMessage, counts.toOutput());
     }
-    return SdkTaskResult.ok(defaultMessage, params.toOutputMap(output));
+    Map<String, Object> outputMap = params.toOutputMap(output);
+    return SdkTaskResult.ok(defaultMessage, outputMap);
   }
 }

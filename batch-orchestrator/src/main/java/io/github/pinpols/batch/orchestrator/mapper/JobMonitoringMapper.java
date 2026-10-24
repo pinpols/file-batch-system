@@ -18,6 +18,11 @@ public interface JobMonitoringMapper {
 
   long countSlaEscalationCandidates(@Param("escalationBefore") Instant escalationBefore);
 
+  JobInstanceEntity selectSlaEscalationCandidateForUpdate(
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("escalationBefore") Instant escalationBefore);
+
   int markSlaAlerted(
       @Param("tenantId") String tenantId,
       @Param("id") Long id,

@@ -6,6 +6,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.AlertRoutingSpec;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.TenantQuotaPolicySpec;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelSchema;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter;
@@ -25,9 +29,14 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -37,6 +46,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFRelation;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -65,10 +75,28 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
 
   private final StringRedisTemplate redisTemplate;
 
+  private final ConsoleTenantConfigInitApplicationService tenantConfigInitService;
+
   ConsoleTenantConfigPackageExcelUploadIntegrationTest(
-      JdbcTemplate jdbcTemplate, StringRedisTemplate redisTemplate) {
+      JdbcTemplate jdbcTemplate,
+      StringRedisTemplate redisTemplate,
+      ConsoleTenantConfigInitApplicationService tenantConfigInitService) {
     this.jdbcTemplate = jdbcTemplate;
     this.redisTemplate = redisTemplate;
+    this.tenantConfigInitService = tenantConfigInitService;
+  }
+
+  @BeforeEach
+  void ensureApplyTenantCalendarFixtures() {
+    TestTenantCalendarFixtures.ensureDefaultCalendar(
+        jdbcTemplate,
+        "excel-upload-ta",
+        "tenant-admin-apply",
+        "excel-session-owner-it",
+        "channel-export-security-it",
+        "legacy-monitoring-policy-it",
+        "config-apply-rollback-it",
+        "config-version-conflict-it");
   }
 
   @Test
@@ -94,6 +122,35 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
     assertThat(response.body()).contains("\"fileTemplateRows\":1");
     assertThat(response.body()).contains("\"jobRows\":0");
     assertThat(response.body()).contains("\"workflowEdgeRows\":0");
+  }
+
+  @Test
+  @DisplayName("拒绝已退役的租户 Pipeline 配置工作表")
+  void shouldRejectRetiredTenantPipelineSheets() throws Exception {
+    byte[] workbookBytes;
+    try (XSSFWorkbook workbook =
+        new XSSFWorkbook(new ByteArrayInputStream(tenantPackageWorkbook(true)))) {
+      Sheet pipeline = workbook.createSheet(ConfigPackageExcelValidator.PIPELINE_SHEET);
+      pipeline.createRow(0).createCell(0).setCellValue("job_code");
+      ByteArrayOutputStream output = new ByteArrayOutputStream();
+      workbook.write(output);
+      workbookBytes = output.toByteArray();
+    }
+    String boundary = "excel-retired-pipeline-sheet-boundary";
+    HttpRequest request = HttpRequest.newBuilder(URI.create(
+            "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
+        .timeout(Duration.ofSeconds(60))
+        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-retired-pipeline")
+        .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbookBytes)))
+        .build();
+
+    HttpResponse<String> response =
+        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+
+    assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+    assertThat(response.body())
+        .contains("unsupported excel sheet: " + ConfigPackageExcelValidator.PIPELINE_SHEET);
   }
 
   @Test
@@ -414,6 +471,33 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
   @Test
   @DisplayName("租户配置包导出不含通道密码且同租户回导保留数据库凭据")
   void shouldExcludeChannelCredentialsFromExportAndPreserveThemOnMerge() throws Exception {
+    final String insertFileChannelConfigSql = """
+        insert into batch.file_channel_config (tenant_id, channel_code, channel_name, channel_type,\s\
+        target_endpoint, auth_type, config_json, receipt_policy, timeout_seconds, enabled)\s\
+        values (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?)\
+        """;
+    final String insertResourceQueueSql = """
+        insert into batch.resource_queue (tenant_id, queue_code, queue_name, queue_type, worker_group,\s\
+        resource_tag) values (?, ?, ?, 'IMPORT', 'PLATFORM_IMPORT_POOL', 'sensitive-capacity-tag')\
+        """;
+    final String insertJobDefinitionSql = """
+        insert into batch.job_definition (tenant_id, job_code, job_name, job_type, schedule_type, timezone,\s\
+        queue_code, worker_group, default_params)\s\
+        values (?, ?, ?, 'IMPORT', 'MANUAL', 'Asia/Shanghai', ?, ?, ?::jsonb)\
+        """;
+    final String selectConfigJsonSql = """
+        select config_json::text from batch.file_channel_config where tenant_id = ? and channel_code = ?\
+        """;
+    final String selectTargetEndpointSql = """
+        select target_endpoint from batch.file_channel_config where tenant_id = ? and channel_code = ?\
+        """;
+    final String selectQueueCodeSql = """
+        select queue_code || ':' || worker_group from batch.job_definition where tenant_id = ? and job_code = ?\
+        """;
+    final String selectDefaultParamsSql = """
+        select default_params ->> 'password' from batch.job_definition where tenant_id = ? and job_code = ?\
+        """;
+
     String tenantId = "channel-export-security-it";
     String channelCode = "SFTP_EXPORT_SECRET";
     String jobCode = "JOB_ROUTE_EXPORT_SECRET";
@@ -421,9 +505,7 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
     String secretConfig = "{\"sftp_host\":\"sftp.example.com\",\"sftp_user\":\"batch\","
         + "\"sftp_password\":\"plain-text-secret\"}";
     jdbcTemplate.update(
-        "insert into batch.file_channel_config (tenant_id, channel_code, channel_name, "
-            + "channel_type, target_endpoint, auth_type, config_json, receipt_policy, "
-            + "timeout_seconds, enabled) values (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?)",
+        insertFileChannelConfigSql,
         tenantId,
         channelCode,
         "SFTP export security",
@@ -435,17 +517,9 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
         30,
         true);
     jdbcTemplate.update(
-        "insert into batch.resource_queue "
-            + "(tenant_id, queue_code, queue_name, queue_type, worker_group, resource_tag) "
-            + "values (?, ?, ?, 'IMPORT', 'PLATFORM_IMPORT_POOL', 'sensitive-capacity-tag')",
-        tenantId,
-        queueCode,
-        "Platform route export security");
+        insertResourceQueueSql, tenantId, queueCode, "Platform route export security");
     jdbcTemplate.update(
-        "insert into batch.job_definition "
-            + "(tenant_id, job_code, job_name, job_type, schedule_type, timezone, queue_code, "
-            + "worker_group, default_params) values (?, ?, ?, 'IMPORT', 'MANUAL', "
-            + "'Asia/Shanghai', ?, ?, ?::jsonb)",
+        insertJobDefinitionSql,
         tenantId,
         jobCode,
         "Platform route export security",
@@ -490,36 +564,20 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
         exportedWorkbook, "channel-export-roundtrip", "ROLE_TENANT_ADMIN", tenantId);
 
     assertThat(applyResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
-    String persistedConfig = jdbcTemplate.queryForObject(
-        "select config_json::text from batch.file_channel_config "
-            + "where tenant_id = ? and channel_code = ?",
-        String.class,
-        tenantId,
-        channelCode);
+    String persistedConfig =
+        jdbcTemplate.queryForObject(selectConfigJsonSql, String.class, tenantId, channelCode);
     ObjectMapper mapper = new ObjectMapper();
     assertThat(mapper.readTree(persistedConfig)).isEqualTo(mapper.readTree(secretConfig));
-    String persistedEndpoint = jdbcTemplate.queryForObject(
-        "select target_endpoint from batch.file_channel_config "
-            + "where tenant_id = ? and channel_code = ?",
-        String.class,
-        tenantId,
-        channelCode);
+    String persistedEndpoint =
+        jdbcTemplate.queryForObject(selectTargetEndpointSql, String.class, tenantId, channelCode);
     assertThat(persistedEndpoint)
         .isEqualTo("sftp://operator:embedded-password@sftp.example.com/inbox?token=embedded-token");
-    assertThat(jdbcTemplate.queryForObject(
-            "select queue_code || ':' || worker_group from batch.job_definition "
-                + "where tenant_id = ? and job_code = ?",
-            String.class,
-            tenantId,
-            jobCode))
-        .isEqualTo(queueCode + ":PLATFORM_IMPORT_POOL");
-    assertThat(jdbcTemplate.queryForObject(
-            "select default_params ->> 'password' from batch.job_definition "
-                + "where tenant_id = ? and job_code = ?",
-            String.class,
-            tenantId,
-            jobCode))
-        .isEqualTo("job-embedded-secret");
+    String selectedQueueCode =
+        jdbcTemplate.queryForObject(selectQueueCodeSql, String.class, tenantId, jobCode);
+    assertThat(selectedQueueCode).isEqualTo(queueCode + ":PLATFORM_IMPORT_POOL");
+    String selectedDefaultParams =
+        jdbcTemplate.queryForObject(selectDefaultParamsSql, String.class, tenantId, jobCode);
+    assertThat(selectedDefaultParams).isEqualTo("job-embedded-secret");
 
     HttpRequest adminExportRequest = HttpRequest.newBuilder(URI.create("http://localhost:" + port
             + "/api/console/config/tenant-package/excel/export?tenantId=" + tenantId))
@@ -591,8 +649,8 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
       assertThat(workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET)).isNotNull();
       assertThat(workbook.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET))
           .isNotNull();
-      assertThat(workbook.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET)).isNotNull();
-      assertThat(workbook.getSheet(ConfigPackageExcelValidator.STEP_SHEET)).isNotNull();
+      assertThat(workbook.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET)).isNull();
+      assertThat(workbook.getSheet(ConfigPackageExcelValidator.STEP_SHEET)).isNull();
       assertThat(workbook.getSheet(ConfigPackageExcelValidator.CHANNEL_SHEET)).isNull();
       assertThat(workbook.getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET))
           .isNull();
@@ -611,9 +669,6 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
               "header_rows",
               "query_param_schema",
               "default_query_sql"));
-      assertHeaderColumns(
-          workbook.getSheet(ConfigPackageExcelValidator.STEP_SHEET),
-          Set.of("job_code", "step_code", "stage_code", "step_params"));
     }
   }
 
@@ -642,8 +697,8 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
     assertThat(response.body()).contains("\"code\":\"SUCCESS\"");
     assertThat(response.body()).contains("\"jobRows\":1");
     assertThat(response.body()).contains("\"fileTemplateRows\":1");
-    assertThat(response.body()).contains("\"pipelineRows\":1");
-    assertThat(response.body()).contains("\"pipelineStepRows\":6");
+    assertThat(response.body()).contains("\"pipelineRows\":0");
+    assertThat(response.body()).contains("\"pipelineStepRows\":0");
     assertThat(response.body()).contains("\"resourceQueueRows\":0");
 
     JsonNode uploadResponse = new ObjectMapper().readTree(response.body());
@@ -694,7 +749,8 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
     assertThat(applied.path("code").asText()).isEqualTo("SUCCESS");
     assertThat(applied.path("data").path("jobInserted").asInt()).isEqualTo(1);
     assertThat(applied.path("data").path("fileTemplateInserted").asInt()).isEqualTo(1);
-    assertThat(applied.path("data").path("pipelineInserted").asInt()).isEqualTo(1);
+    assertThat(applied.path("data").has("pipelineInserted")).isFalse();
+    assertThat(applied.path("data").has("pipelineUpdated")).isFalse();
   }
 
   @Test
@@ -745,8 +801,303 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
   }
 
   @Test
+  @DisplayName("配置包预览拒绝成环的作业依赖")
+  void shouldRejectCyclicJobDependenciesInPreview() throws Exception {
+    String firstJobCode = "JOB_CYCLE_A_" + UUID.randomUUID().toString().replace("-", "");
+    String secondJobCode = "JOB_CYCLE_B_" + UUID.randomUUID().toString().replace("-", "");
+    byte[] workbookBytes = tenantPackageWorkbook(true);
+    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
+      Sheet jobs = workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
+      appendDataRow(
+          jobs,
+          ConfigPackageExcelSchema.JobDefinition.COLUMNS,
+          row(
+              "tenant_id", "excel-upload-ta",
+              "job_code", firstJobCode,
+              "job_name", "Cycle first",
+              "job_type", "IMPORT",
+              "schedule_type", "MANUAL",
+              "depends_on_job_codes", secondJobCode,
+              "param_schema", "{}",
+              "default_params", "{}",
+              "enabled", "true"));
+      appendDataRow(
+          jobs,
+          ConfigPackageExcelSchema.JobDefinition.COLUMNS,
+          row(
+              "tenant_id", "excel-upload-ta",
+              "job_code", secondJobCode,
+              "job_name", "Cycle second",
+              "job_type", "IMPORT",
+              "schedule_type", "MANUAL",
+              "depends_on_job_codes", firstJobCode,
+              "param_schema", "{}",
+              "default_params", "{}",
+              "enabled", "true"));
+      ByteArrayOutputStream output = new ByteArrayOutputStream();
+      workbook.write(output);
+      workbookBytes = output.toByteArray();
+    }
+
+    HttpResponse<String> response = previewWorkbookAsRole(
+        workbookBytes, "cyclic-job-dependency-preview", "ROLE_ADMIN", "excel-upload-ta");
+
+    assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
+    JsonNode preview = new ObjectMapper().readTree(response.body()).path("data");
+    assertThat(preview.path("invalidRows").asInt())
+        .as("cyclic dependency graph must be blocking: %s", preview)
+        .isGreaterThan(0);
+    assertThat(preview.path("issues").toString()).contains("job dependency graph contains a cycle");
+  }
+
+  @Test
+  @DisplayName("Apply依赖图预检与并发图变更串行且失败回滚整包")
+  void shouldRevalidateJobDependenciesAfterConcurrentGraphChangeAndRollbackPackage()
+      throws Exception {
+    final String selectPgAdvisoryXactLockSql = """
+            select pg_advisory_xact_lock(hashtextextended('batch.job_dependency:' || ?, 0))\
+            """;
+    final String insertJobDependencySql = """
+            insert into batch.job_dependency (tenant_id, downstream_job_code, upstream_job_code,\s\
+            dependency_order, readiness_mode, biz_date_alignment)\s\
+            values (?, ?, ?, 0, 'EFFECTIVE_RESULT', 'SAME_DAY')\
+            """;
+
+    final String selectCountSql = """
+            select count(*) from batch.file_channel_config where tenant_id = ?
+        """;
+    final String selectCountSql2 = """
+      select count(*) from batch.job_dependency where tenant_id = ?
+  """;
+    final String selectCountSql3 = """
+      select count(*) from batch.job_dependency where tenant_id = ? and downstream_job_code = ?\s\
+      and upstream_job_code = ?\
+      """;
+
+    String tenantId = "excel-dependency-race-" + UUID.randomUUID().toString().substring(0, 8);
+    String downstream = "JOB_RACE_DOWNSTREAM_" + UUID.randomUUID().toString().replace("-", "");
+    String upstream = "JOB_RACE_UPSTREAM_" + UUID.randomUUID().toString().replace("-", "");
+    insertManualJob(tenantId, downstream);
+    insertManualJob(tenantId, upstream);
+
+    byte[] workbookBytes = tenantPackageWorkbook(true);
+    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
+      appendDataRow(
+          workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET),
+          ConfigPackageExcelSchema.JobDefinition.COLUMNS,
+          row(
+              "tenant_id", tenantId,
+              "job_code", downstream,
+              "job_name", "Dependency race downstream",
+              "job_type", "IMPORT",
+              "schedule_type", "MANUAL",
+              "depends_on_job_codes", upstream,
+              "param_schema", "{}",
+              "default_params", "{}",
+              "enabled", "true"));
+      ByteArrayOutputStream output = new ByteArrayOutputStream();
+      workbook.write(output);
+      workbookBytes = output.toByteArray();
+    }
+    workbookBytes = workbookForTenant(workbookBytes, tenantId);
+    HttpResponse<String> previewResponse = previewWorkbookAsRole(
+        workbookBytes, "dependency-race-preview-" + tenantId, "ROLE_ADMIN", tenantId);
+    JsonNode preview = new ObjectMapper().readTree(previewResponse.body()).path("data");
+    assertThat(preview.path("invalidRows").asInt()).isZero();
+    String uploadToken = preview.path("uploadToken").asText();
+    String previewToken = preview.path("previewToken").asText();
+    int channelCountBefore = jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId);
+
+    CountDownLatch graphLocked = new CountDownLatch(1);
+    CountDownLatch releaseGraphLock = new CountDownLatch(1);
+    try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+      var concurrentWriter = executor.submit(() -> {
+        try (var connection = jdbcTemplate.getDataSource().getConnection()) {
+          connection.setAutoCommit(false);
+          try (var lock = connection.prepareStatement(selectPgAdvisoryXactLockSql)) {
+            lock.setString(1, tenantId);
+            lock.execute();
+          }
+          try (var insert = connection.prepareStatement(insertJobDependencySql)) {
+            insert.setString(1, tenantId);
+            insert.setString(2, upstream);
+            insert.setString(3, downstream);
+            insert.executeUpdate();
+          }
+          graphLocked.countDown();
+          if (!releaseGraphLock.await(10, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("timed out waiting to release dependency graph lock");
+          }
+          connection.commit();
+          return null;
+        } catch (Exception exception) {
+          throw new RuntimeException(exception);
+        }
+      });
+      assertThat(graphLocked.await(10, TimeUnit.SECONDS)).isTrue();
+
+      var applyRequest = HttpRequest.newBuilder(URI.create("http://localhost:" + port
+              + "/api/console/config/tenant-package/excel/apply/" + uploadToken))
+          .timeout(Duration.ofSeconds(60))
+          .header("Content-Type", "application/json")
+          .header("Accept-Language", "en")
+          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-race-" + tenantId)
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+          .header("X-Console-Roles", "ROLE_ADMIN")
+          .POST(HttpRequest.BodyPublishers.ofString(
+              "{\"previewToken\":\"" + previewToken + "\"}", StandardCharsets.UTF_8))
+          .build();
+      var applyFuture = executor.submit(() ->
+          HttpClient.newHttpClient().send(applyRequest, HttpResponse.BodyHandlers.ofString()));
+      try {
+        awaitDependencyGraphLockWait();
+        assertThat(applyFuture.isDone()).isFalse();
+      } finally {
+        releaseGraphLock.countDown();
+      }
+      concurrentWriter.get(10, TimeUnit.SECONDS);
+      HttpResponse<String> applyResponse = applyFuture.get(30, TimeUnit.SECONDS);
+
+      assertThat(applyResponse.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+      JsonNode result = new ObjectMapper().readTree(applyResponse.body());
+      assertThat(result.path("code").asText()).isEqualTo("INVALID_ARGUMENT");
+      assertThat(result.path("message").asText()).isEqualTo("Excel 中存在无效行");
+    }
+
+    Integer selectedJobDependencyCount =
+        jdbcTemplate.queryForObject(selectCountSql2, Integer.class, tenantId);
+    assertThat(selectedJobDependencyCount).isEqualTo(1);
+    Integer selectedJobDependencyCountRead2 =
+        jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId, upstream, downstream);
+    assertThat(selectedJobDependencyCountRead2).isEqualTo(1);
+    Integer selectedFileChannelConfigCount =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId);
+    assertThat(selectedFileChannelConfigCount).isEqualTo(channelCountBefore);
+  }
+
+  private void insertManualJob(String tenantId, String jobCode) {
+    final String insertJobDefinitionSql = """
+        insert into batch.job_definition (tenant_id, job_code, job_name, job_type, schedule_type, timezone,\s\
+        default_params) values (?, ?, ?, 'IMPORT', 'MANUAL', 'Asia/Shanghai', '{}'::jsonb)\
+        """;
+
+    jdbcTemplate.update(insertJobDefinitionSql, tenantId, jobCode, jobCode);
+  }
+
+  private void awaitDependencyGraphLockWait() throws InterruptedException {
+    final String selectCountSql = """
+        select count(*) from pg_locks l join pg_stat_activity a using (pid) where l.locktype = 'advisory'\s\
+        and not l.granted and a.state = 'active' and a.query ilike '%%pg_advisory_xact_lock%%'\
+        """;
+
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+    while (System.nanoTime() < deadline) {
+      Integer waiters = jdbcTemplate.queryForObject(selectCountSql, Integer.class);
+      if (waiters != null && waiters > 0) {
+        return;
+      }
+      Thread.sleep(25);
+    }
+    throw new AssertionError("Excel Apply did not wait for the tenant dependency graph lock");
+  }
+
+  @Test
+  @DisplayName("配置包可导入多上游依赖并按配置顺序持久化")
+  void shouldApplyMultipleJobDependenciesFromPackage() throws Exception {
+    final String selectUpstreamJobCodeSql = """
+        select upstream_job_code from batch.job_dependency where tenant_id = ? and downstream_job_code = ?\s\
+        order by dependency_order\
+        """;
+    final String selectBizDateAlignmentSql = """
+        select biz_date_alignment from batch.job_dependency where tenant_id = ? and downstream_job_code = ?\s\
+        order by dependency_order\
+        """;
+
+    String suffix = UUID.randomUUID().toString().replace("-", "").toUpperCase(Locale.ROOT);
+    String downstream = "JOB_DOWNSTREAM_" + suffix;
+    String upstreamOne = "JOB_UPSTREAM_A_" + suffix;
+    String upstreamTwo = "JOB_UPSTREAM_B_" + suffix;
+    byte[] workbookBytes = tenantPackageWorkbook(true);
+    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
+      Sheet jobs = workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
+      appendDataRow(
+          jobs,
+          ConfigPackageExcelSchema.JobDefinition.COLUMNS,
+          row(
+              "tenant_id", "excel-upload-ta",
+              "job_code", downstream,
+              "job_name", "Downstream",
+              "job_type", "IMPORT",
+              "schedule_type", "CRON",
+              "schedule_expr", "0 0 2 * * ?",
+              "depends_on_job_codes", upstreamOne + "," + upstreamTwo,
+              "depends_on_biz_date_alignments", "SAME_DAY,PREVIOUS_BIZ_DAY",
+              "param_schema", "{}",
+              "default_params", "{}",
+              "enabled", "true"));
+      appendDataRow(
+          jobs,
+          ConfigPackageExcelSchema.JobDefinition.COLUMNS,
+          row(
+              "tenant_id", "excel-upload-ta",
+              "job_code", upstreamOne,
+              "job_name", "Upstream A",
+              "job_type", "IMPORT",
+              "schedule_type", "MANUAL",
+              "param_schema", "{}",
+              "default_params", "{}",
+              "enabled", "true"));
+      appendDataRow(
+          jobs,
+          ConfigPackageExcelSchema.JobDefinition.COLUMNS,
+          row(
+              "tenant_id", "excel-upload-ta",
+              "job_code", upstreamTwo,
+              "job_name", "Upstream B",
+              "job_type", "IMPORT",
+              "schedule_type", "MANUAL",
+              "param_schema", "{}",
+              "default_params", "{}",
+              "enabled", "true"));
+      ByteArrayOutputStream output = new ByteArrayOutputStream();
+      workbook.write(output);
+      workbookBytes = output.toByteArray();
+    }
+
+    HttpResponse<String> previewResponse = previewWorkbookAsRole(
+        workbookBytes,
+        "multi-dependency-package-" + suffix.toLowerCase(Locale.ROOT),
+        "ROLE_ADMIN",
+        "excel-upload-ta");
+    JsonNode preview = new ObjectMapper().readTree(previewResponse.body()).path("data");
+    assertThat(preview.path("invalidRows").asInt())
+        .as("multi-dependency package preview: %s", preview)
+        .isZero();
+    HttpResponse<String> applyResponse = postApply(
+        preview.path("uploadToken").asText(),
+        preview.path("previewToken").asText(),
+        "idem-multi-dependency-" + suffix.toLowerCase(Locale.ROOT));
+    assertThat(applyResponse.statusCode())
+        .as("multi-dependency package apply response: %s", applyResponse.body())
+        .isEqualTo(HttpStatus.OK.value());
+    List<String> selectedUpstreamJobCodeValues = jdbcTemplate.queryForList(
+        selectUpstreamJobCodeSql, String.class, "excel-upload-ta", downstream);
+    assertThat(selectedUpstreamJobCodeValues).containsExactly(upstreamOne, upstreamTwo);
+    List<String> selectedBizDateAlignmentValues = jdbcTemplate.queryForList(
+        selectBizDateAlignmentSql, String.class, "excel-upload-ta", downstream);
+    assertThat(selectedBizDateAlignmentValues).containsExactly("SAME_DAY", "PREVIOUS_BIZ_DAY");
+  }
+
+  @Test
   @DisplayName("配置引用大小写规范化后仍可导出并通过回导预览")
   void shouldNormalizeConfigReferencesAndPreserveExportRoundTrip() throws Exception {
+    final String selectDefaultParamsSql = """
+        select default_params->>'templateCode' from batch.job_definition where tenant_id = ? and job_code = ?\
+        """;
+    final String selectParamSchemaSql = """
+        select param_schema->>'template_code' from batch.job_definition where tenant_id = ? and job_code = ?\
+        """;
+
     String jobCode = "JOB_REF_NORMALIZE_" + UUID.randomUUID().toString().replace("-", "");
     byte[] workbookBytes = tenantPackageWorkbook(true);
     try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
@@ -772,20 +1123,12 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
     assertThat(applyResponse.statusCode())
         .as("configuration package apply response: %s", applyResponse.body())
         .isEqualTo(HttpStatus.OK.value());
-    assertThat(jdbcTemplate.queryForObject(
-            "select default_params->>'templateCode' from batch.job_definition "
-                + "where tenant_id = ? and job_code = ?",
-            String.class,
-            "excel-upload-ta",
-            jobCode))
-        .isEqualTo("excel_upload_template");
-    assertThat(jdbcTemplate.queryForObject(
-            "select param_schema->>'template_code' from batch.job_definition "
-                + "where tenant_id = ? and job_code = ?",
-            String.class,
-            "excel-upload-ta",
-            jobCode))
-        .isEqualTo("excel_upload_template");
+    String selectedDefaultParams = jdbcTemplate.queryForObject(
+        selectDefaultParamsSql, String.class, "excel-upload-ta", jobCode);
+    assertThat(selectedDefaultParams).isEqualTo("excel_upload_template");
+    String selectedParamSchema =
+        jdbcTemplate.queryForObject(selectParamSchemaSql, String.class, "excel-upload-ta", jobCode);
+    assertThat(selectedParamSchema).isEqualTo("excel_upload_template");
 
     HttpRequest exportRequest = HttpRequest.newBuilder(URI.create("http://localhost:" + port
             + "/api/console/config/tenant-package/excel/export?tenantId=excel-upload-ta"))
@@ -899,7 +1242,10 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
       }
 
       ConfigPackageSheetSpecs specs = new ConfigPackageSheetSpecs(new StaticMessageSource());
-      for (ConfigPackageSheetSpecs.SheetDef expectedSheet : specs.project(scenarios)) {
+      for (ConfigPackageSheetSpecs.SheetDef expectedSheet : specs.project(scenarios).stream()
+          .filter(sheet -> !ConfigPackageExcelValidator.PIPELINE_SHEET.equals(sheet.name()))
+          .filter(sheet -> !ConfigPackageExcelValidator.STEP_SHEET.equals(sheet.name()))
+          .toList()) {
         Sheet actualSheet = workbook.getSheet(expectedSheet.name());
         assertThat(actualSheet).as("projected sheet %s", expectedSheet.name()).isNotNull();
 
@@ -925,8 +1271,6 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
               ConfigPackageExcelValidator.BATCH_WINDOW_SHEET,
               ConfigPackageExcelValidator.CHANNEL_SHEET,
               ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
-              ConfigPackageExcelValidator.PIPELINE_SHEET,
-              ConfigPackageExcelValidator.STEP_SHEET,
               ConfigPackageExcelValidator.WF_DEF_SHEET,
               ConfigPackageExcelValidator.WF_NODE_SHEET,
               ConfigPackageExcelValidator.WF_EDGE_SHEET);
@@ -934,15 +1278,11 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
     }
 
     if (scenarios.contains("IMPORT") || scenarios.contains("EXPORT")) {
-      assertThat(sheets)
-          .contains(
-              ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
-              ConfigPackageExcelValidator.PIPELINE_SHEET,
-              ConfigPackageExcelValidator.STEP_SHEET);
+      assertThat(sheets).contains(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET);
     }
     if (scenarios.contains("PROCESS") || scenarios.contains("DISPATCH")) {
       assertThat(sheets)
-          .contains(
+          .doesNotContain(
               ConfigPackageExcelValidator.PIPELINE_SHEET, ConfigPackageExcelValidator.STEP_SHEET);
     }
     if (scenarios.contains("DISPATCH")) {
@@ -1071,17 +1411,37 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
   @Test
   @DisplayName("配置包中段写入失败时整包事务回滚前序实体")
   void shouldRollbackAllConfigurationWritesWhenApplyStepFails() throws Exception {
+    final String selectCountSql = """
+      select count(*) from batch.job_definition where tenant_id = ?
+  """;
+    final String selectCountSql2 = """
+      select count(*) from batch.file_template_config where tenant_id = ?
+  """;
+    final String selectCountSql3 = """
+      select count(*) from batch.file_channel_config where tenant_id = ?
+  """;
+
     String tenantId = "config-apply-rollback-it";
     String suffix = UUID.randomUUID().toString().replace("-", "");
     String functionName = "test_fail_config_apply_" + suffix;
     String triggerName = "test_fail_config_apply_" + suffix;
-    jdbcTemplate.execute("CREATE FUNCTION public." + functionName + "() RETURNS trigger "
-        + "LANGUAGE plpgsql AS $$ BEGIN IF NEW.tenant_id = '" + tenantId + "' THEN "
-        + "RAISE EXCEPTION 'intentional config apply rollback test'; END IF; "
-        + "RETURN NEW; END $$");
-    jdbcTemplate.execute("CREATE TRIGGER " + triggerName
-        + " BEFORE INSERT OR UPDATE ON batch.job_definition "
-        + "FOR EACH ROW EXECUTE FUNCTION public." + functionName + "()");
+    final String createFunctionSql = """
+        CREATE FUNCTION public.%s() RETURNS trigger
+        LANGUAGE plpgsql AS $$
+        BEGIN
+          IF NEW.tenant_id = '%s' THEN
+            RAISE EXCEPTION 'intentional config apply rollback test';
+          END IF;
+          RETURN NEW;
+        END
+        $$
+        """.formatted(functionName, tenantId);
+    jdbcTemplate.execute(createFunctionSql);
+    final String createTriggerSql = """
+        CREATE TRIGGER %s BEFORE INSERT OR UPDATE ON batch.job_definition
+        FOR EACH ROW EXECUTE FUNCTION public.%s()
+        """.formatted(triggerName, functionName);
+    jdbcTemplate.execute(createTriggerSql);
 
     try {
       HttpResponse<String> response = applyWorkbookAsRole(
@@ -1091,58 +1451,64 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
           tenantId);
 
       assertThat(response.statusCode()).isGreaterThanOrEqualTo(400);
-      assertThat(jdbcTemplate.queryForObject(
-              "select count(*) from batch.job_definition where tenant_id = ?",
-              Integer.class,
-              tenantId))
-          .isZero();
-      assertThat(jdbcTemplate.queryForObject(
-              "select count(*) from batch.file_template_config where tenant_id = ?",
-              Integer.class,
-              tenantId))
-          .isZero();
-      assertThat(jdbcTemplate.queryForObject(
-              "select count(*) from batch.file_channel_config where tenant_id = ?",
-              Integer.class,
-              tenantId))
-          .isZero();
+      Integer selectedJobDefinitionCount =
+          jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId);
+      assertThat(selectedJobDefinitionCount).isZero();
+      Integer selectedFileTemplateConfigCount =
+          jdbcTemplate.queryForObject(selectCountSql2, Integer.class, tenantId);
+      assertThat(selectedFileTemplateConfigCount).isZero();
+      Integer selectedFileChannelConfigCount =
+          jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId);
+      assertThat(selectedFileChannelConfigCount).isZero();
     } finally {
-      jdbcTemplate.execute("DROP TRIGGER IF EXISTS " + triggerName + " ON batch.job_definition");
-      jdbcTemplate.execute("DROP FUNCTION IF EXISTS public." + functionName + "()");
+      final String dropTriggerSql =
+          "DROP TRIGGER IF EXISTS %s ON batch.job_definition".formatted(triggerName);
+      jdbcTemplate.execute(dropTriggerSql);
+      final String dropFunctionSql = """
+          DROP FUNCTION IF EXISTS public.%s()
+      """.formatted(functionName);
+      jdbcTemplate.execute(dropFunctionSql);
     }
   }
 
   @Test
   @DisplayName("调度场景精简监控列更新业务 SLA 且保留平台运行阈值")
   void shouldPreservePlatformMonitoringValues_whenApplyingScheduleScenarioSheet() throws Exception {
+    final String selectPrioritySql = """
+        select priority from batch.job_definition where tenant_id = ? and job_code = ?
+    """;
+    final String updateJobDefinitionSql = """
+        update batch.job_definition set schedule_type = 'CRON', schedule_expr = '0 0 2 * * ?'\s\
+        where tenant_id = ? and job_code = ?\
+        """;
+    final String updateJobMonitoringPolicySql = """
+          update batch.job_monitoring_policy
+          set soft_runtime_seconds = 2400, soft_runtime_severity = 'ERROR',
+              start_grace_seconds = 600, start_grace_severity = 'ERROR'
+          where tenant_id = ? and job_definition_id =
+              (select id from batch.job_definition where tenant_id = ? and job_code = ?)
+          """;
+    final String selectSoftRuntimeSecondsSql = """
+        select soft_runtime_seconds, soft_runtime_severity, start_grace_seconds, start_grace_severity,\s\
+        completion_deadline_local_time, completion_deadline_day_offset from batch.job_monitoring_policy mp\s\
+        join batch.job_definition jd on jd.id = mp.job_definition_id where mp.tenant_id = ? and jd.job_code = ?\
+        """;
+
     String tenantId = "excel-upload-ta";
     String jobCode = "JOB_IMPORT_CUSTOMER";
     applyWorkbook(importScenarioWorkbook(false), "schedule-policy-seed");
-    jdbcTemplate.update(
-        "update batch.job_definition set schedule_type = 'CRON', schedule_expr = '0 0 2 * * ?' "
-            + "where tenant_id = ? and job_code = ?",
-        tenantId,
-        jobCode);
-    jdbcTemplate.update("""
-        update batch.job_monitoring_policy
-        set soft_runtime_seconds = 2400, soft_runtime_severity = 'ERROR',
-            start_grace_seconds = 600, start_grace_severity = 'ERROR'
-        where tenant_id = ? and job_definition_id =
-            (select id from batch.job_definition where tenant_id = ? and job_code = ?)
-        """, tenantId, tenantId, jobCode);
+    Integer selectedPriority =
+        jdbcTemplate.queryForObject(selectPrioritySql, Integer.class, tenantId, jobCode);
+    assertThat(selectedPriority).isEqualTo(5);
+    jdbcTemplate.update(updateJobDefinitionSql, tenantId, jobCode);
+    jdbcTemplate.update(updateJobMonitoringPolicySql, tenantId, tenantId, jobCode);
 
     HttpResponse<String> response = applyWorkbookAsRole(
         schedulePolicyWorkbook(), "schedule-policy-sparse-merge", "ROLE_TENANT_ADMIN", tenantId);
 
     assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
-    Map<String, Object> policy = jdbcTemplate.queryForMap(
-        "select soft_runtime_seconds, soft_runtime_severity, start_grace_seconds, "
-            + "start_grace_severity, completion_deadline_local_time, "
-            + "completion_deadline_day_offset from batch.job_monitoring_policy mp "
-            + "join batch.job_definition jd on jd.id = mp.job_definition_id "
-            + "where mp.tenant_id = ? and jd.job_code = ?",
-        tenantId,
-        jobCode);
+    Map<String, Object> policy =
+        jdbcTemplate.queryForMap(selectSoftRuntimeSecondsSql, tenantId, jobCode);
     assertThat(policy)
         .containsEntry("soft_runtime_seconds", 2400)
         .containsEntry("soft_runtime_severity", "ERROR")
@@ -1156,6 +1522,24 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
   @Test
   @DisplayName("旧配置包省略监控策略 Sheet 时不清除现有策略")
   void shouldPreserveMonitoringPolicyWhenLegacyWorkbookOmitsSheet() throws Exception {
+    final String updateJobDefinitionSql = """
+        update batch.job_definition set schedule_type = 'CRON', schedule_expr = '0 0 2 * * ?'\s\
+        where tenant_id = ? and job_code = ?\
+        """;
+    final String updateJobMonitoringPolicySql = """
+          update batch.job_monitoring_policy
+          set soft_runtime_seconds = 2400, soft_runtime_severity = 'ERROR',
+              start_grace_seconds = 600, start_grace_severity = 'ERROR',
+              completion_deadline_local_time = '04:00', completion_deadline_day_offset = 1
+          where tenant_id = ? and job_definition_id =
+              (select id from batch.job_definition where tenant_id = ? and job_code = ?)
+          """;
+    final String selectSoftRuntimeSecondsSql = """
+        select soft_runtime_seconds, soft_runtime_severity, start_grace_seconds, start_grace_severity,\s\
+        completion_deadline_local_time, completion_deadline_day_offset from batch.job_monitoring_policy mp\s\
+        join batch.job_definition jd on jd.id = mp.job_definition_id where mp.tenant_id = ? and jd.job_code = ?\
+        """;
+
     String tenantId = "legacy-monitoring-policy-it";
     String jobCode = "JOB_IMPORT_CUSTOMER";
     applyWorkbookAsRole(
@@ -1163,19 +1547,8 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
         "legacy-monitoring-policy-seed",
         "ROLE_ADMIN",
         tenantId);
-    jdbcTemplate.update(
-        "update batch.job_definition set schedule_type = 'CRON', schedule_expr = '0 0 2 * * ?' "
-            + "where tenant_id = ? and job_code = ?",
-        tenantId,
-        jobCode);
-    jdbcTemplate.update("""
-        update batch.job_monitoring_policy
-        set soft_runtime_seconds = 2400, soft_runtime_severity = 'ERROR',
-            start_grace_seconds = 600, start_grace_severity = 'ERROR',
-            completion_deadline_local_time = '04:00', completion_deadline_day_offset = 1
-        where tenant_id = ? and job_definition_id =
-            (select id from batch.job_definition where tenant_id = ? and job_code = ?)
-        """, tenantId, tenantId, jobCode);
+    jdbcTemplate.update(updateJobDefinitionSql, tenantId, jobCode);
+    jdbcTemplate.update(updateJobMonitoringPolicySql, tenantId, tenantId, jobCode);
 
     HttpResponse<String> response = applyWorkbookAsRole(
         jobOnlyWorkbookWithoutMonitoringPolicy(),
@@ -1186,14 +1559,8 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
     assertThat(response.statusCode())
         .as("apply response: %s", response.body())
         .isEqualTo(HttpStatus.OK.value());
-    Map<String, Object> policy = jdbcTemplate.queryForMap(
-        "select soft_runtime_seconds, soft_runtime_severity, start_grace_seconds, "
-            + "start_grace_severity, completion_deadline_local_time, "
-            + "completion_deadline_day_offset from batch.job_monitoring_policy mp "
-            + "join batch.job_definition jd on jd.id = mp.job_definition_id "
-            + "where mp.tenant_id = ? and jd.job_code = ?",
-        tenantId,
-        jobCode);
+    Map<String, Object> policy =
+        jdbcTemplate.queryForMap(selectSoftRuntimeSecondsSql, tenantId, jobCode);
     assertThat(policy)
         .containsEntry("soft_runtime_seconds", 2400)
         .containsEntry("soft_runtime_severity", "ERROR")
@@ -1206,6 +1573,15 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
   @Test
   @DisplayName("预览后租户配置被其他入口修改时拒绝整包 Apply")
   void shouldRejectApplyWhenTenantConfigurationChangesAfterPreview() throws Exception {
+    final String insertResourceQueueSql = """
+        insert into batch.resource_queue (tenant_id, queue_code, queue_name, queue_type)\s\
+        values (?, ?, ?, 'IMPORT')\
+        """;
+    final String selectCountSql = """
+        select count(*) from batch.file_channel_config where tenant_id = ?\s\
+        and channel_code = 'excel_upload_local'\
+        """;
+
     String tenantId = "config-version-conflict-it";
     String keySuffix = "config-version-conflict";
     String boundary = "excel-upload-" + keySuffix;
@@ -1244,11 +1620,7 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
         .asText();
 
     jdbcTemplate.update(
-        "insert into batch.resource_queue "
-            + "(tenant_id, queue_code, queue_name, queue_type) values (?, ?, ?, 'IMPORT')",
-        tenantId,
-        "CONCURRENT_QUEUE",
-        "Concurrent config write");
+        insertResourceQueueSql, tenantId, "CONCURRENT_QUEUE", "Concurrent config write");
 
     HttpRequest applyRequest = HttpRequest.newBuilder(URI.create("http://localhost:" + port
             + "/api/console/config/tenant-package/excel/apply/" + uploadToken))
@@ -1266,33 +1638,34 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
     assertThat(applyResponse.statusCode()).isEqualTo(HttpStatus.CONFLICT.value());
     assertThat(new ObjectMapper().readTree(applyResponse.body()).path("code").asText())
         .isEqualTo("STATE_CONFLICT");
-    assertThat(jdbcTemplate.queryForObject(
-            "select count(*) from batch.file_channel_config where tenant_id = ? "
-                + "and channel_code = 'excel_upload_local'",
-            Integer.class,
-            tenantId))
-        .isZero();
+    Integer selectedFileChannelConfigCount =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId);
+    assertThat(selectedFileChannelConfigCount).isZero();
   }
 
   @Test
   @DisplayName("配置版本函数只允许应用数据库角色执行")
   void shouldRestrictConfigurationRevisionFunctionsToApplicationRole() {
-    Integer publicExecuteGrants = jdbcTemplate.queryForObject(
-        "select count(*) from pg_proc p "
-            + "cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) acl "
-            + "where p.oid in ("
-            + "'batch.current_tenant_configuration_revision(text)'::regprocedure, "
-            + "'batch.lock_tenant_configuration_revision(text)'::regprocedure) "
-            + "and acl.grantee = 0 and acl.privilege_type = 'EXECUTE'",
-        Integer.class);
-    Boolean applicationCanReadRevision = jdbcTemplate.queryForObject(
-        "select has_function_privilege(current_user, "
-            + "'batch.current_tenant_configuration_revision(text)', 'EXECUTE')",
-        Boolean.class);
-    Boolean applicationCanLockRevision = jdbcTemplate.queryForObject(
-        "select has_function_privilege(current_user, "
-            + "'batch.lock_tenant_configuration_revision(text)', 'EXECUTE')",
-        Boolean.class);
+    final String selectCountSql = """
+      select count(*) from pg_proc p cross\s\
+      join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) acl\s\
+      where p.oid in ('batch.current_tenant_configuration_revision(text)'::regprocedure,\s\
+      'batch.lock_tenant_configuration_revision(text)'::regprocedure) and acl.grantee = 0\s\
+      and acl.privilege_type = 'EXECUTE'\
+      """;
+    final String selectHasFunctionPrivilegeSql = """
+      select has_function_privilege(current_user, 'batch.current_tenant_configuration_revision(text)',\s\
+      'EXECUTE')\
+      """;
+    final String selectHasFunctionPrivilegeSql2 = """
+      select has_function_privilege(current_user, 'batch.lock_tenant_configuration_revision(text)', 'EXECUTE')\
+      """;
+
+    Integer publicExecuteGrants = jdbcTemplate.queryForObject(selectCountSql, Integer.class);
+    Boolean applicationCanReadRevision =
+        jdbcTemplate.queryForObject(selectHasFunctionPrivilegeSql, Boolean.class);
+    Boolean applicationCanLockRevision =
+        jdbcTemplate.queryForObject(selectHasFunctionPrivilegeSql2, Boolean.class);
 
     assertThat(publicExecuteGrants).isZero();
     assertThat(applicationCanReadRevision).isTrue();
@@ -1302,6 +1675,19 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
   @Test
   @DisplayName("MERGE 更新禁用日历并保留日历和窗口的空白可选字段")
   void shouldMergeCalendarAndWindowWithoutResettingBlankOptionalFields() throws Exception {
+    final String selectCalendarNameSql = """
+        select calendar_name, timezone, holiday_roll_rule, catch_up_policy, catch_up_max_days, enabled,\s\
+        description from batch.business_calendar where tenant_id = ? and calendar_code = ?\
+        """;
+    final String selectCountSql = """
+        select count(*) from batch.calendar_holiday h join batch.business_calendar c on c.id = h.calendar_id\s\
+        where c.tenant_id = ? and c.calendar_code = ? and h.day_type = 'HOLIDAY'\
+        """;
+    final String selectWindowNameSql = """
+        select window_name, timezone, start_time::text, end_time::text, end_strategy, out_of_window_action,\s\
+        allow_cross_day, enabled, description from batch.batch_window where tenant_id = ? and window_code = ?\
+        """;
+
     String tenantId = "excel-upload-ta";
     HttpResponse<String> initialPreview = previewWorkbookAsRole(
         calendarAndWindowWorkbook(false),
@@ -1353,12 +1739,8 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
     assertThat(response.statusCode())
         .as("apply response: %s", response.body())
         .isEqualTo(HttpStatus.OK.value());
-    Map<String, Object> calendar = jdbcTemplate.queryForMap(
-        "select calendar_name, timezone, holiday_roll_rule, catch_up_policy, "
-            + "catch_up_max_days, enabled, description from batch.business_calendar "
-            + "where tenant_id = ? and calendar_code = ?",
-        tenantId,
-        "cal_merge");
+    Map<String, Object> calendar =
+        jdbcTemplate.queryForMap(selectCalendarNameSql, tenantId, "cal_merge");
     assertThat(calendar)
         .containsEntry("calendar_name", "Updated calendar")
         .containsEntry("timezone", "America/New_York")
@@ -1367,21 +1749,12 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
         .containsEntry("catch_up_max_days", 5)
         .containsEntry("enabled", false)
         .containsEntry("description", "Keep calendar settings");
-    assertThat(jdbcTemplate.queryForObject(
-            "select count(*) from batch.calendar_holiday h "
-                + "join batch.business_calendar c on c.id = h.calendar_id "
-                + "where c.tenant_id = ? and c.calendar_code = ? and h.day_type = 'HOLIDAY'",
-            Integer.class,
-            tenantId,
-            "cal_merge"))
-        .isEqualTo(2);
+    Integer selectedCalendarHolidayCount =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId, "cal_merge");
+    assertThat(selectedCalendarHolidayCount).isEqualTo(2);
 
-    Map<String, Object> window = jdbcTemplate.queryForMap(
-        "select window_name, timezone, start_time::text, end_time::text, end_strategy, "
-            + "out_of_window_action, allow_cross_day, enabled, description "
-            + "from batch.batch_window where tenant_id = ? and window_code = ?",
-        tenantId,
-        "window_merge");
+    Map<String, Object> window =
+        jdbcTemplate.queryForMap(selectWindowNameSql, tenantId, "window_merge");
     assertThat(window)
         .containsEntry("window_name", "Updated window")
         .containsEntry("timezone", "America/New_York")
@@ -1416,80 +1789,101 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
   }
 
   @Test
-  @DisplayName("MERGE 保留作业、文件模板和 Pipeline 的空白选填值且不删除省略 steps")
-  void shouldPreserveExistingValuesWhenOptionalFieldsAndPipelineStepsAreOmitted() throws Exception {
+  @DisplayName("MERGE 保留作业和文件模板的空白选填值")
+  void shouldPreserveExistingValuesWhenOptionalFieldsAreOmitted() throws Exception {
+    final String updateJobDefinitionSql = """
+        update batch.job_definition set priority = 8 where tenant_id = ? and job_code = ?
+    """;
+    final String selectDescriptionSql = """
+      select description from batch.job_definition where tenant_id = ? and job_code = ?
+  """;
+    final String selectDefaultParamsSql = """
+      select default_params::text from batch.job_definition where tenant_id = ? and job_code = ?
+  """;
+    final String selectTenantIdSql = """
+      select tenant_id, template_code, version, description from batch.file_template_config\s\
+      where template_code like 'tpl_import_%%' order by tenant_id, template_code, version\
+      """;
+    final String selectDescriptionSql2 = """
+      select description from batch.file_template_config where tenant_id = ? and template_code = ?
+  """;
+    final String selectPrioritySql = """
+        select priority from batch.job_definition where tenant_id = ? and job_code = ?
+    """;
+
     byte[] initialWorkbook = importScenarioWorkbook(false);
     applyWorkbook(initialWorkbook, "merge-initial");
 
     String jobCode = "JOB_IMPORT_CUSTOMER";
     String tenantId = "excel-upload-ta";
-    String originalDescription = jdbcTemplate.queryForObject(
-        "select description from batch.job_definition where tenant_id = ? and job_code = ?",
-        String.class,
-        tenantId,
-        jobCode);
-    String originalParams = jdbcTemplate.queryForObject(
-        "select default_params::text from batch.job_definition where tenant_id = ? and job_code = ?",
-        String.class,
-        tenantId,
-        jobCode);
-    List<Map<String, Object>> fileTemplateRows = jdbcTemplate.queryForList(
-        "select tenant_id, template_code, version, description from batch.file_template_config "
-            + "where template_code like 'tpl_import_%' order by tenant_id, template_code, version");
+    jdbcTemplate.update(updateJobDefinitionSql, tenantId, jobCode);
+    String originalDescription =
+        jdbcTemplate.queryForObject(selectDescriptionSql, String.class, tenantId, jobCode);
+    String originalParams =
+        jdbcTemplate.queryForObject(selectDefaultParamsSql, String.class, tenantId, jobCode);
+    List<Map<String, Object>> fileTemplateRows = jdbcTemplate.queryForList(selectTenantIdSql);
     assertThat(fileTemplateRows)
         .as("file templates persisted by the initial scenario import")
         .isNotEmpty();
     String templateDescription = jdbcTemplate.queryForObject(
-        "select description from batch.file_template_config where tenant_id = ? and template_code = ?",
-        String.class,
-        tenantId,
-        "tpl_import_customer");
-    String pipelineDescription = jdbcTemplate.queryForObject(
-        "select description from batch.pipeline_definition where tenant_id = ? and job_code = ?",
-        String.class,
-        tenantId,
-        jobCode);
-
+        selectDescriptionSql2, String.class, tenantId, "tpl_import_customer");
     byte[] mergeWorkbook = importScenarioWorkbook(true);
     applyWorkbook(mergeWorkbook, "merge-omitted-values");
 
-    assertThat(jdbcTemplate.queryForObject(
-            "select description from batch.job_definition where tenant_id = ? and job_code = ?",
-            String.class,
-            tenantId,
-            jobCode))
-        .isEqualTo(originalDescription);
-    assertThat(jdbcTemplate.queryForObject(
-            "select default_params::text from batch.job_definition where tenant_id = ? and job_code = ?",
-            String.class,
-            tenantId,
-            jobCode))
-        .isEqualTo(originalParams);
-    assertThat(jdbcTemplate.queryForObject(
-            "select description from batch.file_template_config where tenant_id = ? and template_code = ?",
-            String.class,
-            tenantId,
-            "tpl_import_customer"))
-        .isEqualTo(templateDescription);
-    assertThat(jdbcTemplate.queryForObject(
-            "select description from batch.pipeline_definition where tenant_id = ? and job_code = ?",
-            String.class,
-            tenantId,
-            jobCode))
-        .isEqualTo(pipelineDescription);
-    assertThat(jdbcTemplate.queryForObject(
-            "select count(*) from batch.pipeline_definition pd "
-                + "join batch.pipeline_step_definition ps on ps.pipeline_definition_id = pd.id "
-                + "where pd.tenant_id = ? and pd.job_code = ?",
-            Integer.class,
-            tenantId,
-            jobCode))
-        .isEqualTo(6);
+    String selectedDescription =
+        jdbcTemplate.queryForObject(selectDescriptionSql, String.class, tenantId, jobCode);
+    assertThat(selectedDescription).isEqualTo(originalDescription);
+    String selectedDefaultParams =
+        jdbcTemplate.queryForObject(selectDefaultParamsSql, String.class, tenantId, jobCode);
+    assertThat(selectedDefaultParams).isEqualTo(originalParams);
+    Integer selectedPriority =
+        jdbcTemplate.queryForObject(selectPrioritySql, Integer.class, tenantId, jobCode);
+    assertThat(selectedPriority).isEqualTo(8);
+    String selectedDescriptionRead2 = jdbcTemplate.queryForObject(
+        selectDescriptionSql2, String.class, tenantId, "tpl_import_customer");
+    assertThat(selectedDescriptionRead2).isEqualTo(templateDescription);
   }
 
   @Test
   @DisplayName("Workflow 配置包 MERGE 保留可空字段且不删除省略的节点和边")
   void shouldPreserveWorkflowValuesAndOmittedNodesAndEdgesDuringMerge() throws Exception {
+    final String selectCalendarCodeSql = """
+        select calendar_code from batch.workflow_definition where tenant_id = ? and workflow_code = ?\s\
+        and version = 1\
+        """;
+    final String selectWorkflowCodeSql = """
+      select workflow_code, version, calendar_code, schedule_enabled from batch.workflow_definition\s\
+      where tenant_id = ? and workflow_code = ?\
+      """;
+    final String selectDescriptionSql = """
+      select description from batch.workflow_definition where tenant_id = ? and workflow_code = ?\s\
+      and version = 1\
+      """;
+    final String selectNodeNameSql = """
+      select node_name from batch.workflow_node wn\s\
+      join batch.workflow_definition wd on wd.id = wn.workflow_definition_id where wd.tenant_id = ?\s\
+      and wd.workflow_code = ? and wd.version = 1 and wn.node_code = 'START'\
+      """;
+    final String selectDescriptionSql2 = """
+      select description from batch.workflow_definition where tenant_id = ? and workflow_code = ?\s\
+      and version = 2\
+      """;
+    final String selectNodeNameSql2 = """
+      select node_name from batch.workflow_node wn\s\
+      join batch.workflow_definition wd on wd.id = wn.workflow_definition_id where wd.tenant_id = ?\s\
+      and wd.workflow_code = ? and wd.version = 2 and wn.node_code = 'START'\
+      """;
+    final String selectCountSql = """
+      select count(*) from batch.workflow_node wn\s\
+      join batch.workflow_definition wd on wd.id = wn.workflow_definition_id where wd.tenant_id = ?\s\
+      and wd.workflow_code = ? and wd.version = 2\
+      """;
+    final String selectCountSql2 = """
+      select count(*) from batch.workflow_edge we\s\
+      join batch.workflow_definition wd on wd.id = we.workflow_definition_id where wd.tenant_id = ?\s\
+      and wd.workflow_code = ? and wd.version = 2\
+      """;
+
     byte[] initialWorkbook = workflowScenarioWorkbook(false);
     HttpResponse<String> initialPreview = previewWorkbookAsRole(
         initialWorkbook, "workflow-merge-initial-preview", "ROLE_ADMIN", "excel-upload-ta");
@@ -1501,20 +1895,17 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
 
     String tenantId = "excel-upload-ta";
     String workflowCode = "WF_CUSTOMER_EOD";
-    String originalDescription = jdbcTemplate.queryForObject(
-        "select description from batch.workflow_definition "
-            + "where tenant_id = ? and workflow_code = ? and version = 1",
-        String.class,
-        tenantId,
-        workflowCode);
-    String originalNodeName = jdbcTemplate.queryForObject(
-        "select node_name from batch.workflow_node wn "
-            + "join batch.workflow_definition wd on wd.id = wn.workflow_definition_id "
-            + "where wd.tenant_id = ? and wd.workflow_code = ? and wd.version = 1 "
-            + "and wn.node_code = 'START'",
-        String.class,
-        tenantId,
-        workflowCode);
+    String selectedCalendarCode =
+        jdbcTemplate.queryForObject(selectCalendarCodeSql, String.class, tenantId, workflowCode);
+    assertThat(selectedCalendarCode)
+        .as(
+            "workflow rows after config package apply: %s",
+            jdbcTemplate.queryForList(selectWorkflowCodeSql, tenantId, workflowCode))
+        .isEqualTo("default_calendar");
+    String originalDescription =
+        jdbcTemplate.queryForObject(selectDescriptionSql, String.class, tenantId, workflowCode);
+    String originalNodeName =
+        jdbcTemplate.queryForObject(selectNodeNameSql, String.class, tenantId, workflowCode);
 
     byte[] sparseWorkbook = workflowScenarioWorkbook(true);
     HttpResponse<String> sparsePreview = previewWorkbookAsRole(
@@ -1525,49 +1916,341 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
         .contains("\"issues\":[]");
     assertSuccessfulApplyAsPlatformAdmin(sparseWorkbook, "workflow-merge-sparse");
 
-    assertThat(jdbcTemplate.queryForObject(
-            "select description from batch.workflow_definition "
-                + "where tenant_id = ? and workflow_code = ? and version = 1",
-            String.class,
+    String selectedDescription =
+        jdbcTemplate.queryForObject(selectDescriptionSql2, String.class, tenantId, workflowCode);
+    assertThat(selectedDescription).isEqualTo(originalDescription);
+    String selectedNodeName =
+        jdbcTemplate.queryForObject(selectNodeNameSql2, String.class, tenantId, workflowCode);
+    assertThat(selectedNodeName).isEqualTo(originalNodeName);
+    Integer selectedWorkflowNodeCount =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId, workflowCode);
+    assertThat(selectedWorkflowNodeCount).isEqualTo(4);
+    Integer selectedWorkflowEdgeCount =
+        jdbcTemplate.queryForObject(selectCountSql2, Integer.class, tenantId, workflowCode);
+    assertThat(selectedWorkflowEdgeCount).isEqualTo(4);
+  }
+
+  @Test
+  @DisplayName("空租户首次导入配置包时先创建日历再导入引用该日历的 Workflow")
+  void shouldApplyWorkflowCalendarReferenceForTenantWithoutExistingConfiguration()
+      throws Exception {
+    final String selectCountSql = """
+            select count(*) from batch.business_calendar where tenant_id = ?
+        """;
+    final String selectCountSql2 = """
+      select count(*) from batch.workflow_definition where tenant_id = ?
+  """;
+    final String selectCalendarCodeSql = """
+            select calendar_code from batch.business_calendar where tenant_id = ?\s\
+            and calendar_code = 'default_calendar'\
+            """;
+    final String selectCalendarCodeSql2 = """
+      select calendar_code from batch.workflow_definition where tenant_id = ?\s\
+      and workflow_code = 'WF_CUSTOMER_EOD' and version = 1\
+      """;
+    final String selectCountSql3 = """
+      select count(*) from batch.workflow_node wn\s\
+      join batch.workflow_definition wd on wd.id = wn.workflow_definition_id where wd.tenant_id = ?\s\
+      and wd.workflow_code = 'WF_CUSTOMER_EOD'\
+      """;
+    final String selectCountSql4 = """
+      select count(*) from batch.workflow_edge we\s\
+      join batch.workflow_definition wd on wd.id = we.workflow_definition_id where wd.tenant_id = ?\s\
+      and wd.workflow_code = 'WF_CUSTOMER_EOD'\
+      """;
+
+    String tenantId = "excel-workflow-empty-" + UUID.randomUUID().toString().substring(0, 8);
+    Integer selectedBusinessCalendarCount =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId);
+    assertThat(selectedBusinessCalendarCount).isZero();
+    Integer selectedWorkflowDefinitionCount =
+        jdbcTemplate.queryForObject(selectCountSql2, Integer.class, tenantId);
+    assertThat(selectedWorkflowDefinitionCount).isZero();
+
+    byte[] workbook = workbookForTenant(workflowScenarioWorkbook(false, true), tenantId);
+    HttpResponse<String> preview = previewWorkbookAsRole(
+        workbook, "workflow-empty-tenant-preview-" + tenantId, "ROLE_ADMIN", tenantId);
+    assertThat(preview.body())
+        .as("first-import package preview")
+        .contains("\"invalidRows\":0")
+        .contains("\"issues\":[]");
+
+    HttpResponse<String> apply = applyWorkbookAsRole(
+        workbook, "workflow-empty-tenant-apply-" + tenantId, "ROLE_ADMIN", tenantId);
+    assertThat(apply.statusCode())
+        .as("configuration package apply response: %s", apply.body())
+        .isEqualTo(HttpStatus.OK.value());
+    assertThat(new ObjectMapper().readTree(apply.body()).path("code").asText())
+        .isEqualTo("SUCCESS");
+
+    String selectedCalendarCode =
+        jdbcTemplate.queryForObject(selectCalendarCodeSql, String.class, tenantId);
+    assertThat(selectedCalendarCode).isEqualTo("default_calendar");
+    String selectedCalendarCodeRead2 =
+        jdbcTemplate.queryForObject(selectCalendarCodeSql2, String.class, tenantId);
+    assertThat(selectedCalendarCodeRead2).isEqualTo("default_calendar");
+    Integer selectedWorkflowNodeCount =
+        jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId);
+    assertThat(selectedWorkflowNodeCount).isEqualTo(4);
+    Integer selectedWorkflowEdgeCount =
+        jdbcTemplate.queryForObject(selectCountSql4, Integer.class, tenantId);
+    assertThat(selectedWorkflowEdgeCount).isEqualTo(3);
+  }
+
+  @Test
+  @DisplayName("全新数据库完整配置包导入后可复制至空租户")
+  void shouldImportCompleteBusinessPackageAndCopyItToEmptyTenant() throws Exception {
+    final String selectCountSql = """
+      select count(*) from batch.workflow_node wn\s\
+      join batch.workflow_definition wd on wd.id = wn.workflow_definition_id where wd.tenant_id = ?\s\
+      and wd.workflow_code = 'WF_CUSTOMER_EOD'\
+      """;
+    final String selectCountSql2 = """
+      select count(*) from batch.workflow_edge we\s\
+      join batch.workflow_definition wd on wd.id = we.workflow_definition_id where wd.tenant_id = ?\s\
+      and wd.workflow_code = 'WF_CUSTOMER_EOD'\
+      """;
+    final String selectBizDateSql = """
+        select h.biz_date::text from batch.calendar_holiday h\s\
+        join batch.business_calendar c on c.id = h.calendar_id where c.tenant_id = ?\s\
+        and c.calendar_code = 'default_calendar' order by h.biz_date\
+        """;
+    final String selectTargetEndpointSql = """
+        select target_endpoint, config_json::text as config_json from batch.file_channel_config\s\
+        where tenant_id = ? and channel_code = ?\
+        """;
+    final String selectPolicyCodeSql = """
+        select policy_code, max_running_jobs_per_tenant, fair_share_weight from batch.tenant_quota_policy\s\
+        where tenant_id = ?\
+        """;
+    final String selectRouteCodeSql = """
+        select route_code, receiver, group_wait_seconds from batch.alert_routing_config where tenant_id = ?\s\
+        and route_code = ?\
+        """;
+
+    String tenantId = "excel-package-empty-" + UUID.randomUUID().toString().substring(0, 8);
+    String copyTargetTenantId =
+        "excel-copy-empty-" + UUID.randomUUID().toString().substring(0, 8);
+    for (String table : List.of(
+        "resource_queue",
+        "business_calendar",
+        "batch_window",
+        "job_definition",
+        "file_channel_config",
+        "file_template_config",
+        "workflow_definition")) {
+      final String selectCountSql3 = """
+                select count(*) from batch.%s where tenant_id = ?\
+                """.formatted(table);
+      Integer selectedCount = jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId);
+      assertThat(selectedCount).as("fresh tenant row count for %s", table).isZero();
+    }
+
+    byte[] workbook = workbookForTenant(completeBusinessPackageWorkbook(), tenantId);
+    HttpResponse<String> preview = previewWorkbookAsRole(
+        workbook, "complete-package-preview-" + tenantId, "ROLE_ADMIN", tenantId);
+    assertThat(preview.body())
+        .as("complete package preview for empty tenant")
+        .contains("\"invalidRows\":0")
+        .contains("\"issues\":[]");
+
+    HttpResponse<String> apply =
+        applyWorkbookAsRole(workbook, "complete-package-apply-" + tenantId, "ROLE_ADMIN", tenantId);
+    assertThat(apply.statusCode())
+        .as("complete package apply response: %s", apply.body())
+        .isEqualTo(HttpStatus.OK.value());
+    assertThat(new ObjectMapper().readTree(apply.body()).path("code").asText())
+        .isEqualTo("SUCCESS");
+
+    for (String table : List.of(
+        "resource_queue",
+        "business_calendar",
+        "batch_window",
+        "job_definition",
+        "file_channel_config",
+        "file_template_config",
+        "workflow_definition")) {
+      final String selectCountSql3 = """
+                select count(*) from batch.%s where tenant_id = ?\
+                """.formatted(table);
+      Integer selectedCountRead2 =
+          jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId);
+      assertThat(selectedCountRead2).as("imported tenant row count for %s", table).isPositive();
+    }
+    Integer selectedWorkflowNodeCount =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId);
+    assertThat(selectedWorkflowNodeCount).isEqualTo(4);
+    Integer selectedWorkflowEdgeCount =
+        jdbcTemplate.queryForObject(selectCountSql2, Integer.class, tenantId);
+    assertThat(selectedWorkflowEdgeCount).isEqualTo(3);
+
+    TenantQuotaPolicySpec quotaPolicy = new TenantQuotaPolicySpec();
+    quotaPolicy.setPolicyCode("COPY_DEFAULT");
+    quotaPolicy.setMaxRunningJobsPerTenant(20);
+    quotaPolicy.setMaxPartitionsPerTenant(200);
+    quotaPolicy.setMaxQpsPerTenant(50);
+    quotaPolicy.setFairShareWeight(3);
+    quotaPolicy.setEnabled(true);
+    quotaPolicy.setDescription("copy regression quota policy");
+    AlertRoutingSpec alertRouting = new AlertRoutingSpec();
+    alertRouting.setRouteCode("COPY_OPERATIONS");
+    alertRouting.setRouteName("Operations alerts");
+    alertRouting.setTeam("operations");
+    alertRouting.setAlertGroup("workflow");
+    alertRouting.setSeverity("ERROR");
+    alertRouting.setReceiver("ops@example.invalid");
+    alertRouting.setGroupBy("tenant,workflow");
+    alertRouting.setGroupWaitSeconds(30);
+    alertRouting.setGroupIntervalSeconds(300);
+    alertRouting.setRepeatIntervalSeconds(1800);
+    alertRouting.setEnabled(true);
+    alertRouting.setDescription("copy regression alert route");
+    TenantConfigBatchInitRequest supplementalConfig = new TenantConfigBatchInitRequest();
+    supplementalConfig.setTargetTenantIds(List.of(tenantId));
+    supplementalConfig.setStrict(true);
+    supplementalConfig.setQuotaPolicies(List.of(quotaPolicy));
+    supplementalConfig.setAlertRoutings(List.of(alertRouting));
+    assertThat(tenantConfigInitService
+            .batchInit(supplementalConfig, "integration-test", "r19-supplemental-config")
+            .successTenants())
+        .isOne();
+
+    for (String table : List.of(
+        "resource_queue",
+        "business_calendar",
+        "batch_window",
+        "job_definition",
+        "file_channel_config",
+        "file_template_config",
+        "workflow_definition",
+        "tenant_quota_policy",
+        "alert_routing_config")) {
+      final String selectCountSql3 = """
+                select count(*) from batch.%s where tenant_id = ?\
+                """.formatted(table);
+      Integer selectedCountRead3 =
+          jdbcTemplate.queryForObject(selectCountSql3, Integer.class, copyTargetTenantId);
+      assertThat(selectedCountRead3)
+          .as("empty copy target row count for %s", table)
+          .isZero();
+    }
+
+    String copyBody = new ObjectMapper()
+        .writeValueAsString(Map.of(
+            "sourceTenantId",
             tenantId,
-            workflowCode))
-        .isEqualTo(originalDescription);
-    assertThat(jdbcTemplate.queryForObject(
-            "select node_name from batch.workflow_node wn "
-                + "join batch.workflow_definition wd on wd.id = wn.workflow_definition_id "
-                + "where wd.tenant_id = ? and wd.workflow_code = ? and wd.version = 1 "
-                + "and wn.node_code = 'START'",
-            String.class,
-            tenantId,
-            workflowCode))
-        .isEqualTo(originalNodeName);
-    assertThat(jdbcTemplate.queryForObject(
-            "select count(*) from batch.workflow_node wn "
-                + "join batch.workflow_definition wd on wd.id = wn.workflow_definition_id "
-                + "where wd.tenant_id = ? and wd.workflow_code = ? and wd.version = 1",
-            Integer.class,
-            tenantId,
-            workflowCode))
-        .isEqualTo(4);
-    assertThat(jdbcTemplate.queryForObject(
-            "select count(*) from batch.workflow_edge we "
-                + "join batch.workflow_definition wd on wd.id = we.workflow_definition_id "
-                + "where wd.tenant_id = ? and wd.workflow_code = ? and wd.version = 1",
-            Integer.class,
-            tenantId,
-            workflowCode))
-        .isEqualTo(4);
+            "targetTenantIds",
+            List.of(copyTargetTenantId),
+            "mode",
+            "UPSERT",
+            "dryRun",
+            false));
+    HttpResponse<String> copy = HttpClient.newHttpClient()
+        .send(
+            HttpRequest.newBuilder(
+                    URI.create("http://localhost:" + port + "/api/console/config/tenant-copy"))
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "application/json")
+                .header(
+                    CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER,
+                    "complete-package-copy-" + copyTargetTenantId)
+                .header("X-Console-Roles", "ROLE_ADMIN")
+                .POST(HttpRequest.BodyPublishers.ofString(copyBody, StandardCharsets.UTF_8))
+                .build(),
+            HttpResponse.BodyHandlers.ofString());
+    assertThat(copy.statusCode())
+        .as("empty tenant config copy response: %s", copy.body())
+        .isEqualTo(HttpStatus.OK.value());
+    JsonNode copyResponse = new ObjectMapper().readTree(copy.body());
+    assertThat(copyResponse.path("code").asText()).isEqualTo("SUCCESS");
+    assertThat(copyResponse.path("data").path("successTenants").asInt()).isEqualTo(1);
+    assertThat(copyResponse.path("data").path("failureTenants").asInt()).isZero();
+    for (String table : List.of(
+        "resource_queue",
+        "business_calendar",
+        "batch_window",
+        "job_definition",
+        "file_channel_config",
+        "file_template_config",
+        "workflow_definition",
+        "tenant_quota_policy",
+        "alert_routing_config")) {
+      final String selectCountSql3 = """
+                select count(*) from batch.%s where tenant_id = ?\
+                """.formatted(table);
+      Integer selectedCountRead4 =
+          jdbcTemplate.queryForObject(selectCountSql3, Integer.class, copyTargetTenantId);
+      assertThat(selectedCountRead4)
+          .as("copied tenant row count for %s", table)
+          .isEqualTo(jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId));
+    }
+    Integer selectedWorkflowNodeCountRead2 =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, copyTargetTenantId);
+    assertThat(selectedWorkflowNodeCountRead2).isEqualTo(4);
+    Integer selectedWorkflowEdgeCountRead2 =
+        jdbcTemplate.queryForObject(selectCountSql2, Integer.class, copyTargetTenantId);
+    assertThat(selectedWorkflowEdgeCountRead2).isEqualTo(3);
+    List<String> selectedBizDateValues =
+        jdbcTemplate.queryForList(selectBizDateSql, String.class, copyTargetTenantId);
+    assertThat(selectedBizDateValues).containsExactly("2026-01-01");
+    Map<String, Object> copiedChannel =
+        jdbcTemplate.queryForMap(selectTargetEndpointSql, copyTargetTenantId, "demo-sftp");
+    assertThat(copiedChannel)
+        .containsEntry("target_endpoint", null)
+        .containsEntry("config_json", "{}");
+    Map<String, Object> selectedPolicyCodeRow =
+        jdbcTemplate.queryForMap(selectPolicyCodeSql, copyTargetTenantId);
+    assertThat(selectedPolicyCodeRow)
+        .containsEntry("policy_code", "copy_default")
+        .containsEntry("max_running_jobs_per_tenant", 20)
+        .containsEntry("fair_share_weight", 3);
+    Map<String, Object> selectedRouteCodeRow =
+        jdbcTemplate.queryForMap(selectRouteCodeSql, copyTargetTenantId, "copy_operations");
+    assertThat(selectedRouteCodeRow)
+        .containsEntry("route_code", "copy_operations")
+        .containsEntry("receiver", "ops@example.invalid")
+        .containsEntry("group_wait_seconds", 30);
+  }
+
+  private static byte[] completeBusinessPackageWorkbook() throws Exception {
+    StaticMessageSource messages = new StaticMessageSource();
+    messages.setUseCodeAsDefaultMessage(true);
+    List<String> scenarios =
+        List.of("IMPORT", "EXPORT", "PROCESS", "DISPATCH", "ATOMIC", "WORKFLOW", "SCHEDULE");
+    List<List<Map<String, Object>>> sheets = ConfigPackageSampleDataFactory.sampleSheets(scenarios);
+    // 仍支持读取 Pipeline 定义；已退役租户自有写入。
+    // 租户 Pipeline 工作表已退役；当前契约中的所有可执行工作都由 Job 和
+    sheets.get(7).clear();
+    sheets.get(8).clear();
+    for (Map<String, Object> node : sheets.get(10)) {
+      if ("JOB".equals(node.get("node_type"))) {
+        node.put("node_type", "TASK");
+        node.put("related_job_code", null);
+      }
+    }
+    return new ConfigPackageExcelWorkbookWriter(messages, List.of("ALL"))
+        .buildExportWorkbook(sheets);
   }
 
   private static byte[] workflowScenarioWorkbook(boolean sparseUpdate) throws Exception {
+    return workflowScenarioWorkbook(sparseUpdate, false);
+  }
+
+  private static byte[] workflowScenarioWorkbook(boolean sparseUpdate, boolean includeCalendar)
+      throws Exception {
     StaticMessageSource messages = new StaticMessageSource();
     messages.setUseCodeAsDefaultMessage(true);
-    ConfigPackageExcelWorkbookWriter writer =
-        new ConfigPackageExcelWorkbookWriter(messages, List.of("WORKFLOW"));
+    ConfigPackageExcelWorkbookWriter writer = new ConfigPackageExcelWorkbookWriter(
+        messages, includeCalendar ? List.of("WORKFLOW", "SCHEDULE") : List.of("WORKFLOW"));
     List<List<Map<String, Object>>> sheets =
         ConfigPackageSampleDataFactory.sampleSheets("WORKFLOW");
+    Map<String, Object> defaultCalendar = new LinkedHashMap<>(sheets.get(1).getFirst());
+    sheets.get(9).getFirst().put("calendar_code", "default-calendar");
     for (int index = 0; index < 9; index++) {
       sheets.get(index).clear();
+    }
+    if (includeCalendar) {
+      sheets.get(1).add(defaultCalendar);
     }
     if (sparseUpdate) {
       sheets.get(10).removeIf(row -> !List.of("START", "END").contains(row.get("node_code")));
@@ -1616,6 +2299,12 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
             .getCell(columnIndex(nodeHeader, "node_name"))
             .setCellValue("Workflow MERGE start node");
       }
+      if (!sparseUpdate) {
+        assertThat(definitionData
+                .getCell(columnIndex(definitionHeader, "calendar_code"))
+                .getStringCellValue())
+            .isEqualTo("default-calendar");
+      }
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       workbook.write(out);
       return out.toByteArray();
@@ -1636,21 +2325,10 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
       Sheet fileTemplates = workbook.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET);
       Row fileTemplateHeader = fileTemplates.getRow(0);
       Row fileTemplateData = fileTemplates.getRow(1);
-      Sheet pipelines = workbook.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET);
-      Row pipelineHeader = pipelines.getRow(0);
-      Row pipelineData = pipelines.getRow(1);
       if (omitOptionalValuesAndSteps) {
         jobData.getCell(columnIndex(jobHeader, "description")).setBlank();
         jobData.getCell(columnIndex(jobHeader, "default_params")).setBlank();
         fileTemplateData.getCell(columnIndex(fileTemplateHeader, "description")).setBlank();
-        pipelineData.getCell(columnIndex(pipelineHeader, "description")).setBlank();
-        Sheet steps = workbook.getSheet(ConfigPackageExcelValidator.STEP_SHEET);
-        for (int rowIndex = steps.getLastRowNum(); rowIndex >= 1; rowIndex--) {
-          Row row = steps.getRow(rowIndex);
-          if (row != null) {
-            steps.removeRow(row);
-          }
-        }
       } else {
         jobData
             .getCell(columnIndex(jobHeader, "description"))
@@ -1658,9 +2336,6 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
         fileTemplateData
             .getCell(columnIndex(fileTemplateHeader, "description"))
             .setCellValue("MERGE file template description");
-        pipelineData
-            .getCell(columnIndex(pipelineHeader, "description"))
-            .setCellValue("MERGE pipeline description");
       }
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       workbook.write(out);
@@ -2142,16 +2817,6 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
               "download_requires_approval", "false",
               "enabled", "true",
               "version", "1")));
-      sheet(
-          workbook,
-          ConfigPackageExcelValidator.PIPELINE_SHEET,
-          ConfigPackageExcelSchema.PipelineDefinition.COLUMNS,
-          List.of());
-      sheet(
-          workbook,
-          ConfigPackageExcelValidator.STEP_SHEET,
-          ConfigPackageExcelSchema.PipelineStep.COLUMNS,
-          List.of());
       sheet(
           workbook,
           ConfigPackageExcelValidator.WF_DEF_SHEET,

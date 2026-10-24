@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.trigger.mapper;
 
+import io.github.pinpols.batch.trigger.domain.param.TriggerOutboxEventMarkFailedParam;
+
+
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.persistence.entity.TriggerOutboxEventEntity;
 import java.time.Instant;
@@ -76,11 +79,7 @@ public interface TriggerOutboxEventMapper {
    * 投递失败,递增 publish_attempt,写 last_error,延迟下次扫描。只对当前仍为 PUBLISHING 的行生效, 返回 0 表示行已被其它 relay 实例接管。
    */
   int markFailed(
-      @Param("id") Long id,
-      @Param("status") String status,
-      @Param("lastError") String lastError,
-      @Param("nextPublishAt") Instant nextPublishAt,
-      @Param("publishingStatus") String publishingStatus);
+      TriggerOutboxEventMarkFailedParam parameters);
 
   int resetStalePublishing(
       @Param("publishingStatus") String publishingStatus,

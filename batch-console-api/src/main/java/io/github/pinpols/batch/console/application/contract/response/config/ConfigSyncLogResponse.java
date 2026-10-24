@@ -8,8 +8,10 @@ import static io.github.pinpols.batch.console.application.contract.response.conf
 
 import java.time.Instant;
 import java.util.Map;
+import lombok.Builder;
 
 /** 单次配置同步审计日志。 */
+@Builder
 public record ConfigSyncLogResponse(
     Long id,
     String tenantId,
@@ -27,20 +29,21 @@ public record ConfigSyncLogResponse(
     Instant createdAt) {
 
   public static ConfigSyncLogResponse from(Map<String, Object> row) {
-    return new ConfigSyncLogResponse(
-        longValue(row, "id"),
-        stringValue(row, "tenantId"),
-        stringValue(row, "syncDirection"),
-        stringValue(row, "sourceEnv"),
-        stringValue(row, "targetEnv"),
-        stringValue(row, "configTypes"),
-        integerValue(row, "totalItems"),
-        integerValue(row, "successItems"),
-        integerValue(row, "failedItems"),
-        integerValue(row, "skippedItems"),
-        stringValue(row, "syncStatus"),
-        value(row, "detailJson"),
-        stringValue(row, "operatorId"),
-        instantValue(row, "createdAt"));
+    return ConfigSyncLogResponse.builder()
+        .id(longValue(row, "id"))
+        .tenantId(stringValue(row, "tenantId"))
+        .syncDirection(stringValue(row, "syncDirection"))
+        .sourceEnv(stringValue(row, "sourceEnv"))
+        .targetEnv(stringValue(row, "targetEnv"))
+        .configTypes(stringValue(row, "configTypes"))
+        .totalItems(integerValue(row, "totalItems"))
+        .successItems(integerValue(row, "successItems"))
+        .failedItems(integerValue(row, "failedItems"))
+        .skippedItems(integerValue(row, "skippedItems"))
+        .syncStatus(stringValue(row, "syncStatus"))
+        .detailJson(value(row, "detailJson"))
+        .operatorId(stringValue(row, "operatorId"))
+        .createdAt(instantValue(row, "createdAt"))
+        .build();
   }
 }

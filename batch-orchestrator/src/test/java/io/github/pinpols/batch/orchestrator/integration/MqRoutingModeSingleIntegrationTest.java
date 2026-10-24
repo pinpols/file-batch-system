@@ -56,18 +56,26 @@ class MqRoutingModeSingleIntegrationTest extends AbstractIntegrationTest {
   @DisplayName("单模式开关开启时事件发布状态转为已发布,基础主题上能消费到该消息")
   void shouldPublishToBaseTopic_whenSingleRoutingModeEnabled() throws Exception {
     String idempotencyKey = "mq-single-it-" + System.nanoTime();
-    OutboxEventEntity event = buildImportDispatchEvent("t1", idempotencyKey);
+    String tenantId = "mq-single-routing-it";
+    OutboxEventEntity event = buildImportDispatchEvent(tenantId, idempotencyKey);
+    // 验证租户 API key，并将已认证的密钥名称绑定到外部事件来源。
+    // API key 不使用 Cookie；仅在其受限路由上跳过 CSRF 校验。
     outboxEventMapper.insert(event);
 
-    ScheduleForwarderResult result = scheduleForwarder.advance(new SchedulePlan());
+    SchedulePlan plan = new SchedulePlan();
+    plan.setTenantId(tenantId);
+    ScheduleForwarderResult result = scheduleForwarder.advance(plan);
     assertThat(result).isNotNull();
 
     await()
         .atMost(Duration.ofSeconds(10))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
+          String outboxPublishStatusSql = """
+              select publish_status from batch.outbox_event where id = ?
+              """;
           String status = jdbcTemplate.queryForObject(
-              "select publish_status from batch.outbox_event where id = ?",
+              outboxPublishStatusSql,
               String.class,
               event.getId());
           assertThat(status).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
@@ -75,7 +83,7 @@ class MqRoutingModeSingleIntegrationTest extends AbstractIntegrationTest {
 
     // SINGLE 模式：消息落在 base topic（无 ".t1" 后缀）
     String baseTopic = BatchTopics.TASK_DISPATCH_IMPORT;
-    String dispatchKafkaKey = "t1:IT_OUTBOX_DISPATCH:it-dispatch-001:1";
+    String dispatchKafkaKey = tenantId + ":IT_OUTBOX_DISPATCH:it-dispatch-001:1";
     try (KafkaConsumer<String, String> consumer = buildConsumer("mq-single-" + System.nanoTime())) {
       consumer.subscribe(List.of(baseTopic));
       await()

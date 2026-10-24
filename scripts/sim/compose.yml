@@ -18,7 +18,7 @@ x-sim-runtime-env: &sim-runtime-env
 services:
   sftp:
     image: atmoz/sftp:${SFTP_IMAGE_TAG:-alpine}
-    container_name: batch-sim-sftp
+    container_name: ${SFTP_CONTAINER:-batch-sim-sftp}
     restart: unless-stopped
     environment:
       <<: *sim-runtime-env
@@ -43,7 +43,7 @@ services:
 
   mockserver:
     image: mockserver/mockserver:${MOCKSERVER_IMAGE_TAG:-5.15.0}
-    container_name: batch-sim-mockserver
+    container_name: ${MOCKSERVER_CONTAINER:-batch-sim-mockserver}
     restart: unless-stopped
     environment:
       <<: *sim-runtime-env
@@ -66,7 +66,7 @@ services:
 
 volumes:
   sftp-data:
-    name: batch-sim-sftp-data
+    name: ${SFTP_DATA_VOLUME_NAME:-batch-sim-sftp-data}
 
 networks:
   batch-network:

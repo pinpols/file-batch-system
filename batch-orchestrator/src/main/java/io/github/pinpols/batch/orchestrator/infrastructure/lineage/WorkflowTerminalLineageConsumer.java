@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.lineage;
 
 import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -30,10 +31,11 @@ public class WorkflowTerminalLineageConsumer {
 
   private final OpenLineageEmitter emitter;
   private final OpenLineageProperties properties;
+  private final BatchKafkaTopicNamespace topicNamespace;
 
   @KafkaListener(
-      topics = BatchTopics.WORKFLOW_TERMINAL_V1,
-      groupId = "${batch.openlineage.consumer-group-id:batch-openlineage-emitter}",
+      topics = "#{__listener.topicName()}",
+      groupId = "#{__listener.consumerGroupId()}",
       containerFactory = OrchestratorKafkaConsumerConfiguration.TRIGGER_LISTENER_FACTORY)
   public void consume(ConsumerRecord<String, String> record, Acknowledgment acknowledgment) {
     TerminalSnapshot snapshot;
@@ -64,18 +66,30 @@ public class WorkflowTerminalLineageConsumer {
     }
   }
 
+  public String topicName() {
+    return topicNamespace.topic(BatchTopics.WORKFLOW_TERMINAL_V1);
+  }
+
+  public String consumerGroupId() {
+    return topicNamespace.consumerGroup(properties.getConsumerGroupId());
+  }
+
   @SuppressWarnings("unchecked")
   static TerminalSnapshot parse(String payload) {
     Map<String, Object> data = JsonUtils.fromJson(payload, Map.class);
     if (EmptyChecks.isNull(data)) {
       throw new IllegalArgumentException("payload is null");
     }
+    if (!"v2".equals(text(data.get("schemaVersion")))) {
+      throw new IllegalArgumentException("unsupported workflow terminal schemaVersion");
+    }
     String tenantId = text(data.get("tenantId"));
     Long runId = number(data.get("workflowRunId"));
     String status = text(data.get("runStatus"));
-    if (!Texts.hasText(tenantId)
+    boolean workflowTerminalEventIsInvalid = !Texts.hasText(tenantId)
         || EmptyChecks.isNull(runId)
-        || !WorkflowTerminalOutboxService.isTerminal(status)) {
+        || !WorkflowTerminalOutboxService.isTerminal(status);
+    if (workflowTerminalEventIsInvalid) {
       throw new IllegalArgumentException("tenantId, workflowRunId or terminal status is invalid");
     }
     WorkflowRunEntity run = new WorkflowRunEntity();
@@ -87,7 +101,8 @@ public class WorkflowTerminalLineageConsumer {
     run.setBizDate(localDate(data.get("bizDate")));
     run.setStartedAt(instant(data.get("startedAt")));
     run.setTraceId(text(data.get("traceId")));
-    return new TerminalSnapshot(run, status, instant(data.get("finishedAt")));
+    Instant finishedAt = instant(data.get("finishedAt"));
+    return new TerminalSnapshot(run, status, finishedAt);
   }
 
   private static String text(Object value) {

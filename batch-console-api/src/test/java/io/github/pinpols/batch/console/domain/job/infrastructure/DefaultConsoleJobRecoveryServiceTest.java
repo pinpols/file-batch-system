@@ -13,6 +13,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.application.ops.ConsoleJobOperationsPort;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.CompensateRequest;
+import io.github.pinpols.batch.console.application.contract.request.WorkflowRunReplayRequest;
 import io.github.pinpols.batch.console.shared.command.ApprovalSubmitContext;
 import io.github.pinpols.batch.console.shared.command.CompensationCommandRequest;
 import io.github.pinpols.batch.console.shared.command.CompensationPayload;
@@ -20,6 +21,7 @@ import io.github.pinpols.batch.console.shared.command.DeadLetterReplayRequest;
 import io.github.pinpols.batch.console.shared.command.PartitionReplayRequest;
 import io.github.pinpols.batch.console.shared.command.RerunRequest;
 import io.github.pinpols.batch.console.shared.command.TaskReplayRequest;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -72,6 +74,71 @@ class DefaultConsoleJobRecoveryServiceTest {
     verify(ops, never()).submitCompensation(any(), anyString());
   }
 
+  @Test
+  @DisplayName("失败 Workflow 节点重放审批保留节点目标类型")
+  void shouldSubmitWorkflowNodeApprovalWithExactTarget() {
+    CompensationCommandRequest req = compensationRequest(null);
+    req.setCompensationType("WORKFLOW_NODE");
+    req.setSourceWorkflowRunId(71L);
+    req.setSourceWorkflowNodeRunId(82L);
+    req.setTargetId(82L);
+    req.setOperationKey("44a76b9e-3cc0-46f0-9ac4-16ca44f80684");
+    req.setPreviewToken("one-use-token");
+    req.setResultPolicy("CREATE_NEW_VERSION");
+    req.setConfigVersionPolicy("USE_ORIGINAL_CONFIG");
+    when(ops.hasText(null)).thenReturn(false);
+    when(ops.hasText(req.getOperationKey())).thenReturn(true);
+    when(ops.hasText(req.getPreviewToken())).thenReturn(true);
+    when(ops.createPendingWorkflowNodeReplay(req)).thenReturn(901L);
+    when(ops.submitApproval(any(ApprovalSubmitContext.class))).thenReturn("APR-NODE-2");
+
+    String result = service.compensation(req, IDEMPOTENCY);
+
+    assertThat(result).isEqualTo("APR-NODE-2");
+    ArgumentCaptor<ApprovalSubmitContext> approvalCaptor =
+        ArgumentCaptor.forClass(ApprovalSubmitContext.class);
+    verify(ops).submitApproval(approvalCaptor.capture());
+    ApprovalSubmitContext approval = approvalCaptor.getValue();
+    assertThat(approval.targetType()).isEqualTo("WORKFLOW_NODE");
+    assertThat(approval.targetId()).isEqualTo("82");
+    assertThat(approval.payload()).isSameAs(req);
+    assertThat(req.getReplayOperationId()).isEqualTo(901L);
+    assertThat(approval.idempotencyKey()).isEqualTo(req.getOperationKey());
+    verify(ops).createPendingWorkflowNodeReplay(req);
+    verify(ops, never()).submitCompensation(any(), anyString());
+  }
+
+  @Test
+  @DisplayName("整 Workflow Replay 创建持久 operation 并登记认证审批动作")
+  void shouldSubmitWholeWorkflowReplayApproval() {
+    WorkflowRunReplayRequest request = new WorkflowRunReplayRequest();
+    request.setTenantId(TENANT);
+    request.setWorkflowRunId(71L);
+    request.setReason("replay whole workflow");
+    request.setOperationKey("44a76b9e-3cc0-46f0-9ac4-16ca44f80684");
+    request.setPreviewToken("preview-token");
+    when(ops.hasText(request.getOperationKey())).thenReturn(true);
+    when(ops.createPendingWorkflowRunReplay(request)).thenReturn(901L);
+    when(ops.submitApproval(any(ApprovalSubmitContext.class))).thenReturn("APR-WORKFLOW-1");
+
+    var result = service.submitWorkflowRunReplay(request, request.getOperationKey());
+
+    assertThat(result.replayOperationId()).isEqualTo(901L);
+    assertThat(result.approvalNo()).isEqualTo("APR-WORKFLOW-1");
+    ArgumentCaptor<ApprovalSubmitContext> approvalCaptor =
+        ArgumentCaptor.forClass(ApprovalSubmitContext.class);
+    verify(ops).submitApproval(approvalCaptor.capture());
+    ApprovalSubmitContext approval = approvalCaptor.getValue();
+    assertThat(approval.approvalType()).isEqualTo("COMPENSATION");
+    assertThat(approval.actionType()).isEqualTo("WORKFLOW_RUN_REPLAY");
+    assertThat(approval.targetType()).isEqualTo("WORKFLOW_RUN");
+    assertThat(approval.targetId()).isEqualTo("71");
+    assertThat(JsonUtils.toJson(approval.payload()))
+        .contains("\"tenantId\":\"t1\"", "\"replayOperationId\":901");
+    assertThat(approval.idempotencyKey()).isEqualTo(request.getOperationKey());
+    verify(ops).publishRefresh(TENANT);
+  }
+
   // ── compensation: with approval id ──────────────────────────────────────
 
   @Test
@@ -86,7 +153,7 @@ class DefaultConsoleJobRecoveryServiceTest {
     String result = service.compensation(req, IDEMPOTENCY);
 
     assertThat(result).isEqualTo("CMD-100");
-    verify(ops).requireApprovedApproval(TENANT, "APR-001");
+    verify(ops).requireApprovedApproval(TENANT, "APR-001", "COMPENSATION", req);
     verify(ops).publishRefresh(TENANT);
   }
 
@@ -107,6 +174,54 @@ class DefaultConsoleJobRecoveryServiceTest {
     verify(ops).submitCompensation(captor.capture(), eq(IDEMPOTENCY));
     assertThat(captor.getValue().getCompensationType()).isEqualTo("WORKFLOW");
     verify(ops).publishRefresh(TENANT);
+  }
+
+  @Test
+  @DisplayName("失败 Workflow 节点重放必须带已批准的审批单并保留精确来源身份")
+  void shouldForwardExactWorkflowNodeReplaySource() {
+    CompensateRequest req = compensateRequest("WORKFLOW_NODE");
+    req.setTargetId(82L);
+    req.setSourceWorkflowRunId(71L);
+    req.setSourceWorkflowNodeRunId(82L);
+    req.setApprovalId("APR-NODE-1");
+    req.setReplayOperationId(901L);
+    req.setResultPolicy("CREATE_NEW_VERSION");
+    req.setConfigVersionPolicy("USE_ORIGINAL_CONFIG");
+    req.setConfigVersion(7);
+    when(ops.hasText("APR-NODE-1")).thenReturn(true);
+    when(ops.parseOptionalBizDate(any())).thenReturn(null);
+    when(ops.submitCompensation(any(CompensationPayload.class), eq(IDEMPOTENCY)))
+        .thenReturn("CMD-WORKFLOW-NODE");
+
+    service.compensate(req, IDEMPOTENCY);
+
+    ArgumentCaptor<CompensationPayload> captor = ArgumentCaptor.forClass(CompensationPayload.class);
+    verify(ops).requireApprovedApproval(TENANT, "APR-NODE-1", "COMPENSATION", req);
+    verify(ops).submitCompensation(captor.capture(), eq(IDEMPOTENCY));
+    assertThat(captor.getValue().getCompensationType()).isEqualTo("WORKFLOW_NODE");
+    assertThat(captor.getValue().getTargetId()).isEqualTo(82L);
+    assertThat(captor.getValue().getSourceWorkflowRunId()).isEqualTo(71L);
+    assertThat(captor.getValue().getSourceWorkflowNodeRunId()).isEqualTo(82L);
+    assertThat(captor.getValue().getResultPolicy()).isEqualTo("CREATE_NEW_VERSION");
+    assertThat(captor.getValue().getConfigVersionPolicy()).isEqualTo("USE_ORIGINAL_CONFIG");
+    assertThat(captor.getValue().getConfigVersion()).isEqualTo(7);
+  }
+
+  @Test
+  @DisplayName("失败 Workflow 节点重放拒绝绕过审批直接执行")
+  void shouldRejectDirectWorkflowNodeCompensationWithoutApproval() {
+    CompensateRequest req = compensateRequest("WORKFLOW_NODE");
+    req.setTargetId(82L);
+    req.setSourceWorkflowRunId(71L);
+    req.setSourceWorkflowNodeRunId(82L);
+    when(ops.hasText(null)).thenReturn(false);
+
+    assertThatThrownBy(() -> service.compensate(req, IDEMPOTENCY))
+        .isInstanceOf(BizException.class)
+        .extracting(exception -> ((BizException) exception).getCode())
+        .isEqualTo(ResultCode.STATE_CONFLICT);
+
+    verify(ops, never()).submitCompensation(any(), anyString());
   }
 
   @Test
@@ -239,11 +354,29 @@ class DefaultConsoleJobRecoveryServiceTest {
     String result = service.replayDeadLetter(req, IDEMPOTENCY);
 
     assertThat(result).isEqualTo("CMD-DLQ");
-    verify(ops).requireApprovedApproval(TENANT, "APR-DLQ");
+    verify(ops).requireApprovedApproval(TENANT, "APR-DLQ", "DLQ_REPLAY", req);
     ArgumentCaptor<CompensationPayload> captor = ArgumentCaptor.forClass(CompensationPayload.class);
     verify(ops).submitCompensation(captor.capture(), anyString());
     assertThat(captor.getValue().getCompensationType()).isEqualTo("DLQ");
     verify(ops).publishRefresh(TENANT);
+  }
+
+  @Test
+  @DisplayName("死信重放审批通过时将外部动作核实声明和证据引用传给编排器")
+  void shouldPassExternalOutcomeEvidence_whenReplayingApprovedDeadLetter() {
+    DeadLetterReplayRequest req = deadLetterRequest("APR-DLQ");
+    req.setExternalActionVerifiedNotExecuted(true);
+    req.setExternalOutcomeEvidenceReference("incident-123/evidence-1");
+    when(ops.hasText("APR-DLQ")).thenReturn(true);
+    when(ops.submitCompensation(any(CompensationPayload.class), anyString())).thenReturn("CMD-DLQ");
+
+    service.replayDeadLetter(req, IDEMPOTENCY);
+
+    ArgumentCaptor<CompensationPayload> captor = ArgumentCaptor.forClass(CompensationPayload.class);
+    verify(ops).submitCompensation(captor.capture(), anyString());
+    assertThat(captor.getValue().getExternalActionVerifiedNotExecuted()).isTrue();
+    assertThat(captor.getValue().getExternalOutcomeEvidenceReference())
+        .isEqualTo("incident-123/evidence-1");
   }
 
   // ── replayTask ──────────────────────────────────────────────────────────
@@ -275,7 +408,7 @@ class DefaultConsoleJobRecoveryServiceTest {
     String result = service.replayTask(req, IDEMPOTENCY);
 
     assertThat(result).isEqualTo("OP-1");
-    verify(ops).requireApprovedApproval(TENANT, "APR-TASK");
+    verify(ops).requireApprovedApproval(TENANT, "APR-TASK", "RETRY", req);
     verify(ops).publishRefresh(TENANT);
   }
 
@@ -307,8 +440,36 @@ class DefaultConsoleJobRecoveryServiceTest {
     String result = service.replayPartition(req, IDEMPOTENCY);
 
     assertThat(result).isEqualTo("OP-2");
-    verify(ops).requireApprovedApproval(TENANT, "APR-PART");
+    verify(ops).requireApprovedApproval(TENANT, "APR-PART", "RETRY", req);
     verify(ops).publishRefresh(TENANT);
+  }
+
+  @Test
+  @DisplayName("带审批的重跑须先绑定批准动作和完整请求，再提交补偿")
+  void shouldBindRerunPayload_whenApprovalIdWasProvided() {
+    RerunRequest request = new RerunRequest();
+    request.setTenantId(TENANT);
+    request.setJobCode("JOB-1");
+    request.setBizDate("2026-04-10");
+    request.setTargetId(123L);
+    request.setApprovalId("APR-RERUN");
+    when(ops.hasText("APR-RERUN")).thenReturn(true);
+    when(ops.submitCompensation(any(), eq(IDEMPOTENCY))).thenReturn("CMD-RERUN");
+
+    assertThat(service.rerun(request, IDEMPOTENCY)).isEqualTo("CMD-RERUN");
+    verify(ops).requireApprovedApproval(TENANT, "APR-RERUN", "RERUN", request);
+  }
+
+  @Test
+  @DisplayName("直接补偿入口附带审批号时也须复核批准载荷")
+  void shouldBindCompensatePayload_whenApprovalIdWasProvided() {
+    CompensateRequest request = compensateRequest("JOB");
+    request.setApprovalId("APR-COMPENSATE");
+    when(ops.hasText("APR-COMPENSATE")).thenReturn(true);
+    when(ops.submitCompensation(any(), eq(IDEMPOTENCY))).thenReturn("CMD-COMPENSATE");
+
+    assertThat(service.compensate(request, IDEMPOTENCY)).isEqualTo("CMD-COMPENSATE");
+    verify(ops).requireApprovedApproval(TENANT, "APR-COMPENSATE", "COMPENSATION", request);
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────

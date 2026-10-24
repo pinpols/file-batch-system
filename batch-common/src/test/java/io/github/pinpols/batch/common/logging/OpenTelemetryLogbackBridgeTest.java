@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.logging;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.slf4j.Logger.ROOT_LOGGER_NAME;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
@@ -26,7 +27,7 @@ class OpenTelemetryLogbackBridgeTest {
   @DisplayName("桥接对象创建时挂载追加器,关闭后从根日志器卸载")
   void shouldAttachThenDetachAppender_whenBridgeClosed() {
     LoggerContext context = (LoggerContext) LoggerFactory.getILoggerFactory();
-    Logger root = context.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+    Logger root = context.getLogger(ROOT_LOGGER_NAME);
 
     try (OpenTelemetryLogbackBridge bridge = new OpenTelemetryLogbackBridge(OpenTelemetry.noop())) {
       assertThat(root.getAppender(OpenTelemetryLogbackBridge.APPENDER_NAME)).isNotNull();

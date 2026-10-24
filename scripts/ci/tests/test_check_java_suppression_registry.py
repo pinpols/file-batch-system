@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：Java 抑制项注册表门禁测试。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_check_java_suppression_registry.py。
 """check-java-suppression-registry.py 的扫描范围与规则登记回归测试。"""
 
 from __future__ import annotations
@@ -78,6 +80,43 @@ class JavaSuppressionRegistryTest(unittest.TestCase):
 
         self.assertEqual(
             [path.relative_to(MODULE.ROOT).as_posix() for path in kept], [production_rel])
+
+    def test_deleted_worktree_sources_do_not_hide_live_suppressions(self) -> None:
+        """暂存后删除的旧文件不再扫描,在途新文件的未登记抑制仍须阻断。"""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            java_directory = root / "batch-common/src/main/java"
+            yaml_directory = root / "batch-common/src/main/resources"
+            java_directory.mkdir(parents=True)
+            yaml_directory.mkdir(parents=True)
+            kept_java = java_directory / "Kept.java"
+            deleted_java = java_directory / "Deleted.java"
+            deleted_yaml = yaml_directory / "deleted.yml"
+            kept_java.write_text("class Kept {}\n", encoding="utf-8")
+            deleted_java.write_text("class Deleted {}\n", encoding="utf-8")
+            deleted_yaml.write_text("removed: true\n", encoding="utf-8")
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            deleted_java.unlink()
+            deleted_yaml.unlink()
+            new_java = java_directory / "New.java"
+            new_yaml = yaml_directory / "new.yml"
+            new_java.write_text('@SuppressWarnings("java:UnregisteredProbe")\nclass New {}\n',
+                                encoding="utf-8")
+            new_yaml.write_text("# noinspection UnregisteredProbe\n", encoding="utf-8")
+            baseline = root / "suppression-baseline.tsv"
+            baseline.write_text("# Empty reviewed baseline\n", encoding="utf-8")
+
+            with patch.object(MODULE, "ROOT", root), patch.object(MODULE, "BASELINE", baseline):
+                self.assertEqual(MODULE.production_sources(), [kept_java, new_java])
+                self.assertEqual(MODULE.production_yaml_configs(), [new_yaml])
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(MODULE.main([]), 1)
+
+                new_java.write_text("class New {}\n", encoding="utf-8")
+                new_yaml.write_text("enabled: true\n", encoding="utf-8")
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(MODULE.main([]), 0)
 
     def test_yaml_candidate_filter_covers_all_production_resource_configs(self) -> None:
         application = "batch-trigger/src/main/resources/application.yml"

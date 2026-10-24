@@ -106,7 +106,9 @@ class ConsoleMetaEnumRegistrationTest {
     Set<String> names = new TreeSet<>();
     for (Resource resource : resources) {
       String filename = resource.getFilename();
-      if (filename == null || !filename.endsWith(".class") || filename.contains("$")) {
+      boolean classFileIsNotTopLevel =
+          filename == null || !filename.endsWith(".class") || filename.contains("$");
+      if (classFileIsNotTopLevel) {
         continue;
       }
       String simpleName = filename.substring(0, filename.length() - ".class".length());

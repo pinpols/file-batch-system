@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -66,6 +67,7 @@ public final class ChannelConfigMerge {
       // ── API / API_PUSH / async receipt polling ──
       "api_push_api_key",
       "authorization",
+      "receiver_idempotency_supported",
       "receipt_poll_url");
 
   /**
@@ -115,10 +117,13 @@ public final class ChannelConfigMerge {
       mergeConfigJson(out, m);
       return out;
     }
-    if (objectMapper != null && Texts.hasText(String.valueOf(cj))) {
+    boolean configJsonHasTextAndParserIsAvailable =
+        EmptyChecks.isNotNull(objectMapper) && Texts.hasText(String.valueOf(cj));
+    if (configJsonHasTextAndParserIsAvailable) {
       try {
+        String configJsonText = String.valueOf(cj);
         Map<String, Object> parsed =
-            objectMapper.readValue(String.valueOf(cj), new TypeReference<>() {});
+            objectMapper.readValue(configJsonText, new TypeReference<>() {});
         mergeConfigJson(out, parsed);
       } catch (Exception ignored) {
         SwallowedExceptionLogger.warn(ChannelConfigMerge.class, "catch:Exception", ignored);

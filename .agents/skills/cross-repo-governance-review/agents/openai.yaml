@@ -1,3 +1,3 @@
 interface:
   display_name: "前后端周期治理审查"
-  short_description: "按固定矩阵复核两仓规范退化与代码腐化"
+  short_description: "按固定覆盖矩阵复核两仓系统风险、代码规约、治理控制和整改证据"

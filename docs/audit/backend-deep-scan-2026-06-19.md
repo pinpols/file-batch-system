@@ -2,7 +2,7 @@
 
 > 5 路并行专项深扫(并发与状态机 · 多租隔离 · 安全注入/RCE 隔离 · 资源与错误处理 · console-api 与架构边界),
 > 覆盖全 10 个平台模块 + scripts。每条候选发现逐项 `grep`/`Read` 核实,甄别
-> **真实活跃缺陷 vs by-design vs 误判**。方法对齐上一轮 `docs/analysis/robustness-deep-scan-2026-06-10.md`。
+> **真实活跃缺陷 vs by-design vs 误判**。方法对齐上一轮 `docs/audit/robustness-deep-scan-2026-06-10.md`。
 
 ## 审查基线
 
@@ -67,7 +67,7 @@ pipeline/workflow 列表上逐条 `selectByXxxId`,N 条定义触发 1+N 查询�
 
 `RetryScheduleMapper` 的 `markRunning/markSuccess/markFailed/resetToWaiting` 均 `where id = #{id}`,无
 `tenant_id` 谓词;`MapperXmlTenantGuardArchTest` 只扫可空 `<if tenantId>` select 守护,**不覆盖 id-only update**。
-与 `docs/analysis/robustness-deep-scan-2026-06-10.md` 「威胁模型 C-2/I-3」为**同一已记录盲区**,至今未闭。
+与 `docs/audit/robustness-deep-scan-2026-06-10.md` 「威胁模型 C-2/I-3」为**同一已记录盲区**,至今未闭。
 实际可利用性低:id 来自调度器内部 `selectByQuery` 结果(WAITING + 到期),非外部可控,属纵深防御而非活跃越权。
 **建议**(沿用上轮结论):① 这些 update 补 `and tenant_id = #{tenantId}`(entity 手头有 tenantId,成本可控,
 但需改 mapper 签名 + 调用方);② 扩展 `MapperXmlTenantGuardArchTest` 覆盖 id-only update/delete。

@@ -31,8 +31,9 @@ public class TriggerStatusController {
 
   @GetMapping("/scheduler-status")
   public CommonResponse<TriggerSchedulerStatus> schedulerStatus() {
-    return CommonResponse.success(
-        new TriggerSchedulerStatus(triggerStatusQueryService.schedulerStatus()));
+    String schedulerState = triggerStatusQueryService.schedulerStatus();
+    TriggerSchedulerStatus status = new TriggerSchedulerStatus(schedulerState);
+    return CommonResponse.success(status);
   }
 
   @GetMapping("/drain/status")

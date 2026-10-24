@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.imports.stage;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -12,12 +13,16 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.exception.WorkerConfigException;
+import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.plugin.ImportLoadContext;
 import io.github.pinpols.batch.common.plugin.ImportLoadPlugin;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressRegistry;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.support.TaskExecutionClient;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration.FileProcessing;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
@@ -56,6 +61,9 @@ class LoadStepTest {
   @Mock
   private ImportLoadPlugin plugin;
 
+  @Mock
+  private TaskExecutionClient taskExecutionClient;
+
   private ImportLoadPluginRegistry registry;
   private ImportWorkerConfiguration workerConfig;
   private ObjectMapper objectMapper;
@@ -69,6 +77,10 @@ class LoadStepTest {
   @BeforeEach
   void setUp() {
     when(plugin.id()).thenReturn(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
+    // 共享 LOAD fixture 的插件声明可安全重放;纯校验和 dry-run 用例不会触达该声明。
+    lenient()
+        .when(plugin.idempotencyCapability())
+        .thenReturn(IdempotencyCapability.IDEMPOTENT_BY_UNIQUE_CONSTRAINT);
     registry = new ImportLoadPluginRegistry(List.of(plugin));
     workerConfig = new ImportWorkerConfiguration(
         "wc",
@@ -82,7 +94,30 @@ class LoadStepTest {
         Boolean.FALSE);
     objectMapper = new ObjectMapper();
     loadStep = new LoadStep(
-        registry, runtimeRepository, workerConfig, objectMapper, disabledCheckpoint(), null);
+        registry,
+        runtimeRepository,
+        workerConfig,
+        objectMapper,
+        disabledCheckpoint(),
+        null,
+        new PipelineStageProgressRegistry(),
+        taskExecutionClient);
+  }
+
+  @Test
+  @DisplayName("回放能力按冻结模板选择 LOAD 插件并传递完整模板配置")
+  void replayCapability_usesFrozenLoadTargetAndTemplateConfig() {
+    Map<String, Object> frozenTemplateConfig = Map.of(
+        "load_target_ref", WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED,
+        "table_name", "customer_account");
+    ReplayCapabilityDeclaration expected =
+        ReplayCapabilityDeclaration.unknown(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
+    when(plugin.replayCapability(frozenTemplateConfig)).thenReturn(expected);
+
+    ReplayCapabilityDeclaration actual = loadStep.replayCapability(frozenTemplateConfig);
+
+    assertThat(actual).isEqualTo(expected);
+    verify(plugin).replayCapability(frozenTemplateConfig);
   }
 
   @AfterEach
@@ -246,10 +281,19 @@ class LoadStepTest {
   void shouldUseLoadTargetRefFromTemplateConfig() throws Exception {
     ImportLoadPlugin custom = mock(ImportLoadPlugin.class);
     when(custom.id()).thenReturn("custom_plugin");
+    when(custom.idempotencyCapability())
+        .thenReturn(IdempotencyCapability.IDEMPOTENT_BY_UNIQUE_CONSTRAINT);
     when(plugin.id()).thenReturn(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
     registry = new ImportLoadPluginRegistry(List.of(plugin, custom));
     loadStep = new LoadStep(
-        registry, runtimeRepository, workerConfig, objectMapper, disabledCheckpoint(), null);
+        registry,
+        runtimeRepository,
+        workerConfig,
+        objectMapper,
+        disabledCheckpoint(),
+        null,
+        new PipelineStageProgressRegistry(),
+        taskExecutionClient);
 
     Path validated = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = streamingContext(validated, null);

@@ -16,7 +16,15 @@
         order by impl_code
     </select>
 
-    <select id="selectAllImplEntries" resultType="map">
+    <resultMap id="StepRegistryEntryViewResultMap"
+               type="io.github.pinpols.batch.console.domain.job.view.StepRegistryEntryView">
+        <constructor>
+            <arg column="module" javaType="java.lang.String"/>
+            <arg column="implCode" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectAllImplEntries" resultMap="StepRegistryEntryViewResultMap">
         select module, impl_code as implCode
         from batch.step_registry
         order by module, impl_code

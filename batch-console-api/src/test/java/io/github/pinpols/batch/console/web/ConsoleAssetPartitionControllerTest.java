@@ -18,6 +18,7 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.LocalDate;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -74,7 +75,7 @@ class ConsoleAssetPartitionControllerTest {
         .andExpect(jsonPath("$.data.assetCode").value("asset-settlement-daily"))
         .andExpect(jsonPath("$.data.versionNo").value(3))
         .andReturn();
-    org.assertj.core.api.Assertions.assertThat(result.getResponse().getContentAsString())
+    Assertions.assertThat(result.getResponse().getContentAsString())
         .contains("\"traceId\":\"trace-1\"");
     verify(orchestratorProxy)
         .assetPartitionReadiness("ta", "settlement_daily", LocalDate.parse("2026-06-30"));

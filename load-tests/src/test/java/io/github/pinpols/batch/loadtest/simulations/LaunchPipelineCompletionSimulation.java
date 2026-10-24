@@ -19,8 +19,8 @@ import static io.gatling.javaapi.core.CoreDsl.*;
 import static io.gatling.javaapi.http.HttpDsl.*;
 
 /**
- * End-to-end sampling from trigger launch until the instance reaches a terminal status visible via
- * console batch-status (requires workers to progress CLAIM→report paths).
+ * 从 Trigger 准入开始采样，直到根 WorkflowRun 进入终态。
+ * 需要 Worker 推进 CLAIM→report 流程。
  *
  * <p>Metrics: Gatling group {@code pipeline_completion} captures wall-clock over that interval per
  * virtual user.
@@ -29,7 +29,7 @@ import static io.gatling.javaapi.http.HttpDsl.*;
  *
  * <pre>
  *   mvn gatling:test -Dsimulation=LaunchPipelineCompletionSimulation \
- *       -DjobCode=E2E_IMPORT_LOAD -DtenantId=t1 \
+ *       -DworkflowDefinitionId=123 -DtenantId=t1 \
  *       -Dpipeline.completion.users=10 -Dramp.seconds=60 \
  *       -Dconsole.authToken=Bearer &lt;token&gt;
  * </pre>
@@ -37,7 +37,7 @@ import static io.gatling.javaapi.http.HttpDsl.*;
 public class LaunchPipelineCompletionSimulation extends Simulation {
 
   private static final Set<String> TERMINAL_STATUSES =
-      Set.of("SUCCESS", "FAILED", "PARTIAL_FAILED", "CANCELLED", "TERMINATED");
+      Set.of("SUCCESS", "FAILED", "TERMINATED");
 
   private static final String AUTH_TOKEN =
       System.getProperty("console.accessToken") != null
@@ -65,7 +65,7 @@ public class LaunchPipelineCompletionSimulation extends Simulation {
       """
             {
               "tenantId": "%s",
-              "jobCode": "%s",
+              "workflowDefinitionId": %s,
               "bizDate": "%s",
               "triggerType": "API",
               "params": %s
@@ -73,7 +73,7 @@ public class LaunchPipelineCompletionSimulation extends Simulation {
             """
           .formatted(
               GatlingConfig.TENANT_ID,
-              GatlingConfig.JOB_CODE,
+              GatlingConfig.requiredWorkflowDefinitionId(),
               GatlingConfig.BIZ_DATE,
               GatlingConfig.LAUNCH_PARAMS_JSON);
 
@@ -96,23 +96,29 @@ public class LaunchPipelineCompletionSimulation extends Simulation {
           .on(
               pause(Duration.ofSeconds(GatlingConfig.PIPELINE_POLL_INTERVAL_SEC)),
               exec(
-                      http("GET /api/console/queries/instances/batch-status")
+                      http("GET /api/console/queries/workflow-runs/{id}")
                           .get(
                               GatlingConfig.CONSOLE_BASE_URL
-                                  + "/api/console/queries/instances/batch-status")
+                                  + "/api/console/queries/workflow-runs/#{instanceNo}")
                           .header("Authorization", AUTH_TOKEN)
                           .queryParam("tenantId", GatlingConfig.TENANT_ID)
-                          .queryParam("instanceNos", "#{instanceNo}")
                           .check(status().is(200))
                           .check(
-                              jsonPath("$.data[0].instanceStatus")
+                              jsonPath("$.data.runStatus")
                                   .optional()
-                                  .saveAs("jobStatus")))
+                                  .saveAs("workflowStatus")))
                   .exitHereIf(
                       session -> {
-                        String st = session.getString("jobStatus");
+                        String st = session.getString("workflowStatus");
                         return st != null && TERMINAL_STATUSES.contains(st);
-                      }));
+                      }))
+          .exec(
+              session -> {
+                String status = session.getString("workflowStatus");
+                return status != null && TERMINAL_STATUSES.contains(status)
+                    ? session
+                    : session.markAsFailed();
+              });
 
   private final ScenarioBuilder scenario =
       scenario("Launch pipeline to terminal (poll)")

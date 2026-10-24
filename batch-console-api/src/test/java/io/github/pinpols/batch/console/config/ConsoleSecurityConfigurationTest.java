@@ -16,6 +16,7 @@ import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -114,7 +115,7 @@ class ConsoleSecurityConfigurationTest {
     when(sessionRegistry.isCurrentSession("bob", "tenant-a", 9L)).thenReturn(true);
 
     MockHttpServletRequest request = baseRequest();
-    request.setCookies(new jakarta.servlet.http.Cookie("batch_console_token", token));
+    request.setCookies(new Cookie("batch_console_token", token));
     MockHttpServletResponse response = new MockHttpServletResponse();
     AtomicBoolean chainCalled = new AtomicBoolean(false);
 

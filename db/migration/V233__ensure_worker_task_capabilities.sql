@@ -1,4 +1,5 @@
 -- 修复迁移历史曾占用 V223、但缺少 Worker 能力摘要列的数据库。
+
 ALTER TABLE batch.worker_registry
     ADD COLUMN IF NOT EXISTS task_capabilities JSONB;
 

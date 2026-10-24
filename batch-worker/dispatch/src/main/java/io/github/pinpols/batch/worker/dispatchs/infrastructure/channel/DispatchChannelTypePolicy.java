@@ -37,7 +37,8 @@ final class DispatchChannelTypePolicy {
     if (!Texts.hasText(channelType)) {
       return Optional.empty();
     }
-    String normalized = channelType.trim().toUpperCase(Locale.ROOT);
+    String trimmedChannelType = channelType.trim();
+    String normalized = trimmedChannelType.toUpperCase(Locale.ROOT);
     return OFFICIAL_TYPES.contains(normalized) ? Optional.of(normalized) : Optional.empty();
   }
 

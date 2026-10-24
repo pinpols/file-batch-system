@@ -16,6 +16,7 @@
 -- NB: Flyway 默认事务包裹会拒绝 CREATE INDEX CONCURRENTLY,本迁移需在
 -- batch-common Flyway 配置中以 mixed=false + transactional=false 单独执行;
 -- 若团队规范要求 in-tx 迁移,改为去掉 CONCURRENTLY(短锁,事件表写入会瞬时阻塞)。
+
 CREATE INDEX IF NOT EXISTS idx_event_delivery_log_outbox_event_id
     ON batch.event_delivery_log (outbox_event_id);
 

@@ -8,5 +8,7 @@ public interface EventOutboxRetryMapper {
 
   int insert(EventOutboxRetryEntity entity);
 
+  int insertIntoArchive(EventOutboxRetryEntity entity);
+
   List<EventOutboxRetryEntity> selectByQuery(EventOutboxRetryQuery query);
 }

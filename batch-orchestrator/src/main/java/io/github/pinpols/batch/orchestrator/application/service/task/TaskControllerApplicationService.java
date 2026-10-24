@@ -9,7 +9,6 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.observability.BatchMetricsNames;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService.TaskHeartbeatResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskCancelCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimBatchCommand;
@@ -23,6 +22,7 @@ import io.github.pinpols.batch.orchestrator.application.service.task.TaskControl
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskLeaseRenewBatchResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskLeaseRenewItemCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskLeaseRenewItemResult;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskNonIdempotentStartCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskReportBatchCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskReportBatchResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskReportItemResult;
@@ -62,15 +62,26 @@ public class TaskControllerApplicationService {
       description = "Worker task claim latency on orchestrator",
       histogram = true)
   public EffectiveTaskConfig claim(Long taskId, TaskClaimCommand request) {
-    JobTaskEntity task = Guard.requireFound(
-        taskExecutionService.assignWorker(request.tenantId(), taskId, request.workerId()),
-        "task not found");
+    JobTaskEntity task =
+        taskExecutionService.assignWorker(request.tenantId(), taskId, request.workerId());
+    if (EmptyChecks.isNull(task)) {
+      throw BizException.of(
+          ResultCode.NOT_FOUND, "error.task.claim_not_available", String.valueOf(taskId));
+    }
     if (!isClaimedBy(task, request.workerId())) {
       throw BizException.of(ResultCode.CONFLICT, "error.task.already_claimed");
     }
     // P1-2.1:认领成功后返回 effective config 快照,worker 优先用本对象的字段。
     // PERF(5.2b): 复用 assignWorker 返回的最新 task 行,省掉 loadEffectiveConfig 内的重复 selectById。
     return taskExecutionService.loadEffectiveConfig(request.tenantId(), task);
+  }
+
+  public void markNonIdempotentExecutionStarted(
+      Long taskId, TaskNonIdempotentStartCommand request) {
+    if (!taskExecutionService.markNonIdempotentExecutionStarted(
+        request.tenantId(), taskId, request.workerId(), request.partitionInvocationId())) {
+      throw BizException.of(ResultCode.CONFLICT, "error.task.invocation_mismatch");
+    }
   }
 
   /**

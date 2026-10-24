@@ -16,7 +16,7 @@ import io.github.pinpols.batch.common.i18n.LocalizedErrorCarrier;
  *   <li>成功: {@link #successResponse()}
  *   <li>失败 + i18n: {@link #failure(BizException, ObjectMapper)} — 自动从 {@link
  *       BizException#getMessageKey()} / {@code messageArgs()} 抽 i18n 信息
- *   <li>失败 + 旧 literal: {@code new StepExecutionResponse(false, code, message, null, null)}
+ *   <li>失败 + 固定文本: {@code new StepExecutionResponse(false, code, message)}
  * </ul>
  */
 public record StepExecutionResponse(
@@ -47,7 +47,7 @@ public record StepExecutionResponse(
   }
 
   public static StepExecutionResponse successResponse() {
-    return new StepExecutionResponse(true, "SUCCESS", "ok", null, null);
+    return new StepExecutionResponse(true, "SUCCESS", "ok");
   }
 
   /**

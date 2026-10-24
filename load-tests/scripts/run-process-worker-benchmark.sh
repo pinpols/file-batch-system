@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：执行 Process Worker 吞吐与处理结果基准。
+# 用法：在仓库根目录执行 bash load-tests/scripts/run-process-worker-benchmark.sh；参数与前置环境见下方说明及所属 README。
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -156,6 +158,8 @@ run_process_job() {
   local params_file="$3"
   local users="$4"
   local log_file="$LOG_DIR/${label}.log"
+  local workflow_id
+  workflow_id="$(resolve_single_job_workflow_id "$LOAD_TEST_TENANT_ID" "$job_code")"
   local baseline_total expected_total
 
   baseline_total="$(
@@ -174,7 +178,7 @@ run_process_job() {
       -Dorchestrator.baseUrl="$ORCHESTRATOR_BASE_URL" \
       -Dinternal.secret="$INTERNAL_SECRET" \
       -DtenantId="$LOAD_TEST_TENANT_ID" \
-      -DjobCode="$job_code" \
+      -DworkflowDefinitionId="$workflow_id" \
       -DbizDate="$BIZ_DATE" \
       -Dlaunch.paramsJsonFile="$params_file" \
       -Dpipeline.completion.users="$users" \

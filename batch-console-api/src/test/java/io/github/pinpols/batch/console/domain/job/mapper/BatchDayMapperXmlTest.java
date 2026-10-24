@@ -23,6 +23,54 @@ import org.junit.jupiter.api.Test;
 class BatchDayMapperXmlTest {
 
   @Test
+  @DisplayName("批次日固定投影的构造列顺序与具名视图组件一致")
+  void shouldMapFixedColumnsToTypedViewsInConstructorOrder() {
+    Configuration configuration = loadMapper("mapper/BatchDayMapper.xml");
+
+    assertConstructorColumns(configuration, "batchDayViewResultMap", List.of(
+        "bizDate",
+        "dayStatus",
+        "openAt",
+        "cutoffAt",
+        "settledAt",
+        "slaDeadlineAt",
+        "lateCount",
+        "catchupCount",
+        "totalJobCount",
+        "successJobCount",
+        "failedJobCount",
+        "inFlightJobCount"));
+    assertConstructorColumns(configuration, "scheduledOccurrenceViewResultMap", List.of(
+        "workflowDefinitionId",
+        "workflowCode",
+        "catchUpPolicy",
+        "scheduleVersion",
+        "scheduledFireTime",
+        "bizDate",
+        "occurrenceStatus",
+        "requestId",
+        "lastRejectionReason"));
+    assertConstructorColumns(configuration, "batchDayJobSummaryViewResultMap", List.of(
+        "jobCode",
+        "totalJobCount",
+        "successJobCount",
+        "failedJobCount",
+        "inFlightJobCount",
+        "catchupCount"));
+  }
+
+  private static void assertConstructorColumns(
+      Configuration configuration, String resultMapId, List<String> expectedColumns) {
+    List<String> actualColumns = configuration
+        .getResultMap(BatchDayMapper.class.getName() + "." + resultMapId)
+        .getConstructorResultMappings()
+        .stream()
+        .map(mapping -> mapping.getColumn())
+        .toList();
+    assertThat(actualColumns).containsExactlyElementsOf(expectedColumns);
+  }
+
+  @Test
   @DisplayName("正式统计口径排除试运行实例, 在途与失败计数分别覆盖各自的状态集合")
   void shouldIsolateDryRunAndCoverPausedStates_whenFormalStatistics() {
     List<String> statements = List.of("selectByQuery", "selectWindow", "selectJobSummaries");

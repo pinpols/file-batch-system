@@ -166,8 +166,10 @@ public class ReadReplicaRoutingDataSource extends AbstractRoutingDataSource {
     List<Class<?>> interfaces = new ArrayList<>(interfaceSet);
     InvocationHandler handler =
         (proxy, method, args) -> invokeObserved(target, proxy, method, args);
+    ClassLoader targetClassLoader = target.getClass().getClassLoader();
+    Class<?>[] proxyInterfaces = interfaces.toArray(Class<?>[]::new);
     return (T) Proxy.newProxyInstance(
-        target.getClass().getClassLoader(), interfaces.toArray(Class<?>[]::new), handler);
+        targetClassLoader, proxyInterfaces, handler);
   }
 
   private Object invokeObserved(Object target, Object proxy, Method method, Object[] args)
@@ -197,7 +199,9 @@ public class ReadReplicaRoutingDataSource extends AbstractRoutingDataSource {
     SQLException current = exception;
     while (EmptyChecks.isNotNull(current)) {
       String state = current.getSQLState();
-      if (EmptyChecks.isNotNull(state) && (state.startsWith("08") || state.startsWith("57"))) {
+      boolean isConnectionAvailabilitySqlState =
+          EmptyChecks.isNotNull(state) && (state.startsWith("08") || state.startsWith("57"));
+      if (isConnectionAvailabilitySqlState) {
         return true;
       }
       Throwable cause = current.getCause();

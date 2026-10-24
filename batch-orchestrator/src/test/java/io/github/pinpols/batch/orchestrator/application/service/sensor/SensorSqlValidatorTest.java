@@ -95,7 +95,10 @@ class SensorSqlValidatorTest {
   @DisplayName("子查询中调用外部连接函数时同样被拒绝")
   void validate_dblinkInSubquery_throws() {
     assertThatThrownBy(() -> SensorSqlValidator.validate(
-            "SELECT id FROM biz.signal WHERE id IN" + " (SELECT dblink('x','y') FROM biz.other)",
+            """
+                SELECT id FROM biz.signal WHERE id IN
+                  (SELECT dblink('x','y') FROM biz.other)
+                """.strip(),
             ALLOWED))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("forbidden function");
@@ -159,7 +162,8 @@ class SensorSqlValidatorTest {
         "dblink_connect('host=evil')",
         "dblink_send_query('c','select 1')")) {
       assertThatThrownBy(
-              () -> SensorSqlValidator.validate("SELECT " + fn + " AS c FROM biz.signal", ALLOWED))
+              () -> SensorSqlValidator.validate(
+                  "SELECT %s AS c FROM biz.signal".formatted(fn), ALLOWED))
           .as("expected %s rejected", fn)
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("forbidden function");

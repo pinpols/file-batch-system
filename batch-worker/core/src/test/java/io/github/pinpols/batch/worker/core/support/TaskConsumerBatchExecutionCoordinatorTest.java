@@ -9,14 +9,17 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor;
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor.BatchItemExecution;
 import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import java.util.List;
+import java.util.function.BiFunction;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.web.client.ResourceAccessException;
 
 @DisplayName("批量任务消费协调器: 租户分批, 死信转投与偏移量提交判定")
@@ -45,7 +48,7 @@ class TaskConsumerBatchExecutionCoordinatorTest {
     boolean canCommit = coordinator.process(List.of(payload(first), payload(second)), registration);
 
     assertThat(canCommit).isTrue();
-    verify(executor, org.mockito.Mockito.times(2)).executeBatchDetailed(any(), eq("worker-1"));
+    verify(executor, Mockito.times(2)).executeBatchDetailed(any(), eq("worker-1"));
   }
 
   @Test
@@ -84,8 +87,7 @@ class TaskConsumerBatchExecutionCoordinatorTest {
             BatchItemExecution.completed(0, first, new WorkerExecutionResult("1", true, "ok")),
             BatchItemExecution.failed(1, second, new IllegalArgumentException("bad row"))));
     @SuppressWarnings("unchecked")
-    java.util.function.BiFunction<String, String, Boolean> dlq =
-        mock(java.util.function.BiFunction.class);
+    BiFunction<String, String, Boolean> dlq = mock(BiFunction.class);
     coordinator = new TaskConsumerBatchExecutionCoordinator(
         () -> "IMPORT", () -> executor, (message, ignored) -> true, dlq);
     when(dlq.apply(anyString(), anyString())).thenReturn(true);
@@ -103,6 +105,6 @@ class TaskConsumerBatchExecutionCoordinatorTest {
   }
 
   private static String payload(TaskDispatchMessage message) {
-    return io.github.pinpols.batch.common.utils.JsonUtils.toJson(message);
+    return JsonUtils.toJson(message);
   }
 }

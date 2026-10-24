@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.integration;
 
+import io.github.pinpols.batch.orchestrator.domain.param.DataAssetUpsertParam;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
@@ -97,6 +98,9 @@ class AssetPartitionReadinessMapperIntegrationTest extends AbstractIntegrationTe
     assertThat(snapshot.businessKey()).isEqualTo(businessKey);
     assertThat(snapshot.freshnessStatus()).isEqualTo("EFFECTIVE");
     assertThat(snapshot.versionNo()).isEqualTo(1);
+    assertThat(snapshot.resultVersionId()).isEqualTo(v1);
+    assertThat(assetPartitionMapper.selectEffectiveJobPartition("tb", assetCode, PARTITION_KEY))
+        .isNull();
   }
 
   @Test
@@ -126,15 +130,14 @@ class AssetPartitionReadinessMapperIntegrationTest extends AbstractIntegrationTe
   // ---- helpers ----
 
   private long ensureAsset(String assetCode) {
-    assetPartitionMapper.upsertDataAsset(TENANT, assetCode, "JOB", assetCode, assetCode);
+    assetPartitionMapper.upsertDataAsset(DataAssetUpsertParam.builder().tenantId(TENANT).assetCode(assetCode).assetType("JOB").displayName(assetCode).ownerJobCode(assetCode).build());
     Long id = assetPartitionMapper.selectDataAssetId(TENANT, assetCode, "JOB");
     assertThat(id).isNotNull();
     return id;
   }
 
   private long insertResultVersion(String businessKey, int versionNo, String status) {
-    Long id = jdbcTemplate.queryForObject(
-        """
+    String insertResultVersionSql = """
         insert into batch.result_version (
           tenant_id, business_key, version_no, job_instance_id, status, effective_at,
           payload_storage, payload_json, generated_at, generated_by, promotion_policy
@@ -145,7 +148,16 @@ class AssetPartitionReadinessMapperIntegrationTest extends AbstractIntegrationTe
           'INLINE_JSON', '{"recordCount":100}'::jsonb, current_timestamp, 'it', 'AUTO_LATEST'
         )
         returning id
-        """, Long.class, TENANT, businessKey, versionNo, STUB_JOB_INSTANCE_ID, status, status);
+        """;
+    Long id = jdbcTemplate.queryForObject(
+        insertResultVersionSql,
+        Long.class,
+        TENANT,
+        businessKey,
+        versionNo,
+        STUB_JOB_INSTANCE_ID,
+        status,
+        status);
     assertThat(id).isNotNull();
     return id;
   }
@@ -173,9 +185,12 @@ class AssetPartitionReadinessMapperIntegrationTest extends AbstractIntegrationTe
   }
 
   private Long pointerVersionId(String assetCode) {
+    String pointerVersionIdSql = """
+        select result_version_id from batch.asset_partition
+        where tenant_id = ? and asset_code = ? and partition_key = ?
+        """;
     return jdbcTemplate.queryForObject(
-        "select result_version_id from batch.asset_partition where tenant_id = ? and asset_code = ?"
-            + " and partition_key = ?",
+        pointerVersionIdSql,
         Long.class,
         TENANT,
         assetCode,

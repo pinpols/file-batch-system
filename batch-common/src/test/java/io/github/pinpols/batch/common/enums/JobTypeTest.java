@@ -18,6 +18,12 @@ class JobTypeTest {
     assertThat(JobType.BUNDLE_DISPATCH.batchType()).isEqualTo(BatchType.DISPATCH);
   }
 
+  @Test
+  @DisplayName("JobType 仅包含可执行作业, Workflow 作为独立对象")
+  void shouldNotExposeWorkflowAsExecutableJobType() {
+    assertThat(DictEnum.codes(JobType.class)).doesNotContain("WORKFLOW");
+  }
+
   @ParameterizedTest
   @DisplayName("每个作业类型都能得到非空批次类型,映射不留缺口")
   @EnumSource(JobType.class)

@@ -10,7 +10,7 @@ import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
 import io.github.pinpols.batch.e2e.support.E2eOutboxPublishSupport;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -45,7 +45,7 @@ class ExportFailurePipelineE2eIT extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
 
   @Autowired
-  private LaunchService launchService;
+  private WorkflowRunLaunchService launchService;
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
@@ -56,6 +56,15 @@ class ExportFailurePipelineE2eIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("投放引用不存在导出模板的任务:验证任务终态为失败,且作业实例状态收敛到失败或部分失败")
   void shouldMarkTaskAndInstanceFailed_whenExportTemplateMissing() {
+    final String selectTaskStatusSql = """
+                      select t.task_status from batch.job_task t
+                      join batch.job_instance ji on ji.id = t.job_instance_id
+                      where ji.tenant_id = ? and ji.dedup_key = ?
+                      """;
+    final String selectInstanceStatusSql = """
+        select instance_status from batch.job_instance where tenant_id = ? and dedup_key = ?
+    """;
+
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API);
 
@@ -69,7 +78,7 @@ class ExportFailurePipelineE2eIT extends AbstractIntegrationTest {
 
     launchService.launch(new LaunchRequest(
         TENANT,
-        seed.jobCode(),
+        seed.workflowDefinitionId(),
         LocalDate.of(2026, 1, 15),
         TriggerType.API,
         seed.requestId(),
@@ -82,16 +91,12 @@ class ExportFailurePipelineE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String status = jdbcTemplate.queryForObject("""
-                      select t.task_status from batch.job_task t
-                      join batch.job_instance ji on ji.id = t.job_instance_id
-                      where ji.tenant_id = ? and ji.dedup_key = ?
-                      """, String.class, TENANT, seed.dedupKey());
+          String status = jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
           assertThat(status).isEqualTo("FAILED");
         });
 
     String instanceStatus = jdbcTemplate.queryForObject(
-        "select instance_status from batch.job_instance where tenant_id = ? and dedup_key = ?",
+        selectInstanceStatusSql,
         String.class,
         TENANT,
         seed.dedupKey());

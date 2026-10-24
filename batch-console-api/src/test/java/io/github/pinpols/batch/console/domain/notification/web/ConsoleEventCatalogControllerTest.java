@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.notification.web;
 
+import static org.hamcrest.Matchers.contains;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -7,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.pinpols.batch.common.dto.ResponseMeta;
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
@@ -42,23 +44,22 @@ class ConsoleEventCatalogControllerTest {
     messageSource.setBasename("messages");
     messageSource.setDefaultEncoding("UTF-8");
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleEventCatalogController(responseFactory, messageSource))
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleEventCatalogController(
+            responseFactory, messageSource, new BatchKafkaTopicNamespace("")))
         .setControllerAdvice(exceptionHandler)
         .setValidator(validator)
         .build();
   }
 
   @Test
-  @DisplayName("事件类型清单返回成功, 首项编码与总数固定且含告警升级事件")
+  @DisplayName("事件目录只承诺已有业务生产者的五类事件")
   void shouldReturnEventTypes() throws Exception {
     mockMvc
         .perform(get("/api/console/event-catalog/event-types"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data[0].code").value("JOB_SUCCESS"))
-        .andExpect(jsonPath("$.data[?(@.code == 'ALERT_ESCALATED')].code").value("ALERT_ESCALATED"))
-        .andExpect(jsonPath("$.data.length()").value(15));
+        .andExpect(jsonPath("$.data[*].code").value(contains(
+            "JOB_SUCCESS", "JOB_FAILED", "WORKFLOW_SUCCESS", "WORKFLOW_FAILED", "ALERT_ESCALATED")));
   }
 
   @Test
@@ -69,6 +70,9 @@ class ConsoleEventCatalogControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
         .andExpect(jsonPath("$.data[0].name").exists())
-        .andExpect(jsonPath("$.data.length()").value(11));
+        .andExpect(jsonPath("$.data[?(@.name == 'batch.task.dispatch.atomic')]").isNotEmpty())
+        .andExpect(jsonPath("$.data[?(@.name == 'batch.job.terminal.v1')]").isNotEmpty())
+        .andExpect(jsonPath("$.data[?(@.name == 'batch.workflow.terminal.v1')]").isNotEmpty())
+        .andExpect(jsonPath("$.data.length()").value(14));
   }
 }

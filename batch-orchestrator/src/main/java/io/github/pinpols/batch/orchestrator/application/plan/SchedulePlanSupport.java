@@ -21,7 +21,8 @@ public final class SchedulePlanSupport {
     request.setWorkerGroup(plan.getWorkerGroup());
     request.setResourceProfile(plan.getResourceProfile());
     request.setDownstreamChannelCode(plan.getDownstreamChannelCode());
-    request.setDownstreamChannelCodes(resolveDownstreamChannelCodes(plan));
+    List<String> downstreamChannelCodes = resolveDownstreamChannelCodes(plan);
+    request.setDownstreamChannelCodes(downstreamChannelCodes);
     request.setWorkerType(plan.getDefaultWorkerType());
     request.setRequiredCapability(plan.isDryRun() ? WorkerCapabilities.DRY_RUN_SAFE : null);
     request.setWindowCode(plan.getWindowCode());

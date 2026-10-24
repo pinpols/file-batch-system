@@ -1,11 +1,15 @@
 package io.github.pinpols.batch.console.domain.rbac.service;
 
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleResourceTagUpsertParam;
+
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.rbac.entity.ResourceTagEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleResourceTagMapper;
@@ -14,6 +18,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 @DisplayName("资源标签服务: 标签查询、写入、删除与资源类型规范化")
 class ConsoleResourceTagServiceTest {
@@ -76,11 +81,57 @@ class ConsoleResourceTagServiceTest {
   }
 
   @Test
+  @DisplayName("写入标签前验证同租户资源确实存在")
+  void shouldRejectTagForMissingResource() {
+    when(repository.selectResourceTagTarget("t1", "JOB", "missing-job")).thenReturn(null);
+
+    ResourceTagUpsertInput tagInput = ResourceTagUpsertInput.builder()
+        .tenantId("t1")
+        .resourceType("JOB")
+        .resourceCode("missing-job")
+        .tagKey("env")
+        .tagValue("prod")
+        .operator("admin")
+        .build();
+    assertThatThrownBy(() -> service.upsert(tagInput))
+        .isInstanceOf(BizException.class);
+    verify(repository).lockResourceTagIdentity("t1", "JOB", "missing-job");
+    verify(repository, Mockito.never()).upsert(ConsoleResourceTagUpsertParam.builder()
+        .tenantId("t1")
+        .resourceType("JOB")
+        .resourceCode("missing-job")
+        .tagKey("env")
+        .tagValue("prod")
+        .operator("admin")
+        .build());
+  }
+
+  @Test
   @DisplayName("写入标签按租户与资源维度下发下游")
   void shouldUpsertTag() {
-    service.upsert("t1", "JOB", "job-001", "env", "prod", "admin");
+    when(repository.lockResourceTagIdentity("t1", "JOB", "job-001")).thenReturn(1L);
+    when(repository.selectResourceTagTarget("t1", "JOB", "job-001")).thenReturn(1L);
 
-    verify(repository).upsert("t1", "JOB", "job-001", "env", "prod", "admin");
+    ResourceTagUpsertInput tagInput2 = ResourceTagUpsertInput.builder()
+        .tenantId("t1")
+        .resourceType("JOB")
+        .resourceCode("job-001")
+        .tagKey("env")
+        .tagValue("prod")
+        .operator("admin")
+        .build();
+    service.upsert(tagInput2);
+
+    verify(repository).lockResourceTagIdentity("t1", "JOB", "job-001");
+    verify(repository).selectResourceTagTarget("t1", "JOB", "job-001");
+    verify(repository).upsert(ConsoleResourceTagUpsertParam.builder()
+        .tenantId("t1")
+        .resourceType("JOB")
+        .resourceCode("job-001")
+        .tagKey("env")
+        .tagValue("prod")
+        .operator("admin")
+        .build());
   }
 
   @Test
@@ -102,7 +153,15 @@ class ConsoleResourceTagServiceTest {
   @Test
   @DisplayName("资源类型不在允许集合内时抛出参数非法异常, 并提示可选取值")
   void shouldRejectInvalidResourceType() {
-    assertThatThrownBy(() -> service.upsert("t1", "UNKNOWN", "res-1", "key", "val", "admin"))
+    ResourceTagUpsertInput tagInput3 = ResourceTagUpsertInput.builder()
+        .tenantId("t1")
+        .resourceType("UNKNOWN")
+        .resourceCode("res-1")
+        .tagKey("key")
+        .tagValue("val")
+        .operator("admin")
+        .build();
+    assertThatThrownBy(() -> service.upsert(tagInput3))
         .isInstanceOf(BizException.class)
         // i18n: messageKey 不含原文,改用 messageArgs 检查
         .satisfies(ex -> assertThat(((BizException) ex).getMessageArgs())
@@ -112,17 +171,85 @@ class ConsoleResourceTagServiceTest {
   @Test
   @DisplayName("资源类型统一转为大写后写入下游")
   void shouldNormalizeResourceTypeToUpperCase() {
-    service.upsert("t1", "job", "job-001", "env", "prod", "admin");
+    when(repository.selectResourceTagTarget("t1", "JOB", "job-001")).thenReturn(1L);
+    ResourceTagUpsertInput tagInput4 = ResourceTagUpsertInput.builder()
+        .tenantId("t1")
+        .resourceType("job")
+        .resourceCode("job-001")
+        .tagKey("env")
+        .tagValue("prod")
+        .operator("admin")
+        .build();
+    service.upsert(tagInput4);
 
-    verify(repository).upsert("t1", "JOB", "job-001", "env", "prod", "admin");
+    verify(repository).upsert(ConsoleResourceTagUpsertParam.builder()
+        .tenantId("t1")
+        .resourceType("JOB")
+        .resourceCode("job-001")
+        .tagKey("env")
+        .tagValue("prod")
+        .operator("admin")
+        .build());
   }
 
   @Test
   @DisplayName("资源类型为空时抛出参数非法异常")
   void shouldRejectBlankResourceType() {
-    assertThatThrownBy(() -> service.upsert("t1", "  ", "res-1", "key", "val", "admin"))
+    ResourceTagUpsertInput tagInput5 = ResourceTagUpsertInput.builder()
+        .tenantId("t1")
+        .resourceType("  ")
+        .resourceCode("res-1")
+        .tagKey("key")
+        .tagValue("val")
+        .operator("admin")
+        .build();
+    assertThatThrownBy(() -> service.upsert(tagInput5))
         .isInstanceOf(BizException.class)
         .satisfies(ex -> assertThat(((BizException) ex).getMessageArgs())
             .anyMatch(a -> a != null && a.toString().contains("resourceType is required")));
+  }
+
+  @Test
+  @DisplayName("缺省租户继续由授权守卫解析，空标签值规范为空串且操作人保持可空")
+  void shouldResolveDefaultTenantAndNormalizeAbsentValue() {
+    when(tenantGuard.resolveTenant(null)).thenReturn("t1");
+    when(repository.selectResourceTagTarget("t1", "JOB", "job-001")).thenReturn(1L);
+    ResourceTagUpsertInput tagInput = ResourceTagUpsertInput.builder()
+        .resourceType("job")
+        .resourceCode("job-001")
+        .tagKey("env")
+        .build();
+
+    service.upsert(tagInput);
+
+    ConsoleResourceTagUpsertParam expectedWrite = ConsoleResourceTagUpsertParam.builder()
+        .tenantId("t1")
+        .resourceType("JOB")
+        .resourceCode("job-001")
+        .tagKey("env")
+        .tagValue("")
+        .operator(null)
+        .build();
+    org.mockito.InOrder order = Mockito.inOrder(tenantGuard, repository);
+    order.verify(tenantGuard).resolveTenant(null);
+    order.verify(repository).lockResourceTagIdentity("t1", "JOB", "job-001");
+    order.verify(repository).selectResourceTagTarget("t1", "JOB", "job-001");
+    order.verify(repository).upsert(expectedWrite);
+  }
+
+  @Test
+  @DisplayName("原始输入不提前校验，租户授权失败仍优先于资源字段错误")
+  void shouldPreserveTenantGuardFailureBeforeResourceValidation() {
+    BizException tenantFailure = BizException.of(ResultCode.FORBIDDEN, "error.tenant.context_missing");
+    when(tenantGuard.resolveTenant(null)).thenThrow(tenantFailure);
+    ResourceTagUpsertInput tagInput = ResourceTagUpsertInput.builder()
+        .resourceType("  ")
+        .resourceCode("")
+        .tagKey("env")
+        .build();
+
+    assertThatThrownBy(() -> service.upsert(tagInput)).isSameAs(tenantFailure);
+
+    Mockito.verifyNoInteractions(repository);
   }
 }

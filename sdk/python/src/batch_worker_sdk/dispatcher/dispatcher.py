@@ -491,7 +491,21 @@ class TaskDispatcher:
 
         # 构造执行上下文并调用 handler。handler.execute 是 async,直接 await;
         # 防御性地兼容返回非 coroutine 的实现(同步 handler)。
-        ctx = self._build_context(task_id, msg, worker_type, runtime_attrs)
+        payload = claim_resp.get("payload")
+        if payload is None:
+            raw_parameters = msg.get("parameters") or {}
+            parameters = dict(raw_parameters)
+        else:
+            try:
+                parameters = json.loads(payload) if isinstance(payload, str) else payload
+            except (TypeError, json.JSONDecodeError):
+                logger.exception("invalid claim payload for taskId=%s", task_id)
+                await self._report_failure(task_id, msg, "invalid claim payload: expected JSON object")
+                return
+            if not isinstance(parameters, dict):
+                await self._report_failure(task_id, msg, "invalid claim payload: expected JSON object")
+                return
+        ctx = self._build_context(task_id, msg, worker_type, runtime_attrs, parameters)
         try:
             raw = handler.execute(ctx)
             result: Any = await raw if asyncio.iscoroutine(raw) else raw
@@ -524,19 +538,23 @@ class TaskDispatcher:
         msg: dict[str, Any],
         worker_type: str,
         runtime_attrs: dict[str, Any],
+        parameters: dict[str, Any],
     ) -> SdkTaskContext:
         """从 Kafka 派发信封物化 :class:`SdkTaskContext`。
 
         ``cancel_signal`` 取 on_message 入队时建好的同一份引用,使
         LeaseRenewalScheduler 的取消信号能被 handler 通过 ctx 观察到。
         """
+        tenant_value = msg.get("tenantId") or self._config.tenant_id
+        resolved_tenant_id = str(tenant_value)
+        runtime_attributes_snapshot = dict(runtime_attrs)
         return SdkTaskContext(
-            tenant_id=str(msg.get("tenantId") or self._config.tenant_id),
+            tenant_id=resolved_tenant_id,
             task_id=task_id,
             worker_code=self._config.worker_code,
             task_type=worker_type,
-            parameters=dict(msg.get("parameters") or {}),
-            runtime_attributes=dict(runtime_attrs),
+            parameters=parameters,
+            runtime_attributes=runtime_attributes_snapshot,
             cancel_signal=self._cancel_signals.get(task_id),
         )
 
@@ -562,9 +580,10 @@ class TaskDispatcher:
             # result_summary 是平台 jsonb 列(#{resultSummary}::jsonb),必须是合法 JSON,
             # 不能是裸人读串(否则 invalid input syntax for type json → report 500)。发
             # {code,message} JSON 对象,对齐内建 worker DefaultTaskExecutionWrapper 的契约。
-            body["resultSummary"] = json.dumps(
+            result_summary_json = json.dumps(
                 {"code": ERROR_CODE_SUCCESS, "message": result.message or ""}
             )
+            body["resultSummary"] = result_summary_json
         self._attach_report_meta(body, msg, task_id)
         try:
             await self._http.report(task_id, _new_idempotency_key(), body)
@@ -597,10 +616,11 @@ class TaskDispatcher:
             "workerId": self._config.worker_code,
             "success": False,
             "message": reason,
-            # jsonb 列:发 {code,message} JSON 对象(见 success 路径同理)。
-            "resultSummary": json.dumps({"code": error_code, "message": reason}),
-            "errorCode": error_code,
         }
+        # jsonb 列:发 {code,message} JSON 对象(见 success 路径同理)。
+        result_summary = {"code": error_code, "message": reason}
+        body["resultSummary"] = json.dumps(result_summary)
+        body["errorCode"] = error_code
         if outputs:
             body["outputs"] = outputs
         self._attach_report_meta(body, msg, task_id)
@@ -627,7 +647,7 @@ class TaskDispatcher:
         """drain in-flight 任务,总耗时不超过 ``timeout`` 秒。
 
         先翻 ``_draining`` 阻止后续 ``on_message`` 接单,再通过
-        ``asyncio.wait`` 等待已 in-flight 的任务完成。完整的
+        ``asyncio.wait_for(asyncio.gather(...))`` 等待已 in-flight 的任务完成。完整的
         ``stop(timeout)``(含 deactivate + 残余任务的最终态 REPORT)由
         ``_lifecycle.stop_with_timeout`` 处理。
         """
@@ -636,7 +656,8 @@ class TaskDispatcher:
             return
         tasks = list(self._in_flight.values())
         try:
-            await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=timeout)
+            gathered_tasks = asyncio.gather(*tasks, return_exceptions=True)
+            await asyncio.wait_for(gathered_tasks, timeout=timeout)
         except TimeoutError:
             logger.warning(
                 "dispatcher shutdown timed out after %ss, in-flight=%d",

@@ -105,10 +105,12 @@ public class AliyunSmsProvider implements SmsProvider {
       signName = textOrNull(config, "signName");
       templateCode = textOrNull(config, "templateCode");
     } catch (Exception ex) {
+      String channelCodeForLog = LogSanitizer.value(message.channelCode());
+      String reasonForLog = ex.getClass().getSimpleName();
       log.warn(
           "aliyun sms config parse failed channel={} reason={}",
-          LogSanitizer.value(message.channelCode()),
-          ex.getClass().getSimpleName());
+          channelCodeForLog,
+          reasonForLog);
       return WebhookDeliveryResult.failure(null, "invalid sms config");
     }
 
@@ -128,7 +130,8 @@ public class AliyunSmsProvider implements SmsProvider {
     queryParams.put("PhoneNumbers", joinedPhoneNumbers);
     queryParams.put("SignName", signName);
     queryParams.put("TemplateCode", templateCode);
-    queryParams.put("TemplateParam", buildTemplateParam(message));
+    String templateParam = buildTemplateParam(message);
+    queryParams.put("TemplateParam", templateParam);
 
     String authorization;
     String canonicalQuery;
@@ -136,12 +139,14 @@ public class AliyunSmsProvider implements SmsProvider {
     String nonce = nonce();
     try {
       canonicalQuery = canonicalQueryString(queryParams);
-      authorization = buildAuthorization(queryParams, acsDate, nonce, endpoint);
+      authorization = buildAuthorization(canonicalQuery, acsDate, nonce, endpoint);
     } catch (Exception ex) {
+      String channelCodeForLog = LogSanitizer.value(message.channelCode());
+      String reasonForLog = ex.getClass().getSimpleName();
       log.warn(
           "aliyun sms sign failed channel={} reason={}",
-          LogSanitizer.value(message.channelCode()),
-          ex.getClass().getSimpleName());
+          channelCodeForLog,
+          reasonForLog);
       return WebhookDeliveryResult.failure(null, "sms sign failed");
     }
 
@@ -155,6 +160,15 @@ public class AliyunSmsProvider implements SmsProvider {
         "x-acs-content-sha256", sha256Hex(""),
         "Authorization", authorization);
 
+    return deliverSignedRequest(phoneNumbers, message, url, headers);
+  }
+
+  /** 签名完成后统一处理发送结果，保留中断标记及原有脱敏错误分类。 */
+  private WebhookDeliveryResult deliverSignedRequest(
+      List<String> phoneNumbers,
+      NotificationMessage message,
+      String url,
+      Map<String, String> headers) {
     try {
       String response = postJson(url, headers);
       JsonNode node = objectMapper.readTree(response);
@@ -163,28 +177,36 @@ public class AliyunSmsProvider implements SmsProvider {
         return WebhookDeliveryResult.ok();
       }
       // 不打印 Message(可能含被风控的内容),只打脱敏 Code。
+      String channelCodeForLog = LogSanitizer.value(message.channelCode());
+      int recipientCountForLog = recipientCount(phoneNumbers);
       log.warn(
           "aliyun sms rejected channel={} recipients={} code={}",
-          LogSanitizer.value(message.channelCode()),
-          recipientCount(phoneNumbers),
+          channelCodeForLog,
+          recipientCountForLog,
           code);
       return WebhookDeliveryResult.failure(200, "sms code=" + code);
     } catch (HttpStatusException ex) {
+      String channelCodeForLog = LogSanitizer.value(message.channelCode());
+      int recipientCountForLog = recipientCount(phoneNumbers);
+      int statusForLog = ex.status();
       log.warn(
           "aliyun sms http failed channel={} recipients={} status={}",
-          LogSanitizer.value(message.channelCode()),
-          recipientCount(phoneNumbers),
-          ex.status());
+          channelCodeForLog,
+          recipientCountForLog,
+          statusForLog);
       return WebhookDeliveryResult.failure(ex.status(), "sms http status=" + ex.status());
     } catch (Exception ex) {
       if (ex instanceof InterruptedException) {
         Thread.currentThread().interrupt();
       }
+      String channelCodeForLog = LogSanitizer.value(message.channelCode());
+      int recipientCountForLog = recipientCount(phoneNumbers);
+      String reasonForLog = ex.getClass().getSimpleName();
       log.warn(
           "aliyun sms delivery failed channel={} recipients={} reason={}",
-          LogSanitizer.value(message.channelCode()),
-          recipientCount(phoneNumbers),
-          ex.getClass().getSimpleName());
+          channelCodeForLog,
+          recipientCountForLog,
+          reasonForLog);
       return WebhookDeliveryResult.failure(null, ex.getClass().getSimpleName());
     }
   }
@@ -207,7 +229,10 @@ public class AliyunSmsProvider implements SmsProvider {
    * → HMAC-SHA256(secret) → 十六进制 signature。
    */
   private String buildAuthorization(
-      SortedMap<String, String> queryParams, String acsDate, String nonce, String endpoint)
+      String canonicalQuery,
+      String acsDate,
+      String nonce,
+      String endpoint)
       throws GeneralSecurityException {
     String hashedPayload = sha256Hex("");
 
@@ -239,7 +264,7 @@ public class AliyunSmsProvider implements SmsProvider {
         + '\n'
         + CANONICAL_URI
         + '\n'
-        + canonicalQueryString(queryParams)
+        + canonicalQuery
         + '\n'
         + canonicalHeaderStr
         + '\n'
@@ -266,23 +291,26 @@ public class AliyunSmsProvider implements SmsProvider {
       if (EmptyChecks.isNotEmpty(sb)) {
         sb.append('&');
       }
-      sb.append(percentEncode(e.getKey())).append('=').append(percentEncode(e.getValue()));
+      String encodedKey = percentEncode(e.getKey());
+      String encodedValue = percentEncode(e.getValue());
+      sb.append(encodedKey).append('=').append(encodedValue);
     }
     return sb.toString();
   }
 
   /** RFC3986 编码：在 URLEncoder 基础上把 {@code + * %7E} 修正为阿里云期望的形式。 */
   private static String percentEncode(String value) {
-    return URLEncoder.encode(value, StandardCharsets.UTF_8)
-        .replace("+", "%20")
-        .replace("*", "%2A")
-        .replace("%7E", "~");
+    String formEncoded = URLEncoder.encode(value, StandardCharsets.UTF_8);
+    String spacesEncoded = formEncoded.replace("+", "%20");
+    String asterisksEncoded = spacesEncoded.replace("*", "%2A");
+    return asterisksEncoded.replace("%7E", "~");
   }
 
   private static String sha256Hex(String input) {
     try {
       MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-      byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+      byte[] encodedInput = input.getBytes(StandardCharsets.UTF_8);
+      byte[] hash = digest.digest(encodedInput);
       return toHex(hash);
     } catch (Exception ex) {
       throw new IllegalStateException("sha256 unavailable", ex);
@@ -291,9 +319,11 @@ public class AliyunSmsProvider implements SmsProvider {
 
   private static String hmacSha256Hex(String secret, String data) throws GeneralSecurityException {
     Mac mac = Mac.getInstance(CryptoAlgorithms.HMAC_SHA256);
-    mac.init(
-        new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), CryptoAlgorithms.HMAC_SHA256));
-    byte[] digest = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
+    byte[] secretBytes = secret.getBytes(StandardCharsets.UTF_8);
+    SecretKeySpec signingKey = new SecretKeySpec(secretBytes, CryptoAlgorithms.HMAC_SHA256);
+    mac.init(signingKey);
+    byte[] signingData = data.getBytes(StandardCharsets.UTF_8);
+    byte[] digest = mac.doFinal(signingData);
     return toHex(digest);
   }
 
@@ -317,7 +347,9 @@ public class AliyunSmsProvider implements SmsProvider {
 
   /** 签名随机数（去重防重放），抽出便于单测固定。 */
   protected String nonce() {
-    return UUID.randomUUID().toString().replace("-", "");
+    UUID nonce = UUID.randomUUID();
+    String nonceText = nonce.toString();
+    return nonceText.replace("-", "");
   }
 
   /** 同步 GET（RPC 风格，body 空，签名头随请求发出），返回响应体；非 2xx 抛 {@link HttpStatusException}。抽出便于单测注入预置响应。 */

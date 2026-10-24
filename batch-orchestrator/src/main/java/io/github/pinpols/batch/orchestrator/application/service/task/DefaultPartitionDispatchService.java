@@ -1,11 +1,16 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
+import io.github.pinpols.batch.orchestrator.domain.param.WorkflowRunMarkRunningParam;
+
+
+import io.github.pinpols.batch.common.dto.FrozenFileTemplateSnapshot;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.WorkflowNodeCode;
+import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
@@ -22,6 +27,7 @@ import io.github.pinpols.batch.orchestrator.application.scheduler.GlobalJobAdmis
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -112,7 +118,8 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     DispatchOutcome outcome = (EmptyChecks.isNotNull(initialNodes)
             && EmptyChecks.isNotEmpty(initialNodes))
         ? dispatchInitialDagNodes(initialNodes, jobInstance, workflowRun, sourcePayload, traceId)
-        : dispatchByPlan(request, effectiveParams, traceId, jobInstance);
+        : dispatchByPlan(
+            request, effectiveParams, traceId, jobInstance, context.executionDefinition());
     launchPhaseMetrics.record(Phase.INSTANCE_TRANSITION, () -> {
       if (outcome.dispatchable()) {
         transitionInstanceToRunning(jobInstance, workflowRun, outcome.partitionCount(), startedAt);
@@ -150,9 +157,17 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
       LaunchRequest request,
       Map<String, Object> effectiveParams,
       String traceId,
-      JobInstanceEntity jobInstance) {
+      JobInstanceEntity jobInstance,
+      JobDefinitionEntity executionDefinition) {
+    if (EmptyChecks.isNull(executionDefinition)) {
+      throw new IllegalStateException("Partition dispatch requires the admitted Job definition");
+    }
     SchedulePlanCommand planCommand = new SchedulePlanCommand(
-        request.tenantId(), request.jobCode(), request.bizDate().toString(), effectiveParams);
+        request.tenantId(),
+        request.jobCode(),
+        request.bizDate().toString(),
+        effectiveParams,
+        executionDefinition);
     SchedulePlan plan =
         launchPhaseMetrics.record(Phase.PLAN_BUILD, () -> schedulePlanBuilder.build(planCommand));
     plan.setDryRun(Boolean.TRUE.equals(jobInstance.getDryRun()));
@@ -214,26 +229,36 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
       int partitionCount,
       Instant startedAt) {
     // 可派发：推进为 RUNNING，并记录 startedAt；任务派发由 outbox 驱动，避免直接 send Kafka 导致事务边界混乱。
-    int updated = jobInstanceMapper.markRunning(MarkInstanceRunningParam.builder()
-        .tenantId(jobInstance.getTenantId())
-        .id(jobInstance.getId())
-        .instanceStatus(lifecycleEventMapper.map(jobInstance, "START").toState())
-        .expectedPartitionCount(partitionCount)
-        .startedAt(startedAt)
-        .expectedVersion(jobInstance.getVersion())
-        .build());
+    MarkInstanceRunningParam.MarkInstanceRunningParamBuilder updateParam =
+        MarkInstanceRunningParam.builder();
+    updateParam.tenantId(jobInstance.getTenantId());
+    updateParam.id(jobInstance.getId());
+    String runningStatus = lifecycleEventMapper.map(jobInstance, "START").toState();
+    updateParam.instanceStatus(runningStatus);
+    updateParam.expectedPartitionCount(partitionCount);
+    updateParam.startedAt(startedAt);
+    updateParam.expectedVersion(jobInstance.getVersion());
+    int updated = jobInstanceMapper.markRunning(updateParam.build());
     if (updated <= 0) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_launch_conflict");
     }
     jobInstance.setVersion(
         (EmptyChecks.isNull(jobInstance.getVersion()) ? 0L : jobInstance.getVersion()) + 1);
     if (EmptyChecks.isNotNull(workflowRun)) {
+      String tenantId = jobInstance.getTenantId();
+      Long workflowRunId = workflowRun.getId();
+      String workflowRunningStatus =
+          lifecycleEventMapper.map(workflowRun, "START").toState();
+      String currentNodeCode = workflowRun.getCurrentNodeCode();
+      WorkflowRunMarkRunningParam workflowRunMarkRunningParam = WorkflowRunMarkRunningParam.builder()
+          .tenantId(tenantId)
+          .id(workflowRunId)
+          .runStatus(workflowRunningStatus)
+          .currentNodeCode(currentNodeCode)
+          .startedAt(startedAt)
+          .build();
       workflowRunMapper.markRunning(
-          jobInstance.getTenantId(),
-          workflowRun.getId(),
-          lifecycleEventMapper.map(workflowRun, "START").toState(),
-          workflowRun.getCurrentNodeCode(),
-          startedAt);
+          workflowRunMarkRunningParam);
     }
   }
 
@@ -254,12 +279,15 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     jobInstance.setVersion(
         (EmptyChecks.isNull(jobInstance.getVersion()) ? 0L : jobInstance.getVersion()) + 1);
     if (EmptyChecks.isNotNull(workflowRun)) {
+      WorkflowRunMarkRunningParam workflowRunMarkRunningParam2 = WorkflowRunMarkRunningParam.builder()
+          .tenantId(jobInstance.getTenantId())
+          .id(workflowRun.getId())
+          .runStatus(WorkflowRunStatus.CREATED.code())
+          .currentNodeCode(workflowRun.getCurrentNodeCode())
+          .startedAt(null)
+          .build();
       workflowRunMapper.markRunning(
-          jobInstance.getTenantId(),
-          workflowRun.getId(),
-          WorkflowRunStatus.CREATED.code(),
-          workflowRun.getCurrentNodeCode(),
-          null);
+          workflowRunMarkRunningParam2);
     }
   }
 
@@ -275,7 +303,8 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     }
     List<JobTaskEntity> tasks = new ArrayList<>(partitions.size());
     for (JobPartitionEntity partition : partitions) {
-      tasks.add(buildTask(context.buildContext(partition)));
+      TaskBuildContext taskBuildContext = context.buildContext(partition);
+      tasks.add(buildTask(taskBuildContext));
     }
     taskCreationService.createTasks(tasks);
     if (!context.scheduling().decision().isDispatchable()) {
@@ -284,56 +313,66 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     for (int i = 0; i < partitions.size(); i++) {
       JobPartitionEntity partition = partitions.get(i);
       JobTaskEntity task = tasks.get(i);
+      JobInstanceEntity jobInstance = context.execution().jobInstance();
+      String traceId = context.execution().traceId();
+      String tenantId = context.execution().request().tenantId();
+      Long taskId = task.getId();
+      String dispatchEventKey = OutboxEventKeyGenerator.forDispatch(tenantId, taskId);
       taskDispatchOutboxService.writeDispatchEvent(
-          context.execution().jobInstance(),
-          task,
-          partition,
-          context.execution().traceId(),
-          OutboxEventKeyGenerator.forDispatch(
-              context.execution().request().tenantId(), task.getId()));
+          jobInstance, task, partition, traceId, dispatchEventKey);
     }
   }
 
   private JobTaskEntity buildTask(TaskBuildContext context) {
+    TaskCreationContext creation = context.creation();
+    TaskExecutionContext execution = creation.execution();
+    TaskSchedulingContext scheduling = creation.scheduling();
+    JobPartitionEntity partition = context.partition();
     JobTaskEntity task = new JobTaskEntity();
-    task.setTenantId(context.creation().execution().request().tenantId());
-    task.setJobInstanceId(context.creation().execution().jobInstance().getId());
-    task.setJobPartitionId(context.partition().getId());
-    task.setTaskType(resolveTaskType(context.creation().scheduling().plan(), context.partition()));
+    task.setTenantId(execution.request().tenantId());
+    task.setJobInstanceId(execution.jobInstance().getId());
+    task.setJobInstanceBizDate(execution.jobInstance().getBizDate());
+    task.setJobPartitionId(partition.getId());
+    String taskType = resolveTaskType(scheduling.plan(), partition);
+    task.setTaskType(taskType);
     task.setTaskSeq(1);
-    task.setAssignedWorkerCode(
-        resolveSelectedWorkerId(context.creation().scheduling().plan(), context.partition()));
-    ResourceSchedulingDecision decision = context.creation().scheduling().decision();
-    task.setTaskStatus(
-        EmptyChecks.isNotNull(decision) && decision.isDispatchable()
-            ? TaskStatus.READY.code()
-            : EmptyChecks.isNull(decision) || EmptyChecks.isNull(decision.getTaskStatus())
-                ? TaskStatus.READY.code()
-                : decision.getTaskStatus());
+    String selectedWorkerId = resolveSelectedWorkerId(scheduling.plan(), partition);
+    task.setAssignedWorkerCode(selectedWorkerId);
+    ResourceSchedulingDecision decision = scheduling.decision();
+    String taskStatus;
+    if (EmptyChecks.isNotNull(decision) && decision.isDispatchable()) {
+      taskStatus = TaskStatus.READY.code();
+    } else if (EmptyChecks.isNull(decision) || EmptyChecks.isNull(decision.getTaskStatus())) {
+      taskStatus = TaskStatus.READY.code();
+    } else {
+      taskStatus = decision.getTaskStatus();
+    }
+    task.setTaskStatus(taskStatus);
     task.setVersion(0L);
     // 演练任务保留完整控制面链路，但排在所有正式任务之后，避免大规模 dry-run 挤占生产批窗口。
-    boolean dryRun =
-        Boolean.TRUE.equals(context.creation().execution().jobInstance().getDryRun());
-    task.setPriority(DryRunSchedulingPriority.resolve(
-        dryRun, context.creation().scheduling().plan().getPriority()));
-    Map<String, Object> effectiveParams = context.creation().execution().effectiveParams();
-    task.setTaskPayload(buildPayloadJson(
-        context.creation().execution().request(),
-        context.creation().execution().jobInstance(),
-        effectiveParams,
-        context.partition()));
+    boolean dryRun = Boolean.TRUE.equals(execution.jobInstance().getDryRun());
+    Integer priority =
+        DryRunSchedulingPriority.resolve(dryRun, scheduling.plan().getPriority());
+    task.setPriority(priority);
+    Map<String, Object> effectiveParams = execution.effectiveParams();
+    String taskPayload =
+        buildPayloadJson(execution.request(), execution.jobInstance(), effectiveParams, partition);
+    task.setTaskPayload(taskPayload);
     // ORCH-P3-3 生效参数审计快照（合并后、wire 注入前），与 task_payload 解耦
-    task.setEffectiveParameters(
-        EmptyChecks.isNull(effectiveParams) ? null : JsonUtils.toJson(effectiveParams));
+    String effectiveParametersJson =
+        EmptyChecks.isNull(effectiveParams) ? null : JsonUtils.toJson(effectiveParams);
+    task.setEffectiveParameters(effectiveParametersJson);
     task.setDryRun(dryRun);
     return task;
   }
 
   private String resolveTaskType(SchedulePlan plan, JobPartitionEntity partition) {
-    if (EmptyChecks.isNotNull(partition)
+    boolean partitionHasWorkerGroupAndDefaultRoute =
+        EmptyChecks.isNotNull(partition)
         && EmptyChecks.isNotNull(partition.getWorkerGroup())
         && hasDefaultRoute(plan)
-        && EmptyChecks.isNotNull(plan.getDefaultWorkerRoute().getWorkerType())) {
+        && EmptyChecks.isNotNull(plan.getDefaultWorkerRoute().getWorkerType());
+    if (partitionHasWorkerGroupAndDefaultRoute) {
       return plan.getDefaultWorkerRoute().getWorkerType();
     }
     return EmptyChecks.isNull(plan) ? null : plan.getDefaultWorkerType();
@@ -358,6 +397,16 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     Map<String, Object> payload = new LinkedHashMap<>();
     if (EmptyChecks.isNotNull(params)) {
       payload.putAll(params);
+    }
+    Object parentNodeCode = payload.get("_parentNodeCode");
+    if (payload.containsKey("_parentWorkflowRunId")
+        && parentNodeCode instanceof String nodeCode
+        && EmptyChecks.isNotBlank(nodeCode)) {
+      // 无根 Workflow 节点作为独立 Job Instance 执行。保留所属节点
+      // 标识到每个 Worker 任务，避免并行节点的结果依赖唯一活动
+      // 节点能否从 workflow_run.current_node_code 推断出来。
+      payload.put("workflowNodeCode", nodeCode);
+      payload.put("workflowNodeType", WorkflowNodeType.JOB.code());
     }
     if (!payload.containsKey("batchNo") && !payload.containsKey("batch_no")) {
       String batchNo = EmptyChecks.isNull(jobInstance) ? null : jobInstance.getBatchNo();
@@ -420,8 +469,18 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
       payload.put("bundleSourceFileId", partition.getSourceFileId());
     }
     String templateCode = partition.getTemplateCode();
-    if (EmptyChecks.isNotBlank(templateCode) && !payload.containsKey("templateCode")) {
+    if (EmptyChecks.isNotBlank(templateCode)) {
       payload.put("templateCode", templateCode);
+    }
+    Object frozenTemplates = payload.remove(FrozenFileTemplateSnapshot.COLLECTION_KEY);
+    if (frozenTemplates instanceof Map<?, ?> snapshots) {
+      payload.remove(FrozenFileTemplateSnapshot.PAYLOAD_KEY);
+      if (EmptyChecks.isNotBlank(templateCode)) {
+        Object selectedSnapshot = snapshots.get(templateCode);
+        if (selectedSnapshot instanceof String ciphertext) {
+          payload.put(FrozenFileTemplateSnapshot.PAYLOAD_KEY, ciphertext);
+        }
+      }
     }
     String targetRef = partition.getTargetRef();
     if (EmptyChecks.isNotBlank(targetRef) && !payload.containsKey("bundleTargetRef")) {

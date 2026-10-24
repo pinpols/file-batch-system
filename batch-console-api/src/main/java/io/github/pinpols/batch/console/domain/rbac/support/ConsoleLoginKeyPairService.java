@@ -11,6 +11,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
@@ -119,10 +120,9 @@ public class ConsoleLoginKeyPairService {
       byte[] aesKeyBytes = rsa.doFinal(wrappedKey);
 
       Cipher aes = Cipher.getInstance(AES_TRANSFORM);
-      aes.init(
-          Cipher.DECRYPT_MODE,
-          new SecretKeySpec(aesKeyBytes, CryptoAlgorithms.AES),
-          new GCMParameterSpec(GCM_TAG_BITS, iv));
+      SecretKeySpec aesKey = new SecretKeySpec(aesKeyBytes, CryptoAlgorithms.AES);
+      GCMParameterSpec gcmParameters = new GCMParameterSpec(GCM_TAG_BITS, iv);
+      aes.init(Cipher.DECRYPT_MODE, aesKey, gcmParameters);
       byte[] plaintext = aes.doFinal(ciphertext);
       return new String(plaintext, StandardCharsets.UTF_8);
     } catch (RuntimeException e) {
@@ -144,9 +144,13 @@ public class ConsoleLoginKeyPairService {
 
   private RSAPublicKey parsePublicKey(String pem) {
     try {
-      byte[] der = Base64.getDecoder().decode(stripPem(pem, "PUBLIC KEY"));
+      Base64.Decoder decoder = Base64.getDecoder();
+      String publicKeyPayload = stripPem(pem, "PUBLIC KEY");
+      byte[] publicKeyDer = decoder.decode(publicKeyPayload);
       KeyFactory kf = KeyFactory.getInstance("RSA");
-      return (RSAPublicKey) kf.generatePublic(new X509EncodedKeySpec(der));
+      X509EncodedKeySpec publicKeySpec = new X509EncodedKeySpec(publicKeyDer);
+      PublicKey publicKey = kf.generatePublic(publicKeySpec);
+      return (RSAPublicKey) publicKey;
     } catch (Exception e) {
       throw new IllegalStateException(
           "Failed to parse batch.console.security.login-encryption.public-key-pem", e);
@@ -155,9 +159,13 @@ public class ConsoleLoginKeyPairService {
 
   private RSAPrivateKey parsePrivateKey(String pem) {
     try {
-      byte[] der = Base64.getDecoder().decode(stripPem(pem, "PRIVATE KEY"));
+      Base64.Decoder decoder = Base64.getDecoder();
+      String privateKeyPayload = stripPem(pem, "PRIVATE KEY");
+      byte[] privateKeyDer = decoder.decode(privateKeyPayload);
       KeyFactory kf = KeyFactory.getInstance("RSA");
-      return (RSAPrivateKey) kf.generatePrivate(new PKCS8EncodedKeySpec(der));
+      PKCS8EncodedKeySpec privateKeySpec = new PKCS8EncodedKeySpec(privateKeyDer);
+      PrivateKey privateKey = kf.generatePrivate(privateKeySpec);
+      return (RSAPrivateKey) privateKey;
     } catch (Exception e) {
       throw new IllegalStateException(
           "Failed to parse batch.console.security.login-encryption.private-key-pem", e);
@@ -165,9 +173,11 @@ public class ConsoleLoginKeyPairService {
   }
 
   private String stripPem(String pem, String label) {
-    return pem.replace("-----BEGIN " + label + "-----", "")
-        .replace("-----END " + label + "-----", "")
-        .replaceAll("\\s", "");
+    String beginMarker = "-----BEGIN " + label + "-----";
+    String withoutBeginMarker = pem.replace(beginMarker, "");
+    String endMarker = "-----END " + label + "-----";
+    String withoutPemMarkers = withoutBeginMarker.replace(endMarker, "");
+    return withoutPemMarkers.replaceAll("\\s", "");
   }
 
   private String normalizePem(String pem, String label) {
@@ -188,7 +198,9 @@ public class ConsoleLoginKeyPairService {
 
   private String computeFingerprint(PublicKey pk) {
     try {
-      byte[] sha = MessageDigest.getInstance(CryptoAlgorithms.SHA_256).digest(pk.getEncoded());
+      MessageDigest digestGenerator = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
+      byte[] encodedPublicKey = pk.getEncoded();
+      byte[] sha = digestGenerator.digest(encodedPublicKey);
       byte[] head = new byte[8];
       System.arraycopy(sha, 0, head, 0, 8);
       return HexFormat.of().formatHex(head);

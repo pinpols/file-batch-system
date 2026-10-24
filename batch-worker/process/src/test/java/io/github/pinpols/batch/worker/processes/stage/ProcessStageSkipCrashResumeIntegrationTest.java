@@ -2,8 +2,12 @@ package io.github.pinpols.batch.worker.processes.stage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -12,7 +16,7 @@ import io.github.pinpols.batch.testing.TestPostgresContainers;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileTemplateRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
@@ -67,7 +71,7 @@ class ProcessStageSkipCrashResumeIntegrationTest {
 
   private JdbcTemplate jdbcTemplate;
   private SqlTransformComputePlugin plugin;
-  private PlatformPipelineDefinitionRepository pipelineDefinitions;
+  private PlatformFileTemplateRepository pipelineDefinitions;
   private PlatformPipelineRunRepository pipelineRuns;
   private DriverManagerDataSource dataSource;
 
@@ -92,31 +96,64 @@ class ProcessStageSkipCrashResumeIntegrationTest {
     plugin = new SqlTransformComputePlugin(
         dataSource, new ObjectMapper(), security, ProcessMetrics.noop());
 
-    jdbcTemplate.execute("drop schema if exists biz cascade");
-    jdbcTemplate.execute("drop schema if exists batch cascade");
-    jdbcTemplate.execute("create schema biz");
-    jdbcTemplate.execute("create schema batch");
-    jdbcTemplate.execute("""
+    final String dropSql = """
+        drop schema if exists biz cascade
+    """;
+    jdbcTemplate.execute(dropSql);
+    final String dropSqlValue1 = """
+        drop schema if exists batch cascade
+    """;
+    jdbcTemplate.execute(dropSqlValue1);
+    final String createSql = """
+        create schema biz
+    """;
+    jdbcTemplate.execute(createSql);
+    final String createSqlValue2 = """
+        create schema batch
+    """;
+    jdbcTemplate.execute(createSqlValue2);
+    final String createProcessStagingGenerationSql = """
+        create table batch.process_staging_generation (
+          generation_id uuid primary key,
+          tenant_id text not null,
+          job_task_id bigint,
+          batch_key text not null,
+          generation_status text not null,
+          created_at timestamptz not null default now(),
+          sealed_at timestamptz,
+          check (generation_status in ('OPEN', 'SEALED')),
+          check ((generation_status = 'SEALED') = (sealed_at is not null)),
+          unique (tenant_id, generation_id, batch_key)
+        )
+        """;
+    jdbcTemplate.execute(createProcessStagingGenerationSql);
+    final String createBatchProcessStagingSql = """
         create table batch.process_staging (
           batch_key text not null,
+          staging_generation_id uuid not null,
           row_seq bigserial not null,
           tenant_id text not null,
           target_schema text not null,
           target_table text not null,
           payload jsonb not null,
           staged_at timestamptz not null default now(),
-          primary key (batch_key, row_seq)
+          primary key (batch_key, staging_generation_id, row_seq),
+          constraint fk_process_staging_generation_identity
+            foreign key (tenant_id, staging_generation_id, batch_key)
+            references batch.process_staging_generation (tenant_id, generation_id, batch_key)
         )
-        """);
-    jdbcTemplate.execute("""
+        """;
+    jdbcTemplate.execute(createBatchProcessStagingSql);
+    final String createBizOrderEventSql = """
         create table biz.order_event (
           tenant_id varchar(32) not null,
           account_id varchar(32) not null,
           event_id bigint not null,
           amount numeric(18, 2) not null
         )
-        """);
-    jdbcTemplate.execute("""
+        """;
+    jdbcTemplate.execute(createBizOrderEventSql);
+    final String createBizAccountSummarySql = """
         create table biz.account_summary (
           tenant_id varchar(32) not null,
           account_id varchar(32) not null,
@@ -124,10 +161,11 @@ class ProcessStageSkipCrashResumeIntegrationTest {
           high_water_mark bigint not null,
           primary key (tenant_id, account_id)
         )
-        """);
+        """;
+    jdbcTemplate.execute(createBizAccountSummarySql);
     seedSource();
 
-    pipelineDefinitions = mock(PlatformPipelineDefinitionRepository.class);
+    pipelineDefinitions = mock(PlatformFileTemplateRepository.class);
     pipelineRuns = mock(PlatformPipelineRunRepository.class);
     lenient().when(pipelineRuns.startStepRun(any(), any(), any(), any())).thenReturn(9999L);
   }
@@ -138,20 +176,18 @@ class ProcessStageSkipCrashResumeIntegrationTest {
   }
 
   private void seedSource() {
-    jdbcTemplate.update(
-        "insert into biz.order_event values (?, ?, ?, ?)",
-        TENANT,
-        "A",
-        1L,
-        new BigDecimal("10.00"));
-    jdbcTemplate.update(
-        "insert into biz.order_event values (?, ?, ?, ?)",
-        TENANT,
-        "A",
-        2L,
-        new BigDecimal("20.00"));
-    jdbcTemplate.update(
-        "insert into biz.order_event values (?, ?, ?, ?)", TENANT, "B", 3L, new BigDecimal("7.00"));
+    final String insertBizOrderEventSql = """
+        insert into biz.order_event values (?, ?, ?, ?)
+    """;
+    jdbcTemplate.update(insertBizOrderEventSql, TENANT, "A", 1L, new BigDecimal("10.00"));
+    final String insertBizOrderEventSqlValue3 = """
+        insert into biz.order_event values (?, ?, ?, ?)
+    """;
+    jdbcTemplate.update(insertBizOrderEventSqlValue3, TENANT, "A", 2L, new BigDecimal("20.00"));
+    final String insertBizOrderEventSqlValue4 = """
+        insert into biz.order_event values (?, ?, ?, ?)
+    """;
+    jdbcTemplate.update(insertBizOrderEventSqlValue4, TENANT, "B", 3L, new BigDecimal("7.00"));
   }
 
   @Test
@@ -168,11 +204,16 @@ class ProcessStageSkipCrashResumeIntegrationTest {
 
     // ── 关键:attempt2 前把源表删空。若 COMPUTE 被重跑,pre-DELETE 会清 staging + 从空源 re-SELECT
     //    → staging 归零 → target 0;只有真正"跳过 COMPUTE 复用 staging"才能发布出 2 行。──
-    jdbcTemplate.execute("delete from biz.order_event");
+    final String deleteBizOrderEventSql = """
+        delete from biz.order_event
+    """;
+    jdbcTemplate.execute(deleteBizOrderEventSql);
 
     // ── Attempt 2:开关开,COMPUTE/VALIDATE 已成功 → 跳过,直达 COMMIT 复用 staging ──
     when(pipelineRuns.loadSucceededStepCodes(PIPELINE_INSTANCE_ID))
         .thenReturn(Set.of("PROCESS_COMPUTE", "PROCESS_VALIDATE"));
+    when(pipelineRuns.loadLatestSucceededStepOutputSummary(PIPELINE_INSTANCE_ID, "PROCESS_COMPUTE"))
+        .thenReturn(Map.of(ProcessRuntimeKeys.PROCESS_STAGED_COUNT, 2));
     DefaultProcessStageExecutor executorSkip = newExecutor(enabledStageSkip());
     ProcessJobContext attempt2 = newContext(stepsThrough(ProcessStage.FEEDBACK));
     List<ProcessStageResult> r2 = executorSkip.execute(attempt2);
@@ -194,14 +235,30 @@ class ProcessStageSkipCrashResumeIntegrationTest {
   @DisplayName("从未成功的 stage 不误跳:succeeded 集为空 → COMPUTE 必跑并清掉陈旧 staging")
   void noPriorSuccess_doesNotSkipCompute_recomputesAndClearsStaleStaging() {
     // 预置一条陈旧 staging(模拟上次崩溃残留),但 COMPUTE 从未成功过(succeeded 集空)。
-    jdbcTemplate.update("""
-        insert into batch.process_staging (batch_key, tenant_id, target_schema, target_table, payload)
-        values (?, ?, 'biz', 'account_summary',
+    final String insertProcessStagingGenerationSql = """
+        insert into batch.process_staging_generation (
+          generation_id, tenant_id, job_task_id, batch_key, generation_status)
+        values (cast(? as uuid), ?, ?, ?, 'OPEN')
+        """;
+    jdbcTemplate.update(
+        insertProcessStagingGenerationSql,
+        "00000000-0000-0000-0000-000000007001",
+        TENANT,
+        TASK_ID,
+        "process-" + TASK_ID);
+    final String insertBatchProcessStagingSql = """
+        insert into batch.process_staging (
+          batch_key, staging_generation_id, tenant_id, target_schema, target_table, payload)
+        values (?, '00000000-0000-0000-0000-000000007001', ?, 'biz', 'account_summary',
                 '{"tenant_id":"t1","account_id":"STALE","total_amount":999.00,"high_water_mark":1}'::jsonb)
-        """, "process-" + TASK_ID, TENANT);
+        """;
+    jdbcTemplate.update(insertBatchProcessStagingSql, "process-" + TASK_ID, TENANT);
     // 源表删空:若 COMPUTE 被误跳,陈旧 STALE 行会被 COMMIT 发布到 target;
     // 若 COMPUTE 正确重跑,pre-DELETE 清掉 STALE + 从空源 re-SELECT → staging 空 → target 空。
-    jdbcTemplate.execute("delete from biz.order_event");
+    final String deleteBizOrderEventSqlValue5 = """
+        delete from biz.order_event
+    """;
+    jdbcTemplate.execute(deleteBizOrderEventSqlValue5);
 
     when(pipelineRuns.loadSucceededStepCodes(PIPELINE_INSTANCE_ID)).thenReturn(Set.of());
     DefaultProcessStageExecutor executorSkip = newExecutor(enabledStageSkip());
@@ -211,9 +268,48 @@ class ProcessStageSkipCrashResumeIntegrationTest {
     assertThat(results).isNotEmpty().allMatch(ProcessStageResult::success);
     // COMPUTE 真跑了(未误跳):陈旧 STALE 被 pre-DELETE 清掉,空源无新行 → target 零
     assertThat(targetCount()).isZero();
-    assertThat(jdbcTemplate.queryForObject(
-            "select count(*) from biz.account_summary where account_id='STALE'", Integer.class))
-        .isZero();
+    final String selectBizAccountSummarySql = """
+        select count(*) from biz.account_summary where account_id='STALE'
+    """;
+    Integer selectedAccountSummaryCount =
+        jdbcTemplate.queryForObject(selectBizAccountSummarySql, Integer.class);
+    assertThat(selectedAccountSummaryCount).isZero();
+  }
+
+  @Test
+  @DisplayName("COMMIT 发现 staging 丢失时将失败结果写入阶段运行记录,且不发布部分结果")
+  void missingStagingAtCommit_isReportedAsFailedStepRun() {
+    when(pipelineRuns.startStepRun(any(), any(), any(), any())).thenAnswer(invocation -> {
+      String stepCode = invocation.getArgument(1);
+      if ("PROCESS_COMMIT".equals(stepCode)) {
+        final String deleteBatchProcessStagingSql = """
+            delete from batch.process_staging where batch_key = ?
+        """;
+        jdbcTemplate.update(deleteBatchProcessStagingSql, "process-" + TASK_ID);
+      }
+      return 9999L;
+    });
+
+    DefaultProcessStageExecutor executor = newExecutor(disabledStageSkip());
+    List<ProcessStageResult> results =
+        executor.execute(newContext(stepsThrough(ProcessStage.FEEDBACK)));
+
+    assertThat(results)
+        .filteredOn(result -> result.stage() == ProcessStage.COMMIT)
+        .singleElement()
+        .satisfies(result -> {
+          assertThat(result.success()).isFalse();
+          assertThat(result.errorKey()).isEqualTo("error.process.staging.changed");
+        });
+    assertThat(targetCount()).isZero();
+    verify(pipelineRuns)
+        .finishStepRunFailure(
+            eq(9999L),
+            eq("BUSINESS_ERROR"),
+            anyString(),
+            eq("error.process.staging.changed"),
+            nullable(String.class),
+            any());
   }
 
   // ─── helpers ────────────────────────────────────────────────────────────────
@@ -225,13 +321,19 @@ class ProcessStageSkipCrashResumeIntegrationTest {
         new ValidateStep(),
         new CommitStep(),
         new FeedbackStep(ProcessMetrics.noop()));
+    ProcessInvocationFence stagingGenerationFixture = (context, stage, stageExecution) -> {
+      if (context.getStagingGenerationId() == null) {
+        context.setStagingGenerationId("00000000-0000-0000-0000-000000007001");
+      }
+      return stageExecution.get();
+    };
     return new DefaultProcessStageExecutor(
         steps,
         List.of(plugin),
-        pipelineDefinitions,
         pipelineRuns,
         ProcessMetrics.noop(),
-        checkpointProps);
+        checkpointProps,
+        stagingGenerationFixture);
   }
 
   private ProcessJobContext newContext(List<PipelineStepDefinition> steps) {
@@ -264,7 +366,6 @@ class ProcessStageSkipCrashResumeIntegrationTest {
           stage == ProcessStage.COMPUTE ? computeStepParams() : Map.of();
       PipelineStepDefinition definition = PipelineStepDefinition.builder()
           .id((long) order)
-          .pipelineDefinitionId(1L)
           .stepCode("PROCESS_" + stage.name())
           .stepName("Process " + stage.name())
           .stageCode(stage.name())
@@ -316,22 +417,27 @@ class ProcessStageSkipCrashResumeIntegrationTest {
   }
 
   private int stagingCount() {
-    Integer n =
-        jdbcTemplate.queryForObject("select count(*) from batch.process_staging", Integer.class);
+    final String selectBatchProcessStagingSql = """
+        select count(*) from batch.process_staging
+    """;
+    Integer n = jdbcTemplate.queryForObject(selectBatchProcessStagingSql, Integer.class);
     return n == null ? 0 : n;
   }
 
   private int targetCount() {
-    Integer n =
-        jdbcTemplate.queryForObject("select count(*) from biz.account_summary", Integer.class);
+    final String selectBizAccountSummarySqlValue6 = """
+        select count(*) from biz.account_summary
+    """;
+    Integer n = jdbcTemplate.queryForObject(selectBizAccountSummarySqlValue6, Integer.class);
     return n == null ? 0 : n;
   }
 
   private BigDecimal totalAmountOf(String accountId) {
+    final String selectBizAccountSummarySqlValue7 = """
+        select total_amount from biz.account_summary where account_id = ?
+    """;
     return jdbcTemplate.queryForObject(
-        "select total_amount from biz.account_summary where account_id = ?",
-        BigDecimal.class,
-        accountId);
+        selectBizAccountSummarySqlValue7, BigDecimal.class, accountId);
   }
 
   private WorkerCheckpointProperties disabledStageSkip() {

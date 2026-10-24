@@ -17,6 +17,7 @@ import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorG
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.concurrent.Future;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -136,8 +137,7 @@ class OutboxPollSchedulerTest {
     scheduler.stopScheduling();
 
     assertThat(executor.getScheduledThreadPoolExecutor().getQueue())
-        .allMatch(
-            task -> task instanceof java.util.concurrent.Future<?> future && future.isCancelled());
+        .allMatch(task -> task instanceof Future<?> future && future.isCancelled());
   }
 
   private void stubLockExecution() throws Throwable {

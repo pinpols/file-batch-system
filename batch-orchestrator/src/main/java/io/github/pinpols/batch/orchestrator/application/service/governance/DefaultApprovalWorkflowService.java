@@ -1,12 +1,17 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
+import io.github.pinpols.batch.orchestrator.domain.param.RejectCommandDecisionParam;
+import io.github.pinpols.batch.orchestrator.domain.param.ApproveCommandDecisionParam;
 import io.github.pinpols.batch.common.enums.ApprovalCommandStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.IdGenerator;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.ApprovalCommandEntity;
 import io.github.pinpols.batch.orchestrator.mapper.ApprovalCommandMapper;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +32,13 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
   @Override
   @Transactional
   public String submit(ApprovalSubmitCommand command) {
+    if (Texts.hasText(command.sourceIdempotencyKey())) {
+      ApprovalCommandEntity existing = findBySourceIdempotencyKey(command);
+      if (EmptyChecks.isNotNull(existing)) {
+        ensureSameSubmission(command, existing);
+        return existing.getApprovalNo();
+      }
+    }
     String approvalNo = IdGenerator.newBusinessNo("apr");
     ApprovalCommandEntity entity = new ApprovalCommandEntity();
     entity.setTenantId(command.tenantId());
@@ -35,14 +47,50 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
     entity.setActionType(command.actionType());
     entity.setTargetType(command.targetType());
     entity.setTargetId(command.targetId());
-    entity.setPayloadJson(Texts.hasText(command.payloadJson()) ? command.payloadJson() : "{}");
+    String payloadJson = command.payloadJson();
+    String resolvedPayloadJson = Texts.hasText(payloadJson) ? payloadJson : "{}";
+    entity.setPayloadJson(resolvedPayloadJson);
     entity.setApprovalStatus(ApprovalCommandStatus.PENDING.code());
     entity.setRequesterId(command.requesterId());
     entity.setSourceTraceId(command.sourceTraceId());
-    entity.setSourceIdempotencyKey(command.sourceIdempotencyKey());
+    entity.setSourceIdempotencyKey(
+        Texts.hasText(command.sourceIdempotencyKey()) ? command.sourceIdempotencyKey() : null);
     entity.setApprovalReason(command.approvalReason());
-    approvalCommandMapper.insert(entity);
+    int inserted = approvalCommandMapper.insert(entity);
+    if (inserted == 0 && Texts.hasText(command.sourceIdempotencyKey())) {
+      ApprovalCommandEntity existing = findBySourceIdempotencyKey(command);
+      if (EmptyChecks.isNotNull(existing)) {
+        ensureSameSubmission(command, existing);
+        return existing.getApprovalNo();
+      }
+    }
+    if (inserted == 0) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.submit_failed");
+    }
     return approvalNo;
+  }
+
+  private ApprovalCommandEntity findBySourceIdempotencyKey(ApprovalSubmitCommand command) {
+    return approvalCommandMapper.selectByTenantAndSourceIdempotencyKey(
+        command.tenantId(), command.sourceIdempotencyKey());
+  }
+
+  private void ensureSameSubmission(
+      ApprovalSubmitCommand command, ApprovalCommandEntity existing) {
+    String payloadJson = Texts.hasText(command.payloadJson()) ? command.payloadJson() : "{}";
+    Object submittedPayload = JsonUtils.fromJson(payloadJson, Object.class);
+    Object existingPayload = JsonUtils.fromJson(existing.getPayloadJson(), Object.class);
+    boolean samePayload = submittedPayload.equals(existingPayload);
+    boolean sameCommand = command.approvalType().equals(existing.getApprovalType())
+        && command.actionType().equals(existing.getActionType())
+        && command.targetType().equals(existing.getTargetType())
+        && Objects.equals(command.targetId(), existing.getTargetId())
+        && Objects.equals(command.requesterId(), existing.getRequesterId())
+        && Objects.equals(command.approvalReason(), existing.getApprovalReason())
+        && samePayload;
+    if (!sameCommand) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.idempotency_conflict");
+    }
   }
 
   @Override
@@ -53,17 +101,21 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
     if (!ApprovalCommandStatus.PENDING.code().equals(entity.getApprovalStatus())) {
       return toRecord(entity);
     }
-    if (approvalCommandMapper.markApproved(
-            tenantId,
-            approvalNo,
-            approverId,
-            approvalReason,
-            ApprovalCommandStatus.APPROVED.code(),
-            ApprovalCommandStatus.PENDING.code())
+    ApproveCommandDecisionParam approveCommandDecisionParam = ApproveCommandDecisionParam.builder()
+        .tenantId(tenantId)
+        .approvalNo(approvalNo)
+        .approverId(approverId)
+        .approvalReason(approvalReason)
+        .approvedStatus(ApprovalCommandStatus.APPROVED.code())
+        .pendingStatus(ApprovalCommandStatus.PENDING.code())
+        .build();
+    if (approvalCommandMapper.markApproved(approveCommandDecisionParam)
         <= 0) {
-      return toRecord(require(tenantId, approvalNo));
+      ApprovalCommandEntity refreshedApproval = require(tenantId, approvalNo);
+      return toRecord(refreshedApproval);
     }
-    return toRecord(require(tenantId, approvalNo));
+    ApprovalCommandEntity persistedApproval = require(tenantId, approvalNo);
+    return toRecord(persistedApproval);
   }
 
   @Override
@@ -74,17 +126,21 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
     if (!ApprovalCommandStatus.PENDING.code().equals(entity.getApprovalStatus())) {
       return toRecord(entity);
     }
-    if (approvalCommandMapper.markRejected(
-            tenantId,
-            approvalNo,
-            approverId,
-            approvalReason,
-            ApprovalCommandStatus.REJECTED.code(),
-            ApprovalCommandStatus.PENDING.code())
+    RejectCommandDecisionParam rejectCommandDecisionParam = RejectCommandDecisionParam.builder()
+        .tenantId(tenantId)
+        .approvalNo(approvalNo)
+        .approverId(approverId)
+        .approvalReason(approvalReason)
+        .rejectedStatus(ApprovalCommandStatus.REJECTED.code())
+        .pendingStatus(ApprovalCommandStatus.PENDING.code())
+        .build();
+    if (approvalCommandMapper.markRejected(rejectCommandDecisionParam)
         <= 0) {
-      return toRecord(require(tenantId, approvalNo));
+      ApprovalCommandEntity refreshedApproval = require(tenantId, approvalNo);
+      return toRecord(refreshedApproval);
     }
-    return toRecord(require(tenantId, approvalNo));
+    ApprovalCommandEntity persistedApproval = require(tenantId, approvalNo);
+    return toRecord(persistedApproval);
   }
 
   /**
@@ -116,12 +172,14 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
       }
       return toRecord(current);
     }
-    return toRecord(require(tenantId, approvalNo));
+    ApprovalCommandEntity persistedApproval = require(tenantId, approvalNo);
+    return toRecord(persistedApproval);
   }
 
   @Override
   public ApprovalRecord get(String tenantId, String approvalNo) {
-    return toRecord(require(tenantId, approvalNo));
+    ApprovalCommandEntity approval = require(tenantId, approvalNo);
+    return toRecord(approval);
   }
 
   private ApprovalCommandEntity require(String tenantId, String approvalNo) {
@@ -136,8 +194,8 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
   }
 
   private ApprovalRecord toRecord(ApprovalCommandEntity entity) {
-    ApprovalIdentity identity =
-        new ApprovalIdentity(new ApprovalContext(entity.getTenantId()), entity.getApprovalNo());
+    ApprovalContext context = new ApprovalContext(entity.getTenantId());
+    ApprovalIdentity identity = new ApprovalIdentity(context, entity.getApprovalNo());
     ApprovalTarget target = new ApprovalTarget(
         entity.getApprovalType(),
         entity.getActionType(),

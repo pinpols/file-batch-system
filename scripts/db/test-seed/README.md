@@ -32,3 +32,14 @@ psql -U batch_user -d batch_business -f scripts/db/test-seed/business_edge_cases
 ```
 
 基础种子脚本对专用测试库是幂等的：会先清理覆盖范围内的表，再写入一组固定数据。边界样本在基础种子上叠加额外覆盖。
+
+## 脚本与配套 SQL 索引
+
+本表登记本目录的执行入口、公共模块及配套 SQL；测试代码通过测试命令执行。新增、移动或删除资产时同步跳转和用途，SQL 正文保持独立维护。
+
+| 文件 | 用途 / 调用归属 |
+|---|---|
+| [business_edge_cases.sql](business_edge_cases.sql) | batch_business.biz edge-case seed data (CANCELLED / ARCHIVED 等异常状态样本) |
+| [business_seed.sql](business_seed.sql) | batch_business.biz seed data (默认租户 / 联调初始数据) |
+| [platform_edge_cases.sql](platform_edge_cases.sql) | 重建测试租户和平台夹具表，会清空原数据。仅限隔离测试数据库，禁止连接共享或生产环境。 |
+| [platform_seed.sql](platform_seed.sql) | 重建测试种子涉及的表，会清空原数据。仅限隔离测试数据库，禁止连接共享或生产环境。 |

@@ -66,7 +66,8 @@ class ClientErrorCounter:
     def record_client_error(self) -> int:
         """递增计数器并返回递增后的值。"""
         self.count += 1
-        if self.threshold > 0 and self.count >= self.threshold:
+        fail_fast_threshold_reached = self.threshold > 0 and self.count >= self.threshold
+        if fail_fast_threshold_reached:
             self.fatal = True
         return self.count
 

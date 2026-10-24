@@ -79,7 +79,8 @@ final class TriggerOutboxReleaseBudget {
       return requested;
     }
     resetWindowIfNeeded();
-    int granted = Math.min(requested, Math.max(0, limit - reservedInWindow));
+    int remainingBudget = Math.max(0, limit - reservedInWindow);
+    int granted = Math.min(requested, remainingBudget);
     reservedInWindow += granted;
     return granted;
   }

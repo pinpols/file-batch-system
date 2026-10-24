@@ -1,5 +1,7 @@
 # Runbook · 业务库 RLS(Phase A 多租隔离)
 
+> 2026-10-18已确认边界缺口：当前业务库叶子分区有普通writer直接访问权限却未启用RLS，直接命名叶子时父策略不适用；现有闭世界检查也遗漏叶子。详见[分区专项 PART-01](../plans/database-partition-lifecycle-remediation-2026-10-18.md#part-01p1叶子直接访问绕过父表租户策略)。下文strict/fail-closed说明不能作为叶子直接访问已隔离的验收结论；需收敛有效授权或补叶子策略，并用普通角色验证。
+
 > Phase A 落地的 PostgreSQL Row-Level Security 防御层。详见 `docs/plans/multi-tenant-isolation-plan-2026-05-31.md` §Phase A。
 
 ## 1. 它做什么

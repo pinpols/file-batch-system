@@ -2,10 +2,12 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Map;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
@@ -18,11 +20,8 @@ class LocalOutboxDispatchSupportTest {
   @Test
   @DisplayName("默认临时出箱目录及信封文件均私有,正常分发仍返回成功")
   void shouldCreatePrivateOutbox_whenEndpointIsMissing(@TempDir Path tempDir) throws Exception {
-    String previous = System.getProperty(
-        io.github.pinpols.batch.common.utils.PrivateTempFiles.TEMP_ROOT_PROPERTY);
-    System.setProperty(
-        io.github.pinpols.batch.common.utils.PrivateTempFiles.TEMP_ROOT_PROPERTY,
-        tempDir.toString());
+    String previous = System.getProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY);
+    System.setProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY, tempDir.toString());
     try {
       var base = command(tempDir);
       var command = new DispatchCommand(
@@ -36,20 +35,18 @@ class LocalOutboxDispatchSupportTest {
       assertThat(result.success()).isTrue();
       Path directory = tempDir.resolve("batch-dispatch-outbox");
       assertThat(Files.getPosixFilePermissions(directory))
-          .isEqualTo(java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"));
+          .isEqualTo(PosixFilePermissions.fromString("rwx------"));
       try (Stream<Path> files = Files.list(directory)) {
         for (Path file : files.toList()) {
           assertThat(Files.getPosixFilePermissions(file))
-              .isEqualTo(java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+              .isEqualTo(PosixFilePermissions.fromString("rw-------"));
         }
       }
     } finally {
       if (previous == null) {
-        System.clearProperty(
-            io.github.pinpols.batch.common.utils.PrivateTempFiles.TEMP_ROOT_PROPERTY);
+        System.clearProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY);
       } else {
-        System.setProperty(
-            io.github.pinpols.batch.common.utils.PrivateTempFiles.TEMP_ROOT_PROPERTY, previous);
+        System.setProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY, previous);
       }
     }
   }
@@ -79,6 +76,39 @@ class LocalOutboxDispatchSupportTest {
   }
 
   @Test
+  @DisplayName("信封已发布但旁挂清单失败时保留未知结果,禁止将其当作无副作用失败重发")
+  void shouldReportUnknown_whenEnvelopeWasPublishedButManifestFailed(@TempDir Path tempDir)
+      throws Exception {
+    Path sandbox = tempDir.resolve("sandbox");
+    Path target = sandbox.resolve("outbox");
+    Files.createDirectories(target);
+    Path envelope = target.resolve("LOCAL_TEST-req-1.json");
+    Path manifest = target.resolve("LOCAL_TEST-req-1.json.chk");
+    Files.createDirectory(manifest);
+    Path existingManifestEntry = manifest.resolve("occupied");
+    Files.writeString(existingManifestEntry, "keep");
+    DispatchCommand base = command(target);
+    DispatchCommand dispatch = new DispatchCommand(
+        base.tenantId(), base.traceId(), base.fileRecord(),
+        Map.of("channel_type", "LOCAL", "channel_code", "LOCAL_TEST",
+            "target_endpoint", target.toString(), "dispatch_manifest_enabled", true),
+        base.payload());
+    DispatchRuntimeProperties properties = runtimeProperties(sandbox);
+
+    DispatchResult result = LocalOutboxDispatchSupport.writeFilesystemEnvelope(
+        dispatch, false, null, properties);
+
+    assertThat(envelope).isRegularFile();
+    String publishedEnvelope = Files.readString(envelope);
+    assertThat(publishedEnvelope).contains("req-1", "rcpt-1");
+    assertThat(result.success()).isFalse();
+    assertThat(result.externalOutcomeUnknown()).isTrue();
+    assertThat(result.externalRequestId()).isEqualTo("req-1");
+    assertThat(result.receiptCode()).isEqualTo("rcpt-1");
+    assertThat(existingManifestEntry).hasContent("keep");
+  }
+
+  @Test
   @DisplayName("目标目录越出沙箱根时拒绝写入,并说明路径逃逸沙箱根")
   void shouldRejectTargetEndpointEscapingSandbox(@TempDir Path tempDir) throws Exception {
     Path sandbox = tempDir.resolve("sandbox");
@@ -91,6 +121,7 @@ class LocalOutboxDispatchSupportTest {
         command(outside), false, null, properties);
 
     assertThat(result.success()).isFalse();
+    assertThat(result.externalOutcomeUnknown()).isFalse();
     assertThat(result.message()).contains("escapes sandbox root");
   }
 

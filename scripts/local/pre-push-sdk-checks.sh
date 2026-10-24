@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：SDK 路线图 PR 推送前自查 — 拦截高频被 CI 拦截的问题:。
+# 用法：在仓库根目录执行 bash scripts/local/pre-push-sdk-checks.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # pre-push-sdk-checks.sh
 #
@@ -245,7 +247,7 @@ if [[ -n "$CHANGED_RELEASE_SENSITIVE" && -n "$BASE_REF" ]]; then
   fi
 fi
 
-READABILITY_INVENTORY="docs/analysis/java-readability-inventory-2026-08-12.md"
+READABILITY_INVENTORY="docs/stats/java-readability-inventory.md"
 if [[ -n "$CHANGED_JAVA" || "$CHANGED_FILES" == *"$READABILITY_INVENTORY"* ]]; then
   if [[ -f "scripts/ci/report-java-readability-inventory.py" && -f "$READABILITY_INVENTORY" ]]; then
     if "$PYTHON_BIN" scripts/ci/report-java-readability-inventory.py --output "$READABILITY_INVENTORY"; then

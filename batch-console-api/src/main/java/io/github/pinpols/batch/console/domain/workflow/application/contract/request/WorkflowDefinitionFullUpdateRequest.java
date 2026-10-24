@@ -26,7 +26,8 @@ public class WorkflowDefinitionFullUpdateRequest {
   @Valid
   private WorkflowDefinitionSaveRequest definition;
 
-  /** 客户端最近一次 GET 拿到的 version,服务端用它做乐观锁检查;不传则跳过版本冲突校验(便于工具脚本)。 */
+  /** 客户端最近一次 GET 拿到的版本，必须参与版本比较，缺失时拒绝写入。 */
+  @NotNull
   private Integer expectedVersion;
 
   /** 预留 lockToken;Spike 阶段以 SecurityContext.username 为权威。 */

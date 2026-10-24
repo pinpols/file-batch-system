@@ -15,11 +15,11 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.config.InternalAuthFilter;
 import io.github.pinpols.batch.orchestrator.controller.LaunchController;
 import io.github.pinpols.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,14 +31,14 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("作业启动接口,验证成功响应内容,接口密钥租户与请求体租户不一致时的拒绝,租户回填以及业务异常到统一错误响应的映射")
+@DisplayName("Workflow启动接口,验证成功响应内容,接口密钥租户校验,租户回填以及业务异常到统一错误响应的映射")
 class LaunchControllerTest {
 
   @Mock
-  private LaunchService launchService;
+  private TenantActionRateLimiter tenantActionRateLimiter;
 
   @Mock
-  private TenantActionRateLimiter tenantActionRateLimiter;
+  private WorkflowRunLaunchService workflowRunLaunchService;
 
   @Mock
   private OrchestratorGracefulShutdown gracefulShutdown;
@@ -48,7 +48,7 @@ class LaunchControllerTest {
   @BeforeEach
   void setUp() {
     LaunchApplicationService launchApplicationService =
-        new LaunchApplicationService(launchService, tenantActionRateLimiter);
+        new LaunchApplicationService(tenantActionRateLimiter, workflowRunLaunchService);
     mockMvc = MockMvcBuilders.standaloneSetup(
             new LaunchController(launchApplicationService, gracefulShutdown))
         .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
@@ -56,17 +56,18 @@ class LaunchControllerTest {
   }
 
   @Test
-  @DisplayName("限流放行且启动成功后返回成功状态,响应中携带实例编号与链路标识")
+  @DisplayName("显式Workflow启动成功后返回运行编号与链路标识")
   void shouldReturnLaunchResponseOnSuccess() throws Exception {
     when(tenantActionRateLimiter.tryConsume(any(), any())).thenReturn(true);
-    when(launchService.launch(any())).thenReturn(new LaunchResponse("inst-001", "trace-001"));
+    when(workflowRunLaunchService.launch(any()))
+        .thenReturn(new LaunchResponse("workflow-run-001", "trace-001"));
 
     mockMvc
         .perform(
             post("/internal/orchestrator/launch").contentType(APPLICATION_JSON).content("""
                     {
                       "tenantId": "t1",
-                      "jobCode": "IMPORT_JOB",
+                      "workflowDefinitionId": 42,
                       "bizDate": "2026-03-27",
                       "triggerType": "API",
                       "requestId": "req-001",
@@ -75,7 +76,7 @@ class LaunchControllerTest {
                     }
                     """))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.instanceNo").value("inst-001"))
+        .andExpect(jsonPath("$.instanceNo").value("workflow-run-001"))
         .andExpect(jsonPath("$.traceId").value("trace-001"));
   }
 
@@ -91,7 +92,7 @@ class LaunchControllerTest {
             .content("""
                     {
                       "tenantId": "t-fake",
-                      "jobCode": "IMPORT_JOB",
+                      "workflowDefinitionId": 42,
                       "bizDate": "2026-03-27",
                       "triggerType": "API",
                       "requestId": "req-001",
@@ -108,7 +109,8 @@ class LaunchControllerTest {
   void shouldUseApiKeyResolvedTenantWhenBodyTenantBlank() throws Exception {
     // arrange: API-Key 解析出 t-real,body 未声明 tenantId
     when(tenantActionRateLimiter.tryConsume(any(), any())).thenReturn(true);
-    when(launchService.launch(any())).thenReturn(new LaunchResponse("inst-001", "trace-001"));
+    when(workflowRunLaunchService.launch(any()))
+        .thenReturn(new LaunchResponse("workflow-run-001", "trace-001"));
 
     // act: launch 应使用解析出的 t-real,而非 body 里的 null
     mockMvc
@@ -117,7 +119,7 @@ class LaunchControllerTest {
             .contentType(APPLICATION_JSON)
             .content("""
                     {
-                      "jobCode": "IMPORT_JOB",
+                      "workflowDefinitionId": 42,
                       "bizDate": "2026-03-27",
                       "triggerType": "API",
                       "requestId": "req-001",
@@ -129,7 +131,7 @@ class LaunchControllerTest {
 
     // assert: 下游收到的 tenantId 已被守卫改写为 t-real
     ArgumentCaptor<LaunchRequest> captor = ArgumentCaptor.forClass(LaunchRequest.class);
-    verify(launchService).launch(captor.capture());
+    verify(workflowRunLaunchService).launch(captor.capture());
     assertThat(captor.getValue().tenantId()).isEqualTo("t-real");
   }
 
@@ -137,13 +139,16 @@ class LaunchControllerTest {
   @DisplayName("业务异常被映射为统一失败响应,状态码与错误码及错误信息与异常内容一致")
   void shouldMapBizExceptionToCommonResponseFailure() throws Exception {
     when(tenantActionRateLimiter.tryConsume(any(), any())).thenReturn(true);
-    when(launchService.launch(any()))
+    when(workflowRunLaunchService.launch(any()))
         .thenThrow(BizException.of(
             ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument", "bad request"));
 
     mockMvc
         .perform(
-            post("/internal/orchestrator/launch").contentType(APPLICATION_JSON).content("{}"))
+            post("/internal/orchestrator/launch").contentType(APPLICATION_JSON).content("""
+                {"tenantId":"t1","workflowDefinitionId":42,"bizDate":"2026-03-27",
+                 "triggerType":"API","requestId":"req-invalid","traceId":"trace-invalid","params":{}}
+                """))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value(ResultCode.INVALID_ARGUMENT.name()))
         .andExpect(jsonPath("$.message").value("error.common.invalid_argument"));

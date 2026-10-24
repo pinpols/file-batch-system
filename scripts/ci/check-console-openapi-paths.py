@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""
-Verify that docs/api/console-api.openapi.yaml documents exactly the same
-HTTP routes as batch-console-api controller classes under web/ and web/realtime/.
-
-Exit 1 on mismatch with a readable diff (openapi-only vs code-only).
-"""
+# 用途：Console controller 与 OpenAPI 路由同步。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-console-openapi-paths.py；参数与前置环境见下方说明及所属 README。
+"""核对 Console OpenAPI 与 web/、web/realtime/ 下 Controller 的 HTTP 路由。
+路径不一致时退出 1，并分别列出仅文档存在和仅代码存在的路由。"""
 from __future__ import annotations
 
 import re

@@ -3,18 +3,20 @@ package io.github.pinpols.batch.orchestrator.infrastructure.sla;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.config.SlaGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper;
@@ -25,7 +27,6 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 /** 单元测试：{@link JobSlaScheduler#scanViolations()} 各路径。 */
 @DisplayName("作业服务级别协议超时扫描的候选处理与告警升级行为")
@@ -34,7 +35,6 @@ class JobSlaSchedulerTest {
   private JobMonitoringMapper jobMonitoringMapper;
   private SlaGovernanceProperties properties;
   private BatchOrchestratorGovernanceProperties governance;
-  private AlertEventService alertEventService;
   private JobSlaViolationProcessor violationProcessor;
   private OrchestratorGracefulShutdown gracefulShutdown;
   private JobSlaScheduler scheduler;
@@ -42,7 +42,6 @@ class JobSlaSchedulerTest {
   @BeforeEach
   void setUp() {
     jobMonitoringMapper = mock(JobMonitoringMapper.class);
-    alertEventService = mock(AlertEventService.class);
     violationProcessor = mock(JobSlaViolationProcessor.class);
     governance = mock(BatchOrchestratorGovernanceProperties.class);
     gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
@@ -55,7 +54,6 @@ class JobSlaSchedulerTest {
         jobMonitoringMapper,
         governance,
         new SimpleMeterRegistry(),
-        alertEventService,
         violationProcessor,
         gracefulShutdown);
     scheduler.initializeMeters();
@@ -80,7 +78,7 @@ class JobSlaSchedulerTest {
     scheduler.scanViolations();
 
     verify(violationProcessor, never()).process(any(), any());
-    verify(alertEventService, never()).emit(any());
+    verify(violationProcessor, never()).processEscalation(any(), any(), anyLong(), anyString());
   }
 
   @Test
@@ -107,7 +105,7 @@ class JobSlaSchedulerTest {
     scheduler.scanViolations();
 
     verify(violationProcessor).process(eq(candidate), any());
-    verify(alertEventService, never()).emit(any());
+    verify(violationProcessor, never()).processEscalation(any(), any(), anyLong(), anyString());
   }
 
   @Test
@@ -163,6 +161,26 @@ class JobSlaSchedulerTest {
   }
 
   @Test
+  @DisplayName("跨租户 SLA 违约候选逐个在所属租户上下文内处理")
+  void shouldProcessViolationUnderCandidateTenantContext() {
+    JobInstanceEntity c1 = slaCandidate("t1", 31L, BatchDateTimeSupport.utcNow());
+    JobInstanceEntity c2 = slaCandidate("t2", 32L, BatchDateTimeSupport.utcNow());
+    when(jobMonitoringMapper.countSlaViolationCandidates()).thenReturn(2L);
+    when(jobMonitoringMapper.selectSlaViolationCandidates(anyInt())).thenReturn(List.of(c1, c2));
+    doAnswer(invocation -> {
+          JobInstanceEntity candidate = invocation.getArgument(0);
+          assertThat(RlsTenantContextHolder.get()).isEqualTo(candidate.getTenantId());
+          return true;
+        })
+        .when(violationProcessor)
+        .process(any(), any());
+
+    scheduler.scanViolations();
+
+    assertThat(RlsTenantContextHolder.get()).isNull();
+  }
+
+  @Test
   @DisplayName("单个候选事务失败时继续处理本批其他候选")
   void shouldContinueAfterCandidatePersistenceFailure() {
     JobInstanceEntity failed = slaCandidate("t1", 20L, BatchDateTimeSupport.utcNow());
@@ -196,10 +214,32 @@ class JobSlaSchedulerTest {
 
     scheduler.scanViolations();
 
-    ArgumentCaptor<AlertEmitRequest> captor = ArgumentCaptor.forClass(AlertEmitRequest.class);
-    verify(alertEventService).emit(captor.capture());
-    assertThat(captor.getValue().alertType()).isEqualTo("JOB_SLA_VIOLATION_ESCALATED");
-    assertThat(captor.getValue().severity()).isEqualTo("ERROR");
+    verify(violationProcessor).processEscalation(eq(stale), any(), eq(300L), eq("ERROR"));
+  }
+
+  @Test
+  @DisplayName("SLA 升级告警在候选实例租户上下文内写入")
+  void shouldEmitEscalationUnderCandidateTenantContext() {
+    properties.setEscalationDelaySeconds(300L);
+    properties.setEscalationSeverity("ERROR");
+    when(jobMonitoringMapper.countSlaViolationCandidates()).thenReturn(0L);
+    when(jobMonitoringMapper.selectSlaViolationCandidates(anyInt())).thenReturn(List.of());
+    JobInstanceEntity stale = slaCandidate("t2", 100L, BatchDateTimeSupport.utcNow());
+    stale.setSlaAlertedAt(BatchDateTimeSupport.utcNow().minusSeconds(900));
+    when(jobMonitoringMapper.countSlaEscalationCandidates(any())).thenReturn(1L);
+    when(jobMonitoringMapper.selectSlaEscalationCandidates(any(), anyInt()))
+        .thenReturn(List.of(stale));
+    doAnswer(invocation -> {
+          JobInstanceEntity request = invocation.getArgument(0);
+          assertThat(RlsTenantContextHolder.get()).isEqualTo(request.getTenantId());
+          return true;
+        })
+        .when(violationProcessor)
+        .processEscalation(any(), any(), anyLong(), anyString());
+
+    scheduler.scanViolations();
+
+    assertThat(RlsTenantContextHolder.get()).isNull();
   }
 
   @Test
@@ -212,7 +252,7 @@ class JobSlaSchedulerTest {
     scheduler.scanViolations();
 
     verify(jobMonitoringMapper, never()).selectSlaEscalationCandidates(any(), anyInt());
-    verify(alertEventService, never()).emit(any());
+    verify(violationProcessor, never()).processEscalation(any(), any(), anyLong(), anyString());
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────

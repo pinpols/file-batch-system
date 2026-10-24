@@ -80,13 +80,27 @@ public class DownstreamFallback {
   }
 
   private static CircuitBreakerConfig buildConfig(DownstreamCircuitBreakerProperties props) {
-    return CircuitBreakerConfig.custom()
-        .slidingWindowType(SlidingWindowType.COUNT_BASED)
-        .slidingWindowSize(Math.max(1, props.getSlidingWindowSize()))
-        .minimumNumberOfCalls(Math.max(1, props.getMinimumNumberOfCalls()))
-        .failureRateThreshold(props.getFailureRateThreshold())
-        .waitDurationInOpenState(Duration.ofMillis(props.getWaitDurationInOpenStateMillis()))
-        .permittedNumberOfCallsInHalfOpenState(Math.max(1, props.getPermittedCallsInHalfOpen()))
+    CircuitBreakerConfig.Builder config = CircuitBreakerConfig.custom().slidingWindowType(SlidingWindowType.COUNT_BASED);
+
+    int requestedWindowSize = props.getSlidingWindowSize();
+    int windowSize = Math.max(1, requestedWindowSize);
+    config.slidingWindowSize(windowSize);
+
+    int requestedMinimumCalls = props.getMinimumNumberOfCalls();
+    int minimumCalls = Math.max(1, requestedMinimumCalls);
+    config.minimumNumberOfCalls(minimumCalls);
+
+    config.failureRateThreshold(props.getFailureRateThreshold());
+
+    long openWindowMillis = props.getWaitDurationInOpenStateMillis();
+    Duration openWindow = Duration.ofMillis(openWindowMillis);
+    config.waitDurationInOpenState(openWindow);
+
+    int requestedHalfOpenCalls = props.getPermittedCallsInHalfOpen();
+    int halfOpenCalls = Math.max(1, requestedHalfOpenCalls);
+    config.permittedNumberOfCallsInHalfOpenState(halfOpenCalls);
+
+    return config
         // 只有 RestClient 层异常计入失败率;其它异常(如业务 IllegalState)不熔断、原样上抛。
         .recordExceptions(RestClientException.class)
         .build();
@@ -114,7 +128,9 @@ public class DownstreamFallback {
           service,
           operation,
           SwallowedExceptionLogger.summary(ex));
-      return fallback.apply(new RestClientException("downstream circuit open: " + service, ex));
+      RestClientException circuitOpenCause =
+          new RestClientException("downstream circuit open: " + service, ex);
+      return fallback.apply(circuitOpenCause);
     } catch (RestClientException ex) {
       DegradedResponseHeaders.mark(service);
       recordOutcome(service, operation, "fallback", ex.getClass().getSimpleName());

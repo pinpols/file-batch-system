@@ -112,14 +112,20 @@ public class RedisRateLimitCircuitBreaker {
 
   private static CircuitBreakerConfig buildConfig(RateLimitProperties.CircuitBreaker config) {
     int window = Math.max(1, config.getConsecutiveFailures());
-    return CircuitBreakerConfig.custom()
+    CircuitBreakerConfig.Builder builder = CircuitBreakerConfig.custom()
         // COUNT_BASED + size=minCalls=window + 100% 阈值 = "连续 window 次全失败才 OPEN"（窗口内任一成功打断）。
         .slidingWindowType(SlidingWindowType.COUNT_BASED)
         .slidingWindowSize(window)
         .minimumNumberOfCalls(window)
-        .failureRateThreshold(100.0f)
-        .waitDurationInOpenState(Duration.ofMillis(Math.max(1L, config.getOpenWindowMillis())))
-        .permittedNumberOfCallsInHalfOpenState(Math.max(1, config.getHalfOpenProbes()))
+        .failureRateThreshold(100.0f);
+    long configuredOpenWindowMillis = config.getOpenWindowMillis();
+    long positiveOpenWindowMillis = Math.max(1L, configuredOpenWindowMillis);
+    Duration openWindow = Duration.ofMillis(positiveOpenWindowMillis);
+    builder.waitDurationInOpenState(openWindow);
+    int configuredHalfOpenProbes = config.getHalfOpenProbes();
+    int positiveHalfOpenProbes = Math.max(1, configuredHalfOpenProbes);
+    builder.permittedNumberOfCallsInHalfOpenState(positiveHalfOpenProbes);
+    return builder
         // 不后台自动转 HALF_OPEN：窗口到期后由下一个真实请求承载探测（该请求真发 Redis 命令），符合"放一个探测请求"语义。
         .automaticTransitionFromOpenToHalfOpenEnabled(false)
         // 只有 Redis 命令级故障 / bucket4j 超时计失败；限流"拒绝"正常返回 false 不计失败，不误熔断。

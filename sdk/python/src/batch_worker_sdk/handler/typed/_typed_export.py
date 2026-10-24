@@ -104,9 +104,10 @@ class SdkAbstractTypedExportHandler[ParamsT: BaseModel, OutputT: BaseModel, RowT
         # 续跑(决策一):已完成则跳过;否则恢复计数。
         resume = self._resume(ctx)
         if resume.already_completed:
-            return self._result(
-                params, resume.counts, f"resumed-complete: {resume.counts.success()} rows"
-            )
+            resume_counts = resume.counts
+            success_count = resume_counts.success()
+            completion_message = f"resumed-complete: {success_count} rows"
+            return self._result(params, resume_counts, completion_message)
         counts = resume.counts
 
         self.open_sink(params, ctx)
@@ -133,12 +134,14 @@ class SdkAbstractTypedExportHandler[ParamsT: BaseModel, OutputT: BaseModel, RowT
         explicit = self.write_out(params, ctx, counts)
         if explicit is not None:
             return explicit
-        return self._result(params, counts, f"exported {counts.success()} rows")
+        success_count = counts.success()
+        default_message = f"exported {success_count} rows"
+        return self._result(params, counts, default_message)
 
     def _result(self, params: ParamsT, counts: SdkRowResult, default_message: str) -> SdkTaskResult:
         output = self.summarize(params, counts)
         if output is None:
-            return SdkTaskResult.success_with(output=counts.to_output(), message=default_message)
-        return SdkTaskResult.success_with(
-            output=SdkTypedParameters.serialize(output), message=default_message
-        )
+            counts_output = counts.to_output()
+            return SdkTaskResult.success_with(output=counts_output, message=default_message)
+        serialized_output = SdkTypedParameters.serialize(output)
+        return SdkTaskResult.success_with(output=serialized_output, message=default_message)

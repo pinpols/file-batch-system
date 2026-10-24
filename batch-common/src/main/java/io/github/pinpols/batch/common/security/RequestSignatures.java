@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.security;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -33,7 +34,8 @@ public final class RequestSignatures {
   public static String bodySha256Hex(byte[] body) {
     try {
       MessageDigest md = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-      return toHex(md.digest(body == null ? new byte[0] : body));
+      byte[] bodyDigest = md.digest(EmptyChecks.isNull(body) ? new byte[0] : body);
+      return toHex(bodyDigest);
     } catch (NoSuchAlgorithmException e) {
       throw new IllegalStateException("SHA-256 unavailable", e);
     }
@@ -63,8 +65,13 @@ public final class RequestSignatures {
   private static String hmacSha256Hex(String key, String data) {
     try {
       Mac mac = Mac.getInstance(HMAC_ALG);
-      mac.init(new SecretKeySpec(nullToEmpty(key).getBytes(StandardCharsets.UTF_8), HMAC_ALG));
-      return toHex(mac.doFinal(data.getBytes(StandardCharsets.UTF_8)));
+      String normalizedKey = nullToEmpty(key);
+      byte[] keyBytes = normalizedKey.getBytes(StandardCharsets.UTF_8);
+      SecretKeySpec secretKey = new SecretKeySpec(keyBytes, HMAC_ALG);
+      mac.init(secretKey);
+      byte[] input = data.getBytes(StandardCharsets.UTF_8);
+      byte[] digest = mac.doFinal(input);
+      return toHex(digest);
     } catch (Exception e) {
       throw new IllegalStateException("HMAC-SHA256 failed", e);
     }

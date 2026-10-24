@@ -1,19 +1,16 @@
 package io.github.pinpols.batch.console.domain.job.mapper;
 
-import io.github.pinpols.batch.common.model.PageRequest;
+import io.github.pinpols.batch.console.domain.job.query.BatchDayQuery;
+import io.github.pinpols.batch.console.domain.job.view.BatchDayJobSummaryView;
+import io.github.pinpols.batch.console.domain.job.view.BatchDayScheduledOccurrenceView;
+import io.github.pinpols.batch.console.domain.job.view.BatchDayView;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 public interface BatchDayMapper {
 
-  List<Map<String, Object>> selectByQuery(
-      @Param("tenantId") String tenantId,
-      @Param("calendarCode") String calendarCode,
-      @Param("fromBizDate") LocalDate fromBizDate,
-      @Param("toBizDate") LocalDate toBizDate,
-      @Param("pageRequest") PageRequest pageRequest);
+  List<BatchDayView> selectByQuery(BatchDayQuery parameters);
 
   long countByQuery(
       @Param("tenantId") String tenantId,
@@ -21,12 +18,17 @@ public interface BatchDayMapper {
       @Param("fromBizDate") LocalDate fromBizDate,
       @Param("toBizDate") LocalDate toBizDate);
 
-  Map<String, Object> selectWindow(
+  BatchDayView selectWindow(
       @Param("tenantId") String tenantId,
       @Param("calendarCode") String calendarCode,
       @Param("bizDate") LocalDate bizDate);
 
-  List<Map<String, Object>> selectJobSummaries(
+  List<BatchDayScheduledOccurrenceView> selectScheduledOccurrences(
+      @Param("tenantId") String tenantId,
+      @Param("calendarCode") String calendarCode,
+      @Param("bizDate") LocalDate bizDate);
+
+  List<BatchDayJobSummaryView> selectJobSummaries(
       @Param("tenantId") String tenantId,
       @Param("calendarCode") String calendarCode,
       @Param("bizDate") LocalDate bizDate);

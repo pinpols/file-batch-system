@@ -2,8 +2,10 @@ package io.github.pinpols.batch.console.application.contract.response;
 
 import io.github.pinpols.batch.console.domain.entity.BusinessShardCatalogEntity;
 import java.time.Instant;
+import lombok.Builder;
 
 /** Public shard catalog view; credentials remain outside the catalog. */
+@Builder
 public record BusinessShardCatalogResponse(
     String placementKey,
     String host,
@@ -17,16 +19,17 @@ public record BusinessShardCatalogResponse(
     String updatedBy) {
 
   public static BusinessShardCatalogResponse from(BusinessShardCatalogEntity entity) {
-    return new BusinessShardCatalogResponse(
-        entity.getPlacementKey(),
-        entity.getHost(),
-        entity.getPort(),
-        entity.getDbName(),
-        entity.getSecretRef(),
-        entity.getPoolMaxSize(),
-        entity.isEnabled(),
-        entity.getDescription(),
-        entity.getUpdatedAt(),
-        entity.getUpdatedBy());
+    return BusinessShardCatalogResponse.builder()
+        .placementKey(entity.getPlacementKey())
+        .host(entity.getHost())
+        .port(entity.getPort())
+        .dbName(entity.getDbName())
+        .secretRef(entity.getSecretRef())
+        .poolMaxSize(entity.getPoolMaxSize())
+        .enabled(entity.isEnabled())
+        .description(entity.getDescription())
+        .updatedAt(entity.getUpdatedAt())
+        .updatedBy(entity.getUpdatedBy())
+        .build();
   }
 }

@@ -111,9 +111,10 @@ kubectl scale deployment/batch-worker-import -n batch-prod --replicas=4
 ### 应急回退
 
 ```bash
-# 只有明确是"一次性历史积压、新增速率已回正常"才跑
-bash scripts/ops/heal-stuck-outbox.sh --dry-run    # 先看会动哪些
-bash scripts/ops/heal-stuck-outbox.sh              # 确认后执行
+# 只读检查 stale PUBLISHING 候选；脚本不会更新 outbox_event
+bash scripts/ops/heal-stuck-outbox.sh --dry-run
+# stale PUBLISHING 由 OutboxPollScheduler 回收；检查调度器和 provider 后按下方症状 4 处理。
+# FAILED/GIVE_UP 重投使用 Orchestrator 的 /internal/outbox/republish 审计接口。
 ```
 
 ---
@@ -171,15 +172,12 @@ kubectl exec batch-orchestrator-0 -- printenv | grep -i lazy
 
 ### 手动重放
 
-```bash
-# 控制台批量入口（per event）
-curl -X POST -H "X-Internal-Secret: <secret>" \
-  http://batch-console-api:18080/api/console/jobs/compensate \
-  -d '{"tenantId":"t1","targetType":"DLQ","targetId":"<dead_letter_id>","reason":"root cause fixed"}'
+先在 Console 的死信列表核对来源任务、错误原因和外部副作用状态，再提交 `DLQ_REPLAY` 审批申请，由独立管理员批准后执行。若任务为 `EXTERNAL_OUTCOME_UNKNOWN`，必须确认外部动作未执行并提交证据引用；批准后只允许一次性恢复。已执行或仍无法确认时保持阻塞。
 
-# 脚本批量（带 dry-run）
-bash scripts/ops/heal-dead-letters.sh --tenant t1 --dry-run
-bash scripts/ops/heal-dead-letters.sh --tenant t1
+运维脚本只读列出候选项：
+
+```bash
+bash scripts/ops/inspect-dead-letters.sh --tenant t1 --dry-run
 ```
 
 ---
@@ -251,7 +249,7 @@ kubectl exec batch-orchestrator-0 -- printenv | grep SHARDING
 SELECT name, lock_until, locked_at, locked_by,
        EXTRACT(EPOCH FROM (lock_until - locked_at)) AS hold_seconds
   FROM batch.shedlock
- WHERE lock_until > NOW()
+ WHERE lock_until > timezone('utc', NOW())
  ORDER BY lock_until - locked_at DESC
  LIMIT 20;
 
@@ -290,9 +288,9 @@ jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}
 | 脚本 | 用途 | 何时用 |
 |---|---|---|
 | `scripts/ops/inspect-all.sh` | 全量诊断 | 告警响起第一时间跑 |
-| `scripts/ops/heal-stuck-outbox.sh` | 重置卡住 >300s 的 Outbox | 确认堆积非业务原因后 |
+| `scripts/ops/heal-stuck-outbox.sh` | 只读统计 stale `PUBLISHING` Outbox | 核对调度器与 Kafka；不直接修改 Outbox |
 | `scripts/ops/heal-drain-timeout.sh` | 强制下线排水超时 Worker | WorkerDrainTimeoutScheduler 没跑时 |
-| `scripts/ops/heal-dead-letters.sh` | 批量重放 DLQ | **根因明确修复后** |
+| `scripts/ops/inspect-dead-letters.sh` | 只读检查 DLQ 候选项 | 人工重放经 Console 审批；UNKNOWN 仅核实未执行后一次性恢复 |
 | `scripts/ops/heal-retry-tasks.sh` | 批量重放 FAILED 任务 | 确认非代码 bug |
 | `scripts/ops/heal-retry-partitions.sh` | 重试 FAILED 分区 | 分区集中失败 |
 | `scripts/ops/trigger-compensation.sh` | 手工补偿命令 | 定向修复单条任务 |

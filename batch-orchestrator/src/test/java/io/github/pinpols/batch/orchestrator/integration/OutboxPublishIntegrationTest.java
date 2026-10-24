@@ -15,21 +15,26 @@ import io.github.pinpols.batch.orchestrator.domain.query.EventDeliveryLogQuery;
 import io.github.pinpols.batch.orchestrator.mapper.EventDeliveryLogMapper;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 
 /**
  * 集成测试：OutboxEventEntity → KafkaOutboxPublisher → Kafka topic + EventDeliveryLog。
@@ -42,8 +47,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 // 强制 BEFORE_CLASS 重建 Spring context：上游 OutboxPublishCircuitBreakerKafkaFailureIT 会 stop/start
 // KAFKA 容器，重启后端口变更；其它共享 fingerprint 的缓存 context 仍指向旧端口，发布会 60s metadata 超时。
-@org.springframework.test.annotation.DirtiesContext(
-    classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.BEFORE_CLASS)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 @DisplayName("发件箱事件发布到 Kafka 并落库投递日志的端到端验证,覆盖默认主题兜底与按租户路由的导入导出派发")
 class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
 
@@ -68,9 +72,8 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
   }
 
   private static void createOutboxTopicsStaticInit() {
-    try (AdminClient admin = AdminClient.create(Map.of(
-        org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
-        kafkaBootstrapServers()))) {
+    try (AdminClient admin = AdminClient.create(
+        Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers()))) {
       admin
           .createTopics(List.of(
               new NewTopic(BatchTopics.OUTBOX_EVENT, 1, (short) 1),
@@ -78,8 +81,8 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
               new NewTopic(BatchTopics.TASK_DISPATCH_EXPORT + ".t1", 1, (short) 1)))
           .all()
           .get();
-    } catch (java.util.concurrent.ExecutionException e) {
-      if (!(e.getCause() instanceof org.apache.kafka.common.errors.TopicExistsException)) {
+    } catch (ExecutionException e) {
+      if (!(e.getCause() instanceof TopicExistsException)) {
         throw new IllegalStateException("failed to pre-create kafka topics", e);
       }
     } catch (InterruptedException e) {
@@ -199,12 +202,17 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
   // --- helpers ---
 
   private void reloadGeneratedId(OutboxEventEntity event) {
-    Long id = jdbcTemplate.queryForObject(
-        "select id from batch.outbox_event where tenant_id = ? and event_key = ?",
-        Long.class,
+    String persistedOutboxEventSql = """
+        select id, created_at from batch.outbox_event where tenant_id = ? and event_key = ?
+        """;
+    Map<String, Object> persisted = jdbcTemplate.queryForMap(
+        persistedOutboxEventSql,
         event.getTenantId(),
         event.getEventKey());
-    event.setId(id);
+    Number persistedId = (Number) persisted.get("id");
+    Timestamp persistedCreatedAt = (Timestamp) persisted.get("created_at");
+    event.setId(persistedId.longValue());
+    event.setCreatedAt(persistedCreatedAt.toInstant());
   }
 
   private static OutboxEventEntity pendingEvent(

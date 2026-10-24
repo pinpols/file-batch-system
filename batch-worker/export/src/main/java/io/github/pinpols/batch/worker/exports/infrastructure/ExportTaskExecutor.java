@@ -46,11 +46,11 @@ public class ExportTaskExecutor implements BatchTaskExecutor {
 
   @Override
   public TaskCapability capability() {
+    Set<ResourceKind> resourceKinds = Set.of(ResourceKind.DB, ResourceKind.DISK, ResourceKind.NET);
+    long capabilityTimeoutSeconds = timeoutProperties.getCapabilityTimeoutSeconds();
+    Duration capabilityTimeout = Duration.ofSeconds(capabilityTimeoutSeconds);
     return new TaskCapability(
-        Set.of(ResourceKind.DB, ResourceKind.DISK, ResourceKind.NET),
-        false,
-        true,
-        Duration.ofSeconds(timeoutProperties.getCapabilityTimeoutSeconds()));
+        resourceKinds, false, true, capabilityTimeout);
   }
 
   @Override

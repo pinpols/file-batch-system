@@ -17,13 +17,12 @@ SDK 自托管 worker 是 **BYO 通用**的:它的 wire 路径(register → 消�
 | 跨语言决策核(消息形状/版本/错误分类/offset) | conformance | 30 条 fixture × 5 语言(`sdk-contract-parity.yml`) |
 | 租户业务 handler | 租户 | SDK testkit(FakeBatchPlatform) |
 
-⇒ **conformance fixture(决策核,已绿)+ 本地全链路(每语言 1 遍,echo)+ 类型无关单测
-= 充分覆盖**。
+基础 conformance、每语言真实 echo 链路及类型无关单测分别提供决策、传输和路由证据。它们不能证明所有插件业务副作用或新增 Replay 合同均已覆盖；每次结论须记录实际构建和运行结果。
 
 ## 怎么跑
 
 前置:本地真实依赖栈已起(orchestrator :18082 + trigger :18081 + postgres :15432 + kafka)，
-平台库已完成迁移。脚本会创建独立 queue/job fixture，不依赖 system-test seed。
+平台库已完成迁移。脚本会创建独立 queue/job 及受管 Workflow fixture，不依赖 system-test seed。
 
 ```bash
 bash scripts/local/sdk-e2e-local.sh go          # 单语言

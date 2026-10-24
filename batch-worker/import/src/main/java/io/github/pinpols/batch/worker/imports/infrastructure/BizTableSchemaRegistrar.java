@@ -69,11 +69,14 @@ public class BizTableSchemaRegistrar {
               Map<String, Object> col = new LinkedHashMap<>();
               col.put("name", colsRs.getString("COLUMN_NAME"));
               col.put("type", colsRs.getString("TYPE_NAME"));
-              col.put("nullable", "YES".equalsIgnoreCase(colsRs.getString("IS_NULLABLE")));
+              String nullableText = colsRs.getString("IS_NULLABLE");
+              boolean nullable = "YES".equalsIgnoreCase(nullableText);
+              col.put("nullable", nullable);
               cols.add(col);
             }
           }
-          snapshot.add(new TableColumns(schema, table, objectMapper.writeValueAsString(cols)));
+          String columnsJson = objectMapper.writeValueAsString(cols);
+          snapshot.add(new TableColumns(schema, table, columnsJson));
         }
       }
     } catch (Exception ex) {
@@ -82,7 +85,8 @@ public class BizTableSchemaRegistrar {
       return;
     }
     try {
-      new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+      TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+      transaction.executeWithoutResult(status -> {
         mapper.deleteAll();
         for (TableColumns tc : snapshot) {
           mapper.upsertEntry(tc.schema(), tc.table(), tc.columnsJson());

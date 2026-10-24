@@ -51,7 +51,7 @@ public final class TenantExistsRule {
               + t
               + "' is referenced by fixture but missing from batch.tenant "
               + "(reconciler/scheduler will skip CRON jobs); insert it via "
-              + "docs/test-data/sim-e2e-bootstrap.sql or tenant create API"));
+              + "test-data/sim/sim-e2e-bootstrap.sql or tenant create API"));
     }
     return issues;
   }

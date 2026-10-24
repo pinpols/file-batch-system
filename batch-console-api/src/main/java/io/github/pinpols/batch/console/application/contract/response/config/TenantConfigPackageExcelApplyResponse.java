@@ -16,7 +16,5 @@ public record TenantConfigPackageExcelApplyResponse(
     int channelUpdated,
     int fileTemplateInserted,
     int fileTemplateUpdated,
-    int pipelineInserted,
-    int pipelineUpdated,
     int workflowInserted,
     int workflowUpdated) {}

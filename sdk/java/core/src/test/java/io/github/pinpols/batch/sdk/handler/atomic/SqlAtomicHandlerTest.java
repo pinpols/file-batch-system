@@ -13,13 +13,18 @@ import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 @DisplayName("SqlAtomicHandler — ADR-036 SQL Atomic 开箱即用模板")
 class SqlAtomicHandlerTest {
@@ -55,7 +60,7 @@ class SqlAtomicHandlerTest {
   }
 
   @Test
-  @DisplayName("SELECT → resultSet + rowCount,success")
+  @DisplayName("查询成功时返回结果集和行数")
   void shouldReturnResultSet_whenSelect() throws Exception {
     // 准备
     stubRoleGateAllows();
@@ -254,7 +259,7 @@ class SqlAtomicHandlerTest {
   @DisplayName("defaultAutoCommit=false + 执行异常 → rollback")
   void shouldRollback_onErrorWhenAutoCommitFalse() throws Exception {
     stubRoleGateAllows();
-    when(statement.execute(anyString())).thenThrow(new java.sql.SQLException("boom"));
+    when(statement.execute(anyString())).thenThrow(new SQLException("boom"));
     var cfg = new SqlAtomicConfig("sql", 30, 10000, 50, false, true);
 
     SdkTaskResult result = new SqlAtomicHandler(cfg, dataSource).execute(ctx("UPDATE t SET x=1"));
@@ -262,4 +267,33 @@ class SqlAtomicHandlerTest {
     assertThat(result.success()).isFalse();
     verify(connection).rollback();
   }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("statementSplittingCases")
+  @DisplayName("只有引号和注释之外的分号切分 SQL，保留原始片段与非空尾句")
+  void shouldPreserveStatementBoundaries_whenQuotesOrCommentsContainDelimiters(String scenario, String sql, List<String> expected) {
+    List<String> statements = SqlAtomicHandler.splitStatements(sql);
+
+    assertThat(statements).containsExactlyElementsOf(expected);
+  }
+
+  private static Stream<Arguments> statementSplittingCases() {
+    return Stream.of(
+        Arguments.of("empty", " ; ; \n", List.of()),
+        Arguments.of("tail", " SELECT 1; SELECT 2 ", List.of("SELECT 1", "SELECT 2")),
+        Arguments.of("single-quoted-semicolon", "SELECT ';';SELECT 2", List.of("SELECT ';'", "SELECT 2")),
+        Arguments.of("escaped-single-quote", "SELECT 'it''s;ok';SELECT 2",
+            List.of("SELECT 'it''s;ok'", "SELECT 2")),
+        Arguments.of("double-quoted-semicolon", "SELECT \"semi;colon\";SELECT 2",
+            List.of("SELECT \"semi;colon\"", "SELECT 2")),
+        Arguments.of("line-comment", "SELECT 1 -- ; still comment\r\n;SELECT 2",
+            List.of("SELECT 1 -- ; still comment", "SELECT 2")),
+        Arguments.of("block-comment", "SELECT /* ; ' \" */ 1;SELECT 2",
+            List.of("SELECT /* ; ' \" */ 1", "SELECT 2")),
+        Arguments.of("trailing-comment", "SELECT 1;-- tail ;",
+            List.of("SELECT 1", "-- tail ;")),
+        Arguments.of("unterminated-quote", "SELECT 'tail;still quote",
+            List.of("SELECT 'tail;still quote")));
+  }
+
 }

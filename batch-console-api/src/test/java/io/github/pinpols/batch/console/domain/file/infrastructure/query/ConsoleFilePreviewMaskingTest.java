@@ -15,9 +15,9 @@ import io.github.pinpols.batch.console.domain.file.mapper.FileErrorRecordMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileRecordMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.support.ConsoleFileQueryMappers;
+import io.github.pinpols.batch.console.domain.file.view.FileTemplateSecurityFlagsView;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -59,10 +59,11 @@ class ConsoleFilePreviewMaskingTest {
   @DisplayName("预览脱敏开启时只遮盖原始行内容")
   void shouldMaskRawRecordWhenPreviewMaskingIsEnabled() {
     when(templateConfigMapper.selectSecurityFlagsByTemplateCode("tenant-a", "IMPORT"))
-        .thenReturn(Map.of(
-            "preview_masking_enabled", true,
-            "error_line_masking_enabled", false,
-            "masking_rule_set", "STRICT"));
+        .thenReturn(FileTemplateSecurityFlagsView.builder()
+            .previewMaskingEnabled(true)
+            .errorLineMaskingEnabled(false)
+            .maskingRuleSet("STRICT")
+            .build());
 
     var response = service.fileErrorRecords(request()).items().getFirst();
 
@@ -74,10 +75,11 @@ class ConsoleFilePreviewMaskingTest {
   @DisplayName("预览脱敏关闭时保留原始行内容")
   void shouldKeepRawRecordWhenPreviewMaskingIsDisabled() {
     when(templateConfigMapper.selectSecurityFlagsByTemplateCode("tenant-a", "IMPORT"))
-        .thenReturn(Map.of(
-            "preview_masking_enabled", false,
-            "error_line_masking_enabled", false,
-            "masking_rule_set", "STRICT"));
+        .thenReturn(FileTemplateSecurityFlagsView.builder()
+            .previewMaskingEnabled(false)
+            .errorLineMaskingEnabled(false)
+            .maskingRuleSet("STRICT")
+            .build());
 
     var response = service.fileErrorRecords(request()).items().getFirst();
 
@@ -89,10 +91,11 @@ class ConsoleFilePreviewMaskingTest {
   @DisplayName("错误行脱敏仍同时遮盖错误消息和原始行")
   void shouldPreserveErrorLineMaskingBehavior() {
     when(templateConfigMapper.selectSecurityFlagsByTemplateCode("tenant-a", "IMPORT"))
-        .thenReturn(Map.of(
-            "preview_masking_enabled", false,
-            "error_line_masking_enabled", true,
-            "masking_rule_set", "STRICT"));
+        .thenReturn(FileTemplateSecurityFlagsView.builder()
+            .previewMaskingEnabled(false)
+            .errorLineMaskingEnabled(true)
+            .maskingRuleSet("STRICT")
+            .build());
 
     var response = service.fileErrorRecords(request()).items().getFirst();
 

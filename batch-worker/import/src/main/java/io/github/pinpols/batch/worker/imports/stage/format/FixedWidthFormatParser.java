@@ -85,8 +85,8 @@ public class FixedWidthFormatParser implements FormatParser {
             if (field.start() + field.length() > line.length()) {
               throw new IllegalStateException("field overflow: " + field.target());
             }
-            String value =
-                line.substring(field.start(), field.start() + field.length()).trim();
+            String fieldText = line.substring(field.start(), field.start() + field.length());
+            String value = fieldText.trim();
             row.put(field.target(), value);
           }
           support.collectSchemaFields(context, row);
@@ -134,8 +134,11 @@ public class FixedWidthFormatParser implements FormatParser {
         || !(length instanceof Number lengthNumber)) {
       return Optional.empty();
     }
-    return Optional.of(new FixedWidthField(
-        String.valueOf(target), startNumber.intValue(), lengthNumber.intValue()));
+    String targetField = String.valueOf(target);
+    int startOffset = startNumber.intValue();
+    int fieldLength = lengthNumber.intValue();
+    FixedWidthField fixedWidthField = new FixedWidthField(targetField, startOffset, fieldLength);
+    return Optional.of(fixedWidthField);
   }
 
   private record FixedWidthField(String target, int start, int length) {}

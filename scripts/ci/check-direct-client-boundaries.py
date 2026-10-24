@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Guard application/domain code from depending on concrete infra clients."""
+# 用途：业务层直连客户端边界。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-direct-client-boundaries.py；参数与前置环境见下方说明及所属 README。
+"""防止应用层与领域层直接依赖具体基础设施客户端。"""
 
 from __future__ import annotations
 

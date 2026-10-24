@@ -241,6 +241,17 @@ class JdbcMappedImportSpecTest {
   }
 
   @Test
+  @DisplayName("BATCH_UPSERT 无冲突键时必须拒绝,重放安全约束不可关闭")
+  void shouldRejectBatchUpsertWithoutConflictColumns() {
+    JdbcMappedImportSpec spec =
+        mappingSpec(List.of(new ColumnMapping("customerNo", "customer_no")));
+
+    assertThatThrownBy(() -> spec.validateIdentifiers(List.of("biz")))
+        .isInstanceOf(WorkerConfigException.class)
+        .hasMessageContaining("conflictColumns");
+  }
+
+  @Test
   @DisplayName("标准审计字段绑定展开,显式配置可覆盖默认值")
   void shouldExpandStandardAuditBindings_whenExplicitOverrideGiven() {
     Map<String, Object> template = Map.of(
@@ -372,12 +383,12 @@ class JdbcMappedImportSpecTest {
   }
 
   @Test
-  @DisplayName("开启严格幂等时,分区替换策略允许不配冲突键")
-  void shouldAllowPartitionReplaceCopy_whenStrictIdempotencyEnabled() {
+  @DisplayName("分区替换策略使用替换键而非UPSERT冲突键")
+  void shouldAllowPartitionReplaceCopy_withoutConflictColumns() {
     JdbcMappedImportSpec spec =
         partitionReplaceSpec(List.of("tenant_id", "biz_date"), Map.of("biz_date", "${bizDate}"));
 
-    spec.validateIdentifiers(List.of("biz"), true);
+    spec.validateIdentifiers(List.of("biz"));
   }
 
   @Test
@@ -385,7 +396,7 @@ class JdbcMappedImportSpecTest {
   void shouldRejectPartitionReplaceCopy_whenReplacePartitionColumnsMissing() {
     JdbcMappedImportSpec spec = partitionReplaceSpec(List.of(), Map.of("biz_date", "${bizDate}"));
 
-    assertThatThrownBy(() -> spec.validateIdentifiers(List.of("biz"), true))
+    assertThatThrownBy(() -> spec.validateIdentifiers(List.of("biz")))
         .isInstanceOf(WorkerConfigException.class)
         .hasMessageContaining("replacePartitionColumns");
   }
@@ -395,7 +406,7 @@ class JdbcMappedImportSpecTest {
   void shouldReject_whenReplacePartitionColumnsUnresolvable() {
     JdbcMappedImportSpec spec = partitionReplaceSpec(List.of("customer_no"), Map.of());
 
-    assertThatThrownBy(() -> spec.validateIdentifiers(List.of("biz"), false))
+    assertThatThrownBy(() -> spec.validateIdentifiers(List.of("biz")))
         .isInstanceOf(WorkerConfigException.class)
         .hasMessageContaining("resolvable before reading rows");
   }

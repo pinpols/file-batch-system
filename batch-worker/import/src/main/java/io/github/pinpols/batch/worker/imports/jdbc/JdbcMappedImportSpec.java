@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -60,7 +61,9 @@ public record JdbcMappedImportSpec(
           "jdbc_mapped_import spec missing (use query_param_schema.jdbcMappedImport or"
               + " jdbc_mapped_import)");
     }
-    String schema = String.valueOf(root.getOrDefault("schema", "biz")).trim();
+    Object schemaValue = root.getOrDefault("schema", "biz");
+    String rawSchema = String.valueOf(schemaValue);
+    String schema = rawSchema.trim();
     String table = required(root, "table");
     String tenantColumn = required(root, "tenantColumn");
     // columnMappings 可缺省(不写 / 空 [] / null)——此时从模板 field_mappings 推断,
@@ -75,17 +78,23 @@ public record JdbcMappedImportSpec(
     }
     // B2:conflictColumns 非空但漏了 tenant 列时自动前置——多租隔离下幂等键几乎必含 tenant_id,
     // 漏填基本是跨租户冲突 bug。空列表(不走 UPSERT)不动。
-    List<String> conflicts =
-        ensureTenantInConflicts(parseStringList(root.get("conflictColumns")), tenantColumn);
+    List<String> configuredConflictColumns = parseStringList(root.get("conflictColumns"));
+    List<String> conflicts = ensureTenantInConflicts(configuredConflictColumns, tenantColumn);
     // B3:standardAuditBindings=true 一键展开标准审计绑定(用户显式 systemBindings 覆盖同名项),
     // 省掉逐条手写 ${...} 样板。是 opt-in 开关而非默认注入,目标表是否有这些列由配置方负责。
     Map<String, String> system = parseSystemBindings(root.get("systemBindings"));
-    if (Boolean.TRUE.equals(toBoolean(root.get("standardAuditBindings")))) {
+    Object standardAuditBindingsValue = root.get("standardAuditBindings");
+    Boolean standardAuditBindingsEnabled = toBoolean(standardAuditBindingsValue);
+    if (Boolean.TRUE.equals(standardAuditBindingsEnabled)) {
       system = withStandardAuditBindings(system);
     }
     // 地区维度(per-run):defaultRegion 触发未传 region 时回退;allowedRegions 非空时作字典校验。
     Object dr = root.get("defaultRegion");
-    String defaultRegion = dr == null ? null : String.valueOf(dr).trim();
+    String defaultRegion = null;
+    if (EmptyChecks.isNotNull(dr)) {
+      String rawDefaultRegion = String.valueOf(dr);
+      defaultRegion = rawDefaultRegion.trim();
+    }
     List<String> allowedRegions = parseStringList(root.get("allowedRegions"));
     ImportLoadStrategy loadStrategy = ImportLoadStrategy.parse(root.get("loadStrategy"));
     List<String> replacePartitionColumns = parseStringList(root.get("replacePartitionColumns"));
@@ -109,10 +118,15 @@ public record JdbcMappedImportSpec(
 
   private static String required(Map<String, Object> root, String key) {
     Object v = root.get(key);
-    if (v == null || !Texts.hasText(String.valueOf(v))) {
+    if (EmptyChecks.isNull(v)) {
       throw new WorkerConfigException("jdbc_mapped_import." + key + " is required");
     }
-    return String.valueOf(v).trim();
+    String presenceText = String.valueOf(v);
+    if (!Texts.hasText(presenceText)) {
+      throw new WorkerConfigException("jdbc_mapped_import." + key + " is required");
+    }
+    String rawValue = String.valueOf(v);
+    return rawValue.trim();
   }
 
   @SuppressWarnings("unchecked")
@@ -184,11 +198,15 @@ public record JdbcMappedImportSpec(
     if (from == null || to == null) {
       return Optional.empty();
     }
-    return Optional.of(new ColumnMapping(
-        String.valueOf(from).trim(),
-        String.valueOf(to).trim(),
-        textOrNull(m.get("type")),
-        textOrNull(m.get("format"))));
+    String rawSourceColumn = String.valueOf(from);
+    String sourceColumn = rawSourceColumn.trim();
+    String rawTargetColumn = String.valueOf(to);
+    String targetColumn = rawTargetColumn.trim();
+    String mappingType = textOrNull(m.get("type"));
+    String mappingFormat = textOrNull(m.get("format"));
+    ColumnMapping mapping =
+        new ColumnMapping(sourceColumn, targetColumn, mappingType, mappingFormat);
+    return Optional.of(mapping);
   }
 
   /**
@@ -204,17 +222,31 @@ public record JdbcMappedImportSpec(
       if (nameRaw == null || !Texts.hasText(String.valueOf(nameRaw))) {
         continue;
       }
-      if (Boolean.FALSE.equals(toBoolean(fm.get("persist")))) {
+      Object persistValue = fm.get("persist");
+      Boolean shouldPersist = toBoolean(persistValue);
+      if (Boolean.FALSE.equals(shouldPersist)) {
         continue;
       }
-      String name = String.valueOf(nameRaw).trim();
+      String rawName = String.valueOf(nameRaw);
+      String name = rawName.trim();
       Object target = fm.get("targetColumn");
-      String to = target != null && Texts.hasText(String.valueOf(target))
-          ? String.valueOf(target).trim()
-          : normalizeColumn(name);
+      String to;
+      if (EmptyChecks.isNotNull(target)) {
+        String targetPresenceText = String.valueOf(target);
+        if (Texts.hasText(targetPresenceText)) {
+          String rawTarget = String.valueOf(target);
+          to = rawTarget.trim();
+        } else {
+          to = normalizeColumn(name);
+        }
+      } else {
+        to = normalizeColumn(name);
+      }
       if (Texts.hasText(to)) {
-        out.add(
-            new ColumnMapping(name, to, textOrNull(fm.get("type")), textOrNull(fm.get("format"))));
+        String mappingType = textOrNull(fm.get("type"));
+        String mappingFormat = textOrNull(fm.get("format"));
+        ColumnMapping mapping = new ColumnMapping(name, to, mappingType, mappingFormat);
+        out.add(mapping);
       }
     }
     return out;
@@ -239,7 +271,10 @@ public record JdbcMappedImportSpec(
         .filter(inf -> !explicitFroms.contains(inf.from()))
         .collect(Collectors.toCollection(ArrayList::new));
     out.addAll(explicit.stream()
-        .map(exp -> withInferredType(exp, inferredByFrom.get(exp.from())))
+        .map(exp -> {
+          ColumnMapping inferredMapping = inferredByFrom.get(exp.from());
+          return withInferredType(exp, inferredMapping);
+        })
         .toList());
     return out;
   }
@@ -296,7 +331,8 @@ public record JdbcMappedImportSpec(
     if (value instanceof Boolean b) {
       return b;
     }
-    String s = String.valueOf(value).trim();
+    String rawText = String.valueOf(value);
+    String s = rawText.trim();
     if ("false".equalsIgnoreCase(s)) {
       return false;
     }
@@ -311,7 +347,8 @@ public record JdbcMappedImportSpec(
     if (value == null) {
       return null;
     }
-    String text = String.valueOf(value).trim();
+    String rawText = String.valueOf(value);
+    String text = rawText.trim();
     return Texts.hasText(text) ? text : null;
   }
 
@@ -338,9 +375,10 @@ public record JdbcMappedImportSpec(
         boolean prevLowerOrDigit =
             i > 0 && (Character.isLowerCase(s.charAt(i - 1)) || Character.isDigit(s.charAt(i - 1)));
         boolean nextLower = i + 1 < s.length() && Character.isLowerCase(s.charAt(i + 1));
-        if (EmptyChecks.isNotEmpty(sb)
+        boolean wordBoundaryNeedsSeparator = EmptyChecks.isNotEmpty(sb)
             && sb.charAt(sb.length() - 1) != '_'
-            && (prevLowerOrDigit || nextLower)) {
+            && (prevLowerOrDigit || nextLower);
+        if (wordBoundaryNeedsSeparator) {
           sb.append('_');
         }
       }
@@ -353,7 +391,10 @@ public record JdbcMappedImportSpec(
     if (raw instanceof List<?> list) {
       return list.stream()
           .filter(o -> o != null && Texts.hasText(String.valueOf(o)))
-          .map(o -> String.valueOf(o).trim())
+          .map(o -> {
+            String rawText = String.valueOf(o);
+            return rawText.trim();
+          })
           .toList();
     }
     return List.of();
@@ -366,7 +407,11 @@ public record JdbcMappedImportSpec(
     Map<String, String> out = new LinkedHashMap<>();
     m.forEach((k, v) -> {
       if (k != null && v != null) {
-        out.put(String.valueOf(k).trim(), String.valueOf(v).trim());
+        String rawBindingKey = String.valueOf(k);
+        String bindingKey = rawBindingKey.trim();
+        String rawBindingValue = String.valueOf(v);
+        String bindingValue = rawBindingValue.trim();
+        out.put(bindingKey, bindingValue);
       }
     });
     return out;
@@ -405,32 +450,29 @@ public record JdbcMappedImportSpec(
     if (partitionTable == null && attachClause == null) {
       return null;
     }
-    return new StageSwap(
-        partitionTable == null ? null : String.valueOf(partitionTable).trim(),
-        attachClause == null ? null : String.valueOf(attachClause).trim());
-  }
-
-  /**
-   * A-3.5 严格幂等模式入口：strictIdempotency=true 时 conflictColumns 必须非空， 否则 {@code parse +
-   * validateIdentifiers} 阶段直接拒绝加载模板。
-   */
-  public void validateIdentifiers(Collection<String> allowedSchemas, boolean strictIdempotency) {
-    validateIdentifiers(allowedSchemas);
-    if (strictIdempotency
-        && loadStrategy == ImportLoadStrategy.BATCH_UPSERT
-        && (conflictColumns == null || conflictColumns.isEmpty())) {
-      throw new WorkerConfigException(
-          "jdbc-mapped-import template missing conflictColumns under strictIdempotency: "
-              + "schema="
-              + schema
-              + ", table="
-              + table
-              + " — declare unique business key columns to enable ON CONFLICT DO NOTHING");
+    String normalizedPartitionTable = null;
+    if (EmptyChecks.isNotNull(partitionTable)) {
+      String rawPartitionTable = String.valueOf(partitionTable);
+      normalizedPartitionTable = rawPartitionTable.trim();
     }
+    String normalizedAttachClause = null;
+    if (EmptyChecks.isNotNull(attachClause)) {
+      String rawAttachClause = String.valueOf(attachClause);
+      normalizedAttachClause = rawAttachClause.trim();
+    }
+    return new StageSwap(normalizedPartitionTable, normalizedAttachClause);
   }
 
   public void validateIdentifiers(Collection<String> allowedSchemas) {
     validateMappingCardinality();
+    if (loadStrategy == ImportLoadStrategy.BATCH_UPSERT && EmptyChecks.isEmpty(Objects.requireNonNull(conflictColumns))) {
+      throw new WorkerConfigException(
+          "jdbc-mapped-import BATCH_UPSERT requires conflictColumns: schema="
+              + schema
+              + ", table="
+              + table
+              + " — declare the business unique key so replay uses ON CONFLICT");
+    }
     JdbcMappedSqlValidator.requireInAllowlist(schema, allowedSchemas);
     JdbcMappedSqlValidator.requireIdentifier(table, "table");
     JdbcMappedSqlValidator.requireIdentifier(tenantColumn, "tenantColumn");
@@ -525,7 +567,8 @@ public record JdbcMappedImportSpec(
       throw new WorkerConfigException(
           "jdbc_mapped_import.stageSwap.attachClause is required for PARTITION_STAGE_SWAP_COPY");
     }
-    String upper = clause.trim().toUpperCase();
+    String trimmedClause = clause.trim();
+    String upper = trimmedClause.toUpperCase();
     if (!upper.startsWith("FOR VALUES ")) {
       throw new WorkerConfigException(
           "jdbc_mapped_import.stageSwap.attachClause must start with FOR VALUES");

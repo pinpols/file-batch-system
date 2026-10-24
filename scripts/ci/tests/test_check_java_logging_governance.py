@@ -1,3 +1,5 @@
+# 用途：Java 日志治理门禁测试。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_check_java_logging_governance.py。
 import importlib.util
 import unittest
 from pathlib import Path

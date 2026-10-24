@@ -18,6 +18,7 @@ import io.github.pinpols.batch.console.domain.file.mapper.FileErrorRecordMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileRecordMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.view.FileRecordStorageView;
+import io.github.pinpols.batch.console.domain.file.view.FileTemplateSecurityFlagsView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalRecord;
@@ -25,7 +26,6 @@ import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClien
 import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.io.ByteArrayInputStream;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -79,7 +79,7 @@ class DefaultConsoleFileDownloadApplicationServiceTest {
     RestClient restClient = mock(RestClient.class, RETURNS_DEEP_STUBS);
     when(orchestratorInternalRestClient.client()).thenReturn(restClient);
     ApprovalRecordResponse response =
-        new ApprovalRecordResponse(new ApprovalRecord(status, targetType, targetId));
+        new ApprovalRecordResponse(new ApprovalRecord(status, targetType, targetId, null, null));
     when(restClient
             .get()
             .uri(anyString(), any(Object[].class))
@@ -101,7 +101,9 @@ class DefaultConsoleFileDownloadApplicationServiceTest {
             null));
     when(fileRecordMapper.selectTemplateCodeByFileId("t1", fileId)).thenReturn("TPL");
     when(fileTemplateConfigMapper.selectSecurityFlagsByTemplateCode("t1", "TPL"))
-        .thenReturn(Map.of("content_encryption_enabled", Boolean.TRUE));
+        .thenReturn(FileTemplateSecurityFlagsView.builder()
+            .contentEncryptionEnabled(true)
+            .build());
   }
 
   @Test

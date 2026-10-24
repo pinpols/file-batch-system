@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.rls;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -21,9 +22,8 @@ import org.springframework.jdbc.datasource.lookup.AbstractRoutingDataSource;
  * <p><b>动机</b>:旧的健康检查遍历硬编码 {@code EXPECTED_RLS_TABLES} 清单。新增 biz 表漏配 RLS 时,因为不在清单里,health 仍报绿 →
  * 静默跨租户泄露。本检查器改为<b>扫真实 biz schema</b>:任何缺 RLS(ENABLE/FORCE)或缺 policy 的 biz 表都会被发现,新增表漏配不再无感。
  *
- * <p><b>分区子表</b>:biz 有若干分区父表(如 {@code customer_account})及其分区子表(如 {@code customer_account_p0})。RLS
- * 加在父表、子表通过分区继承生效。扫描用 {@code relispartition = false} 排除子表,{@code relkind IN ('r','p')} 只取普通表 +
- * 分区父表,避免把子表当成「缺 policy」误报。
+ * <p><b>分区子表</b>:通过父表访问时,父策略约束子表行;直接访问分区子表时,只应用子表策略。为防止分区子表被直接授权后绕过父表策略,
+ * 闭世界检查会逐张检查带 {@code tenant_id} 的分区子表,要求子表同样启用并强制 RLS,且具有符合租户条件的策略。
  *
  * <p><b>扫描边界</b>:只扫描真实存在、包含 {@code tenant_id} 的 biz 租户表。非租户元数据表不属于 RLS 闭世界；若某张表虽包含 {@code
  * tenant_id} 但明确是非租户元数据,才把表名(不带 schema 前缀)加入 {@code exemptBizTables}。
@@ -53,16 +53,20 @@ public class RlsClosedWorldChecker {
   /** 运行期只接受 strict policy；transition 仅作为应急回滚脚本的临时状态。 */
   public static final List<String> ACCEPTED_POLICY_NAMES = List.of("tenant_isolation_strict");
 
+  private static final String TENANT_POLICY_SHAPE = "tenant_id=current_setting'app.tenant_id',true";
+
+  private static final String PROCESS_STAGING_POLICY_SHAPE = TENANT_POLICY_SHAPE
+      + "ANDstaging_generation_id=current_setting'app.process_staging_generation_id',true";
+
   /**
-   * 闭世界扫真实 biz 表:只取普通表('r')+ 分区父表('p'),用 {@code relispartition=false} 排除分区子表(RLS 加父表、子表继承,不该被当缺
-   * policy 误报)。
+   * 闭世界扫真实 biz 表,包含分区父表和带 {@code tenant_id} 的全部分区子表;子表允许直接访问时必须单独受 RLS 保护。
    */
   private static final String LIST_BIZ_TABLES_SQL = "SELECT c.relname FROM pg_class c "
       + "JOIN pg_namespace n ON n.oid = c.relnamespace "
       + "JOIN information_schema.columns col "
       + "ON col.table_schema = n.nspname AND col.table_name = c.relname "
       + "AND col.column_name = 'tenant_id' "
-      + "WHERE n.nspname = ? AND c.relkind IN ('r','p') AND c.relispartition = false";
+      + "WHERE n.nspname = ? AND c.relkind IN ('r','p')";
 
   private static final String CHECK_ENABLE_FORCE_SQL =
       "SELECT relrowsecurity, relforcerowsecurity FROM pg_class c "
@@ -70,10 +74,10 @@ public class RlsClosedWorldChecker {
           + "WHERE n.nspname = ? AND c.relname = ?";
 
   /**
-   * policy <b>语义合规</b>检查 —— 不只验同名 policy 存在,还验 policy 真的在做租户隔离(防误建的同名坏 policy): 必须 {@code
-   * cmd='ALL'}(FOR ALL)、{@code permissive='PERMISSIVE'}、有 {@code WITH CHECK}、且 {@code USING} 表达式引用了
-   * {@code app.tenant_id}(防 {@code USING(true)} 放行全表)。transition policy 不再视为合规状态。任一性质不满足 → 该表算"缺合规
-   * policy"(health DOWN)。占位符由 ACCEPTED_POLICY_NAMES 长度生成。
+   * 只接受本项目生成的 strict 策略形态：FOR ALL / PERMISSIVE / TO PUBLIC；普通租户表按 tenant_id 隔离，
+   * PROCESS staging 还必须按 staging_generation_id 收窄访问。
+   * 归一化仅消除 PostgreSQL 的空白、括号及 text 类型转换，不把“含 tenant_id 字样”等同于隔离证明。
+   * 额外 PERMISSIVE 策略会与 strict 做 OR，未知组合必须拒绝；额外 RESTRICTIVE 策略可保留。
    */
   private final String checkPolicySql;
 
@@ -84,20 +88,27 @@ public class RlsClosedWorldChecker {
 
   public RlsClosedWorldChecker(DataSource businessDataSource, List<String> exemptBizTables) {
     this.businessDataSource = businessDataSource;
-    this.exemptBizTables =
-        exemptBizTables == null ? Set.of() : Set.copyOf(stripSchemaPrefix(exemptBizTables));
-    this.checkPolicySql =
-        "SELECT 1 FROM pg_policies WHERE schemaname = ? AND tablename = ? AND policyname IN ("
-            + "?,".repeat(ACCEPTED_POLICY_NAMES.size() - 1)
-            + "?)"
-            // 语义合规:FOR ALL + PERMISSIVE + 有 WITH CHECK + USING 引用 app.tenant_id(防同名坏 policy)。
-            // 'app.tenant_id' 是代码常量字面量,非外部输入,内联安全。
-            + " AND cmd = 'ALL' AND permissive = 'PERMISSIVE'"
-            + " AND qual IS NOT NULL AND with_check IS NOT NULL"
-            + " AND position('app.tenant_id' in qual) > 0"
-            + " AND position('app.tenant_id' in with_check) > 0"
-            + " AND position('IS NULL' in upper(qual)) = 0"
-            + " AND position('IS NULL' in upper(with_check)) = 0";
+    if (EmptyChecks.isNull(exemptBizTables)) {
+      this.exemptBizTables = Set.of();
+    } else {
+      List<String> schemaFreeTables = stripSchemaPrefix(exemptBizTables);
+      this.exemptBizTables = Set.copyOf(schemaFreeTables);
+    }
+    String acceptedPolicyPlaceholders = "?,".repeat(ACCEPTED_POLICY_NAMES.size() - 1) + "?";
+    this.checkPolicySql = """
+        SELECT 1 FROM pg_policies expected_policy
+        WHERE expected_policy.schemaname = ? AND expected_policy.tablename = ?
+          AND expected_policy.policyname IN (%s)
+          AND expected_policy.cmd = 'ALL' AND expected_policy.permissive = 'PERMISSIVE'
+          AND expected_policy.roles = ARRAY['public']::name[]
+          AND regexp_replace(expected_policy.qual, '[[:space:]()]|::text', '', 'g') = ?
+          AND regexp_replace(expected_policy.with_check, '[[:space:]()]|::text', '', 'g') = ?
+          AND NOT EXISTS (SELECT 1 FROM pg_policies other_policy
+              WHERE other_policy.schemaname = expected_policy.schemaname
+                AND other_policy.tablename = expected_policy.tablename
+                AND other_policy.permissive = 'PERMISSIVE'
+                AND other_policy.policyname <> expected_policy.policyname)
+        """.formatted(acceptedPolicyPlaceholders).stripTrailing();
   }
 
   private static List<String> stripSchemaPrefix(List<String> tables) {
@@ -166,7 +177,8 @@ public class RlsClosedWorldChecker {
       List<String> missingForce,
       List<String> missingPolicy)
       throws SQLException {
-    // 1. 闭世界扫真实 biz 租户表(带 tenant_id 且已排除分区子表),减去显式豁免清单。
+    InspectionFindings findings = new InspectionFindings(missingEnable, missingForce, missingPolicy);
+    // 1. 闭世界扫真实 biz 租户表,包括分区父表和所有租户分区子表。
     Set<String> bizTables = new TreeSet<>();
     try (PreparedStatement ps = conn.prepareStatement(LIST_BIZ_TABLES_SQL)) {
       ps.setString(1, BIZ_SCHEMA);
@@ -180,20 +192,53 @@ public class RlsClosedWorldChecker {
       }
     }
     for (String table : bizTables) {
-      inspectTable(conn, shardLabel, BIZ_SCHEMA, table, missingEnable, missingForce, missingPolicy);
+      inspectTable(conn, shardLabel, BIZ_SCHEMA, table, findings);
     }
 
-    // 2. batch.process_staging 单独检查(在 batch schema,非闭世界扫描范围);不存在则跳过(单 worker 部署)。
+    // 2. batch.process_staging 的父表与分区子表一并检查;该表位于 batch schema,单独限定范围。
     if (tableExists(conn, PROCESS_STAGING_SCHEMA, PROCESS_STAGING_TABLE)) {
       inspectTable(
           conn,
           shardLabel,
           PROCESS_STAGING_SCHEMA,
           PROCESS_STAGING_TABLE,
-          missingEnable,
-          missingForce,
-          missingPolicy);
+          findings,
+          true);
+      for (String partition : listProcessStagingPartitions(conn)) {
+        inspectTable(
+            conn,
+            shardLabel,
+            PROCESS_STAGING_SCHEMA,
+            partition,
+            findings,
+            true);
+      }
     }
+  }
+
+  private List<String> listProcessStagingPartitions(Connection conn) throws SQLException {
+    List<String> partitions = new ArrayList<>();
+    String sql = "SELECT child.relname FROM pg_inherits i "
+        + "JOIN pg_class parent ON parent.oid = i.inhparent "
+        + "JOIN pg_namespace parent_ns ON parent_ns.oid = parent.relnamespace "
+        + "JOIN pg_class child ON child.oid = i.inhrelid "
+        + "JOIN pg_namespace child_ns ON child_ns.oid = child.relnamespace "
+        + "JOIN information_schema.columns column_info "
+        + "ON column_info.table_schema = child_ns.nspname "
+        + "AND column_info.table_name = child.relname AND column_info.column_name = 'tenant_id' "
+        + "WHERE parent_ns.nspname = ? AND parent.relname = ? "
+        + "AND child_ns.nspname = ? ORDER BY child.relname";
+    try (PreparedStatement statement = conn.prepareStatement(sql)) {
+      statement.setString(1, PROCESS_STAGING_SCHEMA);
+      statement.setString(2, PROCESS_STAGING_TABLE);
+      statement.setString(3, PROCESS_STAGING_SCHEMA);
+      try (ResultSet resultSet = statement.executeQuery()) {
+        while (resultSet.next()) {
+          partitions.add(resultSet.getString(1));
+        }
+      }
+    }
+    return partitions;
   }
 
   private void inspectTable(
@@ -201,9 +246,19 @@ public class RlsClosedWorldChecker {
       String shardLabel,
       String schema,
       String table,
-      List<String> missingEnable,
-      List<String> missingForce,
-      List<String> missingPolicy)
+      InspectionFindings findings)
+      throws SQLException {
+    inspectTable(
+        conn, shardLabel, schema, table, findings, false);
+  }
+
+  private void inspectTable(
+      Connection conn,
+      String shardLabel,
+      String schema,
+      String table,
+      InspectionFindings findings,
+      boolean processStagingPolicy)
       throws SQLException {
     String fqTable = (shardLabel == null ? "" : shardLabel + ":") + schema + "." + table;
     try (PreparedStatement ps = conn.prepareStatement(CHECK_ENABLE_FORCE_SQL)) {
@@ -212,10 +267,10 @@ public class RlsClosedWorldChecker {
       try (ResultSet rs = ps.executeQuery()) {
         if (rs.next()) {
           if (!rs.getBoolean(1)) {
-            missingEnable.add(fqTable);
+            findings.missingEnable().add(fqTable);
           }
           if (!rs.getBoolean(2)) {
-            missingForce.add(fqTable);
+            findings.missingForce().add(fqTable);
           }
         }
       }
@@ -226,13 +281,22 @@ public class RlsClosedWorldChecker {
       for (int i = 0; i < ACCEPTED_POLICY_NAMES.size(); i++) {
         ps.setString(3 + i, ACCEPTED_POLICY_NAMES.get(i));
       }
+      String expectedShape =
+          processStagingPolicy ? PROCESS_STAGING_POLICY_SHAPE : TENANT_POLICY_SHAPE;
+      int shapeParameter = 3 + ACCEPTED_POLICY_NAMES.size();
+      ps.setString(shapeParameter, expectedShape);
+      ps.setString(shapeParameter + 1, expectedShape);
       try (ResultSet rs = ps.executeQuery()) {
         if (!rs.next()) {
-          missingPolicy.add(fqTable);
+          findings.missingPolicy().add(fqTable);
         }
       }
     }
   }
+
+  /** 同一次扫描共享三类缺失清单，保持原连接与累积顺序。 */
+  private record InspectionFindings(
+      List<String> missingEnable, List<String> missingForce, List<String> missingPolicy) {}
 
   private boolean tableExists(Connection conn, String schema, String table) throws SQLException {
     try (PreparedStatement ps = conn.prepareStatement(

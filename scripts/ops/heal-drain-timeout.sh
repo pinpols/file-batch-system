@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：自愈：对排空超时的 Worker 执行 force-offline。
+# 用法：在仓库根目录执行 bash scripts/ops/heal-drain-timeout.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # heal-drain-timeout.sh - 自愈：对排空超时的 Worker 执行 force-offline
 # 说明：
@@ -11,12 +13,13 @@
 #
 #   # 真正执行 force-offline
 #   BATCH_HEAL_DRY_RUN=false BATCH_CONSOLE_URL=http://localhost:18080 \
-#     PGHOST=localhost PGUSER=batch PGPASSWORD=secret \
+#     BATCH_CONSOLE_TOKEN="$JWT" BATCH_CONSOLE_CSRF_TOKEN="$CSRF" \
 #     bash scripts/ops/heal-drain-timeout.sh
 #
 # 所有变量：
 #   BATCH_CONSOLE_URL       控制台 base URL（含协议和端口）
-#   BATCH_CONSOLE_TOKEN     Bearer token（若控制台启用认证）
+#   BATCH_CONSOLE_TOKEN     当前认证会话的 JWT cookie
+#   BATCH_CONSOLE_CSRF_TOKEN 同一会话的 XSRF-TOKEN cookie 值
 #   PGHOST/PGPORT/...       PostgreSQL 连接信息
 #   BATCH_HEAL_DRY_RUN      true（默认）= 仅打印操作，false = 实际执行
 
@@ -28,6 +31,7 @@ source "$ROOT/scripts/ops/env.sh"
 
 # ── 配置 ─────────────────────────────────────────────────────────────
 BATCH_CONSOLE_TOKEN="${BATCH_CONSOLE_TOKEN:-}"
+BATCH_CONSOLE_CSRF_TOKEN="${BATCH_CONSOLE_CSRF_TOKEN:-}"
 BATCH_HEAL_DRY_RUN="${BATCH_HEAL_DRY_RUN:-true}"
 
 # ── 辅助函数 ───────────────────────────────────────────────────────────────────
@@ -41,17 +45,13 @@ psql_file() {
 
 console_post() {
   local path="$1"
-  local body="${2:-{}}"
-  # ADR-030 §D7: console 端 HttpOnly cookie 是唯一鉴权方式；脚本通过 --cookie 把
-  # JWT 写到与浏览器同名的 batch_console_token cookie，复用 filter 的 cookie 解析路径。
-  # 不再注入 Authorization header（filter 已无 header fallback，2026-05-15 commit 起）。
-  local cookie_arg=()
-  if [[ -n "${BATCH_CONSOLE_TOKEN}" ]]; then
-    cookie_arg=(--cookie "batch_console_token=${BATCH_CONSOLE_TOKEN}")
-  fi
+  local body="${2:-}"
+  [[ -n "$body" ]] || body='{}'
+  local console_cookies="batch_console_token=${BATCH_CONSOLE_TOKEN}; XSRF-TOKEN=${BATCH_CONSOLE_CSRF_TOKEN}"
   curl -fsS -X POST \
     -H "Content-Type: application/json" \
-    "${cookie_arg[@]}" \
+    --cookie "$console_cookies" \
+    -H "X-XSRF-TOKEN: ${BATCH_CONSOLE_CSRF_TOKEN}" \
     -d "${body}" \
     "${BATCH_CONSOLE_URL%/}${path}"
 }
@@ -67,6 +67,17 @@ require_tools() {
 
 # ── 主流程 ──────────────────────────────────────────────────────────────────────
 require_tools
+
+case "$BATCH_HEAL_DRY_RUN" in
+  true) ;;
+  false)
+    if [[ -z "$BATCH_CONSOLE_TOKEN" || -z "$BATCH_CONSOLE_CSRF_TOKEN" ]]; then
+      echo "ERROR: BATCH_CONSOLE_TOKEN and BATCH_CONSOLE_CSRF_TOKEN are required for execution" >&2
+      exit 2
+    fi
+    ;;
+  *) echo "ERROR: BATCH_HEAL_DRY_RUN must be true or false" >&2; exit 2 ;;
+esac
 
 log "heal-drain-timeout: BATCH_HEAL_DRY_RUN=${BATCH_HEAL_DRY_RUN}"
 log "Querying drain-timeout workers from ${PGHOST}:${PGPORT}/${PGDATABASE}..."

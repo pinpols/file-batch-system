@@ -9,3 +9,24 @@
 - `trigger-process-demo.sh`：本地触发 PROCESS demo 数据链路。
 
 `sql/` 下是这些开发脚本使用的配套 SQL。
+
+## 源码维护工具
+
+- [异常日志补充工具](inject_swallowed_exception_logs.py)：批量为指定 catch 候选补充日志；运行前检查源码范围，运行后必须复核 git diff。
+
+## 脚本与配套 SQL 索引
+
+本表登记本目录的执行入口、公共模块及配套 SQL；测试代码通过测试命令执行。新增、移动或删除资产时同步跳转和用途，SQL 正文保持独立维护。
+
+| 文件 | 用途 / 调用归属 |
+|---|---|
+| [annotate-sonar-report.py](annotate-sonar-report.py) | 为 Sonar CSV 报告补充治理范围与候选标记。 |
+| [lean-loc-report.py](lean-loc-report.py) | 按生产、测试与辅助资产生成代码量统计。 |
+| [sonar-incremental-report.py](sonar-incremental-report.py) | 从 Sonar 全量分析结果中导出 Git 变更行级增量报告。 |
+| [sonar-scan.sh](sonar-scan.sh) | 本地统一 SonarQube 扫描 + 导出报告。 |
+| [sonar_quality_gate.py](sonar_quality_gate.py) | 核对 Sonar 实际评估条件与配置的 Quality Gate。 |
+| [sql/sonar-reset-password-flag.sql](sql/sonar-reset-password-flag.sql) | 供 [sonar-scan.sh](sonar-scan.sh) 使用的配套 SQL。 |
+| [sql/trigger-process-demo-business.sql](sql/trigger-process-demo-business.sql) | 供 [trigger-process-demo.sh](trigger-process-demo.sh) 使用的配套 SQL。 |
+| [sql/trigger-process-demo-platform.sql](sql/trigger-process-demo-platform.sql) | 供 [trigger-process-demo.sh](trigger-process-demo.sh) 使用的配套 SQL。 |
+| [sql/trigger-process-demo-result.sql](sql/trigger-process-demo-result.sql) | 供 [trigger-process-demo.sh](trigger-process-demo.sh) 使用的配套 SQL。 |
+| [trigger-process-demo.sh](trigger-process-demo.sh) | 触发真实 Process 作业并核查处理结果。 |

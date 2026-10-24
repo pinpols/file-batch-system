@@ -11,10 +11,12 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.mapper.CapacityProfileMapper;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 
 @DisplayName("容量画像服务: 分组查询, 时间窗边界与条数上限的校验口径")
 class CapacityProfileServiceTest {
@@ -129,10 +131,10 @@ class CapacityProfileServiceTest {
   @DisplayName("未指定时间窗时默认为最近一天的区间且起点早于终点")
   void window_null_defaultsToBoundedRange() {
     when(mapper.selectTenantProfile(
-            org.mockito.ArgumentMatchers.eq("ta"),
-            org.mockito.ArgumentMatchers.any(Instant.class),
-            org.mockito.ArgumentMatchers.any(Instant.class),
-            org.mockito.ArgumentMatchers.eq(10)))
+            ArgumentMatchers.eq("ta"),
+            ArgumentMatchers.any(Instant.class),
+            ArgumentMatchers.any(Instant.class),
+            ArgumentMatchers.eq(10)))
         .thenReturn(List.of());
 
     service.query("ta", null, null, CapacityProfileGroupBy.TENANT, 10);
@@ -149,8 +151,7 @@ class CapacityProfileServiceTest {
     assertThat(resolvedFrom).isBefore(resolvedTo);
     // null from/to default to a 24h window ending ~now
     assertThat(Duration.between(resolvedFrom, resolvedTo)).isEqualTo(Duration.ofHours(24));
-    assertThat(resolvedTo)
-        .isCloseTo(Instant.now(), within(1, java.time.temporal.ChronoUnit.MINUTES));
+    assertThat(resolvedTo).isCloseTo(Instant.now(), within(1, ChronoUnit.MINUTES));
   }
 
   @Test
@@ -184,14 +185,14 @@ class CapacityProfileServiceTest {
   }
 
   private static String eqArg(String v) {
-    return org.mockito.ArgumentMatchers.eq(v);
+    return ArgumentMatchers.eq(v);
   }
 
   private static Instant eqInstant(Instant v) {
-    return org.mockito.ArgumentMatchers.eq(v);
+    return ArgumentMatchers.eq(v);
   }
 
   private static int eqInt(int v) {
-    return org.mockito.ArgumentMatchers.eq(v);
+    return ArgumentMatchers.eq(v);
   }
 }

@@ -18,6 +18,7 @@ import javax.sql.DataSource;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
+import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
@@ -37,6 +38,14 @@ class JobMonitoringMapperIntegrationTest {
 
   private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.platform();
   private static final String LEGACY_FIXED_RATE_TENANT = "legacy-fixed-rate-migration";
+  private static final String INSERT_WORKFLOW_CHILD_TRIGGER_REQUEST_SQL = """
+      insert into batch.trigger_request (tenant_id, parent_workflow_run_id, parent_node_code)
+      values (?, ?, ?)
+      returning id
+      """;
+  private static final String LINK_JOB_INSTANCE_TO_TRIGGER_REQUEST_SQL = """
+      update batch.job_instance set trigger_request_id = ? where tenant_id = ? and id = ?
+      """;
 
   private static DataSource dataSource;
   private static JdbcTemplate jdbcTemplate;
@@ -44,6 +53,79 @@ class JobMonitoringMapperIntegrationTest {
 
   @BeforeAll
   static void initializePostgresOnlyFixture() throws Exception {
+    final String createSchemaSql = """
+        create schema batch
+    """;
+    final String createJobDefinitionSql = """
+          create table batch.job_definition (
+            id bigserial primary key,
+            tenant_id varchar(64) not null,
+            job_code varchar(128) not null,
+            job_name varchar(256) not null,
+            job_type varchar(32) not null,
+            biz_type varchar(64) not null,
+            schedule_type varchar(32) not null,
+            depends_on_job_code varchar(128),
+            timezone varchar(64) not null,
+            priority integer not null,
+            trigger_mode varchar(32) not null,
+            dag_enabled boolean not null,
+            shard_strategy varchar(32) not null,
+            retry_policy varchar(32) not null,
+            retry_max_count integer not null,
+            timeout_seconds integer not null,
+            enabled boolean not null,
+            version integer not null
+          )
+          """;
+    final String createJobInstanceSql = """
+          create table batch.job_instance (
+            id bigserial primary key,
+            tenant_id varchar(64) not null,
+            job_definition_id bigint not null,
+            job_code varchar(128) not null,
+            instance_no varchar(128) not null,
+            biz_date date not null,
+            dedup_key varchar(256) not null,
+            instance_status varchar(32) not null,
+            trigger_type varchar(32) not null,
+            trace_id varchar(128),
+            trigger_request_id bigint,
+            created_at timestamptz not null default current_timestamp,
+            started_at timestamptz,
+            finished_at timestamptz,
+            deadline_at timestamptz,
+            sla_alerted_at timestamptz,
+            params_snapshot jsonb,
+            expected_duration_seconds integer not null default 0,
+            failed_partition_count integer not null default 0,
+            dry_run boolean not null default false
+          )
+          """;
+    final String createTriggerRequestSql = """
+          create table batch.trigger_request (
+            id bigserial primary key,
+            tenant_id varchar(64) not null,
+            parent_workflow_run_id bigint,
+            parent_node_code varchar(128)
+          )
+          """;
+    final String insertJobDefinitionSql = """
+          insert into batch.job_definition (
+            tenant_id, job_code, job_name, job_type, biz_type, schedule_type, timezone,
+            priority, trigger_mode, dag_enabled, shard_strategy, retry_policy,
+            retry_max_count, timeout_seconds, enabled, version
+          ) values (?, 'LEGACY_FIXED_RATE', 'legacy fixed rate', 'GENERAL', 'IT', 'FIXED_RATE',
+                    'UTC', 5, 'API', false, 'NONE', 'NONE', 0, 0, true, 1)
+          returning id
+          """;
+    final String insertJobMonitoringPolicySql = """
+          insert into batch.job_monitoring_policy (
+            tenant_id, job_definition_id, soft_runtime_seconds, start_grace_seconds,
+            completion_deadline_seconds, completion_deadline_local_time, completion_deadline_day_offset
+          ) values (?, ?, 0, 0, 0, time '04:00', 1)
+          """;
+
     POSTGRES.start();
     PGSimpleDataSource postgresDataSource = new PGSimpleDataSource();
     postgresDataSource.setURL(POSTGRES.getJdbcUrl());
@@ -51,52 +133,10 @@ class JobMonitoringMapperIntegrationTest {
     postgresDataSource.setPassword(POSTGRES.getPassword());
     dataSource = postgresDataSource;
     jdbcTemplate = new JdbcTemplate(dataSource);
-    jdbcTemplate.execute("create schema batch");
-    jdbcTemplate.execute("""
-        create table batch.job_definition (
-          id bigserial primary key,
-          tenant_id varchar(64) not null,
-          job_code varchar(128) not null,
-          job_name varchar(256) not null,
-          job_type varchar(32) not null,
-          biz_type varchar(64) not null,
-          schedule_type varchar(32) not null,
-          depends_on_job_code varchar(128),
-          timezone varchar(64) not null,
-          priority integer not null,
-          trigger_mode varchar(32) not null,
-          dag_enabled boolean not null,
-          shard_strategy varchar(32) not null,
-          retry_policy varchar(32) not null,
-          retry_max_count integer not null,
-          timeout_seconds integer not null,
-          enabled boolean not null,
-          version integer not null
-        )
-        """);
-    jdbcTemplate.execute("""
-        create table batch.job_instance (
-          id bigserial primary key,
-          tenant_id varchar(64) not null,
-          job_definition_id bigint not null,
-          job_code varchar(128) not null,
-          instance_no varchar(128) not null,
-          biz_date date not null,
-          dedup_key varchar(256) not null,
-          instance_status varchar(32) not null,
-          trigger_type varchar(32) not null,
-          trace_id varchar(128),
-          created_at timestamptz not null default current_timestamp,
-          started_at timestamptz,
-          finished_at timestamptz,
-          deadline_at timestamptz,
-          sla_alerted_at timestamptz,
-          params_snapshot jsonb,
-          expected_duration_seconds integer not null default 0,
-          failed_partition_count integer not null default 0,
-          dry_run boolean not null default false
-        )
-        """);
+    jdbcTemplate.execute(createSchemaSql);
+    jdbcTemplate.execute(createJobDefinitionSql);
+    jdbcTemplate.execute(createJobInstanceSql);
+    jdbcTemplate.execute(createTriggerRequestSql);
     new ResourceDatabasePopulator(
             new ClassPathResource("db/migration/V224__job_monitoring_policy_and_alert_claim.sql"))
         .execute(dataSource);
@@ -113,28 +153,14 @@ class JobMonitoringMapperIntegrationTest {
             new ClassPathResource("db/migration/V228__job_not_completed_deadline_alert.sql"))
         .execute(dataSource);
     Long legacyDefinitionId =
-        jdbcTemplate.queryForObject("""
-        insert into batch.job_definition (
-          tenant_id, job_code, job_name, job_type, biz_type, schedule_type, timezone,
-          priority, trigger_mode, dag_enabled, shard_strategy, retry_policy,
-          retry_max_count, timeout_seconds, enabled, version
-        ) values (?, 'LEGACY_FIXED_RATE', 'legacy fixed rate', 'GENERAL', 'IT', 'FIXED_RATE',
-                  'UTC', 5, 'API', false, 'NONE', 'NONE', 0, 0, true, 1)
-        returning id
-        """, Long.class, LEGACY_FIXED_RATE_TENANT);
-    jdbcTemplate.update("""
-        insert into batch.job_monitoring_policy (
-          tenant_id, job_definition_id, soft_runtime_seconds, start_grace_seconds,
-          completion_deadline_seconds, completion_deadline_local_time, completion_deadline_day_offset
-        ) values (?, ?, 0, 0, 0, time '04:00', 1)
-        """, LEGACY_FIXED_RATE_TENANT, legacyDefinitionId);
+    jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, LEGACY_FIXED_RATE_TENANT);
+    jdbcTemplate.update(insertJobMonitoringPolicySql, LEGACY_FIXED_RATE_TENANT, legacyDefinitionId);
     new ResourceDatabasePopulator(
             new ClassPathResource("db/migration/V229__fixed_rate_completion_grace.sql"))
         .execute(dataSource);
 
-    org.apache.ibatis.session.Configuration configuration =
-        new org.apache.ibatis.session.Configuration(
-            new Environment("job-monitoring-it", new JdbcTransactionFactory(), dataSource));
+    Configuration configuration = new Configuration(
+        new Environment("job-monitoring-it", new JdbcTransactionFactory(), dataSource));
     String jobInstanceMapperPath = "mapper/JobInstanceMapper.xml";
     try (var mapperXml = Resources.getResourceAsStream(jobInstanceMapperPath)) {
       new XMLMapperBuilder(
@@ -157,14 +183,16 @@ class JobMonitoringMapperIntegrationTest {
   @DisplayName("迁移清除无法换算的固定频率旧钟点，不伪造宽限时长")
   @Test
   void shouldClearLegacyFixedRateWallClockPolicyDuringMigration() {
-    Map<String, Object> policy = jdbcTemplate.queryForMap("""
-        select mp.completion_deadline_local_time, mp.completion_deadline_day_offset,
-               mp.dependency_completion_window_seconds
-        from batch.job_monitoring_policy mp
-        join batch.job_definition jd
-          on jd.tenant_id = mp.tenant_id and jd.id = mp.job_definition_id
-        where mp.tenant_id = ?
-        """, LEGACY_FIXED_RATE_TENANT);
+    final String selectCompletionDeadlineLocalTimeSql = """
+          select mp.completion_deadline_local_time, mp.completion_deadline_day_offset,
+                 mp.dependency_completion_window_seconds
+          from batch.job_monitoring_policy mp
+          join batch.job_definition jd
+            on jd.tenant_id = mp.tenant_id and jd.id = mp.job_definition_id
+          where mp.tenant_id = ?
+          """;
+
+    Map<String, Object> policy = jdbcTemplate.queryForMap(selectCompletionDeadlineLocalTimeSql, LEGACY_FIXED_RATE_TENANT);
 
     assertThat(policy.get("completion_deadline_local_time")).isNull();
     assertThat(((Number) policy.get("completion_deadline_day_offset")).intValue())
@@ -176,6 +204,15 @@ class JobMonitoringMapperIntegrationTest {
   @DisplayName("识别耗时过久、启动过晚和完成过晚，并排除不适用作业与 dry-run")
   @Test
   void shouldSelectConfiguredViolationsWithoutChangingRuntimeRows() {
+    final String updateJobMonitoringPolicySql = """
+        update batch.job_monitoring_policy\s\
+        set completion_deadline_updated_at = current_timestamp - interval '1 hour' where tenant_id = ?\s\
+        and job_definition_id = ?\
+        """;
+    final String selectInstanceStatusSql = """
+        select instance_status, started_at, finished_at from batch.job_instance where id = ?
+    """;
+
     String tenant = "monitor-it-" + UUID.randomUUID();
     long runningDefinitionId = createJobDefinition(tenant, "RUNNING", "MANUAL");
     long notStartedDefinitionId = createJobDefinition(tenant, "NOT_STARTED", "CRON");
@@ -188,14 +225,14 @@ class JobMonitoringMapperIntegrationTest {
     savePolicy(tenant, deadlineDefinitionId, 0, 0, LocalTime.MIDNIGHT, 0, 0);
     savePolicy(tenant, manualDeadlineDefinitionId, 0, 0, LocalTime.MIDNIGHT, 0, 0);
     jdbcTemplate.update(
-        "update batch.job_monitoring_policy set completion_deadline_updated_at = current_timestamp - interval '1 hour' "
-            + "where tenant_id = ? and job_definition_id = ?",
+        updateJobMonitoringPolicySql,
         tenant,
         deadlineDefinitionId);
     savePolicy(tenant, dryRunDefinitionId, 30, 0, null, 0, 0);
 
     long runningId = insertInstance(
         tenant, runningDefinitionId, "RUNNING", Instant.now().minusSeconds(120), null, null, false);
+    attachWorkflowContext(tenant, runningId, 84L, "RUNNING_NODE");
     long notStartedId = insertInstance(
         tenant,
         notStartedDefinitionId,
@@ -204,6 +241,7 @@ class JobMonitoringMapperIntegrationTest {
         null,
         Instant.now().minusSeconds(3600),
         false);
+    attachWorkflowContext(tenant, notStartedId, 85L, "NOT_STARTED_NODE");
     long stillRunningAtDeadlineId = insertInstance(
         tenant,
         deadlineDefinitionId,
@@ -212,6 +250,7 @@ class JobMonitoringMapperIntegrationTest {
         null,
         Instant.now().minusSeconds(3600),
         false);
+    attachWorkflowContext(tenant, stillRunningAtDeadlineId, 86L, "DEADLINE_NODE");
     long finishedAfterDeadlineId = insertInstance(
         tenant,
         deadlineDefinitionId,
@@ -220,6 +259,7 @@ class JobMonitoringMapperIntegrationTest {
         Instant.now().minusSeconds(1200),
         Instant.now().minusSeconds(3600),
         false);
+    attachWorkflowContext(tenant, finishedAfterDeadlineId, 87L, "COMPLETED_LATE_NODE");
     long historicalCompletionId = insertInstance(
         tenant,
         deadlineDefinitionId,
@@ -244,19 +284,36 @@ class JobMonitoringMapperIntegrationTest {
       assertContains(mapper.selectRunningTooLong(100), runningId);
       assertThat(mapper.selectRunningTooLong(100))
           .noneMatch(row -> row.jobInstanceId().equals(dryRunId));
+      assertThat(mapper.selectRunningTooLong(100))
+          .filteredOn(row -> row.jobInstanceId().equals(runningId))
+          .singleElement()
+          .extracting(JobMonitoringAlertCandidate::bizDate)
+          .isEqualTo(LocalDate.now());
+      assertThat(mapper.selectRunningTooLong(100))
+          .filteredOn(row -> row.jobInstanceId().equals(runningId))
+          .singleElement()
+          .satisfies(row -> {
+            assertThat(row.workflowRunId()).isEqualTo(84L);
+            assertThat(row.nodeCode()).isEqualTo("RUNNING_NODE");
+          });
       assertContains(mapper.selectNotStarted(100), notStartedId);
+      assertWorkflowContext(mapper.selectNotStarted(100), notStartedId, 85L, "NOT_STARTED_NODE");
       assertThat(mapper.selectNotCompletedByDeadline(100))
           .extracting(JobMonitoringAlertCandidate::jobInstanceId)
           .contains(stillRunningAtDeadlineId, finishedAfterDeadlineId);
+      assertWorkflowContext(
+          mapper.selectNotCompletedByDeadline(100), stillRunningAtDeadlineId, 86L, "DEADLINE_NODE");
+      assertWorkflowContext(
+          mapper.selectNotCompletedByDeadline(100), finishedAfterDeadlineId, 87L, "COMPLETED_LATE_NODE");
       assertThat(mapper.selectNotCompletedByDeadline(100))
           .noneMatch(row -> row.jobInstanceId().equals(historicalCompletionId));
       assertThat(mapper.selectNotCompletedByDeadline(100))
           .noneMatch(row -> row.jobInstanceId().equals(manualJobId));
     }
 
-    assertThat(jdbcTemplate.queryForMap(
-            "select instance_status, started_at, finished_at from batch.job_instance where id = ?",
-            runningId))
+    Map<String, Object> selectedInstanceStatusRow =
+        jdbcTemplate.queryForMap(selectInstanceStatusSql, runningId);
+    assertThat(selectedInstanceStatusRow)
         .containsEntry("instance_status", "RUNNING")
         .containsEntry("finished_at", null);
   }
@@ -264,10 +321,20 @@ class JobMonitoringMapperIntegrationTest {
   @DisplayName("监控策略修改即时影响已运行实例")
   @Test
   void shouldApplyUpdatedSoftRuntimePolicyToExistingInstances() {
+    final String updateJobMonitoringPolicySql = """
+        update batch.job_monitoring_policy\s\
+        set soft_runtime_seconds = 0, completion_deadline_updated_at = current_timestamp where tenant_id = ?\s\
+        and job_definition_id = ?\
+        """;
+    final String updateSlaAlertedAtSql = """
+        update batch.job_instance set sla_alerted_at = ? where tenant_id = ? and id = ?
+        """;
+
     String tenant = "monitor-live-policy-" + UUID.randomUUID();
     long definitionId = createJobDefinition(tenant, "LIVE_POLICY", "MANUAL");
     savePolicy(tenant, definitionId, 300, 0, null, 0, 0);
     long instanceId = insertSlaCandidate(tenant, definitionId);
+    attachWorkflowContext(tenant, instanceId, 89L, "SLA_NODE");
     String controlTenant = "monitor-live-policy-control-" + UUID.randomUUID();
     long controlDefinitionId = createJobDefinition(controlTenant, "CONTROL", "MANUAL");
     savePolicy(controlTenant, controlDefinitionId, 0, 0, null, 0, 0);
@@ -280,9 +347,7 @@ class JobMonitoringMapperIntegrationTest {
           .doesNotContain(instanceId);
     }
     jdbcTemplate.update(
-        "update batch.job_monitoring_policy set soft_runtime_seconds = 0, "
-            + "completion_deadline_updated_at = current_timestamp "
-            + "where tenant_id = ? and job_definition_id = ?",
+        updateJobMonitoringPolicySql,
         tenant,
         definitionId);
 
@@ -291,6 +356,32 @@ class JobMonitoringMapperIntegrationTest {
       assertThat(mapper.selectSlaViolationCandidates(100))
           .extracting(JobInstanceEntity::getId)
           .contains(instanceId);
+      assertThat(mapper.selectSlaViolationCandidates(100))
+          .filteredOn(row -> row.getId().equals(instanceId))
+          .singleElement()
+          .satisfies(row -> {
+            assertThat(row.getParentWorkflowRunId()).isEqualTo(89L);
+            assertThat(row.getParentNodeCode()).isEqualTo("SLA_NODE");
+          });
+    }
+
+    Instant slaAlertedAt = Instant.now().truncatedTo(ChronoUnit.MICROS).minusSeconds(900);
+    jdbcTemplate.update(updateSlaAlertedAtSql, Timestamp.from(slaAlertedAt), tenant, instanceId);
+    try (SqlSession session = sqlSessionFactory.openSession(true)) {
+      var mapper = session.getMapper(JobMonitoringMapper.class);
+      assertThat(mapper.selectSlaEscalationCandidates(slaAlertedAt.plusSeconds(300), 100))
+          .filteredOn(row -> row.getId().equals(instanceId))
+          .singleElement()
+          .satisfies(row -> {
+            assertThat(row.getParentWorkflowRunId()).isEqualTo(89L);
+            assertThat(row.getParentNodeCode()).isEqualTo("SLA_NODE");
+          });
+      assertThat(mapper.selectSlaEscalationCandidateForUpdate(
+              tenant, instanceId, slaAlertedAt.plusSeconds(300)))
+          .satisfies(row -> {
+            assertThat(row.getParentWorkflowRunId()).isEqualTo(89L);
+            assertThat(row.getParentNodeCode()).isEqualTo("SLA_NODE");
+          });
     }
   }
 
@@ -433,6 +524,13 @@ class JobMonitoringMapperIntegrationTest {
   @DisplayName("只选近期非 dry-run 的终态失败分区实例")
   @Test
   void shouldSelectOnlyRecentFinalPartitionFailures() {
+  final String updateJobInstanceSql = """
+      update batch.job_instance set failed_partition_count = 2 where id = ?
+  """;
+  final String updateJobInstanceSql2 = """
+      update batch.job_instance set failed_partition_count = 3 where id in (?, ?)
+  """;
+
     String tenant = "monitor-partition-it-" + UUID.randomUUID();
     long definitionId = createJobDefinition(tenant, "FAILED_PARTITION", "MANUAL");
     long recentFailure = insertInstance(
@@ -467,10 +565,11 @@ class JobMonitoringMapperIntegrationTest {
         Instant.now().minusSeconds(7200),
         null,
         false);
+    attachWorkflowContext(tenant, recentFailure, 88L, "FAILED_PARTITION_NODE");
     jdbcTemplate.update(
-        "update batch.job_instance set failed_partition_count = 2 where id = ?", recentFailure);
+        updateJobInstanceSql, recentFailure);
     jdbcTemplate.update(
-        "update batch.job_instance set failed_partition_count = 3 where id in (?, ?)",
+        updateJobInstanceSql2,
         dryRunFailure,
         historicalFailure);
 
@@ -481,7 +580,11 @@ class JobMonitoringMapperIntegrationTest {
       assertContains(candidates, recentFailure);
       assertThat(candidates)
           .singleElement()
-          .satisfies(candidate -> assertThat(candidate.failedPartitionCount()).isEqualTo(2));
+          .satisfies(candidate -> {
+            assertThat(candidate.failedPartitionCount()).isEqualTo(2);
+            assertThat(candidate.workflowRunId()).isEqualTo(88L);
+            assertThat(candidate.nodeCode()).isEqualTo("FAILED_PARTITION_NODE");
+          });
       assertThat(candidates)
           .extracting(JobMonitoringAlertCandidate::jobInstanceId)
           .doesNotContain(zeroFailedPartitions, dryRunFailure, historicalFailure);
@@ -494,16 +597,18 @@ class JobMonitoringMapperIntegrationTest {
 
   private long createJobDefinition(
       String tenant, String suffix, String scheduleType, String dependsOnJobCode) {
+    final String insertJobDefinitionSql = """
+    insert into batch.job_definition (
+    tenant_id, job_code, job_name, job_type, biz_type, schedule_type, depends_on_job_code, timezone,
+    priority, trigger_mode, dag_enabled, shard_strategy, retry_policy,
+    retry_max_count, timeout_seconds, enabled, version
+    ) values (?, ?, ?, 'GENERAL', 'IT', ?, ?, 'UTC', 5, 'API', false,
+    'NONE', 'NONE', 0, 0, true, 1)
+    returning id
+    """;
+
     Long id = jdbcTemplate.queryForObject(
-        """
-        insert into batch.job_definition (
-          tenant_id, job_code, job_name, job_type, biz_type, schedule_type, depends_on_job_code, timezone,
-          priority, trigger_mode, dag_enabled, shard_strategy, retry_policy,
-          retry_max_count, timeout_seconds, enabled, version
-        ) values (?, ?, ?, 'GENERAL', 'IT', ?, ?, 'UTC', 5, 'API', false,
-                  'NONE', 'NONE', 0, 0, true, 1)
-        returning id
-        """,
+        insertJobDefinitionSql,
         Long.class,
         tenant,
         suffix + "_" + UUID.randomUUID(),
@@ -522,14 +627,16 @@ class JobMonitoringMapperIntegrationTest {
       LocalTime completionTime,
       int completionDayOffset,
       int dependencyCompletionWindowSeconds) {
-    jdbcTemplate.update(
-        """
-        insert into batch.job_monitoring_policy (
-          tenant_id, job_definition_id, soft_runtime_seconds, start_grace_seconds,
-          completion_deadline_seconds, completion_deadline_local_time,
-          completion_deadline_day_offset, dependency_completion_window_seconds
-        ) values (?, ?, ?, ?, 0, ?, ?, ?)
-        """,
+        final String insertJobMonitoringPolicySql = """
+    insert into batch.job_monitoring_policy (
+    tenant_id, job_definition_id, soft_runtime_seconds, start_grace_seconds,
+    completion_deadline_seconds, completion_deadline_local_time,
+    completion_deadline_day_offset, dependency_completion_window_seconds
+    ) values (?, ?, ?, ?, 0, ?, ?, ?)
+    """;
+
+        jdbcTemplate.update(
+        insertJobMonitoringPolicySql,
         tenant,
         definitionId,
         runtimeSeconds,
@@ -552,17 +659,22 @@ class JobMonitoringMapperIntegrationTest {
   }
 
   private long insertSlaCandidate(String tenant, long definitionId) {
+    final String selectJobCodeSql = """
+        select job_code from batch.job_definition where id = ?
+    """;
+    final String insertJobInstanceSql = """
+          insert into batch.job_instance (
+            tenant_id, job_definition_id, job_code, instance_no, biz_date, trigger_type,
+            instance_status, dedup_key, params_snapshot, started_at,
+            expected_duration_seconds, failed_partition_count, dry_run
+          ) values (?, ?, ?, ?, ?, 'MANUAL', 'RUNNING', ?, ?::jsonb, ?, 60, 0, false)
+          returning id
+          """;
+
     String jobCode = jdbcTemplate.queryForObject(
-        "select job_code from batch.job_definition where id = ?", String.class, definitionId);
+        selectJobCodeSql, String.class, definitionId);
     Long id = jdbcTemplate.queryForObject(
-        """
-        insert into batch.job_instance (
-          tenant_id, job_definition_id, job_code, instance_no, biz_date, trigger_type,
-          instance_status, dedup_key, params_snapshot, started_at,
-          expected_duration_seconds, failed_partition_count, dry_run
-        ) values (?, ?, ?, ?, ?, 'MANUAL', 'RUNNING', ?, ?::jsonb, ?, 60, 0, false)
-        returning id
-        """,
+        insertJobInstanceSql,
         Long.class,
         tenant,
         definitionId,
@@ -585,8 +697,20 @@ class JobMonitoringMapperIntegrationTest {
       Instant scheduledAt,
       Instant dependencyReadyAt,
       boolean dryRun) {
+    final String selectJobCodeSql = """
+        select job_code from batch.job_definition where id = ?
+    """;
+    final String insertJobInstanceSql = """
+    insert into batch.job_instance (
+    tenant_id, job_definition_id, job_code, instance_no, biz_date, trigger_type,
+    instance_status, dedup_key, params_snapshot, started_at, finished_at,
+    failed_partition_count, dry_run
+    ) values (?, ?, ?, ?, ?, 'MANUAL', ?, ?, ?::jsonb, ?, ?, 0, ?)
+    returning id
+    """;
+
     String jobCode = jdbcTemplate.queryForObject(
-        "select job_code from batch.job_definition where id = ?", String.class, definitionId);
+        selectJobCodeSql, String.class, definitionId);
     String scheduledAtEntry = scheduledAt == null ? "" : "\"scheduledAt\":\"" + scheduledAt + "\"";
     String readyAtEntry = dependencyReadyAt == null
         ? ""
@@ -596,14 +720,7 @@ class JobMonitoringMapperIntegrationTest {
         ? "{}"
         : "{\"effectiveParams\":{" + scheduledAtEntry + readyAtEntry + "}}";
     Long id = jdbcTemplate.queryForObject(
-        """
-        insert into batch.job_instance (
-          tenant_id, job_definition_id, job_code, instance_no, biz_date, trigger_type,
-          instance_status, dedup_key, params_snapshot, started_at, finished_at,
-          failed_partition_count, dry_run
-        ) values (?, ?, ?, ?, ?, 'MANUAL', ?, ?, ?::jsonb, ?, ?, 0, ?)
-        returning id
-        """,
+        insertJobInstanceSql,
         Long.class,
         tenant,
         definitionId,
@@ -629,5 +746,33 @@ class JobMonitoringMapperIntegrationTest {
     assertThat(candidates)
         .extracting(JobMonitoringAlertCandidate::jobInstanceId)
         .contains(instanceId);
+  }
+
+  private void attachWorkflowContext(
+      String tenant, long jobInstanceId, long workflowRunId, String nodeCode) {
+    Long triggerRequestId = jdbcTemplate.queryForObject(
+        INSERT_WORKFLOW_CHILD_TRIGGER_REQUEST_SQL,
+        Long.class,
+        tenant,
+        workflowRunId,
+        nodeCode);
+    assertThat(triggerRequestId).isNotNull();
+    int affectedLINK_JOB_INSTANCE_TO_TRIGGER_REQUEST_Rows = jdbcTemplate.update(
+        LINK_JOB_INSTANCE_TO_TRIGGER_REQUEST_SQL, triggerRequestId, tenant, jobInstanceId);
+    assertThat(affectedLINK_JOB_INSTANCE_TO_TRIGGER_REQUEST_Rows).isEqualTo(1);
+  }
+
+  private static void assertWorkflowContext(
+      List<JobMonitoringAlertCandidate> candidates,
+      long jobInstanceId,
+      long workflowRunId,
+      String nodeCode) {
+    assertThat(candidates)
+        .filteredOn(row -> row.jobInstanceId().equals(jobInstanceId))
+        .singleElement()
+        .satisfies(row -> {
+          assertThat(row.workflowRunId()).isEqualTo(workflowRunId);
+          assertThat(row.nodeCode()).isEqualTo(nodeCode);
+        });
   }
 }

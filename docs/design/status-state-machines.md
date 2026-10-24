@@ -1,5 +1,7 @@
 # 状态机汇总
 
+> **状态归属**：WorkflowRun 是整体运行事实，JOB 节点拥有自己的 JobInstance。控制节点不创建 JobInstance；WAIT 的持久化等待不等于 Worker 执行。一个 Job SUCCESS/EFFECTIVE 不代表整图成功，输入 ARRIVED/SATISFIED 也不代表业务结果完成。显式重放创建新运行并保留来源，禁止把旧终态重置为 RUNNING。
+
 > **status**: 持续维护（枚举值由 CI 与 Java 事实源对照）
 > **scope**: trigger_request / job_instance / pipeline_instance / workflow_run / workflow_node_run / job_task / job_partition / step / outbox / compensation / worker registry 状态对照
 

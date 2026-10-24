@@ -7,25 +7,47 @@ import java.util.List;
 public record ConfigSyncSummaryResponse(
     int jobDefinitions,
     int workflowDefinitions,
-    int pipelineDefinitions,
     int fileChannels,
-    int fileTemplates) {
+    int fileTemplates,
+    int resourceQueues,
+    int batchWindows,
+    int businessCalendars,
+    int quotaPolicies,
+    int alertRoutings) {
 
   public static ConfigSyncSummaryResponse from(ConfigSyncBundlePayload bundle) {
-    return new ConfigSyncSummaryResponse(
-        sizeOf(bundle.getJobDefinitions()),
-        sizeOf(bundle.getWorkflowDefinitions()),
-        sizeOf(bundle.getPipelineDefinitions()),
-        sizeOf(bundle.getFileChannels()),
-        sizeOf(bundle.getFileTemplates()));
+    int jobDefinitionCount = sizeOf(bundle.getJobDefinitions());
+    int workflowDefinitionCount = sizeOf(bundle.getWorkflowDefinitions());
+    int fileChannelCount = sizeOf(bundle.getFileChannels());
+    int fileTemplateCount = sizeOf(bundle.getFileTemplates());
+    int resourceQueueCount = sizeOf(bundle.getResourceQueues());
+    int batchWindowCount = sizeOf(bundle.getBatchWindows());
+    int businessCalendarCount = sizeOf(bundle.getBusinessCalendars());
+    int quotaPolicyCount = sizeOf(bundle.getQuotaPolicies());
+    int alertRoutingCount = sizeOf(bundle.getAlertRoutings());
+    ConfigSyncSummaryResponse summary = new ConfigSyncSummaryResponse(
+        jobDefinitionCount,
+        workflowDefinitionCount,
+        fileChannelCount,
+        fileTemplateCount,
+        resourceQueueCount,
+        batchWindowCount,
+        businessCalendarCount,
+        quotaPolicyCount,
+        alertRoutingCount);
+    return summary;
   }
 
   public int total() {
     return jobDefinitions
         + workflowDefinitions
-        + pipelineDefinitions
         + fileChannels
-        + fileTemplates;
+        + fileTemplates
+        + resourceQueues
+        + batchWindows
+        + businessCalendars
+        + quotaPolicies
+        + alertRoutings;
   }
 
   private static int sizeOf(List<?> values) {

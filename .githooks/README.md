@@ -47,3 +47,12 @@ pre-push 通过统一门禁执行器，分组为 `local-pre-push`，支持 `BATC
 > **跳过 hook**（不推荐）：`git commit --no-verify`
 >
 > **显式忽略本地 pre-push**（不推荐）：`BATCH_GATE_GROUP_MODES=local-pre-push=ignore git push`
+
+## 脚本与配套 SQL 索引
+
+本表登记本目录的执行入口、公共模块及配套 SQL；测试代码通过测试命令执行。新增、移动或删除资产时同步跳转和用途，SQL 正文保持独立维护。
+
+| 文件 | 用途 / 调用归属 |
+|---|---|
+| [pre-commit](pre-commit) | 在提交前执行本仓库暂存变更的轻量质量门禁。 |
+| [pre-push](pre-push) | 在推送前执行本仓库的分域构建与质量检查。 |

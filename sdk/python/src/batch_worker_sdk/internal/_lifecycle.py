@@ -71,7 +71,9 @@ async def _phase_stop_kafka(client: Any, budget: float) -> None:
     if stop is None:
         return
     try:
-        await asyncio.wait_for(stop(), timeout=max(budget, 0.001))
+        stop_coro = stop()
+        wait_timeout = max(budget, 0.001)
+        await asyncio.wait_for(stop_coro, timeout=wait_timeout)
     except TimeoutError:
         logger.warning(
             "stop_with_timeout: Kafka consumer stop overran %.3fs budget; continuing",
@@ -95,7 +97,9 @@ async def _phase_drain_in_flight(client: Any, deadline: float) -> None:
     if shutdown is not None:
         budget = max(0.0, _remaining(deadline))
         try:
-            await asyncio.wait_for(shutdown(budget), timeout=max(budget, 0.001))
+            shutdown_coro = shutdown(budget)
+            wait_timeout = max(budget, 0.001)
+            await asyncio.wait_for(shutdown_coro, timeout=wait_timeout)
         except TimeoutError:
             ids_fn = getattr(dispatcher, "in_flight_task_ids", None)
             try:
@@ -140,7 +144,8 @@ async def _phase_drain_in_flight(client: Any, deadline: float) -> None:
             )
             return
         # 取 poll 间隔与剩余预算的较小值,避免越过 deadline。
-        await asyncio.sleep(min(_DRAIN_POLL_INTERVAL, _remaining(deadline)))
+        poll_interval = min(_DRAIN_POLL_INTERVAL, _remaining(deadline))
+        await asyncio.sleep(poll_interval)
 
 
 async def _phase_stop_schedulers(client: Any, budget: float) -> None:
@@ -167,7 +172,8 @@ async def _phase_stop_schedulers(client: Any, budget: float) -> None:
         stop = getattr(s, "stop", None)
         if stop is None:
             continue
-        coros.append(asyncio.wait_for(stop(), timeout=per_call))
+        stop_coro = stop()
+        coros.append(asyncio.wait_for(stop_coro, timeout=per_call))
         targets.append(s)
     if not coros:
         return
@@ -212,15 +218,13 @@ async def _phase_deactivate(client: Any) -> None:
             # openapi WorkerHeartbeatDto required=[tenantId, workerCode, status,
             # heartbeatAt]:deactivate body 必须带全 4 个必填字段,否则平台
             # @Valid 校验 400。status=OFFLINE 表达优雅下线意图。
-            await deactivate(
-                worker_code,
-                {
-                    "tenantId": tenant_id,
-                    "workerCode": worker_code,
-                    "status": "OFFLINE",
-                    "heartbeatAt": _utc_now_iso(),
-                },
-            )
+            deactivate_body = {
+                "tenantId": tenant_id,
+                "workerCode": worker_code,
+                "status": "OFFLINE",
+                "heartbeatAt": _utc_now_iso(),
+            }
+            await deactivate(worker_code, deactivate_body)
         else:
             await deactivate()
     except Exception as exc:

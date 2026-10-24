@@ -66,15 +66,16 @@ public class DefaultConsoleQuotaPolicyApplicationService
         .build();
     quotaPolicyMapper.insert(param);
     cacheInvalidationService.evictQuotaPolicies(tenantId);
-    return QuotaPolicyResponse.from(
-        quotaPolicyMapper.selectByUniqueKey(tenantId, param.getPolicyCode()));
+    Map<String, Object> createdPolicy =
+        quotaPolicyMapper.selectByUniqueKey(tenantId, param.getPolicyCode());
+    return QuotaPolicyResponse.from(createdPolicy);
   }
 
   @Override
   public QuotaPolicyResponse update(Long id, QuotaPolicySaveRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    Map<String, Object> existing =
-        Guard.requireFound(quotaPolicyMapper.selectById(tenantId, id), "quota policy not found");
+    Map<String, Object> selectedPolicy = quotaPolicyMapper.selectById(tenantId, id);
+    Map<String, Object> existing = Guard.requireFound(selectedPolicy, "quota policy not found");
     TenantQuotaPolicyUpdateParam param = TenantQuotaPolicyUpdateParam.builder()
         .tenantId(tenantId)
         .id(id)
@@ -103,7 +104,8 @@ public class DefaultConsoleQuotaPolicyApplicationService
         .build();
     quotaPolicyMapper.update(param);
     cacheInvalidationService.evictQuotaPolicies(tenantId);
-    return QuotaPolicyResponse.from(quotaPolicyMapper.selectById(tenantId, id));
+    Map<String, Object> updatedPolicy = quotaPolicyMapper.selectById(tenantId, id);
+    return QuotaPolicyResponse.from(updatedPolicy);
   }
 
   @Override

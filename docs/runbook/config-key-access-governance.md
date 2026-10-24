@@ -266,7 +266,7 @@ batch-trigger 集中一份，`local.server.port` 只在 batch-console-api 集中
 | 键 | 写方 | 已确认的按名读取方 |
 |---|---|---|
 | `badRecordCount` | `LoadStep`(2) / `ParseStep` / `ValidateStep` / `ImportRecordGovernanceService` | `scripts/sim/sql/select-stage2d-file-records.sql` 等运维 SQL |
-| `preprocessed` / `preprocessFormat` / `errorOutputPath` / `qualityChecks` / `validatedRecordsPath` / `loadTargetRef` / `scanner` / `detectedAt` / `bundleJobCode` / `manifestSchemaVersion` 等 | 各 import / export stage 与 `ImportIngressScanner` | 目前只有测试按名断言与少量运维 SQL（生产 Java 侧未见按名读取） |
+| `preprocessed` / `preprocessFormat` / `errorOutputPath` / `qualityChecks` / `validatedRecordsPath` / `loadTargetRef` / `scanner` / `detectedAt` / `bundleWorkflowCode` / `manifestSchemaVersion` 等 | 各 import / export stage 与 `ImportIngressScanner` | 目前只有测试按名断言与少量运维 SQL（生产 Java 侧未见按名读取） |
 
 这些键跨 worker 模块、写方分散，且 `badRecordCount` 被非 Java 制品（`scripts/sim/sql/**`）按名读取，符合 §3「缺归属类先
 登记」口径。补齐需要新建 `FileRecordMetadataKeys` 之类的**跨模块**归属类（batch-common 或 batch-worker/core），并同步

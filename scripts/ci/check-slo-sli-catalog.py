@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：校验 SLO / SLI 目录、Runbook 入口和治理文档的一致性。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-slo-sli-catalog.py；参数与前置环境见下方说明及所属 README。
 """校验 SLO / SLI 目录、Runbook 入口和治理文档的一致性。"""
 
 from __future__ import annotations
@@ -51,7 +53,7 @@ REQUIRED_RUNBOOK_LINKS = [
     "compensation-cleanup.md",
     "base-services-deployment.md",
     "event-driven-arrival.md",
-    "worker-stage-coverage.md",
+    "backend-sim-reliability.md",
     "forensic-replay-howto.md",
     "rolling-upgrade-workers.md",
     "asset-partition-readiness.md",

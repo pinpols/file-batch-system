@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.dispatchs.stage;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -13,7 +14,9 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.FrozenDispatchChannelResolver;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,11 +34,15 @@ class PrepareDispatchStepTest {
   @Mock
   private PlatformPipelineRunRepository pipelineRuns;
 
+  @Mock
+  private FrozenDispatchChannelResolver frozenDispatchChannelResolver;
+
   private PrepareDispatchStep step;
 
   @BeforeEach
   void setUp() {
-    step = new PrepareDispatchStep(new ObjectMapper(), fileDispatchRepository, pipelineRuns);
+    step = new PrepareDispatchStep(
+        new ObjectMapper(), fileDispatchRepository, pipelineRuns, frozenDispatchChannelResolver);
   }
 
   @Test
@@ -122,7 +129,39 @@ class PrepareDispatchStepTest {
     DispatchPayload preparedPayload =
         (DispatchPayload) context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
     assertThat(preparedPayload.externalRequestId()).isNotBlank();
-    verify(pipelineRuns).bindFileToPipelineInstance(100L, 10L);
+    verify(pipelineRuns).bindFileToPipelineInstance("t1", 100L, 10L);
+  }
+
+  @Test
+  @DisplayName("整 Workflow 重放使用冻结渠道配置并确认通道仍启用,不读取当前配置")
+  void shouldUseFrozenChannel_whenExecutingWorkflowReplay() {
+    String payload = """
+        {"operationType":"WORKFLOW_RUN","fileId":"10","channelCode":"CH1"}
+        """;
+    Map<String, Object> frozenRow = new java.util.LinkedHashMap<>();
+    frozenRow.put("id", 3L);
+    frozenRow.put("tenant_id", "t1");
+    frozenRow.put("channel_code", "CH1");
+    frozenRow.put("channel_type", "LOCAL");
+    frozenRow.put("target_endpoint", "/snapshot/out");
+    frozenRow.put("auth_type", "NONE");
+    frozenRow.put("config_json", Map.of());
+    frozenRow.put("receipt_policy", "NONE");
+    frozenRow.put("timeout_seconds", 0);
+    frozenRow.put("enabled", true);
+    frozenRow.put("is_deleted", false);
+    when(fileDispatchRepository.loadFile("t1", 10L)).thenReturn(Map.of("id", 10L));
+    when(frozenDispatchChannelResolver.resolve("t1", "CH1", payload))
+        .thenReturn(Optional.of(frozenRow));
+    when(fileDispatchRepository.isChannelActive("t1", "CH1")).thenReturn(true);
+
+    DispatchJobContext context = buildContext(payload);
+    DispatchStageResult result = step.execute(context);
+
+    assertThat(result.success()).isTrue();
+    assertThat(context.getAttributes())
+        .containsEntry(PipelineRuntimeKeys.CHANNEL_CONFIG, frozenRow);
+    verify(fileDispatchRepository, never()).loadChannel("t1", "CH1");
   }
 
   @Test

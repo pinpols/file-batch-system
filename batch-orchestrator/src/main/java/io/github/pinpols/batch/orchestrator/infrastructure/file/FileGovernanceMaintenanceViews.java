@@ -17,33 +17,40 @@ final class FileGovernanceMaintenanceViews {
     if (EmptyChecks.isEmpty(row)) {
       return ArchivedFileCleanupView.absent();
     }
+    Long fileId = longValue(row.get("id"));
+    String tenantId = textValue(row.get("tenant_id"));
+    String storagePath = textValue(row.get("storage_path"));
+    String storageType = textValue(row.get("storage_type"));
+    String fileStatus = textValue(row.get("file_status"));
     return new ArchivedFileCleanupView(
-        longValue(row.get("id")),
-        textValue(row.get("tenant_id")),
-        textValue(row.get("storage_path")),
-        textValue(row.get("storage_type")),
-        textValue(row.get("file_status")));
+        fileId, tenantId, storagePath, storageType, fileStatus);
   }
 
   static OrphanUploadSessionView orphanUploadSession(Map<String, Object> row) {
     if (EmptyChecks.isEmpty(row)) {
       return OrphanUploadSessionView.absent();
     }
+    Long fileId = longValue(row.get("id"));
+    String tenantId = textValue(row.get("tenant_id"));
+    String storageBucket = textValue(row.get("storage_bucket"));
+    String storagePath = textValue(row.get("storage_path"));
     return new OrphanUploadSessionView(
-        longValue(row.get("id")),
-        textValue(row.get("tenant_id")),
-        textValue(row.get("storage_bucket")),
-        textValue(row.get("storage_path")));
+        fileId, tenantId, storageBucket, storagePath);
   }
 
   private static Long longValue(Object value) {
     if (value instanceof Number number) {
       return number.longValue();
     }
-    if (EmptyChecks.isNull(value) || EmptyChecks.isBlank(String.valueOf(value))) {
+    if (EmptyChecks.isNull(value)) {
       return null;
     }
-    return Long.valueOf(String.valueOf(value));
+    String presenceText = String.valueOf(value);
+    if (EmptyChecks.isBlank(presenceText)) {
+      return null;
+    }
+    String rawValue = String.valueOf(value);
+    return Long.valueOf(rawValue);
   }
 
   private static String textValue(Object value) {

@@ -10,7 +10,7 @@
 --   batch_day_replay_session 一等聚合：描述某 (tenant, calendarCode,
 --   bizDate) 子集的重放请求 + 进度 + 结果；session 内每个 job 用
 --   batch_day_replay_entry 跟踪。
---   scope: ALL / ALL_FAILED / SUBSET_JOB_CODES / OUTPUTS_ONLY。
+--   重放范围：ALL / ALL_FAILED / SUBSET_JOB_CODES / OUTPUTS_ONLY。
 --   状态机: PENDING_APPROVAL → RUNNING → SUCCEEDED / PARTIAL_FAILED
 --                              / CANCELLED。
 --   不变量: 同 (tenant, calendarCode, bizDate) 同时只能有 1 个 active
@@ -56,6 +56,7 @@ ALTER TABLE batch.batch_day_replay_session ADD CONSTRAINT ck_replay_session_stat
     CHECK (status IN ('PENDING_APPROVAL', 'RUNNING', 'SUCCEEDED', 'PARTIAL_FAILED', 'CANCELLED'));
 
 -- ADR-020 不变量：同 (tenant, calendarCode, bizDate) 同时只能有 1 个 active session
+
 CREATE UNIQUE INDEX IF NOT EXISTS uk_replay_session_active
     ON batch.batch_day_replay_session (tenant_id, calendar_code, biz_date)
     WHERE status IN ('PENDING_APPROVAL', 'RUNNING');
@@ -77,7 +78,9 @@ COMMENT ON COLUMN batch.batch_day_replay_session.result_policy IS
 
 -- =====================================================================
 -- batch_day_replay_entry: session 内每个 job 的重跑入口
+
 -- =====================================================================
+
 CREATE TABLE IF NOT EXISTS batch.batch_day_replay_entry (
     id                  BIGSERIAL PRIMARY KEY,
     session_id          BIGINT       NOT NULL REFERENCES batch.batch_day_replay_session(id),
@@ -111,8 +114,10 @@ COMMENT ON TABLE batch.batch_day_replay_entry IS
     'ADR-020 batch_day_replay_session 子项: 每个 jobCode 一行, 跟踪 source→rerun→result_version 链路';
 
 -- =====================================================================
+
 -- archive 镜像（按 §archive 冷表对齐红线）
 -- =====================================================================
+
 CREATE TABLE IF NOT EXISTS archive.batch_day_replay_session_archive
     (LIKE batch.batch_day_replay_session INCLUDING ALL);
 
@@ -120,6 +125,6 @@ CREATE TABLE IF NOT EXISTS archive.batch_day_replay_entry_archive
     (LIKE batch.batch_day_replay_entry INCLUDING ALL);
 
 COMMENT ON TABLE archive.batch_day_replay_session_archive IS
-    'V110 archive mirror of batch.batch_day_replay_session';
+    'V110 新增的 batch.batch_day_replay_session 归档镜像。';
 COMMENT ON TABLE archive.batch_day_replay_entry_archive IS
-    'V110 archive mirror of batch.batch_day_replay_entry';
+    'V110 新增的 batch.batch_day_replay_entry 归档镜像。';

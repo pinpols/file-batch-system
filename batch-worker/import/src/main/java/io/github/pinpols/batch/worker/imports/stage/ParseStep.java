@@ -2,7 +2,6 @@ package io.github.pinpols.batch.worker.imports.stage;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -12,7 +11,6 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
-import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
@@ -126,8 +124,9 @@ public class ParseStep implements ImportStageStep {
     Path spoolFile = resolveSpoolPath(context);
     Map<String, Object> attrs = context.getAttributes();
     try {
-      String payloadText = String.valueOf(attrs.getOrDefault(
-          PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD, context.getRawPayload()));
+      Object normalizedPayloadValue = attrs.getOrDefault(
+          PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD, context.getRawPayload());
+      String payloadText = String.valueOf(normalizedPayloadValue);
       payloadText = peelTrailerControlRecord(context, payloadText, attrs);
       ImportPayload importPayload =
           attrs.get(PipelineRuntimeKeys.IMPORT_PAYLOAD) instanceof ImportPayload payload
@@ -176,19 +175,23 @@ public class ParseStep implements ImportStageStep {
             "skip threshold exceeded",
             ERROR_OBJECT_MAPPER);
       }
+      Number parsedCount = support.numberValue(attrs.get(KEY_PARSED_COUNT));
+      Number skippedCount =
+          support.numberValue(attrs.get(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT));
+      long badRecordCount = badRecordCount(context);
       ImportStageSupport.updateFileStatusRecoverAware(
           fileRecords,
           context,
           FileStatus.PARSED.code(),
           Map.of(
               KEY_PARSED_COUNT,
-              support.numberValue(attrs.get(KEY_PARSED_COUNT)),
+              parsedCount,
               PipelineRuntimeKeys.IMPORT_TOTAL_COUNT,
               totalCount,
               PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT,
-              support.numberValue(attrs.get(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT)),
+              skippedCount,
               "badRecordCount",
-              badRecordCount(context),
+              badRecordCount,
               PipelineRuntimeKeys.PARSED_RECORDS_PATH,
               stagingFile.toString()));
       return ImportStageResult.success(stage());
@@ -223,12 +226,15 @@ public class ParseStep implements ImportStageStep {
           fid,
           SwallowedExceptionLogger.summary(ex));
       log.debug("parse stage failed stack: tenantId={}, fileId={}", tid, fid, ex);
+      ImportStage failureStage = stage();
+      String localizedMessageArgument = ex.getMessage();
+      String fallbackMessage = ex.getMessage();
       return ImportStageResult.failure(
-          stage(),
+          failureStage,
           ERROR_CODE_PARSE_FAILED,
           "error.import.parse.failed",
-          new Object[] {ex.getMessage()},
-          ex.getMessage(),
+          new Object[] {localizedMessageArgument},
+          fallbackMessage,
           ERROR_OBJECT_MAPPER);
     } finally {
       // spool 临时文件生命周期结束于 PARSE：下游 VALIDATE / LOAD 只消费 parsed records staging file。
@@ -302,9 +308,11 @@ public class ParseStep implements ImportStageStep {
     if (marker == null) {
       marker = template.get("record_type");
     }
-    String expected = marker == null // empty-check: allow - Sonar S2259
-        ? null
-        : String.valueOf(marker).trim();
+    String expected = null;
+    if (marker != null) { // empty-check: allow - Sonar S2259
+      String rawMarker = String.valueOf(marker);
+      expected = rawMarker.trim();
+    }
     if (expected == null || expected.isBlank()) { // empty-check: allow - Sonar S2259
       return true;
     }
@@ -326,7 +334,10 @@ public class ParseStep implements ImportStageStep {
       return number.intValue() >= 0;
     }
     try {
-      return Integer.parseInt(String.valueOf(value).trim()) >= 0;
+      String rawIndex = String.valueOf(value);
+      String indexText = rawIndex.trim();
+      int parsedIndex = Integer.parseInt(indexText);
+      return parsedIndex >= 0;
     } catch (NumberFormatException ignored) {
       SwallowedExceptionLogger.info(ParseStep.class, "catch:NumberFormatException", ignored);
       return false;
@@ -337,7 +348,8 @@ public class ParseStep implements ImportStageStep {
     if (value == null) {
       return fallback;
     }
-    String text = String.valueOf(value).trim();
+    String rawText = String.valueOf(value);
+    String text = rawText.trim();
     return Texts.hasText(text) ? text : fallback;
   }
 
@@ -346,7 +358,12 @@ public class ParseStep implements ImportStageStep {
       return number.intValue();
     }
     try {
-      return value == null ? fallback : Integer.parseInt(String.valueOf(value).trim());
+      if (EmptyChecks.isNull(value)) {
+        return fallback;
+      }
+      String rawText = String.valueOf(value);
+      String text = rawText.trim();
+      return Integer.parseInt(text);
     } catch (NumberFormatException ignored) {
       SwallowedExceptionLogger.info(ParseStep.class, "catch:NumberFormatException", ignored);
       return fallback;
@@ -404,7 +421,8 @@ public class ParseStep implements ImportStageStep {
         if (FileTemplateFormat.EXCEL.code().equalsIgnoreCase(format)) {
           FormatParseRequest request = FormatParseRequest.fromBinary(
               binaryBytes, importPayload, templateConfig, preserveLogicalRow);
-          return parsers.get(FileTemplateFormat.EXCEL.code()).parse(context, request, writer);
+          FormatParser parser = parsers.get(FileTemplateFormat.EXCEL.code());
+          return parser.parse(context, request, writer);
         }
         Charset cs = resolvePayloadTextCharset(importPayload, templateConfig);
         String asText = new String(binaryBytes, cs);
@@ -493,7 +511,8 @@ public class ParseStep implements ImportStageStep {
     if (templateConfigObject instanceof Map<?, ?> templateConfig) {
       Object charset = templateConfig.get("charset");
       if (charset != null && Texts.hasText(String.valueOf(charset))) {
-        return EncodingUtils.resolve(String.valueOf(charset));
+        String charsetName = String.valueOf(charset);
+        return EncodingUtils.resolve(charsetName);
       }
     }
     if (importPayload != null && Texts.hasText(importPayload.charset())) {
@@ -510,10 +529,12 @@ public class ParseStep implements ImportStageStep {
     if (direct == null) {
       direct = templateConfig.get("loadTargetRef");
     }
-    if (direct != null
-        && WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED.equalsIgnoreCase(
-            String.valueOf(direct).trim())) {
-      return true;
+    if (EmptyChecks.isNotNull(direct)) {
+      String rawLoadTarget = String.valueOf(direct);
+      String loadTarget = rawLoadTarget.trim();
+      if (WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED.equalsIgnoreCase(loadTarget)) {
+        return true;
+      }
     }
     if (templateConfig.get("jdbc_mapped_import") != null
         || templateConfig.get("jdbcMappedImport") != null) {
@@ -555,7 +576,8 @@ public class ParseStep implements ImportStageStep {
     Integer partitionNo = intOrNull(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_NO));
     Integer partitionCount =
         intOrNull(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT));
-    if (partitionNo == null || partitionCount == null || partitionCount <= 1) {
+    boolean inputIsNotPartitioned = partitionNo == null || partitionCount == null || partitionCount <= 1;
+    if (inputIsNotPartitioned) {
       return totalCount;
     }
     // range-slice 优化:PREPROCESS 已用对象存储 range GET 只下本片字节(行边界对齐),staging 已只含本片记录。
@@ -568,9 +590,12 @@ public class ParseStep implements ImportStageStep {
       if (switchVal == null) {
         switchVal = tc.get("partitionAwareParse");
       }
-      if (switchVal != null
-          && "false".equalsIgnoreCase(String.valueOf(switchVal).trim())) {
-        return totalCount;
+      if (EmptyChecks.isNotNull(switchVal)) {
+        String rawSwitchValue = String.valueOf(switchVal);
+        String partitionAwareParse = rawSwitchValue.trim();
+        if ("false".equalsIgnoreCase(partitionAwareParse)) {
+          return totalCount;
+        }
       }
     }
     if (partitionNo < 1 || partitionNo > partitionCount) {
@@ -582,12 +607,7 @@ public class ParseStep implements ImportStageStep {
           context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
       return totalCount;
     }
-    Path filtered = PrivateTempFiles.createTempFile(
-        BatchFileConstants.importStagePrefix(
-            String.valueOf(context.getFileId()),
-            String.valueOf(context.getWorkerId()),
-            "parsed-p" + partitionNo),
-        ".tmp");
+    Path filtered = createStagingFile(context, "parsed-p" + partitionNo);
     long lineNo = 0;
     long kept = 0;
     int targetMod = partitionNo - 1;
@@ -628,7 +648,9 @@ public class ParseStep implements ImportStageStep {
       return n.intValue();
     }
     try {
-      return Integer.parseInt(String.valueOf(value).trim());
+      String rawText = String.valueOf(value);
+      String text = rawText.trim();
+      return Integer.parseInt(text);
     } catch (NumberFormatException ignored) {
       SwallowedExceptionLogger.info(ParseStep.class, "catch:NumberFormatException", ignored);
 

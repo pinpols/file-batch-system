@@ -1,28 +1,43 @@
 package io.github.pinpols.batch.orchestrator.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.orchestrator.application.service.governance.RelatedFileReferenceValidator;
 import io.github.pinpols.batch.orchestrator.application.service.task.DefaultTaskCreationService;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.postgresql.util.PSQLException;
+import org.postgresql.util.ServerErrorMessage;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("任务创建服务: 版本初始化, 步骤实例生成与批量分片口径")
@@ -34,11 +49,15 @@ class DefaultTaskCreationServiceTest {
   @Mock
   private JobStepInstanceMapper jobStepInstanceMapper;
 
+  @Mock
+  private RelatedFileReferenceValidator relatedFileReferenceValidator;
+
   private DefaultTaskCreationService service;
 
   @BeforeEach
   void setUp() {
-    service = new DefaultTaskCreationService(jobTaskMapper, jobStepInstanceMapper);
+    service = new DefaultTaskCreationService(
+        jobTaskMapper, jobStepInstanceMapper, relatedFileReferenceValidator);
   }
 
   @Test
@@ -94,6 +113,21 @@ class DefaultTaskCreationServiceTest {
   }
 
   @Test
+  @DisplayName("任务缺少所属实例业务日时在写库前拒绝")
+  void shouldRejectTaskWithoutInstanceBusinessDate() {
+    JobTaskEntity task = buildTask(100L, "t1", "IMPORT", 1);
+    task.setJobInstanceBizDate(null);
+
+    assertThatThrownBy(() -> service.createTask(task))
+        .isInstanceOfSatisfying(BizException.class, failure -> {
+          assertThat(failure.getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT);
+          assertThat(failure.getMessage()).isEqualTo("error.job_task.instance_biz_date_required");
+        });
+
+    verifyNoInteractions(jobTaskMapper, jobStepInstanceMapper);
+  }
+
+  @Test
   @DisplayName("载荷带有流程节点编码时按该编码解析步骤并生成实例")
   void createTask_resolvesStepCodeFromWorkflowNodeCodeInPayload() {
     JobTaskEntity task = buildTask(200L, "t1", "EXPORT", 1);
@@ -128,6 +162,21 @@ class DefaultTaskCreationServiceTest {
 
     // just verify insert is called, relatedFileId resolution is an internal detail
     verify(jobStepInstanceMapper).insert(any(JobStepInstanceEntity.class));
+    verify(relatedFileReferenceValidator).validate("t1", 42L);
+  }
+
+  @Test
+  @DisplayName("跨租户文件引用在任务及步骤写入前被拒绝")
+  void createTask_rejectsForeignTenantFileReferenceBeforeInsert() {
+    JobTaskEntity task = buildTask(301L, "t1", "IMPORT", 1);
+    task.setTaskPayload("{\"relatedFileId\":99}");
+    Mockito.doThrow(new BizException(ResultCode.NOT_FOUND, "error.file.record_not_found"))
+        .when(relatedFileReferenceValidator)
+        .validate("t1", 99L);
+
+    Assertions.assertThatThrownBy(() -> service.createTask(task)).isInstanceOf(BizException.class);
+
+    verifyNoInteractions(jobTaskMapper, jobStepInstanceMapper);
   }
 
   @Test
@@ -174,6 +223,8 @@ class DefaultTaskCreationServiceTest {
   void createTasks_batchInsertsTasksAndStepsOnceEach() {
     JobTaskEntity t1 = buildTask(null, "t1", "IMPORT", 1);
     JobTaskEntity t2 = buildTask(null, "t1", "EXPORT", 1);
+    t2.setJobInstanceId(2L);
+    t2.setJobPartitionId(null);
     when(jobTaskMapper.insertBatch(any())).thenAnswer(inv -> {
       List<JobTaskEntity> list = inv.getArgument(0);
       long id = 100L;
@@ -194,6 +245,13 @@ class DefaultTaskCreationServiceTest {
     assertThat(cap.getValue()).hasSize(2);
     assertThat(cap.getValue().get(0).getJobTaskId()).isEqualTo(100L);
     assertThat(cap.getValue().get(1).getJobTaskId()).isEqualTo(101L);
+    for (int i = 0; i < result.size(); i++) {
+      assertThat(cap.getValue().get(i).getTenantId()).isEqualTo(result.get(i).getTenantId());
+      assertThat(cap.getValue().get(i).getJobInstanceId())
+          .isEqualTo(result.get(i).getJobInstanceId());
+      assertThat(cap.getValue().get(i).getJobPartitionId())
+          .isEqualTo(result.get(i).getJobPartitionId());
+    }
     // 批量路径 task id 为 fresh 生成:无幂等预检、无逐条 step insert
     verify(jobStepInstanceMapper, never()).selectByJobTaskId(anyString(), anyLong());
     verify(jobStepInstanceMapper, never()).insert(any());
@@ -205,8 +263,8 @@ class DefaultTaskCreationServiceTest {
     JobTaskEntity ok = buildTask(null, "t1", "IMPORT", 1);
     JobTaskEntity bad = buildTask(null, "t1", null, 1);
 
-    org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.createTasks(List.of(ok, bad)))
-        .isInstanceOf(io.github.pinpols.batch.common.exception.BizException.class);
+    Assertions.assertThatThrownBy(() -> service.createTasks(List.of(ok, bad)))
+        .isInstanceOf(BizException.class);
     verify(jobTaskMapper, never()).insertBatch(any());
     verify(jobTaskMapper, never()).insert(any());
     verify(jobStepInstanceMapper, never()).insertBatch(any());
@@ -222,7 +280,7 @@ class DefaultTaskCreationServiceTest {
     for (int i = 0; i < total; i++) {
       tasks.add(buildTask(null, "t1", "IMPORT", i));
     }
-    java.util.concurrent.atomic.AtomicLong nextId = new java.util.concurrent.atomic.AtomicLong(1L);
+    AtomicLong nextId = new AtomicLong(1L);
     when(jobTaskMapper.insertBatch(any())).thenAnswer(inv -> {
       List<JobTaskEntity> chunk = inv.getArgument(0);
       for (JobTaskEntity t : chunk) {
@@ -262,6 +320,96 @@ class DefaultTaskCreationServiceTest {
     verify(jobTaskMapper, never()).insertBatch(any());
   }
 
+  @Test
+  @DisplayName("任务父分区归属冲突返回稳定业务错误, 不继续写步骤")
+  void shouldReturnConflict_whenTaskParentReferenceChanges() {
+    JobTaskEntity task = buildTask(700L, "t1", "IMPORT", 1);
+    doThrow(ownershipFailure("23503", "fk_job_task_partition_tenant_instance"))
+        .when(jobTaskMapper)
+        .insert(task);
+
+    assertThatThrownBy(() -> service.createTask(task))
+        .isInstanceOfSatisfying(BizException.class, failure -> {
+          assertThat(failure.getCode()).isEqualTo(ResultCode.CONFLICT);
+          assertThat(failure.getMessage()).isEqualTo("error.job_task.reference_changed");
+        });
+    verifyNoInteractions(jobStepInstanceMapper);
+  }
+
+  @Test
+  @DisplayName("JobInstance 复合外键竞态返回稳定业务错误")
+  void shouldReturnConflict_whenTaskParentInstanceReferenceChanges() {
+    JobTaskEntity task = buildTask(701L, "t1", "IMPORT", 1);
+    doThrow(ownershipFailure("23503", "fk_job_task_instance_tenant_date"))
+        .when(jobTaskMapper)
+        .insert(task);
+
+    assertThatThrownBy(() -> service.createTask(task))
+        .isInstanceOfSatisfying(BizException.class, failure -> {
+          assertThat(failure.getCode()).isEqualTo(ResultCode.CONFLICT);
+          assertThat(failure.getMessage()).isEqualTo("error.job_task.reference_changed");
+        });
+    verifyNoInteractions(jobStepInstanceMapper);
+  }
+
+  @Test
+  @DisplayName("批量步骤归属冲突返回稳定业务错误")
+  @SuppressWarnings("unchecked")
+  void shouldReturnConflict_whenBatchStepOwnershipChanges() {
+    JobTaskEntity task = buildTask(null, "t1", "IMPORT", 1);
+    when(jobTaskMapper.insertBatch(any())).thenAnswer(invocation -> {
+      List<JobTaskEntity> tasks = invocation.getArgument(0);
+      tasks.get(0).setId(800L);
+      return tasks.size();
+    });
+    doThrow(ownershipFailure("23503", "fk_job_step_task_ownership"))
+        .when(jobStepInstanceMapper)
+        .insertBatch(any());
+
+    assertThatThrownBy(() -> service.createTasks(List.of(task)))
+        .isInstanceOfSatisfying(BizException.class, failure -> {
+          assertThat(failure.getCode()).isEqualTo(ResultCode.CONFLICT);
+          assertThat(failure.getMessage()).isEqualTo("error.job_task.reference_changed");
+        });
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "23503,other_constraint",
+    "23505,fk_job_step_task_ownership",
+    "23503,fk_job_step_task_ownership_extra"
+  })
+  @DisplayName("非目标完整性错误原样上抛, 不按相似名称误判归属冲突")
+  void shouldPreserveDatabaseFailure_whenConstraintOrSqlStateDiffers(
+      String state, String constraint) {
+    JobTaskEntity task = buildTask(900L, "t1", "IMPORT", 1);
+    DataIntegrityViolationException original = ownershipFailure(state, constraint);
+    doThrow(original).when(jobTaskMapper).insert(task);
+
+    assertThatThrownBy(() -> service.createTask(task)).isSameAs(original);
+    verifyNoInteractions(jobStepInstanceMapper);
+  }
+
+  @Test
+  @DisplayName("驱动缺少约束元数据时保留原数据库错误, 不产生空指针")
+  void shouldPreserveDatabaseFailure_whenConstraintMetadataIsMissing() {
+    JobTaskEntity task = buildTask(901L, "t1", "IMPORT", 1);
+    PSQLException sql =
+        new PSQLException(new ServerErrorMessage("SERROR\0C23503\0Munknown foreign key\0\0"));
+    DataIntegrityViolationException original =
+        new DataIntegrityViolationException("missing metadata", sql);
+    doThrow(original).when(jobTaskMapper).insert(task);
+
+    assertThatThrownBy(() -> service.createTask(task)).isSameAs(original);
+    verifyNoInteractions(jobStepInstanceMapper);
+  }
+
+  private DataIntegrityViolationException ownershipFailure(String state, String constraint) {
+    ServerErrorMessage error = new ServerErrorMessage(
+        "SERROR\0C" + state + "\0Mowned reference changed\0n" + constraint + "\0\0");
+    return new DataIntegrityViolationException("ownership failure", new PSQLException(error));
+  }
+
   private JobTaskEntity buildTask(Long id, String tenantId, String taskType, Integer taskSeq) {
     JobTaskEntity task = new JobTaskEntity();
     task.setId(id);
@@ -270,6 +418,7 @@ class DefaultTaskCreationServiceTest {
     task.setTaskSeq(taskSeq);
     task.setTaskStatus("PENDING");
     task.setJobInstanceId(1L);
+    task.setJobInstanceBizDate(LocalDate.of(2026, 3, 22));
     task.setJobPartitionId(1L);
     return task;
   }

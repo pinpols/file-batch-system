@@ -23,8 +23,8 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
  * <p>子类仍可通过 {@code @ExceptionHandler} 追加模块特有异常（如 Orchestrator 的 {@code
  * ResponseStatusException}、Trigger 的 {@code MissingRequestHeaderException}）。
  *
- * <p>i18n:BizException 的展示文案统一过 {@link BizMessageResolver},按 Accept-Language 翻译; 老 literal 异常仍透出原
- * message 不变,逐步迁移到 {@code BizException.of(code, key, args)} 路径。
+ * <p>i18n:业务异常与通用错误码文案统一过 {@link BizMessageResolver},按 Accept-Language 翻译；系统异常的内部 message 仅进入
+ * 日志，不作为 API 响应返回。
  */
 public abstract class AbstractApiExceptionHandler {
 
@@ -46,9 +46,21 @@ public abstract class AbstractApiExceptionHandler {
   /** 日志前缀，用于区分模块来源（"trigger" / "orchestrator" / "console"）。 */
   protected abstract String modulePrefix();
 
+  /** 模块可将明确预期的业务拒绝降为 INFO；默认仍记录 WARN。 */
+  protected boolean logBizExceptionAtInfo(BizException exception) {
+    return false;
+  }
+
   @ExceptionHandler(BizException.class)
   public ResponseEntity<CommonResponse<Void>> handleBizException(BizException exception) {
-    if (exception.getCode().httpStatus() >= 500) {
+    if (logBizExceptionAtInfo(exception)) {
+      log.info(
+          "{} biz request not accepted: code={}, key={}, message={}",
+          modulePrefix(),
+          exception.getCode().code(),
+          exception.getMessageKey(),
+          SwallowedExceptionLogger.summary(exception));
+    } else if (exception.getCode().httpStatus() >= 500) {
       log.warn("{} biz exception", modulePrefix(), exception);
     } else {
       log.warn(
@@ -58,15 +70,23 @@ public abstract class AbstractApiExceptionHandler {
           exception.getMessageKey(),
           SwallowedExceptionLogger.summary(exception));
     }
-    return ResponseEntity.status(exception.getCode().httpStatus())
-        .body(CommonResponse.failure(exception.getCode(), resolveBizMessage(exception)));
+    ResultCode responseCode = exception.getCode();
+    int responseStatus = responseCode.httpStatus();
+    ResponseEntity.BodyBuilder response = ResponseEntity.status(responseStatus);
+    ResultCode code = exception.getCode();
+    String message = resolveBizMessage(exception);
+    CommonResponse<Void> failureBody = CommonResponse.failure(code, message);
+    return response.body(failureBody);
   }
 
   @ExceptionHandler(SystemException.class)
   public ResponseEntity<CommonResponse<Void>> handleSystemException(SystemException exception) {
     log.error("{} system exception", modulePrefix(), exception);
-    return ResponseEntity.status(exception.getCode().httpStatus())
-        .body(CommonResponse.failure(exception.getCode(), exception.getMessage()));
+    ResultCode code = exception.getCode();
+    int status = code.httpStatus();
+    String message = resolveCommonCode(code, code.label());
+    CommonResponse<Void> failureBody = CommonResponse.failure(code, message);
+    return ResponseEntity.status(status).body(failureBody);
   }
 
   /**
@@ -80,9 +100,10 @@ public abstract class AbstractApiExceptionHandler {
         "{} optimistic lock conflict (concurrent modification; upstream may retry): {}",
         modulePrefix(),
         SwallowedExceptionLogger.summary(exception));
-    return ResponseEntity.status(HttpStatus.CONFLICT)
-        .body(CommonResponse.failure(
-            ResultCode.CONFLICT, resolveCommonCode(ResultCode.CONFLICT, "并发修改冲突,请重试")));
+    ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.CONFLICT);
+    String message = resolveCommonCode(ResultCode.CONFLICT, "并发修改冲突,请重试");
+    CommonResponse<Void> failureBody = CommonResponse.failure(ResultCode.CONFLICT, message);
+    return response.body(failureBody);
   }
 
   /**
@@ -95,9 +116,10 @@ public abstract class AbstractApiExceptionHandler {
         "{} duplicate key conflict (concurrent insert; upstream may retry as update): {}",
         modulePrefix(),
         SwallowedExceptionLogger.summary(exception));
-    return ResponseEntity.status(HttpStatus.CONFLICT)
-        .body(CommonResponse.failure(
-            ResultCode.CONFLICT, resolveCommonCode(ResultCode.CONFLICT, "并发插入冲突,请重试")));
+    ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.CONFLICT);
+    String message = resolveCommonCode(ResultCode.CONFLICT, "并发插入冲突,请重试");
+    CommonResponse<Void> failureBody = CommonResponse.failure(ResultCode.CONFLICT, message);
+    return response.body(failureBody);
   }
 
   /**
@@ -108,10 +130,10 @@ public abstract class AbstractApiExceptionHandler {
   public ResponseEntity<CommonResponse<Void>> handleNoResourceFound(
       NoResourceFoundException exception) {
     log.info("{} resource not found: {}", modulePrefix(), exception.getResourcePath());
-    return ResponseEntity.status(HttpStatus.NOT_FOUND)
-        .body(CommonResponse.failure(
-            ResultCode.NOT_FOUND,
-            resolveCommonCode(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.label())));
+    ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.NOT_FOUND);
+    String message = resolveCommonCode(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.label());
+    CommonResponse<Void> failureBody = CommonResponse.failure(ResultCode.NOT_FOUND, message);
+    return response.body(failureBody);
   }
 
   /**
@@ -122,19 +144,20 @@ public abstract class AbstractApiExceptionHandler {
   public ResponseEntity<CommonResponse<Void>> handleTypeMismatch(
       MethodArgumentTypeMismatchException exception) {
     log.info("{} argument type mismatch: name={}", modulePrefix(), exception.getName());
-    return ResponseEntity.badRequest()
-        .body(CommonResponse.failure(
-            ResultCode.INVALID_ARGUMENT,
-            resolveCommonCode(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.label())));
+    ResponseEntity.BodyBuilder response = ResponseEntity.badRequest();
+    String message =
+        resolveCommonCode(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.label());
+    CommonResponse<Void> failureBody = CommonResponse.failure(ResultCode.INVALID_ARGUMENT, message);
+    return response.body(failureBody);
   }
 
   @ExceptionHandler(Exception.class)
   public ResponseEntity<CommonResponse<Void>> handleException(Exception exception) {
     log.error("{} unexpected exception", modulePrefix(), exception);
-    return ResponseEntity.internalServerError()
-        .body(CommonResponse.failure(
-            ResultCode.SYSTEM_ERROR,
-            resolveCommonCode(ResultCode.SYSTEM_ERROR, ResultCode.SYSTEM_ERROR.label())));
+    ResponseEntity.BodyBuilder response = ResponseEntity.internalServerError();
+    String message = resolveCommonCode(ResultCode.SYSTEM_ERROR, ResultCode.SYSTEM_ERROR.label());
+    CommonResponse<Void> failureBody = CommonResponse.failure(ResultCode.SYSTEM_ERROR, message);
+    return response.body(failureBody);
   }
 
   private String resolveBizMessage(BizException exception) {

@@ -6,7 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * 单测 {@link ApiKeyHasher} —— P1-1(docs/archive/analysis/2026-06-03-deep-scan-be-security.md)。
+ * 单测 {@link ApiKeyHasher} —— P1-1(docs/archive/audit/deep-scan-be-security-2026-06-03.md)。
  *
  * <p>覆盖:
  *

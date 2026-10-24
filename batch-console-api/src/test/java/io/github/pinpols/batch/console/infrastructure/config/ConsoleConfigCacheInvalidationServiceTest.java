@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.ConfigCacheInvalidationEvent;
+import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
@@ -51,7 +52,8 @@ class ConsoleConfigCacheInvalidationServiceTest {
     lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
     lenient().when(valueOperations.increment(anyString())).thenReturn(1L);
     service = new ConsoleConfigCacheInvalidationService(
-        new RedisConfigInvalidationStore(redisTemplate), queryCacheService);
+        new RedisConfigInvalidationStore(redisTemplate, new BatchRedisNamespace("")),
+        queryCacheService);
   }
 
   @Test

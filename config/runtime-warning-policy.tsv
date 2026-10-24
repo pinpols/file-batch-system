@@ -1,6 +1,18 @@
-# code	disposition	owner	expires	message_regex
+# code	disposition	owner	expires	message_regex	same_log_required_regex (optional)
+LOCAL_SIM_CONFIG_REVISION_RETRY	EXPECTED	workflow-scheduler	2027-03-31	scheduled-occurrence-materialization-failed: IllegalStateException: Tenant configuration changed during scheduled occurrence materialization	The following 1 profile is active: "local"
+LOCAL_SIM_CONFIG_PACKAGE_RATE_LIMIT	EXPECTED	console-platform	2027-03-31	Expensive-operation rate limit triggered: user=testing-console-user path=/api/console/config/tenant-package/excel/(upload|preview/[0-9a-fA-F]{32})	The following 1 profile is active: "local"
+LOCAL_SIM_EXPORT_STAGE3_BAD_SQL_FIXTURE	EXPECTED	worker-export	2027-03-31	GenerateStep - export GENERATE failed: tenantId=ta, jobCode=TA_EXPORT_REPORT, batchNo=sim-export-stage3-[0-9]+-badsql, errorClass=BadSqlGrammarException	The following 1 profile is active: "local"
+LOCAL_SIM_QUARTZ_STAGE6C_MISFIRE	EXPECTED	workflow-scheduler	2027-03-31	Quartz trigger misfire detected, triggerName=ta:WF:WF-TA_TRIGGER_STAGE6C_(SCHEDULED|MISFIRE)	The following 1 profile is active: "local"
+LOCAL_SIM_FIXTURE_DEAD_LETTER	EXPECTED	workflow-runtime	2027-03-31	dead letter created: tenantId=(ta|tb|default-tenant), partitionId=[0-9]+, instanceNo=inst-[^,]+, errorClass=(BUSINESS|SYSTEM)	The following 1 profile is active: "local"
+LOCAL_SIM_STAGE5B_UNKNOWN_RETRY_BLOCK	EXPECTED	workflow-runtime	2027-03-31	automatic retry blocked for unknown external outcome: tenantId=tb, jobCode=TB_DISPATCH_STAGE5_FAIL_ONCE, partitionId=[0-9]+	The following 1 profile is active: "local"
+LOCAL_SIM_ATOMIC_UNKNOWN_RETRY_BLOCK	EXPECTED	workflow-runtime	2027-03-31	automatic retry blocked for unknown external outcome: tenantId=default-tenant, jobCode=[A-Za-z0-9_-]+, partitionId=[0-9]+	The following 1 profile is active: "local"
+LOCAL_SIM_CHECKPOINT_LEASE_RECLAIM	EXPECTED	workflow-runtime	2027-03-31	expired partition reclaimed and re-dispatched: tenantId=ta, partitionId=[0-9]+, taskId=[0-9]+, resetSteps=[0-9]+, fromVersion=[0-9]+, leaseWindowSeconds=120	The following 1 profile is active: "local"
 LOCAL_SECURITY_BYPASS	EXPECTED	platform-security	2027-03-31	batch\.security\.bypass-mode=true
+LOCAL_LETTUCE_CLOSE_ON_SHUTDOWN	EXPECTED	platform-runtime	2027-03-31	\[SpringApplicationShutdownHook\].*io\.lettuce\.core\.RedisChannelHandler - Connection is already closed
+LOCAL_CONSOLE_DEFAULT_PASSWORD	EXPECTED	console-security	2027-03-31	built-in console account.*factory default password admin123
+LOCAL_CONSOLE_EPHEMERAL_LOGIN_KEYPAIR	EXPECTED	console-security	2027-03-31	console login RSA keypair generated at startup
 LOCAL_EMPTY_TASK_EXECUTOR	EXPECTED	orchestrator	2027-03-31	BatchTaskExecutorRegistry started with no BatchTaskExecutor registered
-LOCAL_ATOMIC_GUARD	EXPECTED	worker-atomic	2027-03-31	Atomic dual-use executor in profile
+LOCAL_ATOMIC_GUARD	ACTION_REQUIRED	worker-atomic	2027-03-31	Atomic dual-use executor in profile
 STARTUP_RESIDUAL_STATE	ACTION_REQUIRED	orchestrator	2027-03-31	Startup runtime audit found residual state
 WORKER_STARTUP_UNHEALTHY	ACTION_REQUIRED	worker-runtime	2027-03-31	worker startup runtime audit WARN
+LOCAL_ATOMIC_SPI_REMINDER	EXPECTED	worker-atomic	2027-03-31	AtomicIsolationStartupCheck - ===== ADR-029 dual-use SPI executor\(s\) ENABLED: \[shell, sql, stored-proc\] ===== This worker can run arbitrary commands/SQL/stored-procs\.	The following 1 profile is active: "local"

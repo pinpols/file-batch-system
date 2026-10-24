@@ -6,7 +6,7 @@ PYTHON_BIN ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 .PHONY: test test-unit test-it test-e2e test-all test-build test-parallel
 .PHONY: data-system data-kafka data-minio
 .PHONY: db-reset-flyway
-.PHONY: ops-inspect ops-heal-stuck ops-heal-dead ops-heal-drain ops-heal-retry ops-heal-partitions ops-compensate ops-heal-zombie-pipelines
+.PHONY: ops-inspect ops-inspect-stuck-outbox ops-inspect-zombie-pipelines ops-inspect-dead-letters ops-heal-drain ops-heal-retry ops-heal-partitions ops-compensate
 .PHONY: ci ci-pr ci-module
 .PHONY: check-openapi check-deps-boundary check-version-alignment bump-version
 .PHONY: pmd spotless spotless-fix coverage
@@ -141,13 +141,13 @@ db-reset-flyway:
 ops-inspect:
 	bash scripts/ops/inspect-all.sh
 
-# 修复长期停滞的 outbox 事件
-ops-heal-stuck:
+# 只读检查长期停滞的 outbox 事件
+ops-inspect-stuck-outbox:
 	bash scripts/ops/heal-stuck-outbox.sh
 
-# 修复死信队列
-ops-heal-dead:
-	bash scripts/ops/heal-dead-letters.sh
+# 只读巡检死信；人工重放经 Console 审批
+ops-inspect-dead-letters:
+	bash scripts/ops/inspect-dead-letters.sh
 
 # 修复 drain 超时任务
 ops-heal-drain:
@@ -165,10 +165,9 @@ ops-heal-partitions:
 ops-compensate:
 	bash scripts/ops/trigger-compensation.sh
 
-# 转化超期 stale pipeline_instance(默认 7 天)为 FAILED 终态; 配合
-# FileGovernanceProperties.processingDelayMaxAgeSeconds 收敛 latency scheduler 噪声
-ops-heal-zombie-pipelines:
-	bash scripts/ops/heal-zombie-pipelines.sh
+# 巡检超期 stale pipeline_instance；终态转换由 Orchestrator stale sweep 负责
+ops-inspect-zombie-pipelines:
+	bash scripts/ops/inspect-stale-pipelines.sh
 
 ## ── CI 回归 ──────────────────────────────────────────────────────────────────
 

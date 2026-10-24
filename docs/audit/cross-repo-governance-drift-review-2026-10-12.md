@@ -37,6 +37,6 @@
 
 ## 复扫方法与节奏
 
-每月审“上次基线到当前 main”的增量，以及配置维护、调度主链、授权和测试代表性；每季度抽样存量模块、例外/基线、部署与运维文档；上线前及重大故障后核对真实环境恢复和浏览器业务闭环。各项入口见[约定约束与漂移防护总账](./convention-drift-guard-index.md)及前端 `docs/engineering/convention-drift-review.md`。
+每月审“上次基线到当前 main”的增量，以及配置维护、调度主链、授权和测试代表性；每季度抽样存量模块、例外/基线、部署与运维文档；上线前及重大故障后核对真实环境恢复和浏览器业务闭环。各项入口见[约定约束与漂移防护总账](../standards/convention-drift-guard-index.md)及前端 `docs/engineering/convention-drift-review.md`。
 
-每次记录：基线提交、变更范围、抽样依据、应拦/应放行样例、CI 实际运行证据、目标环境证据、SKIP、未覆盖项。不要把静态核对写成测试通过；本轮确认缺口已登记到[TODO Master 的 GDRIFT-1–4](../analysis/todo-master.md)，设计取舍与仅有风险线索分开登记。
+每次记录：基线提交、变更范围、抽样依据、应拦/应放行样例、CI 实际运行证据、目标环境证据、SKIP、未覆盖项。不要把静态核对写成测试通过；本轮确认缺口已登记到[TODO Master 的 GDRIFT-1–4](../plans/todo-master.md)，设计取舍与仅有风险线索分开登记。

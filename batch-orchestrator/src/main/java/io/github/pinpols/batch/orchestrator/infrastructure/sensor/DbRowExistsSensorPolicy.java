@@ -20,10 +20,11 @@ import java.util.Map;
 import java.util.Objects;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * DB_ROW_EXISTS sensor：用 readonly SELECT 探测业务库某行是否出现。
@@ -42,10 +43,11 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>SQL 校验：{@link SensorSqlValidator}（SELECT-only + schema 白名单 + 禁 *）。
  *
- * <p>当前实现复用 orchestrator 主库 DataSource；未来 ADR 可拓展 routing datasource 切到真正业务库。
+ * <p>通过租户路由业务 DataSource 执行探测，并在同一只读事务内设置 RLS tenant context。
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(prefix = "batch.datasource.business", name = "url")
 public class DbRowExistsSensorPolicy implements SensorPolicy {
 
   private static final String SENSOR_TYPE = "DB_ROW_EXISTS";
@@ -55,16 +57,19 @@ public class DbRowExistsSensorPolicy implements SensorPolicy {
   private final DataSource dataSource;
   private final SensorProperties props;
   private final ObjectMapper objectMapper;
+  private final TransactionTemplate transactionTemplate;
 
   public DbRowExistsSensorPolicy(
-      NamedParameterJdbcTemplate jdbc,
-      DataSource dataSource,
+      @Qualifier("orchestratorBusinessDataSource") DataSource dataSource,
       SensorProperties props,
-      ObjectMapper objectMapper) {
-    this.jdbc = jdbc;
+      ObjectMapper objectMapper,
+      @Qualifier("workflowSensorBusinessTransactionTemplate")
+          TransactionTemplate transactionTemplate) {
+    this.jdbc = new NamedParameterJdbcTemplate(dataSource);
     this.dataSource = dataSource;
     this.props = props;
     this.objectMapper = objectMapper;
+    this.transactionTemplate = transactionTemplate;
   }
 
   @Override
@@ -73,7 +78,6 @@ public class DbRowExistsSensorPolicy implements SensorPolicy {
   }
 
   @Override
-  @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
   public SensorProbeResult probe(SensorContext ctx) {
     Map<String, Object> spec = ctx.sensorSpec();
     String schema = SensorSpecs.string(spec, "schema");
@@ -89,36 +93,41 @@ public class DbRowExistsSensorPolicy implements SensorPolicy {
     try {
       SensorSqlValidator.validate(sql, props.getDbAllowedSchemas());
     } catch (IllegalArgumentException e) {
-      return SensorProbeResult.error(
-          SENSOR_SPEC_INVALID,
-          List.of(
-              SENSOR_TYPE,
-              Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName())));
+      return sensorFailure(SENSOR_SPEC_INVALID, e);
     }
 
     Map<String, Object> params = resolveParams(spec, ctx);
 
     try {
-      RlsTenantSessionSupport.applyIfPresent(dataSource);
-      List<Map<String, Object>> rows = jdbc.queryForList(sql, params);
-      if (EmptyChecks.isEmpty(rows) || EmptyChecks.isNull(rows.get(0))) {
-        return SensorProbeResult.notYet();
-      }
-      Map<String, Object> output = new LinkedHashMap<>();
-      output.put("rowFound", true);
-      output.put("firstRowJson", writeJson(rows.get(0)));
-      return SensorProbeResult.matched(output);
+      return transactionTemplate.execute(status -> probeRowsInTransaction(sql, params));
     } catch (Exception e) {
       log.warn(
           "DB_ROW_EXISTS probe error tenant={} err={}",
           ctx.tenantId(),
           SwallowedExceptionLogger.summary(e));
-      return SensorProbeResult.error(
-          "error.workflow.sensor_probe_failed",
-          List.of(
-              SENSOR_TYPE,
-              Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName())));
+      return sensorFailure("error.workflow.sensor_probe_failed", e);
     }
+  }
+
+  private SensorProbeResult probeRowsInTransaction(String sql, Map<String, Object> params) {
+    RlsTenantSessionSupport.applyIfPresent(dataSource);
+    List<Map<String, Object>> rows = jdbc.queryForList(sql, params);
+    if (EmptyChecks.isEmpty(rows) || EmptyChecks.isNull(rows.get(0))) {
+      return SensorProbeResult.notYet();
+    }
+    Map<String, Object> output = new LinkedHashMap<>();
+    output.put("rowFound", true);
+    Map<String, Object> firstRow = rows.get(0);
+    String firstRowJson = writeJson(firstRow);
+    output.put("firstRowJson", firstRowJson);
+    return SensorProbeResult.matched(output);
+  }
+
+  private static SensorProbeResult sensorFailure(String errorCode, Exception error) {
+    String errorDetail = Objects.requireNonNullElse(
+        error.getMessage(), error.getClass().getSimpleName());
+    List<String> messageArguments = List.of(SENSOR_TYPE, errorDetail);
+    return SensorProbeResult.error(errorCode, messageArguments);
   }
 
   /** 处理 {@code $.workflowRun.<key>} 占位符；非占位值原样透传。 */

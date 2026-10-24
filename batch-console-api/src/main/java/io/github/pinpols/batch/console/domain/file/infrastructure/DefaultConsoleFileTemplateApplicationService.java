@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.console.domain.file.infrastructure;
 
+import lombok.Builder;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -8,6 +10,7 @@ import io.github.pinpols.batch.common.file.ExportFileNameResolver;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileTemplateApplicationService;
@@ -85,8 +88,10 @@ public class DefaultConsoleFileTemplateApplicationService
   @Override
   public ConsoleFileTemplateResponse get(Long id, String tenantId) {
     String resolved = resolveTenant(tenantId);
-    return ConsoleFileProjectionMapper.template(
-        Guard.requireFound(mapper.selectById(resolved, id), "file template not found: " + id));
+    Map<String, Object> templateRow = mapper.selectById(resolved, id);
+    Map<String, Object> requiredTemplateRow =
+        Guard.requireFound(templateRow, "file template not found: " + id);
+    return ConsoleFileProjectionMapper.template(requiredTemplateRow);
   }
 
   @Override
@@ -103,8 +108,10 @@ public class DefaultConsoleFileTemplateApplicationService
     }
     String operator = requestMetadataResolver.current().operatorId();
     mapper.upsertFileTemplateConfig(buildCreateParam(tenantId, version, operator, request));
-    return ConsoleFileProjectionMapper.template(
-        mapper.selectByUniqueKey(tenantId, request.getTemplateCode(), version));
+    String templateCode = request.getTemplateCode();
+    Map<String, Object> createdTemplateRow =
+        mapper.selectByUniqueKey(tenantId, templateCode, version);
+    return ConsoleFileProjectionMapper.template(createdTemplateRow);
   }
 
   @Override
@@ -121,7 +128,8 @@ public class DefaultConsoleFileTemplateApplicationService
         existing.get("version") != null ? ((Number) existing.get("version")).intValue() : 1;
     mapper.upsertFileTemplateConfig(
         buildUpdateParam(tenantId, templateCode, version, operator, request, existing));
-    return ConsoleFileProjectionMapper.template(mapper.selectById(tenantId, id));
+    Map<String, Object> updatedTemplateRow = mapper.selectById(tenantId, id);
+    return ConsoleFileProjectionMapper.template(updatedTemplateRow);
   }
 
   @Override
@@ -143,17 +151,18 @@ public class DefaultConsoleFileTemplateApplicationService
   @Override
   public FileNamePreviewResponse previewFileName(FileNamePreviewRequest request) {
     String tenantId = resolveTenant(request.getTenantId());
-    return new FileNamePreviewResponse(
-        ExportFileNameResolver.resolve(ExportFileNameResolver.Input.builder()
-            .namingRule(request.getNamingRule())
-            .fileFormatType(request.getFileFormatType())
-            .bizType(request.getBizType())
-            .bizDate(request.getBizDate())
-            .tenantId(tenantId)
-            .batchNo(request.getBatchNo())
-            .region(request.getRegion())
-            .version(request.getVersion())
-            .build()));
+    ExportFileNameResolver.Input input = ExportFileNameResolver.Input.builder()
+        .namingRule(request.getNamingRule())
+        .fileFormatType(request.getFileFormatType())
+        .bizType(request.getBizType())
+        .bizDate(request.getBizDate())
+        .tenantId(tenantId)
+        .batchNo(request.getBatchNo())
+        .region(request.getRegion())
+        .version(request.getVersion())
+        .build();
+    String resolvedFileName = ExportFileNameResolver.resolve(input);
+    return new FileNamePreviewResponse(resolvedFileName);
   }
 
   private String resolveTenant(String tenantId) {
@@ -201,11 +210,15 @@ public class DefaultConsoleFileTemplateApplicationService
         request.getDefaultQuerySql(),
         request.getQueryParamSchemaJson()));
     // Runtime: DB 默认 streaming=true / page=1000 / fetch=1000 / chunk=500,补一致默认
-    param.setRuntime(runtimeOptions(
-        request.getStreamingEnabled() != null ? request.getStreamingEnabled() : Boolean.TRUE,
-        request.getPageSize() != null ? request.getPageSize() : 1000,
-        request.getFetchSize() != null ? request.getFetchSize() : 1000,
-        request.getChunkSize() != null ? request.getChunkSize() : 500));
+    Boolean effectiveStreamingEnabled = EmptyChecks.isNotNull(request.getStreamingEnabled())
+        ? request.getStreamingEnabled()
+        : Boolean.TRUE;
+    Integer effectivePageSize = EmptyChecks.isNotNull(request.getPageSize()) ? request.getPageSize() : 1000;
+    Integer effectiveFetchSize = EmptyChecks.isNotNull(request.getFetchSize()) ? request.getFetchSize() : 1000;
+    Integer effectiveChunkSize = EmptyChecks.isNotNull(request.getChunkSize()) ? request.getChunkSize() : 500;
+    FileTemplateConfigUpsertParam.RuntimeOptions runtimeOptions = runtimeOptions(
+        effectiveStreamingEnabled, effectivePageSize, effectiveFetchSize, effectiveChunkSize);
+    param.setRuntime(runtimeOptions);
     // Security: DB 全部 NOT NULL DEFAULT FALSE,补默认避免 not-null violation
     SecurityOptionsInput securityInput = SecurityOptionsInput.builder()
         .previewMaskingEnabled(coalesceFalse(request.getPreviewMaskingEnabled()))
@@ -232,25 +245,31 @@ public class DefaultConsoleFileTemplateApplicationService
     FileTemplateConfigUpsertParam param = new FileTemplateConfigUpsertParam();
     param.setTenantId(tenantId);
     param.setTemplateCode(templateCode);
-    param.setBasicInfo(buildBasicInfoForUpdate(request, existing, version));
-    param.setFormat(buildFormatForUpdate(request, existing));
-    param.setQuery(buildQueryForUpdate(request, existing));
-    param.setRuntime(buildRuntimeForUpdate(request, existing));
-    param.setSecurity(securityOptions(buildSecurityInputForUpdate(request, existing)));
-    param.setPluginRefs(buildPluginRefsForUpdate(request, existing));
+    FileTemplateConfigUpsertParam.BasicInfo basicInfo = buildBasicInfoForUpdate(request, existing, version);
+    param.setBasicInfo(basicInfo);
+    FileTemplateConfigUpsertParam.FormatOptions formatOptions = buildFormatForUpdate(request, existing);
+    param.setFormat(formatOptions);
+    FileTemplateConfigUpsertParam.QueryOptions queryOptions = buildQueryForUpdate(request, existing);
+    param.setQuery(queryOptions);
+    FileTemplateConfigUpsertParam.RuntimeOptions runtimeOptions = buildRuntimeForUpdate(request, existing);
+    param.setRuntime(runtimeOptions);
+    DefaultConsoleFileTemplateApplicationService.SecurityOptionsInput securityOptionsInput = buildSecurityInputForUpdate(request, existing);
+    FileTemplateConfigUpsertParam.SecurityOptions securityOptions = securityOptions(securityOptionsInput);
+    param.setSecurity(securityOptions);
+    FileTemplateConfigUpsertParam.PluginRefs pluginRefs = buildPluginRefsForUpdate(request, existing);
+    param.setPluginRefs(pluginRefs);
     param.setAudit(auditOptions(operator, operator));
     return param;
   }
 
   private FileTemplateConfigUpsertParam.BasicInfo buildBasicInfoForUpdate(
       FileTemplateUpdateRequest req, Map<String, Object> existing, int version) {
-    return basicInfo(
-        coalesceString(req.getTemplateName(), existing, "template_name"),
-        coalesceString(req.getTemplateType(), existing, "template_type"),
-        coalesceString(req.getBizType(), existing, "biz_type"),
-        coalesceBoolean(req.getEnabled(), existing, "enabled"),
-        version,
-        coalesceString(req.getDescription(), existing, "description"));
+    String templateName = coalesceString(req.getTemplateName(), existing, "template_name");
+    String templateType = coalesceString(req.getTemplateType(), existing, "template_type");
+    String bizType = coalesceString(req.getBizType(), existing, "biz_type");
+    Boolean enabled = coalesceBoolean(req.getEnabled(), existing, "enabled");
+    String description = coalesceString(req.getDescription(), existing, "description");
+    return basicInfo(templateName, templateType, bizType, enabled, version, description);
   }
 
   private FileTemplateConfigUpsertParam.FormatOptions buildFormatForUpdate(
@@ -293,46 +312,58 @@ public class DefaultConsoleFileTemplateApplicationService
 
   private FileTemplateConfigUpsertParam.QueryOptions buildQueryForUpdate(
       FileTemplateUpdateRequest req, Map<String, Object> existing) {
-    return queryOptions(
-        coalesceString(req.getDefaultQueryCode(), existing, "default_query_code"),
-        coalesceString(req.getDefaultQuerySql(), existing, "default_query_sql"),
-        req.getQueryParamSchemaJson() != null
-            ? req.getQueryParamSchemaJson()
-            : stringValue(existing.get("query_param_schema")));
+    String defaultQueryCode =
+        coalesceString(req.getDefaultQueryCode(), existing, "default_query_code");
+    String defaultQuerySql =
+        coalesceString(req.getDefaultQuerySql(), existing, "default_query_sql");
+    String queryParamSchema = EmptyChecks.isNotNull(req.getQueryParamSchemaJson())
+        ? req.getQueryParamSchemaJson()
+        : stringValue(existing.get("query_param_schema"));
+    return queryOptions(defaultQueryCode, defaultQuerySql, queryParamSchema);
   }
 
   private FileTemplateConfigUpsertParam.RuntimeOptions buildRuntimeForUpdate(
       FileTemplateUpdateRequest req, Map<String, Object> existing) {
-    return runtimeOptions(
-        coalesceBoolean(req.getStreamingEnabled(), existing, "streaming_enabled"),
-        coalesceInt(req.getPageSize(), existing, "page_size"),
-        coalesceInt(req.getFetchSize(), existing, "fetch_size"),
-        coalesceInt(req.getChunkSize(), existing, "chunk_size"));
+    Boolean streamingEnabled =
+        coalesceBoolean(req.getStreamingEnabled(), existing, "streaming_enabled");
+    Integer pageSize = coalesceInt(req.getPageSize(), existing, "page_size");
+    Integer fetchSize = coalesceInt(req.getFetchSize(), existing, "fetch_size");
+    Integer chunkSize = coalesceInt(req.getChunkSize(), existing, "chunk_size");
+    return runtimeOptions(streamingEnabled, pageSize, fetchSize, chunkSize);
   }
 
   private SecurityOptionsInput buildSecurityInputForUpdate(
       FileTemplateUpdateRequest req, Map<String, Object> existing) {
-    return SecurityOptionsInput.builder()
-        .previewMaskingEnabled(
-            coalesceBoolean(req.getPreviewMaskingEnabled(), existing, "preview_masking_enabled"))
-        .errorLineMaskingEnabled(coalesceBoolean(
-            req.getErrorLineMaskingEnabled(), existing, "error_line_masking_enabled"))
-        .logMaskingEnabled(
-            coalesceBoolean(req.getLogMaskingEnabled(), existing, "log_masking_enabled"))
-        .contentEncryptionEnabled(coalesceBoolean(
-            req.getContentEncryptionEnabled(), existing, "content_encryption_enabled"))
-        .encryptionKeyRef(coalesceString(req.getEncryptionKeyRef(), existing, "encryption_key_ref"))
-        .downloadRequiresApproval(coalesceBoolean(
-            req.getDownloadRequiresApproval(), existing, "download_requires_approval"))
-        .maskingRuleSet(coalesceString(req.getMaskingRuleSet(), existing, "masking_rule_set"))
-        .build();
+    SecurityOptionsInput.SecurityOptionsInputBuilder securityOptionsBuilder = SecurityOptionsInput.builder();
+    Boolean previewMaskingEnabled =
+        coalesceBoolean(req.getPreviewMaskingEnabled(), existing, "preview_masking_enabled");
+    securityOptionsBuilder.previewMaskingEnabled(previewMaskingEnabled);
+    Boolean errorLineMaskingEnabled =
+        coalesceBoolean(req.getErrorLineMaskingEnabled(), existing, "error_line_masking_enabled");
+    securityOptionsBuilder.errorLineMaskingEnabled(errorLineMaskingEnabled);
+    Boolean logMaskingEnabled =
+        coalesceBoolean(req.getLogMaskingEnabled(), existing, "log_masking_enabled");
+    securityOptionsBuilder.logMaskingEnabled(logMaskingEnabled);
+    Boolean contentEncryptionEnabled =
+        coalesceBoolean(req.getContentEncryptionEnabled(), existing, "content_encryption_enabled");
+    securityOptionsBuilder.contentEncryptionEnabled(contentEncryptionEnabled);
+    String encryptionKeyRef =
+        coalesceString(req.getEncryptionKeyRef(), existing, "encryption_key_ref");
+    securityOptionsBuilder.encryptionKeyRef(encryptionKeyRef);
+    Boolean downloadRequiresApproval =
+        coalesceBoolean(req.getDownloadRequiresApproval(), existing, "download_requires_approval");
+    securityOptionsBuilder.downloadRequiresApproval(downloadRequiresApproval);
+    String maskingRuleSet =
+        coalesceString(req.getMaskingRuleSet(), existing, "masking_rule_set");
+    securityOptionsBuilder.maskingRuleSet(maskingRuleSet);
+    return securityOptionsBuilder.build();
   }
 
   private FileTemplateConfigUpsertParam.PluginRefs buildPluginRefsForUpdate(
       FileTemplateUpdateRequest req, Map<String, Object> existing) {
-    return pluginRefs(
-        coalesceString(req.getLoadTargetRef(), existing, "load_target_ref"),
-        coalesceString(req.getExportDataRef(), existing, "export_data_ref"));
+    String loadTargetRef = coalesceString(req.getLoadTargetRef(), existing, "load_target_ref");
+    String exportDataRef = coalesceString(req.getExportDataRef(), existing, "export_data_ref");
+    return pluginRefs(loadTargetRef, exportDataRef);
   }
 
   private FileTemplateConfigUpsertParam.PluginRefs pluginRefs(
@@ -395,12 +426,11 @@ public class DefaultConsoleFileTemplateApplicationService
     }
     Map<String, Object> queryParamSchema = new LinkedHashMap<>();
     queryParamSchema.put("jdbcMappedImport", jdbcMappedImport);
+    String fieldMappingsJson = writeJson(fieldMappings);
+    String queryParamSchemaJson = writeJson(queryParamSchema);
+    String defaultQuerySql = blankToNull(command.defaultQuerySql());
     return new FileTemplateMappingDraftResult(
-        "IMPORT",
-        writeJson(fieldMappings),
-        writeJson(queryParamSchema),
-        blankToNull(command.defaultQuerySql()),
-        warnings);
+        "IMPORT", fieldMappingsJson, queryParamSchemaJson, defaultQuerySql, warnings);
   }
 
   private FileTemplateMappingDraftResult draftExportMapping(
@@ -449,13 +479,16 @@ public class DefaultConsoleFileTemplateApplicationService
     if (defaultQuerySql == null) {
       warnings.add("未填写 defaultQuerySql/tableName,保存前需要补齐导出 SQL");
     }
+    String fieldMappingsJson = writeJson(fieldMappings);
+    String queryParamSchemaJson = writeJson(queryParamSchema);
     return new FileTemplateMappingDraftResult(
-        "EXPORT", writeJson(fieldMappings), writeJson(queryParamSchema), defaultQuerySql, warnings);
+        "EXPORT", fieldMappingsJson, queryParamSchemaJson, defaultQuerySql, warnings);
   }
 
   private String defaultExportSql(FileTemplateMappingDraftCommand command, List<String> columns) {
     String selectColumns = columns.isEmpty() ? "id" : String.join(", ", columns);
-    String tableRef = Texts.hasText(command.schemaName())
+    boolean schemaNameIsPresent = Texts.hasText(command.schemaName());
+    String tableRef = schemaNameIsPresent
         ? command.schemaName() + "." + command.tableName()
         : command.tableName();
     String tenantColumn = firstText(command.tenantColumn(), "tenant_id");
@@ -483,7 +516,11 @@ public class DefaultConsoleFileTemplateApplicationService
   }
 
   private static boolean isSqlIdentifier(String value) {
-    return Texts.hasText(value) && SQL_IDENTIFIER.matcher(value.trim()).matches();
+    if (!Texts.hasText(value)) {
+      return false;
+    }
+    String normalizedValue = value.trim();
+    return SQL_IDENTIFIER.matcher(normalizedValue).matches();
   }
 
   private String writeJson(Object value) {
@@ -501,7 +538,8 @@ public class DefaultConsoleFileTemplateApplicationService
     if (!Texts.hasText(direction)) {
       return "IMPORT";
     }
-    String normalized = direction.trim().toUpperCase(Locale.ROOT);
+    String trimmedDirection = direction.trim();
+    String normalized = trimmedDirection.toUpperCase(Locale.ROOT);
     Guard.require(
         "IMPORT".equals(normalized) || "EXPORT".equals(normalized),
         "direction must be IMPORT or EXPORT");

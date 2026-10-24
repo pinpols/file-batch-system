@@ -46,7 +46,9 @@ public class RequestSignatureFilter extends OncePerRequestFilter {
       throws ServletException, IOException {
 
     String apiKey = request.getHeader(HEADER_API_KEY);
-    if (!properties.isEnabled() || !isMutating(request.getMethod()) || !Texts.hasText(apiKey)) {
+    boolean requestNeedsSignatureVerification =
+        properties.isEnabled() && isMutating(request.getMethod()) && Texts.hasText(apiKey);
+    if (!requestNeedsSignatureVerification) {
       chain.doFilter(request, response);
       return;
     }
@@ -73,12 +75,17 @@ public class RequestSignatureFilter extends OncePerRequestFilter {
 
     Result result = verifier.verify(signed, System.currentTimeMillis());
     if (result != Result.OK) {
+      String safeTenantId = LogSanitizer.value(tenantId);
+      String requestMethod = request.getMethod();
+      String safeRequestMethod = LogSanitizer.value(requestMethod);
+      String requestUri = request.getRequestURI();
+      String safeRequestUri = LogSanitizer.value(requestUri);
       log.warn(
           "request signature rejected: result={} tenant={} method={} uri={}",
           result,
-          LogSanitizer.value(tenantId),
-          LogSanitizer.value(request.getMethod()),
-          LogSanitizer.value(request.getRequestURI()));
+          safeTenantId,
+          safeRequestMethod,
+          safeRequestUri);
       writeUnauthorized(response, result);
       return;
     }

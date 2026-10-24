@@ -1,3 +1,5 @@
+# 用途：验证CI 测试质量快照与历史趋势汇总。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_report_ci_quality_trends.py。
 import importlib.util
 import tempfile
 import unittest

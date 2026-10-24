@@ -12,6 +12,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,7 +49,7 @@ class KafkaLatencyToxicIT extends AbstractChaosIntegrationTest {
                 .send(new ProducerRecord<>("chaos-kafka-it", "k", "latency-payload"))
                 .get(10, TimeUnit.SECONDS))
             .isInstanceOf(ExecutionException.class)
-            .hasRootCauseInstanceOf(org.apache.kafka.common.errors.TimeoutException.class);
+            .hasRootCauseInstanceOf(TimeoutException.class);
       }
     });
   }

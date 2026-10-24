@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.quota;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.config.QuotaProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
@@ -68,10 +69,11 @@ public class QuotaRuntimeStateSnapshotScheduler {
         snapshotted += delta;
       } catch (DataAccessException ex) {
         // 单个租户失败不影响其他租户：下一轮自然重试
+        String causeSummary = SwallowedExceptionLogger.summary(ex);
         log.warn(
             "quota snapshot failed for tenant={}: {}",
             tenantId,
-            SwallowedExceptionLogger.summary(ex));
+            causeSummary);
       }
     }
     if (snapshotted > 0) {
@@ -84,21 +86,25 @@ public class QuotaRuntimeStateSnapshotScheduler {
     int written = 0;
     for (TenantQuotaPolicyEntity p :
         tenantQuotaPolicyMapper.selectByTenantAndEnabled(tenantId, true)) {
+      String tenantJobsResetPolicy = p.quotaResetPolicy();
+      int tenantJobsBurstLimit = nonNegativeBurstLimit(p.burstLimit());
       written += snapshotWriter.writeIfActive(
           tenantId,
           "TENANT_JOBS",
           tenantId,
-          p.quotaResetPolicy(),
-          p.burstLimit() == null ? 0 : Math.max(0, p.burstLimit()));
+          tenantJobsResetPolicy,
+          tenantJobsBurstLimit);
+      String tenantPartitionsResetPolicy = p.quotaResetPolicy();
+      int tenantPartitionsBurstLimit = nonNegativeBurstLimit(p.partitionBurstLimit());
       written += snapshotWriter.writeIfActive(
           tenantId,
           "TENANT_PARTITIONS",
           tenantId,
-          p.quotaResetPolicy(),
-          p.partitionBurstLimit() == null ? 0 : Math.max(0, p.partitionBurstLimit()));
+          tenantPartitionsResetPolicy,
+          tenantPartitionsBurstLimit);
     }
     for (ResourceQueueEntity q : resourceQueueMapper.selectByTenantAndEnabled(tenantId, true)) {
-      int qburst = q.burstLimit() == null ? 0 : Math.max(0, q.burstLimit());
+      int qburst = nonNegativeBurstLimit(q.burstLimit());
       written += snapshotWriter.writeIfActive(
           tenantId, "QUEUE_JOBS", q.queueCode(), q.quotaResetPolicy(), qburst);
       // 队列分区维度的 burst 当前与队列 burst 共用 burstLimit；如未来分离再追加 partition 列
@@ -106,5 +112,9 @@ public class QuotaRuntimeStateSnapshotScheduler {
           tenantId, "QUEUE_PARTITIONS", q.queueCode(), q.quotaResetPolicy(), qburst);
     }
     return written;
+  }
+
+  private int nonNegativeBurstLimit(Integer burstLimit) {
+    return EmptyChecks.isNull(burstLimit) ? 0 : Math.max(0, burstLimit);
   }
 }

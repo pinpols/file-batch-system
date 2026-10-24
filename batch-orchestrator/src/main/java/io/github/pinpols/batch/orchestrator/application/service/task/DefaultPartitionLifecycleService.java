@@ -1,18 +1,28 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
+import io.github.pinpols.batch.orchestrator.domain.param.JobPartitionPromoteStatusParam;
+import io.github.pinpols.batch.orchestrator.domain.param.JobTaskPromoteStatusParam;
+
+
 import io.github.pinpols.batch.common.enums.PartitionStatus;
+import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TaskStatus;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
+import io.github.pinpols.batch.orchestrator.application.service.governance.RelatedFileReferenceValidator;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.ClaimPartitionParam;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkPartitionStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseParam;
+import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -39,8 +49,15 @@ import org.springframework.transaction.interceptor.TransactionAspectSupport;
 @RequiredArgsConstructor
 public class DefaultPartitionLifecycleService implements PartitionLifecycleService {
 
+  private static final String PARTITION_INSTANCE_REFERENCE_CONSTRAINT =
+      "fk_job_partition_instance_tenant_date";
+  private static final String PARTITION_SOURCE_FILE_REFERENCE_CONSTRAINT =
+      "fk_job_partition_source_file_tenant";
+
   private final JobPartitionMapper jobPartitionMapper;
   private final JobTaskMapper jobTaskMapper;
+  private final JobInstanceMapper jobInstanceMapper;
+  private final RelatedFileReferenceValidator relatedFileReferenceValidator;
 
   @Override
   @Transactional
@@ -50,10 +67,20 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
     if (EmptyChecks.isNull(plan) || EmptyChecks.isNull(plan.getPartitions())) {
       return partitionEntities;
     }
+    JobInstanceEntity jobInstance = jobInstanceMapper.selectById(plan.getTenantId(), jobInstanceId);
+    if (EmptyChecks.isNull(jobInstance) || EmptyChecks.isNull(jobInstance.getBizDate())) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.job.instance_not_found");
+    }
+    // 创建分区或批量写入前，先验证每个 bundle 来源，避免单个
+    // 外租户文件导致部分分区记录被持久化。
+    for (SchedulePlan.PartitionPlan partitionPlan : plan.getPartitions()) {
+      relatedFileReferenceValidator.validate(plan.getTenantId(), partitionPlan.getSourceFileId());
+    }
     for (SchedulePlan.PartitionPlan partitionPlan : plan.getPartitions()) {
       JobPartitionEntity partitionEntity = new JobPartitionEntity();
       partitionEntity.setTenantId(plan.getTenantId());
       partitionEntity.setJobInstanceId(jobInstanceId);
+      partitionEntity.setJobInstanceBizDate(jobInstance.getBizDate());
       partitionEntity.setPartitionNo(partitionPlan.getPartitionNo());
       partitionEntity.setPartitionKey(partitionPlan.getPartitionKey());
       partitionEntity.setPartitionStatus(
@@ -76,7 +103,8 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
       String partitionIdempotencyKey = jobInstanceId + ":" + partitionPlan.getPartitionNo();
       Guard.requireText(partitionIdempotencyKey, "job_partition.idempotency_key");
       partitionEntity.setIdempotencyKey(partitionIdempotencyKey);
-      partitionEntity.setInputSnapshot(buildInputSnapshot(plan, partitionPlan, jobInstanceId));
+      String inputSnapshot = buildInputSnapshot(plan, partitionPlan, jobInstanceId);
+      partitionEntity.setInputSnapshot(inputSnapshot);
       partitionEntity.setDryRun(plan.isDryRun());
       // ADR-046 文件束:把 plan 里的 per-file 绑定写进 partition(非束作业这些为 null)。
       partitionEntity.setSourceFileId(partitionPlan.getSourceFileId());
@@ -87,9 +115,36 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
     // PERF(5.1): launch fan-out 由逐条 insert 改单条多行 INSERT（N 往返 → 1）；
     // useGeneratedKeys 按序回填每个 entity 的 id，下游 buildTask/releaseForDispatch 依赖。
     // R2:按固定 chunk 切批,防绑定参数越 PG 65535 上限整批回滚;subList 视图回填保证 id 顺序正确。
-    BatchInsertChunks.insertInChunks(
-        partitionEntities, BatchInsertChunks.DEFAULT_CHUNK_SIZE, jobPartitionMapper::insertBatch);
+    try {
+      BatchInsertChunks.insertInChunks(
+          partitionEntities, BatchInsertChunks.DEFAULT_CHUNK_SIZE, jobPartitionMapper::insertBatch);
+    } catch (RuntimeException failure) {
+      if (isConstraintViolation(failure, PARTITION_SOURCE_FILE_REFERENCE_CONSTRAINT)) {
+        throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found", failure);
+      }
+      if (isConstraintViolation(failure, PARTITION_INSTANCE_REFERENCE_CONSTRAINT)) {
+        throw BizException.of(ResultCode.CONFLICT, "error.job.partition_parent_changed", failure);
+      }
+      throw failure;
+    }
     return partitionEntities;
+  }
+
+  private static boolean isConstraintViolation(Throwable failure, String constraintName) {
+    for (Throwable current = failure; !EmptyChecks.isNull(current); current = current.getCause()) {
+      boolean currentMatchesForeignKeyConstraint =
+          current instanceof SQLException sql
+          && "23503".equals(sql.getSQLState())
+          && EmptyChecks.isNotNull(sql.getMessage())
+          && sql.getMessage().contains(constraintName);
+      if (currentMatchesForeignKeyConstraint) {
+        return true;
+      }
+      if (current == current.getCause()) {
+        break;
+      }
+    }
+    return false;
   }
 
   @Override
@@ -168,21 +223,27 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
     if (EmptyChecks.isNull(partition) || EmptyChecks.isNull(task)) {
       return false;
     }
+    JobPartitionPromoteStatusParam jobPartitionPromoteStatusParam = JobPartitionPromoteStatusParam.builder()
+        .tenantId(partition.getTenantId())
+        .id(partition.getId())
+        .fromStatus(fromPartitionStatus)
+        .toStatus(PartitionStatus.READY.code())
+        .expectedVersion(partition.getVersion())
+        .build();
     int partitionUpdated = jobPartitionMapper.promoteStatus(
-        partition.getTenantId(),
-        partition.getId(),
-        fromPartitionStatus,
-        PartitionStatus.READY.code(),
-        partition.getVersion());
+        jobPartitionPromoteStatusParam);
     if (partitionUpdated <= 0) {
       return false;
     }
+    JobTaskPromoteStatusParam jobTaskPromoteStatusParam = JobTaskPromoteStatusParam.builder()
+        .tenantId(task.getTenantId())
+        .id(task.getId())
+        .fromStatus(fromTaskStatus)
+        .toStatus(TaskStatus.READY.code())
+        .expectedVersion(task.getVersion())
+        .build();
     int taskUpdated = jobTaskMapper.promoteStatus(
-        task.getTenantId(),
-        task.getId(),
-        fromTaskStatus,
-        TaskStatus.READY.code(),
-        task.getVersion());
+        jobTaskPromoteStatusParam);
     if (taskUpdated <= 0) {
       // 分片与任务是”必须一起推进”的原子语义：
       // - partition 已 READY 但 task 还没 READY，会导致派发链路选择/查询出现不一致
@@ -203,9 +264,10 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
 
   private String resolveInitialPartitionStatus(
       SchedulePlan.PartitionPlan partitionPlan, String initialStatus) {
-    if (EmptyChecks.isNotNull(partitionPlan)
+    boolean partitionHasRecordedStatus = EmptyChecks.isNotNull(partitionPlan)
         && EmptyChecks.isNotNull(partitionPlan.getPartitionStatus())
-        && EmptyChecks.isNotBlank(partitionPlan.getPartitionStatus())) {
+        && EmptyChecks.isNotBlank(partitionPlan.getPartitionStatus());
+    if (partitionHasRecordedStatus) {
       return partitionPlan.getPartitionStatus();
     }
     return EmptyChecks.isBlank(initialStatus) ? PartitionStatus.CREATED.code() : initialStatus;
@@ -253,10 +315,12 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
   /** 分发束和 fan-out 的渠道属于单个分区；普通分发仍回退到计划级渠道。 */
   private String resolveDownstreamChannelCode(
       SchedulePlan plan, SchedulePlan.PartitionPlan partitionPlan) {
-    if (EmptyChecks.isNotNull(plan)
+    boolean partitionHasExplicitDispatchTarget =
+        EmptyChecks.isNotNull(plan)
         && "DISPATCH".equalsIgnoreCase(plan.getDefaultWorkerType())
         && EmptyChecks.isNotNull(partitionPlan)
-        && EmptyChecks.isNotBlank(partitionPlan.getTargetRef())) {
+        && EmptyChecks.isNotBlank(partitionPlan.getTargetRef());
+    if (partitionHasExplicitDispatchTarget) {
       return partitionPlan.getTargetRef();
     }
     return EmptyChecks.isNull(plan) ? null : plan.getDownstreamChannelCode();

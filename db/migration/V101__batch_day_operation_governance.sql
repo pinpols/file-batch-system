@@ -1,5 +1,5 @@
 -- =========================================================
--- V101: Batch day operation governance
+-- V101：批量日操作治理。
 -- 1) 扩展 batch_day_instance 状态机，支持人工终态。
 -- 2) 增加治理操作所需的冻结状态和操作者快照字段。
 -- =========================================================
@@ -21,10 +21,10 @@ CREATE INDEX IF NOT EXISTS idx_batch_day_instance_frozen
     WHERE frozen = true;
 
 COMMENT ON COLUMN batch.batch_day_instance.frozen IS
-    'Manual governance freeze flag. Frozen batch days are skipped by cutoff/settle schedulers until released/reopened/closed.';
+    '人工治理冻结标记；批量日冻结期间，cutoff 和 settle 调度器会跳过该日，直至解冻、重新打开或关闭。';
 COMMENT ON COLUMN batch.batch_day_instance.operation_reason IS
-    'Latest manual governance reason code or free-form reason.';
+    '最近一次人工治理操作的原因码或自由文本原因。';
 COMMENT ON COLUMN batch.batch_day_instance.operated_by IS
-    'Latest manual governance operator id.';
+    '最近一次人工治理操作的操作者 ID。';
 COMMENT ON COLUMN batch.batch_day_instance.operated_at IS
-    'Latest manual governance operation timestamp.';
+    '最近一次人工治理操作的时间。';

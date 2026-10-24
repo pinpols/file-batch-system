@@ -272,8 +272,9 @@ impl DispatchMessage {
     /// on), carrying through the `partitionInvocationId` so the real adapter can
     /// include it in claim/renew/report.
     fn to_record(&self) -> TaskRecord {
+        let task_id_text = self.task_id_str();
         TaskRecord::new(
-            &self.task_id_str(),
+            &task_id_text,
             &self.tenant_id,
             &self.task_type,
             self.schema_version.as_deref(),
@@ -527,11 +528,12 @@ impl<H: MessageHandler> KafkaTaskConsumer<H> {
                 // advance PAST — and thus silently skip — the withheld record. Below
                 // the ceiling, advance normally by the record's OWN offset (never
                 // clamped to ceiling-1, which would drop unprocessed records).
-                if commit_blocked_by_withheld(self.withheld_ceilings.get(&key).copied(), offset) {
+                let withheld_ceiling = self.withheld_ceilings.get(&key).copied();
+                if commit_blocked_by_withheld(withheld_ceiling, offset) {
                     log::warn!(
                         "kafka commit withheld: {topic}[{partition}]@{offset} at/above \
                          partition ceiling {:?} → not committed (redelivered later)",
-                        self.withheld_ceilings.get(&key)
+                        withheld_ceiling
                     );
                 } else {
                     let mut tpl = TopicPartitionList::new();

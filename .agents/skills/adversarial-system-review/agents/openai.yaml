@@ -1,0 +1,3 @@
+interface:
+  display_name: "对抗式系统审查"
+  short_description: "从信任边界构造可验证的攻击与故障路径，审查系统安全性和韧性缺口"

@@ -44,17 +44,24 @@ public record ConsoleAlertTrendResponse(
     if (view == null) {
       return null;
     }
+    List<SeverityCountEntry> severityEntries =
+        view.bySeverity().stream().map(SeverityCountEntry::from).toList();
+    List<DaySeverityCountEntry> dailyTrendEntries =
+        view.dailyTrend().stream().map(DaySeverityCountEntry::from).toList();
     return new ConsoleAlertTrendResponse(
-        view.bySeverity().stream().map(SeverityCountEntry::from).toList(),
-        view.dailyTrend().stream().map(DaySeverityCountEntry::from).toList());
+        severityEntries, dailyTrendEntries);
   }
 
   public static ConsoleAlertTrendResponse from(Map<String, Object> row) {
     if (row == null) {
       return null;
     }
-    return new ConsoleAlertTrendResponse(
-        mapList(row, "bySeverity").stream().map(SeverityCountEntry::from).toList(),
-        mapList(row, "dailyTrend").stream().map(DaySeverityCountEntry::from).toList());
+    List<Map<String, Object>> severityRows = mapList(row, "bySeverity");
+    List<SeverityCountEntry> severityEntries =
+        severityRows.stream().map(SeverityCountEntry::from).toList();
+    List<Map<String, Object>> dailyTrendRows = mapList(row, "dailyTrend");
+    List<DaySeverityCountEntry> dailyTrendEntries =
+        dailyTrendRows.stream().map(DaySeverityCountEntry::from).toList();
+    return new ConsoleAlertTrendResponse(severityEntries, dailyTrendEntries);
   }
 }

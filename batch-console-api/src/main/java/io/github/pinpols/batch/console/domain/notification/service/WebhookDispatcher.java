@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogMarkRetryFailureParam;
+
+
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
@@ -20,9 +23,12 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
+import java.util.stream.Stream;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
@@ -34,6 +40,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.Call;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -191,19 +198,22 @@ public class WebhookDispatcher {
     if (subscriptions == null || subscriptions.isEmpty()) {
       return List.of();
     }
+    String normalizedEventType = normalizeEventType(eventType);
+    Instant payloadEmittedAt = EmptyChecks.isNull(emittedAt) ? BatchDateTimeSupport.utcNow() : emittedAt;
     WebhookEventPayload payload = new WebhookEventPayload(
         tenantId,
-        normalizeEventType(eventType),
+        normalizedEventType,
         stream,
         cursor,
-        emittedAt == null ? BatchDateTimeSupport.utcNow() : emittedAt,
+        payloadEmittedAt,
         data);
     String payloadJson = JsonUtils.toJson(payload);
     List<PendingWebhookDelivery> pendingDeliveries = new ArrayList<>();
     for (WebhookSubscriptionEntity subscription : subscriptions) {
-      if (subscription == null
+      boolean subscriptionCannotReceiveEvent = subscription == null
           || subscription.getId() == null
-          || !matches(subscription.getEventTypes(), payload.eventType())) {
+          || !matches(subscription.getEventTypes(), payload.eventType());
+      if (subscriptionCannotReceiveEvent) {
         continue;
       }
       WebhookDeliveryLogInsertParam deliveryLogParam = WebhookDeliveryLogInsertParam.builder()
@@ -238,12 +248,15 @@ public class WebhookDispatcher {
         sleep(backoffMillis);
         backoffMillis *= 2;
       } else {
+        ConsoleWebhookDeliveryLogMarkRetryFailureParam consoleWebhookDeliveryLogMarkRetryFailureParam = ConsoleWebhookDeliveryLogMarkRetryFailureParam.builder()
+            .id(pending.deliveryLogId())
+            .attempt(attempt)
+            .httpStatus(result.httpStatus())
+            .responseBody(result.errorSummary())
+            .nextRetryAt(BatchDateTimeSupport.utcNow().plusSeconds(INITIAL_RELAY_DELAY_SECONDS))
+            .build();
         deliveryLogRepository.markRetryFailure(
-            pending.deliveryLogId(),
-            attempt,
-            result.httpStatus(),
-            result.errorSummary(),
-            BatchDateTimeSupport.utcNow().plusSeconds(INITIAL_RELAY_DELAY_SECONDS));
+            consoleWebhookDeliveryLogMarkRetryFailureParam);
       }
     }
   }
@@ -263,10 +276,13 @@ public class WebhookDispatcher {
       SwallowedExceptionLogger.info(
           WebhookDispatcher.class, "catch:WebhookHttpStatusException", ex);
 
-      return WebhookDeliveryResult.failure(ex.status(), sanitize(ex.responseBody()));
+      int responseStatus = ex.status();
+      String sanitizedResponseBody = sanitize(ex.responseBody());
+      return WebhookDeliveryResult.failure(responseStatus, sanitizedResponseBody);
     } catch (Exception ex) {
       // 含 SsrfGuardedDns 抛出的 BlockedAddressException(rebinding 到内网被拦):投递失败,不建连。
-      return WebhookDeliveryResult.failure(null, sanitize(ex.getMessage()));
+      String sanitizedFailureMessage = sanitize(ex.getMessage());
+      return WebhookDeliveryResult.failure(null, sanitizedFailureMessage);
     }
   }
 
@@ -274,7 +290,8 @@ public class WebhookDispatcher {
       WebhookSubscriptionEntity subscription, WebhookEventPayload payload, String payloadJson)
       throws IOException {
     // SSRF 防护：主机名由 OkHttp DNS guard 校验并固定连接 IP；此处额外校验字面量 IP，避免绕过 DNS 回调。
-    String host = URI.create(subscription.getCallbackUrl()).getHost();
+    URI callbackUri = URI.create(subscription.getCallbackUrl());
+    String host = callbackUri.getHost();
     if (host != null) {
       DnsResolveGuard.resolveAndValidate(host);
     }
@@ -284,10 +301,25 @@ public class WebhookDispatcher {
         .header("X-Batch-Event-Type", payload.eventType())
         .header("X-Batch-Event-Stream", payload.stream() == null ? "" : payload.stream())
         .post(RequestBody.create(payloadJson, JSON));
-    if (subscription.getSecret() != null && !subscription.getSecret().isBlank()) {
-      builder = builder.header("X-Batch-Signature", sign(payloadJson, subscription.getSecret()));
+    boolean terminalBusinessEvent = ("workflow-runs".equals(payload.stream())
+            && ("WORKFLOW_SUCCESS".equals(payload.eventType())
+                || "WORKFLOW_FAILED".equals(payload.eventType())))
+        || ("job-instances".equals(payload.stream())
+            && ("JOB_SUCCESS".equals(payload.eventType())
+                || "JOB_FAILED".equals(payload.eventType())));
+    if (terminalBusinessEvent && EmptyChecks.isNotBlank(payload.cursor())) {
+      Base64.Encoder idempotencyKeyEncoder = Base64.getUrlEncoder().withoutPadding();
+      byte[] cursorBytes = payload.cursor().getBytes(StandardCharsets.UTF_8);
+      String idempotencyKey = idempotencyKeyEncoder.encodeToString(cursorBytes);
+      builder = builder.header("Idempotency-Key", idempotencyKey);
     }
-    try (Response response = httpClient.newCall(builder.build()).execute()) {
+    if (subscription.getSecret() != null && !subscription.getSecret().isBlank()) {
+      String signature = sign(payloadJson, subscription.getSecret());
+      builder = builder.header("X-Batch-Signature", signature);
+    }
+    Request request = builder.build();
+    Call call = httpClient.newCall(request);
+    try (Response response = call.execute()) {
       if (!response.isSuccessful()) {
         String body = readBoundedErrorBody(response.body());
         throw new WebhookHttpStatusException(response.code(), body);
@@ -322,23 +354,32 @@ public class WebhookDispatcher {
     if ("*".equals(configuredEventTypes.trim())) {
       return true;
     }
-    return Arrays.stream(configuredEventTypes.split(","))
-        .map(String::trim)
-        .filter(value -> !value.isBlank())
-        .map(value -> value.toUpperCase(Locale.ROOT))
-        .anyMatch(value -> value.equals(eventType));
+    Stream<String> configuredEventTypeTokens =
+        Arrays.stream(configuredEventTypes.split(","));
+    Stream<String> trimmedEventTypes = configuredEventTypeTokens.map(String::trim);
+    Stream<String> nonBlankEventTypes = trimmedEventTypes.filter(value -> !EmptyChecks.isBlank(Objects.requireNonNull(value)));
+    Stream<String> normalizedEventTypes =
+        nonBlankEventTypes.map(value -> value.toUpperCase(Locale.ROOT));
+    return normalizedEventTypes.anyMatch(value -> value.equals(eventType));
   }
 
   private String normalizeEventType(String eventType) {
-    return eventType == null ? "UNKNOWN" : eventType.trim().toUpperCase(Locale.ROOT);
+    if (EmptyChecks.isNull(eventType)) {
+      return "UNKNOWN";
+    }
+    String trimmedEventType = eventType.trim();
+    return trimmedEventType.toUpperCase(Locale.ROOT);
   }
 
   private String sign(String payloadJson, String secret) {
     try {
       Mac mac = Mac.getInstance(CryptoAlgorithms.HMAC_SHA256);
-      mac.init(
-          new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), CryptoAlgorithms.HMAC_SHA256));
-      byte[] digest = mac.doFinal(payloadJson.getBytes(StandardCharsets.UTF_8));
+      byte[] secretBytes = secret.getBytes(StandardCharsets.UTF_8);
+      SecretKeySpec signingKey =
+          new SecretKeySpec(secretBytes, CryptoAlgorithms.HMAC_SHA256);
+      mac.init(signingKey);
+      byte[] payloadBytes = payloadJson.getBytes(StandardCharsets.UTF_8);
+      byte[] digest = mac.doFinal(payloadBytes);
       return "sha256=" + HexFormat.of().formatHex(digest);
     } catch (Exception ex) {
       throw new IllegalStateException("failed to sign webhook payload", ex);

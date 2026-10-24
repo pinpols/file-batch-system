@@ -1,0 +1,741 @@
+-- ============================================================================
+
+\if :{?mockserver_base_url}
+\else
+\set mockserver_base_url 'http://localhost:11080'
+\endif
+-- sim-e2e-bootstrap.sql
+--
+-- A4 fixture 工程化产物:把 sim-e2e (2026-05-29) 第 1+2 波 P0-P3 验证收尾
+-- 累计的手术 SQL 收成幂等一键脚本。导入 ta/tb/tc fixture xlsx 后,运行一次
+-- 即可让 ta/tb/tc 业务跑通 reconciler / scheduler / state-machine 路径。
+--
+-- 用法:
+--   docker exec -i batch-postgres-primary \
+--     psql -U batch -d batch -v ON_ERROR_STOP=1 \
+--     -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql
+--
+-- 幂等性:所有 INSERT 走 ON CONFLICT DO UPDATE;所有 UPDATE 用 WHERE 收敛到
+-- 仅 ta/tb/tc 三租户。允许重复执行,二次运行不报错、不重复改。
+--
+-- 涵盖的修正(对齐 docs/verifications/sim-e2e-2026-05-29.md §7 + §11):
+--   1.  batch.tenant 补 ta/tb/tc ACTIVE 行(reconciler/scheduler 依赖)
+--   2.  job_definition.execution_mode = 'FULL' 全置位
+--   3.  IMPORT pipeline 补齐 5-step:RECEIVE/PREPROCESS/PARSE/VALIDATE/LOAD
+--       (修复 file_state RECEIVED -> PARSED 状态机禁止跳过 PREPROCESS)
+--   4.  EXPORT pipeline 补齐 5-step:PREPARE/GENERATE/STORE/REGISTER/COMPLETE
+--       (修复 tb 只有 GENERATE 一步导致 OutboundFile 卡 GENERATED 状态)
+--       (IMPORT/EXPORT/DISPATCH 保持 SCREAMING_SNAKE,仅 PROCESS 用 camelCase sqlTransformCompute)
+--   6.  file_channel_config.config_json SFTP key 命名统一 sftp_*
+--   7.  file_template_config:
+--         IMPORT TPL  -> query_param_schema 注入 jdbcMappedImport spec
+--         EXPORT TPL  -> default_query_sql 带 :tenantId AND :batchNo
+--                     -> query_param_schema 注入 sqlTemplateExport.cursorColumn
+--       sqlTemplateExport spec 模板(为空 {} 才补,已设置的不动)
+-- ============================================================================
+
+\set ON_ERROR_STOP on
+BEGIN;
+
+
+-- ----------------------------------------------------------------------------
+-- 0. tenant_id 集合(只对这三个租户作用)
+-- ----------------------------------------------------------------------------
+-- 注意:这里直接展开是为了让所有后续语句独立可读、可单独 copy 调试,而不是
+-- 临时表;所有 WHERE 子句都显式列租户白名单。
+
+-- ----------------------------------------------------------------------------
+-- 1. batch.tenant 上有 ta / tb / tc 三行 ACTIVE,reconciler & quartz 才挑得到
+-- ----------------------------------------------------------------------------
+INSERT INTO batch.tenant (tenant_id, tenant_name, status, description, created_by)
+VALUES
+    ('ta', 'ta', 'ACTIVE', 'sim-e2e bootstrap (A4 fixture engineering)', 'sim-e2e'),
+    ('tb', 'tb', 'ACTIVE', 'sim-e2e bootstrap (A4 fixture engineering)', 'sim-e2e'),
+    ('tc', 'tc', 'ACTIVE', 'sim-e2e bootstrap (A4 fixture engineering)', 'sim-e2e')
+ON CONFLICT (tenant_id) DO UPDATE
+SET status      = 'ACTIVE',
+    description = COALESCE(batch.tenant.description, EXCLUDED.description),
+    updated_at  = CURRENT_TIMESTAMP;
+
+
+-- ----------------------------------------------------------------------------
+-- 2. job_definition.execution_mode = 'FULL'(V73 默认应是 FULL,但旧数据可能空)
+-- ----------------------------------------------------------------------------
+UPDATE batch.job_definition
+SET execution_mode = 'FULL',
+    updated_at     = CURRENT_TIMESTAMP
+WHERE tenant_id IN ('ta','tb','tc')
+  AND (execution_mode IS NULL OR execution_mode <> 'FULL');
+
+
+-- ----------------------------------------------------------------------------
+-- 6. SFTP 直接使用当前配置包的规范字段，不在启动时转换旧 key。
+--    三通道字段和当前环境路由由 prepare-sftp-probe-fixtures.sql 原子校验/准备。
+-- ----------------------------------------------------------------------------
+
+-- ----------------------------------------------------------------------------
+-- 7a. IMPORT file_template_config.query_param_schema 注入 jdbcMappedImport spec
+--      (只在 schema 为空 {} 时设;已有自定义不动)
+-- ----------------------------------------------------------------------------
+UPDATE batch.file_template_config
+SET query_param_schema = jsonb_build_object(
+        'spec', 'jdbcMappedImport',
+        'version', '1',
+        'params', jsonb_build_object(
+            'tenantId',  jsonb_build_object('type','string','required', true),
+            'batchNo',   jsonb_build_object('type','string','required', true),
+            'batchDate', jsonb_build_object('type','date','required', true)
+        )
+    ),
+    updated_at = CURRENT_TIMESTAMP
+WHERE tenant_id IN ('ta','tb','tc')
+  AND template_type = 'IMPORT'
+  AND (query_param_schema IS NULL OR query_param_schema = '{}'::jsonb);
+
+
+-- ----------------------------------------------------------------------------
+-- 7b. EXPORT file_template_config.default_query_sql + query_param_schema
+--      默认 SQL 必须带 :tenantId AND :batchNo IS NOT NULL,防止 export 拉全表;
+--      query_param_schema 注入 sqlTemplateExport.cursorColumn。
+--      禁止通用兜底生成 SELECT *；具体 EXPORT 模板必须在后续专用块显式列清单。
+-- ----------------------------------------------------------------------------
+UPDATE batch.file_template_config
+SET default_query_sql = COALESCE(NULLIF(default_query_sql, ''),
+        '')
+WHERE FALSE;
+ -- no-op,占位让 diff 更清晰
+
+UPDATE batch.file_template_config
+SET updated_at = updated_at
+WHERE FALSE;
+ -- historical SELECT * fallback removed; explicit template blocks below own runtime SQL.
+
+UPDATE batch.file_template_config
+SET query_param_schema = jsonb_build_object(
+        'spec', 'sqlTemplateExport',
+        'version', '1',
+        'cursorColumn', 'id',
+        'params', jsonb_build_object(
+            'tenantId', jsonb_build_object('type','string','required', true),
+            'batchNo',  jsonb_build_object('type','string','required', true)
+        )
+    ),
+    updated_at = CURRENT_TIMESTAMP
+WHERE tenant_id IN ('ta','tb','tc')
+  AND template_type = 'EXPORT'
+  AND (query_param_schema IS NULL OR query_param_schema = '{}'::jsonb);
+
+
+-- ----------------------------------------------------------------------------
+-- 9. 2026-06-08 runtime config refresh:让 11-sheet Excel 包可被当前 worker 真正执行。
+--    早期 fixture 只放占位 spec / demo SQL；当前 worker 需要：
+--      * IMPORT: query_param_schema.jdbcMappedImport + load_target_ref='jdbc_mapped'
+--      * EXPORT: export_data_ref='sql_template_export' + SELECT 列含 id + :batchNo 引用
+--      * DISPATCH:标准本地运行栈通过宿主机映射端口访问 MockServer
+-- ----------------------------------------------------------------------------
+UPDATE batch.file_template_config
+SET query_param_schema = '{
+      "jdbcMappedImport": {
+        "schema": "biz",
+        "table": "customer_account",
+        "tenantColumn": "tenant_id",
+        "columnMappings": [
+          {"from": "customer_no", "to": "customer_no"},
+          {"from": "customer_name", "to": "customer_name"},
+          {"from": "customer_type", "to": "customer_type"},
+          {"from": "certificate_no", "to": "certificate_no"},
+          {"from": "mobile_no", "to": "mobile_no"},
+          {"from": "email", "to": "email"},
+          {"from": "status", "to": "status"}
+        ],
+        "conflictColumns": ["tenant_id", "customer_no"],
+        "systemBindings": {
+          "source_file_name": "${sourceFileName}",
+          "source_batch_no": "${batchNo}",
+          "source_trace_id": "${traceId}",
+          "created_by": "${workerId}",
+          "updated_by": "${workerId}"
+        }
+      }
+    }'::jsonb,
+    load_target_ref = 'jdbc_mapped',
+    updated_at = CURRENT_TIMESTAMP
+WHERE tenant_id = 'ta'
+  AND template_code IN ('ta_import_customer_tpl','ta_import_order_tpl');
+
+
+UPDATE batch.file_template_config
+SET query_param_schema = '{
+      "jdbcMappedImport": {
+        "schema": "biz",
+        "table": "transaction",
+        "tenantColumn": "tenant_id",
+        "columnMappings": [
+          {"from": "txn_no", "to": "txn_no"},
+          {"from": "account_no", "to": "account_no"},
+          {"from": "txn_type", "to": "txn_type"},
+          {"from": "amount", "to": "amount", "type": "NUMERIC"},
+          {"from": "currency_code", "to": "currency_code"},
+          {"from": "txn_date", "to": "txn_date", "type": "DATE"},
+          {"from": "remark", "to": "remark"}
+        ],
+        "conflictColumns": ["tenant_id", "txn_no", "txn_date"]
+      }
+    }'::jsonb,
+    load_target_ref = 'jdbc_mapped',
+    updated_at = CURRENT_TIMESTAMP
+WHERE tenant_id = 'tb'
+  AND template_code = 'tb_import_transaction_tpl';
+
+
+UPDATE batch.file_template_config
+SET query_param_schema = '{
+      "jdbcMappedImport": {
+        "schema": "biz",
+        "table": "risk_score",
+        "tenantColumn": "tenant_id",
+        "columnMappings": [
+          {"from": "entity_id", "to": "entity_id"},
+          {"from": "entity_type", "to": "entity_type"},
+          {"from": "score_value", "to": "score_value", "type": "NUMERIC"},
+          {"from": "score_band", "to": "score_band"},
+          {"from": "score_date", "to": "score_date", "type": "DATE"}
+        ],
+        "conflictColumns": ["tenant_id", "entity_id", "score_date"]
+      }
+    }'::jsonb,
+    load_target_ref = 'jdbc_mapped',
+    updated_at = CURRENT_TIMESTAMP
+WHERE tenant_id = 'tc'
+  AND template_code = 'tc_import_risk_score_tpl';
+
+
+-- 旧 Excel/seed 可能把规则写成数组、把默认日历写成连字符；当前配置码
+-- 统一使用小写下划线，基础租户也必须与克隆租户一致。
+UPDATE batch.file_template_config t
+SET validation_rule_set = jsonb_build_object(
+      'fieldRules', COALESCE(
+        (SELECT jsonb_object_agg(m->>'name', jsonb_build_object(
+            'required', true, 'errorCode', 'IMPORT_VALIDATE_REQUIRED'))
+           FROM jsonb_array_elements(t.field_mappings) AS m
+          WHERE COALESCE((m->>'required')::boolean, false)),
+        '{}'::jsonb)),
+    updated_at = CURRENT_TIMESTAMP
+WHERE t.tenant_id IN ('ta', 'tb', 'tc')
+  AND jsonb_typeof(t.field_mappings) = 'array'
+  AND jsonb_typeof(t.validation_rule_set) = 'array';
+
+
+UPDATE batch.job_definition
+SET calendar_code = 'default_calendar',
+    updated_at = CURRENT_TIMESTAMP
+WHERE tenant_id IN ('ta', 'tb', 'tc')
+  AND calendar_code = 'default-calendar';
+
+
+UPDATE batch.file_template_config
+SET default_query_sql = 'SELECT id, tenant_id, customer_no, customer_name, customer_type, certificate_no, mobile_no, email, status FROM biz.customer_account WHERE tenant_id = :tenantId AND CAST(:batchNo AS text) IS NOT NULL',
+    query_param_schema = '{"export_data_ref":"sql_template_export","sqlTemplateExport":{"cursorColumn":"id"}}'::jsonb,
+    export_data_ref = 'sql_template_export',
+    updated_at = CURRENT_TIMESTAMP
+WHERE tenant_id = 'ta'
+  AND template_code = 'ta_export_report_tpl';
+
+
+UPDATE batch.file_template_config
+SET default_query_sql = 'SELECT id, tenant_id, customer_no, customer_name, customer_type, certificate_no, mobile_no, email, status FROM biz.customer_account WHERE tenant_id = :tenantId AND CAST(:batchNo AS text) IS NOT NULL',
+    query_param_schema = '{"export_data_ref":"sql_template_export","sqlTemplateExport":{"cursorColumn":"id"}}'::jsonb,
+    export_data_ref = 'sql_template_export',
+    updated_at = CURRENT_TIMESTAMP
+WHERE tenant_id = 'ta'
+  AND template_code = 'TA_EXPORT_REPORT_TPL';
+
+
+UPDATE batch.file_template_config
+SET default_query_sql = 'SELECT id, tenant_id, txn_no, account_no, txn_type, amount, currency_code, txn_date, remark FROM biz.transaction WHERE tenant_id = :tenantId AND CAST(:batchNo AS text) IS NOT NULL',
+    query_param_schema = '{"export_data_ref":"sql_template_export","sqlTemplateExport":{"cursorColumn":"id"}}'::jsonb,
+    export_data_ref = 'sql_template_export',
+    updated_at = CURRENT_TIMESTAMP
+WHERE tenant_id = 'tb'
+  AND template_code = 'tb_export_statement_tpl';
+
+
+UPDATE batch.file_template_config
+SET default_query_sql = 'SELECT id, tenant_id, entity_id, entity_type, score_value, score_band, score_date FROM biz.risk_score WHERE tenant_id = :tenantId AND CAST(:batchNo AS text) IS NOT NULL',
+    query_param_schema = '{"export_data_ref":"sql_template_export","sqlTemplateExport":{"cursorColumn":"id"}}'::jsonb,
+    export_data_ref = 'sql_template_export',
+    updated_at = CURRENT_TIMESTAMP
+WHERE tenant_id = 'tc'
+  AND template_code = 'tc_export_risk_alert_tpl';
+
+
+UPDATE batch.job_definition
+SET default_params = m.params,
+    updated_at = CURRENT_TIMESTAMP
+FROM (
+    VALUES
+      ('ta', 'TA_IMPORT_CUSTOMER',
+        jsonb_build_object(
+          'templateCode', 'ta_import_customer_tpl',
+          'content', 'customer_no,customer_name,customer_type,certificate_no,mobile_no,email,status' || E'\n'
+                     || 'WF-CUST-000001,工作流客户1,PERSONAL,WFID000001,13900000001,wf1@sim.com,ACTIVE' || E'\n')),
+      ('ta', 'TA_IMPORT_ORDER',
+        jsonb_build_object(
+          'templateCode', 'ta_import_order_tpl',
+          'content', 'customer_no,customer_name,customer_type,certificate_no,mobile_no,email,status' || E'\n'
+                     || 'WF-ORDER-000001,工作流订单客户1,PERSONAL,WFOD000001,13900000002,wfo1@sim.com,ACTIVE' || E'\n')),
+      ('ta', 'TA_EXPORT_REPORT', jsonb_build_object('templateCode', 'ta_export_report_tpl')),
+      ('tb', 'TB_IMPORT_TRANSACTION',
+        jsonb_build_object(
+          'templateCode', 'tb_import_transaction_tpl',
+          'content', 'txn_no,account_no,txn_type,amount,currency_code,txn_date,remark' || E'\n'
+                     || 'WF-TB-TXN-000001,WFACC000001,DEPOSIT,101.00,CNY,2026-06-08,wf-default' || E'\n')),
+      ('tb', 'TB_EXPORT_STATEMENT', jsonb_build_object('templateCode', 'tb_export_statement_tpl')),
+      ('tc', 'TC_IMPORT_RISK_SCORE',
+        jsonb_build_object(
+          'templateCode', 'tc_import_risk_score_tpl',
+          'content', 'entity_id,entity_type,score_value,score_band,score_date' || E'\n'
+                     || 'WF-ENT-000001,ACCOUNT,701,MEDIUM,2026-06-08' || E'\n')),
+      ('tc', 'TC_EXPORT_RISK_ALERT', jsonb_build_object('templateCode', 'tc_export_risk_alert_tpl'))
+) AS m(tenant_id, job_code, params)
+WHERE batch.job_definition.tenant_id = m.tenant_id
+  AND batch.job_definition.job_code = m.job_code;
+
+
+-- 手动启动的 Job 没有预期触发记录可供守护。保留有效监控策略，使
+-- 租户复制/应用流程能够复现这些夹具，且不依赖不支持的启动宽限期。
+UPDATE batch.job_monitoring_policy AS policy
+SET start_grace_seconds = 0,
+    updated_at = CURRENT_TIMESTAMP
+FROM batch.job_definition AS definition
+WHERE definition.id = policy.job_definition_id
+  AND definition.tenant_id IN ('ta', 'tb', 'tc')
+  AND definition.schedule_type = 'MANUAL'
+  AND NULLIF(BTRIM(definition.depends_on_job_code), '') IS NULL
+  AND policy.start_grace_seconds > 0;
+
+
+UPDATE batch.workflow_node AS wn
+SET node_params = m.params,
+    updated_at = CURRENT_TIMESTAMP
+FROM batch.workflow_definition wd,
+     (VALUES
+       ('NODE_EXPORT',
+        jsonb_build_object('templateCode', 'tc_export_risk_alert_tpl')),
+       ('NODE_DISPATCH',
+        jsonb_build_object(
+          'fileId', '$.nodes.NODE_EXPORT.output.fileId',
+          'channelCode', 'tc_api_risk_push'))
+     ) AS m(node_code, params)
+WHERE wd.id = wn.workflow_definition_id
+  AND wd.tenant_id = 'tc'
+  AND wd.workflow_code = 'TC_WF_RISK_PIPELINE'
+  AND wn.node_code = m.node_code;
+
+
+UPDATE batch.workflow_node AS wn
+SET node_params = m.params,
+    updated_at = CURRENT_TIMESTAMP
+FROM batch.workflow_definition wd,
+     (VALUES
+       ('BRANCH_B',
+        jsonb_build_object(
+          'branch', 'B',
+          'templateCode', 'tc_export_risk_alert_tpl')),
+       ('BRANCH_C',
+        jsonb_build_object(
+          'branch', 'C',
+          'fileId', '$.nodes.BRANCH_B.output.fileId',
+          'channelCode', 'tc_api_risk_push')),
+       ('FALLBACK',
+        jsonb_build_object(
+          'branch', 'fallback',
+          'fileId', '$.nodes.BRANCH_B.output.fileId',
+          'channelCode', 'tc_api_risk_push'))
+     ) AS m(node_code, params)
+WHERE wd.id = wn.workflow_definition_id
+  AND wd.tenant_id = 'tc'
+  AND wd.workflow_code IN ('TC_WF_GATEWAY_ALL', 'TC_WF_GATEWAY_N_OF')
+  AND wn.node_code = m.node_code;
+
+
+DELETE FROM batch.workflow_edge e
+USING batch.workflow_definition wd
+WHERE wd.id = e.workflow_definition_id
+  AND wd.tenant_id = 'tc'
+  AND wd.workflow_code IN ('TC_WF_GATEWAY_ALL', 'TC_WF_GATEWAY_N_OF')
+  AND e.from_node_code = 'FORK'
+  AND e.to_node_code = 'BRANCH_C';
+
+
+INSERT INTO batch.workflow_edge (
+    workflow_definition_id, from_node_code, to_node_code, edge_type,
+    condition_expr, enabled, created_at, updated_at, tenant_id
+)
+SELECT wd.id, 'BRANCH_B', 'BRANCH_C', 'SUCCESS',
+       NULL, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, wd.tenant_id
+FROM batch.workflow_definition wd
+WHERE wd.tenant_id = 'tc'
+  AND wd.workflow_code IN ('TC_WF_GATEWAY_ALL', 'TC_WF_GATEWAY_N_OF')
+  AND NOT EXISTS (
+      SELECT 1
+      FROM batch.workflow_edge e
+      WHERE e.workflow_definition_id = wd.id
+        AND e.from_node_code = 'BRANCH_B'
+        AND e.to_node_code = 'BRANCH_C'
+  );
+
+
+UPDATE batch.file_channel_config
+SET target_endpoint = m.endpoint,
+    config_json = (coalesce(config_json, '{}'::jsonb) - 'url' - 'method' - 'tokenHeader')
+        || jsonb_build_object(
+             'target_endpoint', m.endpoint,
+             'api_push_api_key', 'sim-api-key',
+             'authorization', 'Bearer sim-token'
+           ),
+    updated_at = CURRENT_TIMESTAMP
+FROM (
+    VALUES
+      ('tb', 'tb_api_push',      :'mockserver_base_url' || '/tb/callback'),
+      ('tb', 'tb_api_ingest',    :'mockserver_base_url' || '/tb/ingest'),
+      ('tc', 'tc_api_risk_push', :'mockserver_base_url' || '/tc/ingest')
+) AS m(tenant_id, channel_code, endpoint)
+WHERE batch.file_channel_config.tenant_id = m.tenant_id
+  AND batch.file_channel_config.channel_code = m.channel_code;
+
+
+-- ----------------------------------------------------------------------------
+-- 10. Stage 2 import 业务分支:补 XML / FIXED_WIDTH 可触发系统级模板与 job。
+--     这些 job 不进入 11-sheet fixture,由 bootstrap 幂等补齐,用于本地业务矩阵验证。
+-- ----------------------------------------------------------------------------
+INSERT INTO batch.file_template_config (
+    tenant_id, template_code, template_name, template_type, biz_type,
+    file_format_type, charset, target_charset, with_bom, line_separator,
+    delimiter, quote_char, escape_char, record_length, header_rows, footer_rows,
+    header_template, trailer_template, checksum_type, compress_type, encrypt_type,
+    naming_rule, field_mappings, validation_rule_set, query_param_schema,
+    streaming_enabled, page_size, fetch_size, chunk_size, enabled, version,
+    description, created_by, updated_by, preprocess_pipeline,
+    preview_masking_enabled, error_line_masking_enabled, log_masking_enabled,
+    content_encryption_enabled, download_requires_approval, load_target_ref, is_deleted
+)
+VALUES
+  ('ta', 'TA_IMPORT_CUSTOMER_XML_TPL', '客户 XML 导入模板', 'IMPORT', 'CUSTOMER_XML',
+   'XML', 'UTF-8', 'UTF-8', false, E'\n',
+   null, null, null, 0, 0, 0,
+   '{}'::jsonb, '{}'::jsonb, 'NONE', 'NONE', 'NONE',
+   'ta_import_customer_xml_${batchDate}.xml',
+   '[]'::jsonb,
+   jsonb_build_object(
+     'nullCheck', jsonb_build_object('enabled', true, 'fields',
+       jsonb_build_array('customer_no', 'customer_name', 'status')),
+     'fieldRules', jsonb_build_object('status',
+       jsonb_build_object('allowedValues', jsonb_build_array('ACTIVE', 'INACTIVE')))),
+   jsonb_build_object(
+     'parseHints', jsonb_build_object('xmlRecordElement', 'customer'),
+     'jdbcMappedImport', jsonb_build_object(
+       'schema', 'biz',
+       'table', 'customer_account',
+       'tenantColumn', 'tenant_id',
+       'columnMappings', jsonb_build_array(
+         jsonb_build_object('from', 'customer_no', 'to', 'customer_no'),
+         jsonb_build_object('from', 'customer_name', 'to', 'customer_name'),
+         jsonb_build_object('from', 'customer_type', 'to', 'customer_type'),
+         jsonb_build_object('from', 'certificate_no', 'to', 'certificate_no'),
+         jsonb_build_object('from', 'mobile_no', 'to', 'mobile_no'),
+         jsonb_build_object('from', 'email', 'to', 'email'),
+         jsonb_build_object('from', 'status', 'to', 'status')),
+       'conflictColumns', jsonb_build_array('tenant_id', 'customer_no'),
+       'systemBindings', jsonb_build_object(
+         'source_file_name', '${sourceFileName}',
+         'source_batch_no', '${batchNo}',
+         'source_trace_id', '${traceId}',
+         'created_by', '${workerId}',
+         'updated_by', '${workerId}'))),
+   true, 1000, 1000, 500, true, 1,
+   'Stage 2 XML import system scenario', 'sim-e2e', 'sim-e2e', null,
+   false, false, true, false, false, 'jdbc_mapped', false),
+  ('ta', 'TA_IMPORT_CUSTOMER_FIXED_TPL', '客户 FIXED_WIDTH 导入模板', 'IMPORT', 'CUSTOMER_FIXED',
+   'FIXED_WIDTH', 'UTF-8', 'UTF-8', false, E'\n',
+   null, null, null, 86, 0, 0,
+   '{}'::jsonb, '{}'::jsonb, 'NONE', 'NONE', 'NONE',
+   'ta_import_customer_fixed_${batchDate}.txt',
+   jsonb_build_array(
+     jsonb_build_object('target', 'customer_no', 'start', 0, 'length', 12),
+     jsonb_build_object('target', 'customer_name', 'start', 12, 'length', 20),
+     jsonb_build_object('target', 'customer_type', 'start', 32, 'length', 10),
+     jsonb_build_object('target', 'certificate_no', 'start', 42, 'length', 16),
+     jsonb_build_object('target', 'mobile_no', 'start', 58, 'length', 12),
+     jsonb_build_object('target', 'email', 'start', 70, 'length', 8),
+     jsonb_build_object('target', 'status', 'start', 78, 'length', 8)),
+   jsonb_build_object(
+     'nullCheck', jsonb_build_object('enabled', true, 'fields',
+       jsonb_build_array('customer_no', 'customer_name', 'status')),
+     'fieldRules', jsonb_build_object('status',
+       jsonb_build_object('allowedValues', jsonb_build_array('ACTIVE', 'INACTIVE')))),
+   jsonb_build_object(
+     'jdbcMappedImport', jsonb_build_object(
+       'schema', 'biz',
+       'table', 'customer_account',
+       'tenantColumn', 'tenant_id',
+       'columnMappings', jsonb_build_array(
+         jsonb_build_object('from', 'customer_no', 'to', 'customer_no'),
+         jsonb_build_object('from', 'customer_name', 'to', 'customer_name'),
+         jsonb_build_object('from', 'customer_type', 'to', 'customer_type'),
+         jsonb_build_object('from', 'certificate_no', 'to', 'certificate_no'),
+         jsonb_build_object('from', 'mobile_no', 'to', 'mobile_no'),
+         jsonb_build_object('from', 'email', 'to', 'email'),
+         jsonb_build_object('from', 'status', 'to', 'status')),
+       'conflictColumns', jsonb_build_array('tenant_id', 'customer_no'),
+       'systemBindings', jsonb_build_object(
+         'source_file_name', '${sourceFileName}',
+         'source_batch_no', '${batchNo}',
+         'source_trace_id', '${traceId}',
+         'created_by', '${workerId}',
+         'updated_by', '${workerId}'))),
+   true, 1000, 1000, 500, true, 1,
+   'Stage 2 fixed-width import system scenario', 'sim-e2e', 'sim-e2e', null,
+   false, false, true, false, false, 'jdbc_mapped', false)
+ON CONFLICT (tenant_id, template_code, version) DO UPDATE
+SET template_name = EXCLUDED.template_name,
+    biz_type = EXCLUDED.biz_type,
+    file_format_type = EXCLUDED.file_format_type,
+    charset = EXCLUDED.charset,
+    target_charset = EXCLUDED.target_charset,
+    line_separator = EXCLUDED.line_separator,
+    record_length = EXCLUDED.record_length,
+    header_rows = EXCLUDED.header_rows,
+    footer_rows = EXCLUDED.footer_rows,
+    naming_rule = EXCLUDED.naming_rule,
+    field_mappings = EXCLUDED.field_mappings,
+    validation_rule_set = EXCLUDED.validation_rule_set,
+    query_param_schema = EXCLUDED.query_param_schema,
+    chunk_size = EXCLUDED.chunk_size,
+    enabled = EXCLUDED.enabled,
+    description = EXCLUDED.description,
+    updated_by = EXCLUDED.updated_by,
+    updated_at = CURRENT_TIMESTAMP,
+    load_target_ref = EXCLUDED.load_target_ref,
+    is_deleted = false;
+
+
+INSERT INTO batch.job_definition (
+    tenant_id, job_code, job_name, job_type, biz_type, schedule_type, schedule_expr,
+    timezone, priority, queue_code, worker_group, calendar_code, window_code,
+    trigger_mode, dag_enabled, shard_strategy, retry_policy, retry_max_count,
+    timeout_seconds, execution_handler, param_schema, default_params, version,
+    enabled, description, created_by, updated_by, execution_mode,
+    previous_day_dependency_scope, retry_policy_by_class
+)
+SELECT src.tenant_id, m.job_code, m.job_name, src.job_type, m.biz_type,
+       'MANUAL', null, src.timezone, src.priority, src.queue_code, src.worker_group,
+       src.calendar_code, src.window_code, 'API', false, src.shard_strategy,
+       'NONE', 0, src.timeout_seconds, src.execution_handler,
+       src.param_schema, jsonb_build_object('templateCode', m.template_code),
+       1, true, m.description, 'sim-e2e', 'sim-e2e', 'FULL',
+       coalesce(src.previous_day_dependency_scope, 'INHERIT'), src.retry_policy_by_class
+FROM batch.job_definition src
+CROSS JOIN (
+    VALUES
+      ('TA_IMPORT_CUSTOMER_XML', '客户 XML 导入', 'CUSTOMER_XML',
+       'TA_IMPORT_CUSTOMER_XML_TPL', 'Stage 2 XML import system scenario'),
+      ('TA_IMPORT_CUSTOMER_FIXED', '客户 FIXED_WIDTH 导入', 'CUSTOMER_FIXED',
+       'TA_IMPORT_CUSTOMER_FIXED_TPL', 'Stage 2 fixed-width import system scenario')
+) AS m(job_code, job_name, biz_type, template_code, description)
+WHERE src.tenant_id = 'ta'
+  AND src.job_code = 'TA_IMPORT_CUSTOMER'
+ON CONFLICT (tenant_id, job_code) DO UPDATE
+SET job_name = EXCLUDED.job_name,
+    biz_type = EXCLUDED.biz_type,
+    schedule_type = EXCLUDED.schedule_type,
+    schedule_expr = EXCLUDED.schedule_expr,
+    trigger_mode = EXCLUDED.trigger_mode,
+    retry_policy = EXCLUDED.retry_policy,
+    retry_max_count = EXCLUDED.retry_max_count,
+    default_params = EXCLUDED.default_params,
+    enabled = true,
+    description = EXCLUDED.description,
+    updated_by = EXCLUDED.updated_by,
+    updated_at = CURRENT_TIMESTAMP,
+    execution_mode = 'FULL';
+
+
+-- ----------------------------------------------------------------------------
+-- 11. Stage 3 export 业务分支:补 JSON / FIXED_WIDTH / EXCEL / bad SQL 模板。
+--     复用 TA_EXPORT_REPORT job,通过 params.templateCode 切换模板,避免增加 fixture job 数量。
+-- ----------------------------------------------------------------------------
+-- 11.0 源模板 ta_export_report_tpl:原由 03 console Excel 配置包导入建立。sim 不跑 03 时缺失,
+--      导致下方 source_template CTE 为空 → export 衍生模板克隆 0 行 → 所有 export stage(9/12/18)
+--      报 "export_data_ref is required"。此处自包含补齐基础源模板(关键 export 配置仍由下方
+--      export_matrix / 克隆 SELECT 的硬编码提供),脱离 03 依赖;03 真跑时 DO NOTHING 保留其权威版本。
+--      列集沿用上面 import 模板已验证的集合 + export_data_ref。
+INSERT INTO batch.file_template_config (
+    tenant_id, template_code, template_name, template_type, biz_type,
+    file_format_type, charset, target_charset, with_bom, line_separator,
+    delimiter, quote_char, escape_char, record_length, header_rows, footer_rows,
+    header_template, trailer_template, checksum_type, compress_type, encrypt_type,
+    naming_rule, field_mappings, validation_rule_set, query_param_schema,
+    streaming_enabled, page_size, fetch_size, chunk_size, enabled, version,
+    description, created_by, updated_by, preprocess_pipeline,
+    preview_masking_enabled, error_line_masking_enabled, log_masking_enabled,
+    content_encryption_enabled, download_requires_approval, export_data_ref, load_target_ref, is_deleted
+)
+VALUES
+  ('ta', 'ta_export_report_tpl', '客户报表导出基础源模板', 'EXPORT', 'TA_EXPORT_REPORT',
+   'JSON', 'UTF-8', 'UTF-8', false, E'\n',
+   null, null, null, 0, 1, 0,
+   null, null, 'NONE', 'NONE', 'NONE',
+   'ta_export_customer_${bizDate}_${batchNo}.json',
+   '[]'::jsonb, '{}'::jsonb,
+   jsonb_build_object('export_data_ref', 'sql_template_export',
+                      'sqlTemplateExport', jsonb_build_object('cursorColumn', 'id')),
+   true, 200, 200, 100, true, 1,
+   'Stage 3 export 基础源模板:JSON/FIXED/EXCEL/BAD_SQL/KEYSET 衍生模板由 bootstrap 与 stage fixture 克隆生成',
+   'sim-e2e', 'sim-e2e', null,
+   false, false, false, false, false, 'sql_template_export', null, false)
+ON CONFLICT (tenant_id, template_code, version) DO NOTHING;
+
+
+WITH source_template AS (
+    SELECT *
+    FROM batch.file_template_config
+    WHERE tenant_id = 'ta'
+      AND template_code = 'ta_export_report_tpl'
+      AND version = 1
+), export_matrix AS (
+    SELECT *
+    FROM (VALUES
+      (
+        'TA_EXPORT_REPORT_JSON_TPL',
+        '客户 JSON 导出模板',
+        'TA_EXPORT_REPORT_JSON',
+        'JSON',
+        'ta_export_customer_json_${bizDate}_${batchNo}.json',
+        0,
+        'SELECT id, tenant_id, customer_no, customer_name, customer_type, certificate_no, mobile_no, email, status FROM biz.customer_account WHERE tenant_id = :tenantId AND customer_no LIKE ''EXP-%'' AND CAST(:batchNo AS text) IS NOT NULL',
+        '{"export_data_ref":"sql_template_export","sqlTemplateExport":{"cursorColumn":"id"}}'::jsonb,
+        'Stage 3 JSON export system scenario'
+      ),
+      (
+        'TA_EXPORT_REPORT_FIXED_TPL',
+        '客户 FIXED_WIDTH 导出模板',
+        'TA_EXPORT_REPORT_FIXED',
+        'FIXED_WIDTH',
+        'ta_export_customer_fixed_${bizDate}_${batchNo}.txt',
+        88,
+        'SELECT id, tenant_id, customer_no, customer_name, customer_type, certificate_no, mobile_no, email, status FROM biz.customer_account WHERE tenant_id = :tenantId AND customer_no LIKE ''EXP-%'' AND CAST(:batchNo AS text) IS NOT NULL',
+        jsonb_build_object(
+          'export_data_ref', 'sql_template_export',
+          'sqlTemplateExport', jsonb_build_object('cursorColumn', 'id'),
+          'fixedWidthColumns', jsonb_build_array(
+            jsonb_build_object('header', 'customer_no', 'source', 'detail.customer_no', 'width', 16),
+            jsonb_build_object('header', 'customer_name', 'source', 'detail.customer_name', 'width', 24),
+            jsonb_build_object('header', 'customer_type', 'source', 'detail.customer_type', 'width', 12),
+            jsonb_build_object('header', 'mobile_no', 'source', 'detail.mobile_no', 'width', 14),
+            jsonb_build_object('header', 'status', 'source', 'detail.status', 'width', 10))),
+        'Stage 3 fixed-width export system scenario'
+      ),
+      (
+        'TA_EXPORT_REPORT_EXCEL_TPL',
+        '客户 EXCEL 导出模板',
+        'TA_EXPORT_REPORT_EXCEL',
+        'EXCEL',
+        'ta_export_customer_excel_${bizDate}_${batchNo}.xlsx',
+        0,
+        'SELECT id, tenant_id, customer_no, customer_name, customer_type, certificate_no, mobile_no, email, status FROM biz.customer_account WHERE tenant_id = :tenantId AND customer_no LIKE ''EXP-%'' AND CAST(:batchNo AS text) IS NOT NULL',
+        jsonb_build_object(
+          'export_data_ref', 'sql_template_export',
+          'sqlTemplateExport', jsonb_build_object('cursorColumn', 'id'),
+          'csvColumns', jsonb_build_array(
+            jsonb_build_object('header', 'customer_no', 'source', 'detail.customer_no'),
+            jsonb_build_object('header', 'customer_name', 'source', 'detail.customer_name'),
+            jsonb_build_object('header', 'customer_type', 'source', 'detail.customer_type'),
+            jsonb_build_object('header', 'mobile_no', 'source', 'detail.mobile_no'),
+            jsonb_build_object('header', 'status', 'source', 'detail.status'))),
+        'Stage 3 Excel export system scenario'
+      ),
+      (
+        'TA_EXPORT_REPORT_BAD_SQL_TPL',
+        '客户坏 SQL 导出模板',
+        'TA_EXPORT_REPORT_BAD_SQL',
+        'JSON',
+        'ta_export_customer_bad_sql_${bizDate}_${batchNo}.json',
+        0,
+        'SELECT id, missing_col FROM biz.customer_account WHERE tenant_id = :tenantId AND customer_no LIKE ''EXP-%'' AND CAST(:batchNo AS text) IS NOT NULL',
+        '{"export_data_ref":"sql_template_export","sqlTemplateExport":{"cursorColumn":"id"}}'::jsonb,
+        'Stage 3 bad SQL export failure scenario'
+      )
+    ) AS m(template_code, template_name, biz_type, file_format_type, naming_rule,
+           record_length, default_query_sql, query_param_schema, description)
+)
+INSERT INTO batch.file_template_config (
+    tenant_id, template_code, template_name, template_type, biz_type,
+    file_format_type, charset, target_charset, with_bom, line_separator,
+    delimiter, quote_char, escape_char, record_length, header_rows, footer_rows,
+    header_template, trailer_template, checksum_type, compress_type, encrypt_type,
+    naming_rule, field_mappings, validation_rule_set, default_query_code,
+    default_query_sql, query_param_schema, streaming_enabled, page_size, fetch_size,
+    chunk_size, enabled, version, description, created_by, updated_by,
+    preprocess_pipeline, preview_masking_enabled, error_line_masking_enabled,
+    log_masking_enabled, content_encryption_enabled, encryption_key_ref,
+    download_requires_approval, masking_rule_set, export_data_ref, load_target_ref, is_deleted
+)
+SELECT
+    st.tenant_id, em.template_code, em.template_name, 'EXPORT', em.biz_type,
+    em.file_format_type, st.charset, st.target_charset, st.with_bom, st.line_separator,
+    st.delimiter, st.quote_char, st.escape_char, em.record_length, 1, st.footer_rows,
+    st.header_template, st.trailer_template, st.checksum_type, st.compress_type, st.encrypt_type,
+    em.naming_rule, '[]'::jsonb, st.validation_rule_set, st.default_query_code,
+    em.default_query_sql, em.query_param_schema, true, 200, 200,
+    100, true, 1, em.description, 'sim-e2e', 'sim-e2e',
+    st.preprocess_pipeline, st.preview_masking_enabled, st.error_line_masking_enabled,
+    st.log_masking_enabled, st.content_encryption_enabled, st.encryption_key_ref,
+    st.download_requires_approval, st.masking_rule_set, 'sql_template_export', null, false
+FROM source_template st
+CROSS JOIN export_matrix em
+ON CONFLICT (tenant_id, template_code, version) DO UPDATE
+SET template_name = EXCLUDED.template_name,
+    template_type = EXCLUDED.template_type,
+    biz_type = EXCLUDED.biz_type,
+    file_format_type = EXCLUDED.file_format_type,
+    record_length = EXCLUDED.record_length,
+    header_rows = EXCLUDED.header_rows,
+    naming_rule = EXCLUDED.naming_rule,
+    field_mappings = EXCLUDED.field_mappings,
+    default_query_sql = EXCLUDED.default_query_sql,
+    query_param_schema = EXCLUDED.query_param_schema,
+    streaming_enabled = EXCLUDED.streaming_enabled,
+    page_size = EXCLUDED.page_size,
+    fetch_size = EXCLUDED.fetch_size,
+    chunk_size = EXCLUDED.chunk_size,
+    enabled = EXCLUDED.enabled,
+    description = EXCLUDED.description,
+    updated_by = EXCLUDED.updated_by,
+    updated_at = CURRENT_TIMESTAMP,
+    export_data_ref = EXCLUDED.export_data_ref,
+    load_target_ref = EXCLUDED.load_target_ref,
+    is_deleted = false;
+
+
+COMMIT;
+
+
+-- ----------------------------------------------------------------------------
+-- 校验查询(诊断用,自行复制到 psql 跑)
+-- ----------------------------------------------------------------------------
+-- SELECT tenant_id, status FROM batch.tenant WHERE tenant_id IN ('ta','tb','tc');
+-- SELECT tenant_id, job_code, execution_mode FROM batch.job_definition
+--  WHERE tenant_id IN ('ta','tb','tc') ORDER BY 1,2;
+-- SELECT pd.tenant_id, pd.job_code, pd.pipeline_type,
+--        string_agg(psd.stage_code, ',' ORDER BY psd.step_order) AS stages,
+--        string_agg(psd.impl_code,  ',' ORDER BY psd.step_order) AS impls
+--  WHERE pd.tenant_id IN ('ta','tb','tc')
+--  GROUP BY 1,2,3 ORDER BY 1,2;
+-- SELECT tenant_id, channel_code, config_json FROM batch.file_channel_config
+--  WHERE tenant_id IN ('ta','tb','tc') AND channel_type='SFTP';
+-- SELECT tenant_id, template_code, template_type,
+--        left(default_query_sql, 80) AS sql_head,
+--        query_param_schema->>'spec' AS spec
+--   FROM batch.file_template_config
+--  WHERE tenant_id IN ('ta','tb','tc') ORDER BY 1,2;

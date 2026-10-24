@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：启动 console-api + 4 worker(JFR + clock offset)。
+# 用法：在仓库根目录执行 bash load-tests/scripts/start-soak.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # start-soak.sh — 启动 console-api + 4 worker(JFR + clock offset)
 #
@@ -20,7 +22,7 @@ SOAK_HOURS="${SOAK_HOURS:-24}"
 CLOCK_OFFSET="${CLOCK_OFFSET:-+12h}"
 mkdir -p "$SOAK_LOG_DIR"
 
-# JFR + heap dump + clock offset
+# 启用 JFR、堆转储和测试时钟偏移。
 # 注意:JFR filename 含 %p(PID 占位符),JVM 自动展开。
 JFR_OPTS="-XX:StartFlightRecording=name=soak-${SOAK_RUN_ID},duration=${SOAK_HOURS}h,filename=${SOAK_LOG_DIR}/jvm-${SOAK_RUN_ID}-%p.jfr,settings=profile,dumponexit=true"
 OOM_OPTS="-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=${SOAK_LOG_DIR}/"

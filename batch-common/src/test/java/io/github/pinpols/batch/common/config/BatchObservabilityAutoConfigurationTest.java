@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.slf4j.Logger.ROOT_LOGGER_NAME;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
@@ -56,7 +57,7 @@ class BatchObservabilityAutoConfigurationTest {
   @DisplayName("全局懒加载开启时仍立即挂载日志追加器")
   void shouldEagerlyAttachLogbackBridge_whenGlobalLazyInitializationIsEnabled() {
     LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
-    Logger rootLogger = loggerContext.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+    Logger rootLogger = loggerContext.getLogger(ROOT_LOGGER_NAME);
 
     contextRunner
         .withBean(OpenTelemetry.class, OpenTelemetry::noop)

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.infrastructure.workflow;
 
+import io.github.pinpols.batch.console.domain.workflow.application.command.WorkflowVersionSnapshotCommand;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -52,9 +53,9 @@ public final class WorkflowDefinitionWriteSupport {
   }
 
   public Map<String, String> readNodeParams(String tenantId, Long definitionId) {
-    return nodeMapper
-        .selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, definitionId, null))
-        .stream()
+    WorkflowNodeQuery query = WorkflowNodeQuery.ofDefinition(tenantId, definitionId, null);
+    List<WorkflowNodeEntity> nodes = nodeMapper.selectByQuery(query);
+    return nodes.stream()
         .filter(node -> EmptyChecks.isNotNull(node.getNodeParams()))
         .collect(Collectors.toMap(
             WorkflowNodeEntity::getNodeCode,
@@ -76,15 +77,16 @@ public final class WorkflowDefinitionWriteSupport {
         param.setNodeName(node.getNodeName());
         param.setNodeType(node.getNodeType());
         param.setRelatedJobCode(node.getRelatedJobCode());
-        param.setRelatedPipelineCode(node.getRelatedPipelineCode());
         param.setWorkerGroup(node.getWorkerGroup());
         param.setWindowCode(node.getWindowCode());
         param.setNodeOrder(node.getNodeOrder());
         param.setRetryPolicy(node.getRetryPolicy());
         param.setRetryMaxCount(node.getRetryMaxCount());
         param.setTimeoutSeconds(node.getTimeoutSeconds());
-        param.setNodeParams(
-            resolveNodeParams(node.getNodeParams(), existingNodeParams.get(node.getNodeCode())));
+        String submittedNodeParams = node.getNodeParams();
+        String storedNodeParams = existingNodeParams.get(node.getNodeCode());
+        String resolvedNodeParams = resolveNodeParams(submittedNodeParams, storedNodeParams);
+        param.setNodeParams(resolvedNodeParams);
         param.setCrossDayDependencies(node.getCrossDayDependencies());
         param.setCrossDayDependencyTimeoutSeconds(node.getCrossDayDependencyTimeoutSeconds());
         param.setEnabled(node.getEnabled());
@@ -120,17 +122,18 @@ public final class WorkflowDefinitionWriteSupport {
     return resolved;
   }
 
-  public void appendVersionSnapshot(
-      String tenantId,
-      Long definitionId,
-      String workflowCode,
-      Integer version,
-      WorkflowDefinitionSaveRequest body,
-      String savedBy) {
-    List<WorkflowNodeEntity> nodes =
-        nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, definitionId, null));
-    List<WorkflowEdgeEntity> edges =
-        edgeMapper.selectByQuery(WorkflowEdgeQuery.ofDefinition(tenantId, definitionId, null));
+  public void appendVersionSnapshot(WorkflowVersionSnapshotCommand command) {
+    String tenantId = command.tenantId();
+    Long definitionId = command.definitionId();
+    String workflowCode = command.workflowCode();
+    Integer version = command.version();
+    WorkflowDefinitionSaveRequest body = command.body();
+    Boolean scheduleEnabled = command.scheduleEnabled();
+    String savedBy = command.savedBy();
+    WorkflowNodeQuery nodeQuery = WorkflowNodeQuery.ofDefinition(tenantId, definitionId, null);
+    List<WorkflowNodeEntity> nodes = nodeMapper.selectByQuery(nodeQuery);
+    WorkflowEdgeQuery edgeQuery = WorkflowEdgeQuery.ofDefinition(tenantId, definitionId, null);
+    List<WorkflowEdgeEntity> edges = edgeMapper.selectByQuery(edgeQuery);
     WorkflowDefinitionVersionInsertParam param = new WorkflowDefinitionVersionInsertParam();
     param.setTenantId(tenantId);
     param.setWorkflowDefinitionId(definitionId);
@@ -139,6 +142,13 @@ public final class WorkflowDefinitionWriteSupport {
     param.setWorkflowName(body.getWorkflowName());
     param.setWorkflowType(body.getWorkflowType());
     param.setEnabled(body.getEnabled());
+    param.setScheduleEnabled(scheduleEnabled);
+    param.setScheduleType(body.getScheduleType());
+    param.setScheduleExpr(body.getScheduleExpr());
+    param.setTimezone(body.getTimezone());
+    param.setTriggerMode(body.getTriggerMode());
+    param.setCalendarCode(body.getCalendarCode());
+    param.setDependsOnJobCode(body.getDependsOnJobCode());
     try {
       param.setNodesJson(objectMapper.writeValueAsString(nodes));
       param.setEdgesJson(objectMapper.writeValueAsString(edges));

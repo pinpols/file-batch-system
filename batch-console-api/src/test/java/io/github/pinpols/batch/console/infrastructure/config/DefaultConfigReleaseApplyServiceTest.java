@@ -72,6 +72,14 @@ class DefaultConfigReleaseApplyServiceTest {
   }
 
   @Test
+  @DisplayName("租户 Pipeline 配置已退役，发布单校验阶段直接拒绝")
+  void shouldReject_whenPipelineDefinitionReleaseIsValidated() {
+    assertThatThrownBy(() -> service.validate(
+            "PIPELINE_DEFINITION", "JOB1", "{\"jobCode\":\"JOB1\",\"pipelineType\":\"IMPORT\"}"))
+        .isInstanceOf(BizException.class);
+  }
+
+  @Test
   @DisplayName("受支持的配置类型别名,被规范化成标准类型码")
   void shouldCanonicalize_whenConfigTypeAliasIsSupported() {
     assertThat(service.canonicalType(" job_definition ")).isEqualTo("JOB");

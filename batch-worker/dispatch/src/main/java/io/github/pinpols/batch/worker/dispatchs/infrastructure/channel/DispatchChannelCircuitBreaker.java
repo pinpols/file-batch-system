@@ -77,17 +77,19 @@ public class DispatchChannelCircuitBreaker {
 
   private static CircuitBreakerConfig buildConfig(DispatchCircuitBreakerProperties properties) {
     int window = Math.max(1, properties.getFailureThreshold());
-    return CircuitBreakerConfig.custom()
+    CircuitBreakerConfig.Builder config = CircuitBreakerConfig.custom()
         .slidingWindowType(SlidingWindowType.COUNT_BASED)
         .slidingWindowSize(window)
         .minimumNumberOfCalls(window)
         // 100% 阈值 + 窗口=阈值:窗口内全失败才熔断,等价原"连续 N 次失败"语义;
         // 期间出现一次成功即拉低失败率,不熔断(与原实现 recordSuccess 清零计数一致)。
-        .failureRateThreshold(100.0f)
-        .waitDurationInOpenState(Duration.ofMillis(properties.getCooldownMillis()))
+        .failureRateThreshold(100.0f);
+    long cooldownMillis = properties.getCooldownMillis();
+    return config.waitDurationInOpenState(Duration.ofMillis(cooldownMillis))
         .permittedNumberOfCallsInHalfOpenState(HALF_OPEN_PROBES)
         .build();
   }
+
 
   /**
    * 是否放行该渠道的一次投递。CLOSED → 放行;OPEN(冷却期内)→ 拒绝;冷却期满转 HALF_OPEN → 放行受限试探。
@@ -111,8 +113,10 @@ public class DispatchChannelCircuitBreaker {
     // 有界化(对齐原 ConcurrentHashMap 在恢复时 remove 的语义):CLOSED 且窗口内无残留失败的健康 breaker
     // 可安全驱逐,避免高基数 tenant|channelType|channelCode 无界增长;下次调用会重建等价的新 CLOSED 实例。
     // HALF_OPEN 探测中不驱逐,以免打断受限试探。
-    if (circuitBreaker.getState() == CircuitBreaker.State.CLOSED
-        && circuitBreaker.getMetrics().getNumberOfFailedCalls() == 0) {
+    boolean closedBreakerHasNoFailures =
+        circuitBreaker.getState() == CircuitBreaker.State.CLOSED
+            && circuitBreaker.getMetrics().getNumberOfFailedCalls() == 0;
+    if (closedBreakerHasNoFailures) {
       registry.remove(key);
     }
   }

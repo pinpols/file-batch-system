@@ -84,25 +84,19 @@ state = {
 }
 ```
 
-## 5. 节点类型
+## 5. 当前节点与校验边界
 
-| 节点 | BE 映射 | 配置字段 | UI |
-|---|---|---|---|
-| **START** | `workflow_node.node_type=START`(唯一) | 无 | 圆形绿点 |
-| **END** | `workflow_node.node_type=END`(可多个,等价 OR) | 无 | 圆形红点 |
-| **JOB** | `node_type=JOB` + `related_job_code` | jobCode 下拉 / 失败重试 / 超时 / 跳过条件 | 长方形,标 job 名 |
-| **FILE_STEP** | `node_type=FILE_STEP` + `related_pipeline_code`(单向引 pipeline_definition) | pipelineCode 下拉 / 入参映射 | 长方形带文件 icon |
-| **GATEWAY** | `node_type=GATEWAY` + `gateway_strategy`(AND/OR/XOR) | 策略 / 默认分支 / 条件表达式 | 菱形 |
-| **APPROVAL** | `node_type=APPROVAL` + `approval_template_code` | 审批模板 / 超时降级 | 长方形带审批 icon |
+| 节点 | 后端语义 | 当前画布 |
+|---|---|---|
+| START / END | 持久化控制节点，不派 Worker | 支持 |
+| JOB | `related_job_code` 引用同租户 Job，按需生成实例 | 支持 |
+| GATEWAY | 分支/汇聚；joinMode 为 ALL/ANY/N_OF | 支持 |
+| WAIT | 持久化 Sensor 等待，按 ADR-028 处理超时 | 后端支持；当前 `DesignerNodeType` 未列入，不宣称画布可编辑 |
+| TASK / FILE_STEP / APPROVAL | TASK 为旧根实现；FILE_STEP 已退役；没有独立 APPROVAL 节点 | 不作为新图节点配置 |
 
-**校验规则**(`dagValidators.ts`):
-1. 必须恰好一个 `START`
-2. 必须至少一个 `END`
-3. 无孤立节点(每个节点必须可从 START 到达)
-4. 无环(DFS 检测)
-5. `GATEWAY` 出度 ≥ 2
-6. `JOB` / `FILE_STEP` 必须配 jobCode / pipelineCode
-7. 跨域引用 `FILE_STEP.related_pipeline_code` 必须在 pipeline_definition 表存在(API 校验)
+客户端 `dagValidators.ts` 校验唯一 START、至少一个 END、START 无入边、END 无出边、非 END 有出边、可达性、无环、边引用、JOB 编码与条件表达式。GATEWAY 可用于单出边汇聚，入度≥2 时校验 joinMode，N_OF 阈值需合法。服务端静态校验是权威，前端即时校验不能替代它。
+
+启用定义或日程时，JOB 引用必须在同租户存在且已启用；未启用草稿可以按后端规则保留暂不可用引用。全量保存需编辑锁及 expectedVersion，运行准入再由 Orchestrator 校验；停用动作不应被坏引用阻止。不能通过图配置嵌套 Workflow，也不能用审批节点代替操作审批。
 
 ## 6. 交互设计(抄好的部分)
 
@@ -121,41 +115,23 @@ state = {
 | 校验态 | DolphinScheduler | 节点描红 + 顶部 banner + 提交时弹错误列表 |
 | 单人锁 | 简化 | 进入页面 PUT `/lock`,5min 自动续期,leave PUT `/unlock`;别人进来只读 + banner |
 
-## 7. 数据契约
+## 7. 当前数据契约
 
-### 加载
+| 操作 | 端点与约束 |
+|---|---|
+| 读取图 | `GET /api/console/workflow-definitions/{id}?tenantId=...`，返回 detail/nodes/edges |
+| 全量保存 | `PUT /api/console/workflow-definitions/{id}/full`；body 为 `definition`（含 nodes/edges）、`expectedVersion` 与适用锁字段；同事务更新并追加版本快照 |
+| 申请锁 | `PUT /api/console/workflow-definitions/{id}/lock?tenantId=...` |
+| 续锁 | `PUT /api/console/workflow-definitions/{id}/lock/renew?tenantId=...` |
+| 释放锁 | `DELETE /api/console/workflow-definitions/{id}/lock?tenantId=...` |
+| 历史版本 | `GET /api/console/workflow-definitions/{id}/versions/{version}?tenantId=...` |
+| 发起运行 | `POST /api/console/workflow-definitions/{id}/trigger`，保持原 Idempotency-Key；未知结果只查 trigger-status |
 
-```
-GET /api/console/workflow/definitions/{id}/full
-→ { definition: WorkflowDefinition, nodes: [...], edges: [...], lockedBy: string | null }
-```
+不使用 `/workflow/definitions` 旧路径，不给 FILE_STEP 提供 Pipeline 下拉。节点、边及日程字段映射以配对前端 `src/api/workflowDesigner.ts`、codec 和后端 DTO 为准，不能只更新画布 JSON 丢弃未展示字段。Console OpenAPI 是生成类型来源。
 
-### 保存(全量替换)
+## 7.1 历史设计排期的适用范围
 
-```
-PUT /api/console/workflow/definitions/{id}/full
-  body: { definition: {...}, nodes: [...], edges: [...] }
-  → 同事务删旧 node/edge 再插新,version 自增
-```
-
-### 锁
-
-```
-PUT /api/console/workflow/definitions/{id}/lock      → { lockedBy, expiresAt }
-DELETE /api/console/workflow/definitions/{id}/lock   → 204
-PUT /api/console/workflow/definitions/{id}/lock/renew → { expiresAt }
-```
-
-### 跨域校验
-
-```
-GET /api/console/queries/pipeline-definitions/codes?tenantId=
-  → FILE_STEP 下拉数据源
-GET /api/console/queries/job-definitions/codes?tenantId=
-  → JOB 下拉数据源
-```
-
-(部分已存在,差缺补)
+下列 Spike/MVP/Polish 是原立项拆分，不能当作当前待办或全量完成声明；当前待办和证据见整合方案与验收矩阵。
 
 ## 8. 实施阶段
 
@@ -167,7 +143,7 @@ GET /api/console/queries/job-definitions/codes?tenantId=
 - 出 spike PR,内部 review 验证路径通
 
 ### MVP(2 周)
-- 加 GATEWAY / FILE_STEP / APPROVAL
+- 原计划涉及 GATEWAY；FILE_STEP/APPROVAL 已退出当前图设计，不继续按旧排期实施
 - 右侧 inspector + 节点表单
 - 客户端 validators 全套
 - 保存到 BE(走 PUT /full + 单人锁)

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：标准化种子数据 + ADR-010 全链路 + 多租隔离 + 异常路径验证脚本。
+# 用法：在仓库根目录执行 bash scripts/local/validate-seed-scenarios.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # validate-seed-scenarios.sh
 #
@@ -10,18 +12,18 @@
 #
 # 重跑要点:幂等 — 探针行用唯一 trace_id 隔离,run 完自动清理。
 #
-# 覆盖范围(31 项, 详见汇总表):
+# 覆盖范围(详见末尾汇总表):
 #   - 探活: trigger / orch / postgres
-#   - Schema: V82-V85 + 约束 + tenant_id 列
+#   - Schema：历史租户/Outbox 契约及当前 Workflow 切换迁移
 #   - 种子基线: job_definition / workflow_node 行数
 #   - V84 多租隔离: 跨租户同 (wf_def, node_code) 共存
 #   - 同步 API + ADR-010 异步链路: trigger_outbox → relay → Kafka → orch consumer
-#   - 异常路径 ×5: 缺字段 / 缺幂等键 / 缺 secret / 重发去重 / 跨租户拒绝
+#   - 异常路径: 缺 Workflow 目标 / 旧 Job 根目标 / 缺幂等键 / 缺 secret / 重发去重 / 跨租户拒绝
 #   - Worker 链路覆盖 ×7: IMPORT/EXPORT/DISPATCH + 4 种 workflow_type
 #     (DAG/PIPELINE/GATEWAY/MIXED), 验证 instance 创建,不强制 worker SUCCESS
 #   - 多租并发隔离: ta/tb 同时 fire,验证 tenant_id 不串
 #   - ADVANCED=1: orch /internal/{outbox,compensations} + console 鉴权 (5 项)
-#   - 探针清理: cascade 删运行时子表 + dead_letter / retry_schedule（按 probe instance）
+#   - 探针清理: 按根 WorkflowRun 追溯节点 JobInstance、任务、文件与请求并按 FK 顺序删除
 #
 # 用法:
 #   ./scripts/local/validate-seed-scenarios.sh                # 默认 docker 端口 18081 等
@@ -109,6 +111,12 @@ psql_value() {
     | awk 'NR == 1 { first = $0 } END { if (NR > 0) print first }'
 }
 
+provision_single_job_workflow() {
+  local tenant="$1" job_code="$2"
+  psql_file "$PG_DB" "$SQL_DIR/provision-single-job-workflow.sql" \
+    -v tenant_id="$tenant" -v job_code="$job_code" -v fixture_tag="$PROBE_TAG" >/dev/null
+}
+
 # do_cleanup [probe_pattern]
 # 默认 'seedval-%' 全 sweep — 把所有历史 PROBE_TAG 痕迹都清掉
 # 使用 cascade 顺序: 子表 → 父表(避免 FK 违反, 即使没有 FK 也按依赖序删)
@@ -120,10 +128,11 @@ do_cleanup() {
 }
 
 # 退出钩子: 任何路径退出都跑 sweep, 杜绝 mid-run crash 留下无效记录
+# shellcheck disable=SC2329 # Invoked indirectly by the EXIT trap.
 on_exit() {
   local rc=$?
   do_cleanup "$SWEEP_PATTERN" 2>/dev/null || true
-  exit $rc
+  exit "$rc"
 }
 trap on_exit EXIT
 
@@ -171,10 +180,10 @@ fi
 # ---------- 0.3. STRICT 前置：四类 worker（默认 default-tenant，端口同 start-all.sh） ----------
 if [[ "$STRICT" == "1" ]]; then
   section "0.3 STRICT 前置: worker(import/export/dispatch/process) + default-tenant"
-  _W_IMP="${BATCH_WORKER_IMPORT_PORT:-18083}"
-  _W_EXP="${BATCH_WORKER_EXPORT_PORT:-18084}"
-  _W_DISP="${BATCH_WORKER_DISPATCH_PORT:-18085}"
-  _W_PROC="${BATCH_WORKER_PROCESS_PORT:-18086}"
+  _W_IMP="${BATCH_WORKER_IMPORT_PORT:-$BATCH_DEFAULT_WORKER_IMPORT_PORT}"
+  _W_EXP="${BATCH_WORKER_EXPORT_PORT:-$BATCH_DEFAULT_WORKER_EXPORT_PORT}"
+  _W_DISP="${BATCH_WORKER_DISPATCH_PORT:-$BATCH_DEFAULT_WORKER_DISPATCH_PORT}"
+  _W_PROC="${BATCH_WORKER_PROCESS_PORT:-$BATCH_DEFAULT_WORKER_PROCESS_PORT}"
   _strict_workers_ok=1
   for _pair in "import:${_W_IMP}" "export:${_W_EXP}" "dispatch:${_W_DISP}" "process:${_W_PROC}"; do
     _name="${_pair%%:*}"
@@ -228,7 +237,7 @@ if [[ "$LOAD_SEED" == "1" ]]; then
 fi
 
 # ---------- 1. Schema 落地 ----------
-section "1. Schema 落地(V82-V85)"
+section "1. Schema 落地(历史租户约束 + Workflow cutover)"
 
 for v in 82 83 84 85; do
   ok=$(psql_value "$PG_DB" validate-seed-select-flyway-success.sql -v version="$v")
@@ -236,6 +245,15 @@ for v in 82 83 84 85; do
     result pass "V$v migration" "applied success=t"
   else
     result fail "V$v migration" "未应用或 success=f (got=$ok)"
+  fi
+done
+
+for v in 270 271; do
+  ok=$(psql_value "$PG_DB" validate-seed-select-flyway-success.sql -v version="$v")
+  if [[ "$ok" == "t" ]]; then
+    result pass "V$v fresh-schema migration" "applied success=t"
+  else
+    result fail "V$v fresh-schema migration" "未应用或 success=f (got=$ok)"
   fi
 done
 
@@ -286,14 +304,14 @@ else
   result fail "workflow_node 基线" "$wf_node_count 行,期望 >=4"
 fi
 
-# ---------- 3. V84 多租隔离行为 ----------
-section "3. V84 多租隔离行为(workflow_node)"
+# ---------- 3. Workflow 多租隔离行为 ----------
+section "3. Workflow 多租隔离行为(workflow_node)"
 
 # 取 finance 那行作"基准"node_code
 finance_wf_id=$(psql_value "$PG_DB" validate-seed-select-workflow-definition-id.sql \
   -v tenant_id=tenant-finance -v workflow_code=finance_recon_flow)
 if [[ -z "$finance_wf_id" ]]; then
-  result skip "V84 跨租户隔离" "tenant-finance/finance_recon_flow 不在种子中,跳过"
+    result skip "跨租户 Workflow 隔离" "tenant-finance/finance_recon_flow 不在种子中,跳过"
 else
   # 探针:default-tenant 用同一 wf_def_id + 同一 node_code 应能共存
   psql_file "$PG_DB" "$SQL_DIR/validate-seed-delete-workflow-node-probe.sql" -q \
@@ -303,20 +321,27 @@ else
   insert2=$(psql_value "$PG_DB" validate-seed-insert-workflow-node-probe.sql \
     -v tenant_id="$STRICT_TENANT_ID" -v workflow_definition_id="$finance_wf_id")
   if [[ "$insert1" == "$STRICT_TENANT_ID" && -z "$insert2" ]]; then
-    result pass "V84 跨租户可共存 + 同租户唯一" "$STRICT_TENANT_ID 插入成功,重插被 ON CONFLICT 拦"
+    result pass "跨租户可共存 + 同租户唯一" "$STRICT_TENANT_ID 插入成功,重插被 ON CONFLICT 拦"
   else
-    result fail "V84 隔离行为" "1st=$insert1 2nd=$insert2 (期望 $STRICT_TENANT_ID + 空)"
+    result fail "Workflow 隔离行为" "1st=$insert1 2nd=$insert2 (期望 $STRICT_TENANT_ID + 空)"
   fi
   psql_file "$PG_DB" "$SQL_DIR/validate-seed-delete-workflow-node-probe.sql" -q \
     -v tenant_id="$STRICT_TENANT_ID" -v workflow_definition_id="$finance_wf_id" >/dev/null
 fi
 
-# ---------- 4. 同步 API: trigger fire happy path ----------
-section "4. 同步 API: 写 trigger_request + trigger_outbox_event"
+# ---------- 4. 同步 API: Workflow root trigger happy path ----------
+section "4. 同步 API: Workflow ID 写 trigger_request + trigger_outbox_event"
 
 REQUEST_ID="${PROBE_TAG}-import-happy"
+provision_single_job_workflow "$STRICT_TENANT_ID" import_customer_job
+IMPORT_WORKFLOW_ID=$(psql_value "$PG_DB" select-single-job-workflow-id.sql \
+  -v tenant_id="$STRICT_TENANT_ID" -v job_code=import_customer_job)
+if [[ ! "$IMPORT_WORKFLOW_ID" =~ ^[0-9]+$ ]]; then
+  result fail "Job 单作业 Workflow 已创建" "$STRICT_TENANT_ID/import_customer_job"
+  IMPORT_WORKFLOW_ID=0
+fi
 http_code=$(http_post "/api/triggers/launch" \
-  "{\"tenantId\":\"$STRICT_TENANT_ID\",\"jobCode\":\"import_customer_job\",\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\",\"params\":{\"templateCode\":\"import_customer_v1\",\"content\":\"[]\"}}" \
+  "{\"tenantId\":\"$STRICT_TENANT_ID\",\"workflowDefinitionId\":$IMPORT_WORKFLOW_ID,\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\",\"params\":{\"templateCode\":\"import_customer_v1\",\"content\":\"[]\"}}" \
   "Idempotency-Key: $REQUEST_ID" "X-Request-Id: $REQUEST_ID")
 if [[ "$http_code" == "200" ]]; then
   result pass "fire 同步返回" "HTTP 200"
@@ -337,30 +362,30 @@ else
 fi
 
 # ---------- 5. ADR-010 异步链路 ----------
-section "5. ADR-010 异步链路: outbox → Kafka → orchestrator → job_instance"
+section "5. ADR-010 异步链路: outbox → Kafka → orchestrator → WorkflowRun"
 
 elapsed=0
-launched_id=""
+launched_run=""
 while [[ $elapsed -lt $AWAIT_TIMEOUT ]]; do
-  launched_id=$(psql_value "$PG_DB" select-launched-job-instance-id.sql \
+  IFS='|' read -r launched_run launched_status < <(psql_value "$PG_DB" select-workflow-run-by-request.sql \
     -v tenant_id="$STRICT_TENANT_ID" -v request_id="$REQUEST_ID")
-  if [[ -n "$launched_id" ]]; then
+  if [[ -n "$launched_run" ]]; then
     break
   fi
   sleep 1
   elapsed=$((elapsed+1))
 done
 
-if [[ -n "$launched_id" ]]; then
+if [[ -n "$launched_run" ]]; then
   outbox_status=$(psql_value "$PG_DB" validate-seed-select-trigger-outbox-status.sql \
     -v tenant_id="$STRICT_TENANT_ID" -v request_id="$REQUEST_ID")
-  result pass "TriggerOutboxRelay 推 LAUNCHED" "${elapsed}s, job_instance_id=$launched_id, outbox=$outbox_status"
+  result pass "TriggerOutboxRelay 创建 WorkflowRun" "${elapsed}s, workflow_run_id=$launched_run status=$launched_status outbox=$outbox_status"
 else
   outbox_state=$(psql_value "$PG_DB" validate-seed-select-trigger-outbox-state.sql \
     -v tenant_id="$STRICT_TENANT_ID" -v request_id="$REQUEST_ID")
   req_state=$(psql_value "$PG_DB" validate-seed-select-trigger-request-status.sql \
     -v tenant_id="$STRICT_TENANT_ID" -v request_id="$REQUEST_ID")
-  result fail "TriggerOutboxRelay 推 LAUNCHED" "${AWAIT_TIMEOUT}s 未推到; trigger_request=$req_state outbox=$outbox_state(local profile lazy=true 会卡这一步,docker 应通)"
+  result fail "TriggerOutboxRelay 创建 WorkflowRun" "${AWAIT_TIMEOUT}s 未创建; trigger_request=$req_state outbox=$outbox_state(local profile lazy=true 会卡这一步,docker 应通)"
 fi
 
 # ---------- 6. 异常: 缺必填字段 ----------
@@ -371,10 +396,22 @@ http_code=$(http_post "/api/triggers/launch" \
   "{\"tenantId\":\"$STRICT_TENANT_ID\",\"triggerType\":\"API\",\"bizDate\":\"2026-05-03\"}" \
   "Idempotency-Key: $REQUEST_ID")
 if [[ "$http_code" == "400" ]]; then
-  result pass "缺 jobCode → 400" "validation 拒绝"
+  result pass "缺 Workflow 根目标 → 400" "validation 拒绝"
 else
   body=$(head -c 100 /tmp/resp.body)
-  result fail "缺 jobCode" "HTTP $http_code(期望 400) body=$body"
+  result fail "缺 Workflow 根目标" "HTTP $http_code(期望 400) body=$body"
+fi
+
+# 顶层 Job 根入口已退出；Job 只能由 Workflow Job 节点启动。
+JOB_ROOT_REQ_ID="${PROBE_TAG}-job-root-rejected"
+http_code=$(http_post "/api/triggers/launch" \
+  "{\"tenantId\":\"$STRICT_TENANT_ID\",\"jobCode\":\"import_customer_job\",\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\"}" \
+  "Idempotency-Key: $JOB_ROOT_REQ_ID" "X-Request-Id: $JOB_ROOT_REQ_ID")
+if [[ "$http_code" == "400" ]]; then
+  result pass "舊 Job 根目標拒絕 → 400" "必须使用 workflowDefinitionId"
+else
+  body=$(head -c 100 /tmp/resp.body)
+  result fail "旧 Job 根目标拒绝" "HTTP $http_code(期望 400) body=$body"
 fi
 
 # 7. 异常: 缺幂等键
@@ -382,7 +419,7 @@ http_code=$(curl -sS --max-time 30 --connect-timeout 5 -o /tmp/resp.body -w "%{h
   -X POST "http://localhost:${TRIGGER_PORT}/api/triggers/launch" \
   -H "Content-Type: application/json" \
   -H "X-Internal-Secret: $INTERNAL_SECRET" \
-  -d "{\"tenantId\":\"$STRICT_TENANT_ID\",\"jobCode\":\"import_customer_job\",\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\"}" 2>/dev/null)
+  -d "{\"tenantId\":\"$STRICT_TENANT_ID\",\"workflowDefinitionId\":$IMPORT_WORKFLOW_ID,\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\"}" 2>/dev/null)
 if [[ "$http_code" == "400" ]]; then
   result pass "缺 Idempotency-Key → 400" "MISSING_IDEMPOTENCY_KEY"
 else
@@ -395,7 +432,7 @@ http_code=$(curl -sS --max-time 30 --connect-timeout 5 -o /tmp/resp.body -w "%{h
   -X POST "http://localhost:${TRIGGER_PORT}/api/triggers/launch" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: ${PROBE_TAG}-no-secret" \
-  -d "{\"tenantId\":\"$STRICT_TENANT_ID\",\"jobCode\":\"import_customer_job\",\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\",\"params\":{\"templateCode\":\"import_customer_json_v1\",\"content\":\"[]\"}}" 2>/dev/null)
+  -d "{\"tenantId\":\"$STRICT_TENANT_ID\",\"workflowDefinitionId\":$IMPORT_WORKFLOW_ID,\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\",\"params\":{\"templateCode\":\"import_customer_json_v1\",\"content\":\"[]\"}}" 2>/dev/null)
 if [[ "$http_code" == "401" ]]; then
   result pass "缺 X-Internal-Secret → 401" "InternalSecretFilter 拦截"
 elif [[ "$http_code" == "200" ]]; then
@@ -408,11 +445,11 @@ fi
 # 9. 异常: 同 Idempotency-Key 重发(幂等回放)
 DEDUP_REQ_ID="${PROBE_TAG}-dedup"
 http_post "/api/triggers/launch" \
-  "{\"tenantId\":\"$STRICT_TENANT_ID\",\"jobCode\":\"import_customer_job\",\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\",\"params\":{\"templateCode\":\"import_customer_v1\",\"content\":\"[]\"}}" \
+  "{\"tenantId\":\"$STRICT_TENANT_ID\",\"workflowDefinitionId\":$IMPORT_WORKFLOW_ID,\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\",\"params\":{\"templateCode\":\"import_customer_v1\",\"content\":\"[]\"}}" \
   "Idempotency-Key: $DEDUP_REQ_ID" "X-Request-Id: $DEDUP_REQ_ID" >/dev/null
 sleep 1
 http_post "/api/triggers/launch" \
-  "{\"tenantId\":\"$STRICT_TENANT_ID\",\"jobCode\":\"import_customer_job\",\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\",\"params\":{\"templateCode\":\"import_customer_v1\",\"content\":\"[]\"}}" \
+  "{\"tenantId\":\"$STRICT_TENANT_ID\",\"workflowDefinitionId\":$IMPORT_WORKFLOW_ID,\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\",\"params\":{\"templateCode\":\"import_customer_v1\",\"content\":\"[]\"}}" \
   "Idempotency-Key: $DEDUP_REQ_ID" "X-Request-Id: $DEDUP_REQ_ID" >/dev/null
 dedup_count=$(psql_value "$PG_DB" validate-seed-count-trigger-request.sql \
   -v tenant_id="$STRICT_TENANT_ID" -v request_id="$DEDUP_REQ_ID")
@@ -422,30 +459,31 @@ else
   result fail "幂等键重发去重" "$dedup_count 行 trigger_request(期望 1)"
 fi
 
-# 10. 异常: 跨租户 launch(default-tenant 用 tenant-finance 的 jobCode)
+# 10. 异常: 跨租户 launch(default-tenant 用 tenant-finance 的 Workflow ID)
 CROSS_REQ_ID="${PROBE_TAG}-cross-tenant"
 http_code=$(http_post "/api/triggers/launch" \
-  "{\"tenantId\":\"$STRICT_TENANT_ID\",\"jobCode\":\"finance_recon_workflow\",\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\"}" \
+  "{\"tenantId\":\"$STRICT_TENANT_ID\",\"workflowDefinitionId\":$finance_wf_id,\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\"}" \
   "Idempotency-Key: $CROSS_REQ_ID" "X-Request-Id: $CROSS_REQ_ID")
-# trigger 端是 "宽容前端" — HTTP 200 是预期(只写 outbox);orch 消费时按 (tenantId, jobCode)
-# 查 job_definition 找不到会拒绝;trigger_request 应停在 ACCEPTED 不进 LAUNCHED
+# Trigger 接受显式 Workflow ID 后异步传递；Orchestrator 必须按租户验证 Workflow 归属。
 if [[ "$http_code" == "200" ]]; then
   sleep 8  # 等 relay + orch 消费
   cross_status=$(psql_value "$PG_DB" validate-seed-select-trigger-request-status.sql \
     -v tenant_id="$STRICT_TENANT_ID" -v request_id="$CROSS_REQ_ID")
   case "$cross_status" in
-    REJECTED|FAILED|GIVE_UP|ACCEPTED)
-      result pass "跨租户 jobCode → 后端拒绝" "trigger HTTP 200(异步设计) + trigger_request=$cross_status(未推 LAUNCHED)" ;;
+    REJECTED)
+      result pass "跨租户 Workflow ID → 后端拒绝" "trigger HTTP 200(异步设计) + trigger_request=$cross_status(未推 LAUNCHED)" ;;
+    ACCEPTED)
+      result fail "跨租户 Workflow 隔离" "请求仍为 ACCEPTED，不能证明后端拒绝目标" ;;
     LAUNCHED)
-      result fail "跨租户 jobCode 隔离" "trigger_request=LAUNCHED — 多租隔离失效!" ;;
+      result fail "跨租户 Workflow 隔离" "trigger_request=LAUNCHED — 多租隔离失效!" ;;
     *)
-      result fail "跨租户 jobCode 隔离" "trigger_request=$cross_status(未知状态)" ;;
+      result fail "跨租户 Workflow 隔离" "trigger_request=$cross_status(未知状态)" ;;
   esac
 elif [[ "$http_code" == "404" || "$http_code" == "400" ]]; then
-  result pass "跨租户 jobCode → 同步拒绝" "HTTP $http_code(trigger 端校验)"
+  result pass "跨租户 Workflow ID → 同步拒绝" "HTTP $http_code(trigger 端校验)"
 else
   body=$(head -c 100 /tmp/resp.body)
-  result fail "跨租户 jobCode 行为" "HTTP $http_code body=$body"
+  result fail "跨租户 Workflow 行为" "HTTP $http_code body=$body"
 fi
 
 # ---------- 7. Worker 链路覆盖(各 worker 类型 + workflow_type) ----------
@@ -456,71 +494,106 @@ fi
 #   依赖业务数据完整性(biz 表 / MinIO 文件 / 模板加密 key 等),非本脚本目标。
 #   严格的 worker SUCCESS 验证看 batch-e2e-tests 模块。
 
-# fire_and_await tenant jobCode params_json timeout_sec
-# 输出全局: LAST_FIRE_DETAIL
-# 返回: 0=task 已离开 CREATED(链路通),1=未推 LAUNCHED(异步链路卡)
-fire_and_await() {
-  local tenant="$1"; local jobCode="$2"; local params_json="$3"; local timeout="${4:-25}"
-  local req_id="${PROBE_TAG}-${tenant}-${jobCode}"
-  local body="{\"tenantId\":\"$tenant\",\"jobCode\":\"$jobCode\",\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\",\"params\":$params_json}"
+# 等待一个 Workflow 根运行结束；所有顶层探测都必须使用 Workflow ID。
+# 输出：LAST_FIRE_DETAIL。返回码：0=成功，2=终态失败，3=尚未进入终态。
+workflow_fire_and_await_id() {
+  local tenant="$1"; local workflow_id="$2"; local request_key="$3"
+  local params_json="$4"; local timeout="${5:-25}"
+  local req_id="${PROBE_TAG}-${tenant}-${request_key}"
+  local body elapsed=0 run_id="" status=""
+  body=$("$PYTHON_BIN" -c "import json,sys;print(json.dumps({'tenantId':sys.argv[1],'workflowDefinitionId':int(sys.argv[2]),'bizDate':'2026-05-03','triggerType':'API','params':json.loads(sys.argv[3])}))" \
+    "$tenant" "$workflow_id" "$params_json")
   http_post "/api/triggers/launch" "$body" \
     "Idempotency-Key: $req_id" "X-Request-Id: $req_id" >/dev/null
 
-  local elapsed=0 job_id=""
   while [[ $elapsed -lt $timeout ]]; do
-    job_id=$(psql_value "$PG_DB" select-launched-job-instance-id.sql \
+    IFS='|' read -r run_id status < <(psql_value "$PG_DB" select-workflow-run-by-request.sql \
       -v tenant_id="$tenant" -v request_id="$req_id")
-    [[ -n "$job_id" ]] && break
-    sleep 1; elapsed=$((elapsed+1))
-  done
-  if [[ -z "$job_id" ]]; then
-    local req_status
-    req_status=$(psql_value "$PG_DB" validate-seed-select-trigger-request-status.sql \
-      -v tenant_id="$tenant" -v request_id="$req_id")
-    LAST_FIRE_DETAIL="${timeout}s 未推 LAUNCHED, trigger_request=$req_status"
-    return 1
-  fi
-
-  # 等 instance 推到终态(SUCCESS / FAILED / PARTIAL_FAILED / TERMINATED / CANCELLED)
-  local instance_status=""
-  while [[ $elapsed -lt $timeout ]]; do
-    instance_status=$(psql_value "$PG_DB" validate-seed-select-job-instance-status.sql \
-      -v tenant_id="$tenant" -v instance_id="$job_id")
-    case "$instance_status" in
+    case "${status:-}" in
       SUCCESS|FAILED|PARTIAL_FAILED|TERMINATED|CANCELLED) break ;;
     esac
-    sleep 2; elapsed=$((elapsed+2))
+    sleep 1; elapsed=$((elapsed+1))
   done
-
-  local task_status
-  task_status=$(psql_value "$PG_DB" validate-seed-select-job-task-statuses.sql \
-    -v tenant_id="$tenant" -v instance_id="$job_id")
-  local err
-  err=$(psql_value "$PG_DB" validate-seed-select-job-task-errors.sql \
-    -v tenant_id="$tenant" -v instance_id="$job_id")
-  LAST_FIRE_DETAIL="job_id=$job_id instance=$instance_status tasks=${task_status:-none} err=${err:-none} (${elapsed}s)"
-  case "$instance_status" in
-    SUCCESS) return 0 ;;                         # 严格 happy
-    FAILED|PARTIAL_FAILED) return 2 ;;           # 终态但失败 — 业务/数据问题, 不算 link 通
-    *) return 3 ;;                               # 仍未到终态 — worker 没消费/卡住
+  LAST_WORKFLOW_RUN_ID="${run_id:-}"
+  LAST_WORKFLOW_STATUS="${status:-}"
+  LAST_FIRE_DETAIL="workflow_id=$workflow_id workflow_run_id=${run_id:-none} status=${status:-pending} (${elapsed}s)"
+  case "${status:-}" in
+    SUCCESS) return 0 ;;
+    FAILED|PARTIAL_FAILED|TERMINATED|CANCELLED) return 2 ;;
+    *) return 3 ;;
   esac
 }
 
 # assert_fire label tenant jobCode params [expect=success|terminal|reach_worker]
-# expect 默认 success(严格 happy);也可放宽到 terminal(SUCCESS 或 FAILED 都接受)/reach_worker(只要 instance 创建)
+# 解析受管单作业 Workflow，并使用 Workflow ID 启动；不得按 Job code 启动。
 assert_fire() {
   local label="$1"; local tenant="$2"; local jobCode="$3"; local params="$4"; local expect="${5:-success}"
-  fire_and_await "$tenant" "$jobCode" "$params" "$AWAIT_TIMEOUT"
+  local workflow_id
+  provision_single_job_workflow "$tenant" "$jobCode"
+  workflow_id=$(psql_value "$PG_DB" select-single-job-workflow-id.sql \
+    -v tenant_id="$tenant" -v job_code="$jobCode")
+  if [[ ! "$workflow_id" =~ ^[0-9]+$ ]]; then
+    result fail "$label [managed Workflow missing]" "$tenant/$jobCode has no single-job Workflow"
+    return
+  fi
+  workflow_fire_and_await_id "$tenant" "$workflow_id" "$jobCode" "$params" "$AWAIT_TIMEOUT"
   local rc=$?
   case "$expect" in
     success)
-      [[ $rc -eq 0 ]] && result pass "$label [SUCCESS]" "$LAST_FIRE_DETAIL" || result fail "$label [需 SUCCESS]" "$LAST_FIRE_DETAIL"
+      if [[ $rc -eq 0 ]]; then
+        result pass "$label [SUCCESS]" "$LAST_FIRE_DETAIL"
+      else
+        result fail "$label [需 SUCCESS]" "$LAST_FIRE_DETAIL"
+      fi
       ;;
     terminal)
-      [[ $rc -eq 0 || $rc -eq 2 ]] && result pass "$label [终态]" "$LAST_FIRE_DETAIL" || result fail "$label [未到终态]" "$LAST_FIRE_DETAIL"
+      if [[ $rc -eq 0 || $rc -eq 2 ]]; then
+        result pass "$label [终态]" "$LAST_FIRE_DETAIL"
+      else
+        result fail "$label [未到终态]" "$LAST_FIRE_DETAIL"
+      fi
       ;;
     *)
-      [[ $rc -ne 1 ]] && result pass "$label [link]" "$LAST_FIRE_DETAIL" || result fail "$label [link 断]" "$LAST_FIRE_DETAIL"
+      if [[ -n "$LAST_WORKFLOW_RUN_ID" ]]; then
+        result pass "$label [WorkflowRun created]" "$LAST_FIRE_DETAIL"
+      else
+        result fail "$label [根运行未创建]" "$LAST_FIRE_DETAIL"
+      fi
+      ;;
+  esac
+}
+
+assert_workflow_fire() {
+  local label="$1" tenant="$2" workflow_code="$3" params="$4" expect="${5:-success}"
+  local workflow_id
+  workflow_id=$(psql_value "$PG_DB" select-workflow-definition-id.sql \
+    -v tenant_id="$tenant" -v workflow_code="$workflow_code")
+  if [[ ! "$workflow_id" =~ ^[0-9]+$ ]]; then
+    result fail "$label [Workflow not found]" "$tenant/$workflow_code"
+    return
+  fi
+  workflow_fire_and_await_id "$tenant" "$workflow_id" "$workflow_code" "$params" "$AWAIT_TIMEOUT"
+  case "$expect" in
+    success)
+      if [[ "$LAST_WORKFLOW_STATUS" == "SUCCESS" ]]; then
+        result pass "$label [SUCCESS]" "$LAST_FIRE_DETAIL"
+      else
+        result fail "$label [需 SUCCESS]" "$LAST_FIRE_DETAIL"
+      fi
+      ;;
+    terminal)
+      if [[ "$LAST_WORKFLOW_STATUS" =~ ^(SUCCESS|FAILED|PARTIAL_FAILED|TERMINATED|CANCELLED)$ ]]; then
+        result pass "$label [终态]" "$LAST_FIRE_DETAIL"
+      else
+        result fail "$label [未到终态]" "$LAST_FIRE_DETAIL"
+      fi
+      ;;
+    *)
+      if [[ -n "$LAST_WORKFLOW_RUN_ID" ]]; then
+        result pass "$label [WorkflowRun created]" "$LAST_FIRE_DETAIL"
+      else
+        result fail "$label [根运行未创建]" "$LAST_FIRE_DETAIL"
+      fi
       ;;
   esac
 }
@@ -551,11 +624,11 @@ if [[ "$STRICT" == "1" ]]; then
   assert_fire "EXPORT 严格 ($STRICT_TENANT_ID, settlement)" "$STRICT_TENANT_ID" "export_settlement_job" \
     "{\"templateCode\":\"export_settlement_v1\",\"batchNo\":\"$PROBE_BATCH_NO\",\"bizDate\":\"$PROBE_BIZDATE\"}" success
 
-  PROBE_WF_JOB="${PROBE_TAG}-wf-pipeline"
+  PROBE_WF_CODE="${PROBE_TAG}-wf-pipeline"
   psql_file "$PG_DB" "$SQL_DIR/validate-seed-upsert-strict-workflow.sql" -q \
-    -v tenant_id="$STRICT_TENANT_ID" -v job_code="$PROBE_WF_JOB" -v probe_tag="$PROBE_TAG" >/dev/null
+    -v tenant_id="$STRICT_TENANT_ID" -v job_code="$PROBE_WF_CODE" -v probe_tag="$PROBE_TAG" >/dev/null
 
-  assert_fire "WORKFLOW PIPELINE 严格 ($STRICT_TENANT_ID)" "$STRICT_TENANT_ID" "$PROBE_WF_JOB" \
+  assert_workflow_fire "Workflow PIPELINE 严格 ($STRICT_TENANT_ID)" "$STRICT_TENANT_ID" "$PROBE_WF_CODE" \
     "{\"templateCode\":\"export_settlement_v1\",\"batchNo\":\"$PROBE_WF_BATCH_NO\",\"bizDate\":\"$PROBE_BIZDATE\"}" success
 
   # ===== DISPATCH 严格 =====
@@ -589,10 +662,10 @@ else
 
   assert_fire "EXPORT 链路 (tc, risk_alert)" "tc" "TC_EXPORT_RISK_ALERT" '{}' reach_worker
   assert_fire "DISPATCH 链路 (tc, local channel)" "tc" "TC_DISPATCH_REVIEW" '{"channelCode":"tc_local_archive"}' reach_worker
-  assert_fire "WORKFLOW DAG (ta)" "ta" "TA_WF_SETTLEMENT" '{}' reach_worker
-  assert_fire "WORKFLOW PIPELINE (tc)" "tc" "TC_WF_RISK_PIPELINE" '{}' reach_worker
-  assert_fire "WORKFLOW DAG GATEWAY (probe)" "$STRICT_TENANT_ID" "wf_probe_gateway" '{}' reach_worker
-  assert_fire "WORKFLOW MIXED (probe + ADR-009 DSL)" "$STRICT_TENANT_ID" "wf_probe_mixed" '{}' reach_worker
+  assert_workflow_fire "Workflow DAG (ta)" "ta" "TA_WF_SETTLEMENT" '{}' reach_worker
+  assert_workflow_fire "Workflow PIPELINE (tc)" "tc" "TC_WF_RISK_PIPELINE" '{}' reach_worker
+  assert_workflow_fire "Workflow DAG GATEWAY (probe)" "$STRICT_TENANT_ID" "wf_probe_gateway" '{}' reach_worker
+  assert_workflow_fire "Workflow MIXED (probe + ADR-009 DSL)" "$STRICT_TENANT_ID" "wf_probe_mixed" '{}' reach_worker
 fi
 
 # ---------- 8. 多租户并发隔离实跑 ----------
@@ -600,39 +673,52 @@ section "8. 多租户并发: 同时 fire ta + tb,验证不串"
 
 REQ_TA="${PROBE_TAG}-mt-ta"
 REQ_TB="${PROBE_TAG}-mt-tb"
+provision_single_job_workflow ta TA_IMPORT_CUSTOMER
+provision_single_job_workflow tb TB_EXPORT_STATEMENT
+TA_WORKFLOW_ID=$(psql_value "$PG_DB" select-single-job-workflow-id.sql \
+  -v tenant_id=ta -v job_code=TA_IMPORT_CUSTOMER)
+TB_WORKFLOW_ID=$(psql_value "$PG_DB" select-single-job-workflow-id.sql \
+  -v tenant_id=tb -v job_code=TB_EXPORT_STATEMENT)
+if [[ ! "$TA_WORKFLOW_ID" =~ ^[0-9]+$ || ! "$TB_WORKFLOW_ID" =~ ^[0-9]+$ ]]; then
+  result fail "多租 managed Workflow 已创建" "ta=$TA_WORKFLOW_ID tb=$TB_WORKFLOW_ID"
+fi
 http_post "/api/triggers/launch" \
-  '{"tenantId":"ta","jobCode":"TA_IMPORT_CUSTOMER","bizDate":"2026-05-03","triggerType":"API","params":{}}' \
+  "{\"tenantId\":\"ta\",\"workflowDefinitionId\":$TA_WORKFLOW_ID,\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\",\"params\":{}}" \
   "Idempotency-Key: $REQ_TA" "X-Request-Id: $REQ_TA" >/dev/null &
 http_post "/api/triggers/launch" \
-  '{"tenantId":"tb","jobCode":"TB_EXPORT_STATEMENT","bizDate":"2026-05-03","triggerType":"API","params":{}}' \
+  "{\"tenantId\":\"tb\",\"workflowDefinitionId\":$TB_WORKFLOW_ID,\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\",\"params\":{}}" \
   "Idempotency-Key: $REQ_TB" "X-Request-Id: $REQ_TB" >/dev/null &
 wait
 
-# 等两个都推 LAUNCHED
+# 等两个独立 WorkflowRun 创建
 elapsed=0
-ta_id=""; tb_id=""
+ta_run=""; tb_run=""
 while [[ $elapsed -lt $AWAIT_TIMEOUT ]]; do
-  [[ -z "$ta_id" ]] && ta_id=$(psql_value "$PG_DB" select-launched-job-instance-id.sql \
-    -v tenant_id=ta -v request_id="$REQ_TA")
-  [[ -z "$tb_id" ]] && tb_id=$(psql_value "$PG_DB" select-launched-job-instance-id.sql \
-    -v tenant_id=tb -v request_id="$REQ_TB")
-  [[ -n "$ta_id" && -n "$tb_id" ]] && break
+  if [[ -z "$ta_run" ]]; then
+    IFS='|' read -r ta_run _ < <(psql_value "$PG_DB" select-workflow-run-by-request.sql \
+      -v tenant_id=ta -v request_id="$REQ_TA")
+  fi
+  if [[ -z "$tb_run" ]]; then
+    IFS='|' read -r tb_run _ < <(psql_value "$PG_DB" select-workflow-run-by-request.sql \
+      -v tenant_id=tb -v request_id="$REQ_TB")
+  fi
+  [[ -n "$ta_run" && -n "$tb_run" ]] && break
   sleep 1; elapsed=$((elapsed+1))
 done
 
-if [[ -n "$ta_id" && -n "$tb_id" ]]; then
-  # 关键断言:两个 job_instance 各自 tenant_id 隔离
-  ta_tenant=$(psql_value "$PG_DB" validate-seed-select-job-instance-tenant.sql \
-    -v instance_id="$ta_id")
-  tb_tenant=$(psql_value "$PG_DB" validate-seed-select-job-instance-tenant.sql \
-    -v instance_id="$tb_id")
+if [[ -n "$ta_run" && -n "$tb_run" ]]; then
+  # 关键断言:两个 WorkflowRun 各自 tenant_id 隔离
+  ta_tenant=$(psql_value "$PG_DB" validate-seed-select-workflow-run-tenant.sql \
+    -v workflow_run_id="$ta_run")
+  tb_tenant=$(psql_value "$PG_DB" validate-seed-select-workflow-run-tenant.sql \
+    -v workflow_run_id="$tb_run")
   if [[ "$ta_tenant" == "ta" && "$tb_tenant" == "tb" ]]; then
-    result pass "多租并发 → 隔离" "ta job_id=$ta_id (tenant=$ta_tenant) + tb job_id=$tb_id (tenant=$tb_tenant) (${elapsed}s)"
+    result pass "多租并发 → 隔离" "ta workflow_run_id=$ta_run (tenant=$ta_tenant) + tb workflow_run_id=$tb_run (tenant=$tb_tenant) (${elapsed}s)"
   else
     result fail "多租并发隔离" "ta_tenant=$ta_tenant tb_tenant=$tb_tenant — 数据串了!"
   fi
 else
-  result fail "多租并发 推 LAUNCHED" "ta_id=$ta_id tb_id=$tb_id (${AWAIT_TIMEOUT}s)"
+  result fail "多租并发 WorkflowRun 创建" "ta_run=$ta_run tb_run=$tb_run (${AWAIT_TIMEOUT}s)"
 fi
 
 # ---------- 9. ADVANCED gate: orch 运维 API + console auth + trigger cron ----------

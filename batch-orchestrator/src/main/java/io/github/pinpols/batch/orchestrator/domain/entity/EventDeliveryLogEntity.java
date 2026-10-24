@@ -12,6 +12,7 @@ public class EventDeliveryLogEntity extends AbstractLocalizedErrorEntity {
   private Long id;
   private String tenantId;
   private Long outboxEventId;
+  private Instant outboxEventCreatedAt;
   private String eventType;
   private String eventKey;
   private String targetTopic;

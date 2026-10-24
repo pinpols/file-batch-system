@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.support.http;
 
+import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -35,14 +36,15 @@ class OkHttpConsoleExternalHttpTransportTest {
     OkHttpConsoleExternalHttpTransport transport = new OkHttpConsoleExternalHttpTransport(
         client(guarded), client(trusted), hostname -> List.of(InetAddress.getLoopbackAddress()));
 
-    OutboundHttpResponse response = transport.execute(OutboundHttpRequest.post(
+    OutboundHttpContent httpContent = new OutboundHttpContent("{\"ok\":true}", "application/json; charset=utf-8");
+    OutboundHttpRequest httpRequest = OutboundHttpRequest.post(
         "https://example.test/notify",
         Map.of("X-Test", "value"),
-        "{\"ok\":true}",
-        "application/json; charset=utf-8",
+        httpContent,
         Duration.ofSeconds(2),
         Duration.ofSeconds(3),
-        OutboundAddressPolicy.GUARDED));
+        OutboundAddressPolicy.GUARDED);
+    OutboundHttpResponse response = transport.execute(httpRequest);
 
     assertThat(response.statusCode()).isEqualTo(202);
     assertThat(response.body()).isEqualTo("accepted");

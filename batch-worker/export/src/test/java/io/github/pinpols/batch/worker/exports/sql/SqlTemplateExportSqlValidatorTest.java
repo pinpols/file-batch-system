@@ -180,7 +180,9 @@ class SqlTemplateExportSqlValidatorTest {
   @DisplayName("字符串字面量里的参数写法不算真实参数,仍判定缺少租户参数")
   void validate_doesNotTreatStringLiteralAsRequiredParameter() {
     SqlTemplateExportSqlValidator validator = validatorWithDefaults();
-    String sql = "SELECT id FROM biz.t WHERE note = ':tenantId' AND batch_no = :batchNo";
+    String sql = """
+        SELECT id FROM biz.t WHERE note = ':tenantId' AND batch_no = :batchNo\
+    """;
     assertThatThrownBy(() -> validator.validate(sql))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining(":tenantId");
@@ -220,8 +222,9 @@ class SqlTemplateExportSqlValidatorTest {
   @Test
   @DisplayName("出现未声明的命名参数时校验失败")
   void validate_rejectsUnknownNamedParameter() {
-    String sql = "SELECT id FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo "
-        + "AND customer_id = :extraParam";
+    String sql = """
+        SELECT id FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo AND customer_id = :extraParam\
+        """;
     SqlTemplateExportSqlValidator validator = validatorWithDefaults();
     assertThatThrownBy(() -> validator.validate(sql))
         .isInstanceOf(IllegalArgumentException.class)
@@ -234,23 +237,30 @@ class SqlTemplateExportSqlValidatorTest {
     SqlTemplateExportSecurityProperties props = new SqlTemplateExportSecurityProperties();
     props.setAllowedExtraParams(List.of("customerId"));
     SqlTemplateExportSqlValidator validator = new SqlTemplateExportSqlValidator(props);
-    String sql = "SELECT id FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo "
-        + "AND customer_id = :customerId";
+    String sql = """
+        SELECT id FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo AND customer_id = :customerId\
+        """;
     assertThat(validator.validate(sql)).isEqualTo(sql);
   }
 
   @Test
   @DisplayName("类型转换写法不被误判为命名参数,校验通过")
   void validate_doesNotTreatPostgresCastAsNamedParameter() {
-    String sql = "SELECT id::text FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo";
-    assertThat(validatorWithDefaults().validate(sql)).isEqualTo(sql);
+    String sql = """
+        SELECT id::text FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo\
+        """;
+    SqlTemplateExportSqlValidator validator = validatorWithDefaults();
+    String validatedSql = validator.validate(sql);
+    assertThat(validatedSql).isEqualTo(sql);
   }
 
   @Test
   @DisplayName("美元引用块内的参数写法不被当作真实参数")
   void validate_doesNotTreatDollarQuoteAsNamedParameter() {
-    String sql = "SELECT $$:unknownInDollarQuote$$ AS note, id FROM biz.t "
-        + "WHERE tenant_id = :tenantId AND batch_no = :batchNo";
+    String sql = """
+        SELECT $$:unknownInDollarQuote$$ AS note, id FROM biz.t WHERE tenant_id = :tenantId\s\
+        AND batch_no = :batchNo\
+        """;
     assertThat(validatorWithDefaults().validate(sql)).isEqualTo(sql);
   }
 
@@ -278,7 +288,9 @@ class SqlTemplateExportSqlValidatorTest {
   @DisplayName("合法查询返回去除首尾空白后的语句")
   void validate_returnsNormalizedSqlForValidQuery() {
     String sql =
-        "  SELECT id, name FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo  ";
+        """
+          SELECT id, name FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo\s\s\
+    """;
     String result = validatorWithDefaults().validate(sql);
     assertThat(result).isEqualTo(sql.trim());
   }
@@ -301,8 +313,10 @@ class SqlTemplateExportSqlValidatorTest {
   @Test
   @DisplayName("调用外部连接函数时被拒绝")
   void validate_rejectsDblinkFunctionCall() {
-    String sql = "SELECT c FROM dblink('host=evil', 'select 1') AS t(c int)"
-        + " WHERE :tenantId IS NOT NULL AND :batchNo IS NOT NULL";
+    String sql = """
+        SELECT c FROM dblink('host=evil', 'select 1') AS t(c int) WHERE :tenantId IS NOT NULL\s\
+        AND :batchNo IS NOT NULL\
+        """;
     assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("forbidden function 'dblink'");
@@ -311,8 +325,9 @@ class SqlTemplateExportSqlValidatorTest {
   @Test
   @DisplayName("调用危险会话终止函数时被拒绝")
   void validate_rejectsPgTerminateBackend() {
-    String sql = "SELECT pg_terminate_backend(pid) AS c FROM biz.t"
-        + " WHERE tenant_id = :tenantId AND batch_no = :batchNo";
+    String sql = """
+        SELECT pg_terminate_backend(pid) AS c FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo\
+        """;
     assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("forbidden function 'pg_terminate_backend'");
@@ -323,8 +338,10 @@ class SqlTemplateExportSqlValidatorTest {
   void validate_rejectsForbiddenFunctionWithCommentInjection() {
     // 回归:老子串方案被"函数名与左括号间插块注释"绕过(右侧紧跟 ( 判定只跳空白不跳注释 → 漏判)。
     // 现与 process 侧共用 SelectSqlAstValidator 的 AST 函数节点遍历,仍拒。
-    String sql = "SELECT pg_read_server_files/**/('/etc/passwd') AS c FROM biz.t"
-        + " WHERE tenant_id = :tenantId AND batch_no = :batchNo";
+    String sql = """
+        SELECT pg_read_server_files/**/('/etc/passwd') AS c FROM biz.t WHERE tenant_id = :tenantId\s\
+        AND batch_no = :batchNo\
+        """;
     assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("forbidden function 'pg_read_server_files'");
@@ -333,8 +350,10 @@ class SqlTemplateExportSqlValidatorTest {
   @Test
   @DisplayName("函数名大小写混杂时仍被识别并拒绝")
   void validate_rejectsForbiddenFunctionMixedCase() {
-    String sql = "SELECT DbLink('host=evil', 'select 1') AS c FROM biz.t"
-        + " WHERE tenant_id = :tenantId AND batch_no = :batchNo";
+    String sql = """
+        SELECT DbLink('host=evil', 'select 1') AS c FROM biz.t WHERE tenant_id = :tenantId\s\
+        AND batch_no = :batchNo\
+        """;
     assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("forbidden function");
@@ -344,8 +363,10 @@ class SqlTemplateExportSqlValidatorTest {
   @DisplayName("函数名加双引号引用时仍被识别并拒绝")
   void validate_rejectsForbiddenFunctionQuotedIdentifier() {
     // 带引号标识符 "pg_read_server_files"(...) 曾逃逸子串比对;AST 收集函数名时去引号后仍拒。
-    String sql = "SELECT \"pg_read_server_files\"('/etc/passwd') AS c FROM biz.t"
-        + " WHERE tenant_id = :tenantId AND batch_no = :batchNo";
+    String sql = """
+        SELECT "pg_read_server_files"('/etc/passwd') AS c FROM biz.t WHERE tenant_id = :tenantId\s\
+        AND batch_no = :batchNo\
+        """;
     assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("forbidden function");
@@ -355,8 +376,10 @@ class SqlTemplateExportSqlValidatorTest {
   @DisplayName("危险函数嵌套在其它函数调用里仍被拒绝")
   void validate_rejectsForbiddenFunctionNestedInExpression() {
     // AST 遍历应深入嵌套表达式 / 函数参数,不止顶层 select item。
-    String sql = "SELECT upper(coalesce(pg_terminate_backend(pid), 'x')) AS c FROM biz.t"
-        + " WHERE tenant_id = :tenantId AND batch_no = :batchNo";
+    String sql = """
+        SELECT upper(coalesce(pg_terminate_backend(pid), 'x')) AS c FROM biz.t WHERE tenant_id = :tenantId\s\
+        AND batch_no = :batchNo\
+        """;
     assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("forbidden function 'pg_terminate_backend'");
@@ -367,8 +390,10 @@ class SqlTemplateExportSqlValidatorTest {
   void validate_rejectsForbiddenFunctionInOrderBy() {
     // 回归:TablesNamesFinder 不下钻 ORDER BY 标量表达式,共享核须显式补走,否则漏采放行
     // (export 旧子串实现本能拦住此写法,共享核初版曾在此回归)。
-    String sql = "SELECT c1 FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo"
-        + " ORDER BY pg_terminate_backend(pid)";
+    String sql = """
+        SELECT c1 FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo\s\
+        ORDER BY pg_terminate_backend(pid)\
+        """;
     assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("forbidden function 'pg_terminate_backend'");
@@ -378,8 +403,10 @@ class SqlTemplateExportSqlValidatorTest {
   @DisplayName("分组子句里出现危险函数时被拒绝")
   void validate_rejectsForbiddenFunctionInGroupBy() {
     String sql =
-        "SELECT max(c1) AS m FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo"
-            + " GROUP BY pg_terminate_backend(pid)";
+        """
+        SELECT max(c1) AS m FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo\s\
+        GROUP BY pg_terminate_backend(pid)\
+        """;
     assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("forbidden function 'pg_terminate_backend'");
@@ -389,8 +416,10 @@ class SqlTemplateExportSqlValidatorTest {
   @DisplayName("窗口函数子句里出现危险函数时被拒绝")
   void validate_rejectsForbiddenFunctionInWindowOver() {
     // 窗口 OVER(...) 是 AnalyticExpression 节点,函数名与内部表达式均须采集。
-    String sql = "SELECT row_number() over (ORDER BY pg_terminate_backend(pid)) AS rn FROM biz.t"
-        + " WHERE tenant_id = :tenantId AND batch_no = :batchNo";
+    String sql = """
+        SELECT row_number() over (ORDER BY pg_terminate_backend(pid)) AS rn FROM biz.t\s\
+        WHERE tenant_id = :tenantId AND batch_no = :batchNo\
+        """;
     assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("forbidden function 'pg_terminate_backend'");
@@ -399,8 +428,10 @@ class SqlTemplateExportSqlValidatorTest {
   @Test
   @DisplayName("偏移子句里出现危险函数时被拒绝")
   void validate_rejectsForbiddenFunctionInOffset() {
-    String sql = "SELECT c1 FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo"
-        + " ORDER BY c1 OFFSET pg_terminate_backend(1)";
+    String sql = """
+        SELECT c1 FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo\s\
+        ORDER BY c1 OFFSET pg_terminate_backend(1)\
+        """;
     assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("forbidden function 'pg_terminate_backend'");
@@ -409,7 +440,9 @@ class SqlTemplateExportSqlValidatorTest {
   @Test
   @DisplayName("以建表即查询方式写出结果集时被拒绝")
   void validate_rejectsCtas() {
-    String sql = "CREATE TABLE biz.foo AS SELECT id FROM biz.t WHERE tenant_id = :tenantId";
+    String sql = """
+        CREATE TABLE biz.foo AS SELECT id FROM biz.t WHERE tenant_id = :tenantId\
+    """;
     assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("only allows SELECT");
@@ -418,10 +451,11 @@ class SqlTemplateExportSqlValidatorTest {
   @Test
   @DisplayName("多表关联查询在带租户与批次条件时通过")
   void validate_acceptsJoin() {
-    String sql = "SELECT sb.batch_no, sd.settlement_no "
-        + "FROM biz.settlement_detail sd "
-        + "JOIN biz.settlement_batch sb ON sb.id = sd.batch_id "
-        + "WHERE sb.tenant_id = :tenantId AND sb.batch_no = :batchNo";
+    String sql = """
+        SELECT sb.batch_no, sd.settlement_no FROM biz.settlement_detail sd\s\
+        JOIN biz.settlement_batch sb ON sb.id = sd.batch_id WHERE sb.tenant_id = :tenantId\s\
+        AND sb.batch_no = :batchNo\
+        """;
     String result = validatorWithDefaults().validate(sql);
     assertThat(result).isEqualTo(sql);
   }
@@ -447,8 +481,9 @@ class SqlTemplateExportSqlValidatorTest {
     props.setForbiddenFunctions(extended);
     SqlTemplateExportSqlValidator v = new SqlTemplateExportSqlValidator(props);
 
-    String sql = "SELECT w1_4_test_only_marker_fn(1) AS c FROM biz.t"
-        + " WHERE tenant_id = :tenantId AND batch_no = :batchNo";
+    String sql = """
+        SELECT w1_4_test_only_marker_fn(1) AS c FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo\
+        """;
     assertThatThrownBy(() -> v.validate(sql))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("forbidden function 'w1_4_test_only_marker_fn'");

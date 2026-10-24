@@ -19,6 +19,21 @@ description: 用户要求在特性分支交付代码、执行提交检查、创�
 3. 需要最新基线时 `git fetch`，确认目标分支和本地改动后，从最新目标分支创建短生命周期分支。不要直接在受保护主分支开发。分支统一使用 `feature/<topic>`、`fix/<topic>`、`chore/<topic>`、`docs/<topic>`，分别对应功能、缺陷、工程/依赖/脚本/CI、纯文档变更。
 4. 保留已有工作区改动。目标分支落后时，先确认 rebase/合并不会覆盖工作，不用 reset/checkout 丢弃或强推来“整理”状态。
 
+## 功能、缺陷与 Issue 交付
+
+- 功能实现、Bug 修复和 Issue 整改都使用本流程管理分支、验证、PR 与交付；实际实现由对应领域 Skill 负责。本 Skill 不替代业务设计、代码审查或专项测试。
+- 开始前把需求/Issue 转成可验证的行为和验收条件，核对已有分支/PR 是否已覆盖同一问题，避免重复实现。PR 描述关联 Issue、说明修复范围和验证证据；用户只要求修复时，不自动关闭 Issue，关闭属于独立的外部状态变更。
+
+## 多 PR 依赖与冲突预防
+
+在同一项目中有多个并行或连续 PR 时，创建下一分支或推送前先做交付关系盘点：
+
+1. 仅盘点与本次工作相关的开放 PR、分支和 worktree，记录 base/head SHA、状态、目标目录和主要变更路径；不要用“最近的 PR”代替依赖关系。
+2. 比较变更文件和共享边界，特别检查 API/OpenAPI/生成类型、数据库迁移编号与 Schema、公共 DTO/枚举、配置事实源、CI workflow、共享测试 fixture 和文档。把结果标成独立、前置依赖/堆叠、文件冲突或契约冲突，并说明证据。
+3. 有明确依赖时按依赖图确定 base 和合并顺序，使用连续 PR 基线规则；独立工作可分别以目标分支为 base。若并行编辑会争用同一目录或共享契约，先拆分责任边界或串行处理，不依靠最后解决文本冲突来替代设计协调。
+4. 每次 push/更新 PR 前重新核对前置 PR 的 head、目标分支最新状态和实际 PR diff；base/head 改变或冲突解决后，重新检查完整差异并运行受影响门禁。迁移序号、生成物和跨仓契约须核对最终合并顺序下仍成立。
+5. 合并前按拓扑顺序确认依赖 PR 已合并或仍作为有效 stacked base；合并后重新确认后续 PR 的 base、差异范围和 required checks。不得只凭 Git 文本冲突为零认定语义兼容。
+
 ### 连续 PR 基线
 
 1. 创建分支或 PR 前，先查询当前交付链最新的未合并 PR，并记录其 `headRefName`、`headRefOid`、`baseRefName` 和状态。这里的“最新 PR”只指同一任务或明确连续交付链；无关 PR 不得作为基线。
@@ -33,12 +48,12 @@ description: 用户要求在特性分支交付代码、执行提交检查、创�
 2. Java 多模块测试使用 Maven Wrapper，并根据依赖闭包使用 `-am`；记录真实测试类、用例数及是否依赖 Testcontainers/Docker。
 3. 本地提交门禁：显式暂存拟交付文件，审查 `git diff --cached`，再运行 `bash scripts/local/pre-commit-checks.sh`；提交 hook 会按暂存文件域路由检查，并可能自动格式化或新增生成快照，执行后必须重新审查暂存差异。
 4. **Lean LOC 快照**：tracked 源码变化由 pre-commit 使用暂存树重生成 `docs/stats/loc-current-lean.md` 并自动暂存。生成器要求 Python 3.12+；手工复核可运行 `python3.12 scripts/ci/check-loc-snapshot.py`。不要用旧快照覆盖当前结果。
-5. **Java 可读性清单**：pre-push 可能自动刷新 `docs/analysis/java-readability-inventory-2026-08-12.md` 并拒绝本次 push。若仅清单排序/行数按生成逻辑变化，审查后单独暂存并提交该生成物，再重试 push；不要用 `SKIP_SDK_CHECKS=1` 绕过。
+5. **Java 可读性清单**：pre-push 可能自动刷新 `docs/stats/java-readability-inventory.md` 并拒绝本次 push。若仅清单排序/行数按生成逻辑变化，审查后单独暂存并提交该生成物，再重试 push；不要用 `SKIP_SDK_CHECKS=1` 绕过。
 6. **Changelog**：有用户可见功能、重要缺陷/安全修复、生产配置、部署、迁移或外部契约影响时，按根 `CHANGELOG.md` 的 `[Unreleased]` 分类追加条目。只有 `docs/agent-baseline.md` 或 ADR/架构权威约束变化才更新 `docs/changelog.md`。提交后运行 `python3 scripts/ci/check-changelog-sync.py --base origin/main`。
 7. **Sonar**：Java 生产代码有改动时，PR 前应在 Docker、Java 21 和 Sonar 服务可用的本地环境运行 `bash scripts/dev/sonar-scan.sh --incremental --base-ref origin/main`，检查 issues、changed-lines 与 hotspots，并治理本次新增项；扫描未能运行时记录阻塞原因和未执行状态。需刷新覆盖率时添加 `--with-tests`。报告位于 `reports/sonar/<timestamp>/`，通常是本地产物，不要随意纳入 PR。该扫描分析完整 Maven reactor 并额外导出 Git 变更行报告，不等于只扫描改动文件。CI workflow 在 main push 及相关代码变更夜间扫描；SonarQube Community Build 不执行 PR 分析。是否属于 required check 以仓库 Ruleset 为准；若结果为 `SKIPPED`、未配置或未运行，不得描述为 Sonar 通过。
 8. 根据变更域运行 Shell/文档/配置/依赖/安全/API 等守护。全量 Full Gate、sim、BE-ACC 和 Sonar 是不同验证层级，不要互相替代；未运行则在 PR 中写明。
 9. **实现与文档同步**：所有有语义影响的变更都要检查对应文档、示例、索引和生成物是否需要更新，包括功能与 API 契约、配置/环境变量、数据库结构与表说明、部署和运行方式、脚本运维、测试验收及故障处理。按权威文档归属更新，不复制出相互矛盾的第二事实来源；同步生成类型、清单或快照时要运行对应校验。纯内部重构若不改变用户行为、操作方式或架构约束，可以不改文档，但在 PR 说明中简述判断依据。只完成代码、不核对适用文档，不算交付完成。
-10. **门禁与文档同步**：新增或扩展门禁时，确认脚本已登记在 `scripts/ci/README.md`，并按影响更新 `docs/runbook/ci.md` 的触发/阻断矩阵、`docs/audit/convention-drift-guard-index.md` 的守卫矩阵，以及对应专项 runbook。文档应说明检查范围、触发条件、执行命令和不覆盖的验证；修改 workflow 时还要核对 required check 名称与实际 job 一致。只改门禁实现但不更新适用说明，不算交付完成。
+10. **门禁与文档同步**：新增或扩展门禁时，确认脚本已登记在 `scripts/ci/README.md`，并按影响更新 `docs/runbook/ci.md` 的触发/阻断矩阵、`docs/standards/convention-drift-guard-index.md` 的守卫矩阵，以及对应专项 runbook。文档应说明检查范围、触发条件、执行命令和不覆盖的验证；修改 workflow 时还要核对 required check 名称与实际 job 一致。只改门禁实现但不更新适用说明，不算交付完成。
 11. **PR 前人工质量复核**：创建或更新 PR 前，必须对目标分支到当前 head 的完整 diff 执行 `.agents/skills/code-review-and-gates/SKILL.md`。至少逐项检查行为/边界正确性和该 skill 的可读性与代码卫生清单，特别留意复合条件、嵌套实参/返回表达式、参数密度及调用现场、方法职责/方法壳、无类型 Map、依赖注入、资源生命周期、WHY 注释和重复/死代码。记录审查发现或明确说明未发现问题；不重复运行已有 pre-commit/pre-push 门禁，缺陷修复后只补跑受影响验证。
 
 ## 提交与 PR
@@ -59,5 +74,5 @@ description: 用户要求在特性分支交付代码、执行提交检查、创�
 
 - 本地 Sonar 命令说明：`scripts/dev/sonar-scan.sh`、`scripts/dev/README.md`。
 - 临时 Sonar CI 触发范围、限制及 Quality Gate：`docs/runbook/ci.md`、`docs/runbook/sonar.md`。
-- LOC 口径与归档：`docs/stats/README.md`、`docs/stats/archive/README.md`。
+- LOC 口径与归档：`docs/stats/README.md`、`docs/archive/stats/README.md`。
 - 代码量自动刷新：`scripts/local/pre-commit-checks.sh`；可读性清单生成：`scripts/ci/report-java-readability-inventory.py`。

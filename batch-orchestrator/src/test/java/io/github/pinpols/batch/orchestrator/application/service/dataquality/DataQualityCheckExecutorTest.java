@@ -23,6 +23,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -77,7 +78,17 @@ class DataQualityCheckExecutorTest {
     var outcome = executor.execute(instance("t1", 1L), "job:JOB:2026-05-07");
 
     assertThat(outcome.status()).isEqualTo(GateStatus.PASS);
-    verify(checkMapper).insert(any(DataQualityCheckEntity.class));
+    ArgumentCaptor<DataQualityCheckEntity> checkCaptor =
+        ArgumentCaptor.forClass(DataQualityCheckEntity.class);
+    verify(checkMapper).insert(checkCaptor.capture());
+    DataQualityCheckEntity savedCheck = checkCaptor.getValue();
+    assertThat(savedCheck.tenantId()).isEqualTo("t1");
+    assertThat(savedCheck.jobInstanceId()).isEqualTo(1L);
+    assertThat(savedCheck.ruleCode()).isEqualTo("ROW_COUNT_OK");
+    assertThat(savedCheck.status()).isEqualTo("PASS");
+    assertThat(savedCheck.metricsJson()).isEqualTo("{}");
+    assertThat(savedCheck.failureSample()).isNull();
+    assertThat(savedCheck.checkedAt()).isNotNull();
   }
 
   @Test

@@ -5,6 +5,7 @@
 --
 -- 全新库：本脚本与 batch.job_instance（V93/V94）对齐。
 -- 若库上曾执行过「仅含 data_interval_*」的旧 V97，Flyway 不会重跑本版本 → 依赖 **V98** 补 calendar_code。
+
 ALTER TABLE archive.job_instance_archive
     ADD COLUMN IF NOT EXISTS calendar_code VARCHAR(64);
 

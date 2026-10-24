@@ -2,6 +2,7 @@
 -- cleanup-historical-failures.sql
 -- 清理累积的历史失败数据（FAILED / CANCELLED / TERMINATED job_instance 及其级联），
 -- 保留 SUCCESS + 最近 1h 内的所有状态（便于调试）。
+-- 本入口不复制冷表；带 checkpoint 的候选必须走 Orchestrator 归档，任何写入前拒绝。
 --
 -- 用法：
 --   PGPASSWORD=... psql -h localhost -p 15432 -U batch_user -d batch_platform \
@@ -12,7 +13,61 @@
 -- ⚠️ 会真实删除数据，不可回滚（除非事务中断）。生产环境请先快照。
 -- =========================================================
 
-\set retention_interval '1 hour'
+\set ON_ERROR_STOP on
+\if :{?retention_interval}
+\else
+  \set retention_interval '1 hour'
+\endif
+
+-- 位点需要与完整运行树一起归档；此独立清理入口不提供冷复制，遇到位点先拒绝。
+SELECT EXISTS (
+  SELECT 1 FROM batch.pipeline_progress progress
+  JOIN batch.pipeline_instance pipeline
+    ON pipeline.id = progress.pipeline_instance_id AND pipeline.tenant_id = progress.tenant_id
+  JOIN batch.job_instance job
+    ON job.id = pipeline.related_job_instance_id AND job.tenant_id = pipeline.tenant_id
+  WHERE job.instance_status IN ('FAILED','CANCELLED','TERMINATED')
+    AND job.created_at < now() - interval :'retention_interval'
+) AS _cleanup_has_checkpoint \gset
+\if :_cleanup_has_checkpoint
+  DO $checkpoint_cleanup_guard$
+  BEGIN
+    RAISE EXCEPTION 'checkpoint-bearing instances require the Orchestrator archive service; no data deleted.'
+      USING ERRCODE = '55000';
+  END
+  $checkpoint_cleanup_guard$;
+\endif
+
+-- DQ执行证据必须随完整运行树原子搬运；此入口不提供冷复制，删除前失败关闭。
+SELECT EXISTS (
+  SELECT 1 FROM batch.data_quality_check check_row
+  JOIN batch.job_instance job ON job.id = check_row.job_instance_id
+  WHERE job.instance_status IN ('FAILED','CANCELLED','TERMINATED') AND job.created_at < now() - :'retention_interval'::interval
+) AS _cleanup_has_quality_evidence \gset
+\if :_cleanup_has_quality_evidence
+  DO $quality_cleanup_guard$
+  BEGIN
+    RAISE EXCEPTION 'quality-evidence-bearing instances require the Orchestrator archive service; no data deleted.'
+      USING ERRCODE = '55000';
+  END
+  $quality_cleanup_guard$;
+\endif
+
+-- 不会扩大对该登记表的访问范围。
+SELECT EXISTS (
+  SELECT 1 FROM batch.job_instance job
+  WHERE job.instance_status IN ('FAILED','CANCELLED','TERMINATED') AND job.created_at < now() - :'retention_interval'::interval
+    AND (EXISTS (SELECT 1 FROM batch.workflow_node_run node WHERE node.job_instance_id=job.id)
+         OR EXISTS (SELECT 1 FROM archive.workflow_node_run_archive node WHERE node.job_instance_id=job.id)
+         OR EXISTS (SELECT 1 FROM batch.workflow_run run WHERE run.related_job_instance_id=job.id)
+         OR EXISTS (SELECT 1 FROM archive.workflow_run_archive run WHERE run.related_job_instance_id=job.id))
+) AS _cleanup_has_workflow_reference \gset
+\if :_cleanup_has_workflow_reference
+  DO $runtime_cleanup_guard$ BEGIN
+    RAISE EXCEPTION 'Workflow-linked instances require the Orchestrator archive service; no data deleted.'
+      USING ERRCODE='55000';
+  END $runtime_cleanup_guard$;
+\endif
 
 BEGIN;
 
@@ -135,12 +190,10 @@ DELETE FROM batch.job_instance
  WHERE instance_status IN ('FAILED','CANCELLED','TERMINATED')
    AND created_at < now() - interval :'retention_interval';
 
--- 2) 孤儿 trigger_request：已被拒绝/转发失败/放弃/已 launch 但没有活跃 instance 引用
---   （job_instance.trigger_request_id 是 FK，不能删仍有 SUCCESS 实例引用的行）
-DELETE FROM batch.trigger_request
- WHERE request_status IN ('REJECTED','FORWARD_FAILED','GIVE_UP','LAUNCHED')
-   AND created_at < now() - interval :'retention_interval'
-   AND id NOT IN (SELECT trigger_request_id FROM batch.job_instance WHERE trigger_request_id IS NOT NULL);
+-- 2) 请求/等待保留：FORWARD_FAILED可恢复，不能按终态清；保留未传播拒绝及冷热引用。
+SELECT now() - :'retention_interval'::interval AS request_retention_cutoff \gset
+\set request_cleanup_mode failure
+\ir cleanup-trigger-request-retention.sql
 
 -- 3) outbox：已发布 > 24h 的删（保留近期事件供调试）
 --    注意：先删 event_delivery_log（FK 引用 outbox_event.id）再删 outbox_event 本身

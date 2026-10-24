@@ -1,4 +1,6 @@
 #!/usr/bin/env sh
+# 用途：根据环境变量渲染 Alertmanager 配置。
+# 用法：在仓库根目录执行 bash scripts/ops/render-alertmanager-config.sh；参数与前置环境见下方说明及所属 README。
 set -eu
 
 token=${BATCH_CONSOLE_ALERTMANAGER_BEARER_TOKEN:-}

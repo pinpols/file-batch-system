@@ -8,17 +8,26 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.orchestrator.config.TriggerConsumerProperties;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
+import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+import io.github.pinpols.batch.orchestrator.infrastructure.trigger.TriggerLaunchConsumer;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.LocalDate;
 import java.util.Map;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.kafka.support.Acknowledgment;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.http.HttpStatus;
@@ -42,17 +51,33 @@ class LaunchApplicationServiceTest {
   @Mock
   private TenantActionRateLimiter rateLimiter;
 
+  @Mock
+  private WorkflowRunLaunchService workflowRunLaunchService;
+
+  @Mock
+  private OrchestratorGracefulShutdown gracefulShutdown;
+
+  @Mock
+  private Acknowledgment acknowledgment;
+
   private LaunchApplicationService service;
 
   @BeforeEach
   void setUp() {
     MockitoAnnotations.openMocks(this);
-    service = new LaunchApplicationService(launchService, rateLimiter);
+    service = new LaunchApplicationService(rateLimiter, workflowRunLaunchService);
   }
 
   private LaunchRequest request(String tenantId) {
-    return new LaunchRequest(
-        tenantId, "j", LocalDate.now(), TriggerType.SCHEDULED, "req", "trace", Map.of());
+    return LaunchRequest.builder()
+        .tenantId(tenantId)
+        .workflowDefinitionId(71L)
+        .bizDate(LocalDate.now())
+        .triggerType(TriggerType.SCHEDULED)
+        .requestId("req")
+        .traceId("trace")
+        .params(Map.of())
+        .build();
   }
 
   @Test
@@ -70,12 +95,12 @@ class LaunchApplicationServiceTest {
   }
 
   @Test
-  @DisplayName("限流通过 → 透传到 LaunchService,返回其结果")
+  @DisplayName("限流通过 → 透传到根 Workflow Launch 服务,返回其结果")
   void shouldDelegateToLaunchService_whenPermitGranted() {
     LaunchRequest req = request("ta");
     LaunchResponse expected = new LaunchResponse("inst-001", "trace");
     when(rateLimiter.tryConsume("ta", RateLimitAction.LAUNCH)).thenReturn(true);
-    when(launchService.launch(req)).thenReturn(expected);
+    when(workflowRunLaunchService.launch(req)).thenReturn(expected);
 
     LaunchResponse result = service.launch(req);
     assertThat(result).isSameAs(expected);
@@ -86,13 +111,87 @@ class LaunchApplicationServiceTest {
   void shouldSkipRateLimit_whenLaunchingFromTrustedQueue() {
     LaunchRequest req = request("ta");
     LaunchResponse expected = new LaunchResponse("inst-queue", "trace-queue");
-    when(launchService.launch(req)).thenReturn(expected);
+    when(workflowRunLaunchService.launch(req)).thenReturn(expected);
 
     LaunchResponse result = service.launchFromTrustedQueue(req);
 
     assertThat(result).isSameAs(expected);
     verify(rateLimiter, never()).tryConsume(anyString(), any());
-    verify(launchService).launch(req);
+    verify(workflowRunLaunchService).launch(req);
+    verify(launchService, never()).launch(any());
+  }
+
+  @Test
+  @DisplayName("旧版 Job 根启动消息只确认并拒绝，不回退创建 JobInstance")
+  void shouldDropLegacyJobRootMessageFromTrustedQueue() {
+    when(gracefulShutdown.isDraining()).thenReturn(false);
+    TriggerLaunchConsumer consumer = new TriggerLaunchConsumer(
+        service,
+        gracefulShutdown,
+        new SimpleMeterRegistry(),
+        new TriggerConsumerProperties(),
+        new BatchKafkaTopicNamespace(""));
+    String legacyEnvelope = """
+        {
+          "launchRequest": {
+            "tenantId": "ta",
+            "jobCode": "LEGACY_JOB_ROOT",
+            "bizDate": "2026-10-21",
+            "triggerType": "MANUAL",
+            "requestId": "legacy-job-root-request",
+            "traceId": "legacy-job-root-trace",
+            "params": {}
+          },
+          "dedupKey": "ta:LEGACY_JOB_ROOT:2026-10-21",
+          "sourceFireTime": "2026-10-21T00:00:00Z",
+          "envelopeVersion": 2
+        }
+        """;
+    ConsumerRecord<String, String> record = new ConsumerRecord<>(
+        BatchTopics.TRIGGER_LAUNCH_V1, 0, 0L, "legacy-job-root-request", legacyEnvelope);
+
+    consumer.consume(record, acknowledgment);
+
+    verify(acknowledgment).acknowledge();
+    verify(launchService, never()).launch(any());
+    verify(workflowRunLaunchService, never()).launch(any());
+  }
+
+  @Test
+  @DisplayName("HTTP 入口拒绝 Job-only 根启动")
+  void shouldRejectJobOnlyTopLevelLaunch() {
+    LaunchRequest jobTarget = new LaunchRequest(
+        "ta", "j", LocalDate.now(), TriggerType.API, "req-job", "trace-job", Map.of());
+
+    assertThatThrownBy(() -> service.launch(jobTarget))
+        .isInstanceOf(ResponseStatusException.class)
+        .extracting("statusCode")
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+
+    verify(rateLimiter, never()).tryConsume(anyString(), any());
+    verify(launchService, never()).launch(any());
+    verify(workflowRunLaunchService, never()).launch(any());
+  }
+
+  @Test
+  @DisplayName("Workflow ID 目标进入唯一根 Workflow Launch 服务，不伪装成 Job Launch")
+  void shouldRouteWorkflowTargetToRootWorkflowLauncher() {
+    LaunchRequest req = LaunchRequest.builder()
+        .tenantId("ta")
+        .workflowDefinitionId(71L)
+        .bizDate(LocalDate.now())
+        .triggerType(TriggerType.API)
+        .requestId("req-wf")
+        .traceId("trace-wf")
+        .params(Map.of())
+        .build();
+    LaunchResponse expected = new LaunchResponse("workflow-71", "trace-wf");
+    when(rateLimiter.tryConsume("ta", RateLimitAction.LAUNCH)).thenReturn(true);
+    when(workflowRunLaunchService.launch(req)).thenReturn(expected);
+
+    assertThat(service.launch(req)).isSameAs(expected);
+    verify(workflowRunLaunchService).launch(req);
+    verify(launchService, never()).launch(any());
   }
 
   @Test

@@ -16,13 +16,18 @@ import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
@@ -48,6 +53,7 @@ class SqlTransformComputePluginIntegrationTest {
   private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.create();
 
   private JdbcTemplate jdbcTemplate;
+  private DriverManagerDataSource dataSource;
   private SqlTransformComputePlugin plugin;
 
   @BeforeAll
@@ -63,40 +69,99 @@ class SqlTransformComputePluginIntegrationTest {
   @BeforeEach
   void setUp() {
     RlsTenantContextHolder.set("t1");
-    org.springframework.jdbc.datasource.DriverManagerDataSource dataSource =
-        new org.springframework.jdbc.datasource.DriverManagerDataSource(
-            POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+    dataSource = new DriverManagerDataSource(
+        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
     jdbcTemplate = new JdbcTemplate(dataSource);
     SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
     security.setAllowedSchemas(List.of("biz"));
     plugin = new SqlTransformComputePlugin(
         dataSource, new ObjectMapper(), security, ProcessMetrics.noop());
 
-    jdbcTemplate.execute("drop schema if exists biz cascade");
-    jdbcTemplate.execute("drop schema if exists batch cascade");
-    jdbcTemplate.execute("create schema biz");
-    jdbcTemplate.execute("create schema batch");
-    jdbcTemplate.execute("""
+    String dropBizSchemaSql = """
+        drop schema if exists biz cascade
+        """;
+    jdbcTemplate.execute(dropBizSchemaSql);
+    String dropBatchSchemaSql = """
+        drop schema if exists batch cascade
+        """;
+    jdbcTemplate.execute(dropBatchSchemaSql);
+    String createBizSchemaSql = """
+        create schema biz
+        """;
+    jdbcTemplate.execute(createBizSchemaSql);
+    String createBatchSchemaSql = """
+        create schema batch
+        """;
+    jdbcTemplate.execute(createBatchSchemaSql);
+    String createStagingGenerationTableSql = """
+        create table batch.process_staging_generation (
+          generation_id uuid primary key,
+          tenant_id text not null,
+          job_task_id bigint,
+          batch_key text not null,
+          generation_status text not null,
+          created_at timestamptz not null default now(),
+          sealed_at timestamptz,
+          check (generation_status in ('OPEN', 'SEALED')),
+          check ((generation_status = 'SEALED') = (sealed_at is not null)),
+          unique (tenant_id, generation_id, batch_key)
+        )
+        """;
+    jdbcTemplate.execute(createStagingGenerationTableSql);
+    String createProcessStagingTableSql = """
         create table batch.process_staging (
           batch_key text not null,
+          staging_generation_id uuid not null,
           row_seq bigserial not null,
           tenant_id text not null,
           target_schema text not null,
           target_table text not null,
           payload jsonb not null,
           staged_at timestamptz not null default now(),
-          primary key (batch_key, row_seq)
+          primary key (batch_key, staging_generation_id, row_seq),
+          constraint fk_process_staging_generation_identity
+            foreign key (tenant_id, staging_generation_id, batch_key)
+            references batch.process_staging_generation (tenant_id, generation_id, batch_key)
+            on delete no action
         )
-        """);
-    jdbcTemplate.execute("""
+        """;
+    jdbcTemplate.execute(createProcessStagingTableSql);
+    String createGenerationGuardFunctionSql = """
+        create function batch.guard_process_staging_generation()
+        returns trigger language plpgsql as $$
+        begin
+          perform 1 from batch.process_staging_generation generation
+          where generation.generation_id = new.staging_generation_id
+            and generation.tenant_id = new.tenant_id
+            and generation.batch_key = new.batch_key
+            and generation.generation_status = 'OPEN'
+          for share;
+          if not found then
+            raise exception 'PROCESS staging generation is missing, mismatched, or sealed'
+              using errcode = '23503', constraint = 'fk_process_staging_generation_open';
+          end if;
+          return new;
+        end
+        $$
+        """;
+    jdbcTemplate.execute(createGenerationGuardFunctionSql);
+    String createGenerationGuardTriggerSql = """
+        create trigger trg_process_staging_generation_guard
+        before insert or update of batch_key, staging_generation_id, tenant_id
+        on batch.process_staging for each row
+        execute function batch.guard_process_staging_generation()
+        """;
+    jdbcTemplate.execute(createGenerationGuardTriggerSql);
+    String createOrderEventTableSql = """
         create table biz.order_event (
           tenant_id varchar(32) not null,
           account_id varchar(32) not null,
           event_id bigint not null,
           amount numeric(18, 2) not null
         )
-        """);
-    jdbcTemplate.execute("""
+        """;
+    jdbcTemplate.execute(createOrderEventTableSql);
+    String createAccountSummaryTableSql = """
         create table biz.account_summary (
           tenant_id varchar(32) not null,
           account_id varchar(32) not null,
@@ -104,15 +169,15 @@ class SqlTransformComputePluginIntegrationTest {
           high_water_mark bigint not null,
           primary key (tenant_id, account_id)
         )
-        """);
-    jdbcTemplate.update(
-        "insert into biz.order_event values (?, ?, ?, ?)", "t1", "A", 1L, new BigDecimal("10.00"));
-    jdbcTemplate.update(
-        "insert into biz.order_event values (?, ?, ?, ?)", "t1", "A", 2L, new BigDecimal("20.00"));
-    jdbcTemplate.update(
-        "insert into biz.order_event values (?, ?, ?, ?)", "t1", "B", 3L, new BigDecimal("7.00"));
-    jdbcTemplate.update(
-        "insert into biz.order_event values (?, ?, ?, ?)", "t2", "X", 9L, new BigDecimal("99.00"));
+        """;
+    jdbcTemplate.execute(createAccountSummaryTableSql);
+    String insertOrderEventSql = """
+        insert into biz.order_event values (?, ?, ?, ?)
+        """;
+    jdbcTemplate.update(insertOrderEventSql, "t1", "A", 1L, new BigDecimal("10.00"));
+    jdbcTemplate.update(insertOrderEventSql, "t1", "A", 2L, new BigDecimal("20.00"));
+    jdbcTemplate.update(insertOrderEventSql, "t1", "B", 3L, new BigDecimal("7.00"));
+    jdbcTemplate.update(insertOrderEventSql, "t2", "X", 9L, new BigDecimal("99.00"));
   }
 
   @AfterEach
@@ -137,20 +202,28 @@ class SqlTransformComputePluginIntegrationTest {
     assertThat(feedback.success()).isTrue();
 
     // 业务结果落到目标表
-    assertThat(jdbcTemplate.queryForObject(
-            "select total_amount from biz.account_summary where account_id='A'", BigDecimal.class))
-        .isEqualByComparingTo("20.00");
-    assertThat(jdbcTemplate.queryForObject(
-            "select total_amount from biz.account_summary where account_id='B'", BigDecimal.class))
-        .isEqualByComparingTo("7.00");
-    assertThat(
-            jdbcTemplate.queryForObject("select count(*) from biz.account_summary", Integer.class))
-        .isEqualTo(2);
+    String selectAccountAAmountSql = """
+        select total_amount from biz.account_summary where account_id='A'
+        """;
+    BigDecimal accountAAmount = jdbcTemplate.queryForObject(selectAccountAAmountSql, BigDecimal.class);
+    assertThat(accountAAmount).isEqualByComparingTo("20.00");
+    String selectAccountBAmountSql = """
+        select total_amount from biz.account_summary where account_id='B'
+        """;
+    BigDecimal accountBAmount = jdbcTemplate.queryForObject(selectAccountBAmountSql, BigDecimal.class);
+    assertThat(accountBAmount).isEqualByComparingTo("7.00");
+    String accountSummaryCountSql = """
+            select count(*) from biz.account_summary
+            """;
+    Integer accountSummaryCount = jdbcTemplate.queryForObject(accountSummaryCountSql, Integer.class);
+    assertThat(accountSummaryCount).isEqualTo(2);
 
     // staging 已被 feedback 清空
-    assertThat(jdbcTemplate.queryForObject(
-            "select count(*) from batch.process_staging", Integer.class))
-        .isZero();
+    String stagingCountSql = """
+            select count(*) from batch.process_staging
+            """;
+    Integer remainingStagingCount = jdbcTemplate.queryForObject(stagingCountSql, Integer.class);
+    assertThat(remainingStagingCount).isZero();
 
     // 水位、行数都正确暴露在 context attributes
     assertThat(context.getAttributes())
@@ -166,15 +239,20 @@ class SqlTransformComputePluginIntegrationTest {
     ProcessJobContext context = newContextWithSpec();
     Map<String, Object> stepParams = currentStepParams(context);
     Map<String, Object> spec = nestedSpec(stepParams);
+    String validationSql = """
+        select bool_and((payload->>'total_amount')::numeric > 100) AS pass,
+               'total_amount must exceed 100' AS message
+        from batch.process_staging
+        where batch_key = :batchKey
+          and staging_generation_id = :stagingGenerationId
+        """;
     spec.put(
         "validations",
         List.of(Map.of(
             "name",
             "non_negative_total",
             "checkSql",
-            "select bool_and((payload->>'total_amount')::numeric > 100) AS pass,"
-                + " 'total_amount must exceed 100' AS message"
-                + " from batch.process_staging where batch_key = :batchKey")));
+            validationSql)));
 
     plugin.prepare(context);
     plugin.compute(context);
@@ -185,13 +263,44 @@ class SqlTransformComputePluginIntegrationTest {
     assertThat(validate.message()).contains("non_negative_total").contains("must exceed 100");
 
     // commit 没跑,target 应为空
-    assertThat(
-            jdbcTemplate.queryForObject("select count(*) from biz.account_summary", Integer.class))
-        .isZero();
+    String accountSummaryCountSql = """
+            select count(*) from biz.account_summary
+            """;
+    Integer accountSummaryCount = jdbcTemplate.queryForObject(accountSummaryCountSql, Integer.class);
+    assertThat(accountSummaryCount).isZero();
     // staging 仍有 2 行(留作 forensics,直到下次 prepare/feedback 才清)
-    assertThat(jdbcTemplate.queryForObject(
-            "select count(*) from batch.process_staging", Integer.class))
-        .isEqualTo(2);
+    String stagingCountSql = """
+            select count(*) from batch.process_staging
+            """;
+    Integer remainingStagingCount = jdbcTemplate.queryForObject(stagingCountSql, Integer.class);
+    assertThat(remainingStagingCount).isEqualTo(2);
+  }
+
+  @Test
+  @DisplayName("校验后暂存行被删除时提交失败并回滚,不能把零行发布报告为成功")
+  void commit_failsAndRollsBack_whenValidatedStagingRowsDisappear() {
+    ProcessJobContext context = newContextWithSpec();
+    plugin.prepare(context);
+    plugin.compute(context);
+    assertThat(plugin.validate(context).success()).isTrue();
+    String batchKey = context.getBatchKey();
+    String deleteStagingSql = """
+        delete from batch.process_staging where batch_key = ?
+        """;
+    jdbcTemplate.update(deleteStagingSql, batchKey);
+
+    TransactionTemplate transaction =
+        new TransactionTemplate(new DataSourceTransactionManager(dataSource));
+    assertThatThrownBy(() -> transaction.execute(status -> plugin.commit(context)))
+        .isInstanceOf(BizException.class)
+        .satisfies(error -> assertThat(((BizException) error).getMessageKey())
+            .isEqualTo("error.process.staging.changed"));
+
+    String accountSummaryCountSql = """
+            select count(*) from biz.account_summary
+            """;
+    Integer accountSummaryCount = jdbcTemplate.queryForObject(accountSummaryCountSql, Integer.class);
+    assertThat(accountSummaryCount).isZero();
   }
 
   @Test
@@ -201,11 +310,20 @@ class SqlTransformComputePluginIntegrationTest {
 
     plugin.prepare(context);
     plugin.compute(context);
-    jdbcTemplate.update("""
-        insert into batch.process_staging (batch_key, tenant_id, target_schema, target_table, payload)
-        values (?, 't2', 'biz', 'account_summary',
+    String otherGeneration = UUID.randomUUID().toString();
+    String insertOtherGenerationSql = """
+        insert into batch.process_staging_generation (
+          generation_id, tenant_id, batch_key, generation_status)
+        values (cast(? as uuid), 't2', ?, 'OPEN')
+        """;
+    jdbcTemplate.update(insertOtherGenerationSql, otherGeneration, context.getBatchKey());
+    String insertOtherTenantStagingSql = """
+        insert into batch.process_staging (
+          batch_key, staging_generation_id, tenant_id, target_schema, target_table, payload)
+        values (?, cast(? as uuid), 't2', 'biz', 'account_summary',
                 '{"tenant_id":"t2","account_id":"X","total_amount":99.00,"high_water_mark":9}'::jsonb)
-        """, context.getBatchKey());
+        """;
+    jdbcTemplate.update(insertOtherTenantStagingSql, context.getBatchKey(), otherGeneration);
     ProcessStageResult validate = plugin.validate(context);
     ProcessStageResult commit = plugin.commit(context);
     ProcessStageResult feedback = plugin.feedback(context);
@@ -213,22 +331,137 @@ class SqlTransformComputePluginIntegrationTest {
     assertThat(validate.success()).isTrue();
     assertThat(commit.success()).isTrue();
     assertThat(feedback.success()).isTrue();
-    assertThat(jdbcTemplate.queryForObject(
-            "select count(*) from biz.account_summary where tenant_id='t2'", Integer.class))
-        .isZero();
-    assertThat(jdbcTemplate.queryForObject(
-            "select count(*) from batch.process_staging where tenant_id='t2'", Integer.class))
-        .isEqualTo(1);
+    String otherTenantPublishedCountSql = """
+        select count(*) from biz.account_summary where tenant_id='t2'
+        """;
+    Integer otherTenantPublishedCount =
+        jdbcTemplate.queryForObject(otherTenantPublishedCountSql, Integer.class);
+    assertThat(otherTenantPublishedCount).isZero();
+    String otherTenantStagingCountSql = """
+        select count(*) from batch.process_staging where tenant_id='t2'
+        """;
+    Integer otherTenantStagingCount = jdbcTemplate.queryForObject(otherTenantStagingCountSql, Integer.class);
+    assertThat(otherTenantStagingCount).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("相同 batchKey 的不同 generation 互相隔离,提交与清理只影响当前代次")
+  void stagingOperations_areScopedToGeneration_evenWhenBatchKeyIsReused() {
+    ProcessJobContext first = newContextWithSpec();
+    ProcessJobContext second = newContextWithSpec();
+    second.setBatchKey(first.getBatchKey());
+
+    plugin.prepare(first);
+    plugin.compute(first);
+    plugin.prepare(second);
+    plugin.compute(second);
+    assertThat(second.getStagingGenerationId()).isNotEqualTo(first.getStagingGenerationId());
+    String batchKey = first.getBatchKey();
+    String stagingCountForBatchSql = """
+        select count(*) from batch.process_staging where batch_key = ?
+        """;
+    Integer stagingCountForBatch =
+        jdbcTemplate.queryForObject(stagingCountForBatchSql, Integer.class, batchKey);
+    assertThat(stagingCountForBatch).isEqualTo(4);
+
+    assertThat(plugin.validate(first).success()).isTrue();
+    assertThat(plugin.commit(first).success()).isTrue();
+    String firstGenerationId = first.getStagingGenerationId();
+    String generationStagingCountSql = """
+        select count(*) from batch.process_staging
+        where staging_generation_id = cast(? as uuid)
+        """;
+    Integer firstGenerationStagingCount =
+        jdbcTemplate.queryForObject(generationStagingCountSql, Integer.class, firstGenerationId);
+    assertThat(firstGenerationStagingCount).isZero();
+    String secondGenerationId = second.getStagingGenerationId();
+    Integer secondGenerationStagingCount =
+        jdbcTemplate.queryForObject(generationStagingCountSql, Integer.class, secondGenerationId);
+    assertThat(secondGenerationStagingCount).isEqualTo(2);
+    assertThat(plugin.feedback(first).success()).isTrue();
+    Integer remainingSecondGenerationStagingCount =
+        jdbcTemplate.queryForObject(generationStagingCountSql, Integer.class, secondGenerationId);
+    assertThat(remainingSecondGenerationStagingCount).isEqualTo(2);
+  }
+
+  @Test
+  @DisplayName("已封口 generation 拒绝迟到的 COMPUTE 写入")
+  void compute_rejectsSealedGenerationBeforeWritingStaging() {
+    ProcessJobContext context = newContextWithSpec();
+    String insertSealedGenerationSql = """
+        insert into batch.process_staging_generation (
+          generation_id, tenant_id, batch_key, generation_status, sealed_at)
+        values (cast(? as uuid), ?, ?, 'SEALED', now())
+        """;
+    jdbcTemplate.update(
+        insertSealedGenerationSql,
+        context.getStagingGenerationId(),
+        context.getTenantId(),
+        context.getBatchKey());
+    plugin.prepare(context);
+
+    assertThatThrownBy(() -> plugin.compute(context))
+        .isInstanceOf(BizException.class)
+        .satisfies(error -> assertThat(((BizException) error).getMessageKey())
+            .isEqualTo("error.process.staging_generation_missing"));
+    String stagingGenerationId = context.getStagingGenerationId();
+    String generationStagingCountSql = """
+        select count(*) from batch.process_staging
+        where staging_generation_id = cast(? as uuid)
+        """;
+    Integer generationStagingCount =
+        jdbcTemplate.queryForObject(generationStagingCountSql, Integer.class, stagingGenerationId);
+    assertThat(generationStagingCount).isZero();
+  }
+
+  @Test
+  @DisplayName("声明式复合外键保护暂存代次归属,清理行前禁止删除generation账本")
+  void stagingGenerationForeignKey_rejectsOrphansAndProtectsReferencedGeneration() {
+    ProcessJobContext context = newContextWithSpec();
+    plugin.prepare(context);
+    plugin.compute(context);
+
+    String generationConstraintCountSql = """
+            select count(*) from pg_constraint
+            where conname = 'fk_process_staging_generation_identity'
+            """;
+    Integer generationConstraintCount =
+        jdbcTemplate.queryForObject(generationConstraintCountSql, Integer.class);
+    assertThat(generationConstraintCount).isEqualTo(1);
+    String deleteReferencedGenerationSql = """
+        delete from batch.process_staging_generation
+        where generation_id = cast(? as uuid)
+        """;
+    assertThatThrownBy(() -> jdbcTemplate.update(deleteReferencedGenerationSql, context.getStagingGenerationId()))
+        .isInstanceOf(DataIntegrityViolationException.class);
+
+    String deleteGenerationStagingSql = """
+        delete from batch.process_staging
+        where staging_generation_id = cast(? as uuid)
+        """;
+    jdbcTemplate.update(deleteGenerationStagingSql, context.getStagingGenerationId());
+    String deleteGenerationSql = """
+        delete from batch.process_staging_generation
+        where generation_id = cast(? as uuid)
+        """;
+    Integer deletedGenerationCount = jdbcTemplate.update(deleteGenerationSql, context.getStagingGenerationId());
+    assertThat(deletedGenerationCount).isEqualTo(1);
   }
 
   @Test
   @DisplayName("水位取自暂存行而不是再查一次源表,本批水位推进到二")
   void compute_advancesWatermarkFromStagingRows_notSecondSourceQuery() {
-    jdbcTemplate.execute("drop sequence if exists biz.watermark_seq");
-    jdbcTemplate.execute("create sequence biz.watermark_seq start 1 increment 1");
+    String dropWatermarkSequenceSql = """
+        drop sequence if exists biz.watermark_seq
+        """;
+    jdbcTemplate.execute(dropWatermarkSequenceSql);
+    String createWatermarkSequenceSql = """
+        create sequence biz.watermark_seq start 1 increment 1
+        """;
+    jdbcTemplate.execute(createWatermarkSequenceSql);
     ProcessJobContext context = newContextWithSpec();
     Map<String, Object> spec = nestedSpec(currentStepParams(context));
-    spec.put("sourceSql", """
+    String sourceSql = """
         select tenant_id,
                account_id,
                sum(amount) as total_amount,
@@ -238,7 +471,8 @@ class SqlTransformComputePluginIntegrationTest {
           and event_id > cast(:highWaterMarkIn as bigint)
         group by tenant_id, account_id
         order by account_id
-        """);
+        """;
+    spec.put("sourceSql", sourceSql);
 
     plugin.prepare(context);
     ProcessStageResult compute = plugin.compute(context);
@@ -282,9 +516,11 @@ class SqlTransformComputePluginIntegrationTest {
           assertThat(ex.getMessageArgs()).contains("nonexistent_target");
         });
     // staging 完全空(prepare 早停)
-    assertThat(jdbcTemplate.queryForObject(
-            "select count(*) from batch.process_staging", Integer.class))
-        .isZero();
+    String stagingCountSql = """
+            select count(*) from batch.process_staging
+            """;
+    Integer remainingStagingCount = jdbcTemplate.queryForObject(stagingCountSql, Integer.class);
+    assertThat(remainingStagingCount).isZero();
   }
 
   @Test
@@ -314,14 +550,18 @@ class SqlTransformComputePluginIntegrationTest {
     assertThat(compute.code()).isEqualTo("PROCESS_STAGED_OVERFLOW");
     assertThat(compute.message()).contains("exceeded maxStagedRows 1");
     // 立即清本批 staging,不会污染后续 stage
-    assertThat(jdbcTemplate.queryForObject(
-            "select count(*) from batch.process_staging where batch_key = 'batch-test-1'",
-            Integer.class))
-        .isZero();
+    String currentBatchStagingCountSql = """
+        select count(*) from batch.process_staging where batch_key = 'batch-test-1'
+        """;
+    Integer currentBatchStagingCount =
+        jdbcTemplate.queryForObject(currentBatchStagingCountSql, Integer.class);
+    assertThat(currentBatchStagingCount).isZero();
     // target 表仍然为空
-    assertThat(
-            jdbcTemplate.queryForObject("select count(*) from biz.account_summary", Integer.class))
-        .isZero();
+    String accountSummaryCountSql = """
+            select count(*) from biz.account_summary
+            """;
+    Integer accountSummaryCount = jdbcTemplate.queryForObject(accountSummaryCountSql, Integer.class);
+    assertThat(accountSummaryCount).isZero();
   }
 
   @Test
@@ -341,15 +581,22 @@ class SqlTransformComputePluginIntegrationTest {
     assertThat(validate.success()).isTrue();
     assertThat(commit.success()).isTrue();
     assertThat(feedback.success()).isTrue();
-    assertThat(jdbcTemplate.queryForObject(
-            "select count(*) from batch.process_staging", Integer.class))
-        .isZero();
-    assertThat(
-            jdbcTemplate.queryForObject("select count(*) from biz.account_summary", Integer.class))
-        .isEqualTo(2);
-    assertThat(jdbcTemplate.queryForObject(
-            "select total_amount from biz.account_summary where account_id='A'", BigDecimal.class))
-        .isEqualByComparingTo("20.00");
+    String stagingCountSql = """
+            select count(*) from batch.process_staging
+            """;
+    Integer remainingStagingCount = jdbcTemplate.queryForObject(stagingCountSql, Integer.class);
+    assertThat(remainingStagingCount).isZero();
+    String accountSummaryCountSql = """
+            select count(*) from biz.account_summary
+            """;
+    Integer accountSummaryCount = jdbcTemplate.queryForObject(accountSummaryCountSql, Integer.class);
+    assertThat(accountSummaryCount).isEqualTo(2);
+    String selectAccountAAmountSql = """
+        select total_amount from biz.account_summary where account_id='A'
+        """;
+    BigDecimal accountAAmount =
+        jdbcTemplate.queryForObject(selectAccountAAmountSql, BigDecimal.class);
+    assertThat(accountAAmount).isEqualByComparingTo("20.00");
     assertThat(context.getAttributes())
         .containsEntry(ProcessRuntimeKeys.PROCESS_STAGED_COUNT, 2)
         .containsEntry(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT, 2)
@@ -395,9 +642,10 @@ class SqlTransformComputePluginIntegrationTest {
     context.setJobCode("JOB_PROCESS");
     context.setWorkerId("process-test");
     context.setBatchKey("batch-test-1");
+    context.setStagingGenerationId(UUID.randomUUID().toString());
     context.getAttributes().put(PipelineRuntimeKeys.HIGH_WATER_MARK_IN, 1L);
     Map<String, Object> sqlTransformSpec = new LinkedHashMap<>();
-    sqlTransformSpec.put("sourceSql", """
+    String sourceSql = """
         select tenant_id,
                account_id,
                sum(amount) as total_amount,
@@ -406,7 +654,8 @@ class SqlTransformComputePluginIntegrationTest {
         where tenant_id = :tenantId
           and event_id > cast(:highWaterMarkIn as bigint)
         group by tenant_id, account_id
-        """);
+        """;
+    sqlTransformSpec.put("sourceSql", sourceSql);
     sqlTransformSpec.put("targetSchema", "biz");
     sqlTransformSpec.put("targetTable", "account_summary");
     sqlTransformSpec.put("writeMode", "UPSERT");

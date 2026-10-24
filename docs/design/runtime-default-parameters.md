@@ -9,9 +9,9 @@
 | 域 | 主配置位置 |
 |----|------------|
 | Orchestrator 调度 / Outbox / 重试 / 租约 / 排空 / SLA / 文件治理 | `batch-orchestrator/src/main/resources/application.yml` |
-| Import Worker 流式与分页 | `batch-worker-import/src/main/resources/application.yml`（含 `spring.config.import: classpath:batch-defaults.yml`） |
-| Export Worker 流式与分页 | `batch-worker-export/src/main/resources/application.yml`（含 `spring.config.import: classpath:batch-defaults.yml`） |
-| Dispatch 熔断与回执轮询 | `batch-worker-dispatch/src/main/resources/application.yml` |
+| Import Worker 流式与分页 | `batch-worker/import/src/main/resources/application.yml`（含 `spring.config.import: classpath:batch-defaults.yml`） |
+| Export Worker 流式与分页 | `batch-worker/export/src/main/resources/application.yml`（含 `spring.config.import: classpath:batch-defaults.yml`） |
+| Dispatch 熔断与回执轮询 | `batch-worker/dispatch/src/main/resources/application.yml` |
 | 模板级 chunk | `batch.file_template_config.chunk_size`（Flyway V13，默认 500） |
 
 ## Import / Export 文件处理（chunk / page / fetch）
@@ -23,11 +23,12 @@
 | `fetch-size` | `1000` | `BATCH_WORKER_IMPORT_FETCH_SIZE` / `BATCH_WORKER_EXPORT_FETCH_SIZE` |
 | Import `chunk-size` | `2000` | `BATCH_WORKER_IMPORT_CHUNK_SIZE` |
 | Import `max-chunk-size` | `10000` | `BATCH_WORKER_IMPORT_MAX_CHUNK_SIZE` |
-| Import `jdbc-mapped.strict-idempotency` | `true` | `BATCH_WORKER_IMPORT_JDBC_MAPPED_STRICT_IDEMPOTENCY` |
 | Export `chunk-size` | `500` | `BATCH_WORKER_EXPORT_CHUNK_SIZE` |
 
 模板若配置 `chunk_size`，导入 `LoadStep` / 导出 `GenerateStep` 会优先使用模板值；导入侧受
 `max-chunk-size` 上限约束，避免 COPY / 宽表场景在 JVM 内构造过大的单 chunk 缓冲。
+
+Import `jdbc_mapped_import` 的 `BATCH_UPSERT` 必须配置 `conflictColumns`，该重放安全校验始终启用，不提供运行时关闭开关。
 
 ## Orchestrator 摘录
 

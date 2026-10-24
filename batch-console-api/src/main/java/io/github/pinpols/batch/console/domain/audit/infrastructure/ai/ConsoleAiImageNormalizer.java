@@ -21,7 +21,11 @@ public final class ConsoleAiImageNormalizer {
   private ConsoleAiImageNormalizer() {}
 
   public static NormalizedImage normalize(byte[] input, ConsoleAiProperties.Image limits) {
-    if (EmptyChecks.isNull(input) || input.length < 1 || input.length > limits.getMaxFileBytes()) {
+    if (EmptyChecks.isNull(input) || input.length < 1) {
+      throw invalidImage();
+    }
+    boolean inputExceedsByteLimit = input.length > limits.getMaxFileBytes();
+    if (inputExceedsByteLimit) {
       throw invalidImage();
     }
     String detected = detect(input);
@@ -34,12 +38,18 @@ public final class ConsoleAiImageNormalizer {
         reader.setInput(stream, false, true);
         int width = reader.getWidth(0);
         int height = reader.getHeight(0);
-        if (width < 1
-            || height < 1
-            || width > limits.getMaxSide()
-            || height > limits.getMaxSide()
-            || (long) width * height > limits.getMaxPixels()
-            || reader.getNumImages(true) != 1) {
+        if (width < 1 || height < 1) {
+          throw invalidImage();
+        }
+        if (width > limits.getMaxSide() || height > limits.getMaxSide()) {
+          throw invalidImage();
+        }
+        boolean pixelCountExceedsLimit = (long) width * height > limits.getMaxPixels();
+        if (pixelCountExceedsLimit) {
+          throw invalidImage();
+        }
+        boolean hasUnexpectedImageCount = reader.getNumImages(true) != 1;
+        if (hasUnexpectedImageCount) {
           throw invalidImage();
         }
         BufferedImage source = reader.read(0);
@@ -54,7 +64,8 @@ public final class ConsoleAiImageNormalizer {
         }
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         String format = jpeg ? "jpeg" : "png";
-        if (!ImageIO.write(clean, format, output) || output.size() > limits.getMaxFileBytes()) {
+        boolean imageWritten = ImageIO.write(clean, format, output);
+        if (!imageWritten || output.size() > limits.getMaxFileBytes()) {
           throw invalidImage();
         }
         return new NormalizedImage(

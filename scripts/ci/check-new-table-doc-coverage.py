@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Require newly created platform tables to be registered in the schema guide."""
+# 用途：新增数据库表文档登记。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-new-table-doc-coverage.py；参数与前置环境见下方说明及所属 README。
+"""新增平台表必须登记到数据库结构指南。"""
 
 from __future__ import annotations
 

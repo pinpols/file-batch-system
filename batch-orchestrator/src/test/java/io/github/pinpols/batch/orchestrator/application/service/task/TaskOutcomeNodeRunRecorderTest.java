@@ -13,6 +13,7 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Orchest
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,7 +47,7 @@ class TaskOutcomeNodeRunRecorderTest {
         nodeRun("WAITING", 1, WorkflowNodeRunStatus.WAITING_DEPENDENCY.code());
 
     assertThat(TaskOutcomeStatePolicy.resolveActiveNodeCodes(
-            java.util.List.of(fork, end, oldBranch, finishedBranch, waiting)))
+            List.of(fork, end, oldBranch, finishedBranch, waiting)))
         .containsExactly("WAITING");
   }
 

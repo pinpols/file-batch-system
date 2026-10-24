@@ -1,0 +1,3 @@
+interface:
+  display_name: "代码审查与质量门禁"
+  short_description: "按严重程度复核代码变更的正确性、安全性、数据完整性和适用验证门禁"

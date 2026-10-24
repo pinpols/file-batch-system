@@ -10,7 +10,6 @@ import java.util.Map;
 /** Platform 文件运行态 Mapper 的值转换与参数构造工具。 */
 public final class PlatformRuntimeValues {
 
-  static final String PIPELINE_DEFINITION_ID = "pipelineDefinitionId";
   static final String PIPELINE_INSTANCE_ID = "pipelineInstanceId";
   static final String CURRENT_STAGE = "currentStage";
   static final String TENANT_ID = "tenantId";
@@ -65,7 +64,8 @@ public final class PlatformRuntimeValues {
       rawMap.forEach((key, rawValue) -> mapped.put(String.valueOf(key), rawValue));
       return mapped;
     }
-    return JsonUtils.fromJson(String.valueOf(value), Map.class);
+    String jsonText = String.valueOf(value);
+    return JsonUtils.fromJson(jsonText, Map.class);
   }
 
   static String stringValue(Object value) {

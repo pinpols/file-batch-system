@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.orchestrator.application.engine;
 
+import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
+
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -180,7 +183,14 @@ class TaskDispatchOutboxServiceTest {
   void shouldPersistRunModeToPayload_whenOverrideGiven() {
     JobTaskEntity t = task(500L, null);
     t.setTaskPayload("{}"); // 初始空 payload
-    service.writeDispatchEvent(instance(100L, 5), t, null, "trace", null, RunMode.RECOVER);
+    service.writeDispatchEvent(TaskDispatchEventCommand.builder()
+            .jobInstance(instance(100L, 5))
+            .task(t)
+            .partition(null)
+            .traceId("trace")
+            .eventKey(null)
+            .runModeOverride(RunMode.RECOVER)
+            .build());
 
     ArgumentCaptor<String> payloadCap = ArgumentCaptor.forClass(String.class);
     verify(jobTaskMapper).updatePayload(eq("ta"), eq(500L), payloadCap.capture());

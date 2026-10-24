@@ -13,6 +13,16 @@
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
 
+    <resultMap id="FileRecordSummaryViewResultMap"
+               type="io.github.pinpols.batch.console.domain.file.view.FileRecordSummaryView">
+        <constructor>
+            <arg column="arrived_today" javaType="java.lang.Long"/>
+            <arg column="pending" javaType="java.lang.Long"/>
+            <arg column="processed" javaType="java.lang.Long"/>
+            <arg column="failed" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
     <select id="selectByQuery" resultMap="FileRecordResultMap">
         select id,
                tenant_id,
@@ -120,7 +130,7 @@
           and id = #{fileId}
     </select>
 
-    <select id="selectSummary" resultType="map">
+    <select id="selectSummary" resultMap="FileRecordSummaryViewResultMap">
         select
             count(1) filter (where created_at &gt;= date_trunc('day', now())) as arrived_today,
             count(1) filter (where file_status = 'RECEIVED')                  as pending,

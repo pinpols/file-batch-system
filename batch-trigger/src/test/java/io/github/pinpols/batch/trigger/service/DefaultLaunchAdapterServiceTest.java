@@ -34,11 +34,11 @@ class DefaultLaunchAdapterServiceTest {
       new CronExpressionAdapter());
 
   @Test
-  @DisplayName("API 请求转 LaunchRequest 时原样透传租户、作业、业务日期、请求与链路标识及参数")
+  @DisplayName("API 请求转 LaunchRequest 时保留 Workflow 根身份及业务字段")
   void shouldBuildApiLaunchRequestFromControllerPayload() {
     TriggerLaunchRequest request = new TriggerLaunchRequest();
     request.setTenantId("t1");
-    request.setJobCode("IMPORT_JOB");
+    request.setWorkflowDefinitionId(71L);
     request.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
     request.setTriggerType(TriggerType.API);
     request.setParams(Map.of("source", "api"));
@@ -47,7 +47,8 @@ class DefaultLaunchAdapterServiceTest {
         new TriggerLaunchCommand(request, "idem-001", "req-001", "trace-001"));
 
     assertThat(launchRequest.tenantId()).isEqualTo("t1");
-    assertThat(launchRequest.jobCode()).isEqualTo("IMPORT_JOB");
+    assertThat(launchRequest.jobCode()).isNull();
+    assertThat(launchRequest.workflowDefinitionId()).isEqualTo(71L);
     assertThat(launchRequest.bizDate()).isEqualTo(LocalDate.of(2026, Month.MARCH, 27));
     assertThat(launchRequest.triggerType()).isEqualTo(TriggerType.API);
     assertThat(launchRequest.requestId()).isEqualTo("req-001");
@@ -56,11 +57,47 @@ class DefaultLaunchAdapterServiceTest {
   }
 
   @Test
+  @DisplayName("API 请求显式以 Workflow ID 为目标时不把目标降格为 JobCode")
+  void shouldPreserveWorkflowTargetIdentityFromApiRequest() {
+    TriggerLaunchRequest request = new TriggerLaunchRequest();
+    request.setTenantId("t1");
+    request.setWorkflowDefinitionId(71L);
+    request.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
+    request.setTriggerType(TriggerType.API);
+
+    LaunchRequest launchRequest =
+        service.fromApiRequest(new TriggerLaunchCommand(request, "idem-wf", "req-wf", "trace-wf"));
+
+    assertThat(launchRequest.workflowDefinitionId()).isEqualTo(71L);
+    assertThat(launchRequest.jobCode()).isNull();
+  }
+
+  @Test
+  @DisplayName("外部 EVENT 编码从 Trigger API 请求透传到 launch envelope")
+  void shouldPropagateExternalEventCode() {
+    TriggerLaunchRequest request = new TriggerLaunchRequest();
+    request.setTenantId("t1");
+    request.setWorkflowDefinitionId(71L);
+    request.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
+    request.setTriggerType(TriggerType.EVENT);
+    request.setExternalEventCode("PAYMENT_CLOSED");
+
+    LaunchRequest launchRequest = service.fromApiRequest(
+        new TriggerLaunchCommand(request, "event-idem", "event-req", "event-trace"));
+
+    assertThat(launchRequest.triggerType()).isEqualTo(TriggerType.EVENT);
+    assertThat(launchRequest.externalEventCode()).isEqualTo("PAYMENT_CLOSED");
+  }
+
+  @Test
   @DisplayName("定时补跑按日历推导业务日期,并在参数中写入 MANUAL_APPROVAL 补跑与待审批标记")
   void shouldDeriveBizDateAndCatchUpMetadataFromScheduledTrigger() {
     TriggerDescriptor descriptor = new TriggerDescriptor();
     descriptor.setTenantId("t1");
     descriptor.setJobCode("EXPORT_JOB");
+    descriptor.setWorkflowDefinitionId(71L);
+    descriptor.setWorkflowCode("JOB-WF-71");
+    descriptor.setWorkflowVersion(4);
     descriptor.setScheduleType("CRON");
     descriptor.setScheduleExpression("0 15 0 * * ?");
     descriptor.setTimezone("Asia/Shanghai");
@@ -76,6 +113,8 @@ class DefaultLaunchAdapterServiceTest {
             descriptor, fireTime, TriggerType.CATCH_UP, "req-002", "trace-002"),
         calendar);
 
+    assertThat(launchRequest.workflowDefinitionId()).isEqualTo(71L);
+    assertThat(launchRequest.jobCode()).isNull();
     assertThat(launchRequest.bizDate()).isEqualTo(LocalDate.of(2026, Month.MARCH, 27));
     assertThat(launchRequest.triggerType()).isEqualTo(TriggerType.CATCH_UP);
     assertThat(launchRequest.params())
@@ -86,6 +125,9 @@ class DefaultLaunchAdapterServiceTest {
         .containsEntry("catchUpPolicy", CatchUpPolicyType.MANUAL_APPROVAL.code())
         .containsEntry("catchUp", true)
         .containsEntry("catchUpApprovalRequired", true)
+        .containsEntry("workflowDefinitionId", 71L)
+        .containsEntry("workflowCode", "JOB-WF-71")
+        .containsEntry("workflowVersion", 4)
         .containsEntry("scheduledAt", fireTime.toString());
   }
 
@@ -181,7 +223,7 @@ class DefaultLaunchAdapterServiceTest {
   void shouldPropagateApiProvidedDataInterval() {
     TriggerLaunchRequest request = new TriggerLaunchRequest();
     request.setTenantId("t1");
-    request.setJobCode("API_JOB");
+    request.setWorkflowDefinitionId(71L);
     request.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
     request.setTriggerType(TriggerType.API);
     request.setParams(Map.of());

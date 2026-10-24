@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.entity.AssetFreshnessPolicyEntity;
 import io.github.pinpols.batch.console.domain.param.AssetFreshnessPolicyUpsertParam;
@@ -58,6 +59,7 @@ public class ConsoleAssetFreshnessPolicyService {
   @Transactional
   public void upsert(AssetFreshnessPolicyUpsertParam param) {
     AssetFreshnessPolicyUpsertParam normalized = normalize(param);
+    requireJobDefinition(normalized.tenantId(), normalized.assetCode());
     if (normalized.id() == null) {
       mapper.upsert(normalized);
       return;
@@ -65,6 +67,16 @@ public class ConsoleAssetFreshnessPolicyService {
     int updated = mapper.updateById(normalized);
     if (updated == 0) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found", normalized.id());
+    }
+  }
+
+  private void requireJobDefinition(String tenantId, String jobCode) {
+    Long jobDefinitionId = mapper.lockJobDefinitionForPolicyWrite(tenantId, jobCode);
+    if (EmptyChecks.isNull(jobDefinitionId)) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          ResultCode.INVALID_ARGUMENT.detailKey(),
+          "assetCode must reference a Job definition in this tenant");
     }
   }
 
@@ -113,9 +125,11 @@ public class ConsoleAssetFreshnessPolicyService {
           ResultCode.INVALID_ARGUMENT.detailKey(),
           "lookbackDays must be between 1 and 31");
     }
-    String severity = Texts.hasText(param.severity())
-        ? param.severity().trim().toUpperCase(Locale.ROOT)
-        : DEFAULT_SEVERITY;
+    String severity = DEFAULT_SEVERITY;
+    if (Texts.hasText(param.severity())) {
+      String trimmedSeverity = param.severity().trim();
+      severity = trimmedSeverity.toUpperCase(Locale.ROOT);
+    }
     if (!VALID_SEVERITIES.contains(severity)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,

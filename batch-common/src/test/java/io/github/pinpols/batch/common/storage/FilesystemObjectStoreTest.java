@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -41,16 +42,15 @@ class FilesystemObjectStoreTest {
         BUCKET, "source/a.txt", new ByteArrayInputStream(payload), payload.length, "text/plain");
     Path source = root.resolve(BUCKET).resolve("source/a.txt");
     // 模拟历史宽松文件,复制不得继承公开权限。
-    Files.setPosixFilePermissions(
-        source, java.nio.file.attribute.PosixFilePermissions.fromString("rw-r--r--"));
+    Files.setPosixFilePermissions(source, PosixFilePermissions.fromString("rw-r--r--"));
     store.copy(BUCKET, "source/a.txt", "target/b.txt");
     Path copied = root.resolve(BUCKET).resolve("target/b.txt");
     assertThat(Files.readAllBytes(copied)).isEqualTo(payload);
     assertThat(Files.getLastModifiedTime(copied)).isEqualTo(Files.getLastModifiedTime(source));
     assertThat(Files.getPosixFilePermissions(copied))
-        .isEqualTo(java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+        .isEqualTo(PosixFilePermissions.fromString("rw-------"));
     assertThat(Files.getPosixFilePermissions(copied.getParent()))
-        .isEqualTo(java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"));
+        .isEqualTo(PosixFilePermissions.fromString("rwx------"));
   }
 
   @Test

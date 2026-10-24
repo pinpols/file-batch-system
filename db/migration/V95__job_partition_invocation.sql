@@ -1,4 +1,4 @@
--- ADR-014: partition CLAIM invocation id — renew/report optional match + stale-worker isolation
+-- ADR-014：分区 CLAIM 调用身份——续租/回报可选匹配，用于隔离过期 Worker。
 
 ALTER TABLE batch.job_partition
     ADD COLUMN IF NOT EXISTS current_invocation_id VARCHAR(64);

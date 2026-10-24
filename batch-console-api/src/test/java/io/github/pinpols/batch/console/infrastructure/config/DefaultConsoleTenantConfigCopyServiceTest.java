@@ -17,6 +17,10 @@ import io.github.pinpols.batch.console.application.contract.response.config.Tena
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.query.FileTemplateConfigQuery;
+import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
+import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDependencyRuleRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.JobDependencyRuleResponse;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
@@ -26,12 +30,13 @@ import io.github.pinpols.batch.console.domain.job.query.JobDefinitionQuery;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertRoutingConfigMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantQuotaPolicyMapper;
-import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
-import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineStepDefinitionMapper;
+import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
+import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowDefinitionQuery;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,8 +51,6 @@ class DefaultConsoleTenantConfigCopyServiceTest {
   private WorkflowDefinitionMapper workflowDefinitionMapper;
   private WorkflowNodeMapper workflowNodeMapper;
   private WorkflowEdgeMapper workflowEdgeMapper;
-  private PipelineDefinitionMapper pipelineDefinitionMapper;
-  private PipelineStepDefinitionMapper pipelineStepDefinitionMapper;
   private FileChannelConfigMapper fileChannelConfigMapper;
   private FileTemplateConfigMapper fileTemplateConfigMapper;
   private ResourceQueueMapper resourceQueueMapper;
@@ -65,8 +68,6 @@ class DefaultConsoleTenantConfigCopyServiceTest {
     workflowDefinitionMapper = mock(WorkflowDefinitionMapper.class);
     workflowNodeMapper = mock(WorkflowNodeMapper.class);
     workflowEdgeMapper = mock(WorkflowEdgeMapper.class);
-    pipelineDefinitionMapper = mock(PipelineDefinitionMapper.class);
-    pipelineStepDefinitionMapper = mock(PipelineStepDefinitionMapper.class);
     fileChannelConfigMapper = mock(FileChannelConfigMapper.class);
     fileTemplateConfigMapper = mock(FileTemplateConfigMapper.class);
     resourceQueueMapper = mock(ResourceQueueMapper.class);
@@ -81,8 +82,6 @@ class DefaultConsoleTenantConfigCopyServiceTest {
         workflowDefinitionMapper,
         workflowNodeMapper,
         workflowEdgeMapper,
-        pipelineDefinitionMapper,
-        pipelineStepDefinitionMapper,
         fileChannelConfigMapper,
         fileTemplateConfigMapper,
         resourceQueueMapper,
@@ -96,7 +95,7 @@ class DefaultConsoleTenantConfigCopyServiceTest {
   }
 
   @Test
-  @DisplayName("组装作业同步包时,文件模板与通道只保留显式引用到的项")
+  @DisplayName("作业同步包从 Job 参数解析模板与通道引用")
   void shouldBuildBundleWithExplicitReferences_whenJobBundleIsAssembled() {
     stubExplicitReferenceBundle();
 
@@ -105,11 +104,47 @@ class DefaultConsoleTenantConfigCopyServiceTest {
     assertThat(bundle.getFileTemplates())
         .extracting("templateCode")
         .containsExactly("tpl-from-job", "tpl-from-step");
+    assertThat(bundle.getFileTemplates())
+        .filteredOn(template -> "tpl-from-job".equals(template.getTemplateCode()))
+        .singleElement()
+        .satisfies(template -> {
+          assertThat(template.getHeaderTemplateJson()).isEqualTo("{\"header\":true}");
+          assertThat(template.getTrailerTemplateJson()).isEqualTo("{\"trailer\":true}");
+          assertThat(template.getFieldMappingsJson()).isEqualTo("[{\"from\":\"a\"}]");
+          assertThat(template.getValidationRuleSetJson()).isEqualTo("{\"required\":[]}");
+          assertThat(template.getQueryParamSchemaJson())
+              .isEqualTo("{\"jdbcMappedImport\":{\"table\":\"customer_account\"}}");
+        });
     assertThat(bundle.getFileChannels()).extracting("channelCode").containsExactly("chan-explicit");
     assertThat(bundle.getJobDefinitions())
         .singleElement()
         .extracting("dependencyCompletionWindowSeconds")
         .isEqualTo(900);
+    assertThat(bundle.getJobDefinitions()).singleElement().satisfies(job -> {
+      assertThat(job.getScheduleType()).isEqualTo("CRON");
+      assertThat(job.getScheduleExpr()).isEqualTo("0 0 1 * * *");
+      assertThat(job.getTimezone()).isEqualTo("Asia/Shanghai");
+      assertThat(job.getTriggerMode()).isEqualTo("SCHEDULED");
+      assertThat(job.getDependsOnJobCode()).isEqualTo("UPSTREAM_A");
+      assertThat(job.getDependencyRules())
+          .containsExactly(
+              new JobDependencyRuleRequest("UPSTREAM_A", "SAME_DAY"),
+              new JobDependencyRuleRequest("UPSTREAM_B", "PREVIOUS_BIZ_DAY"));
+    });
+    assertThat(bundle.getWorkflowDefinitions()).singleElement().satisfies(workflow -> {
+      assertThat(workflow.getSingleJobCode()).isEqualTo("JOB_A");
+      assertThat(workflow.getScheduleType()).isEqualTo("CRON");
+      assertThat(workflow.getScheduleExpr()).isEqualTo("0 0 2 * * *");
+      assertThat(workflow.getTimezone()).isEqualTo("Asia/Shanghai");
+    });
+    assertThat(bundle.getBusinessCalendars())
+        .extracting("calendarCode")
+        .containsExactlyInAnyOrder("cn", "workflow-cn");
+    assertThat(bundle.getBusinessCalendars())
+        .filteredOn(calendar -> "workflow-cn".equals(calendar.getCalendarCode()))
+        .singleElement()
+        .extracting("holidays")
+        .isEqualTo(List.of("2026-10-01"));
   }
 
   @Test
@@ -130,6 +165,7 @@ class DefaultConsoleTenantConfigCopyServiceTest {
     verify(initService).batchInit(captor.capture(), anyString(), anyString());
     TenantConfigBatchInitRequest delegated = captor.getValue();
     assertThat(delegated.getTargetTenantIds()).containsExactly("tb");
+    assertThat(delegated.isStrict()).isTrue();
     assertThat(delegated.getJobDefinitions()).extracting("jobCode").containsExactly("JOB_A");
     assertThat(delegated.getFileTemplates())
         .extracting("templateCode")
@@ -139,66 +175,172 @@ class DefaultConsoleTenantConfigCopyServiceTest {
         .containsExactly("chan-explicit");
     assertThat(delegated.getFileChannels()).singleElement().satisfies(channel -> {
       assertThat(channel.getTargetEndpoint()).isNull();
-      assertThat(channel.getConfigJson()).isNull();
+      assertThat(channel.getConfigJson()).isEqualTo("{}");
     });
+  }
+
+  @Test
+  @DisplayName("构建作业复制包时忽略缺少编码的无关依赖配置")
+  void shouldIgnoreUncodedConfigRows_whenBuildingJobBundle() {
+    stubExplicitReferenceBundle();
+    when(batchWindowMapper.selectByQuery(anyString(), isNull(), isNull(), any(PageRequest.class)))
+        .thenReturn(List.of(
+            Collections.singletonMap("window_code", null),
+            Map.of("window_code", "nightly", "enabled", true)));
+    when(businessCalendarMapper.selectByQuery(
+            anyString(), isNull(), isNull(), any(PageRequest.class)))
+        .thenReturn(List.of(
+            Collections.singletonMap("calendarCode", null),
+            Map.of("id", 301L, "calendarCode", "cn", "enabled", true),
+            Map.of("id", 302L, "calendarCode", "workflow-cn", "enabled", true)));
+    when(fileTemplateConfigMapper.selectByQuery(any(FileTemplateConfigQuery.class)))
+        .thenReturn(List.of(
+            templateConfigView(null, null, null),
+            templateConfigView("tpl-from-job", "OTHER", true),
+            templateConfigView("tpl-from-step", "OTHER", true)));
+    when(fileChannelConfigMapper.selectByQuery(
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null
+                && parameters.tenantId() != null
+                && parameters.channelCode() == null
+                && parameters.channelType() == null
+                && parameters.enabled() == null
+                && parameters.pageRequest() != null)))
+        .thenReturn(List.of(
+            channelConfigView(null, null, null, null),
+            channelConfigView("chan-explicit", null, null, true)));
+
+    ConfigSyncBundlePayload bundle = service.buildJobBundle("ta", "JOB_A");
+
+    assertThat(bundle.getJobDefinitions()).extracting("jobCode").containsExactly("JOB_A");
+    assertThat(bundle.getBusinessCalendars())
+        .extracting("calendarCode")
+        .containsExactly("cn", "workflow-cn");
+    assertThat(bundle.getFileTemplates())
+        .extracting("templateCode")
+        .containsExactly("tpl-from-job", "tpl-from-step");
+    assertThat(bundle.getFileChannels()).extracting("channelCode").containsExactly("chan-explicit");
   }
 
   private void stubExplicitReferenceBundle() {
     JobDefinitionEntity job = new JobDefinitionEntity();
+    job.setId(101L);
     job.setJobCode("JOB_A");
     job.setBizType("PAYROLL");
+    job.setScheduleType("CRON");
+    job.setScheduleExpr("0 0 1 * * *");
+    job.setTimezone("Asia/Shanghai");
+    job.setTriggerMode("SCHEDULED");
+    job.setDependsOnJobCode("UPSTREAM_A");
+    job.setJobDependencyRules(List.of(
+        new JobDependencyRuleResponse("UPSTREAM_A", "SAME_DAY"),
+        new JobDependencyRuleResponse("UPSTREAM_B", "PREVIOUS_BIZ_DAY")));
     job.setQueueCode("q1");
     job.setWindowCode("nightly");
     job.setCalendarCode("cn");
     job.setDependencyCompletionWindowSeconds(900);
-    job.setDefaultParams("{\"fileTemplateCode\":\"tpl-from-job\"}");
+    job.setDefaultParams("{\"fileTemplateCode\":\"tpl-from-job\","
+        + "\"systemPipelineStepParams\":{\"GENERATE\":{"
+        + "\"templateCode\":\"tpl-from-step\",\"channelCode\":\"chan-explicit\"}}}");
     when(jobDefinitionMapper.selectByQuery(any(JobDefinitionQuery.class))).thenReturn(List.of(job));
-    when(pipelineDefinitionMapper.selectByQuery(
-            anyString(), isNull(), isNull(), isNull(), any(PageRequest.class)))
-        .thenReturn(List.of(Map.of(
-            "id", 10L,
-            "job_code", "JOB_A",
-            "pipeline_name", "pipe",
-            "pipeline_type", "EXPORT",
-            "biz_type", "PAYROLL",
-            "enabled", true)));
-    when(pipelineStepDefinitionMapper.selectByPipelineDefinitionId(10L))
-        .thenReturn(List.of(Map.of(
-            "step_code",
-            "generate",
-            "step_params",
-            "{\"templateCode\":\"tpl-from-step\",\"channelCode\":\"chan-explicit\"}",
-            "enabled",
-            true)));
+    WorkflowDefinitionEntity workflow = new WorkflowDefinitionEntity();
+    workflow.setId(201L);
+    workflow.setWorkflowCode("JOB-WF-101");
+    workflow.setSingleJobDefinitionId(job.getId());
+    workflow.setScheduleEnabled(true);
+    workflow.setScheduleType("CRON");
+    workflow.setScheduleExpr("0 0 2 * * *");
+    workflow.setTimezone("Asia/Shanghai");
+    workflow.setCalendarCode("workflow-cn");
+    workflow.setTriggerMode("SCHEDULED");
+    WorkflowNodeEntity node = new WorkflowNodeEntity();
+    node.setNodeCode("job");
+    node.setRelatedJobCode("JOB_A");
     when(workflowDefinitionMapper.selectByQuery(any(WorkflowDefinitionQuery.class)))
-        .thenReturn(List.of());
+        .thenReturn(List.of(workflow));
+    when(workflowNodeMapper.selectByQuery(any())).thenReturn(List.of(node));
+    when(workflowEdgeMapper.selectByQuery(any())).thenReturn(List.of());
+    when(jobDefinitionMapper.selectById("ta", job.getId())).thenReturn(job);
     when(resourceQueueMapper.selectByQuery(
-            anyString(), isNull(), isNull(), isNull(), any(PageRequest.class)))
+            org.mockito.ArgumentMatchers.argThat(query -> query != null
+                && query.tenantId() != null
+                && query.queueCode() == null
+                && query.queueType() == null
+                && query.enabled() == null
+                && query.pageRequest() != null)))
         .thenReturn(List.of(Map.of("queue_code", "q1", "enabled", true)));
     when(batchWindowMapper.selectByQuery(anyString(), isNull(), isNull(), any(PageRequest.class)))
         .thenReturn(List.of(Map.of("window_code", "nightly", "enabled", true)));
     when(businessCalendarMapper.selectByQuery(
             anyString(), isNull(), isNull(), any(PageRequest.class)))
-        .thenReturn(List.of(Map.of("calendar_code", "cn", "enabled", true)));
+        .thenReturn(List.of(
+            Map.of("id", 301L, "calendarCode", "cn", "enabled", true),
+            Map.of("id", 302L, "calendarCode", "workflow-cn", "enabled", true),
+            Map.of("id", 303L, "calendarCode", "unrelated", "enabled", true)));
+    when(calendarHolidayMapper.selectByCalendarId(301L))
+        .thenReturn(List.of(Map.of("bizDate", "2026-01-01")));
+    when(calendarHolidayMapper.selectByCalendarId(302L))
+        .thenReturn(List.of(Map.of("bizDate", "2026-10-01")));
+    when(calendarHolidayMapper.selectByCalendarId(303L))
+        .thenReturn(List.of(Map.of("bizDate", "2026-12-25")));
     when(fileTemplateConfigMapper.selectByQuery(any(FileTemplateConfigQuery.class)))
         .thenReturn(List.of(
-            Map.of("template_code", "tpl-from-job", "biz_type", "OTHER", "enabled", true),
-            Map.of("template_code", "tpl-from-step", "biz_type", "OTHER", "enabled", true),
-            Map.of("template_code", "tpl-legacy", "biz_type", "PAYROLL", "enabled", true)));
+            FileTemplateConfigQueryView.builder()
+                .templateCode("tpl-from-job")
+                .bizType("OTHER")
+                .enabled(true)
+                .headerTemplate("{\"header\":true}")
+                .trailerTemplate("{\"trailer\":true}")
+                .fieldMappings("[{\"from\":\"a\"}]")
+                .validationRuleSet("{\"required\":[]}")
+                .queryParamSchema("{\"jdbcMappedImport\":{\"table\":\"customer_account\"}}")
+                .build(),
+            templateConfigView("tpl-from-step", "OTHER", true),
+            templateConfigView("tpl-legacy", "PAYROLL", true)));
     when(fileChannelConfigMapper.selectByQuery(
-            anyString(), isNull(), isNull(), isNull(), any(PageRequest.class)))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null
+                && parameters.tenantId() != null
+                && parameters.channelCode() == null
+                && parameters.channelType() == null
+                && parameters.enabled() == null
+                && parameters.pageRequest() != null)))
         .thenReturn(List.of(
-            Map.of(
-                "channel_code", "chan-explicit",
-                "target_endpoint", "sftp://source-user:source-password@example.com/inbox",
-                "config_json", "{\"password\":\"source-password\"}",
-                "enabled", true),
-            Map.of("channel_code", "PAYROLL", "enabled", true)));
+            channelConfigView(
+                "chan-explicit",
+                "sftp://source-user:source-password@example.com/inbox",
+                "{\"password\":\"source-password\"}",
+                true),
+            channelConfigView("PAYROLL", null, null, true)));
     when(tenantQuotaPolicyMapper.selectByQuery(
             anyString(), isNull(), isNull(), any(PageRequest.class)))
         .thenReturn(List.of());
     when(alertRoutingConfigMapper.selectByQuery(
-            anyString(), isNull(), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null
+                && parameters.tenantId() != null
+                && parameters.keyword() == null
+                && parameters.routeCode() == null
+                && parameters.team() == null
+                && parameters.severity() == null
+                && parameters.enabled() == null
+                && parameters.pageRequest() != null)))
         .thenReturn(List.of());
+  }
+
+  private static FileChannelConfigQueryView channelConfigView(
+      String channelCode, String targetEndpoint, Object configJson, Boolean enabled) {
+    return FileChannelConfigQueryView.builder()
+        .channelCode(channelCode)
+        .targetEndpoint(targetEndpoint)
+        .configJson(configJson)
+        .enabled(enabled)
+        .build();
+  }
+
+  private static FileTemplateConfigQueryView templateConfigView(
+      String templateCode, String bizType, Boolean enabled) {
+    return FileTemplateConfigQueryView.builder()
+        .templateCode(templateCode)
+        .bizType(bizType)
+        .enabled(enabled)
+        .build();
   }
 }

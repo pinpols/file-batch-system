@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.application.ops.infrastructure;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.ops.ConsoleKafkaLagQueryPort;
@@ -25,6 +26,7 @@ import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.springframework.kafka.core.KafkaAdmin;
 import org.springframework.stereotype.Service;
@@ -41,6 +43,7 @@ public class DefaultConsoleKafkaLagQueryService implements ConsoleKafkaLagQueryP
 
   private final KafkaAdmin kafkaAdmin;
   private final ConsoleQueryCacheService cacheService;
+  private final BatchKafkaTopicNamespace topicNamespace;
   private final Object adminClientMonitor = new Object();
   private final AtomicBoolean stopping = new AtomicBoolean();
   private AdminClient adminClient;
@@ -66,11 +69,12 @@ public class DefaultConsoleKafkaLagQueryService implements ConsoleKafkaLagQueryP
         if (EmptyChecks.isNotEmpty(groupIdFilter) && !groupId.contains(groupIdFilter)) {
           continue;
         }
-        if (!groupId.startsWith("batch")) {
+        if (!groupId.startsWith(topicNamespace.consumerGroup("batch"))) {
           continue;
         }
         try {
-          result.add(queryGroupLag(admin, groupId));
+          ConsoleKafkaConsumerLagResponse groupLag = queryGroupLag(admin, groupId);
+          result.add(groupLag);
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
           log.warn(
@@ -126,8 +130,9 @@ public class DefaultConsoleKafkaLagQueryService implements ConsoleKafkaLagQueryP
   private ConsoleKafkaConsumerLagResponse queryGroupLag(AdminClient admin, String groupId)
       throws InterruptedException, ExecutionException, TimeoutException {
     ListConsumerGroupOffsetsResult offsetsResult = admin.listConsumerGroupOffsets(groupId);
+    KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> committedOffsetsFuture = offsetsResult.partitionsToOffsetAndMetadata();
     Map<TopicPartition, OffsetAndMetadata> committedOffsets =
-        offsetsResult.partitionsToOffsetAndMetadata().get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        committedOffsetsFuture.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
     Map<TopicPartition, OffsetSpec> endOffsetRequests = new LinkedHashMap<>();
     for (TopicPartition topicPartition : committedOffsets.keySet()) {
@@ -140,10 +145,10 @@ public class DefaultConsoleKafkaLagQueryService implements ConsoleKafkaLagQueryP
     for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : committedOffsets.entrySet()) {
       TopicPartition topicPartition = entry.getKey();
       long committed = entry.getValue().offset();
-      long endOffset = endOffsetsResult
-          .partitionResult(topicPartition)
-          .get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
-          .offset();
+      KafkaFuture<ListOffsetsResult.ListOffsetsResultInfo> endOffsetFuture = endOffsetsResult.partitionResult(topicPartition);
+      ListOffsetsResult.ListOffsetsResultInfo endOffsetInfo =
+          endOffsetFuture.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+      long endOffset = endOffsetInfo.offset();
       long lag = Math.max(0, endOffset - committed);
       totalLag += lag;
       if (lag > 0) {
@@ -152,12 +157,10 @@ public class DefaultConsoleKafkaLagQueryService implements ConsoleKafkaLagQueryP
       }
     }
 
+    List<ConsoleKafkaConsumerLagResponse.PartitionLag> responsePartitionLags =
+        EmptyChecks.isEmpty(partitionLags) ? null : partitionLags;
     return new ConsoleKafkaConsumerLagResponse(
-        groupId,
-        totalLag,
-        committedOffsets.size(),
-        EmptyChecks.isEmpty(partitionLags) ? null : partitionLags,
-        null);
+        groupId, totalLag, committedOffsets.size(), responsePartitionLags, null);
   }
 
   private static ConsoleKafkaConsumerLagResponse error(String groupId, String message) {

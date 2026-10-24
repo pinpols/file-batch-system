@@ -20,8 +20,9 @@ final class SqlTransformComputeSqlBuilder {
             + JdbcMappedSqlValidator.quotePg(column.source()))
         .collect(Collectors.joining(", "));
     return """
-    INSERT INTO %s (batch_key, tenant_id, target_schema, target_table, payload)
-    SELECT :batchKey, :tenantId, :targetSchema, :targetTable, jsonb_build_object(%s)
+    INSERT INTO %s (batch_key, staging_generation_id, tenant_id, target_schema, target_table, payload)
+    SELECT :batchKey, :stagingGenerationId, :tenantId, :targetSchema, :targetTable,
+           jsonb_build_object(%s)
     FROM (
     %s
     ) base
@@ -37,6 +38,7 @@ final class SqlTransformComputeSqlBuilder {
             SELECT jsonb_populate_record(NULL::%s, payload) AS rec
             FROM %s
             WHERE batch_key = :batchKey
+              AND staging_generation_id = :stagingGenerationId
               AND tenant_id = :tenantId
               AND target_schema = :targetSchema
               AND target_table = :targetTable
@@ -73,6 +75,7 @@ final class SqlTransformComputeSqlBuilder {
   /** 通过一条 DIRECT 写入语句返回发布行数和水位值。 */
   static String buildDirectPublishMetricsSql(SqlTransformComputeSpec spec) {
     String watermarkColumn = JdbcMappedSqlValidator.quotePg(spec.watermarkColumn());
+    String directPublishSql = buildDirectPublishSql(spec);
     return """
     WITH published AS (
     %s
@@ -80,13 +83,13 @@ final class SqlTransformComputeSqlBuilder {
     )
     SELECT count(*) AS published_rows, max(high_water_mark) AS high_water_mark
     FROM published
-    """.formatted(buildDirectPublishSql(spec), watermarkColumn);
+    """.formatted(directPublishSql, watermarkColumn);
   }
 
   private static String targetName(SqlTransformComputeSpec spec) {
-    return JdbcMappedSqlValidator.quotePg(spec.targetSchema())
-        + "."
-        + JdbcMappedSqlValidator.quotePg(spec.targetTable());
+    String quotedTargetSchema = JdbcMappedSqlValidator.quotePg(spec.targetSchema());
+    String quotedTargetTable = JdbcMappedSqlValidator.quotePg(spec.targetTable());
+    return quotedTargetSchema + "." + quotedTargetTable;
   }
 
   private static String targetColumnList(SqlTransformComputeSpec spec) {

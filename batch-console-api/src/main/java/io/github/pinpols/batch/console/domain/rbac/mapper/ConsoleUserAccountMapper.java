@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.console.domain.rbac.mapper;
 
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleUserAccountInsertParam;
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleUserAccountInsertProvisionedParam;
+
+
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
 import java.util.List;
@@ -31,19 +35,10 @@ public interface ConsoleUserAccountMapper {
   Map<String, Object> selectByUsername(@Param("username") String username);
 
   int insert(
-      @Param("tenantId") String tenantId,
-      @Param("username") String username,
-      @Param("displayName") String displayName,
-      @Param("passwordHash") String passwordHash,
-      @Param("authoritiesCsv") String authoritiesCsv,
-      @Param("createdBy") String createdBy);
+      ConsoleUserAccountInsertParam parameters);
 
   int insertProvisioned(
-      @Param("tenantId") String tenantId,
-      @Param("username") String username,
-      @Param("displayName") String displayName,
-      @Param("passwordHash") String passwordHash,
-      @Param("authoritiesCsv") String authoritiesCsv);
+      ConsoleUserAccountInsertProvisionedParam parameters);
 
   int updateProfile(
       @Param("id") long id,

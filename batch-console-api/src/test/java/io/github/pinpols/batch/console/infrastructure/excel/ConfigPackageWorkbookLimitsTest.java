@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.common.exception.BizException;
+import org.apache.poi.openxml4j.util.ZipSecureFile;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.DisplayName;
@@ -88,10 +89,9 @@ class ConfigPackageWorkbookLimitsTest {
   void shouldConfigureZipExpansionGuards_beforeWorkbookParsing() {
     ConfigPackageWorkbookLimits.configurePoiZipLimits();
 
-    assertThat(org.apache.poi.openxml4j.util.ZipSecureFile.getMaxEntrySize())
-        .isEqualTo(64L * 1024 * 1024);
-    assertThat(org.apache.poi.openxml4j.util.ZipSecureFile.getMaxFileCount()).isEqualTo(128);
-    assertThat(org.apache.poi.openxml4j.util.ZipSecureFile.getMinInflateRatio()).isEqualTo(0.01d);
+    assertThat(ZipSecureFile.getMaxEntrySize()).isEqualTo(64L * 1024 * 1024);
+    assertThat(ZipSecureFile.getMaxFileCount()).isEqualTo(128);
+    assertThat(ZipSecureFile.getMinInflateRatio()).isEqualTo(0.01d);
   }
 
   private static void assertRejected(XSSFWorkbook workbook, String reason) {

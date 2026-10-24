@@ -130,6 +130,24 @@ class ResultVersionQueryServiceTest {
   }
 
   @Test
+  @DisplayName("指定 Job 业务日版本通过唯一业务键精确查询")
+  void shouldFindSpecificVersionByExactBusinessKey() {
+    ResultVersionEntity row = ResultVersionEntity.builder()
+        .id(123L)
+        .businessKey("job:JOB_A:2026-05-04")
+        .versionNo(1)
+        .status("SUPERSEDED")
+        .build();
+    when(mapper.selectByBusinessKeyAndVersionNo("t1", "job:JOB_A:2026-05-04", 1))
+        .thenReturn(row);
+
+    var found = service.findVersionByJob("t1", "JOB_A", LocalDate.of(2026, Month.MAY, 4), 1);
+
+    assertThat(found).contains(row);
+    verify(mapper).selectByBusinessKeyAndVersionNo("t1", "job:JOB_A:2026-05-04", 1);
+  }
+
+  @Test
   @DisplayName("条数上限非正时返回空列表")
   void shouldReturnEmpty_whenLimitNotPositive() {
     assertThat(service.listVersions("t1", "job:JOB_A:2026-05-04", 0)).isEmpty();

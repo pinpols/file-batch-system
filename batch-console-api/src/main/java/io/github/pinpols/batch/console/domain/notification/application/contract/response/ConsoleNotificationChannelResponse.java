@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.console.domain.notification.application.contract.response;
 
+import lombok.Builder;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -9,7 +11,6 @@ import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
-
 /**
  * 通知渠道行响应（{@code NotificationChannelMapper.selectByTenant/selectByCode} 投影）。
  *
@@ -20,6 +21,7 @@ import java.util.Set;
  * <p>MyBatis {@code resultType="map"} 省略 null 列，历史 wire 不含 null 键 → {@code NON_NULL} 保键集对等。
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Builder
 public record ConsoleNotificationChannelResponse(
     Long id,
     @JsonProperty("tenant_id") String tenantId,
@@ -37,18 +39,31 @@ public record ConsoleNotificationChannelResponse(
     if (row == null) {
       return null;
     }
-    return new ConsoleNotificationChannelResponse(
-        ConsoleResponseFieldReader.longValue(row, "id"),
-        ConsoleResponseFieldReader.stringValue(row, "tenant_id"),
-        ConsoleResponseFieldReader.stringValue(row, "channel_code"),
-        ConsoleResponseFieldReader.stringValue(row, "channel_name"),
-        ConsoleResponseFieldReader.stringValue(row, "channel_type"),
-        safeConfig(row.get("config_json")),
-        ConsoleResponseFieldReader.booleanValue(row, "enabled"),
-        ConsoleResponseFieldReader.stringValue(row, "created_by"),
-        ConsoleResponseFieldReader.stringValue(row, "updated_by"),
-        ConsoleResponseFieldReader.instantValue(row, "created_at"),
-        ConsoleResponseFieldReader.instantValue(row, "updated_at"));
+    Long id = ConsoleResponseFieldReader.longValue(row, "id");
+    String tenantId = ConsoleResponseFieldReader.stringValue(row, "tenant_id");
+    String channelCode = ConsoleResponseFieldReader.stringValue(row, "channel_code");
+    String channelName = ConsoleResponseFieldReader.stringValue(row, "channel_name");
+    String channelType = ConsoleResponseFieldReader.stringValue(row, "channel_type");
+    Object configJsonValue = row.get("config_json");
+    Object safeConfigJson = safeConfig(configJsonValue);
+    Boolean enabled = ConsoleResponseFieldReader.booleanValue(row, "enabled");
+    String createdBy = ConsoleResponseFieldReader.stringValue(row, "created_by");
+    String updatedBy = ConsoleResponseFieldReader.stringValue(row, "updated_by");
+    Instant createdAt = ConsoleResponseFieldReader.instantValue(row, "created_at");
+    Instant updatedAt = ConsoleResponseFieldReader.instantValue(row, "updated_at");
+    return ConsoleNotificationChannelResponse.builder()
+        .id(id)
+        .tenantId(tenantId)
+        .channelCode(channelCode)
+        .channelName(channelName)
+        .channelType(channelType)
+        .configJson(safeConfigJson)
+        .enabled(enabled)
+        .createdBy(createdBy)
+        .updatedBy(updatedBy)
+        .createdAt(createdAt)
+        .updatedAt(updatedAt)
+        .build();
   }
 
   private static Object safeConfig(Object value) {

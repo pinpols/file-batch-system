@@ -4,15 +4,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
+import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -40,6 +43,13 @@ class TaskDispatcherP0HardeningTest {
       .build();
 
   private TaskDispatcher dispatcher;
+
+  private void stubCurrentClaim(PlatformHttpClient http, long taskId, String invocationId)
+      throws IOException {
+    PlatformHttpClient.TaskClaimResponse response =
+        new PlatformHttpClient.TaskClaimResponse(invocationId);
+    when(http.claim(eq(taskId), anyString(), any())).thenReturn(response);
+  }
 
   @AfterEach
   void tearDown() {
@@ -98,6 +108,7 @@ class TaskDispatcherP0HardeningTest {
   @DisplayName("处理器执行时注入链路、租户与任务标识,便于日志串联")
   void shouldPopulateDiagnosticContext_whenHandlerRuns() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
+    stubCurrentClaim(http, 42L, "inv-42");
     AtomicReference<Map<String, String>> seenMdc = new AtomicReference<>();
     CountDownLatch executed = new CountDownLatch(1);
     dispatcher = new TaskDispatcher(
@@ -140,6 +151,7 @@ class TaskDispatcherP0HardeningTest {
   @DisplayName("执行结束后诊断上下文被清理,不残留到后续任务")
   void shouldClearDiagnosticContext_afterExecution() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
+    stubCurrentClaim(http, 42L, "inv-42");
     CountDownLatch executed = new CountDownLatch(1);
     dispatcher = new TaskDispatcher(config, Map.of("tt", new CountDownHandler(executed)), http);
 
@@ -156,8 +168,9 @@ class TaskDispatcherP0HardeningTest {
 
   @Test
   @DisplayName("工作线程执行完毕后恢复调用方原有上下文,不丢失外层字段")
-  void shouldRestoreCallerContext_afterWorkerExecution() {
+  void shouldRestoreCallerContext_afterWorkerExecution() throws IOException {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
+    stubCurrentClaim(http, 42L, "inv-42");
     dispatcher = new TaskDispatcher(config, Map.of("tt", noopHandler()), http);
     MDC.put("traceId", "outer-trace");
     MDC.put("tenantId", "outer-tenant");
@@ -177,6 +190,7 @@ class TaskDispatcherP0HardeningTest {
   @DisplayName("缺少链路标识时不注入该字段,其它上下文照常写入")
   void shouldSkipTraceKey_whenTraceIdMissing() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
+    stubCurrentClaim(http, 42L, "inv-42");
     AtomicReference<Map<String, String>> seenMdc = new AtomicReference<>();
     CountDownLatch executed = new CountDownLatch(1);
     dispatcher = new TaskDispatcher(
@@ -220,6 +234,7 @@ class TaskDispatcherP0HardeningTest {
         .maxConcurrentTasks(1)
         .build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
+    stubCurrentClaim(http, 1L, "inv-1");
     CountDownLatch started = new CountDownLatch(1);
     CountDownLatch gate = new CountDownLatch(1);
     dispatcher = new TaskDispatcher(cap1, Map.of("tt", new GatedHandler(started, gate)), http);

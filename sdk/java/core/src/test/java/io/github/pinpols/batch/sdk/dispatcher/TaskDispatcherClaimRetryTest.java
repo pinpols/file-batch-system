@@ -133,7 +133,7 @@ class TaskDispatcherClaimRetryTest {
     verify(http, never()).report(anyLong(), anyString(), any());
   }
 
-  // ─── 其它 4xx(400 / 404 / 422)→ 客户端构造错误,放弃,不重试 ───────────────────────
+  // ─── 404 → 历史任务不可领取；其它 4xx(400 / 422)→ 客户端构造错误,放弃,不重试 ───────────────────────
 
   @Test
   @DisplayName("认领目标不存在时不重试也不回报,且不标记致命")
@@ -148,6 +148,40 @@ class TaskDispatcherClaimRetryTest {
     assertThat(dispatcher.isFatal()).isFalse();
     verify(http, times(1)).claim(anyLong(), anyString(), any());
     verify(http, never()).report(anyLong(), anyString(), any());
+  }
+
+  @Test
+  @DisplayName("读取多个历史终态派单不能熔断，后续待执行任务仍可领取回报")
+  void shouldContinuePendingTaskAfterTerminalClaimBacklog() throws Exception {
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    when(http.claim(anyLong(), anyString(), any())).thenAnswer(invocation -> {
+      long taskId = invocation.getArgument(0);
+      if (taskId < 100L) {
+        throw new PlatformHttpException(404, "error.task.claim_not_available");
+      }
+      return new PlatformHttpClient.TaskClaimResponse("pending-invocation");
+    });
+    AtomicBoolean executed = new AtomicBoolean();
+    dispatcher = new TaskDispatcher(config, Map.of("tt", trackedHandler(executed)), http);
+
+    for (long taskId = 1L; taskId <= 6L; taskId++) {
+      TaskDispatchMessage historical = new TaskDispatchMessage(
+          taskId, "tx", "job-1", "tt", "historical", Map.of(), Map.of());
+      dispatcher.processInWorkerThread(historical);
+    }
+    assertThat(dispatcher.isFatal()).isFalse();
+    assertThat(dispatcher.consecutiveClientErrors()).isZero();
+    assertThat(executed).isFalse();
+    verify(http, never()).report(anyLong(), anyString(), any());
+
+    TaskDispatchMessage pending = new TaskDispatchMessage(
+        100L, "tx", "job-1", "tt", "pending", Map.of(), Map.of());
+    TaskDispatcher.DispatchDecision decision = dispatcher.onMessage(pending);
+    assertThat(decision).isEqualTo(TaskDispatcher.DispatchDecision.SUBMITTED);
+    verify(http, org.mockito.Mockito.timeout(2000)).report(
+        org.mockito.ArgumentMatchers.eq(100L), anyString(), any());
+    assertThat(executed).isTrue();
+    verify(http, times(7)).claim(anyLong(), anyString(), any());
   }
 
   // ─── 5xx → 指数退避重试,直到耗尽或成功 ─────────────────────────────────────────
@@ -235,14 +269,14 @@ class TaskDispatcherClaimRetryTest {
     AtomicInteger calls = new AtomicInteger();
     when(http.claim(anyLong(), anyString(), any())).thenAnswer(inv -> {
       if (calls.incrementAndGet() <= 2) {
-        throw new PlatformHttpException(404, "task gone");
+        throw new PlatformHttpException(400, "bad request");
       }
       return new PlatformHttpClient.TaskClaimResponse("ti-9");
     });
     dispatcher = new TaskDispatcher(threshold3, Map.of("tt", noopHandler()), http);
 
-    dispatcher.processInWorkerThread(msg()); // 404 → 1
-    dispatcher.processInWorkerThread(msg()); // 404 → 2
+    dispatcher.processInWorkerThread(msg()); // 400 → 1
+    dispatcher.processInWorkerThread(msg()); // 400 → 2
     assertThat(dispatcher.consecutiveClientErrors()).isEqualTo(2);
     dispatcher.processInWorkerThread(msg()); // 成功 claim + report → 归零
 
@@ -257,7 +291,7 @@ class TaskDispatcherClaimRetryTest {
         config.toBuilder().clientErrorFailFastThreshold(0).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.claim(anyLong(), anyString(), any()))
-        .thenThrow(new PlatformHttpException(404, "task gone"));
+        .thenThrow(new PlatformHttpException(400, "bad request"));
     dispatcher = new TaskDispatcher(disabled, Map.of("tt", noopHandler()), http);
 
     for (int i = 0; i < 10; i++) {
@@ -275,7 +309,7 @@ class TaskDispatcherClaimRetryTest {
         config.toBuilder().clientErrorFailFastThreshold(3).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.claim(anyLong(), anyString(), any()))
-        .thenReturn(new PlatformHttpClient.TaskClaimResponse(null)); // CLAIM 成功
+        .thenReturn(new PlatformHttpClient.TaskClaimResponse("inv-42")); // CLAIM 成功
     doThrow(new PlatformHttpException(422, "unprocessable"))
         .when(http)
         .report(anyLong(), anyString(), any()); // REPORT 422
@@ -294,7 +328,7 @@ class TaskDispatcherClaimRetryTest {
         config.toBuilder().clientErrorFailFastThreshold(3).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.claim(anyLong(), anyString(), any()))
-        .thenReturn(new PlatformHttpClient.TaskClaimResponse(null));
+        .thenReturn(new PlatformHttpClient.TaskClaimResponse("inv-42"));
     doThrow(new PlatformHttpException(401, "unauthorized"))
         .when(http)
         .report(anyLong(), anyString(), any()); // 鉴权类不计入此计数器
@@ -315,7 +349,7 @@ class TaskDispatcherClaimRetryTest {
         config.toBuilder().clientErrorFailFastThreshold(3).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.claim(anyLong(), anyString(), any()))
-        .thenReturn(new PlatformHttpClient.TaskClaimResponse(null));
+        .thenReturn(new PlatformHttpClient.TaskClaimResponse("inv-42"));
     doThrow(new PlatformHttpException(409, "already reported"))
         .when(http)
         .report(anyLong(), anyString(), any()); // 409 不计入
@@ -334,7 +368,7 @@ class TaskDispatcherClaimRetryTest {
         config.toBuilder().clientErrorFailFastThreshold(3).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.claim(anyLong(), anyString(), any()))
-        .thenReturn(new PlatformHttpClient.TaskClaimResponse(null));
+        .thenReturn(new PlatformHttpClient.TaskClaimResponse("inv-42"));
     doThrow(new PlatformHttpException(400, "bad report body"))
         .when(http)
         .report(anyLong(), anyString(), any());

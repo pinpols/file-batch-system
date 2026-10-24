@@ -33,6 +33,9 @@ import io.github.pinpols.batch.console.domain.job.query.JobPartitionQuery;
 import io.github.pinpols.batch.console.domain.job.query.JobStepInstanceQuery;
 import io.github.pinpols.batch.console.domain.job.support.ConsoleJobQueryMappers;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -53,8 +56,10 @@ public class ConsoleJobQueryService {
   public PageResponse<ConsoleJobDefinitionResponse> jobDefinitions(
       JobDefinitionQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+    String requestedTenantId = request.getTenantId();
+    String tenantId = resolveTenant(tenantGuard, requestedTenantId);
     JobDefinitionQuery query = new JobDefinitionQuery(
-        resolveTenant(tenantGuard, request.getTenantId()),
+        tenantId,
         request.getJobCode(),
         request.getExactJobCode(),
         request.getDependsOnJobCode(),
@@ -83,16 +88,25 @@ public class ConsoleJobQueryService {
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
+    String requestedTenantId = request.getTenantId();
+    String tenantId = resolveTenant(tenantGuard, requestedTenantId);
+    Long jobInstanceId = request.getJobInstanceId();
+    Long jobPartitionId = request.getJobPartitionId();
+    String logLevel = request.getLogLevel();
+    String logType = request.getLogType();
+    String traceId = request.getTraceId();
+    String keyword = request.getKeyword();
+    Long cursorId = decodeCursorId(request.getCursor());
     JobExecutionLogQuery query = new JobExecutionLogQuery(
-        resolveTenant(tenantGuard, request.getTenantId()),
-        request.getJobInstanceId(),
-        request.getJobPartitionId(),
-        request.getLogLevel(),
-        request.getLogType(),
-        request.getTraceId(),
-        request.getKeyword(),
+        tenantId,
+        jobInstanceId,
+        jobPartitionId,
+        logLevel,
+        logType,
+        traceId,
+        keyword,
         pageRequest,
-        decodeCursorId(request.getCursor()));
+        cursorId);
     List<JobExecutionLogEntity> rows = jobMappers.jobExecutionLogMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(
@@ -103,18 +117,30 @@ public class ConsoleJobQueryService {
   }
 
   private ConsoleJobExecutionLogResponse toJobExecutionLogResponse(JobExecutionLogEntity entity) {
+    Long id = entity.getId();
+    String tenantId = display(entity.getTenantId());
+    Long jobInstanceId = entity.getJobInstanceId();
+    Long jobPartitionId = entity.getJobPartitionId();
+    String logLevel = display(entity.getLogLevel());
+    String logType = display(entity.getLogType());
+    String traceId = display(entity.getTraceId());
+    String message = display(entity.getMessage());
+    String detailRef = display(entity.getDetailRef());
+    String rawExtraJson = entity.getExtraJson();
+    String extraJson = SecretMasking.maskSensitiveJson(rawExtraJson);
+    Instant createdAt = entity.getCreatedAt();
     return new ConsoleJobExecutionLogResponse(
-        entity.getId(),
-        display(entity.getTenantId()),
-        entity.getJobInstanceId(),
-        entity.getJobPartitionId(),
-        display(entity.getLogLevel()),
-        display(entity.getLogType()),
-        display(entity.getTraceId()),
-        display(entity.getMessage()),
-        display(entity.getDetailRef()),
-        SecretMasking.maskSensitiveJson(entity.getExtraJson()),
-        entity.getCreatedAt());
+        id,
+        tenantId,
+        jobInstanceId,
+        jobPartitionId,
+        logLevel,
+        logType,
+        traceId,
+        message,
+        detailRef,
+        extraJson,
+        createdAt);
   }
 
   public PageResponse<ConsoleJobInstanceResponse> jobInstances(JobInstanceQueryRequest request) {
@@ -132,20 +158,37 @@ public class ConsoleJobQueryService {
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
     Long cursorId = decodeCursorId(request.getCursor());
+    String requestedTenantId = request.getTenantId();
+    String tenantId = resolveTenant(tenantGuard, requestedTenantId);
+    String jobCode = request.getJobCode();
+    String instanceStatus = request.getInstanceStatus();
+    String instanceStatusesText = request.getInstanceStatuses();
+    List<String> instanceStatuses = parseCsv(instanceStatusesText);
+    String instanceNo = request.getInstanceNo();
+    String bizDate = request.getBizDate();
+    String traceId = request.getTraceId();
+    String startDateText = request.getStartDate();
+    ZoneId startDateZone = timezoneProvider.defaultZone();
+    Instant startDate = parseFlexibleInstant(startDateText, "startDate", startDateZone);
+    String endDateText = request.getEndDate();
+    ZoneId endDateZone = timezoneProvider.defaultZone();
+    Instant endDate = parseFlexibleInstantEndOfDay(endDateText, "endDate", endDateZone);
+    String sortBy = request.getSortBy();
+    Integer minDurationSeconds = request.getMinDurationSeconds();
+    Boolean slaBreached = request.getSlaBreached();
     JobInstanceQuery query = new JobInstanceQuery(
-        resolveTenant(tenantGuard, request.getTenantId()),
-        request.getJobCode(),
-        request.getInstanceStatus(),
-        parseCsv(request.getInstanceStatuses()),
-        request.getInstanceNo(),
-        request.getBizDate(),
-        request.getTraceId(),
-        parseFlexibleInstant(request.getStartDate(), "startDate", timezoneProvider.defaultZone()),
-        parseFlexibleInstantEndOfDay(
-            request.getEndDate(), "endDate", timezoneProvider.defaultZone()),
-        request.getSortBy(),
-        request.getMinDurationSeconds(),
-        request.getSlaBreached(),
+        tenantId,
+        jobCode,
+        instanceStatus,
+        instanceStatuses,
+        instanceNo,
+        bizDate,
+        traceId,
+        startDate,
+        endDate,
+        sortBy,
+        minDurationSeconds,
+        slaBreached,
         pageRequest,
         cursorId);
     List<JobInstanceEntity> rows = jobMappers.jobInstanceMapper.selectByQuery(query);
@@ -157,17 +200,18 @@ public class ConsoleJobQueryService {
   }
 
   public ConsoleJobInstanceResponse jobInstance(String tenantId, Long id) {
-    JobInstanceEntity entity =
-        jobMappers.jobInstanceMapper.selectById(resolveTenant(tenantGuard, tenantId), id);
-    return toJobInstanceResponse(requireNotNull(entity, "job instance not found"));
+    String resolvedTenantId = resolveTenant(tenantGuard, tenantId);
+    JobInstanceEntity entity = jobMappers.jobInstanceMapper.selectById(resolvedTenantId, id);
+    JobInstanceEntity existingInstance = requireNotNull(entity, "job instance not found");
+    return toJobInstanceResponse(existingInstance);
   }
 
   public List<ConsoleJobInstanceResponse> batchInstanceStatus(
       String tenantId, List<String> instanceNos) {
     String resolved = resolveTenant(tenantGuard, tenantId);
-    return jobMappers.jobInstanceMapper.selectByInstanceNos(resolved, instanceNos).stream()
-        .map(this::toJobInstanceResponse)
-        .toList();
+    List<JobInstanceEntity> instances =
+        jobMappers.jobInstanceMapper.selectByInstanceNos(resolved, instanceNos);
+    return instances.stream().map(this::toJobInstanceResponse).toList();
   }
 
   public PageResponse<ConsoleJobStepInstanceResponse> jobStepInstances(
@@ -176,14 +220,15 @@ public class ConsoleJobQueryService {
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
+    String requestedTenantId = request.getTenantId();
+    String tenantId = resolveTenant(tenantGuard, requestedTenantId);
+    Long jobInstanceId = request.getJobInstanceId();
+    Long jobPartitionId = request.getJobPartitionId();
+    String stepCode = request.getStepCode();
+    String stepStatus = request.getStepStatus();
+    Long cursorId = decodeCursorId(request.getCursor());
     JobStepInstanceQuery query = new JobStepInstanceQuery(
-        resolveTenant(tenantGuard, request.getTenantId()),
-        request.getJobInstanceId(),
-        request.getJobPartitionId(),
-        request.getStepCode(),
-        request.getStepStatus(),
-        pageRequest,
-        decodeCursorId(request.getCursor()));
+        tenantId, jobInstanceId, jobPartitionId, stepCode, stepStatus, pageRequest, cursorId);
     List<JobStepInstanceEntity> rows = jobMappers.jobStepInstanceMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(
@@ -194,9 +239,11 @@ public class ConsoleJobQueryService {
   }
 
   public ConsoleJobStepInstanceResponse jobStepInstance(String tenantId, Long id) {
+    String resolvedTenantId = resolveTenant(tenantGuard, tenantId);
     JobStepInstanceEntity entity =
-        jobMappers.jobStepInstanceMapper.selectById(resolveTenant(tenantGuard, tenantId), id);
-    return toJobStepInstanceResponse(requireNotNull(entity, "job step instance not found"));
+        jobMappers.jobStepInstanceMapper.selectById(resolvedTenantId, id);
+    JobStepInstanceEntity existingStep = requireNotNull(entity, "job step instance not found");
+    return toJobStepInstanceResponse(existingStep);
   }
 
   public PageResponse<ConsoleJobPartitionResponse> jobPartitions(JobPartitionQueryRequest request) {
@@ -204,12 +251,13 @@ public class ConsoleJobQueryService {
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
-    JobPartitionQuery query = new JobPartitionQuery(
-        resolveTenant(tenantGuard, request.getTenantId()),
-        request.getJobInstanceId(),
-        request.getPartitionStatus(),
-        pageRequest,
-        decodeCursorId(request.getCursor()));
+    String requestedTenantId = request.getTenantId();
+    String tenantId = resolveTenant(tenantGuard, requestedTenantId);
+    Long jobInstanceId = request.getJobInstanceId();
+    String partitionStatus = request.getPartitionStatus();
+    Long cursorId = decodeCursorId(request.getCursor());
+    JobPartitionQuery query =
+        new JobPartitionQuery(tenantId, jobInstanceId, partitionStatus, pageRequest, cursorId);
     List<JobPartitionEntity> rows = jobMappers.jobPartitionMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(pageRequest, rows, this::toJobPartitionResponse, JobPartitionEntity::getId);
@@ -219,118 +267,195 @@ public class ConsoleJobQueryService {
   }
 
   private ConsoleJobPartitionResponse toJobPartitionResponse(JobPartitionEntity entity) {
-    return new ConsoleJobPartitionResponse(
-        entity.getId(),
-        display(entity.getTenantId()),
-        entity.getJobInstanceId(),
-        entity.getPartitionNo(),
-        display(entity.getPartitionKey()),
-        display(entity.getPartitionStatus()),
-        display(entity.getWorkerGroup()),
-        display(entity.getWorkerCode()),
-        entity.getRetryCount(),
-        display(entity.getBusinessKey()),
-        entity.getLeaseExpireAt(),
-        entity.getStartedAt(),
-        entity.getFinishedAt(),
-        display(entity.getErrorCode()),
-        display(entity.getErrorMessage()));
+    Long id = entity.getId();
+    String tenantId = display(entity.getTenantId());
+    Long jobInstanceId = entity.getJobInstanceId();
+    Integer partitionNo = entity.getPartitionNo();
+    String partitionKey = display(entity.getPartitionKey());
+    String partitionStatus = display(entity.getPartitionStatus());
+    String workerGroup = display(entity.getWorkerGroup());
+    String workerCode = display(entity.getWorkerCode());
+    Integer retryCount = entity.getRetryCount();
+    String businessKey = display(entity.getBusinessKey());
+    Instant leaseExpireAt = entity.getLeaseExpireAt();
+    Instant startedAt = entity.getStartedAt();
+    Instant finishedAt = entity.getFinishedAt();
+    String errorCode = display(entity.getErrorCode());
+    String errorMessage = display(entity.getErrorMessage());
+    return ConsoleJobPartitionResponse.builder()
+        .id(id)
+        .tenantId(tenantId)
+        .jobInstanceId(jobInstanceId)
+        .partitionNo(partitionNo)
+        .partitionKey(partitionKey)
+        .partitionStatus(partitionStatus)
+        .workerGroup(workerGroup)
+        .workerCode(workerCode)
+        .retryCount(retryCount)
+        .businessKey(businessKey)
+        .leaseExpireAt(leaseExpireAt)
+        .startedAt(startedAt)
+        .finishedAt(finishedAt)
+        .errorCode(errorCode)
+        .errorMessage(errorMessage)
+        .build();
   }
 
   private ConsoleJobDefinitionResponse toJobDefinitionResponse(JobDefinitionEntity entity) {
-    return new ConsoleJobDefinitionResponse(
-        entity.getId(),
-        display(entity.getTenantId()),
-        display(entity.getJobCode()),
-        display(entity.getDependsOnJobCode()),
-        display(entity.getJobName()),
-        display(entity.getJobType()),
-        display(entity.getBizType()),
-        display(entity.getQueueCode()),
-        display(entity.getWorkerGroup()),
-        display(entity.getScheduleType()),
-        display(entity.getScheduleExpr()),
-        display(entity.getTimezone()),
-        display(entity.getCalendarCode()),
-        display(entity.getWindowCode()),
-        display(entity.getTriggerMode()),
-        entity.getDagEnabled(),
-        display(entity.getRetryPolicy()),
-        entity.getRetryMaxCount(),
-        entity.getTimeoutSeconds(),
-        Nullables.coalesce(entity.getSoftRuntimeSeconds(), 0),
-        display(entity.getSoftRuntimeSeverity()),
-        Nullables.coalesce(entity.getStartGraceSeconds(), 0),
-        display(entity.getStartGraceSeverity()),
-        entity.getCompletionDeadlineEnabled(),
-        entity.getCompletionDeadlineLocalTime(),
-        entity.getCompletionDeadlineDayOffset(),
-        display(entity.getCompletionDeadlineSeverity()),
-        Nullables.coalesce(entity.getDependencyCompletionWindowSeconds(), 0),
-        display(entity.getShardStrategy()),
-        display(entity.getExecutionMode()),
-        display(entity.getWatermarkField()),
-        display(entity.getExecutionHandler()),
-        display(entity.getParamSchema()),
-        SecretMasking.maskSensitiveJson(entity.getDefaultParams()),
-        entity.getPriority(),
-        entity.getVersion(),
-        entity.getEnabled(),
-        display(entity.getDescription()),
-        entity.getCreatedAt(),
-        entity.getUpdatedAt());
+    String maskedDefaultParams = SecretMasking.maskSensitiveJson(entity.getDefaultParams());
+    ConsoleJobDefinitionResponse response = ConsoleJobDefinitionResponse.builder()
+        .id(entity.getId())
+        .tenantId(display(entity.getTenantId()))
+        .jobCode(display(entity.getJobCode()))
+        .dependsOnJobCode(display(entity.getDependsOnJobCode()))
+        .dependsOnJobCodes(
+            EmptyChecks.isNull(entity.getDependsOnJobCodes())
+                ? List.of()
+                : entity.getDependsOnJobCodes())
+        .jobDependencyRules(
+            EmptyChecks.isNull(entity.getJobDependencyRules())
+                ? List.of()
+                : entity.getJobDependencyRules())
+        .jobName(display(entity.getJobName()))
+        .jobType(display(entity.getJobType()))
+        .bizType(display(entity.getBizType()))
+        .queueCode(display(entity.getQueueCode()))
+        .workerGroup(display(entity.getWorkerGroup()))
+        .scheduleType(display(entity.getScheduleType()))
+        .scheduleExpr(display(entity.getScheduleExpr()))
+        .timezone(display(entity.getTimezone()))
+        .calendarCode(display(entity.getCalendarCode()))
+        .windowCode(display(entity.getWindowCode()))
+        .triggerMode(display(entity.getTriggerMode()))
+        .dagEnabled(entity.getDagEnabled())
+        .retryPolicy(display(entity.getRetryPolicy()))
+        .retryMaxCount(entity.getRetryMaxCount())
+        .timeoutSeconds(entity.getTimeoutSeconds())
+        .softRuntimeSeconds(Nullables.coalesce(entity.getSoftRuntimeSeconds(), 0))
+        .softRuntimeSeverity(display(entity.getSoftRuntimeSeverity()))
+        .startGraceSeconds(Nullables.coalesce(entity.getStartGraceSeconds(), 0))
+        .startGraceSeverity(display(entity.getStartGraceSeverity()))
+        .completionDeadlineEnabled(entity.getCompletionDeadlineEnabled())
+        .completionDeadlineLocalTime(entity.getCompletionDeadlineLocalTime())
+        .completionDeadlineDayOffset(entity.getCompletionDeadlineDayOffset())
+        .completionDeadlineSeverity(display(entity.getCompletionDeadlineSeverity()))
+        .dependencyCompletionWindowSeconds(
+            Nullables.coalesce(entity.getDependencyCompletionWindowSeconds(), 0))
+        .shardStrategy(display(entity.getShardStrategy()))
+        .executionMode(display(entity.getExecutionMode()))
+        .watermarkField(display(entity.getWatermarkField()))
+        .executionHandler(display(entity.getExecutionHandler()))
+        .paramSchema(display(entity.getParamSchema()))
+        .defaultParams(maskedDefaultParams)
+        .priority(entity.getPriority())
+        .version(entity.getVersion())
+        .enabled(entity.getEnabled())
+        .description(display(entity.getDescription()))
+        .createdAt(entity.getCreatedAt())
+        .updatedAt(entity.getUpdatedAt())
+        .defaultWorkflowDefinitionId(entity.getDefaultWorkflowDefinitionId())
+        .build();
+    return response;
   }
 
   private ConsoleJobInstanceResponse toJobInstanceResponse(JobInstanceEntity entity) {
-    return new ConsoleJobInstanceResponse(
-        entity.getId(),
-        display(entity.getTenantId()),
-        display(entity.getJobCode()),
-        display(entity.getInstanceNo()),
-        entity.getBizDate(),
-        display(entity.getTriggerType()),
-        display(entity.getInstanceStatus()),
-        display(entity.getBatchNo()),
-        display(entity.getOperatorId()),
-        entity.getRerunFlag(),
-        entity.getRetryFlag(),
-        display(entity.getRerunReason()),
-        entity.getRelatedFileId(),
-        entity.getParentInstanceId(),
-        display(entity.getQueueCode()),
-        display(entity.getWorkerGroup()),
-        entity.getPriority(),
-        display(entity.getTraceId()),
-        SecretMasking.maskSensitiveJson(entity.getParamsSnapshot()),
-        SecretMasking.maskSensitiveJson(entity.getResultSummary()),
-        entity.getDeadlineAt(),
-        entity.getExpectedDurationSeconds(),
-        entity.getSlaAlertedAt(),
-        entity.getStartedAt(),
-        entity.getFinishedAt(),
-        entity.getDryRun(),
-        display(entity.getFailureClass()));
+    Long id = entity.getId();
+    String tenantId = display(entity.getTenantId());
+    String jobCode = display(entity.getJobCode());
+    String instanceNo = display(entity.getInstanceNo());
+    LocalDate bizDate = entity.getBizDate();
+    String triggerType = display(entity.getTriggerType());
+    String instanceStatus = display(entity.getInstanceStatus());
+    String batchNo = display(entity.getBatchNo());
+    String operatorId = display(entity.getOperatorId());
+    Boolean rerunFlag = entity.getRerunFlag();
+    Boolean retryFlag = entity.getRetryFlag();
+    String rerunReason = display(entity.getRerunReason());
+    Long relatedFileId = entity.getRelatedFileId();
+    Long parentInstanceId = entity.getParentInstanceId();
+    String queueCode = display(entity.getQueueCode());
+    String workerGroup = display(entity.getWorkerGroup());
+    Integer priority = entity.getPriority();
+    String traceId = display(entity.getTraceId());
+    String rawParamsSnapshot = entity.getParamsSnapshot();
+    String paramsSnapshot = SecretMasking.maskSensitiveJson(rawParamsSnapshot);
+    String rawResultSummary = entity.getResultSummary();
+    String resultSummary = SecretMasking.maskSensitiveJson(rawResultSummary);
+    Instant deadlineAt = entity.getDeadlineAt();
+    Integer expectedDurationSeconds = entity.getExpectedDurationSeconds();
+    Instant slaAlertedAt = entity.getSlaAlertedAt();
+    Instant startedAt = entity.getStartedAt();
+    Instant finishedAt = entity.getFinishedAt();
+    Boolean dryRun = entity.getDryRun();
+    String failureClass = display(entity.getFailureClass());
+    return ConsoleJobInstanceResponse.builder()
+        .id(id)
+        .tenantId(tenantId)
+        .jobCode(jobCode)
+        .instanceNo(instanceNo)
+        .bizDate(bizDate)
+        .triggerType(triggerType)
+        .instanceStatus(instanceStatus)
+        .batchNo(batchNo)
+        .operatorId(operatorId)
+        .rerunFlag(rerunFlag)
+        .retryFlag(retryFlag)
+        .rerunReason(rerunReason)
+        .relatedFileId(relatedFileId)
+        .parentInstanceId(parentInstanceId)
+        .queueCode(queueCode)
+        .workerGroup(workerGroup)
+        .priority(priority)
+        .traceId(traceId)
+        .paramsSnapshot(paramsSnapshot)
+        .resultSummary(resultSummary)
+        .deadlineAt(deadlineAt)
+        .expectedDurationSeconds(expectedDurationSeconds)
+        .slaAlertedAt(slaAlertedAt)
+        .startedAt(startedAt)
+        .finishedAt(finishedAt)
+        .dryRun(dryRun)
+        .failureClass(failureClass)
+        .build();
   }
 
   private ConsoleJobStepInstanceResponse toJobStepInstanceResponse(JobStepInstanceEntity entity) {
     String errorMessage = localizedErrorRenderer.render(entity);
-    return new ConsoleJobStepInstanceResponse(
-        entity.getId(),
-        display(entity.getTenantId()),
-        entity.getJobInstanceId(),
-        entity.getJobPartitionId(),
-        entity.getJobTaskId(),
-        display(entity.getStepCode()),
-        display(entity.getStepType()),
-        display(entity.getStepStatus()),
-        entity.getRetryCount(),
-        entity.getRelatedFileId(),
-        SecretMasking.maskSensitiveJson(entity.getResultSummary()),
-        display(entity.getErrorCode()),
-        display(errorMessage),
-        entity.getRelatedPipelineInstanceId(),
-        entity.getStartedAt(),
-        entity.getFinishedAt());
+    Long id = entity.getId();
+    String tenantId = display(entity.getTenantId());
+    Long jobInstanceId = entity.getJobInstanceId();
+    Long jobPartitionId = entity.getJobPartitionId();
+    Long jobTaskId = entity.getJobTaskId();
+    String stepCode = display(entity.getStepCode());
+    String stepType = display(entity.getStepType());
+    String stepStatus = display(entity.getStepStatus());
+    Integer retryCount = entity.getRetryCount();
+    Long relatedFileId = entity.getRelatedFileId();
+    String rawResultSummary = entity.getResultSummary();
+    String resultSummary = SecretMasking.maskSensitiveJson(rawResultSummary);
+    String errorCode = display(entity.getErrorCode());
+    String displayedErrorMessage = display(errorMessage);
+    Long relatedPipelineInstanceId = entity.getRelatedPipelineInstanceId();
+    Instant startedAt = entity.getStartedAt();
+    Instant finishedAt = entity.getFinishedAt();
+    return ConsoleJobStepInstanceResponse.builder()
+        .id(id)
+        .tenantId(tenantId)
+        .jobInstanceId(jobInstanceId)
+        .jobPartitionId(jobPartitionId)
+        .jobTaskId(jobTaskId)
+        .stepCode(stepCode)
+        .stepType(stepType)
+        .stepStatus(stepStatus)
+        .retryCount(retryCount)
+        .relatedFileId(relatedFileId)
+        .resultSummary(resultSummary)
+        .errorCode(errorCode)
+        .errorMessage(displayedErrorMessage)
+        .relatedPipelineInstanceId(relatedPipelineInstanceId)
+        .startedAt(startedAt)
+        .finishedAt(finishedAt)
+        .build();
   }
 
   /** Comma-separated -> trimmed list,null/空 → null。供「多状态过滤」入口复用。 */

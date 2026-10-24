@@ -12,6 +12,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -88,15 +89,21 @@ public class AtomicExecutorProductionGuard {
     Set<String> enforced = new HashSet<>();
     for (String p : guardProperties.getEnforceProfiles()) {
       if (EmptyChecks.isNotBlank(p)) {
-        enforced.add(p.trim().toLowerCase(Locale.ROOT));
+        String trimmedProfile = p.trim();
+        String normalizedProfile = trimmedProfile.toLowerCase(Locale.ROOT);
+        enforced.add(normalizedProfile);
       }
     }
     if (EmptyChecks.isEmpty(enforced) || EmptyChecks.isNull(activeProfiles)) {
       return false;
     }
     for (String active : activeProfiles) {
-      if (active != null && enforced.contains(active.trim().toLowerCase(Locale.ROOT))) {
-        return true;
+      if (EmptyChecks.isNotNull(active)) {
+        String trimmedProfile = active.trim();
+        String normalizedProfile = trimmedProfile.toLowerCase(Locale.ROOT);
+        if (enforced.contains(normalizedProfile)) {
+          return true;
+        }
       }
     }
     return false;
@@ -106,22 +113,28 @@ public class AtomicExecutorProductionGuard {
   List<String> collectViolations() {
     List<String> violations = new ArrayList<>();
     SqlExecutorProperties sql = sqlProps.getIfAvailable();
-    if (sql != null && sql.isEnabled() && sql.getAllowedDataSourceBeans().isEmpty()) {
+    boolean enabledSqlHasNoDataSourceAllowlist =
+        sql != null && sql.isEnabled() && sql.getAllowedDataSourceBeans().isEmpty();
+    if (enabledSqlHasNoDataSourceAllowlist) {
       violations.add("batch.worker.executors.sql.enabled=true 但 allowedDataSourceBeans 为空"
           + " — prod profile 必须显式配 batch.worker.executors.sql.allowed-data-source-beans"
           + " 列出可用 DataSource bean 名(防业务方借 parameters.dataSourceBean 切到任意高权限连接)");
     }
     StoredProcExecutorProperties sp = storedProcProps.getIfAvailable();
-    if (sp != null && sp.isEnabled() && sp.getAllowedSchemas().isEmpty()) {
+    boolean enabledStoredProcedureHasNoSchemaAllowlist =
+        sp != null && sp.isEnabled() && sp.getAllowedSchemas().isEmpty();
+    if (enabledStoredProcedureHasNoSchemaAllowlist) {
       violations.add("batch.worker.executors.stored-proc.enabled=true 但 allowedSchemas 为空"
           + " — prod profile 必须配 batch.worker.executors.stored-proc.allowed-schemas"
           + " 限定可调用的 schema(默认空=允许全部,prod 风险过大)");
     }
     HttpExecutorProperties http = httpProps.getIfAvailable();
-    if (http != null
-        && http.isEnabled()
-        && http.getAllowedHostPatterns().isEmpty()
-        && !http.isEnforceAllowlist()) {
+    boolean httpEnabledWithEmptyUnenforcedAllowlist =
+        EmptyChecks.isNotNull(http)
+            && http.isEnabled()
+            && EmptyChecks.isEmpty(Objects.requireNonNull(http.getAllowedHostPatterns()))
+            && !http.isEnforceAllowlist();
+    if (httpEnabledWithEmptyUnenforcedAllowlist) {
       violations.add("batch.worker.executors.http.enabled=true 但 allowedHostPatterns 为空且"
           + " enforceAllowlist=false — prod profile 必须二选一:"
           + "(a) 配 batch.worker.executors.http.allowed-host-patterns 列出可访问的出口域名 glob;"
@@ -129,13 +142,17 @@ public class AtomicExecutorProductionGuard {
           + " fail-closed 拒绝全部");
     }
     ShellExecutorProperties shell = shellProps.getIfAvailable();
-    if (shell != null && shell.isEnabled() && shell.getCommandWhitelist().isEmpty()) {
+    boolean enabledShellHasNoCommandAllowlist =
+        shell != null && shell.isEnabled() && shell.getCommandWhitelist().isEmpty();
+    if (enabledShellHasNoCommandAllowlist) {
       violations.add("batch.worker.executors.shell.enabled=true 但 commandWhitelist 为空"
           + " — prod profile 必须配 batch.worker.executors.shell.command-whitelist"
           + " 列出允许执行的程序绝对路径(默认空=允许全部 program,任意 RCE 风险)");
     }
     SparkSubmitExecutorProperties spark = sparkProps.getIfAvailable();
-    if (spark != null && spark.isEnabled() && spark.getAppResourceAllowlist().isEmpty()) {
+    boolean enabledSparkHasNoResourceAllowlist =
+        spark != null && spark.isEnabled() && spark.getAppResourceAllowlist().isEmpty();
+    if (enabledSparkHasNoResourceAllowlist) {
       violations.add("batch.worker.executors.spark-submit.enabled=true 但 appResourceAllowlist 为空"
           + " — prod profile 必须配 batch.worker.executors.spark-submit.app-resource-allowlist"
           + " 列出允许提交的 jar/.py 前缀(默认空=允许提交任意 jar,等同任意代码执行 RCE)");

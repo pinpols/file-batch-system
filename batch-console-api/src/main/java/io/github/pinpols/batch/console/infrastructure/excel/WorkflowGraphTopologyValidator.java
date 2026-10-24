@@ -116,26 +116,29 @@ final class WorkflowGraphTopologyValidator {
     if (EmptyChecks.isEmpty(startCodes) && EmptyChecks.isNotEmpty(byCode)) {
       // 没有 START 节点,挑首节点定位
       Map<String, String> first = byCode.values().iterator().next();
+      int issueRowNo = excelRowNo(first, fallbackRowNo);
       issues.add(new WorkbookIssue(
           WF_NODE_SHEET,
-          excelRowNo(first, fallbackRowNo),
+          issueRowNo,
           COL_NODE_TYPE,
           "workflow graph missing START node"));
     }
     if (EmptyChecks.isEmpty(endCodes) && EmptyChecks.isNotEmpty(byCode)) {
       Map<String, String> first = byCode.values().iterator().next();
+      int issueRowNo = excelRowNo(first, fallbackRowNo);
       issues.add(new WorkbookIssue(
           WF_NODE_SHEET,
-          excelRowNo(first, fallbackRowNo),
+          issueRowNo,
           COL_NODE_TYPE,
           "workflow graph requires at least 1 END node"));
     }
     if (startCodes.size() > 1) {
       for (String s : startCodes) {
         Map<String, String> n = byCode.get(s);
+        int issueRowNo = excelRowNo(n, fallbackRowNo);
         issues.add(new WorkbookIssue(
             WF_NODE_SHEET,
-            excelRowNo(n, fallbackRowNo),
+            issueRowNo,
             COL_NODE_TYPE,
             "workflow graph has multiple START nodes: " + startCodes));
       }
@@ -143,9 +146,10 @@ final class WorkflowGraphTopologyValidator {
     for (String s : startCodes) {
       if (EmptyChecks.isNotEmpty(incoming.getOrDefault(s, List.of()))) {
         Map<String, String> n = byCode.get(s);
+        int issueRowNo = excelRowNo(n, fallbackRowNo);
         issues.add(new WorkbookIssue(
             WF_NODE_SHEET,
-            excelRowNo(n, fallbackRowNo),
+            issueRowNo,
             COL_NODE_TYPE,
             "START node cannot have incoming edges: " + s));
       }
@@ -153,9 +157,10 @@ final class WorkflowGraphTopologyValidator {
     for (String e : endCodes) {
       if (EmptyChecks.isNotEmpty(outgoing.getOrDefault(e, List.of()))) {
         Map<String, String> n = byCode.get(e);
+        int issueRowNo = excelRowNo(n, fallbackRowNo);
         issues.add(new WorkbookIssue(
             WF_NODE_SHEET,
-            excelRowNo(n, fallbackRowNo),
+            issueRowNo,
             COL_NODE_TYPE,
             "END node cannot have outgoing edges: " + e));
       }
@@ -166,9 +171,10 @@ final class WorkflowGraphTopologyValidator {
       String f = normalize(e.get(COL_FROM_NODE_CODE));
       String t = normalize(e.get(COL_TO_NODE_CODE));
       if (Texts.hasText(f) && f.equals(t)) {
+        int issueRowNo = excelRowNo(e, fallbackEdgeRow);
         issues.add(new WorkbookIssue(
             WF_EDGE_SHEET,
-            excelRowNo(e, fallbackEdgeRow),
+            issueRowNo,
             COL_TO_NODE_CODE,
             "self-loop edge on node: " + f));
       }
@@ -189,9 +195,10 @@ final class WorkflowGraphTopologyValidator {
       for (String code : byCode.keySet()) {
         if (!reachFromStart.contains(code)) {
           Map<String, String> n = byCode.get(code);
+          int issueRowNo = excelRowNo(n, fallbackRowNo);
           issues.add(new WorkbookIssue(
               WF_NODE_SHEET,
-              excelRowNo(n, fallbackRowNo),
+              issueRowNo,
               COL_NODE_CODE,
               "node unreachable from START: " + code));
         }
@@ -204,11 +211,14 @@ final class WorkflowGraphTopologyValidator {
     }
     if (EmptyChecks.isNotEmpty(endCodes)) {
       for (String code : byCode.keySet()) {
-        if (!reachToEnd.contains(code) && !endCodes.contains(code)) {
+        boolean nonEndNodeCannotReachAnyEnd =
+            !reachToEnd.contains(code) && !endCodes.contains(code);
+        if (nonEndNodeCannotReachAnyEnd) {
           Map<String, String> n = byCode.get(code);
+          int issueRowNo = excelRowNo(n, fallbackRowNo);
           issues.add(new WorkbookIssue(
               WF_NODE_SHEET,
-              excelRowNo(n, fallbackRowNo),
+              issueRowNo,
               COL_NODE_CODE,
               "node cannot reach any END: " + code));
         }
@@ -220,9 +230,10 @@ final class WorkflowGraphTopologyValidator {
       String type = normalizeEnum(e.get(COL_EDGE_TYPE));
       String expr = normalize(e.get(COL_CONDITION_EXPR));
       if ("CONDITION".equals(type) && !Texts.hasText(expr)) {
+        int issueRowNo = excelRowNo(e, rowNo);
         issues.add(new WorkbookIssue(
             WF_EDGE_SHEET,
-            excelRowNo(e, rowNo),
+            issueRowNo,
             COL_CONDITION_EXPR,
             "CONDITION edge requires non-empty condition_expr"));
       }
@@ -240,18 +251,20 @@ final class WorkflowGraphTopologyValidator {
       while (m.find()) {
         String ref = m.group(1);
         if (!byCode.containsKey(ref)) {
+          int issueRowNo = excelRowNo(n, fallbackRowNo);
           issues.add(new WorkbookIssue(
               WF_NODE_SHEET,
-              excelRowNo(n, fallbackRowNo),
+              issueRowNo,
               COL_NODE_PARAMS,
               "node_params DSL references missing node: " + ref));
           continue;
         }
         Set<String> ancSet = ancestors.getOrDefault(e.getKey(), Set.of());
         if (!ancSet.contains(ref)) {
+          int issueRowNo = excelRowNo(n, fallbackRowNo);
           issues.add(new WorkbookIssue(
               WF_NODE_SHEET,
-              excelRowNo(n, fallbackRowNo),
+              issueRowNo,
               COL_NODE_PARAMS,
               "node_params DSL can only reference upstream nodes; '"
                   + ref
@@ -275,9 +288,10 @@ final class WorkflowGraphTopologyValidator {
       Integer c = color.getOrDefault(next, 0);
       if (c == 1) {
         Map<String, String> n = byCode.get(node);
+        int issueRowNo = EmptyChecks.isNull(n) ? fallback : excelRowNo(n, fallback);
         issues.add(new WorkbookIssue(
             WF_EDGE_SHEET,
-            n == null ? fallback : excelRowNo(n, fallback),
+            issueRowNo,
             COL_TO_NODE_CODE,
             "topology cycle detected through edge: " + node + " -> " + next));
         return;

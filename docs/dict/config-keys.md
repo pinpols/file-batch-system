@@ -10,11 +10,15 @@
 batch-common/target/classes/META-INF/spring-configuration-metadata.json
 batch-orchestrator/target/classes/META-INF/spring-configuration-metadata.json
 batch-trigger/target/classes/META-INF/spring-configuration-metadata.json
-batch-worker-import/target/classes/META-INF/spring-configuration-metadata.json
-batch-worker-export/target/classes/META-INF/spring-configuration-metadata.json
-batch-worker-dispatch/target/classes/META-INF/spring-configuration-metadata.json
+batch-worker/import/target/classes/META-INF/spring-configuration-metadata.json
+batch-worker/export/target/classes/META-INF/spring-configuration-metadata.json
+batch-worker/process/target/classes/META-INF/spring-configuration-metadata.json
+batch-worker/atomic/target/classes/META-INF/spring-configuration-metadata.json
+batch-worker/dispatch/target/classes/META-INF/spring-configuration-metadata.json
 batch-console-api/target/classes/META-INF/spring-configuration-metadata.json
 ```
+
+> metadata 描述 Spring 绑定键，不证明每个键都支持数据库动态覆盖；动态参数按治理注册表和应用配置边界执行。Workflow 图/日程、Job 执行参数、系统 Pipeline 目录和 Secret 版本各有事实来源，不能混成配置键字典。
 
 ## 怎么用
 

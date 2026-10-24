@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.rbac.support.captcha;
 
+import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -84,7 +85,8 @@ public class TencentCaptchaVerifier implements CaptchaVerifier {
     try {
       String payload = buildPayload(ticket, randstr, clientIp);
       String endpoint = properties.getTencentEndpoint();
-      String host = URI.create(endpoint).getHost();
+      URI endpointUri = URI.create(endpoint);
+      String host = endpointUri.getHost();
       long timestamp = epochSeconds();
 
       Map<String, String> headers = buildSignedHeaders(
@@ -132,9 +134,10 @@ public class TencentCaptchaVerifier implements CaptchaVerifier {
    */
   Map<String, String> buildSignedHeaders(
       String host, String payload, long timestamp, String secretId, String secretKey) {
-    String date = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-        .withZone(ZoneOffset.UTC)
-        .format(Instant.ofEpochSecond(timestamp));
+    DateTimeFormatter utcDateFormatter =
+        DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneOffset.UTC);
+    Instant requestTime = Instant.ofEpochSecond(timestamp);
+    String date = utcDateFormatter.format(requestTime);
     String authorization = buildAuthorization(host, payload, timestamp, date, secretId, secretKey);
 
     Map<String, String> headers = new LinkedHashMap<>();
@@ -192,11 +195,13 @@ public class TencentCaptchaVerifier implements CaptchaVerifier {
 
   /** 四段派生密钥后对 stringToSign 做 HMAC,输出小写 hex。 */
   static String sign(String date, String stringToSign, String secretKey) {
-    byte[] secretDate =
-        CaptchaCrypto.hmacSha256(("TC3" + secretKey).getBytes(StandardCharsets.UTF_8), date);
+    String secretSeed = "TC3" + secretKey;
+    byte[] secretSeedBytes = secretSeed.getBytes(StandardCharsets.UTF_8);
+    byte[] secretDate = CaptchaCrypto.hmacSha256(secretSeedBytes, date);
     byte[] secretService = CaptchaCrypto.hmacSha256(secretDate, SERVICE);
     byte[] secretSigning = CaptchaCrypto.hmacSha256(secretService, "tc3_request");
-    return CaptchaCrypto.hex(CaptchaCrypto.hmacSha256(secretSigning, stringToSign));
+    byte[] signature = CaptchaCrypto.hmacSha256(secretSigning, stringToSign);
+    return CaptchaCrypto.hex(signature);
   }
 
   /** 时间戳来源,UTC 秒;protected 以便单测覆盖固定值做确定性断言。 */
@@ -207,14 +212,15 @@ public class TencentCaptchaVerifier implements CaptchaVerifier {
   /** 执行 application/json POST 带签名头,返回响应体字符串。抽 protected 以便单测覆盖返回预置 JSON、无网络验证各分支。 */
   protected String postJson(String url, Map<String, String> headers, String body)
       throws IOException, InterruptedException {
-    OutboundHttpResponse response = httpTransport.execute(OutboundHttpRequest.post(
+    OutboundHttpContent httpContent = new OutboundHttpContent(body, CONTENT_TYPE);
+    OutboundHttpRequest httpRequest = OutboundHttpRequest.post(
         url,
         headers,
-        body,
-        CONTENT_TYPE,
+        httpContent,
         CONNECT_TIMEOUT,
         REQUEST_TIMEOUT,
-        OutboundAddressPolicy.GUARDED));
+        OutboundAddressPolicy.GUARDED);
+    OutboundHttpResponse response = httpTransport.execute(httpRequest);
     return response.body();
   }
 

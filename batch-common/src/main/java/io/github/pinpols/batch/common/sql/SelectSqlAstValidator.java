@@ -14,6 +14,8 @@ import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.select.AllColumns;
 import net.sf.jsqlparser.statement.select.AllTableColumns;
 import net.sf.jsqlparser.statement.select.Join;
+import net.sf.jsqlparser.statement.select.Limit;
+import net.sf.jsqlparser.statement.select.Offset;
 import net.sf.jsqlparser.statement.select.OrderByElement;
 import net.sf.jsqlparser.statement.select.ParenthesedSelect;
 import net.sf.jsqlparser.statement.select.PlainSelect;
@@ -147,7 +149,9 @@ public final class SelectSqlAstValidator {
    */
   public static SchemaViolation findSchemaViolation(
       Statement statement, List<String> allowedSchemas) {
-    List<String> tableNames = List.copyOf(new TablesNamesFinder<Void>().getTables(statement));
+    TablesNamesFinder<Void> tablesNamesFinder = new TablesNamesFinder<>();
+    Set<String> discoveredTableNames = tablesNamesFinder.getTables(statement);
+    List<String> tableNames = List.copyOf(discoveredTableNames);
     for (String name : tableNames) {
       int dot = name.indexOf('.');
       if (dot <= 0) {
@@ -209,7 +213,9 @@ public final class SelectSqlAstValidator {
       public <S> Void visit(Function function, S context) {
         if (function.getName() != null) {
           // 去引号：防 "pg_read_server_files"(...) 这类带引号标识符逃逸比对。
-          names.add(function.getName().toLowerCase(Locale.ROOT).replace("\"", ""));
+          String lowerCaseName = function.getName().toLowerCase(Locale.ROOT);
+          String normalizedName = lowerCaseName.replace("\"", "");
+          names.add(normalizedName);
         }
         return super.visit(function, context);
       }
@@ -218,7 +224,9 @@ public final class SelectSqlAstValidator {
       public <S> Void visit(AnalyticExpression aexpr, S context) {
         // 窗口/分析函数是 AnalyticExpression 而非 Function 节点,名字单独采集,内部表达式手动下钻。
         if (aexpr.getName() != null) {
-          names.add(aexpr.getName().toLowerCase(Locale.ROOT).replace("\"", ""));
+          String lowerCaseName = aexpr.getName().toLowerCase(Locale.ROOT);
+          String normalizedName = lowerCaseName.replace("\"", "");
+          names.add(normalizedName);
         }
         acceptIfPresent(aexpr.getExpression(), context);
         acceptIfPresent(aexpr.getOffset(), context);
@@ -254,10 +262,7 @@ public final class SelectSqlAstValidator {
       }
 
       private <S> void acceptSetOperationScalarClauses(
-          List<OrderByElement> orderBy,
-          net.sf.jsqlparser.statement.select.Limit limit,
-          net.sf.jsqlparser.statement.select.Offset offset,
-          S context) {
+          List<OrderByElement> orderBy, Limit limit, Offset offset, S context) {
         acceptScalarClauses(null, null, orderBy, limit, offset, context);
       }
 
@@ -266,8 +271,8 @@ public final class SelectSqlAstValidator {
           Expression groupByExpressions,
           Expression having,
           List<OrderByElement> orderBy,
-          net.sf.jsqlparser.statement.select.Limit limit,
-          net.sf.jsqlparser.statement.select.Offset offset,
+          Limit limit,
+          Offset offset,
           S context) {
         acceptIfPresent(groupByExpressions, context);
         acceptIfPresent(having, context);

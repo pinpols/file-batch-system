@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：一条命令升级应用版本，同步关键落点。
+# 用法：bash scripts/ci/bump-version.sh <NEW_VERSION>；会改写项目版本文件。
 # =========================================================================
 # bump-version.sh — 一条命令升级应用版本，同步关键落点
 #
@@ -10,7 +12,7 @@
 #   自动修改：
 #     - pom.xml   <revision>NEW_VERSION</revision>
 #     - docs/api/orchestrator-internal.openapi.yaml   info.version
-#     - docs/sdk/quickstart.md   Java SDK dependency version
+# docs/sdk/quickstart.md 中的 Java SDK 依赖版本。
 #     - GA 版本在 CHANGELOG.md 自动补正式版本小节（如已存在则不改）
 #     - GA 版本额外同步 helm/batch-platform/Chart.yaml appVersion 与 helm/values-prod.yaml image.tag
 #

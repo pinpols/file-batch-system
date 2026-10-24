@@ -93,9 +93,11 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
       String headerName,
       String fallback) {
     String existing = CorrelationIds.normalize(response.getHeader(headerName));
-    return EmptyChecks.isNotNull(existing)
-        ? existing
-        : CorrelationIds.normalize(request.getHeader(headerName), fallback);
+    if (EmptyChecks.isNotNull(existing)) {
+      return existing;
+    }
+    String requestedCorrelationId = request.getHeader(headerName);
+    return CorrelationIds.normalize(requestedCorrelationId, fallback);
   }
 
   private String resolveTenantId(HttpServletResponse response, String requestedTenantId) {
@@ -109,9 +111,10 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
             : principal.tenantId();
       }
       // 租户角色：严格匹配
-      if (requestedTenantId != null
+      boolean requestedTenantIsDifferent = EmptyChecks.isNotNull(requestedTenantId)
           && !requestedTenantId.isBlank()
-          && !requestedTenantId.equals(principal.tenantId())) {
+          && !requestedTenantId.equals(principal.tenantId());
+      if (requestedTenantIsDifferent) {
         try {
           responseWriter.write(
               response,

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：不可变集合空值风险。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-mapof-null-values.py；参数与前置环境见下方说明及所属 README。
 # scripts/ci/check-mapof-null-values.py
 #
 # Map.of / List.of / Set.of 空值守护(固化唯一反复复发的生产 NPE 模式)。

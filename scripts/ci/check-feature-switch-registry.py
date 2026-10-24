@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Validate the feature-switch registry as a strict CI contract."""
+# 用途：功能开关注册表。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-feature-switch-registry.py；参数与前置环境见下方说明及所属 README。
+"""将功能开关注册表作为严格的 CI 契约进行校验。"""
 
 from __future__ import annotations
 

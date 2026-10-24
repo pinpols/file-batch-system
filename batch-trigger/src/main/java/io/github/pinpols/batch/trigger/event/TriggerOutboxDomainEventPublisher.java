@@ -4,8 +4,10 @@ import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.event.DomainEvent;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.observability.OtelTracePropagation;
+import io.github.pinpols.batch.common.observability.W3cTraceContext;
 import io.github.pinpols.batch.common.persistence.entity.TriggerOutboxEventEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -48,20 +50,26 @@ public class TriggerOutboxDomainEventPublisher implements DomainEventPublisher {
   private static final String DEFAULT_TOPIC = BatchTopics.TRIGGER_LAUNCH_V1;
 
   private final TriggerOutboxEventMapper triggerOutboxEventMapper;
+  private final BatchKafkaTopicNamespace topicNamespace;
 
   @Override
   @Transactional(propagation = Propagation.MANDATORY)
   public Long publish(DomainEvent event) {
-    return insertOutboxEvent(
-        event.tenantId(), event.eventKey(), event.traceId(), JsonUtils.toJson(event.payload()));
+    String tenantId = event.tenantId();
+    String eventKey = event.eventKey();
+    String traceId = event.traceId();
+    String payloadJson = JsonUtils.toJson(event.payload());
+    return insertOutboxEvent(tenantId, eventKey, traceId, payloadJson);
   }
 
   /** 写入 trigger launch 信封，并在持久化异步边界捕获当前 W3C 链路上下文。 */
   @Transactional(propagation = Propagation.MANDATORY)
   public Long publishLaunch(
       String tenantId, String requestId, String traceId, LaunchEnvelope envelope) {
-    LaunchEnvelope persisted = envelope.withTraceContext(OtelTracePropagation.captureCurrent());
-    return insertOutboxEvent(tenantId, requestId, traceId, JsonUtils.toJson(persisted));
+    W3cTraceContext capturedTraceContext = OtelTracePropagation.captureCurrent();
+    LaunchEnvelope persisted = envelope.withTraceContext(capturedTraceContext);
+    String payloadJson = JsonUtils.toJson(persisted);
+    return insertOutboxEvent(tenantId, requestId, traceId, payloadJson);
   }
 
   private Long insertOutboxEvent(
@@ -69,7 +77,7 @@ public class TriggerOutboxDomainEventPublisher implements DomainEventPublisher {
     TriggerOutboxEventEntity entity = new TriggerOutboxEventEntity();
     entity.setTenantId(tenantId);
     entity.setRequestId(requestId);
-    entity.setTopic(DEFAULT_TOPIC);
+    entity.setTopic(topicNamespace.topic(DEFAULT_TOPIC));
     entity.setPayload(payloadJson);
     entity.setPublishStatus(OutboxPublishStatus.NEW.code());
     entity.setPublishAttempt(0);

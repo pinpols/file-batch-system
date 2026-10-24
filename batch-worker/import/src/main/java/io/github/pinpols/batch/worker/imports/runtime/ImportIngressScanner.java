@@ -17,7 +17,9 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
+import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam.FileAuditParamBuilder;
 import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam;
+import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam.FileRecordParamBuilder;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
@@ -136,7 +138,7 @@ public class ImportIngressScanner {
 
   /**
    * ADR-046 Phase3:把「manifest-only 导出束」清单登记为自完整到达组 trigger 记录。导出无输入数据文件,清单本身就是触发: 一条 trigger 记录的
-   * metadata 携带 {@code bundleJobCode} + {@code bundleExportTemplates}(导出模板列表),其 arrival 组 {@code
+   * metadata 携带 {@code bundleWorkflowCode} + {@code bundleExportTemplates}(导出模板列表),其 arrival 组 {@code
    * requiredFileSet} = 自身文件名 → 组满足条件立即触发,{@code BundleArrivalLauncher} 一个声明展成 N 个导出
    * partition。幂等:trigger 记录以清单对象路径为 storage_path,已登记则跳过(不重复发射)。
    */
@@ -148,13 +150,19 @@ public class ImportIngressScanner {
     String suffix = scannerProperties.getBatchManifestSuffix();
     for (Map.Entry<String, ObjectSnapshot> entry : snapshots.entrySet()) {
       ObjectSnapshot snapshot = entry.getValue();
-      if (!entry.getKey().endsWith(suffix) || !isStable(snapshot)) {
+      boolean entryDoesNotMatchManifestSuffix = !entry.getKey().endsWith(suffix);
+      if (entryDoesNotMatchManifestSuffix) {
+        continue;
+      }
+      boolean manifestSnapshotIsUnstable = !isStable(snapshot);
+      if (manifestSnapshotIsUnstable) {
         continue;
       }
       BatchManifest manifest = readBatchManifest(entry.getKey());
-      if (manifest == null
+      boolean manifestCannotLaunchFileGroup = manifest == null
           || !manifest.isManifestOnlyExport()
-          || !Texts.hasText(manifest.fileGroupCode())) {
+          || !Texts.hasText(manifest.fileGroupCode());
+      if (manifestCannotLaunchFileGroup) {
         continue;
       }
       registerExportTrigger(snapshot, manifest);
@@ -171,8 +179,10 @@ public class ImportIngressScanner {
       return;
     }
     // 幂等:trigger 记录以清单对象路径为 storage_path,已登记则跳过 → 同一导出清单只发射一次
-    if (fileRecords.existsFileRecordByStoragePath(
-        resolvedTenant, s3StorageProperties.getBucket(), snapshot.objectName())) {
+    boolean fileRecordAlreadyExists =
+        fileRecords.existsFileRecordByStoragePath(
+            resolvedTenant, s3StorageProperties.getBucket(), snapshot.objectName());
+    if (fileRecordAlreadyExists) {
       return;
     }
     LocalDate bizDate = parseManifestBizDate(manifest.bizDate());
@@ -185,19 +195,22 @@ public class ImportIngressScanner {
     String fileName = baseName(snapshot.objectName());
     Map<String, Object> metadata = new LinkedHashMap<>();
     metadata.put("scanner", "objectStore-export-trigger");
-    metadata.put("detectedAt", BatchDateTimeSupport.utcNow().toString());
-    metadata.put("bundleJobCode", manifest.jobCode());
+    Instant detectedAt = BatchDateTimeSupport.utcNow();
+    String detectedAtText = detectedAt.toString();
+    metadata.put("detectedAt", detectedAtText);
+    metadata.put("bundleWorkflowCode", manifest.workflowCode());
     metadata.put("bundleExportTemplates", manifest.exportTemplateCodes());
     // 自完整到达组:requiredFileSet = 本 trigger 记录自身文件名 → 组(大小 1)立即满足条件触发
     putArrivalMetadata(metadata, manifest.fileGroupCode(), fileName);
-    fileRecords.createFileRecord(FileRecordParam.builder()
+    FileRecordParamBuilder exportTriggerFileRecordBuilder = FileRecordParam.builder()
         .tenantId(resolvedTenant)
         .fileCode(null)
         .bizType(scannerProperties.getDefaultBizType())
         .fileCategory("EXPORT_TRIGGER")
         .fileName(fileName)
-        .originalFileName(fileName)
-        .fileFormatType(resolveFileFormatType(fileName))
+        .originalFileName(fileName);
+    String exportTriggerFileFormatType = resolveFileFormatType(fileName);
+    exportTriggerFileRecordBuilder.fileFormatType(exportTriggerFileFormatType)
         .charset(StandardCharsets.UTF_8.name())
         .fileSizeBytes(snapshot.size())
         .checksumType("NONE")
@@ -209,16 +222,19 @@ public class ImportIngressScanner {
         .bizDate(bizDate)
         .sourceType(scannerProperties.getSourceType())
         .sourceRef(snapshot.objectName())
-        .fileStatus(FileStatus.RECEIVED.code())
-        .traceId("export-trigger-" + sanitizeTrace(fileName))
+        .fileStatus(FileStatus.RECEIVED.code());
+    String exportTriggerTraceId = "export-trigger-" + sanitizeTrace(fileName);
+    FileRecordParam exportTriggerFileRecord = exportTriggerFileRecordBuilder
+        .traceId(exportTriggerTraceId)
         .metadata(metadata)
-        .build());
+        .build();
+    fileRecords.createFileRecord(exportTriggerFileRecord);
     log.info(
-        "export bundle trigger registered: tenant={}, group={}, jobCode={}, templateCount={},"
+        "export bundle trigger registered: tenant={}, group={}, workflowCode={}, templateCount={},"
             + " bizDate={}",
         resolvedTenant,
         manifest.fileGroupCode(),
-        manifest.jobCode(),
+        manifest.workflowCode(),
         manifest.exportTemplateCodes().size(),
         bizDate);
   }
@@ -228,7 +244,8 @@ public class ImportIngressScanner {
       return null;
     }
     try {
-      return LocalDate.parse(bizDate.trim());
+      String normalizedBizDate = bizDate.trim();
+      return LocalDate.parse(normalizedBizDate);
     } catch (RuntimeException ignored) {
       return null;
     }
@@ -256,12 +273,17 @@ public class ImportIngressScanner {
 
   private void tryRegister(
       ObjectSnapshot snapshot, Set<String> currentObjects, List<BatchManifest> batchManifests) {
-    if (snapshot == null || snapshot.objectName().endsWith(scannerProperties.getDoneFileSuffix())) {
+    if (EmptyChecks.isNull(snapshot)) {
       return;
     }
-    if (scannerProperties.isBatchManifestEnabled()
-        && snapshot.objectName().endsWith(scannerProperties.getBatchManifestSuffix())) {
-      return; // 批次清单对象本身不当数据文件登记
+    boolean isDoneFileObject =
+        snapshot.objectName().endsWith(scannerProperties.getDoneFileSuffix());
+    if (isDoneFileObject) {
+      return;
+    }
+    String manifestSuffix = scannerProperties.getBatchManifestSuffix();
+    if (EmptyChecks.isNotBlank(manifestSuffix) && snapshot.objectName().endsWith(manifestSuffix)) {
+      return; // 协议清单归属不随处理开关改变，关闭时也不能落入普通数据入口。
     }
     String marker = null;
     if (scannerProperties.isRequireDoneFile()) {
@@ -306,6 +328,17 @@ public class ImportIngressScanner {
     if (bizDate == null) {
       return;
     }
+    registerDiscoveredInputFile(snapshot, resolvedTenant, manifest, batchManifests, fileName, bizDate);
+  }
+
+  /** 准入与幂等判断完成后才生成本次元数据，并按文件登记、到达审计、扫描审计的顺序持久化。 */
+  private void registerDiscoveredInputFile(
+      ObjectSnapshot snapshot,
+      String resolvedTenant,
+      SidecarManifest manifest,
+      List<BatchManifest> batchManifests,
+      String fileName,
+      LocalDate bizDate) {
     // ADR-040 Phase1:命中批次清单(成员名 ∈ manifest.requiredFiles)→ 用清单的 group + requiredFiles
     // 覆盖静态配置,实现动态成组;未命中则沿用静态 arrival 配置。
     String effectiveGroupCode = scannerProperties.getArrival().getFileGroupCode();
@@ -321,10 +354,13 @@ public class ImportIngressScanner {
     metadata.put("stabilityWindowSeconds", scannerProperties.getStabilityWindowSeconds());
     metadata.put("etag", snapshot.etag());
     metadata.put("lastModified", snapshot.lastModified());
-    metadata.put("detectedAt", BatchDateTimeSupport.utcNow().toString());
-    if (scannerProperties.getArrival().isEnabled()
+    Instant detectedAt = BatchDateTimeSupport.utcNow();
+    String detectedAtText = detectedAt.toString();
+    metadata.put("detectedAt", detectedAtText);
+    boolean arrivalGroupCanBeRecorded = scannerProperties.getArrival().isEnabled()
         && Texts.hasText(effectiveGroupCode)
-        && Texts.hasText(effectiveRequiredFileSet)) {
+        && Texts.hasText(effectiveRequiredFileSet);
+    if (arrivalGroupCanBeRecorded) {
       putArrivalMetadata(metadata, effectiveGroupCode, effectiveRequiredFileSet);
     }
     if (manifest != null) {
@@ -332,24 +368,25 @@ public class ImportIngressScanner {
     }
     // ADR-046:批次清单 v2 落 metadata 供束 launch 读取——
     //   ① fileMapping 声明本文件绑定:导入束给 templateCode(目标表从模板推),分发束给 targetRef(下游渠道);
-    //   ② jobCode 声明本束满足条件后启动哪个 BUNDLE_* 作业(到达组满足条件时 BundleArrivalLauncher 据此发 launch)。
+    //   ② workflowCode 声明本束满足条件后启动哪个 Workflow(到达组满足条件时 BundleArrivalLauncher 据此发起根运行)。
     if (matchedBatch != null) {
       putBundleMetadata(metadata, matchedBatch, fileName);
     }
-    Long fileId = fileRecords.createFileRecord(FileRecordParam.builder()
+    FileRecordParamBuilder inputFileRecordBuilder = FileRecordParam.builder()
         .tenantId(resolvedTenant)
         .fileCode(null)
         .bizType(scannerProperties.getDefaultBizType())
         .fileCategory("INPUT")
         .fileName(fileName)
-        .originalFileName(fileName)
-        .fileFormatType(resolveFileFormatType(fileName))
+        .originalFileName(fileName);
+    String inputFileFormatType = resolveFileFormatType(fileName);
+    inputFileRecordBuilder.fileFormatType(inputFileFormatType)
         .charset(StandardCharsets.UTF_8.name())
-        .fileSizeBytes(snapshot.size())
-        .checksumType(
-            manifest != null && Texts.hasText(manifest.checksumType())
-                ? manifest.checksumType()
-                : "NONE")
+        .fileSizeBytes(snapshot.size());
+    String inputChecksumType = EmptyChecks.isNotNull(manifest) && Texts.hasText(manifest.checksumType())
+        ? manifest.checksumType()
+        : "NONE";
+    inputFileRecordBuilder.checksumType(inputChecksumType)
         .checksumValue(manifest == null ? null : manifest.checksumValue())
         .storageType("S3")
         .storagePath(snapshot.objectName())
@@ -358,21 +395,27 @@ public class ImportIngressScanner {
         .bizDate(bizDate)
         .sourceType(scannerProperties.getSourceType())
         .sourceRef(snapshot.objectName())
-        .fileStatus(FileStatus.RECEIVED.code())
-        .traceId("import-scan-" + sanitizeTrace(fileName))
+        .fileStatus(FileStatus.RECEIVED.code());
+    String inputTraceId = "import-scan-" + sanitizeTrace(fileName);
+    FileRecordParam inputFileRecord = inputFileRecordBuilder
+        .traceId(inputTraceId)
         .metadata(metadata)
-        .build());
-    if (scannerProperties.getArrival().isEnabled()
+        .build();
+    Long fileId = fileRecords.createFileRecord(inputFileRecord);
+    boolean arrivalGroupAuditCanBeRecorded = scannerProperties.getArrival().isEnabled()
         && Texts.hasText(effectiveGroupCode)
-        && Texts.hasText(effectiveRequiredFileSet)) {
-      fileAudits.appendAudit(FileAuditParam.builder()
+        && Texts.hasText(effectiveRequiredFileSet);
+    if (arrivalGroupAuditCanBeRecorded) {
+      FileAuditParamBuilder arrivalAuditBuilder = FileAuditParam.builder()
           .fileId(fileId)
           .tenantId(resolvedTenant)
           .operationType(FileAuditOperationType.ARRIVAL_REGISTER.code())
           .operationResult(OperationResult.SUCCESS.code())
           .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
-          .operatorId("import-ingress-scanner")
-          .traceId("arrival-" + sanitizeTrace(fileName))
+          .operatorId("import-ingress-scanner");
+      String arrivalAuditTraceId = "arrival-" + sanitizeTrace(fileName);
+      FileAuditParam arrivalAudit = arrivalAuditBuilder
+          .traceId(arrivalAuditTraceId)
           .evidenceRef(snapshot.objectName())
           .detailSummary(Map.of(
               "fileGroupCode",
@@ -381,19 +424,23 @@ public class ImportIngressScanner {
               effectiveRequiredFileSet,
               "arrivalState",
               "WAITING_ARRIVAL"))
-          .build());
+          .build();
+      fileAudits.appendAudit(arrivalAudit);
     }
-    fileAudits.appendAudit(FileAuditParam.builder()
+    FileAuditParamBuilder scanAuditBuilder = FileAuditParam.builder()
         .fileId(fileId)
         .tenantId(resolvedTenant)
         .operationType(FileAuditOperationType.RECEIVE_SCAN.code())
         .operationResult(OperationResult.SUCCESS.code())
         .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
-        .operatorId("import-ingress-scanner")
-        .traceId("import-scan-" + sanitizeTrace(fileName))
+        .operatorId("import-ingress-scanner");
+    String scanAuditTraceId = "import-scan-" + sanitizeTrace(fileName);
+    FileAuditParam scanAudit = scanAuditBuilder
+        .traceId(scanAuditTraceId)
         .evidenceRef(snapshot.objectName())
         .detailSummary(metadata)
-        .build());
+        .build();
+    fileAudits.appendAudit(scanAudit);
     log.info(
         "import file registered by scanner: tenantId={}, fileId={}, objectName={}",
         resolvedTenant,
@@ -407,7 +454,9 @@ public class ImportIngressScanner {
         "manifestChecksumScope",
         Texts.hasText(manifest.checksumScope()) ? manifest.checksumScope() : "RAW_OBJECT");
     metadata.put("integrityState", FileIntegrityState.VERIFIED.code());
-    metadata.put("integrityVerifiedAt", BatchDateTimeSupport.utcNow().toString());
+    Instant integrityVerifiedAt = BatchDateTimeSupport.utcNow();
+    String integrityVerifiedAtText = integrityVerifiedAt.toString();
+    metadata.put("integrityVerifiedAt", integrityVerifiedAtText);
     if (EmptyChecks.isNotNull(manifest.recordCount())) {
       metadata.put("expectedRecordCount", manifest.recordCount());
     }
@@ -421,9 +470,10 @@ public class ImportIngressScanner {
     // P2：用 ConcurrentHashMap.compute 原子化 check-and-update，即便 ShedLock
     // 异常过期时也不会有 get+put 之间的 TOCTOU；返回更新后的 state，稳定性判断在外部做
     ObservedObjectState state = observedObjects.compute(snapshot.objectName(), (k, existing) -> {
-      if (existing == null
+      boolean objectSnapshotHasChanged = existing == null
           || existing.size() != snapshot.size()
-          || !Objects.equals(existing.etag(), snapshot.etag())) {
+          || !Objects.equals(existing.etag(), snapshot.etag());
+      if (objectSnapshotHasChanged) {
         return new ObservedObjectState(snapshot.size(), snapshot.etag(), now);
       }
       return existing;
@@ -432,10 +482,9 @@ public class ImportIngressScanner {
     if (state.firstObservedAt().equals(now)) {
       return false;
     }
-    return state
-        .firstObservedAt()
-        .plusSeconds(scannerProperties.getStabilityWindowSeconds())
-        .isBefore(now);
+    Instant stableAfter =
+        state.firstObservedAt().plusSeconds(scannerProperties.getStabilityWindowSeconds());
+    return stableAfter.isBefore(now);
   }
 
   private LocalDate resolveScannerBizDate(String objectName) {
@@ -452,7 +501,9 @@ public class ImportIngressScanner {
       return null;
     }
     try {
-      return LocalDate.parse(scannerProperties.getDefaultBizDate().trim());
+      String defaultBizDate = scannerProperties.getDefaultBizDate();
+      String normalizedDefaultBizDate = defaultBizDate.trim();
+      return LocalDate.parse(normalizedDefaultBizDate);
     } catch (Exception invalid) {
       SwallowedExceptionLogger.warn(ImportIngressScanner.class, "catch:Exception", invalid);
       log.warn(
@@ -594,20 +645,39 @@ public class ImportIngressScanner {
   }
 
   private boolean isSupportedManifest(SidecarManifest manifest, ObjectSnapshot snapshot) {
-    if (EmptyChecks.isNull(manifest)
-        || !"file-sidecar-manifest-v1".equals(manifest.schemaVersion())
-        || !baseName(snapshot.objectName()).equals(manifest.fileName())
-        || EmptyChecks.isNull(manifest.sizeBytes())
-        || manifest.sizeBytes() < 0
-        || !Texts.hasText(manifest.checksumType())
-        || !Set.of("SHA-256", "SHA256")
-            .contains(manifest.checksumType().trim().toUpperCase(Locale.ROOT))
-        || !Texts.hasText(manifest.checksumValue())
-        || !"RAW_OBJECT"
-            .equalsIgnoreCase(
-                Texts.hasText(manifest.checksumScope())
-                    ? manifest.checksumScope().trim()
-                    : "RAW_OBJECT")) {
+    if (EmptyChecks.isNull(manifest)) {
+      return false;
+    }
+    if (!"file-sidecar-manifest-v1".equals(manifest.schemaVersion())) {
+      return false;
+    }
+    String snapshotFileName = baseName(snapshot.objectName());
+    if (!snapshotFileName.equals(manifest.fileName())) {
+      return false;
+    }
+    if (EmptyChecks.isNull(manifest.sizeBytes())) {
+      return false;
+    }
+    if (manifest.sizeBytes() < 0) {
+      return false;
+    }
+    if (!Texts.hasText(manifest.checksumType())) {
+      return false;
+    }
+    Set<String> supportedChecksumTypes = Set.of("SHA-256", "SHA256");
+    String trimmedChecksumType = manifest.checksumType().trim();
+    String normalizedChecksumType = trimmedChecksumType.toUpperCase(Locale.ROOT);
+    if (!supportedChecksumTypes.contains(normalizedChecksumType)) {
+      return false;
+    }
+    if (!Texts.hasText(manifest.checksumValue())) {
+      return false;
+    }
+    boolean checksumScopeHasText = Texts.hasText(manifest.checksumScope());
+    String checksumScope = checksumScopeHasText
+        ? manifest.checksumScope().trim()
+        : "RAW_OBJECT";
+    if (!"RAW_OBJECT".equalsIgnoreCase(checksumScope)) {
       return false;
     }
     String checksum = manifest.checksumValue().trim();
@@ -630,8 +700,12 @@ public class ImportIngressScanner {
         digest.update(buffer, 0, read);
       }
     }
-    return bytesRead == snapshot.size()
-        && HexFormat.of().formatHex(digest.digest()).equalsIgnoreCase(expectedChecksum.trim());
+    if (bytesRead != snapshot.size()) {
+      return false;
+    }
+    String actualChecksum = HexFormat.of().formatHex(digest.digest());
+    String normalizedExpectedChecksum = expectedChecksum.trim();
+    return actualChecksum.equalsIgnoreCase(normalizedExpectedChecksum);
   }
 
   /** 写入到达组 metadata(到达组 SLA + 满足条件判定所需);group/requiredFileSet 已按批次清单或静态配置解析。 */
@@ -641,16 +715,14 @@ public class ImportIngressScanner {
     metadata.put("waitFileGroupMode", scannerProperties.getArrival().getWaitFileGroupMode());
     metadata.put(KEY_REQUIRED_FILE_SET, requiredFileSet);
     metadata.put("arrivalTimeoutAction", scannerProperties.getArrival().getArrivalTimeoutAction());
-    metadata.put(
-        "expectedArrivalTime",
-        BatchDateTimeSupport.utcNow()
-            .plusSeconds(scannerProperties.getArrival().getExpectedArrivalDelaySeconds())
-            .toString());
-    metadata.put(
-        "latestTolerableTime",
-        BatchDateTimeSupport.utcNow()
-            .plusSeconds(scannerProperties.getArrival().getLatestTolerableDelaySeconds())
-            .toString());
+    Instant expectedArrivalAt = BatchDateTimeSupport.utcNow()
+        .plusSeconds(scannerProperties.getArrival().getExpectedArrivalDelaySeconds());
+    String expectedArrivalTime = expectedArrivalAt.toString();
+    metadata.put("expectedArrivalTime", expectedArrivalTime);
+    Instant latestTolerableAt = BatchDateTimeSupport.utcNow()
+        .plusSeconds(scannerProperties.getArrival().getLatestTolerableDelaySeconds());
+    String latestTolerableTime = latestTolerableAt.toString();
+    metadata.put("latestTolerableTime", latestTolerableTime);
     metadata.put("arrivalState", "WAITING_ARRIVAL");
     metadata.put("triggerOnComplete", scannerProperties.getArrival().isTriggerOnComplete());
     metadata.put("allowEmptyRun", scannerProperties.getArrival().isAllowEmptyRun());
@@ -674,8 +746,9 @@ public class ImportIngressScanner {
     if (!scannerProperties.isBatchManifestEnabled() || batchManifests.isEmpty()) {
       return;
     }
+    String fileName = baseName(snapshot.objectName());
     BatchManifest matched =
-        matchBatchManifest(batchManifests, tenantId, baseName(snapshot.objectName()));
+        matchBatchManifest(batchManifests, tenantId, fileName);
     if (matched == null) {
       return;
     }
@@ -691,10 +764,11 @@ public class ImportIngressScanner {
     Map<String, Object> existingMetadata = parseRecordMetadata(fileRecord);
     Map<String, Object> metadata = new LinkedHashMap<>();
     if (!hasRequiredFileSet(existingMetadata)) {
-      putArrivalMetadata(
-          metadata, matched.fileGroupCode(), String.join(",", matched.requiredFiles()));
+      String fileGroupCode = matched.fileGroupCode();
+      String requiredFiles = String.join(",", matched.requiredFiles());
+      putArrivalMetadata(metadata, fileGroupCode, requiredFiles);
     }
-    putMissingBundleMetadata(metadata, matched, baseName(snapshot.objectName()), existingMetadata);
+    putMissingBundleMetadata(metadata, matched, fileName, existingMetadata);
     if (metadata.isEmpty()) {
       return;
     }
@@ -738,12 +812,12 @@ public class ImportIngressScanner {
         .targetRefFor(fileName)
         .ifPresent(targetRef -> putMetadataValue(
             metadata, existingMetadata, "bundleTargetRef", targetRef, onlyMissingOrChanged));
-    if (Texts.hasText(matchedBatch.jobCode())) {
+    if (Texts.hasText(matchedBatch.workflowCode())) {
       putMetadataValue(
           metadata,
           existingMetadata,
-          "bundleJobCode",
-          matchedBatch.jobCode(),
+          "bundleWorkflowCode",
+          matchedBatch.workflowCode(),
           onlyMissingOrChanged);
     }
   }
@@ -754,7 +828,9 @@ public class ImportIngressScanner {
       String key,
       String value,
       boolean onlyMissingOrChanged) {
-    if (!onlyMissingOrChanged || !Objects.equals(existingMetadata.get(key), value)) {
+    boolean shouldWriteMetadataValue =
+        !onlyMissingOrChanged || !Objects.equals(existingMetadata.get(key), value);
+    if (shouldWriteMetadataValue) {
       metadata.put(key, value);
     }
   }
@@ -762,7 +838,11 @@ public class ImportIngressScanner {
   /** 已登记记录的 metadata_json 是否已含非空 requiredFileSet(回填幂等判据)。 */
   private boolean hasRequiredFileSet(Map<String, Object> metadata) {
     Object value = metadata.get(KEY_REQUIRED_FILE_SET);
-    return value != null && Texts.hasText(String.valueOf(value));
+    if (EmptyChecks.isNull(value)) {
+      return false;
+    }
+    String requiredFileSet = String.valueOf(value);
+    return Texts.hasText(requiredFileSet);
   }
 
   private Map<String, Object> parseRecordMetadata(Map<String, Object> fileRecord) {
@@ -783,9 +863,10 @@ public class ImportIngressScanner {
   private BatchManifest matchBatchManifest(
       List<BatchManifest> manifests, String tenantId, String fileName) {
     for (BatchManifest m : manifests) {
-      if (m.requiredFiles() == null
+      boolean manifestFileGroupIsIncomplete = m.requiredFiles() == null
           || m.requiredFiles().isEmpty()
-          || !Texts.hasText(m.fileGroupCode())) {
+          || !Texts.hasText(m.fileGroupCode());
+      if (manifestFileGroupIsIncomplete) {
         continue;
       }
       if (Texts.hasText(m.tenantId()) && !m.tenantId().equals(tenantId)) {
@@ -806,7 +887,12 @@ public class ImportIngressScanner {
         log.warn("batch manifest too large, skip: object={}", objectName);
         return null;
       }
-      return objectMapper.readValue(bytes, BatchManifest.class);
+      BatchManifest manifest = objectMapper.readValue(bytes, BatchManifest.class);
+      if (manifest.hasRetiredJobTarget()) {
+        log.warn("batch manifest uses retired jobCode root target, skip: object={}", objectName);
+        return null;
+      }
+      return manifest;
     } catch (Exception ex) {
       log.warn(
           "failed to read/parse batch manifest: object={}, error={}",

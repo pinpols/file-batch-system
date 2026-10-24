@@ -28,7 +28,8 @@ public final class CorrelationIds {
     if (value == null || value.isBlank()) {
       return null;
     }
-    StringBuilder out = new StringBuilder(Math.min(value.length(), MAX_HEADER_ID_LENGTH));
+    int initialCapacity = Math.min(value.length(), MAX_HEADER_ID_LENGTH);
+    StringBuilder out = new StringBuilder(initialCapacity);
     String trimmed = value.trim();
     for (int i = 0; i < trimmed.length() && out.length() < MAX_HEADER_ID_LENGTH; i++) {
       char c = trimmed.charAt(i);

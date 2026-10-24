@@ -1,9 +1,11 @@
 > 注:本文为 2026-05-31 时点快照,文中"未实施"部分已落地——`custom_task_type_registry`(Flyway V159)与 `ConsoleCustomTaskTypeController` 均已存在,以代码与 ADR 为准。
 
+> **当前链路**：SDK 通过 register 上报 taskType 描述符，平台 `custom_task_type_registry` 与 Console 查询入口已存在。Job 引用执行类型并保存执行参数，Workflow 的 JOB 节点引用 Job；日程属于 Workflow，不存在供本链路使用的 `trigger_definition` 配置表。默认参数由 `LaunchParamResolver` 合并后持久化，Kafka 是任务提示，CLAIM 返回有效配置。以下早期方案/排期只作背景，不据其“缺失”清单推断当前尚未实现。
+
 # 自定义 taskType 作业配置设计
 
 **状态**:基线设计(部分未实施) · 2026-05-31
-**关联**:[worker-deployment-models](./worker-deployment-models.md) · [sdk-industry-benchmark](./sdk-industry-benchmark.md) · [ADR-035](../architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md) · [深度评估](../review/batch-worker-sdk-deep-review-2026-05-31.md)
+**关联**:[worker-deployment-models](./worker-deployment-models.md) · [sdk-industry-benchmark](../archive/audit/sdk-industry-benchmark-2026-05-31.md) · [ADR-035](../architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md) · [深度评估](../review/batch-worker-sdk-deep-review-2026-05-31.md)
 
 > 本文回答:**租户写了一个 SDK handler 之后,运营 / 业务方怎么在 console 上用它?参数怎么填?默认值怎么设?敏感凭据怎么处理?**
 >
@@ -18,7 +20,7 @@
 | **A. Worker 进程级** | 租户运维 | 租户 K8s ConfigMap / Secret / env | `baseUrl` / `apiKey` / `kafkaBootstrap` / 业务 DB 密码 |
 | **B. taskType 定义级** | 租户(代码或一次性) | 平台 `custom_task_type_registry` 表 | schema / 默认参数 / 默认重试 / 默认超时 |
 | **C. workflow_node 引用级** | 运营 / 业务方 | 平台 `workflow_node.parameters` 字段(JSONB) | 这一次使用的具体参数(`filePath` / `batchSize`) |
-| **D. 触发器级** | 运营 | 平台 `trigger_definition` | cron 表达式 / 触发条件 |
+| **D. 触发器级** | 运营 | 平台 `workflow_definition` | cron 表达式 / 触发条件 |
 | **E. 派单运行时级** | 平台自动 | `TaskDispatchMessage` 字段 | `bizDate` / `attemptNo` / 模板变量替换结果 |
 
 **派单时合并**:`B.defaults` + `C.overrides` + `E.runtime substitution` → 一份完整 `parameters` 进 `TaskDispatchMessage`。SDK handler 拿到的是**已合并的最终值**。
@@ -31,14 +33,14 @@
 
 - **A 层**:`BatchPlatformClientConfig` 支持 builder 构建,租户从 env / K8s Secret 注入
 - **C 层**:`workflow_node.parameters` 是 JSONB 字段,console 编辑器能编辑
-- **D 层**:`trigger_definition` 完整支持 cron / event 等
+- **D 层**:`workflow_definition` 提供日程；文件/外部事件按独立来源契约接纳
 - **E 层**:`TaskDispatchMessage.parameters` 接收,handler 通过 `ctx.parameters()` 读
 - **`register()`**:上报 `capabilityTags = handlers.keySet()`,平台知道 SDK 能跑哪些 taskType
 
-### ❌ 真缺(B 层是大洞)
+### 历史缺口清单（2026-05，已不代表当前）
 
-- ❌ `custom_task_type_registry` 表 **不存在**
-- ❌ console "我的 taskType 注册" 页 **不存在**
+- 旧缺口：`custom_task_type_registry`；当前 V159 与注册服务已落地
+- 旧缺口：taskType 可发现性；当前 Console API 已提供查询，具体页面能力以配对前端为准
 - ❌ 参数 schema 定义机制 **不存在**
 - ❌ workflow_node 编辑器**没有 schema 提示** —— 运营拖一个 `tenant_xyz_import` 节点,parameters 是空 JSON 框,只能无依据填写
 - ❌ SDK register 时**没上报 schema**(协议没字段接收)
@@ -342,7 +344,7 @@ Conductor 的 `TaskDef` 模型是最对标的,我们参考它。
 **参考**
 
 - [worker-deployment-models](./worker-deployment-models.md)
-- [sdk-industry-benchmark](./sdk-industry-benchmark.md)
+- [sdk-industry-benchmark](../archive/audit/sdk-industry-benchmark-2026-05-31.md)
 - [batch-worker-sdk 深度评估](../review/batch-worker-sdk-deep-review-2026-05-31.md)
 - [ADR-035 租户自托管 SDK](../architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md)
 - [Conductor TaskDef](https://conductor-oss.org/docs/documentation/configuration/taskdef)

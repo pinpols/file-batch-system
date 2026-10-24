@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse;
 import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.DispatchRecord;
@@ -59,10 +61,11 @@ class LineageEvidenceArchiveFallbackIntegrationTest extends AbstractIntegrationT
     // arrange: 整条链只种在 archive.* 冷表；热表 batch.* 除 result_version 外一无所有
     String tenant = unique("tenant");
     long fileId = insertArchivedFileRecord(tenant);
+    String updateArchivedFileMetadataSql = """
+        update archive.file_record_archive set metadata_json = ?::jsonb where id = ?
+        """;
     jdbcTemplate.update(
-        "update archive.file_record_archive set metadata_json = ?::jsonb where id = ?",
-        "{\"recordCount\":42,\"source\":\"contract-test\"}",
-        fileId);
+        updateArchivedFileMetadataSql, "{\"recordCount\":42,\"source\":\"contract-test\"}", fileId);
     long instanceId = insertArchivedJobInstance(tenant, fileId);
     long pipelineId = insertArchivedPipelineInstance(tenant, instanceId, fileId);
     insertArchivedDispatchRecord(tenant, fileId, pipelineId);
@@ -108,6 +111,16 @@ class LineageEvidenceArchiveFallbackIntegrationTest extends AbstractIntegrationT
     insertArchivedPipelineInstance(tenantB, instanceB, fileB);
     insertArchivedDispatchRecord(tenantB, fileB, null);
 
+    long archivedResultVersionId =
+        insertArchivedResultVersion(tenantB, instanceB, "file_record:" + fileB);
+    assertThatThrownBy(
+            () -> lineageEvidenceService.evidenceForResultVersion(tenantA, archivedResultVersionId))
+        .isInstanceOf(BizException.class);
+    LineageEvidenceResponse evidenceForB =
+        lineageEvidenceService.evidenceForResultVersion(tenantB, archivedResultVersionId);
+    assertThat(evidenceForB.resultVersion().tenantId()).isEqualTo(tenantB);
+    assertThat(evidenceForB.resultVersion().id()).isEqualTo(archivedResultVersionId);
+
     // job_instance: A 看不到 B 的实例；B 自己能看到
     assertThat(lineageEvidenceMapper.selectArchivedJobInstance(tenantA, instanceB))
         .isNull();
@@ -142,15 +155,16 @@ class LineageEvidenceArchiveFallbackIntegrationTest extends AbstractIntegrationT
   // ---- archive.* seed helpers (冷表无 FK，可种孤立行；id 走热表序列默认) ----
 
   private long insertArchivedFileRecord(String tenant) {
-    return jdbcTemplate.queryForObject(
-        """
-        insert into archive.file_record_archive(
+    String insertArchivedFileRecordSql = """
+        insert into archive.file_record_archive (
           tenant_id, file_code, biz_type, file_category, file_name, file_format_type,
           storage_type, storage_path, source_type, file_status, biz_date, trace_id
         ) values (?, ?, 'GL', 'INPUT', ?, 'DELIMITED', 'S3', ?, 'SYSTEM', 'LOADED',
                   current_date, ?)
         returning id
-        """,
+        """;
+    return jdbcTemplate.queryForObject(
+        insertArchivedFileRecordSql,
         Long.class,
         tenant,
         unique("fc"),
@@ -160,49 +174,87 @@ class LineageEvidenceArchiveFallbackIntegrationTest extends AbstractIntegrationT
   }
 
   private long insertArchivedJobInstance(String tenant, long relatedFileId) {
-    return jdbcTemplate.queryForObject(
-        """
-        insert into archive.job_instance_archive(
+    String insertArchivedJobInstanceSql = """
+        insert into archive.job_instance_archive (
           tenant_id, job_definition_id, job_code, instance_no, biz_date, trigger_type,
           instance_status, priority, dedup_key, expected_partition_count,
           success_partition_count, failed_partition_count, trace_id, related_file_id, finished_at
-        ) values (?, 1, 'LINEAGE_JOB', ?, current_date, 'MANUAL', 'SUCCESS', 5, ?, 1, 1, 0, ?, ?,
-                  now())
+        ) values (?, 1, 'LINEAGE_JOB', ?, current_date, 'MANUAL', 'SUCCESS', 5, ?, 1, 1, 0, ?, ?, now())
         returning id
-        """, Long.class, tenant, unique("inst"), unique("dedup"), unique("trace"), relatedFileId);
+        """;
+    return jdbcTemplate.queryForObject(
+        insertArchivedJobInstanceSql,
+        Long.class,
+        tenant,
+        unique("inst"),
+        unique("dedup"),
+        unique("trace"),
+        relatedFileId);
   }
 
   private long insertArchivedPipelineInstance(String tenant, long jobInstanceId, long fileId) {
-    return jdbcTemplate.queryForObject(
-        """
-        insert into archive.pipeline_instance_archive(
-          tenant_id, pipeline_definition_id, job_code, pipeline_type, file_id,
+    String insertArchivedPipelineInstanceSql = """
+        insert into archive.pipeline_instance_archive (
+          tenant_id, job_code, pipeline_type,
+          system_pipeline_code, system_pipeline_version, file_id,
           related_job_instance_id, run_status, trace_id, finished_at
-        ) values (?, 1, 'LINEAGE_JOB', 'IMPORT', ?, ?, 'SUCCESS', ?, now())
+        ) values (?, 'LINEAGE_JOB', 'IMPORT', 'IMPORT', 1, ?, ?, 'SUCCESS', ?, now())
         returning id
-        """, Long.class, tenant, fileId, jobInstanceId, unique("trace"));
+        """;
+    return jdbcTemplate.queryForObject(
+        insertArchivedPipelineInstanceSql,
+        Long.class,
+        tenant,
+        fileId,
+        jobInstanceId,
+        unique("trace"));
   }
 
   private long insertArchivedDispatchRecord(String tenant, long fileId, Long pipelineInstanceId) {
-    return jdbcTemplate.queryForObject("""
+    String insertArchivedDispatchRecordSql = """
         insert into archive.file_dispatch_record_archive(
           tenant_id, file_id, pipeline_instance_id, channel_code, dispatch_target,
           dispatch_status, dispatch_attempt, receipt_status, dispatched_at
         ) values (?, ?, ?, 'CH_MAIN', 'sftp://target', 'ACKED', 1, 'SUCCESS', now())
         returning id
-        """, Long.class, tenant, fileId, pipelineInstanceId);
+        """;
+    return jdbcTemplate.queryForObject(
+        insertArchivedDispatchRecordSql, Long.class, tenant, fileId, pipelineInstanceId);
   }
 
   private long insertLiveResultVersion(String tenant, long jobInstanceId, String payloadRef) {
-    return jdbcTemplate.queryForObject(
-        """
-        insert into batch.result_version(
+    String insertLiveResultVersionSql = """
+        insert into batch.result_version (
           tenant_id, business_key, version_no, job_instance_id, status, effective_at,
           payload_storage, payload_ref, generated_at, generated_by, promotion_policy
         ) values (?, ?, 1, ?, 'EFFECTIVE', current_timestamp, 'FILE_RECORD', ?,
                   current_timestamp, 'it', 'AUTO_LATEST')
         returning id
-        """, Long.class, tenant, unique("bizkey"), jobInstanceId, payloadRef);
+        """;
+    return jdbcTemplate.queryForObject(
+        insertLiveResultVersionSql,
+        Long.class,
+        tenant,
+        unique("bizkey"),
+        jobInstanceId,
+        payloadRef);
+  }
+
+  private long insertArchivedResultVersion(String tenant, long jobInstanceId, String payloadRef) {
+    String insertArchivedResultVersionSql = """
+        insert into archive.result_version_archive (
+          tenant_id, business_key, version_no, job_instance_id, status, effective_at,
+          payload_storage, payload_ref, generated_at, generated_by, promotion_policy
+        ) values (?, ?, 1, ?, 'ARCHIVED', now(), 'FILE_RECORD', ?, now(), 'it', 'AUTO_LATEST')
+        returning id
+        """;
+    return jdbcTemplate.queryForObject(
+        insertArchivedResultVersionSql,
+        Long.class,
+        tenant,
+        unique("archive-bizkey"),
+        jobInstanceId,
+        payloadRef);
   }
 
   private static String unique(String prefix) {

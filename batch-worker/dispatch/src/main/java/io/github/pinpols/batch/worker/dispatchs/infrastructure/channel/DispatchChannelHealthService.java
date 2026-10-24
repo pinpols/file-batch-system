@@ -146,7 +146,9 @@ public class DispatchChannelHealthService {
   }
 
   public boolean allowDispatch(Map<String, Object> channelConfig) {
-    if (!properties.isEnabled() || channelConfig == null || channelConfig.isEmpty()) {
+    boolean channelHealthCheckIsUnavailable =
+        !properties.isEnabled() || channelConfig == null || channelConfig.isEmpty();
+    if (channelHealthCheckIsUnavailable) {
       return true;
     }
     ChannelIdentity channel = ChannelIdentity.from(channelConfig);
@@ -173,7 +175,9 @@ public class DispatchChannelHealthService {
     // A-3.9：半开阶段只让一个线程拿到探针机会——CAS 把 next_probe_at 推到未来，
     // 失败即说明另一线程已抢到通行证。holdMillis 覆盖典型 dispatch 最长耗时，
     // 防止本线程还没 recordDispatchOutcome 就又有新线程通过。
-    Instant hold = now.plusMillis(Math.max(1_000L, properties.getHalfOpenHoldMillis()));
+    long configuredHoldMillis = properties.getHalfOpenHoldMillis();
+    long halfOpenHoldMillis = Math.max(1_000L, configuredHoldMillis);
+    Instant hold = now.plusMillis(halfOpenHoldMillis);
     boolean claimed =
         repository.tryClaimHalfOpenProbe(channel.tenantId(), channel.channelCode(), now, hold);
     if (!claimed && log.isDebugEnabled()) {
@@ -187,7 +191,9 @@ public class DispatchChannelHealthService {
 
   public void recordDispatchOutcome(
       Map<String, Object> channelConfig, boolean success, String message, String evidence) {
-    if (!properties.isEnabled() || channelConfig == null || channelConfig.isEmpty()) {
+    boolean channelFailureTrackingIsUnavailable =
+        !properties.isEnabled() || channelConfig == null || channelConfig.isEmpty();
+    if (channelFailureTrackingIsUnavailable) {
       return;
     }
     ChannelIdentity channel = ChannelIdentity.from(channelConfig);
@@ -197,12 +203,16 @@ public class DispatchChannelHealthService {
     Instant now = BatchDateTimeSupport.utcNow();
     if (success) {
       // P2：成功走原子 upsert——HEALTHY + failures=0 + next_probe=now+probeInterval
-      DispatchHealthUpsertCommand successCmd = DispatchHealthUpsertCommand.builder()
+      DispatchHealthUpsertCommand.DispatchHealthUpsertCommandBuilder successCommand =
+          DispatchHealthUpsertCommand.builder()
           .tenantId(channel.tenantId())
           .channelCode(channel.channelCode())
           .channelType(channel.channelType())
-          .now(now)
-          .nextProbeAt(now.plusMillis(properties.getProbeIntervalMillis()))
+          .now(now);
+      long probeIntervalMillis = properties.getProbeIntervalMillis();
+      Instant nextProbeAt = now.plusMillis(probeIntervalMillis);
+      DispatchHealthUpsertCommand successCmd = successCommand
+          .nextProbeAt(nextProbeAt)
           .probeMessage(message)
           .probeEvidence(evidence)
           .build();
@@ -214,14 +224,18 @@ public class DispatchChannelHealthService {
     // 首次失败（INSERT 路径）用 base probeInterval 做 placeholder。
     // 第 2 步 recalcBackoff：按 RETURNING 得到的 failures 重算真实 next_probe_at（指数退避），
     // 并以 failures 作为 CAS 前态，防止旧线程覆盖更新后的更长退避或成功状态。
-    Instant firstFailureBackoffAt = now.plusMillis(properties.getProbeIntervalMillis());
-    DispatchHealthUpsertCommand failureCmd = DispatchHealthUpsertCommand.builder()
+    DispatchHealthUpsertCommand.DispatchHealthUpsertCommandBuilder failureCommand =
+        DispatchHealthUpsertCommand.builder()
         .tenantId(channel.tenantId())
         .channelCode(channel.channelCode())
         .channelType(channel.channelType())
-        .now(now)
-        .nextProbeAt(firstFailureBackoffAt)
-        .failureThreshold(Math.max(1, circuitBreakerProperties.getFailureThreshold()))
+        .now(now);
+    long probeIntervalMillis = properties.getProbeIntervalMillis();
+    Instant firstFailureBackoffAt = now.plusMillis(probeIntervalMillis);
+    failureCommand.nextProbeAt(firstFailureBackoffAt);
+    int failureThreshold = Math.max(1, circuitBreakerProperties.getFailureThreshold());
+    DispatchHealthUpsertCommand failureCmd = failureCommand
+        .failureThreshold(failureThreshold)
         .probeMessage(message)
         .probeEvidence(evidence)
         .build();
@@ -244,7 +258,8 @@ public class DispatchChannelHealthService {
    * {@code least(greatest(...,0),30)} 一致。
    */
   private Instant computeExponentialBackoffNextProbeAt(Instant now, long failures) {
-    long exponent = Math.min(Math.max(failures - 1L, 0L), 30L);
+    long minimumExponent = Math.max(failures - 1L, 0L);
+    long exponent = Math.min(minimumExponent, 30L);
     long backoffMillis = Math.min(properties.getMaxBackoffMillis(), (long)
         (properties.getProbeIntervalMillis() * Math.pow(2, exponent)));
     return now.plusMillis(backoffMillis);
@@ -286,13 +301,15 @@ public class DispatchChannelHealthService {
             SecretMasking.maskSensitiveKeys(row));
       } catch (ExecutionException executionEx) {
         probeFailureCount.incrementAndGet();
+        Throwable probeCause = executionEx.getCause();
+        Throwable reportedFailure = EmptyChecks.isNull(probeCause) ? executionEx : probeCause;
+        String errorSummary = SwallowedExceptionLogger.summary(reportedFailure);
+        Map<String, Object> safeRow = SecretMasking.maskSensitiveKeys(row);
         log.warn(
             "dispatch channel probe exception: error={}, row={}",
-            executionEx.getCause() == null
-                ? SwallowedExceptionLogger.summary(executionEx)
-                : SwallowedExceptionLogger.summary(executionEx.getCause()),
-            SecretMasking.maskSensitiveKeys(row),
-            executionEx.getCause() == null ? executionEx : executionEx.getCause());
+            errorSummary,
+            safeRow,
+            reportedFailure);
       } catch (InterruptedException interrupted) {
         Thread.currentThread().interrupt();
         future.cancel(true);
@@ -389,9 +406,10 @@ public class DispatchChannelHealthService {
     }
     DispatchChannelHealthSnapshot snapshot =
         repository.findHealth(channel.tenantId(), channel.channelCode());
-    if (snapshot != null
+    boolean channelProbeIsNotDue = snapshot != null
         && snapshot.nextProbeAt() != null
-        && BatchDateTimeSupport.utcNow().isBefore(snapshot.nextProbeAt())) {
+        && BatchDateTimeSupport.utcNow().isBefore(snapshot.nextProbeAt());
+    if (channelProbeIsNotDue) {
       return new DispatchChannelProbeResult(false, "probe deferred until backoff expires", null);
     }
     DispatchChannelProbeResult result = RemoteFilesystemDispatchSupport.probeChannel(
@@ -446,10 +464,10 @@ public class DispatchChannelHealthService {
    */
   private record ChannelIdentity(String tenantId, String channelCode, String channelType) {
     static ChannelIdentity from(Map<String, Object> channelConfig) {
-      return new ChannelIdentity(
-          stringValue(channelConfig.get("tenant_id")),
-          stringValue(channelConfig.get("channel_code")),
-          stringValue(channelConfig.get("channel_type")));
+      String tenantId = stringValue(channelConfig.get("tenant_id"));
+      String channelCode = stringValue(channelConfig.get("channel_code"));
+      String channelType = stringValue(channelConfig.get("channel_type"));
+      return new ChannelIdentity(tenantId, channelCode, channelType);
     }
 
     boolean isTargetable() {
@@ -465,7 +483,9 @@ public class DispatchChannelHealthService {
   private void logProbeFailure(
       String tenantId, String channelCode, String channelType, String message, String evidence) {
     String m = message == null ? "" : message.toLowerCase(Locale.ROOT);
-    if (m.contains("read-only") || m.contains("not writable") || m.contains("permission denied")) {
+    boolean isRemoteWritePermissionFailure =
+        m.contains("read-only") || m.contains("not writable") || m.contains("permission denied");
+    if (isRemoteWritePermissionFailure) {
       log.debug(
           "dispatch channel probe failed (environment): tenantId={}, channelCode={},"
               + " channelType={}, message={}, evidence={}",

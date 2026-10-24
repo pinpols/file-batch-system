@@ -45,16 +45,20 @@ COMMENT ON COLUMN batch.custom_task_type_registry.declared_by_worker_code IS '�
 COMMENT ON COLUMN batch.custom_task_type_registry.status                  IS 'ACTIVE / DEPRECATED(不兼容升级灰度,旧 code 保留 30 天)';
 
 -- 派单 / console 查询主路径:按 (tenant_id, status) 列 taskType
+
 CREATE INDEX IF NOT EXISTS idx_custom_task_type_registry_tenant_status
     ON batch.custom_task_type_registry (tenant_id, status);
 
 -- ---------------------------------------------------------
 -- archive 镜像(docs/agent-baseline.md 红线;LIKE INCLUDING ALL 与 V71 一致)
+
 -- ---------------------------------------------------------
+
 CREATE TABLE IF NOT EXISTS archive.custom_task_type_registry_archive
     (LIKE batch.custom_task_type_registry INCLUDING DEFAULTS INCLUDING GENERATED INCLUDING IDENTITY INCLUDING CONSTRAINTS);
 
 -- LIKE INCLUDING CONSTRAINTS 不复制 PRIMARY KEY(归档 UPSERT ON CONFLICT(id) 依赖,见 V140 同款补 PK)
+
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -72,4 +76,4 @@ BEGIN
 END $$;
 
 COMMENT ON TABLE archive.custom_task_type_registry_archive IS
-    'V159 archive mirror of batch.custom_task_type_registry';
+    'V159 新增的 batch.custom_task_type_registry 归档镜像。';

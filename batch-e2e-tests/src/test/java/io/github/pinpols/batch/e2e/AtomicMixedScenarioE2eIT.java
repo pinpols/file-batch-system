@@ -11,7 +11,7 @@ import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
 import io.github.pinpols.batch.e2e.support.E2eOutboxPublishSupport;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -48,7 +48,7 @@ class AtomicMixedScenarioE2eIT extends AbstractIntegrationTest {
   private static final int ROUNDS = 3;
 
   @Autowired
-  private LaunchService launchService;
+  private WorkflowRunLaunchService launchService;
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
@@ -59,8 +59,12 @@ class AtomicMixedScenarioE2eIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("连续三轮各投放四类执行器任务:验证每个任务都走到终态成功,成功任务数与投放数完全一致")
   void shouldReachSuccessForAllTasks_whenMixedExecutorsRunInRepeatedRounds() throws IOException {
+    final String createProcedureSql = """
+        CREATE OR REPLACE PROCEDURE batch.e2e_mixed_proc() LANGUAGE plpgsql AS $$ BEGIN END; $$
+    """;
+
     jdbcTemplate.execute(
-        "CREATE OR REPLACE PROCEDURE batch.e2e_mixed_proc() LANGUAGE plpgsql AS $$ BEGIN END; $$");
+        createProcedureSql);
 
     HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     server.createContext("/ok", exchange -> {
@@ -101,7 +105,7 @@ class AtomicMixedScenarioE2eIT extends AbstractIntegrationTest {
   private static List<Map<String, Object>> mixedBatch(int round, String httpUrl) {
     Map<String, Object> sql = new LinkedHashMap<>();
     sql.put("taskType", "sql");
-    sql.put("sql", "SELECT " + (round + 1));
+    sql.put("sql", "SELECT %d".formatted(round + 1));
 
     Map<String, Object> shell = new LinkedHashMap<>();
     shell.put("taskType", "shell");
@@ -125,7 +129,7 @@ class AtomicMixedScenarioE2eIT extends AbstractIntegrationTest {
         jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
     launchService.launch(new LaunchRequest(
         TENANT,
-        seed.jobCode(),
+        seed.workflowDefinitionId(),
         LocalDate.of(2026, 1, 15),
         TriggerType.API,
         seed.requestId(),
@@ -141,12 +145,12 @@ class AtomicMixedScenarioE2eIT extends AbstractIntegrationTest {
     for (int i = 0; i < dedupKeys.size(); i++) {
       args[i + 1] = dedupKeys.get(i);
     }
+    final String selectCountSql = """
+        select count(*) from batch.job_task t join batch.job_instance ji on ji.id = t.job_instance_id\s\
+        where ji.tenant_id = ? and ji.dedup_key in (%s) and t.task_status = 'SUCCESS'\
+        """.formatted(inClause);
     Integer n = jdbcTemplate.queryForObject(
-        "select count(*) from batch.job_task t"
-            + " join batch.job_instance ji on ji.id = t.job_instance_id"
-            + " where ji.tenant_id = ? and ji.dedup_key in ("
-            + inClause
-            + ") and t.task_status = 'SUCCESS'",
+        selectCountSql,
         Integer.class,
         args);
     return n == null ? 0 : n;

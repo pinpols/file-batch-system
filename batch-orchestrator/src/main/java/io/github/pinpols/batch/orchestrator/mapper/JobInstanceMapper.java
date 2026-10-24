@@ -1,5 +1,10 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import io.github.pinpols.batch.orchestrator.domain.param.JobInstanceUpdateStatusParam;
+import io.github.pinpols.batch.orchestrator.domain.query.JobInstanceBatchDayCandidatesQuery;
+import io.github.pinpols.batch.orchestrator.domain.query.JobInstanceForensicByBizDateRangeQuery;
+
+
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkInstanceRunningParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateInstanceProgressParam;
@@ -26,6 +31,12 @@ public interface JobInstanceMapper {
       @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
   JobInstanceEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+
+  /** 通过根请求解析当前受管 Workflow JOB；绝不使用根显示 ID 推断。 */
+  JobInstanceEntity selectCurrentByWorkflowRequest(
+      @Param("tenantId") String tenantId,
+      @Param("requestId") String requestId,
+      @Param("jobCode") String jobCode);
 
   JobInstanceEntity selectByInstanceNo(
       @Param("tenantId") String tenantId, @Param("instanceNo") String instanceNo);
@@ -98,6 +109,9 @@ public interface JobInstanceMapper {
    */
   Integer acquireGlobalJobAdmissionLock();
 
+  /** 同租户 Job/分区准入共用的事务锁；计数到状态与 outbox 提交前持有。 */
+  Integer acquireTenantResourceAdmissionLock(@Param("tenantId") String tenantId);
+
   /**
    * 获取公平共享组的事务级 advisory lock。
    *
@@ -147,18 +161,10 @@ public interface JobInstanceMapper {
    * </ul>
    */
   List<JobInstanceEntity> selectBatchDayCandidates(
-      @Param("tenantId") String tenantId,
-      @Param("calendarCode") String calendarCode,
-      @Param("bizDate") LocalDate bizDate,
-      @Param("statuses") List<String> statuses,
-      @Param("jobCodes") List<String> jobCodes);
+      JobInstanceBatchDayCandidatesQuery parameters);
 
   int updateStatus(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("instanceStatus") String instanceStatus,
-      @Param("finishedAt") Instant finishedAt,
-      @Param("expectedVersion") Long expectedVersion);
+      JobInstanceUpdateStatusParam parameters);
 
   /**
    * 非终态生命周期状态 CAS 更新(ADR-044 pause/resume)。
@@ -216,9 +222,5 @@ public interface JobInstanceMapper {
    * 路径用，不在主链路。
    */
   List<JobInstanceEntity> selectForensicByBizDateRange(
-      @Param("tenantId") String tenantId,
-      @Param("bizDateFrom") LocalDate bizDateFrom,
-      @Param("bizDateTo") LocalDate bizDateTo,
-      @Param("jobCodes") List<String> jobCodes,
-      @Param("limit") int limit);
+      JobInstanceForensicByBizDateRangeQuery parameters);
 }

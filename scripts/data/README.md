@@ -19,3 +19,17 @@
 - Kafka topic 初始化：安装 Kafka CLI，确保 `kafka-topics.sh` 在 `PATH`，或设置 `KAFKA_BIN_DIR=/path/to/kafka/bin` / `KAFKA_TOPICS_BIN=/path/to/kafka-topics.sh`；连接地址用 `KAFKA_BOOTSTRAP_SERVER`。初始化器始终确保平台核心 topic 存在，`KAFKA_TOPICS` 仅用于追加自定义 topic，不能用旧本地环境文件覆盖核心清单。
 - 对象存储初始化：安装 `mc`；连接地址和凭据用 `MINIO_ENDPOINT`、`MINIO_ROOT_USER`、`MINIO_ROOT_PASSWORD`、`MINIO_BUCKET`。托管云对象存储也可由平台侧预建 bucket 和 lifecycle，此脚本只是 S3 兼容初始化适配器。
 - 系统测试数据加载：数据库连接用 `PGHOST`、`PGPORT`、`PGUSER`、`PGPASSWORD`、`PLATFORM_DB`、`BUSINESS_DB`；默认按宿主机 `psql`、Python `psycopg`、Docker 客户端顺序选择，也可设置 `BATCH_PSQL_BIN` 或 `BATCH_PG_CLIENT_MODE`。Python fallback 依赖 `scripts/requirements-postgres.txt`。对象存储用 `BATCH_S3_*`，无可用客户端时明确失败。
+
+## 脚本与配套 SQL 索引
+
+本表登记本目录的执行入口、公共模块及配套 SQL；测试代码通过测试命令执行。新增、移动或删除资产时同步跳转和用途，SQL 正文保持独立维护。
+
+| 文件 | 用途 / 调用归属 |
+|---|---|
+| [init-kafka-topics.sh](init-kafka-topics.sh) | 初始化 Kafka topics。 |
+| [init-minio.sh](init-minio.sh) | 初始化 S3 兼容对象存储 bucket。 |
+| [init-tenant-kafka-acl.sh](init-tenant-kafka-acl.sh) | ADR-035 Phase 3:per-tenant Kafka SASL/SCRAM 用户 + ACL。 |
+| [init-tenant-topics.sh](init-tenant-topics.sh) | 为 per-tenant worker pool 创建独立派发 topic。 |
+| [load-system-test-data.sh](load-system-test-data.sh) | 装载系统测试数据。 |
+| [sql/align-batch-id-sequences.sql](sql/align-batch-id-sequences.sql) | 供 [load-system-test-data.sh](load-system-test-data.sh) 使用的配套 SQL。 |
+| [sql/close-seed-runtime-rows.sql](sql/close-seed-runtime-rows.sql) | 供 [load-system-test-data.sh](load-system-test-data.sh) 使用的配套 SQL。 |

@@ -48,7 +48,9 @@ public class QuotaRuntimeBackendGuard implements ApplicationRunner, Ordered {
   }
 
   StatefulBackendGuard.DesiredBackend desiredBackend() {
-    String backend = properties.getRuntimeStore().trim().toLowerCase();
+    String configuredRuntimeStore = properties.getRuntimeStore();
+    String trimmedRuntimeStore = configuredRuntimeStore.trim();
+    String backend = trimmedRuntimeStore.toLowerCase();
     String identity =
         switch (backend) {
           case QuotaRuntimeBackends.REDIS -> {

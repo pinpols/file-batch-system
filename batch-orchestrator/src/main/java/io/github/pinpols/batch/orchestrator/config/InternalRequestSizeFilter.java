@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.config;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.web.BoundedRequestBodyReader;
 import io.github.pinpols.batch.common.web.BoundedRequestBodyReader.RequestBodyLimitExceededException;
+import io.github.pinpols.batch.common.web.CachedBodyHttpServletRequest;
 import io.github.pinpols.batch.common.web.ServletRequestPaths;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -47,7 +48,9 @@ public class InternalRequestSizeFilter extends OncePerRequestFilter {
 
     long max = properties.getMaxBodyBytes();
     String path = ServletRequestPaths.applicationPath(request);
-    if (max <= 0 || !isInternalPath(path) || !isWriteMethod(request)) {
+    boolean shouldLimitInternalWriteBody =
+        max > 0 && isInternalPath(path) && isWriteMethod(request);
+    if (!shouldLimitInternalWriteBody) {
       chain.doFilter(request, response);
       return;
     }
@@ -61,7 +64,9 @@ public class InternalRequestSizeFilter extends OncePerRequestFilter {
       return;
     }
     try {
-      chain.doFilter(BoundedRequestBodyReader.readAndCache(request, max, "internal"), response);
+      CachedBodyHttpServletRequest cachedRequest =
+          BoundedRequestBodyReader.readAndCache(request, max, "internal");
+      chain.doFilter(cachedRequest, response);
     } catch (RequestBodyLimitExceededException ex) {
       writePayloadTooLarge(response);
     }

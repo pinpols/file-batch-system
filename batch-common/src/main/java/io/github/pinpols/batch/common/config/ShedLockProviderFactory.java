@@ -16,8 +16,8 @@ public final class ShedLockProviderFactory {
   private static final String CREATE_SHEDLOCK_TABLE_SQL = """
       CREATE TABLE IF NOT EXISTS batch.shedlock (
           name        VARCHAR(64)  NOT NULL PRIMARY KEY,
-          lock_until  TIMESTAMPTZ  NOT NULL,
-          locked_at   TIMESTAMPTZ  NOT NULL,
+          lock_until  TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+          locked_at   TIMESTAMP WITHOUT TIME ZONE NOT NULL,
           locked_by   VARCHAR(255) NOT NULL
       )
       """;

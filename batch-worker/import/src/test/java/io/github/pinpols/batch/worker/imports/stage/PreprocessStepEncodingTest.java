@@ -11,9 +11,10 @@ import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
+import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileTemplateRepository;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
@@ -32,7 +33,7 @@ import org.junit.jupiter.api.Test;
 class PreprocessStepEncodingTest {
 
   private PlatformFileRecordRepository runtimeRepository;
-  private PlatformPipelineDefinitionRepository pipelineDefinitions;
+  private PlatformFileTemplateRepository pipelineDefinitions;
   private PreprocessStep step;
   private Map<String, Object> templateConfig;
 
@@ -41,7 +42,7 @@ class PreprocessStepEncodingTest {
     BatchSecurityProperties security = new BatchSecurityProperties();
     security.setBypassMode(true);
     runtimeRepository = mock(PlatformFileRecordRepository.class);
-    pipelineDefinitions = mock(PlatformPipelineDefinitionRepository.class);
+    pipelineDefinitions = mock(PlatformFileTemplateRepository.class);
     when(pipelineDefinitions.loadLatestTemplateConfig(any(), any(), any()))
         .thenAnswer(invocation -> templateConfig == null ? Map.of() : templateConfig);
     S3StorageProperties props = new S3StorageProperties();
@@ -166,7 +167,7 @@ class PreprocessStepEncodingTest {
   }
 
   private static byte[] gbk(String text) {
-    return text.getBytes(io.github.pinpols.batch.common.utils.EncodingUtils.GBK);
+    return text.getBytes(EncodingUtils.GBK);
   }
 
   private ImportJobContext contextWithRawPayload(String raw) {

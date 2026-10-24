@@ -6,12 +6,12 @@
 
 当前快照：[loc-current-lean.md](./loc-current-lean.md)，标题固定为“当前快照”，不使用生成当天日期；日期只用于归档快照，避免本地时区与 CI 时区生成不同内容。
 
-归档说明：[archive/README.md](./archive/README.md)。历史快照已移入 `archive/`，不作为当前代码量基线。
+归档说明：[archive/README.md](../archive/stats/README.md)。历史快照已移入 `docs/archive/stats/`，不作为当前代码量基线。
 
 历史快照：
 
-- 物理行口径：见 [`archive/`](./archive/)，包括 2026-05-29 至 2026-07-19 快照。
-- 精简口径：见 [`archive/`](./archive/)，包括 2026-07-22 至 2026-09-24 快照。
+- 物理行口径：见 [`archive/`](../archive/stats)，包括 2026-05-29 至 2026-07-19 快照。
+- 精简口径：见 [`archive/`](../archive/stats)，包括 2026-07-22 至 2026-09-24 快照。
 
 - 只统计 git 跟踪文件。
 - 排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration。
@@ -22,3 +22,9 @@
 ```bash
 python3 scripts/dev/lean-loc-report.py --write docs/stats/loc-current-lean.md
 ```
+
+## 当前治理机器清单
+
+[java-readability-inventory.md](java-readability-inventory.md) 由 pre-push 持续刷新，只列候选，不作为日期化审计结论；复核裁定按日期保存在 [audit/](../audit/README.md)。
+
+根 test-data/ 是测试输入资产，在代码量统计中归入 test；目录迁移不应把这批 SQL/JSON 解释为生产代码。

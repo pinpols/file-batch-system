@@ -9,6 +9,10 @@ import io.github.pinpols.batch.common.i18n.LocalizedErrorRenderer;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.console.application.contract.query.ApprovalCommandQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.WorkerRegistryQueryRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.query.BatchDayWindowQueryRequest;
+import io.github.pinpols.batch.console.domain.job.mapper.BatchDayMapper;
+import io.github.pinpols.batch.console.domain.job.view.BatchDayScheduledOccurrenceView;
+import io.github.pinpols.batch.console.domain.job.view.BatchDayView;
 import io.github.pinpols.batch.console.domain.notification.application.contract.query.AlertEventQueryRequest;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
 import io.github.pinpols.batch.console.domain.ops.entity.ApprovalCommandEntity;
@@ -16,6 +20,8 @@ import io.github.pinpols.batch.console.domain.ops.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.console.domain.ops.mapper.ApprovalCommandMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.WorkerRegistryMapper;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +35,9 @@ class ConsoleOpsQueryServiceTest {
 
   @Mock
   private WorkerRegistryMapper workerRegistryMapper;
+
+  @Mock
+  private BatchDayMapper batchDayMapper;
 
   @Mock
   private AlertEventMapper alertEventMapper;
@@ -123,5 +132,55 @@ class ConsoleOpsQueryServiceTest {
         .contains("\"action\":\"retry\"")
         .contains("\"apiToken\":\"****\"")
         .doesNotContain("raw");
+  }
+
+  @Test
+  @DisplayName("批次日窗口响应包括 occurrence 拒绝原因和请求关联")
+  void shouldExposeScheduledOccurrencesInBatchDayWindow() {
+    LocalDate bizDate = LocalDate.of(2026, 10, 15);
+    BatchDayView row = new BatchDayView(
+        bizDate, "SETTLED", null, null, null, null, 0, 0, 0L, 0L, 0L, 0L);
+    when(batchDayMapper.selectWindow("tenant-a", "CALENDAR", bizDate)).thenReturn(row);
+    when(batchDayMapper.selectJobSummaries("tenant-a", "CALENDAR", bizDate)).thenReturn(List.of());
+    BatchDayScheduledOccurrenceView occurrenceRow = new BatchDayScheduledOccurrenceView(
+        42L,
+        "daily-settlement",
+        null,
+        3,
+        Instant.parse("2026-10-15T02:00:00Z"),
+        bizDate,
+        "CLOSED_DAY_REJECTED",
+        null,
+        "explicit CATCH_UP or RERUN request required");
+    when(batchDayMapper.selectScheduledOccurrences("tenant-a", "CALENDAR", bizDate))
+        .thenReturn(List.of(occurrenceRow));
+    ConsoleOpsQueryMappers mappers = new ConsoleOpsQueryMappers(
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        workerRegistryMapper,
+        null,
+        null,
+        null,
+        batchDayMapper,
+        null);
+    ConsoleOpsQueryService service = new ConsoleOpsQueryService(
+        requestTenantId -> requestTenantId, mappers, localizedErrorRenderer, timezoneProvider);
+    BatchDayWindowQueryRequest request = new BatchDayWindowQueryRequest();
+    request.setTenantId("tenant-a");
+    request.setCalendarCode("CALENDAR");
+
+    var occurrence =
+        service.batchDayWindow("2026-10-15", request).scheduledOccurrences().getFirst();
+
+    assertThat(occurrence.workflowDefinitionId()).isEqualTo(42L);
+    assertThat(occurrence.workflowCode()).isEqualTo("daily-settlement");
+    assertThat(occurrence.occurrenceStatus()).isEqualTo("CLOSED_DAY_REJECTED");
+    assertThat(occurrence.requestId()).isNull();
+    assertThat(occurrence.lastRejectionReason())
+        .isEqualTo("explicit CATCH_UP or RERUN request required");
   }
 }

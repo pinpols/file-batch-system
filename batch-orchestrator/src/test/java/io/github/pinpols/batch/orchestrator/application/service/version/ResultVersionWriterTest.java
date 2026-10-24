@@ -21,11 +21,13 @@ import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.Month;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
 
 @DisplayName("结果版本写入器: 首次生效, 重跑策略与质量门禁阻断口径")
 class ResultVersionWriterTest {
@@ -48,10 +50,10 @@ class ResultVersionWriterTest {
         io.github.pinpols.batch.orchestrator.application.service.dataquality
             .DataQualityCheckExecutor.class);
     @SuppressWarnings("unchecked")
-    org.springframework.beans.factory.ObjectProvider<
+    ObjectProvider<
             io.github.pinpols.batch.orchestrator.application.service.dataquality
                 .DataQualityCheckExecutor>
-        dqProvider = mock(org.springframework.beans.factory.ObjectProvider.class);
+        dqProvider = mock(ObjectProvider.class);
     when(dqProvider.getIfAvailable()).thenReturn(dqExecutor);
     when(dqExecutor.execute(any(), anyString()))
         .thenReturn(io.github.pinpols.batch.orchestrator.application.service.dataquality
@@ -262,7 +264,7 @@ class ResultVersionWriterTest {
             .status(
                 io.github.pinpols.batch.orchestrator.application.service.dataquality
                     .DataQualityGateOutcome.GateStatus.BLOCKED)
-            .findings(java.util.List.of())
+            .findings(List.of())
             .build());
 
     writer.writeOnTerminal(instance, Map.of("recordCount", 1));

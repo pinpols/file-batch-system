@@ -1,3 +1,5 @@
+# 用途：基础设施边界增量门禁:既有引用与新增引用分别判定。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_check_infrastructure_abstraction_boundaries.py。
 """基础设施边界增量门禁:既有引用与新增引用分别判定。"""
 
 import importlib.util

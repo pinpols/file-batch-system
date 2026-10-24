@@ -36,12 +36,13 @@ class ConfigApprovalMapperIntegrationTest extends AbstractIntegrationTest {
     long suffix = BatchDateTimeSupport.utcEpochMillis();
     String tenantId = "t-config-approval-" + suffix;
     long releaseId = suffix;
-    jdbcTemplate.update("""
+    String insertConfigApprovalSql = """
         INSERT INTO batch.config_approval
           (tenant_id, release_id, approval_status, requested_by, review_comment,
            created_at, updated_at)
         VALUES (?, ?, 'PENDING', 'requester', 'integration test', now(), now())
-        """, tenantId, releaseId);
+        """;
+    jdbcTemplate.update(insertConfigApprovalSql, tenantId, releaseId);
 
     Map<String, Object> latest = configApprovalMapper.selectLatestByRelease(tenantId, releaseId);
     assertThat(latest)

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：按统一职责分组和模式执行门禁并传播结果。
+# 用法：bash scripts/ci/run-gate.sh [--group 分组] [--mode enforce|report|ignore] <CODE> <名称> -- <命令及参数>。
 set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"

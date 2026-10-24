@@ -79,7 +79,8 @@ public final class SecretMasking {
       if (isSensitive(key, additionalSensitiveKeys) && EmptyChecks.isNotNull(value)) {
         masked.put(key, MASKED_VALUE);
       } else {
-        masked.put(key, maskNestedValue(value, additionalSensitiveKeys));
+        Object maskedValue = maskNestedValue(value, additionalSensitiveKeys);
+        masked.put(key, maskedValue);
       }
     }
     return masked;
@@ -98,8 +99,9 @@ public final class SecretMasking {
     if (json == null || json.isBlank()) { // empty-check: allow - Sonar S2259
       return json;
     }
-    return JsonUtils.toJson(
-        maskNestedValue(JsonUtils.fromJson(json, Object.class), additionalSensitiveKeys));
+    Object parsedJson = JsonUtils.fromJson(json, Object.class);
+    Object maskedJson = maskNestedValue(parsedJson, additionalSensitiveKeys);
+    return JsonUtils.toJson(maskedJson);
   }
 
   /** 判断动态 JSON 是否仍含有未恢复的敏感字段掩码。 */
@@ -107,7 +109,8 @@ public final class SecretMasking {
     if (json == null || json.isBlank()) { // empty-check: allow - Sonar S2259
       return false;
     }
-    return containsMaskedSensitiveValue(JsonUtils.fromJson(json, Object.class));
+    Object parsedJson = JsonUtils.fromJson(json, Object.class);
+    return containsMaskedSensitiveValue(parsedJson);
   }
 
   /** 从跨租户配置副本中递归移除敏感字段，避免复制源环境凭据或租户级密钥引用。 */
@@ -116,7 +119,9 @@ public final class SecretMasking {
     if (json == null || json.isBlank()) { // empty-check: allow - Sonar S2259
       return json;
     }
-    return JsonUtils.toJson(removeSensitiveFields(JsonUtils.fromJson(json, Object.class)));
+    Object parsedJson = JsonUtils.fromJson(json, Object.class);
+    Object filteredJson = removeSensitiveFields(parsedJson);
+    return JsonUtils.toJson(filteredJson);
   }
 
   /** 更新请求回传脱敏 JSON 时，从当前数据库值恢复相同位置的掩码凭据。 */
@@ -132,15 +137,17 @@ public final class SecretMasking {
       @Nullable String submittedJson,
       @Nullable String storedJson,
       Set<String> additionalSensitiveKeys) {
-    if (submittedJson == null // empty-check: allow - Sonar S2259
+    boolean maskRestoreInputsAreIncomplete = submittedJson == null // empty-check: allow - Sonar S2259
         || submittedJson.isBlank() // empty-check: allow - Sonar S2259
         || storedJson == null // empty-check: allow - Sonar S2259
-        || storedJson.isBlank()) { // empty-check: allow - Sonar S2259
+        || storedJson.isBlank(); // empty-check: allow - Sonar S2259
+    if (maskRestoreInputsAreIncomplete) {
       return submittedJson;
     }
     Object submitted = JsonUtils.fromJson(submittedJson, Object.class);
     Object stored = JsonUtils.fromJson(storedJson, Object.class);
-    return JsonUtils.toJson(restoreMaskedValue(submitted, stored, additionalSensitiveKeys));
+    Object restored = restoreMaskedValue(submitted, stored, additionalSensitiveKeys);
+    return JsonUtils.toJson(restored);
   }
 
   /** 脱敏 URI 中的 userinfo 和敏感 query 参数；普通文件路径及非敏感 URI 保持不变。 */
@@ -180,9 +187,10 @@ public final class SecretMasking {
       String authority = uri.getRawAuthority();
       if (EmptyChecks.isNotNull(uri.getRawUserInfo())) {
         String userInfo = uri.getRawUserInfo();
-        if (restore
+        boolean shouldRestoreMaskedUserInfo = restore
             && MASKED_VALUE.equals(userInfo)
-            && storedUri != null) { // empty-check: allow - Sonar S2259
+            && storedUri != null;
+        if (shouldRestoreMaskedUserInfo) { // empty-check: allow - Sonar S2259
           userInfo = storedUri.getRawUserInfo();
         } else if (!restore) {
           userInfo = MASKED_VALUE;
@@ -290,18 +298,18 @@ public final class SecretMasking {
       for (Map.Entry<?, ?> entry : source.entrySet()) {
         String key = String.valueOf(entry.getKey());
         Object nested = entry.getValue();
-        masked.put(
-            key,
-            isSensitive(key, additionalSensitiveKeys) && EmptyChecks.isNotNull(nested)
-                ? MASKED_VALUE
-                : maskNestedValue(nested, additionalSensitiveKeys));
+        Object maskedValue = isSensitive(key, additionalSensitiveKeys) && EmptyChecks.isNotNull(nested)
+            ? MASKED_VALUE
+            : maskNestedValue(nested, additionalSensitiveKeys);
+        masked.put(key, maskedValue);
       }
       return masked;
     }
     if (value instanceof Iterable<?> source) {
       List<Object> masked = new ArrayList<>();
       for (Object nested : source) {
-        masked.add(maskNestedValue(nested, additionalSensitiveKeys));
+        Object maskedValue = maskNestedValue(nested, additionalSensitiveKeys);
+        masked.add(maskedValue);
       }
       return masked;
     }
@@ -317,12 +325,15 @@ public final class SecretMasking {
       for (Map.Entry<?, ?> entry : submittedMap.entrySet()) {
         String key = String.valueOf(entry.getKey());
         Object value = entry.getValue();
-        if (isSensitive(key, additionalSensitiveKeys)
+        boolean shouldRestoreStoredSecret = isSensitive(key, additionalSensitiveKeys)
             && MASKED_VALUE.equals(value)
-            && storedMap.containsKey(key)) {
+            && storedMap.containsKey(key);
+        if (shouldRestoreStoredSecret) {
           restored.put(key, storedMap.get(key));
         } else {
-          restored.put(key, restoreMaskedValue(value, storedMap.get(key), additionalSensitiveKeys));
+          Object storedValue = storedMap.get(key);
+          Object restoredValue = restoreMaskedValue(value, storedValue, additionalSensitiveKeys);
+          restored.put(key, restoredValue);
         }
       }
       return restored;
@@ -332,8 +343,10 @@ public final class SecretMasking {
       List<Object> restored = new ArrayList<>(submittedList.size());
       for (int index = 0; index < submittedList.size(); index++) {
         Object storedValue = index < storedList.size() ? storedList.get(index) : null;
-        restored.add(
-            restoreMaskedValue(submittedList.get(index), storedValue, additionalSensitiveKeys));
+        Object submittedValue = submittedList.get(index);
+        Object restoredValue =
+            restoreMaskedValue(submittedValue, storedValue, additionalSensitiveKeys);
+        restored.add(restoredValue);
       }
       return restored;
     }
@@ -369,7 +382,9 @@ public final class SecretMasking {
       for (Map.Entry<?, ?> entry : map.entrySet()) {
         String key = String.valueOf(entry.getKey());
         if (!isSensitive(key)) {
-          sanitized.put(key, removeSensitiveFields(entry.getValue()));
+          Object nestedValue = entry.getValue();
+          Object sanitizedValue = removeSensitiveFields(nestedValue);
+          sanitized.put(key, sanitizedValue);
         }
       }
       return sanitized;
@@ -377,7 +392,8 @@ public final class SecretMasking {
     if (value instanceof Iterable<?> values) {
       List<Object> sanitized = new ArrayList<>();
       for (Object nested : values) {
-        sanitized.add(removeSensitiveFields(nested));
+        Object sanitizedValue = removeSensitiveFields(nested);
+        sanitized.add(sanitizedValue);
       }
       return sanitized;
     }

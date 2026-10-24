@@ -31,9 +31,10 @@ public final class CursorCodec {
       return null;
     }
     String json = JsonUtils.toJson(sortKey);
-    return Base64.getUrlEncoder()
-        .withoutPadding()
-        .encodeToString(json.getBytes(StandardCharsets.UTF_8));
+    Base64.Encoder urlEncoder = Base64.getUrlEncoder();
+    Base64.Encoder encoderWithoutPadding = urlEncoder.withoutPadding();
+    byte[] jsonBytes = json.getBytes(StandardCharsets.UTF_8);
+    return encoderWithoutPadding.encodeToString(jsonBytes);
   }
 
   /**

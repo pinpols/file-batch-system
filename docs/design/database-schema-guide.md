@@ -6,7 +6,7 @@
 
 | 数据范围 | 权威来源 | 说明 |
 |---|---|---|
-| 平台数据库 `batch`、`archive` | [`db/migration/`](../../db/migration/) 中已应用的 Flyway migration | 表、字段、约束、索引及迁移顺序以实际目标环境的 Flyway 成功记录为准 |
+| 平台数据库 `batch`、`archive` | [`db/migration/`](../../db/migration) 中已应用的 Flyway migration | 表、字段、约束、索引及迁移顺序以实际目标环境的 Flyway 成功记录为准 |
 | 业务数据库 `biz` 与 `batch.process_staging` | [`scripts/db/business/create_biz_tables.sql`](../../scripts/db/business/create_biz_tables.sql) 及同目录后续脚本 | 业务库不由平台库 Flyway 管理；RLS 安装见 [`rls-phase-a.sql`](../../scripts/db/business/rls-phase-a.sql) |
 | Quartz 元数据 | Quartz PostgreSQL JobStore schema 脚本与 Quartz 版本 | 框架表由 Quartz 持久化调度器使用，不承载 BFS 业务状态 |
 | 表和关键列说明 | 数据库 `COMMENT ON TABLE/COLUMN` migration | 可通过 `psql` 的 `\dt+`、`\d+ schema.table` 查看；对象注释治理见 [`V194`](../../db/migration/V194__complete_database_object_comments.sql) |
@@ -58,9 +58,12 @@ flowchart TB
   noderun[workflow_node_run]
   trigger[trigger_request]
   triggerOut[trigger_outbox_event]
+  eventDelivery[external_event_delivery]
+  eventAlias[external_event_delivery_alias]
+  eventDelivery --> eventAlias
   trigger -. "同一触发请求" .-> triggerOut
   file[file_record]
-  pipeDef[pipeline_definition]
+  pipeDef[SystemPipelineCatalog]
   pipe[pipeline_instance]
   pipeStep[pipeline_step_run]
   dispatch[file_dispatch_record]
@@ -80,7 +83,7 @@ flowchart TB
   tenant -. "tenant_id 逻辑隔离" .-> jobdef
   tenant -. "tenant_id 逻辑隔离" .-> wfdef
   jobdef -->|"FK / 定义到实例"| instance
-  instance -. "job_instance_id 业务关联（无 FK）" .-> partition
+  instance -->|"租户/实例/日期复合归属，V318"| partition
   partition -->|"FK / 执行任务"| task
   partition -->|"FK / 执行日志"| execLog
   step -->|"FK / 步骤归属"| task
@@ -92,16 +95,16 @@ flowchart TB
   wfdef -->|"FK"| edge
   wfdef -->|"一次运行"| wfrun
   wfrun -->|"FK"| noderun
-  node -. "related_job_code / related_pipeline_code" .-> jobdef
-  node -. "related_pipeline_code" .-> pipeDef
-  trigger -->|"FK / trigger_request_id"| instance
+  node -. "related_job_code" .-> jobdef
+  trigger -. "顶层请求接纳" .-> wfrun
+  trigger -. "JOB内部子请求" .-> instance
 
   file -->|"FK / 文件运行"| pipe
-  pipeDef -->|"FK"| pipe
+  pipeDef -. "系统code/version" .-> pipe
   pipe -->|"FK"| pipeStep
   file -->|"FK"| dispatch
   file -->|"FK"| audit
-  jobdef -. "calendar_code" .-> calendar
+  wfdef -. "calendar_code / 顶层日程" .-> calendar
   calendar -. "批量日" .-> day
   instance -. "批次和结果关联" .-> day
   instance -. "产出业务版本" .-> result
@@ -119,7 +122,10 @@ flowchart TB
 | 表 | 职责 |
 |---|---|
 | `tenant` | 平台租户主数据和隔离根标识 |
-| `job_definition` | 作业定义、调度、队列、Worker 组、重试和参数默认值 |
+| `job_definition` | 可复用作业类型、队列、Worker组、执行策略与类型化参数；顶层日程归Workflow |
+| `job_dependency` | 规范化的作业依赖边及 `biz_date_alignment`；V298以 `(tenant_id,upstream_job_code)` NO ACTION FK保护上游定义存在和租户边界，下游定义仍按从属关系级联删除；应用校验依赖环。支持 `SAME_DAY` 与 `PREVIOUS_BIZ_DAY`（使用下游作业日历的假日和工作日覆盖，并在等待快照固定解析日期；未配置日历时按周一至周五兼容）；旧 `depends_on_job_code` 仍作为投影 |
+| `job_monitoring_policy` | 租户作业监控阈值；V299以 `(tenant_id,job_definition_id)` 复合 FK绑定同租户 Job，保持 Job 删除时策略级联清理 |
+| `job_dependency_waiting_launch` | 作业上游未就绪时持久化原始 LaunchRequest、业务日和依赖规则快照；租户 RLS 下由 Orchestrator reconciler 重放；V294以`(tenant_id,request_id)`外键绑定原请求、删除NO ACTION，终态等待须显式先清 |
 | `job_instance` | 一次作业运行及状态机权威记录；参数在创建时快照 |
 | `job_instance_dedup_key` | 分区表之外的实例幂等账本 |
 | `job_partition` | 实例拆分出的可并行工作单元和领取状态 |
@@ -137,12 +143,23 @@ flowchart TB
 | 表 | 职责 |
 |---|---|
 | `workflow_definition` | Workflow 定义聚合根 |
-| `workflow_node`、`workflow_edge` | DAG 节点和控制流边；JOB / PIPELINE 引用通常通过业务编码关联 |
+| `workflow_node`、`workflow_edge` | DAG 节点和控制流边；V293以租户复合FK绑定父定义。JOB业务编码在草稿中可暂未就绪，启用/运行另有应用检查 |
 | `workflow_definition_version` | Workflow 定义历史快照 |
 | `workflow_run`、`workflow_node_run` | 一次 Workflow 执行及节点运行状态 |
 | `trigger_request` | 触发请求幂等记录 |
-| `trigger_outbox_event` | Trigger 事务 Outbox，和平台 `outbox_event` 分开 |
-| `trigger_runtime_state`、`trigger_misfire_pending` | 触发器运行位置、misfire 和待审批补跑 |
+| `trigger_outbox_event` | Trigger 事务 Outbox，和平台 `outbox_event` 分开；V297以 `(tenant_id,request_id)` `NO ACTION` FK保护来源请求，应用仍负责同事务创建、payload 身份和业务状态校验 |
+| `trigger_request_idempotency_alias` | 将不同 HTTP 幂等键映射到已接纳的 EVENT TriggerRequest；见 [V278](../../db/migration/V278__trigger_request_idempotency_alias.sql) |
+| `scheduled_occurrence` | Workflow 计划 fire 的唯一 occurrence 台账和终态；请求号通过 V295 同租户 `NO ACTION` 外键关联原请求；见 [V261](../../db/migration/V261__scheduled_occurrence_ledger.sql)、[V295](../../db/migration/V295__protect_scheduled_expected_request_references.sql) |
+| `scheduled_occurrence_coverage` | 记录 occurrence 扫描覆盖水位与配置代际；见 [V262](../../db/migration/V262__scheduled_occurrence_coverage.sql) |
+| `scheduled_occurrence_catch_up_audit` | 审计人工补跑的 occurrence 决策；见 [V274](../../db/migration/V274__audit_scheduled_occurrence_catch_up.sql) |
+| `scheduled_occurrence_supersession_history` | 保留旧计划 occurrence 被新计划替代的历史；见 [V272](../../db/migration/V272__scheduled_occurrence_supersession_history.sql) |
+| `expected_work_occurrence` | 每个业务日的预期工作义务及其来源、身份和终态；请求号通过 V295 同租户 `NO ACTION` 外键关联原请求；见 [V263](../../db/migration/V263__expected_work_occurrence.sql)、[V295](../../db/migration/V295__protect_scheduled_expected_request_references.sql) |
+| `file_group_expectation_definition` | 定义按日生成的文件组预期义务；见 [V264](../../db/migration/V264__file_group_expectation_definition.sql) |
+| `external_event_expectation_definition` | 定义按日生成并绑定 Workflow 的外部事件预期；见 [V265](../../db/migration/V265__external_event_expectation_definition.sql) |
+| `workflow_launch_wait` | 持久化根 Workflow 执行容量等待及原始请求恢复载荷；V293复合FK保护同租户父定义；[V294](../../db/migration/V294__protect_wait_request_retention.sql)将原请求租户FK删除动作由级联改为NO ACTION，保留等待及终态审计；首次定义见 [V280](../../db/migration/V280__workflow_launch_capacity_wait.sql) |
+| `external_event_delivery` | 自动事件路由回执，冻结首次接纳的来源事件载荷、业务日和 Workflow 目标集合；见 [V287](../../db/migration/V287__external_event_delivery_target_snapshot.sql) |
+| `external_event_delivery_alias` | 将同一事件回执绑定到不同 HTTP `Idempotency-Key`，用于事件级状态回查；见 [V287](../../db/migration/V287__external_event_delivery_target_snapshot.sql) |
+| `trigger_runtime_state`、`trigger_misfire_pending` | 触发器运行位置、misfire 和待审批补跑；V296以 `(tenant_id,catch_up_request_id)` `NO ACTION` FK保护已接纳请求，应用仍校验 Workflow/业务日/状态 |
 
 Workflow 关系和 DAG 配置示例见 [Workflow 依赖指南](../architecture/workflow-dependency-guide.md)；Trigger outbox 的投递边界见 [Outbox 架构说明](../architecture/outbox-architecture.md)。
 
@@ -153,9 +170,11 @@ Workflow 关系和 DAG 配置示例见 [Workflow 依赖指南](../architecture/w
 | `file_record` | 文件身份、到达、校验、对象存储和生命周期权威记录 |
 | `file_channel_config`、`file_channel_health` | 文件通道配置和探活结果 |
 | `file_template_config` | 文件格式、校验、映射和处理目标配置 |
-| `pipeline_definition`、`pipeline_step_definition` | 文件处理链路及步骤定义 |
+| 系统固定Pipeline目录 | 文件执行身份和阶段来自SystemPipelineCatalog及Job参数；旧租户定义表和ID在V347退役 |
 | `pipeline_instance`、`pipeline_step_run`、`pipeline_progress` | 文件链路运行态、步骤结果和续跑位点 |
 | `file_dispatch_record`、`file_error_record`、`file_audit_log` | 下游投递回执、坏记录明细和文件治理审计 |
+
+`pipeline_progress` 的热父关系由 [V292](../../db/migration/V292__protect_pipeline_checkpoint_parent_lifecycle.sql) 的租户复合 FK 保护，父删除 RESTRICT。正式归档先锁父及位点、保全并核对冷副本，再显式删热子和父；`archive.pipeline_progress_archive` 保留独立历史身份，不引用热父表。应用位点写入0行必须失败，补偿删除0行仍为幂等；完整语义见 [ADR-038](../architecture/adr/ADR-038-platform-worker-checkpoint-resume.md)。
 
 ### 3.4 批量日、日历与数据结果
 
@@ -163,8 +182,8 @@ Workflow 关系和 DAG 配置示例见 [Workflow 依赖指南](../architecture/w
 |---|---|
 | `business_calendar`、`calendar_group`、`calendar_holiday` | 日历、共享节假日和业务日期输入 |
 | `batch_window` | 作业允许运行的时间窗口 |
-| `calendar_dependency`、`disaster_day_override` | 跨日历依赖和灾难日覆盖 |
-| `batch_day_instance`、`batch_day_waiting_launch` | 批量日权威状态和等待前序闸门的启动意图 |
+| `calendar_dependency`、`calendar_dependency_wait`、`disaster_day_override` | 跨日历依赖定义、固定业务日/依赖规则快照的持久化等待事实和灾难日覆盖；等待行由开启调度器恢复重检，超时首次告警由 CAS 认领 |
+| `batch_day_instance`、`batch_day_waiting_launch`、`batch_day_open_cursor`、`batch_day_catchup_control`、`batch_day_catchup_control_event` | 批量日权威状态、等待前序闸门的启动意图、原始日期扫描位置、按日历暂停控制及不可变操作审计 |
 | `batch_day_replay_session`、`batch_day_replay_entry`、`batch_day_operation_audit` | 批量日重放会话、作业重放结果和操作审计 |
 | `result_version` | 同一业务键的结果版本和有效版本裁决 |
 | `data_asset`、`asset_partition`、`asset_freshness_policy` | 最小资产目录、结果分区新鲜度读模型及 SLA 规则 |
@@ -185,7 +204,8 @@ Workflow 关系和 DAG 配置示例见 [Workflow 依赖指南](../architecture/w
 | `alert_event`、`alert_routing_config` | 告警事件及路由配置 |
 | `notification_channel`、`subscription_rule`、`notification_delivery_log` | 通知通道、订阅和投递记录 |
 | `webhook_subscription`、`webhook_delivery_log` | Webhook 订阅及投递重试记录 |
-| `console_user_account`、`console_push_subscription`、`console_push_job_notification`、`console_push_approval_notification` | Console 账号和浏览器推送订阅/投递 |
+| `console_user_account`、`console_push_subscription`、`console_push_approval_notification` | Console 账号、浏览器设备订阅与审批通知记录 |
+| `workflow_terminal_notification_receipt`、`console_push_job_delivery` | Job/Workflow 终态的首次消费回执与 Job Push 的首次决定/冻结设备意图；设备投递引用同租户回执并强制 RLS。新库 V330 退役旧 `console_push_job_notification` lookback 去重表，非空旧账本拒绝切换；详见[通知运维说明](../runbook/workflow-terminal-notifications.md) |
 | `console_ai_audit_log` | AI 请求审计、token 用量、费用估算和内容哈希；审计表与对话正文分离 |
 | `console_ai_conversation`、`console_ai_turn` | AI 会话和轮次；复合租户键关联，按配置选择持久化，轮次正文由应用加密后保存并按到期时间清理 |
 | `console_ai_monthly_usage` | AI 租户月度 token、已计费用和预算预留台账；不代表供应商最终账单 |
@@ -281,7 +301,8 @@ ORDER BY conrelid::regclass::text, conname;
 
 ## 6. 相关资料
 
-- [完整迁移目录](../../db/migration/)
+- [完整迁移目录](../../db/migration)
+- 日切 catch-up 游标与运维控制：[V239](../../db/migration/V254__batch_day_open_cursor.sql)、[V244](../../db/migration/V259__batch_day_catchup_control.sql)
 - Console AI / 维护 / 使用率结构：[V214](../../db/migration/V214__alert_escalation_notification_outbox.sql)、[V215](../../db/migration/V215__create_console_maintenance_state.sql)、[V216](../../db/migration/V216__create_console_usage_daily.sql)、[V218](../../db/migration/V218__console_ai_conversations_and_cost_usage.sql)、[V219](../../db/migration/V219__console_ai_image_attachments.sql)、[V220](../../db/migration/V220__console_user_batch_provisioning.sql)、[V222](../../db/migration/V222__console_oidc_external_identity.sql)、[V224](../../db/migration/V224__job_monitoring_policy_and_alert_claim.sql)、[V230](../../db/migration/V230__batch_day_replay_preview_token.sql)、[V232](../../db/migration/V232__tenant_configuration_revision_fence.sql)
 - [数据模型 DDL 与演进背景](./data-model-ddl.md)
 - [Outbox 表关系与生命周期](../architecture/outbox-architecture.md)
@@ -289,3 +310,18 @@ ORDER BY conrelid::regclass::text, conname;
 - [备份与 PITR](../runbook/backup-and-pitr.md)
 - [数据库迁移检查](../runbook/db-migration-checklist.md)
 - [RLS 与租户隔离](../runbook/multi-tenant-rls.md)
+
+
+## Workflow根、义务与恢复的逻辑模型补充
+
+| 资产组 | 表 / 来源 | 逻辑含义 |
+|---|---|---|
+| 顶层运行 | workflow_run、workflow_node_run | 请求对应根运行，JOB节点关联按需创建的JobInstance；旧related_job_instance_id列不定义新根 |
+| 机会覆盖 | scheduled_occurrence、scheduled_occurrence_coverage、supersession/catch_up审计 | 原计划身份、覆盖边界和处置证据；Quartz本身不是业务义务台账 |
+| 输入义务 | file_group_expectation_definition、external_event_expectation_definition、expected_work_occurrence | 由Workflow拥有的定义及逐日发生项，输入到达与业务完成分开 |
+| 启动等待 | workflow_launch_wait、job_dependency_waiting_launch、calendar_dependency_wait | 保存各自等待对象及原始日期/规则，不依赖进程内队列恢复 |
+| 重放与审批 | replay_operation、preview_token、按日replay session/entry | 冻结来源、预览/审批和目标运行；区间部分失败不回滚其它日期副作用 |
+| 终态与送达 | workflow_terminal_notification_receipt、console_push_job_delivery及各渠道投递记录 | 终态事件与通知分开记账；归档以完整通知族及审计保留为单位 |
+| 配置交付 | config_sync_target_receipt | 逐目标同步回执，配置同步成功不是运行完成 |
+
+上述为逻辑导航。实际表存在、复合FK、分区键、索引和已应用版本仍以目标库catalog及Flyway成功记录为准；本轮未连接目标数据库重新认证DDL。

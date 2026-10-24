@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：生成测试质量快照和 Full Gate 历史趋势报告。
+# 用法：python3 scripts/ci/report-ci-quality-trends.py --reports-root <报告目录> --json <JSON 输出> --markdown <Markdown 输出>。
 """生成测试质量快照和 Full Gate 历史趋势报告。"""
 
 from __future__ import annotations
@@ -98,7 +100,7 @@ def source_counts(root: Path = ROOT) -> dict[str, int]:
         disabled += len(re.findall(r"@Disabled(?:\s*\(|\b)", source))
         flaky_quarantines += len(re.findall(r"@FlakyTest\s*\(", source))
     registry = json.loads((root / "docs/governance/soft-gates.json").read_text(encoding="utf-8"))
-    suppression_baseline = root / "scripts/ci/java-suppression-baseline.tsv"
+    suppression_baseline = root / "scripts/ci/baselines/java-suppression-baseline.tsv"
     suppression_exceptions = sum(
         1
         for line in suppression_baseline.read_text(encoding="utf-8").splitlines()

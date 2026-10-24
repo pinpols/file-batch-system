@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：基建健康检查:PG primary/replica / Kafka / Redis / MinIO。
+# 用法：在仓库根目录执行 bash scripts/local/health-check-infra.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # health-check-infra.sh
 #
@@ -116,7 +118,7 @@ tcp_probe() {
   fi
 }
 
-# ── PG primary ────────────────────────────────────────────
+# 检查 PostgreSQL 主库。
 check_pg_primary() {
   if ! tcp_probe "$PG_PRIMARY_HOST" "$PG_PRIMARY_PORT" 3; then
     ng "PG primary" "$(batch_format_host_port "$PG_PRIMARY_HOST" "$PG_PRIMARY_PORT") 端口不通"
@@ -169,7 +171,7 @@ check_pg_replica() {
   fi
 }
 
-# ── Redis ────────────────────────────────────────────────
+# 检查 Redis/Valkey。
 check_redis() {
   if ! tcp_probe "$REDIS_HOST" "$REDIS_PORT" 3; then
     ng "Redis" "$(batch_format_host_port "$REDIS_HOST" "$REDIS_PORT") 端口不通"
@@ -194,7 +196,7 @@ check_redis() {
   fi
 }
 
-# ── Kafka ────────────────────────────────────────────────
+# 检查 Kafka。
 check_kafka() {
   if [[ $SKIP_KAFKA == 1 ]]; then
     skip "Kafka" "--no-kafka 跳过"
@@ -214,7 +216,7 @@ check_kafka() {
   ok "Kafka" "$KAFKA_BOOTSTRAP 端口通"
 }
 
-# ── MinIO ────────────────────────────────────────────────
+# 检查 MinIO。
 check_minio() {
   if [[ $SKIP_MINIO == 1 ]]; then
     skip "MinIO" "--no-minio 跳过"
@@ -231,7 +233,7 @@ check_minio() {
   fi
 }
 
-# ── main ─────────────────────────────────────────────────
+# 执行检查主流程。
 [[ $QUIET == 1 ]] || echo "── 基建健康检查 ──"
 check_pg_primary
 check_pg_replica

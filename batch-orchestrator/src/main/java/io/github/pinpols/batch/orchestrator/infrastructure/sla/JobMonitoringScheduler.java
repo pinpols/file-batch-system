@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.sla;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.service.governance.JobMonitoringAlertEmissionService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.JobMonitoringAlertEmissionService.Violation;
@@ -106,7 +107,9 @@ public class JobMonitoringScheduler {
         continue;
       }
       try {
-        if (emissionService.emitOnce(candidate, violation)) {
+        boolean emitted = RlsTenantContextHolder.runWithTenant(
+            candidate.tenantId(), () -> emissionService.emitOnce(candidate, violation));
+        if (emitted) {
           meterRegistry
               .counter("batch.job.monitoring.violation.total", VIOLATION_TYPE_TAG, violation.name())
               .increment();

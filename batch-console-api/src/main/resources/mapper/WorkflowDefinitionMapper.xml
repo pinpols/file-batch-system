@@ -7,8 +7,16 @@
         <result column="workflow_code" property="workflowCode"/>
         <result column="workflow_name" property="workflowName"/>
         <result column="workflow_type" property="workflowType"/>
+        <result column="single_job_definition_id" property="singleJobDefinitionId"/>
+        <result column="schedule_type" property="scheduleType"/>
+        <result column="schedule_expr" property="scheduleExpr"/>
+        <result column="timezone" property="timezone"/>
+        <result column="trigger_mode" property="triggerMode"/>
+        <result column="calendar_code" property="calendarCode"/>
+        <result column="depends_on_job_code" property="dependsOnJobCode"/>
         <result column="version" property="version"/>
         <result column="enabled" property="enabled"/>
+        <result column="schedule_enabled" property="scheduleEnabled"/>
         <result column="description" property="description"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
@@ -28,6 +36,20 @@
         </if>
         <if test="workflowType != null and workflowType != ''">
             and workflow_type = #{workflowType}
+        </if>
+        <if test="relatedJobCode != null and relatedJobCode != ''">
+            and exists (
+                select 1 from batch.workflow_node n
+                where n.tenant_id = workflow_definition.tenant_id
+                  and n.workflow_definition_id = workflow_definition.id
+                  and n.related_job_code = #{relatedJobCode}
+            )
+        </if>
+        <if test="singleJobWorkflow != null">
+            <choose>
+                <when test="singleJobWorkflow">and single_job_definition_id is not null</when>
+                <otherwise>and single_job_definition_id is null</otherwise>
+            </choose>
         </if>
         <if test="version != null">
             and version = #{version}
@@ -56,6 +78,20 @@
         <if test="workflowType != null and workflowType != ''">
             and workflow_type = #{workflowType}
         </if>
+        <if test="relatedJobCode != null and relatedJobCode != ''">
+            and exists (
+                select 1 from batch.workflow_node n
+                where n.tenant_id = workflow_definition.tenant_id
+                  and n.workflow_definition_id = workflow_definition.id
+                  and n.related_job_code = #{relatedJobCode}
+            )
+        </if>
+        <if test="singleJobWorkflow != null">
+            <choose>
+                <when test="singleJobWorkflow">and single_job_definition_id is not null</when>
+                <otherwise>and single_job_definition_id is null</otherwise>
+            </choose>
+        </if>
         <if test="version != null">
             and version = #{version}
         </if>
@@ -81,6 +117,29 @@
         limit 1
     </select>
 
+    <select id="hasCalendarScopedExpectations" resultType="boolean">
+        select exists (
+            select 1
+              from batch.external_event_expectation_definition
+             where tenant_id = #{tenantId}
+               and workflow_definition_id = #{id}
+        ) or exists (
+            select 1
+              from batch.file_group_expectation_definition
+             where tenant_id = #{tenantId}
+               and workflow_definition_id = #{id}
+        )
+    </select>
+
+    <select id="selectBySingleJobDefinitionId" resultMap="WorkflowDefinitionResultMap">
+        select *
+        from batch.workflow_definition
+        where tenant_id = #{tenantId}
+          and single_job_definition_id = #{singleJobDefinitionId}
+        order by version desc, id desc
+        limit 1
+    </select>
+
     <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.workflow_definition (
             tenant_id,
@@ -89,7 +148,14 @@
             workflow_type,
             version,
             enabled,
-            description
+            description,
+            single_job_definition_id,
+            schedule_type,
+            schedule_expr,
+            timezone,
+            trigger_mode,
+            calendar_code,
+            depends_on_job_code
         ) values (
             #{tenantId},
             #{workflowCode},
@@ -97,19 +163,16 @@
             <choose><when test="workflowType != null and workflowType != ''">#{workflowType}</when><otherwise>'DAG'</otherwise></choose>,
             <choose><when test="version != null">#{version}</when><otherwise>1</otherwise></choose>,
             <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>,
-            #{description}
+            #{description},
+            #{singleJobDefinitionId},
+            <choose><when test="scheduleType != null and scheduleType != ''">#{scheduleType}</when><otherwise>'MANUAL'</otherwise></choose>,
+            #{scheduleExpr},
+            #{timezone},
+            <choose><when test="triggerMode != null and triggerMode != ''">#{triggerMode}</when><otherwise>'MANUAL'</otherwise></choose>,
+            #{calendarCode},
+            #{dependsOnJobCode}
         )
     </insert>
-
-    <update id="updateWorkflowDefinition">
-        update batch.workflow_definition
-        set workflow_name = #{workflowName},
-            workflow_type = #{workflowType},
-            enabled = #{enabled},
-            updated_at = current_timestamp
-        where tenant_id = #{tenantId}
-          and id = #{id}
-    </update>
 
     <delete id="deleteByTenantAndId">
         delete from batch.workflow_definition
@@ -125,20 +188,47 @@
           and id = #{id}
     </update>
 
-    <!-- BE Spike (workflow-dag-designer): 全量替换路径专用,字段全更新 + version += 1。
-         expectedVersion 非空时作为乐观锁谓词,避免多 tab 互覆盖。 -->
+    <update id="toggleScheduleEnabled">
+        update batch.workflow_definition
+        set schedule_enabled = #{scheduleEnabled},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
+
+    <update id="updateScheduleConfiguration">
+        update batch.workflow_definition
+        set schedule_type = #{scheduleType},
+            schedule_expr = #{scheduleExpr},
+            timezone = #{timezone},
+            trigger_mode = #{triggerMode},
+            calendar_code = #{calendarCode},
+            depends_on_job_code = #{dependsOnJobCode},
+            version = version + 1,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and version = #{expectedVersion}
+    </update>
+
+    <!-- 全量替换必须比较原版本，缺版本不能退化为无条件覆盖。 -->
     <update id="updateAndBumpVersion">
         update batch.workflow_definition
         set workflow_name = #{workflowName},
             workflow_type = #{workflowType},
             enabled = #{enabled},
+            schedule_enabled = #{scheduleEnabled},
+            schedule_type = #{scheduleType},
+            schedule_expr = #{scheduleExpr},
+            timezone = #{timezone},
+            trigger_mode = #{triggerMode},
+            calendar_code = #{calendarCode},
+            depends_on_job_code = #{dependsOnJobCode},
             version = version + 1,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
-          <if test="expectedVersion != null">
-              and version = #{expectedVersion}
-          </if>
+          and version = #{expectedVersion}
     </update>
 
     <insert id="upsertWorkflowDefinition">
@@ -150,6 +240,14 @@
             version,
             enabled,
             description,
+            single_job_definition_id,
+            schedule_enabled,
+            schedule_type,
+            schedule_expr,
+            timezone,
+            trigger_mode,
+            calendar_code,
+            depends_on_job_code,
             created_by,
             updated_by
         ) values (
@@ -160,6 +258,14 @@
             <choose><when test="version != null">#{version}</when><otherwise>1</otherwise></choose>,
             <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>,
             #{description},
+            #{singleJobDefinitionId},
+            <choose><when test="scheduleEnabled != null">#{scheduleEnabled}</when><otherwise>false</otherwise></choose>,
+            <choose><when test="scheduleType != null and scheduleType != ''">#{scheduleType}</when><otherwise>'MANUAL'</otherwise></choose>,
+            #{scheduleExpr},
+            #{timezone},
+            <choose><when test="triggerMode != null and triggerMode != ''">#{triggerMode}</when><otherwise>'MANUAL'</otherwise></choose>,
+            #{calendarCode},
+            #{dependsOnJobCode},
             #{createdBy},
             #{updatedBy}
         )
@@ -168,6 +274,14 @@
             workflow_type = excluded.workflow_type,
             enabled = excluded.enabled,
             description = excluded.description,
+            single_job_definition_id = excluded.single_job_definition_id,
+            schedule_enabled = excluded.schedule_enabled,
+            schedule_type = excluded.schedule_type,
+            schedule_expr = excluded.schedule_expr,
+            timezone = excluded.timezone,
+            trigger_mode = excluded.trigger_mode,
+            calendar_code = excluded.calendar_code,
+            depends_on_job_code = excluded.depends_on_job_code,
             updated_by = excluded.updated_by,
             updated_at = current_timestamp
     </insert>

@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayWaitingLaunchTransitionParam;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayWaitingLaunchCalendarQuery;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity;
 import java.time.LocalDate;
 import java.util.List;
@@ -34,26 +36,28 @@ public interface BatchDayWaitingLaunchMapper {
 
   default List<BatchDayWaitingLaunchEntity> selectWaitingByCalendarBizDate(
       String tenantId, String calendarCode, LocalDate bizDate, int limit) {
-    return selectByCalendarBizDateAndStatus(
-        tenantId, calendarCode, bizDate, WaitStatus.WAITING.name(), limit);
+    BatchDayWaitingLaunchCalendarQuery batchDayWaitingLaunchCalendarQuery = BatchDayWaitingLaunchCalendarQuery.builder()
+        .tenantId(tenantId)
+        .calendarCode(calendarCode)
+        .bizDate(bizDate)
+        .waitStatus(WaitStatus.WAITING.name())
+        .limit(limit)
+        .build();
+    return selectByCalendarBizDateAndStatus(batchDayWaitingLaunchCalendarQuery);
   }
 
-  List<BatchDayWaitingLaunchEntity> selectByCalendarBizDateAndStatus(
-      @Param("tenantId") String tenantId,
-      @Param("calendarCode") String calendarCode,
-      @Param("bizDate") LocalDate bizDate,
-      @Param("waitStatus") String waitStatus,
-      @Param("limit") int limit);
+  List<BatchDayWaitingLaunchEntity> selectByCalendarBizDateAndStatus(BatchDayWaitingLaunchCalendarQuery param);
 
   default int markReleased(String tenantId, String requestId, String releasedBy) {
-    return transitionStatus(
-        tenantId, requestId, releasedBy, WaitStatus.WAITING.name(), WaitStatus.RELEASED.name());
+    BatchDayWaitingLaunchTransitionParam batchDayWaitingLaunchTransitionParam = BatchDayWaitingLaunchTransitionParam.builder()
+        .tenantId(tenantId)
+        .requestId(requestId)
+        .releasedBy(releasedBy)
+        .expectedStatus(WaitStatus.WAITING.name())
+        .targetStatus(WaitStatus.RELEASED.name())
+        .build();
+    return transitionStatus(batchDayWaitingLaunchTransitionParam);
   }
 
-  int transitionStatus(
-      @Param("tenantId") String tenantId,
-      @Param("requestId") String requestId,
-      @Param("releasedBy") String releasedBy,
-      @Param("expectedStatus") String expectedStatus,
-      @Param("targetStatus") String targetStatus);
+  int transitionStatus(BatchDayWaitingLaunchTransitionParam param);
 }

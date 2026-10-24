@@ -91,6 +91,30 @@
       "sensitivity": "SECRET"
     },
     {
+      "id": "batch-common/src/main/java/io/github/pinpols/batch/common/config/KafkaConnectionProperties.java#KafkaConnectionProperties",
+      "className": "KafkaConnectionProperties",
+      "prefix": "spring.kafka",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-common/src/main/java/io/github/pinpols/batch/common/config/KafkaConsumerTimingProperties.java#KafkaConsumerTimingProperties",
+      "className": "KafkaConsumerTimingProperties",
+      "prefix": "spring.kafka.consumer",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-common/src/main/java/io/github/pinpols/batch/common/config/KafkaNamespaceProperties.java#KafkaNamespaceProperties",
+      "className": "KafkaNamespaceProperties",
+      "prefix": "batch.kafka",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
       "id": "batch-common/src/main/java/io/github/pinpols/batch/common/config/ObjectStoreEncryptionProperties.java#ObjectStoreEncryptionProperties",
       "className": "ObjectStoreEncryptionProperties",
       "prefix": "batch.storage.encryption",
@@ -371,6 +395,14 @@
       "sensitivity": "PUBLIC"
     },
     {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowLaunchWaitProperties.java#WorkflowLaunchWaitProperties",
+      "className": "WorkflowLaunchWaitProperties",
+      "prefix": "batch.workflow.launch-wait",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
       "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/trigger/StaleCreatedLaunchRecoveryProperties.java#StaleCreatedLaunchRecoveryProperties",
       "className": "StaleCreatedLaunchRecoveryProperties",
       "prefix": "batch.trigger.launch.created-recovery",
@@ -435,6 +467,14 @@
       "sensitivity": "PUBLIC"
     },
     {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/BatchDayScanProperties.java#BatchDayScanProperties",
+      "className": "BatchDayScanProperties",
+      "prefix": "batch.batch-day",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
       "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/BatchMqTopicsProperties.java#BatchMqTopicsProperties",
       "className": "BatchMqTopicsProperties",
       "prefix": "batch.mq.topics",
@@ -478,6 +518,14 @@
       "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/InternalRequestProperties.java#InternalRequestProperties",
       "className": "InternalRequestProperties",
       "prefix": "batch.worker.internal-request",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/JobDependencyWaitProperties.java#JobDependencyWaitProperties",
+      "className": "JobDependencyWaitProperties",
+      "prefix": "batch.job-dependency-wait",
       "source": "STATIC",
       "activation": "RESTART_REQUIRED",
       "sensitivity": "PUBLIC"
@@ -627,6 +675,14 @@
       "sensitivity": "PUBLIC"
     },
     {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/TriggerLaunchContinuityMetricsProperties.java#TriggerLaunchContinuityMetricsProperties",
+      "className": "TriggerLaunchContinuityMetricsProperties",
+      "prefix": "batch.trigger.launch.metrics",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
       "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/WorkerCapabilityTagsAuditProperties.java#WorkerCapabilityTagsAuditProperties",
       "className": "WorkerCapabilityTagsAuditProperties",
       "prefix": "batch.worker.audit",
@@ -654,6 +710,22 @@
       "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/WorkflowArchiveProperties.java#WorkflowArchiveProperties",
       "className": "WorkflowArchiveProperties",
       "prefix": "batch.workflow.archive",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/WorkflowSensorDataSourceConfiguration.java#orchestratorPlatformHikariConfig",
+      "className": "orchestratorPlatformHikariConfig",
+      "prefix": "spring.datasource.hikari",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "SECRET"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/WorkflowSensorDataSourceConfiguration.java#workflowSensorBusinessHikariConfig",
+      "className": "workflowSensorBusinessHikariConfig",
+      "prefix": "batch.datasource.business.hikari",
       "source": "STATIC",
       "activation": "RESTART_REQUIRED",
       "sensitivity": "PUBLIC"

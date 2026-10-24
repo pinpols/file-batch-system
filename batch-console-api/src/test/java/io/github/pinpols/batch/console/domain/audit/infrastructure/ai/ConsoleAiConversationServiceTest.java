@@ -1,5 +1,12 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiTurnStartInput;
+
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiConversationAllocateTurnNoParam;
+import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationPageByOwnerQuery;
+import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationTurnsQuery;
+
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -67,11 +74,18 @@ class ConsoleAiConversationServiceTest {
     when(mapper.selectRecentCompleteTurns(eq("tenant-a"), anyString(), eq(12)))
         .thenReturn(List.of());
     when(mapper.allocateTurnNo(
-            eq("tenant-a"), anyString(), anyString(), any(OffsetDateTime.class), anyString()))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "tenant-a") && parameters.conversationId() != null && parameters.ownerUserId() != null && parameters.expiresAt() != null && parameters.contextVersion() != null)))
         .thenReturn(1L);
 
+    ConsoleAiTurnStartInput turnInput = ConsoleAiTurnStartInput.builder()
+        .tenantId("tenant-a")
+        .ownerUserId("operator-a")
+        .requestedConversationId(null)
+        .contextVersion("v1")
+        .prompt("show failed jobs")
+        .build();
     ConsoleAiConversationService.StartedTurn turn =
-        service.beginTurn("tenant-a", "operator-a", null, "v1", "show failed jobs");
+        service.beginTurn(turnInput);
 
     assertThat(UUID.fromString(turn.conversationId())).isNotNull();
     assertThat(turn.turnNo()).isEqualTo(1L);
@@ -88,12 +102,20 @@ class ConsoleAiConversationServiceTest {
     when(mapper.selectRecentCompleteTurns(eq("tenant-a"), anyString(), eq(12)))
         .thenReturn(List.of());
     when(mapper.allocateTurnNo(
-            eq("tenant-a"), anyString(), anyString(), any(OffsetDateTime.class), anyString()))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "tenant-a") && parameters.conversationId() != null && parameters.ownerUserId() != null && parameters.expiresAt() != null && parameters.contextVersion() != null)))
         .thenReturn(1L);
     when(mapper.insertTurn(any())).thenReturn(0);
 
-    assertThatThrownBy(() -> service.beginTurn(
-            "tenant-a", "operator-a", null, "v1", "question", UUID.randomUUID(), List.of()))
+    ConsoleAiTurnStartInput turnInput = ConsoleAiTurnStartInput.builder()
+        .tenantId("tenant-a")
+        .ownerUserId("operator-a")
+        .requestedConversationId(null)
+        .contextVersion("v1")
+        .prompt("question")
+        .clientTurnId(UUID.randomUUID())
+        .attachmentIds(List.of())
+        .build();
+    assertThatThrownBy(() -> service.beginTurn(turnInput))
         .isInstanceOf(BizException.class);
   }
 
@@ -104,8 +126,15 @@ class ConsoleAiConversationServiceTest {
     conversation.setOwnerUserId("operator-b");
     when(mapper.selectForUpdate("tenant-a", "conversation-1")).thenReturn(conversation);
 
+    ConsoleAiTurnStartInput turnInput = ConsoleAiTurnStartInput.builder()
+        .tenantId("tenant-a")
+        .ownerUserId("operator-a")
+        .requestedConversationId("conversation-1")
+        .contextVersion("v1")
+        .prompt("show failed jobs")
+        .build();
     assertThatThrownBy(() ->
-            service.beginTurn("tenant-a", "operator-a", "conversation-1", "v1", "show failed jobs"))
+            service.beginTurn(turnInput))
         .isInstanceOfSatisfying(
             BizException.class,
             exception -> assertThat(exception.getCode()).isEqualTo(ResultCode.NOT_FOUND));
@@ -120,15 +149,18 @@ class ConsoleAiConversationServiceTest {
     conversation.setExpiresAt(OffsetDateTime.now(ZoneOffset.UTC).plusDays(1));
     when(mapper.selectForUpdate("tenant-a", "conversation-1")).thenReturn(conversation);
     when(mapper.allocateTurnNo(
-            eq("tenant-a"),
-            eq("conversation-1"),
-            eq("operator-a"),
-            any(OffsetDateTime.class),
-            eq("v1")))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "tenant-a") && java.util.Objects.equals(parameters.conversationId(), "conversation-1") && java.util.Objects.equals(parameters.ownerUserId(), "operator-a") && parameters.expiresAt() != null && java.util.Objects.equals(parameters.contextVersion(), "v1"))))
         .thenReturn(null);
 
+    ConsoleAiTurnStartInput turnInput = ConsoleAiTurnStartInput.builder()
+        .tenantId("tenant-a")
+        .ownerUserId("operator-a")
+        .requestedConversationId("conversation-1")
+        .contextVersion("v1")
+        .prompt("show failed jobs")
+        .build();
     assertThatThrownBy(() ->
-            service.beginTurn("tenant-a", "operator-a", "conversation-1", "v1", "show failed jobs"))
+            service.beginTurn(turnInput))
         .isInstanceOfSatisfying(
             BizException.class,
             exception -> assertThat(exception.getCode()).isEqualTo(ResultCode.NOT_FOUND));
@@ -139,7 +171,14 @@ class ConsoleAiConversationServiceTest {
   @DisplayName("会话缺失或已过期:不重建会话,也不写入轮次")
   void shouldNotRecreateMissingOrExpiredConversation() {
     when(mapper.selectForUpdate("tenant-a", "missing")).thenReturn(null);
-    assertThatThrownBy(() -> service.beginTurn("tenant-a", "operator-a", "missing", "v1", "prompt"))
+    ConsoleAiTurnStartInput turnInput = ConsoleAiTurnStartInput.builder()
+        .tenantId("tenant-a")
+        .ownerUserId("operator-a")
+        .requestedConversationId("missing")
+        .contextVersion("v1")
+        .prompt("prompt")
+        .build();
+    assertThatThrownBy(() -> service.beginTurn(turnInput))
         .isInstanceOfSatisfying(
             BizException.class,
             exception -> assertThat(exception.getCode()).isEqualTo(ResultCode.NOT_FOUND));
@@ -148,7 +187,14 @@ class ConsoleAiConversationServiceTest {
     expired.setOwnerUserId("operator-a");
     expired.setExpiresAt(OffsetDateTime.now(ZoneOffset.UTC).minusDays(1));
     when(mapper.selectForUpdate("tenant-a", "expired")).thenReturn(expired);
-    assertThatThrownBy(() -> service.beginTurn("tenant-a", "operator-a", "expired", "v1", "prompt"))
+    ConsoleAiTurnStartInput expiredTurnInput = ConsoleAiTurnStartInput.builder()
+        .tenantId("tenant-a")
+        .ownerUserId("operator-a")
+        .requestedConversationId("expired")
+        .contextVersion("v1")
+        .prompt("prompt")
+        .build();
+    assertThatThrownBy(() -> service.beginTurn(expiredTurnInput))
         .isInstanceOfSatisfying(
             BizException.class,
             exception -> assertThat(exception.getCode()).isEqualTo(ResultCode.NOT_FOUND));
@@ -164,16 +210,72 @@ class ConsoleAiConversationServiceTest {
         .isInstanceOfSatisfying(
             BizException.class,
             exception -> assertThat(exception.getCode()).isEqualTo(ResultCode.NOT_FOUND));
-    verify(mapper, never()).selectTurns(anyString(), anyString(), anyString(), any(), anyInt());
+    verify(mapper, never()).selectTurns(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.conversationId() != null && parameters.ownerUserId() != null));
   }
 
   @Test
   @DisplayName("上下文版本未知:在访问数据库之前即拒绝")
   void shouldRejectUnknownContextVersionBeforeDatabaseAccess() {
+    ConsoleAiTurnStartInput turnInput = ConsoleAiTurnStartInput.builder()
+        .tenantId("tenant-a")
+        .ownerUserId("operator-a")
+        .requestedConversationId("conversation-1")
+        .contextVersion("v2")
+        .prompt("show failed jobs")
+        .build();
     assertThatThrownBy(() ->
-            service.beginTurn("tenant-a", "operator-a", "conversation-1", "v2", "show failed jobs"))
+            service.beginTurn(turnInput))
         .isInstanceOf(BizException.class);
     verify(mapper, never()).setTenantContext(anyString());
+  }
+
+  @Test
+  @DisplayName("开始轮次仍先检查持久化开关，不因缺少所有者改变错误")
+  void shouldCheckPersistenceBeforeOwner_whenBothInputsAreInvalid() {
+    properties.getPersistence().setEnabled(false);
+    ConsoleAiTurnStartInput turnInput = ConsoleAiTurnStartInput.builder().build();
+
+    assertThatThrownBy(() -> service.beginTurn(turnInput))
+        .isInstanceOfSatisfying(BizException.class, exception -> {
+          assertThat(exception.getCode()).isEqualTo(ResultCode.FORBIDDEN);
+          assertThat(exception.getMessageKey()).isEqualTo("error.ai.assistant_not_configured");
+        });
+
+    verify(mapper, never()).setTenantContext(any());
+  }
+
+  @Test
+  @DisplayName("开始轮次缺少所有者仍由服务按原权限错误拒绝")
+  void shouldRejectMissingOwner_whenContextVersionIsAlsoInvalid() {
+    ConsoleAiTurnStartInput turnInput = ConsoleAiTurnStartInput.builder()
+        .tenantId("tenant-a")
+        .contextVersion("v2")
+        .build();
+
+    assertThatThrownBy(() -> service.beginTurn(turnInput))
+        .isInstanceOfSatisfying(BizException.class, exception -> {
+          assertThat(exception.getCode()).isEqualTo(ResultCode.FORBIDDEN);
+          assertThat(exception.getMessageKey()).isEqualTo(ResultCode.FORBIDDEN.detailKey());
+        });
+
+    verify(mapper, never()).setTenantContext(any());
+  }
+
+  @Test
+  @DisplayName("开始轮次缺少版本仍由服务按原参数错误拒绝")
+  void shouldRejectMissingContextVersion_whenStartingTurn() {
+    ConsoleAiTurnStartInput turnInput = ConsoleAiTurnStartInput.builder()
+        .tenantId("tenant-a")
+        .ownerUserId("operator-a")
+        .build();
+
+    assertThatThrownBy(() -> service.beginTurn(turnInput))
+        .isInstanceOfSatisfying(BizException.class, exception -> {
+          assertThat(exception.getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT);
+          assertThat(exception.getMessageKey()).isEqualTo(ResultCode.INVALID_ARGUMENT.detailKey());
+        });
+
+    verify(mapper, never()).setTenantContext(any());
   }
 
   @Test
@@ -194,9 +296,15 @@ class ConsoleAiConversationServiceTest {
     ConsoleAiConversationEntity third = conversation("conversation-3", updatedAt);
     ConsoleAiConversationEntity second = conversation("conversation-2", updatedAt);
     ConsoleAiConversationEntity first = conversation("conversation-1", updatedAt);
-    when(mapper.selectPageByOwner(eq("tenant-a"), eq("operator-a"), isNull(), isNull(), eq(3)))
+    when(mapper.selectPageByOwner(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "tenant-a") && java.util.Objects.equals(parameters.ownerUserId(), "operator-a") && parameters.beforeUpdatedAt() == null && parameters.beforeId() == null && java.util.Objects.equals(parameters.limit(), 3))))
         .thenReturn(List.of(third, second, first));
-    when(mapper.selectPageByOwner("tenant-a", "operator-a", updatedAt, "conversation-2", 3))
+    when(mapper.selectPageByOwner(ConsoleAiConversationPageByOwnerQuery.builder()
+        .tenantId("tenant-a")
+        .ownerUserId("operator-a")
+        .beforeUpdatedAt(updatedAt)
+        .beforeId("conversation-2")
+        .limit(3)
+        .build()))
         .thenReturn(List.of(first));
 
     PageResponse<ConsoleAiConversationService.ConversationView> firstPage =
@@ -224,7 +332,7 @@ class ConsoleAiConversationServiceTest {
     assertThatThrownBy(() -> service.page("tenant-a", "operator-a", "not-a-cursor", 20))
         .isInstanceOf(BizException.class);
     verify(mapper, never())
-        .selectPageByOwner(anyString(), anyString(), any(), anyString(), anyInt());
+        .selectPageByOwner(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.ownerUserId() != null && parameters.beforeId() != null));
   }
 
   private static ConsoleAiConversationEntity conversation(String id, Instant updatedAt) {

@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.console.domain.file.infrastructure;
 
+import lombok.Builder;
+
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -127,13 +129,12 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
         tenantId, request.getApprovalId(), ApprovalTargetBinding.file(request.getFileId()));
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     RestClient restClient = orchestratorInternalRestClient.client();
-    FileOperationRequest fileOperation = new FileOperationRequest(
-        tenantId,
-        null,
-        ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64),
-        requestMetadata.traceId(),
-        ConsoleTextSanitizer.safeInput(request.getReason(), 512),
-        request.getApprovalId());
+    String operatorId = ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64);
+    String traceId = requestMetadata.traceId();
+    String reason = ConsoleTextSanitizer.safeInput(request.getReason(), 512);
+    String approvalId = request.getApprovalId();
+    FileOperationRequest fileOperation =
+        new FileOperationRequest(tenantId, null, operatorId, traceId, reason, approvalId);
     FileDownloadResponse response = restClient
         .post()
         .uri("/internal/files/{fileId}/presign", request.getFileId())
@@ -154,13 +155,13 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     RestClient restClient = orchestratorInternalRestClient.client();
+    String action = request.getAction();
+    String operatorId = ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64);
+    String traceId = requestMetadata.traceId();
+    String reason = ConsoleTextSanitizer.safeInput(request.getReason(), 512);
+    Long extendWaitSeconds = request.getExtendWaitSeconds();
     ArrivalGroupOperationRequest arrivalGroupOperation = new ArrivalGroupOperationRequest(
-        tenantId,
-        request.getAction(),
-        ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64),
-        requestMetadata.traceId(),
-        ConsoleTextSanitizer.safeInput(request.getReason(), 512),
-        request.getExtendWaitSeconds());
+        tenantId, action, operatorId, traceId, reason, extendWaitSeconds);
     FileOperationResponse response = restClient
         .post()
         .uri("/internal/files/arrival-groups/{fileGroupCode}/actions", request.getFileGroupCode())
@@ -179,12 +180,12 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     RestClient restClient = orchestratorInternalRestClient.client();
+    String safeChannelCode = ConsoleTextSanitizer.safeInput(channelCode, 128);
+    String safeFileName = ConsoleTextSanitizer.safeInput(fileName, 255);
+    String operatorId = ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64);
+    String traceId = requestMetadata.traceId();
     PresignUploadRequest body = new PresignUploadRequest(
-        resolvedTenantId,
-        ConsoleTextSanitizer.safeInput(channelCode, 128),
-        ConsoleTextSanitizer.safeInput(fileName, 255),
-        ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64),
-        requestMetadata.traceId());
+        resolvedTenantId, safeChannelCode, safeFileName, operatorId, traceId);
     return restClient
         .post()
         .uri("/internal/files/presign-upload")
@@ -281,13 +282,20 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
   private ConsoleFileOperationResponse executeFileOperation(FileExecContext ctx) {
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     RestClient restClient = orchestratorInternalRestClient.client();
-    FileOperationRequest fileOperation = new FileOperationRequest(
-        ctx.tenantId(),
-        ConsoleTextSanitizer.safeInput(ctx.channelCode(), 128),
-        ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64),
-        requestMetadata.traceId(),
-        ConsoleTextSanitizer.safeInput(ctx.reason(), 512),
-        ctx.approvalId());
+    String tenantId = ctx.tenantId();
+    String sanitizedChannelCode = ConsoleTextSanitizer.safeInput(ctx.channelCode(), 128);
+    String sanitizedOperatorId = ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64);
+    String traceId = requestMetadata.traceId();
+    String sanitizedReason = ConsoleTextSanitizer.safeInput(ctx.reason(), 512);
+    String approvalId = ctx.approvalId();
+    FileOperationRequest fileOperation =
+        new FileOperationRequest(
+            tenantId,
+            sanitizedChannelCode,
+            sanitizedOperatorId,
+            traceId,
+            sanitizedReason,
+            approvalId);
     FileOperationResponse response = restClient
         .post()
         .uri("/internal/files/{fileId}/" + ctx.operation(), ctx.fileId())
@@ -304,14 +312,18 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     // P0 (adv-review 2026-07-13)：审批提交必须经 tenantGuard.resolveTenant 校验/覆盖 body 声明的
     // tenantId，与 presignDownload 带 approvalId 分支一致；否则租户 A 会话可借 body tenantId=B
     // 向租户 B 的审批队列注入攻击者可控审批单（跨租户写越权）。
-    String tenantId = tenantGuard.resolveTenant(extractTenantId(ctx.payload()));
-    ApprovalSubmitCommand approvalCommand = ApprovalSubmitCommand.builder()
+    Object approvalPayload = ctx.payload();
+    String requestedTenantId = extractTenantId(approvalPayload);
+    String tenantId = tenantGuard.resolveTenant(requestedTenantId);
+    OrchestratorApprovalClient.ApprovalSubmitCommand.ApprovalSubmitCommandBuilder approvalCommandBuilder = ApprovalSubmitCommand.builder()
         .tenantId(tenantId)
         .approvalType(ctx.approvalType())
         .actionType(ctx.actionType())
         .targetType(ctx.targetType())
-        .targetId(ctx.targetId())
-        .payloadJson(JsonUtils.toJson(ctx.payload()))
+        .targetId(ctx.targetId());
+    String payloadJson = JsonUtils.toJson(ctx.payload());
+    ApprovalSubmitCommand approvalCommand = approvalCommandBuilder
+        .payloadJson(payloadJson)
         .approvalReason(ctx.approvalReason())
         .idempotencyKey(ctx.idempotencyKey())
         .build();

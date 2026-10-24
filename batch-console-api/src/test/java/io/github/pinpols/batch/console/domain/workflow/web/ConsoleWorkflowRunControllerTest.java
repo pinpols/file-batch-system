@@ -12,11 +12,18 @@ import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunActionResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunSkipNodeResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.util.List;
+import java.util.Set;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -40,6 +47,11 @@ class ConsoleWorkflowRunControllerTest {
             new ConsoleWorkflowRunController(proxy, responseFactory))
         .setControllerAdvice(exceptionHandler)
         .build();
+  }
+
+  @AfterEach
+  void clearSecurityContext() {
+    SecurityContextHolder.clearContext();
   }
 
   @Test
@@ -89,13 +101,54 @@ class ConsoleWorkflowRunControllerTest {
   @Test
   @DisplayName("跳过指定节点时, 运行标识、租户与节点编码透传到编排端口")
   void shouldPassNodeCode_whenSkippingNode() throws Exception {
-    when(proxy.workflowRunSkipNode(3L, "ta", "NODE_A"))
+    ConsolePrincipal principal = new ConsolePrincipal("operator-1", "ta", Set.of("ROLE_ADMIN"));
+    List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_ADMIN"));
+    UsernamePasswordAuthenticationToken authentication =
+        new UsernamePasswordAuthenticationToken(principal, null, authorities);
+    SecurityContextHolder.getContext().setAuthentication(authentication);
+
+    when(proxy.workflowRunSkipNode(3L, "ta", "NODE_A", "operator-1", "manual incident recovery"))
         .thenReturn(new ConsoleWorkflowRunSkipNodeResponse(3L, "NODE_A", "SKIPPED"));
     mockMvc
         .perform(post("/api/console/workflow-runs/3/skip-node")
             .param("tenantId", "ta")
-            .param("nodeCode", "NODE_A"))
+            .param("nodeCode", "NODE_A")
+            .param("reason", "manual incident recovery")
+            .param("operatorId", "untrusted-client-value"))
         .andExpect(status().isOk());
-    verify(proxy).workflowRunSkipNode(3L, "ta", "NODE_A");
+    verify(proxy).workflowRunSkipNode(3L, "ta", "NODE_A", "operator-1", "manual incident recovery");
+  }
+
+  @Test
+  @DisplayName("跳过节点必须提供人工处置理由")
+  void shouldRejectSkipNodeWithoutReason() throws Exception {
+    mockMvc
+        .perform(post("/api/console/workflow-runs/3/skip-node")
+            .param("tenantId", "ta")
+            .param("nodeCode", "NODE_A"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  @DisplayName("跳过节点拒绝空白理由")
+  void shouldRejectBlankSkipReason() throws Exception {
+    mockMvc
+        .perform(post("/api/console/workflow-runs/3/skip-node")
+            .param("tenantId", "ta")
+            .param("nodeCode", "NODE_A")
+            .param("reason", "   "))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  @DisplayName("跳过节点理由不能超过 1024 个字符")
+  void shouldRejectSkipReasonLongerThan1024Characters() throws Exception {
+    String tooLongReason = "x".repeat(1025);
+    mockMvc
+        .perform(post("/api/console/workflow-runs/3/skip-node")
+            .param("tenantId", "ta")
+            .param("nodeCode", "NODE_A")
+            .param("reason", tooLongReason))
+        .andExpect(status().isBadRequest());
   }
 }

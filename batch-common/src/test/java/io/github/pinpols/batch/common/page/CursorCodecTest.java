@@ -2,6 +2,7 @@ package io.github.pinpols.batch.common.page;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Base64;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -43,8 +44,7 @@ class CursorCodecTest {
     // 合法 base64 但内容不是 JSON 对象
     assertThat(CursorCodec.decode("aGVsbG8")).isEmpty();
     // 合法 base64 但 JSON 数组(不是对象)
-    String arrToken =
-        java.util.Base64.getUrlEncoder().withoutPadding().encodeToString("[1,2,3]".getBytes());
+    String arrToken = Base64.getUrlEncoder().withoutPadding().encodeToString("[1,2,3]".getBytes());
     assertThat(CursorCodec.decode(arrToken)).isEmpty();
   }
 }

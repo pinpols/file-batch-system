@@ -1,4 +1,6 @@
 ## 9. 文件处理链路设计
+
+本文的文件资产视图聚焦 IMPORT、EXPORT、DISPATCH 三条出入站链路；PROCESS 负责内部数据加工，同样复用文件 Pipeline 执行模板。当前共有四类文件 Worker，另有不走文件 Pipeline 的 ATOMIC。阶段与版本以 `SystemPipelineCatalog` 为准。
 ### 9.1 设计目标与统一原则
 
 文件处理不是单一动作，而是一条完整链路。对本系统而言，建议将文件域统一抽象为三条标准链路：
@@ -10,10 +12,10 @@
 统一原则如下：
 
 - 平台定义固定阶段骨架，避免每个文件场景各写一套流程
-- 每个阶段通过步骤插件扩展，支持按场景启停和编排
+- 阶段顺序由系统固定，Job 配置允许的实现和业务参数，不能按场景增删、重排或禁用阶段
 - 链路实例、文件资产、任务实例三者可追踪关联
 - 幂等、重试、补偿、安全审计属于平台底座能力，不下放到具体业务自行实现
-- Worker 按链路职责拆分为 `batch-worker-import / export / dispatch`，由 `batch-worker-core` 提供统一执行基座
+- Worker 按职责拆分为 `batch-worker-import / export / process / dispatch`，由 `batch-worker-core` 提供阶段执行基座；ATOMIC 复用消费等基础能力，使用独立任务执行器
 
 #### 文件链路统一视图
 
@@ -43,7 +45,7 @@ flowchart LR
 |---|---|---|
 | `file_record` | 文件资产主表 | 统一表达入站、出站、中间文件 |
 | `file_type` | 文件类型 | 描述格式、命名规则、模板、方向、保留期 |
-| `pipeline_definition` | 链路模板定义 | 定义导入/导出/分发的模板与启停状态 |
+| `SystemPipelineCatalog` + Job 业务参数 | 系统阶段契约与执行配置 | 系统固化阶段/版本，Job 保存业务参数；旧租户 Pipeline 定义表已退役 |
 | `pipeline_instance` | 链路实例 | 一次文件链路执行的运行态主记录 |
 | `pipeline_step_run` | 步骤运行记录 | 记录步骤执行耗时、结果、重试、错误 |
 | `file_dispatch_record` | 分发记录 | 记录渠道、目标系统、回执、重发情况 |
@@ -272,7 +274,7 @@ BIN / 自定义二进制报文**不作为一期标准能力**，但系统应预�
 | 取值 | 含义 |
 |---|---|
 | `MARKER`（默认） | 空标记，仅守门「文件传完了」，不校验内容 |
-| `MANIFEST` | `.chk` 为 JSON sidecar（协议见 `docs/design/file-integrity-sidecar-manifest-design-2026-06-07.md`，命名 `<全名>.chk`）。登记时校验文件名、协议字段和 `sizeBytes`，流式读取原始对象验证 SHA-256 后才登记 `integrityState=VERIFIED`；同时把 checksum 和 `recordCount` 写入 `file_record` / metadata |
+| `MANIFEST` | `.chk` 为 JSON sidecar（协议见 `docs/design/file-integrity-sidecar-manifest-design.md`，命名 `<全名>.chk`）。登记时校验文件名、协议字段和 `sizeBytes`，流式读取原始对象验证 SHA-256 后才登记 `integrityState=VERIFIED`；同时把 checksum 和 `recordCount` 写入 `file_record` / metadata |
 
 MANIFEST 模式的**完整性校验链**：
 
@@ -786,7 +788,7 @@ filePipelines:
 
 ```mermaid
 flowchart TD
-    A[PipelineDefinition] --> B[Orchestrator Task/Outbox]
+    A[Job 业务参数 + SystemPipelineCatalog] --> B[Orchestrator Task/Outbox]
     B --> C[Worker AbstractPipelineStepExecutionAdapter]
     C --> D[AbstractStageExecutor]
     D --> E[Import/Export/Process/Dispatch Stage Beans]
@@ -800,12 +802,12 @@ flowchart TD
 
 | 抽象 | 作用 |
 |---|---|
-| `PipelineDefinition` | 按 Job 绑定类型固定的阶段骨架，并保存各阶段的实现参数和运行策略 |
+| `SystemPipelineDefinition` / Job 业务参数 | 系统目录固定阶段骨架和版本；Job 单独保存允许的实现参数和运行策略，运行使用冻结配置 |
 | `PipelineStepDefinition` | 定义步骤编码、阶段、实现编码、参数、超时、重试策略 |
 | `ExecutionContext` | 承载文件资产、任务实例、租户、trace、业务参数、临时变量 |
 | 各 Worker Stage SPI | Import/Export/Process/Dispatch 按自己的阶段语义提供窄接口，避免万能 Step 接口 |
 | `batch.step_registry` | 启动时登记实现编码，供 Console 配置校验；不是第二套运行时执行器 |
-| `AbstractPipelineStepExecutionAdapter` / `AbstractStageExecutor` | Worker 内加载定义、按顺序执行阶段并统一处理日志、异常、回写和监控 |
+| `AbstractPipelineStepExecutionAdapter` / `AbstractStageExecutor` | Worker 校验本地系统模板、合并 Job 冻结参数并执行阶段并统一处理日志、异常、回写和监控 |
 
 #### 与统一核心模型对齐
 
@@ -864,7 +866,7 @@ public interface ImportStageStep {
 链路执行由 `batch-orchestrator` 负责实例编排与任务派发，各 Worker 负责模板加载和实际阶段执行。核心职责如下：
 
 1. Orchestrator 根据 Job/Workflow 生成任务并通过 Outbox 投递到目标 Worker
-2. Worker 从平台库读取已 provision 的 `PipelineDefinition`，创建 `pipeline_instance`
+2. Worker 按任务冻结的类型/版本校验系统目录，读取本地步骤模板并合并 Job 冻结参数，再创建 `pipeline_instance`；不读取旧租户定义表
 3. Worker 的 Stage Executor 按步骤定义解析本模块实现并顺序执行
 4. Worker 在同一执行链中推进 `last_success_stage` / `current_stage` 并记录 `pipeline_step_run`
 5. Worker 通过任务结果回报成功或失败，Orchestrator 使用状态 CAS 推进实例
@@ -881,7 +883,8 @@ sequenceDiagram
 
     O->>K: 事务 Outbox 投递任务
     K->>W: Worker 领取任务
-    W->>DB: 加载定义并创建 pipeline_instance
+    W->>W: 校验系统模板并合并冻结参数
+    W->>DB: 创建 pipeline_instance
     W->>W: 按 impl_code 解析并执行 Stage Bean
     W->>DB: 回写 pipeline_step_run/current_stage
     W-->>O: 上报 Task Result

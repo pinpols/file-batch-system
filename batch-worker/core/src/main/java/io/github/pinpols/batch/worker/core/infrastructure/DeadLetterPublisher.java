@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.mq.MqMessage;
@@ -11,6 +12,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -47,6 +49,7 @@ public class DeadLetterPublisher {
   static final int ENVELOPE_VERSION = 1;
 
   private final MqMessagePublisher mqMessagePublisher;
+  private final BatchKafkaTopicNamespace topicNamespace;
   private final Counter successCounter;
   private final Counter timeoutCounter;
   private final Counter failureCounter;
@@ -54,8 +57,11 @@ public class DeadLetterPublisher {
 
   public DeadLetterPublisher(
       @Qualifier("workerMqMessagePublisher") MqMessagePublisher mqMessagePublisher,
-      ObjectProvider<MeterRegistry> meterRegistryProvider) {
+      ObjectProvider<MeterRegistry> meterRegistryProvider,
+      BatchKafkaTopicNamespace topicNamespace) {
     this.mqMessagePublisher = mqMessagePublisher;
+    this.topicNamespace = topicNamespace;
+    String deadLetterTopic = topicNamespace.topic(BatchTopics.TASK_DEAD_LETTER);
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
     if (registry == null) {
       this.successCounter = null;
@@ -63,7 +69,7 @@ public class DeadLetterPublisher {
       this.failureCounter = null;
       this.publishTimer = null;
     } else {
-      Tags base = Tags.of("topic", BatchTopics.TASK_DEAD_LETTER);
+      Tags base = Tags.of("topic", deadLetterTopic);
       this.successCounter = Counter.builder("worker.dlq.publish.success.total")
           .description("DLQ 发布成功累计")
           .tags(base)
@@ -99,13 +105,16 @@ public class DeadLetterPublisher {
     envelope.put("sourceTopic", sourceTopic);
     envelope.put("workerType", workerType);
     envelope.put("errorMessage", truncate(errorMessage, 2000));
-    envelope.put("failedAt", BatchDateTimeSupport.utcNow().toString());
+    Instant failedAt = BatchDateTimeSupport.utcNow();
+    String failedAtText = failedAt.toString();
+    envelope.put("failedAt", failedAtText);
     String value = JsonUtils.toJson(envelope);
 
     long startNanos = System.nanoTime();
     try {
-      CompletableFuture<?> future =
-          mqMessagePublisher.publish(MqMessage.of(BatchTopics.TASK_DEAD_LETTER, null, value));
+      String deadLetterTopic = topicNamespace.topic(BatchTopics.TASK_DEAD_LETTER);
+      MqMessage deadLetterMessage = MqMessage.of(deadLetterTopic, null, value);
+      CompletableFuture<?> future = mqMessagePublisher.publish(deadLetterMessage);
       if (future != null) {
         future.get(PUBLISH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
       }
@@ -129,11 +138,13 @@ public class DeadLetterPublisher {
         failureCounter.increment();
       }
       Throwable cause = ex.getCause();
+      Throwable reportedFailure = EmptyChecks.isNull(cause) ? ex : cause;
+      String errorSummary = SwallowedExceptionLogger.summary(reportedFailure);
       log.error(
           "DLQ publish failed: sourceTopic={}, workerType={}, error={}",
           sourceTopic,
           workerType,
-          SwallowedExceptionLogger.summary(EmptyChecks.isNull(cause) ? ex : cause));
+          errorSummary);
       throw new IllegalStateException("dead letter publish failed", cause);
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();

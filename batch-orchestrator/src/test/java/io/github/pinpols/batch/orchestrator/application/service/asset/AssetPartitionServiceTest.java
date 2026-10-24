@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.asset;
 
+import io.github.pinpols.batch.orchestrator.domain.param.DataAssetUpsertParam;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -49,11 +50,13 @@ class AssetPartitionServiceTest {
         Instant.parse("2026-06-30T02:00:00Z"),
         "INLINE_JSON",
         "{\"rows\":20}",
-        null);
+        null,
+        700L);
     when(assetPartitionMapper.selectEffectiveJobPartition("t1", "JOB_A", "2026-06-30"))
         .thenReturn(snapshot);
     when(resultVersionQueryService.findLatestByJob("t1", "JOB_A", bizDate))
         .thenReturn(Optional.of(ResultVersionEntity.builder()
+            .id(700L)
             .tenantId("t1")
             .businessKey("job:JOB_A:2026-06-30")
             .versionNo(4)
@@ -64,7 +67,10 @@ class AssetPartitionServiceTest {
     Optional<AssetPartitionSnapshot> found =
         service.findEffectiveJobPartition("t1", "JOB_A", bizDate);
 
-    assertThat(found).contains(snapshot);
+    assertThat(found).isPresent();
+    assertThat(found.orElseThrow()).isSameAs(snapshot);
+    assertThat(found.orElseThrow().resultVersionId()).isEqualTo(700L);
+    assertThat(found.orElseThrow().versionNo()).isEqualTo(snapshot.versionNo());
     verify(resultVersionQueryService, never()).findEffectiveByJob("t1", "JOB_A", bizDate);
   }
 
@@ -84,8 +90,10 @@ class AssetPartitionServiceTest {
         Instant.parse("2026-06-30T02:00:00Z"),
         "INLINE_JSON",
         "{\"rows\":20}",
-        null);
+        null,
+        699L);
     ResultVersionEntity latest = ResultVersionEntity.builder()
+        .id(700L)
         .tenantId("t1")
         .businessKey("job:JOB_A:2026-06-30")
         .versionNo(5)
@@ -104,6 +112,7 @@ class AssetPartitionServiceTest {
 
     assertThat(found).isPresent();
     assertThat(found.get().versionNo()).isEqualTo(5);
+    assertThat(found.orElseThrow().resultVersionId()).isEqualTo(700L);
     assertThat(found.get().jobInstanceId()).isEqualTo(102L);
     assertThat(found.get().payloadJson()).isEqualTo("{\"rows\":30}");
   }
@@ -206,7 +215,7 @@ class AssetPartitionServiceTest {
     service.materializeEffectiveJobPartition(instance, version);
     service.materializeEffectiveJobPartition(instance, version);
 
-    verify(assetPartitionMapper, times(1)).upsertDataAsset("t1", "JOB_A", "JOB", "JOB_A", "JOB_A");
+    verify(assetPartitionMapper, times(1)).upsertDataAsset(DataAssetUpsertParam.builder().tenantId("t1").assetCode("JOB_A").assetType("JOB").displayName("JOB_A").ownerJobCode("JOB_A").build());
     verify(assetPartitionMapper, times(1)).selectDataAssetId("t1", "JOB_A", "JOB");
     verify(assetPartitionMapper, times(2))
         .upsertEffectiveJobPartition(new AssetPartitionMaterializationCommand(
@@ -240,6 +249,6 @@ class AssetPartitionServiceTest {
 
     service.materializeEffectiveJobPartition(instance, version);
 
-    verify(assetPartitionMapper, never()).upsertDataAsset("t1", "JOB_A", "JOB", "JOB_A", "JOB_A");
+    verify(assetPartitionMapper, never()).upsertDataAsset(DataAssetUpsertParam.builder().tenantId("t1").assetCode("JOB_A").assetType("JOB").displayName("JOB_A").ownerJobCode("JOB_A").build());
   }
 }

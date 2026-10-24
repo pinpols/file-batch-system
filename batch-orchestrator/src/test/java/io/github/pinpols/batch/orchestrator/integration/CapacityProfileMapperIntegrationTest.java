@@ -159,8 +159,7 @@ class CapacityProfileMapperIntegrationTest extends AbstractIntegrationTest {
         "2026-05-01T11:00:00Z",
         "2026-05-01T11:00:04Z"); // 4000ms
 
-    long pipelineDefId = insertPipelineDefinition(tenantA, JOB_CODE_A);
-    long piA = insertPipelineInstance(tenantA, pipelineDefId, JOB_CODE_A, fileA2, a1);
+    long piA = insertPipelineInstance(tenantA, JOB_CODE_A, fileA2, a1);
     insertPipelineProgress(tenantA, piA, 750L);
 
     insertJobTask(tenantA, a1, WORKER_A, "SUCCESS", "2026-05-01T10:00:00Z", "2026-05-01T10:00:10Z");
@@ -182,23 +181,26 @@ class CapacityProfileMapperIntegrationTest extends AbstractIntegrationTest {
   }
 
   private long insertJobDefinition(String tenantId, String jobCode) {
+    String insertJobDefinitionSql = """
+        insert into batch.job_definition (
+          tenant_id, job_code, job_name, job_type, schedule_type, timezone
+        ) values (?, ?, ?, 'GENERAL', 'MANUAL', 'Asia/Shanghai') returning id
+        """;
     Long id = jdbcTemplate.queryForObject(
-        "insert into batch.job_definition (tenant_id, job_code, job_name, job_type,"
-            + " schedule_type, timezone) values (?, ?, ?, 'GENERAL', 'MANUAL',"
-            + " 'Asia/Shanghai') returning id",
-        Long.class,
-        tenantId,
-        jobCode,
-        jobCode + "-name");
+        insertJobDefinitionSql, Long.class, tenantId, jobCode, jobCode + "-name");
     assertThat(id).isNotNull();
     return id;
   }
 
   private long insertFileRecord(String tenantId, String tag, long sizeBytes) {
+    String insertFileRecordSql = """
+        insert into batch.file_record (
+          tenant_id, file_category, file_name, file_format_type, file_size_bytes,
+          storage_type, storage_path, source_type, file_status
+        ) values (?, 'INPUT', ?, 'DELIMITED', ?, 'LOCAL', ?, 'UPLOAD', 'RECEIVED') returning id
+        """;
     Long id = jdbcTemplate.queryForObject(
-        "insert into batch.file_record (tenant_id, file_category, file_name, file_format_type,"
-            + " file_size_bytes, storage_type, storage_path, source_type, file_status) values"
-            + " (?, 'INPUT', ?, 'DELIMITED', ?, 'LOCAL', ?, 'UPLOAD', 'RECEIVED') returning id",
+        insertFileRecordSql,
         Long.class,
         tenantId,
         "file-" + tag,
@@ -219,11 +221,15 @@ class CapacityProfileMapperIntegrationTest extends AbstractIntegrationTest {
     // trigger_type=MANUAL 满足 ck_job_instance_trigger_source（trigger_request_id 允许 NULL）。
     // instance_no/dedup_key 唯一化;related_file_id 显式 ::bigint 以便可为 NULL。
     String unique = tenantId + ":" + jobCode + ":" + status + ":" + System.nanoTime();
+    final String insertJobInstanceSql = """
+    insert into batch.job_instance (
+    tenant_id, job_definition_id, job_code, instance_no, biz_date, trigger_type,
+    instance_status, worker_group, dedup_key, related_file_id, started_at, finished_at
+    ) values (?, ?, ?, ?, ?::date, 'MANUAL', ?, 'wg', ?, ?::bigint,
+    ?::timestamptz, ?::timestamptz) returning id
+    """;
     Long id = jdbcTemplate.queryForObject(
-        "insert into batch.job_instance (tenant_id, job_definition_id, job_code, instance_no,"
-            + " biz_date, trigger_type, instance_status, worker_group, dedup_key,"
-            + " related_file_id, started_at, finished_at) values (?, ?, ?, ?, ?::date,"
-            + " 'MANUAL', ?, 'wg', ?, ?::bigint, ?::timestamptz, ?::timestamptz) returning id",
+        insertJobInstanceSql,
         Long.class,
         tenantId,
         jobDefId,
@@ -239,41 +245,27 @@ class CapacityProfileMapperIntegrationTest extends AbstractIntegrationTest {
     return id;
   }
 
-  private long insertPipelineDefinition(String tenantId, String jobCode) {
-    Long id = jdbcTemplate.queryForObject(
-        "insert into batch.pipeline_definition (tenant_id, job_code, pipeline_name,"
-            + " pipeline_type) values (?, ?, ?, 'IMPORT') returning id",
-        Long.class,
-        tenantId,
-        jobCode,
-        jobCode + "-pipeline");
-    assertThat(id).isNotNull();
-    return id;
-  }
-
   private long insertPipelineInstance(
-      String tenantId, long pipelineDefId, String jobCode, long fileId, long relatedJobInstanceId) {
+      String tenantId, String jobCode, long fileId, long relatedJobInstanceId) {
+    final String insertPipelineInstanceSql = """
+    insert into batch.pipeline_instance (
+    tenant_id, job_code, pipeline_type, system_pipeline_code,
+    system_pipeline_version, file_id, related_job_instance_id, run_status
+    ) values (?, ?, 'IMPORT', 'IMPORT', 1, ?, ?, 'SUCCESS') returning id
+    """;
     Long id = jdbcTemplate.queryForObject(
-        "insert into batch.pipeline_instance (tenant_id, pipeline_definition_id, job_code,"
-            + " pipeline_type, file_id, related_job_instance_id, run_status) values (?, ?, ?,"
-            + " 'IMPORT', ?, ?, 'SUCCESS') returning id",
-        Long.class,
-        tenantId,
-        pipelineDefId,
-        jobCode,
-        fileId,
-        relatedJobInstanceId);
+        insertPipelineInstanceSql, Long.class, tenantId, jobCode, fileId, relatedJobInstanceId);
     assertThat(id).isNotNull();
     return id;
   }
 
   private void insertPipelineProgress(String tenantId, long pipelineInstanceId, long processed) {
-    jdbcTemplate.update(
-        "insert into batch.pipeline_progress (tenant_id, pipeline_instance_id, stage,"
-            + " processed_count) values (?, ?, 'LOAD', ?)",
-        tenantId,
-        pipelineInstanceId,
-        processed);
+    String insertPipelineProgressSql = """
+        insert into batch.pipeline_progress (
+          tenant_id, pipeline_instance_id, stage, processed_count
+        ) values (?, ?, 'LOAD', ?)
+        """;
+    jdbcTemplate.update(insertPipelineProgressSql, tenantId, pipelineInstanceId, processed);
   }
 
   private void insertJobTask(
@@ -284,10 +276,17 @@ class CapacityProfileMapperIntegrationTest extends AbstractIntegrationTest {
       String startedAt,
       String finishedAt) {
     // job_partition_id 留 NULL（V173 已解 job_task→job_instance FK，无需真分区）。
+    final String insertJobTaskSql = """
+    insert into batch.job_task (
+    tenant_id, job_instance_id, job_instance_biz_date, task_status,
+    assigned_worker_code, started_at, finished_at
+    ) values (?, ?, (select biz_date from batch.job_instance where tenant_id=? and id=?),
+    ?, ?, ?::timestamptz, ?::timestamptz)
+    """;
     jdbcTemplate.update(
-        "insert into batch.job_task (tenant_id, job_instance_id, task_status,"
-            + " assigned_worker_code, started_at, finished_at) values (?, ?, ?, ?, ?::timestamptz,"
-            + " ?::timestamptz)",
+        insertJobTaskSql,
+        tenantId,
+        jobInstanceId,
         tenantId,
         jobInstanceId,
         status,

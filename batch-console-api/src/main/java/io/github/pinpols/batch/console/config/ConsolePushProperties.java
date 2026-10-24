@@ -41,7 +41,7 @@ public class ConsolePushProperties {
   /** 单条推送 TTL(秒),浏览器推送服务超时未送达则丢弃。 */
   private int ttlSeconds = 12 * 3600;
 
-  /** 任务终态推送(PoC)子开关。 */
+  /** Job 终态持久设备投递子开关。 */
   private final JobNotify jobNotify = new JobNotify();
 
   /** 审批结果推送子开关。 */
@@ -55,9 +55,6 @@ public class ConsolePushProperties {
 
     /** 轮询间隔(毫秒)。 */
     private long pollIntervalMillis = 30_000L;
-
-    /** 每次扫描"最近 N 分钟"内终态化的实例;窗口过大会重复扫历史。 */
-    private int lookbackMinutes = 10;
 
     /** 单次最多处理实例数,避免突发风暴。 */
     private int batchSize = 50;

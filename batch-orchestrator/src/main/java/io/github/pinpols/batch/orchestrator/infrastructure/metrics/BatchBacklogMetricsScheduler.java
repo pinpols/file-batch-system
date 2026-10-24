@@ -12,6 +12,7 @@ import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
@@ -76,11 +77,15 @@ public class BatchBacklogMetricsScheduler {
     }
     try {
       outboxPending.set(outboxEventMapper.countByStatuses(OUTBOX_PENDING_STATUSES));
-      outboxStalePublishing.set(outboxEventMapper.countStalePublishing(
-          OutboxPublishStatus.PUBLISHING.code(),
-          governance.outbox().getPublishingTimeoutSeconds()));
-      outboxDuplicateEventKeys.set(outboxEventMapper.countDuplicateEventKeysSince(
-          BatchDateTimeSupport.utcNow().minus(duplicateDetectionWindow())));
+      String publishingStatusCode = OutboxPublishStatus.PUBLISHING.code();
+      long publishingTimeoutSeconds = governance.outbox().getPublishingTimeoutSeconds();
+      long stalePublishingCount =
+          outboxEventMapper.countStalePublishing(publishingStatusCode, publishingTimeoutSeconds);
+      outboxStalePublishing.set(stalePublishingCount);
+      Instant duplicateDetectionSince =
+          BatchDateTimeSupport.utcNow().minus(duplicateDetectionWindow());
+      outboxDuplicateEventKeys.set(
+          outboxEventMapper.countDuplicateEventKeysSince(duplicateDetectionSince));
       dlqPending.set(deadLetterTaskMapper.countByReplayStatuses(DLQ_PENDING_STATUSES));
     } catch (RuntimeException ex) {
       log.warn("batch backlog metrics sampling failed: {}", SwallowedExceptionLogger.summary(ex));
@@ -88,6 +93,8 @@ public class BatchBacklogMetricsScheduler {
   }
 
   private Duration duplicateDetectionWindow() {
-    return Duration.ofHours(Math.max(1, backlogMetricsProperties.getOutboxDuplicateWindowHours()));
+    long configuredWindowHours = backlogMetricsProperties.getOutboxDuplicateWindowHours();
+    long positiveWindowHours = Math.max(1, configuredWindowHours);
+    return Duration.ofHours(positiveWindowHours);
   }
 }

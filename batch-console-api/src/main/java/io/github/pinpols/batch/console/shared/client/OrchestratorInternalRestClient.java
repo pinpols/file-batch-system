@@ -1,16 +1,24 @@
 package io.github.pinpols.batch.console.shared.client;
 
+import lombok.Builder;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.i18n.AcceptLanguageRequestInterceptor;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.config.ConsoleOrchestratorClientProperties;
 import java.time.Duration;
 import java.util.function.Supplier;
+import lombok.Builder;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
 import org.springframework.boot.http.client.HttpClientSettings;
 import org.springframework.core.env.Environment;
+import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.function.SingletonSupplier;
 import org.springframework.web.client.RestClient;
@@ -65,15 +73,19 @@ public class OrchestratorInternalRestClient {
         "batch.console.orchestrator.base-url");
     Guard.requireText(baseUrl, "orchestrator base url is not configured");
     String secret = batchSecurityProperties.getInternalSecret();
+    HttpClientSettings httpClientSettings = HttpClientSettings.defaults();
+    Duration connectTimeout =
+        Duration.ofMillis(orchestratorClientProperties.getConnectTimeoutMillis());
+    httpClientSettings = httpClientSettings.withConnectTimeout(connectTimeout);
+    Duration readTimeout = Duration.ofMillis(orchestratorClientProperties.getReadTimeoutMillis());
+    httpClientSettings = httpClientSettings.withReadTimeout(readTimeout);
+    ClientHttpRequestFactory requestFactory =
+        ClientHttpRequestFactoryBuilder.detect().build(httpClientSettings);
     RestClient.Builder builder = restClientBuilderProvider
         .getObject()
         .baseUrl(baseUrl)
-        .requestFactory(ClientHttpRequestFactoryBuilder.detect()
-            .build(HttpClientSettings.defaults()
-                .withConnectTimeout(
-                    Duration.ofMillis(orchestratorClientProperties.getConnectTimeoutMillis()))
-                .withReadTimeout(
-                    Duration.ofMillis(orchestratorClientProperties.getReadTimeoutMillis()))));
+        .requestInterceptor(new AcceptLanguageRequestInterceptor())
+        .requestFactory(requestFactory);
     if (Texts.hasText(secret)) {
       builder = builder.defaultHeader(X_INTERNAL_SECRET_HEADER, secret);
     }
@@ -88,38 +100,40 @@ public class OrchestratorInternalRestClient {
         .body(responseType);
   }
 
-  public void approveApproval(
+  public ApprovalDecision approveApproval(
       String tenantId,
       String approvalNo,
       String operatorId,
       String reason,
       String requestId,
       String traceId) {
-    client()
+    ApprovalDecisionResponse response = client()
         .post()
         .uri("/internal/approvals/{approvalNo}/approve", approvalNo)
         .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId)
         .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId)
         .body(new ApprovalActionRequest(tenantId, operatorId, reason))
         .retrieve()
-        .toBodilessEntity();
+        .body(ApprovalDecisionResponse.class);
+    return requireDecision(response, tenantId, approvalNo);
   }
 
-  public void rejectApproval(
+  public ApprovalDecision rejectApproval(
       String tenantId,
       String approvalNo,
       String operatorId,
       String reason,
       String requestId,
       String traceId) {
-    client()
+    ApprovalDecisionResponse response = client()
         .post()
         .uri("/internal/approvals/{approvalNo}/reject", approvalNo)
         .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId)
         .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId)
         .body(new ApprovalActionRequest(tenantId, operatorId, reason))
         .retrieve()
-        .toBodilessEntity();
+        .body(ApprovalDecisionResponse.class);
+    return requireDecision(response, tenantId, approvalNo);
   }
 
   public void markApprovalExecuted(String tenantId, String approvalNo) {
@@ -145,7 +159,67 @@ public class OrchestratorInternalRestClient {
         .toBodilessEntity();
   }
 
+  public void rejectWorkflowNodeReplayOperation(Long operationId, String tenantId) {
+    client()
+        .post()
+        .uri("/internal/compensations/workflow-node/replay-operations/{id}/reject", operationId)
+        .body(new ApprovalTenantRequest(tenantId))
+        .retrieve()
+        .toBodilessEntity();
+  }
+
+  public void approveWorkflowRunReplayOperation(
+      Long operationId, String tenantId, String approver) {
+    client()
+        .post()
+        .uri("/internal/orchestrator/workflow-replay/operations/{id}/approve", operationId)
+        .body(new WorkflowRunReplayApprovalRequest(tenantId, approver))
+        .retrieve()
+        .toBodilessEntity();
+  }
+
+  public void rejectWorkflowRunReplayOperation(Long operationId, String tenantId) {
+    client()
+        .post()
+        .uri("/internal/orchestrator/workflow-replay/operations/{id}/reject", operationId)
+        .body(new WorkflowRunReplayRejectRequest(tenantId))
+        .retrieve()
+        .toBodilessEntity();
+  }
+
+  private ApprovalDecision requireDecision(
+      ApprovalDecisionResponse response, String tenantId, String approvalNo) {
+    ApprovalDecision decision = response == null ? null : response.record();
+    if (decision == null || !Texts.hasText(decision.approvalStatus())) {
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.approval.empty_response");
+    }
+    if (!tenantId.equals(decision.tenantId()) || !approvalNo.equals(decision.approvalNo())) {
+      throw BizException.of(ResultCode.FORBIDDEN, "error.approval.execution_mismatch");
+    }
+    return decision;
+  }
+
+  /** 远端返回的实际决策必须保留，HTTP 200 不代表本次决策赢得了 CAS。 */
+  @Builder
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  public record ApprovalDecision(
+      String tenantId,
+      String approvalNo,
+      String approvalStatus,
+      String actionType,
+      String targetType,
+      String targetId,
+      String payloadJson,
+      String approverId,
+      String sourceIdempotencyKey) {}
+
+  private record ApprovalDecisionResponse(ApprovalDecision record) {}
+
   private record ApprovalActionRequest(String tenantId, String operatorId, String reason) {}
 
   private record ApprovalTenantRequest(String tenantId) {}
+
+  private record WorkflowRunReplayApprovalRequest(String tenantId, String approver) {}
+
+  private record WorkflowRunReplayRejectRequest(String tenantId) {}
 }

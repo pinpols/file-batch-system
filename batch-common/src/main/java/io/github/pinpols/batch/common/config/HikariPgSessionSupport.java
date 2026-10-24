@@ -53,7 +53,9 @@ public final class HikariPgSessionSupport {
       return;
     }
     if (props.isMergeConnectionInitSql() && Texts.hasText(cfg.getConnectionInitSql())) {
-      cfg.setConnectionInitSql(sessionSql + " " + cfg.getConnectionInitSql().trim());
+      String existingConnectionInitSql = cfg.getConnectionInitSql().trim();
+      String mergedConnectionInitSql = sessionSql + " " + existingConnectionInitSql;
+      cfg.setConnectionInitSql(mergedConnectionInitSql);
     } else {
       cfg.setConnectionInitSql(sessionSql);
     }
@@ -75,14 +77,16 @@ public final class HikariPgSessionSupport {
           .append("; ");
     }
     if (timeouts.getWorkMem() != null && timeouts.getWorkMem().toBytes() > 0L) {
-      sb.append("SET work_mem TO '")
-          .append(toPgMemory(timeouts.getWorkMem().toBytes()))
-          .append("'; ");
+      long workMemBytes = timeouts.getWorkMem().toBytes();
+      String postgresWorkMem = toPgMemory(workMemBytes);
+      sb.append("SET work_mem TO '").append(postgresWorkMem).append("'; ");
     }
     if (timeouts.getMaintenanceWorkMem() != null
         && timeouts.getMaintenanceWorkMem().toBytes() > 0L) {
+      long maintenanceWorkMemBytes = timeouts.getMaintenanceWorkMem().toBytes();
+      String postgresMaintenanceWorkMem = toPgMemory(maintenanceWorkMemBytes);
       sb.append("SET maintenance_work_mem TO '")
-          .append(toPgMemory(timeouts.getMaintenanceWorkMem().toBytes()))
+          .append(postgresMaintenanceWorkMem)
           .append("'; ");
     }
     return sb.toString().trim();

@@ -1,5 +1,5 @@
 -- =========================================================
--- V181 - Alert escalation notify watermark (close the last-mile loop)
+-- V181：增加告警升级通知水位，闭合通知处理链路。
 -- 说明：
 -- 1) V176 增加 escalation_tier/escalated_at 后，告警超过确认时限仍未确认时，运维扫描会通过日志和指标提升可见性。
 --    但该升级链路不会主动通知用户。本字段使控制台通知器能够在每次级别提升时仅发送一次站内 Webhook，
@@ -18,6 +18,7 @@ ALTER TABLE batch.alert_event
 -- 通知扫描条件：status='OPEN' AND escalation_tier > escalation_notified_tier。
 -- 针对 OPEN 记录创建部分索引，避免告警表增大后周期性通知扫描成本持续上升；
 -- 大多数告警会进入 ACKED/CLOSED 状态并从部分索引中排除。
+
 CREATE INDEX IF NOT EXISTS idx_alert_event_escalation_notify
     ON batch.alert_event (escalation_tier, escalation_notified_tier)
     WHERE status = 'OPEN';

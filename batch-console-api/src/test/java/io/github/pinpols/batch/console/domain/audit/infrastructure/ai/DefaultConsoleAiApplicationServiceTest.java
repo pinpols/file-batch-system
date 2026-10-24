@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiTurnStartInput;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -35,6 +37,7 @@ import io.github.pinpols.batch.console.domain.audit.support.ConsoleAiAuditServic
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -771,8 +774,13 @@ class DefaultConsoleAiApplicationServiceTest {
             new ConsoleAiClients.ProviderClient("openai", mock(ChatClient.class)), null));
     ConsoleAiConversationService.StartedTurn turn =
         new ConsoleAiConversationService.StartedTurn("conversation-1", 1L, List.of());
-    when(conversationService.beginTurn(
-            anyString(), anyString(), any(), anyString(), anyString(), isNull(), isNull()))
+    when(conversationService.beginTurn(org.mockito.ArgumentMatchers.argThat((ConsoleAiTurnStartInput input) -> input != null
+        && input.tenantId() != null
+        && input.ownerUserId() != null
+        && input.contextVersion() != null
+        && input.prompt() != null
+        && input.clientTurnId() == null
+        && input.attachmentIds() == null)))
         .thenReturn(turn);
     BizException budgetDenied =
         BizException.of(ResultCode.RATE_LIMITED, "error.common.rate_limited_detail");
@@ -809,13 +817,13 @@ class DefaultConsoleAiApplicationServiceTest {
   }
 
   private double tokenCount(String type) {
-    io.micrometer.core.instrument.Counter counter =
+    Counter counter =
         meterRegistry.find("batch.console.ai.tokens.total").tag("type", type).counter();
     return counter == null ? 0.0 : counter.count();
   }
 
   private double decisionCount(String decision) {
-    io.micrometer.core.instrument.Counter counter = meterRegistry
+    Counter counter = meterRegistry
         .find("batch.console.ai.requests.total")
         .tag("decision", decision)
         .counter();

@@ -19,6 +19,7 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -95,7 +96,7 @@ class ConsoleSelfServiceJobControllerTest {
                       "tenantId":"t1",
                       "jobCode":"import-job-001",
                       "bizDate":"2026-01-01",
-                      "compensationType":"FULL",
+                      "compensationType":"JOB",
                       "targetInstanceNo":"INS-001",
                       "reason":"Missing records"
                     }
@@ -103,5 +104,25 @@ class ConsoleSelfServiceJobControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
         .andExpect(jsonPath("$.data").value("APR-20260101-002"));
+  }
+
+  @Test
+  @DisplayName("补偿申请缺少类型或目标实例时在提交审批前拒绝")
+  void shouldRejectCompensationRequestWithoutTypeOrTarget() throws Exception {
+    mockMvc
+        .perform(post("/api/console/self-service/jobs/compensation-request")
+            .header("Idempotency-Key", "idem-3")
+            .contentType(APPLICATION_JSON)
+            .content("""
+                    {
+                      "tenantId":"t1",
+                      "jobCode":"import-job-001",
+                      "bizDate":"2026-01-01",
+                      "reason":"Missing target"
+                    }
+                    """))
+        .andExpect(status().isBadRequest());
+
+    Mockito.verifyNoInteractions(selfServiceJobService);
   }
 }

@@ -12,6 +12,7 @@ import org.apache.ibatis.type.JdbcType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 
 @DisplayName("JSON 字符串类型处理器,覆盖按列名与列索引读取以及非空参数写入的包装行为")
 class JsonbStringTypeHandlerTest {
@@ -62,7 +63,7 @@ class JsonbStringTypeHandlerTest {
     handler.setNonNullParameter(ps, 3, value, JdbcType.OTHER);
 
     ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-    verify(ps).setString(org.mockito.Mockito.eq(3), captor.capture());
+    verify(ps).setString(Mockito.eq(3), captor.capture());
     assertThat(captor.getValue()).isEqualTo("{\"a\":\"b\"}");
   }
 }

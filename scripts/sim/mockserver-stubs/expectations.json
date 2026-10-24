@@ -1,29 +1,206 @@
 [
   {
-    "httpRequest": { "method": "POST", "path": "/tb/callback" },
+    "httpRequest": {
+      "method": "POST",
+      "path": "/tb/callback"
+    },
     "httpResponse": {
       "statusCode": 200,
-      "headers": { "Content-Type": ["application/json"] },
+      "headers": {
+        "Content-Type": [
+          "application/json"
+        ]
+      },
       "body": "{\"received\":true,\"tenant\":\"tb\",\"endpoint\":\"callback\"}"
     },
-    "times": { "unlimited": true }
+    "times": {
+      "unlimited": true
+    },
+    "id": "85b90636-0241-5f68-b7f7-7f6b7fdbdd9d"
   },
   {
-    "httpRequest": { "method": "POST", "path": "/tb/ingest" },
+    "httpRequest": {
+      "method": "POST",
+      "path": "/tb/ingest"
+    },
     "httpResponse": {
       "statusCode": 200,
-      "headers": { "Content-Type": ["application/json"] },
+      "headers": {
+        "Content-Type": [
+          "application/json"
+        ]
+      },
       "body": "{\"received\":true,\"tenant\":\"tb\",\"endpoint\":\"ingest\"}"
     },
-    "times": { "unlimited": true }
+    "times": {
+      "unlimited": true
+    },
+    "id": "ab13ab39-23a1-5def-bf9d-5c4d74a67dc6"
   },
   {
-    "httpRequest": { "method": "POST", "path": "/tc/ingest" },
+    "httpRequest": {
+      "method": "POST",
+      "path": "/tc/ingest"
+    },
     "httpResponse": {
       "statusCode": 200,
-      "headers": { "Content-Type": ["application/json"] },
+      "headers": {
+        "Content-Type": [
+          "application/json"
+        ]
+      },
       "body": "{\"received\":true,\"tenant\":\"tc\",\"endpoint\":\"risk-ingest\"}"
     },
-    "times": { "unlimited": true }
+    "times": {
+      "unlimited": true
+    },
+    "id": "0cbf7866-1eef-5d85-94d1-7e4cc577beeb"
+  },
+  {
+    "httpRequest": {
+      "method": "POST",
+      "path": "/tb/fail"
+    },
+    "httpResponse": {
+      "statusCode": 500,
+      "headers": {
+        "Content-Type": [
+          "application/json"
+        ]
+      },
+      "body": "{\"error\":\"sim-stage5b-business-failure\"}"
+    },
+    "times": {
+      "unlimited": true
+    },
+    "id": "b0880efd-7f03-53b7-a1b9-ebcffb752327"
+  },
+  {
+    "httpRequest": {
+      "method": "GET",
+      "path": "/tb/callback"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": [
+          "application/json"
+        ]
+      },
+      "body": "{\"healthy\":true}"
+    },
+    "times": {
+      "unlimited": true
+    },
+    "id": "a021c656-e1c7-5b37-b404-060dc8bc3dd6"
+  },
+  {
+    "httpRequest": {
+      "method": "GET",
+      "path": "/tb/ingest"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": [
+          "application/json"
+        ]
+      },
+      "body": "{\"healthy\":true}"
+    },
+    "times": {
+      "unlimited": true
+    },
+    "id": "c5b96312-392a-5ce1-8623-59adb0e4da6b"
+  },
+  {
+    "httpRequest": {
+      "method": "GET",
+      "path": "/tc/ingest"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": [
+          "application/json"
+        ]
+      },
+      "body": "{\"healthy\":true}"
+    },
+    "times": {
+      "unlimited": true
+    },
+    "id": "e0b2d5bf-207d-5a24-bae1-0e0e028c831d"
+  },
+  {
+    "httpRequest": {
+      "method": "GET",
+      "path": "/tb/fail"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": [
+          "application/json"
+        ]
+      },
+      "body": "{\"healthy\":true}"
+    },
+    "times": {
+      "unlimited": true
+    },
+    "id": "c50a5d41-ae12-59ed-a881-539c8392d79d"
+  },
+  {
+    "id": "d98207c9-83ba-5506-aa0e-ef127d480ea4",
+    "httpRequest": {
+      "method": "HEAD",
+      "path": "/tb/callback"
+    },
+    "httpResponse": {
+      "statusCode": 200
+    },
+    "times": {
+      "unlimited": true
+    }
+  },
+  {
+    "id": "f9fd82ea-0ac6-5522-afda-a5dd6ff4659b",
+    "httpRequest": {
+      "method": "HEAD",
+      "path": "/tb/ingest"
+    },
+    "httpResponse": {
+      "statusCode": 200
+    },
+    "times": {
+      "unlimited": true
+    }
+  },
+  {
+    "id": "76376569-e8ba-5ff2-8188-fcd5dca772ed",
+    "httpRequest": {
+      "method": "HEAD",
+      "path": "/tc/ingest"
+    },
+    "httpResponse": {
+      "statusCode": 200
+    },
+    "times": {
+      "unlimited": true
+    }
+  },
+  {
+    "id": "24e3fe09-d644-5a61-a299-b033edad6e71",
+    "httpRequest": {
+      "method": "HEAD",
+      "path": "/tb/fail"
+    },
+    "httpResponse": {
+      "statusCode": 200
+    },
+    "times": {
+      "unlimited": true
+    }
   }
 ]

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：错误码字典同步。
+# 用法：在仓库根目录执行 python3 scripts/codegen/gen-error-codes-dict.py；参数与前置环境见下方说明及所属 README。
 """
 从 scripts/codegen/error-codes.yaml 生成 ResultCode.java 与 docs/dict/error-codes.md。
 

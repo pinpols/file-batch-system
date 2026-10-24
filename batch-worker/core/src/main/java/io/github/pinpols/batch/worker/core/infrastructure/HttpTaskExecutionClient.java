@@ -125,7 +125,8 @@ public class HttpTaskExecutionClient
     List<TaskClaimResult> out = new ArrayList<>(items.size());
     for (int i = 0; i < items.size(); i += claimBatchMaxItems) {
       int end = Math.min(i + claimBatchMaxItems, items.size());
-      out.addAll(claimBatchChunkHttpOrFallback(items.subList(i, end)));
+      List<TaskClaimItem> chunk = items.subList(i, end);
+      out.addAll(claimBatchChunkHttpOrFallback(chunk));
     }
     return out;
   }
@@ -184,23 +185,21 @@ public class HttpTaskExecutionClient
 
   private List<TaskClaimResult> mapClaimChunkOrFallback(
       List<TaskClaimItem> chunk, ClaimBatchHttpResponse response) {
-    if (response == null
-        || response.results() == null
-        || response.results().size() != chunk.size()) {
+    List<ClaimBatchHttpResult> responseResults = EmptyChecks.isNull(response) ? null : response.results();
+    if (EmptyChecks.isNull(responseResults) || responseResults.size() != chunk.size()) {
       log.warn(
           "claim-batch response mismatch: chunk size {}, response results {}",
           chunk.size(),
-          response == null || response.results() == null
-              ? null
-              : response.results().size());
+          EmptyChecks.isNull(responseResults) ? null : responseResults.size());
       return fallbackClaimChunk(chunk);
     }
     List<TaskClaimResult> out = new ArrayList<>(chunk.size());
     for (int i = 0; i < chunk.size(); i++) {
-      ClaimBatchHttpResult row = response.results().get(i);
+      ClaimBatchHttpResult row = responseResults.get(i);
       Long taskId = chunk.get(i).taskId();
       boolean claimed = row != null && row.claimed();
-      out.add(new TaskClaimResult(taskId, claimed, claimed ? row.config() : null));
+      EffectiveTaskConfig claimedConfig = claimed ? row.config() : null;
+      out.add(new TaskClaimResult(taskId, claimed, claimedConfig));
     }
     return out;
   }
@@ -218,20 +217,55 @@ public class HttpTaskExecutionClient
   @Override
   public boolean renewLease(
       String tenantId, Long taskId, String workerId, String partitionInvocationId) {
+    TaskLeaseRenewItem renewItem =
+        new TaskLeaseRenewItem(tenantId, taskId, workerId, partitionInvocationId);
+    TaskLeaseRenewResult renewResult = renewLeaseWithResult(renewItem);
+    return renewResult.renewed();
+  }
+
+  @Override
+  public boolean markNonIdempotentExecutionStarted(
+      String tenantId, Long taskId, String workerId, String partitionInvocationId) {
     String traceId = currentTraceId();
     String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
-    return executeClaimLike(
-            "renew",
-            () -> client()
-                .post()
-                .uri("/internal/tasks/{taskId}/renew", taskId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
-                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
-                .body(new ClaimRequest(tenantId, workerId, partitionInvocationId))
-                .retrieve()
-                .toBodilessEntity())
-        .success();
+    try {
+      client()
+          .post()
+          .uri("/internal/tasks/{taskId}/non-idempotent-started", taskId)
+          .contentType(MediaType.APPLICATION_JSON)
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+          .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
+          .body(new ClaimRequest(tenantId, workerId, partitionInvocationId))
+          .retrieve()
+          .toBodilessEntity();
+      return true;
+    } catch (HttpClientErrorException ex) {
+      log.warn(
+          "non-idempotent execution start rejected: tenantId={}, taskId={}, status={}",
+          tenantId,
+          taskId,
+          ex.getStatusCode());
+      return false;
+    }
+  }
+
+  private TaskLeaseRenewResult renewLeaseWithResult(TaskLeaseRenewItem item) {
+    String traceId = currentTraceId();
+    String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+    ClaimOutcome<TaskHeartbeatHttpResponse> outcome = executeClaimLike(
+        "renew",
+        () -> client()
+            .post()
+            .uri("/internal/tasks/{taskId}/renew", item.taskId())
+            .contentType(MediaType.APPLICATION_JSON)
+            .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, item.tenantId())
+            .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
+            .body(new ClaimRequest(item.tenantId(), item.workerId(), item.partitionInvocationId()))
+            .retrieve()
+            .body(TaskHeartbeatHttpResponse.class));
+    TaskHeartbeatHttpResponse heartbeat = outcome.body();
+    boolean cancelRequested = EmptyChecks.isNotNull(heartbeat) && heartbeat.cancelRequested();
+    return new TaskLeaseRenewResult(item.taskId(), outcome.success(), cancelRequested);
   }
 
   @Override
@@ -303,20 +337,17 @@ public class HttpTaskExecutionClient
 
   private Map<Long, TaskLeaseRenewResult> mapChunkOrFallback(
       List<TaskLeaseRenewItem> chunk, BatchRenewHttpResponse response) {
-    if (response == null
-        || response.results() == null
-        || response.results().size() != chunk.size()) {
+    List<BatchRenewHttpResult> responseResults = EmptyChecks.isNull(response) ? null : response.results();
+    if (EmptyChecks.isNull(responseResults) || responseResults.size() != chunk.size()) {
       log.warn(
           "renew-batch response mismatch: chunk size {}, response results {}",
           chunk.size(),
-          response == null || response.results() == null
-              ? null
-              : response.results().size());
+          EmptyChecks.isNull(responseResults) ? null : responseResults.size());
       return fallbackRenewChunk(chunk);
     }
     Map<Long, TaskLeaseRenewResult> m = new LinkedHashMap<>();
     for (int i = 0; i < chunk.size(); i++) {
-      BatchRenewHttpResult row = response.results().get(i);
+      BatchRenewHttpResult row = responseResults.get(i);
       Long taskId = chunk.get(i).taskId();
       boolean renewed = row != null && row.renewed();
       boolean cancelRequested = row != null && Boolean.TRUE.equals(row.cancelRequested());
@@ -328,9 +359,7 @@ public class HttpTaskExecutionClient
   private Map<Long, TaskLeaseRenewResult> fallbackRenewChunk(List<TaskLeaseRenewItem> chunk) {
     Map<Long, TaskLeaseRenewResult> m = new LinkedHashMap<>();
     for (TaskLeaseRenewItem item : chunk) {
-      boolean ok =
-          renewLease(item.tenantId(), item.taskId(), item.workerId(), item.partitionInvocationId());
-      m.put(item.taskId(), new TaskLeaseRenewResult(item.taskId(), ok, false));
+      m.put(item.taskId(), renewLeaseWithResult(item));
     }
     return m;
   }
@@ -364,7 +393,9 @@ public class HttpTaskExecutionClient
       submitReportOverHttp(report);
     } catch (RuntimeException rex) {
       WorkerReportOutboxCoordinator coordinator = reportOutboxCoordinator.getIfAvailable();
-      if (coordinator != null && coordinator.enqueue(report)) {
+      boolean reportWasDeferredToOutbox =
+          EmptyChecks.isNotNull(coordinator) && coordinator.enqueue(report);
+      if (reportWasDeferredToOutbox) {
         outcome = "deferred_outbox";
       } else {
         outcome = "dropped";
@@ -549,7 +580,10 @@ public class HttpTaskExecutionClient
     }
 
     RetryState advance() {
-      return new RetryState(attempt + 1, max, Math.min(cap, backoff * 2), cap);
+      int nextAttempt = attempt + 1;
+      long doubledBackoff = backoff * 2;
+      long nextBackoff = Math.min(cap, doubledBackoff);
+      return new RetryState(nextAttempt, max, nextBackoff, cap);
     }
   }
 
@@ -602,9 +636,10 @@ public class HttpTaskExecutionClient
     synchronized (this) {
       current = this.restClients.get();
       if (current == null) {
-        HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
-            .build();
+        HttpClient.Builder httpClientBuilder = HttpClient.newBuilder();
+        long connectTimeoutMillis = properties.getConnectTimeoutMillis();
+        Duration connectTimeout = Duration.ofMillis(connectTimeoutMillis);
+        HttpClient httpClient = httpClientBuilder.connectTimeout(connectTimeout).build();
         current = resolveBaseUrls().stream()
             .map(baseUrl -> buildClient(baseUrl, httpClient))
             .toList();
@@ -617,7 +652,9 @@ public class HttpTaskExecutionClient
 
   private RestClient buildClient(String baseUrl, HttpClient httpClient) {
     JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
-    factory.setReadTimeout(Duration.ofMillis(properties.getReadTimeoutMillis()));
+    long readTimeoutMillis = properties.getReadTimeoutMillis();
+    Duration readTimeout = Duration.ofMillis(readTimeoutMillis);
+    factory.setReadTimeout(readTimeout);
     return restClientBuilderProvider
         .getObject()
         .baseUrl(baseUrl)
@@ -675,6 +712,8 @@ public class HttpTaskExecutionClient
   private record BatchRenewHttpResponse(List<BatchRenewHttpResult> results) {}
 
   private record BatchRenewHttpResult(Long taskId, boolean renewed, Boolean cancelRequested) {}
+
+  private record TaskHeartbeatHttpResponse(boolean cancelRequested) {}
 
   // ── ADR-046 P2 切片 2.3:claim-batch 线上报文(worker-local,与 orchestrator 端点契约对齐)──
   private record ClaimBatchHttpRequest(List<ClaimBatchHttpItem> items) {}

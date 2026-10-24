@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.console.domain.observability.service;
 
+import io.github.pinpols.batch.console.domain.observability.param.ConsoleSystemParameterUpsertParam;
+
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -94,7 +97,13 @@ class ConsoleSystemParameterServiceTest {
   void shouldUpsertAndClearCache() {
     service.upsert("t1", "batch.size", "300", "batch size config", "admin");
 
-    verify(repository).upsert("t1", "batch.size", "300", "batch size config", "admin");
+    verify(repository).upsert(ConsoleSystemParameterUpsertParam.builder()
+        .tenantId("t1")
+        .paramKey("batch.size")
+        .paramValue("300")
+        .description("batch size config")
+        .operator("admin")
+        .build());
     verify(redisTemplate).delete("sys-param:t1:batch.size");
   }
 

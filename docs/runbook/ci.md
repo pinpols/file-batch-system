@@ -6,9 +6,11 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 
 ## 概览
 
+`PR_SIM_RUNTIME_CLEANUP_TEST` / `FULL_SIM_RUNTIME_CLEANUP_TEST` 分别在 policy / full-static 组执行 Sim 初始化、容量脚本清理和混合画像契约测试。PR 按脚本、数据库或 CI 变更触发；本地 pre-commit 的脚本测试组也执行容量用例。清理失败必须非零，且不覆盖主流程原始失败码；混合画像须传入 Workflow ID、独立分配业务日，并拒绝只完成部分子 Job 的容量结论。
+
 长期治理原则见 [CI 与测试质量治理](../standards/ci-test-quality-governance.md)；本文只说明具体工作流与操作入口。
 前后端 schedule 的保留依据、代码变更检测要求和季度复核清单见[CI 定时治理](./ci-schedule-governance.md)。
-全部 CI 守卫的分类目录、判定正反例以及快速失败/失败汇总边界见[CI 脚本说明](../../scripts/ci/README.md#完整守护清单)。该目录的 83 个可执行守卫由脚本治理检查登记；新增或调整门禁时须同步更新守卫清单、对应工作流路由和本 runbook。
+全部 CI 守卫的分类目录、判定正反例以及快速失败/失败汇总边界见[CI 脚本说明](../../scripts/ci/README.md#完整守护清单)。守卫、执行入口和配套 SQL 均在职责 README 登记；[工作流总索引](../../.github/workflows/README.md)覆盖全部 workflow，[共享 Actions 索引](../../.github/actions/README.md)覆盖复用步骤。新增、改名和删除均由 `check-script-governance.py` 核对真实跳转、用途与路径，不能只写文件名。
 
 门禁统一通过 `scripts/lib/gate-result.sh` / `scripts/ci/run-gate.sh` 执行。`group` 表示稳定职责分组，`mode` 只有 `enforce`、`report`、`ignore`：阻断模式执行并传播失败，报告模式执行但只记录真实退出码，忽略模式明确不执行；范围路由未命中则是 `SKIP / mode=conditional`。统一执行器会过滤子检查器缺少 `group` / `mode` 的旧式状态行，只保留诊断内容及合规的嵌套门禁行，最终状态统一由执行器输出。模式控制使用 `BATCH_GATE_MODE`、`BATCH_GATE_GROUP_MODES`、`BATCH_GATE_MODES` 或单次调用的 `--mode`，优先级和命令示例见[CI 脚本说明](../../scripts/ci/README.md#分组开关和模式)。required checks 必须保持 `enforce`；仓库 workflow 中任何报告/忽略项都要以 `soft-gate-id` 登记到 `docs/governance/soft-gates.json`，不得用散落的 `BATCH_CI_SKIP_*`、`|| true` 或裸 `exit 0` 吞掉结果。
 
@@ -19,7 +21,7 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 | `pr-gate` | PR 合入门禁 | PR → main（opened / synchronize / reopened / ready_for_review，非草稿）、`merge_group`、手动 | 按变更范围执行静态检查和测试分片 | 各 job 单独设置，不设统一 workflow 超时 |
 | `sdk-contract-parity` | SDK 契约门禁 | 所有 PR（按 SDK 变更范围执行）、`merge_group`、手动 | 五语言共享契约验证；`sdk-contract-required` 聚合结果是稳定门禁，live transport 在 SDK 相关 PR 上运行但不属于 required 聚合 | 各 job 单独设置 |
 | `full-ci-gate` | main 全量回归 | main push、每周日 02:00 UTC、手动 | 主干静态检查、单元/集成测试、E2E 和安全检查；定时/手动还运行测试质量分析 | 各 job 单独设置，不设统一 workflow 超时 |
-| `staging-gate` | 手动 E2E 复验 | 手动 | GitHub-hosted runner 连接显式配置的 staging 前端/API origin 和账号；先校验两端健康及非 loopback 地址，再运行发布 E2E。必验场景缺失/跳过会失败，可选跳过会写入场景报告；不部署到 staging 集群，也不运行负载测试或巡检 | 各 job 单独设置 |
+| `staging-gate` | 手动后端 E2E 复验 | 手动 | GitHub-hosted runner 上的 Java 治理与六片后端 E2E，依赖由 Testcontainers 管理；不连接外部 staging，不执行部署 | 各 job 单独设置 |
 | `daily-sim-strict-validation` | 变更感知的定时真实数据验证 | 每天 13:31 UTC（北京 21:31）、手动（`force=true` 可强制执行） | 检测当日代码/配置变化后运行 `sim-harness all` 和 BE-ACC strict；纯 Markdown/RST、`LICENSE`、`NOTICE` 不触发当天验证。手动运行按当前北京时间日期判断；定时运行使用计划触发时间所属日期。SIM 失败不跳过 strict，但启动失败/取消/runner 丢失不算通过。只有两项成功才构建 nightly 镜像 | 验证 job 240 min；内部步骤分别设限 |
 | `daily-backend-reliability` | 每日隔离故障回归 | 每天 20:17 UTC（北京次日 04:17）、手动 | 在独立 GitHub-hosted runner 调用 `scripts/local/backend-reliability-tests.sh`，用 Testcontainers 验证文件完整性、并发、checkpoint 续跑、NAS 发布、Kafka 故障恢复、Outbox exactly-once 与消费者背压；上传 Surefire 报告。不会连接 Compose Sim 或 staging，也不执行 PITR/HA 切换 | 120 min |
 | `docker-image-build` | 变更感知的镜像构建 | 由 `daily-sim-strict-validation` 在当天有代码/配置变更且 sim + strict 成功后调用；也支持手动和复用调用 | 默认只用 Docker Bake 构建全部应用镜像和运维工具箱镜像；显式 `publish=true` 时登录 GHCR、推送 SHA 镜像并上传含 immutable digest 的 backend image set。CI 使用 Maven Central 配置并带依赖下载重试 | 30 min |
@@ -55,7 +57,7 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 | Squawk / oasdiff | 2.65.0 / 1.32.1 | 迁移安全和 OpenAPI 破坏性变更守护 |
 | Trivy CLI | 0.74.0 | `vuln,misconfig` 扫描参数统一 |
 
-CI 版本基线与运行结果分开记录。每次核验 Full Gate、CodeQL 或镜像工作流时，按目标分支的实际 commit SHA 检查最新 run；`IN_PROGRESS`、`QUEUED`、`SKIPPED` 或其他 SHA 上的成功都不能作为当前提交通过证据。Docker Buildx/Bake、发布凭据、GHES 与 self-hosted runner 兼容性仍须按目标环境验证。后续每次升级按 [CI 外部 Actions 版本升级与验收记录](../backlog/ci-external-action-upgrade-backlog-2026-09-30.md) 运行对应回归。
+CI 版本基线与运行结果分开记录。每次核验 Full Gate、CodeQL 或镜像工作流时，按目标分支的实际 commit SHA 检查最新 run；`IN_PROGRESS`、`QUEUED`、`SKIPPED` 或其他 SHA 上的成功都不能作为当前提交通过证据。Docker Buildx/Bake、发布凭据、GHES 与 self-hosted runner 兼容性仍须按目标环境验证。后续每次升级按 [CI 外部 Actions 版本升级与验收记录](../audit/ci-external-action-upgrade-review-2026-09-30.md) 运行对应回归。
 
 OpenSSF Scorecard 是 main/定时的供应链治理报告，不属于 PR required checks，也不以总分决定合并。其 workflow 失败表示扫描链路本身需要修复；SARIF 中的发现按 [`../standards/open-source-governance.md`](../standards/open-source-governance.md) 分级治理。外部 Action 必须固定 40 位 SHA；季度依赖盘点只生成 artifact 与 Actions Summary，由维护者需要时建立一张人工 PR 并核对 release、变更说明和所需权限。
 
@@ -218,10 +220,10 @@ SDK 五语言契约矩阵。
 > `ServiceEntryGuardArchTest` 按入口语义验证核心服务入口 fail-safe 行为；Orchestrator `ControllerPersistenceBoundaryArchTest` 与 Console `LayerBoundaryArchTest` 分别禁止 Controller/Web 直连 Mapper/Repository；Orchestrator 与 Console 的 `EntityModelNamingArchTest` 强制领域 `entity` 包只含 `XxxEntity`；`EntityApiBoundaryArchTest` 强制 Orchestrator 与 Console HTTP 方法签名不暴露 Entity，零豁免。Controller/Service/Entity 分层规范见 `docs/coding-conventions.md` §4.1.1、§6.3、§8.2.10。执行入口：`bash scripts/ci/run-java-governance-tests.sh`。
 > `PositionalArgsConventionTest` 还守护已治理 Query 不回退为多 `null` 位置构造，并确保状态型参数对象不重新暴露通用 Builder 或公共全参构造器；语义上是否应纳入受控工厂集合仍由代码审查决定。
 > 同一测试还按当前 PR 的变更行检查生产 Java 方法实参与 `return` 的三层以上嵌套调用；短 fluent receiver、lambda 函数体、测试代码和未变更历史代码排除。
-> 这类测试型守卫的登记入口是 [约定约束与漂移防护总账](../audit/convention-drift-guard-index.md) 的守卫矩阵（`check-*` / `validate-*` 脚本另由 [scripts/ci/README.md](../../scripts/ci/README.md) 登记）。
+> 这类测试型守卫的登记入口是 [约定约束与漂移防护总账](../standards/convention-drift-guard-index.md) 的守卫矩阵（`check-*` / `validate-*` 脚本另由 [scripts/ci/README.md](../../scripts/ci/README.md) 登记）。
 > Python / Shell / 配置/契约守卫在 PR 的 `static-policy`、Full/Staging 的 `static-checks` 中独立命名执行，不混入 Maven unit/IT；
 > PR 的 SBOM/Trivy 与 PMD/Spotless 分别由 `static-supply-chain`、`static-java-quality` 并发执行，稳定的 `static-checks` 只聚合结果。
-> `docs/test-data/**/*.xlsx` 按 test 域路由；权威 Java schema 变更也会执行配置包校验，schema 漂移会在 PR 阶段阻断，不再等 nightly Sim 才暴露。
+> `test-data/sim/**/*.xlsx` 按 test 域路由；权威 Java schema 变更也会执行配置包校验，schema 漂移会在 PR 阶段阻断，不再等 nightly Sim 才暴露。
 > 本地 pre-commit 只核对治理测试源码清单；pre-push 在 Java、POM 或相关 CI 路由变化时调用
 > `run-java-governance-tests.sh` 真实执行同一组测试，在线 workflow 也复用该入口。
 
@@ -229,7 +231,7 @@ SDK 五语言契约矩阵。
 
 | 检查项 | 工具 | 触发流水线 | 说明 |
 |---|---|---|---|
-| PMD 代码规约 | `maven-pmd-plugin` | 全部（run-full-regression） | 对齐 docs/agent-baseline.md 规约 |
+| PMD 代码规约 | `maven-pmd-plugin` | 全部（run-full-regression） | 对齐编码规约：Mapper公共方法≥5、Service公共接口≥6、其它方法≥7；构造器按既有规则豁免，边界由真实PMD夹具守护 |
 | Spotless 代码格式 | `spotless-maven-plugin` | 全部（run-full-regression） | Palantir Java Format 2.92.0（Google 风格兼容、120 列） |
 | 覆盖率门禁 | JaCoCo `jacoco:check` | 全部（run-full-regression） | 行覆盖率 ≥ 60%，初始阈值，后续提升 |
 | Secret 扫描 | `security-scan.sh --mode=secret` | pr-gate、full-ci-gate | 扫描密钥泄漏 |
@@ -254,13 +256,17 @@ pr-gate 会根据 PR 变更文件范围决定 Maven 构建粒度：
 | 仅 CI、脚本、部署配置或文档 | 跳过 Maven 单元测试，保留命中域的静态门禁 |
 | 无 Java 相关变更 | 跳过 Maven gate |
 
-PR 所有单元分片均设置 `-DskipITs=true`；集成和 E2E 由 Full Gate 回退。详细证据与回退条件见 [CI 门禁耗时分析与优化记录](../analysis/ci-gate-runtime-optimization-2026-10-07.md)。
+PR 所有单元分片均设置 `-DskipITs=true`；集成和 E2E 由 Full Gate 回退。详细证据与回退条件见 [CI 门禁耗时分析与优化记录](../verifications/ci-gate-runtime-optimization-2026-10-07.md)。
 
 ---
 
 ## 本地 Git Hook 门禁
 
 本地 hook 只承担**快速预检、完整诊断和提交前防低级漂移**，不替代 PR / full-ci / staging / sim 验证。设计原则：
+
+Shell Linux 兼容守卫在 PR / Full 默认扫描工作树中现存的已跟踪及未跟踪 `.sh` 文件，
+避免路径迁移后读取仍在索引中的已删除文件而中断；本地显式文件检查采用相同边界。
+此过滤不改变兼容规则或未跟踪文件覆盖，回归入口见 [CI 脚本说明](../../scripts/ci/README.md)。
 
 - `pre-commit` 按暂存文件域路由，尽量只扫暂存命中的文件；CI 仍保留全量扫描。
 - `pre-push` 面向分支级轻量契约，允许使用 `origin/main...HEAD` 的增量基线。
@@ -411,8 +417,8 @@ make db-reset-flyway    # 清空 Flyway 历史
 
 ```bash
 make ops-inspect        # 全量巡检
-make ops-heal-stuck     # 修复长期停滞 outbox
-make ops-heal-dead      # 修复死信队列
+make ops-inspect-stuck-outbox # 只读检查长期停滞 outbox
+make ops-inspect-dead-letters  # 只读检查死信；人工重放经 Console 审批
 make ops-heal-drain     # 修复 drain 超时
 make ops-heal-retry     # 修复待重试任务
 make ops-heal-partitions# 修复分区不均衡
@@ -526,39 +532,29 @@ bash scripts/ci/run-flaky-quarantine.sh
 - 最近 PR 运行约 9:02：环境 44 秒、编译 289 秒、分析 136 秒、上传 7 秒。
 - PR 改为 Java no-build + 默认高精度查询，且不再准备 Maven/JDK 构建环境；main/定时/手工仍使用 manual build + `security-extended`，在线连续 10 次运行后更新本节实测数据。
 
-完整样本、运行链接和回退标准见 [CI 门禁耗时分析与优化记录](../analysis/ci-gate-runtime-optimization-2026-10-07.md)。
+完整样本、运行链接和回退标准见 [CI 门禁耗时分析与优化记录](../verifications/ci-gate-runtime-optimization-2026-10-07.md)。
 
 ---
 
 ## 关键文件索引
 
-```
-.github/
-  workflows/
-    pr-gate.yml              # PR 门禁
-    sdk-contract-parity.yml  # 五语言 SDK 契约门禁
-    full-ci-gate.yml         # 主干质量门禁(含安全扫 + Checkov)
-    staging-gate.yml         # 手动全量 E2E 复验
-    daily-sim-strict-validation.yml # 变更感知的每日 sim + strict，成功后调用镜像构建
-    daily-backend-reliability.yml   # 每日隔离 Testcontainers 故障回归
-    docker-image-build.yml   # 手动 / reusable 镜像构建
-    label-automerge.yml      # automerge 标签自动归并
-  actions/
-    setup-build-env/         # 共享 setup：JDK、Maven cache；Testcontainers 镜像缓存可关闭
-    detect-change-scope/     # 共享变更范围探测入口
-  renovate.json              # 依赖自动更新配置
+- [全部工作流](../../.github/workflows/README.md)：逐项介绍触发条件、检查目的、结果与写入边界，包括 SDK、定时验证、发布和供应链流程。
+- [共享 Actions](../../.github/actions/README.md)：构建环境、Python 依赖及变更范围复用步骤。
+- [CI 脚本与门禁](../../scripts/ci/README.md)：执行命令、判定正反例、失败处理与配套 SQL。
+- [CI 历史基线](../../scripts/ci/baselines/README.md)：内联 SQL、Java 抑制与高风险命令预算，只能按真实差异和评审维护。
+- [本地钩子](../../.githooks/README.md)：pre-commit/pre-push 使用方式；[脚本目录](../../scripts/README.md)按任务寻找本地与运维入口。
+- [PMD 规则](../../config/quality/pmd-ruleset.xml)及根 [pom.xml](../../pom.xml)：Java 静态质量与测试插件配置。质量目录中的 XML 通过统一范围探测器标记为 `java/config/ci`，规则独立变更也会触发 PR 的 Java 静态质量检查；README 变更仍按文档处理。
 
-scripts/ci/
-  run-full-regression.sh     # 所有 Maven 回归的统一入口
-  check-console-openapi-paths.py   # OpenAPI 路径对齐校验
-  check-dependency-boundaries.py   # 模块依赖边界校验
-  security-scan.sh           # 安全扫描入口（secret / deps / dast）
+### 文档、脚本与工作流索引防漂移
 
-build/
-  pmd-ruleset.xml            # PMD 规则集（对齐 docs/agent-baseline.md）
+| 校验 | PR | Full CI | 本地 |
+|---|---|---|---|
+| docs/ 当前及归档 README 的逐层跳转与用途、当前内部链接 | docs/ci 变更执行 DOCS_STRUCTURE | static-checks 执行 | pre-commit 按 docs 域执行 |
+| 文档生命周期、完整日期与归档分类 | docs/ci 变更执行 DOC_TIMESTAMP_POLICY | static-checks 执行 | pre-commit 按 docs 域执行 |
+| 自动化脚本头、说明语言、脚本/SQL/基线索引与 workflow/action 索引 | scripts/database/ci 域执行 SCRIPT_GOVERNANCE；仓库其他位置的 Shell 也分类到 scripts | static-checks 执行 | pre-commit 按共享分类结果执行 |
+| 上述守卫的正反例与路径分类测试 | ci 域变更时由 CI 质量测试组执行 | CI 质量测试组执行 | pre-commit 的脚本测试组执行 |
 
-pom.xml                      # 父 pom：JaCoCo agent、PMD、Spotless 插件配置
-```
+脚本头固定格式及范围见 [编码规约 §19.5](../coding-conventions.md#195-自动化脚本的头注释与说明)。索引校验要求有真实跳转和用途、目标存在、子目录有上级入口；不能证明用途文字或脚本命令在目标环境已验收。工作流和本地门禁的接入检查属于配置事实，远端 run 仍须针对目标 SHA 单独读取。
 
 ### CodeQL 构建模式
 
@@ -573,3 +569,7 @@ pom.xml                      # 父 pom：JaCoCo agent、PMD、Spotless 插件配
 `.github/workflows/sonar-gate.yml` 是独立工作流，不是 Full Gate 的 job 或 required check。main Java/构建/Sonar 工具变更会单独触发它；此外每日 18:23 UTC（北京时间次日 02:23）按最近 24 小时相关变更条件运行，也支持手动触发。该工作流独立执行 `clean test` 和 JaCoCo 报告，不消费 Full Gate artifact；因此它可能在 Full Gate 之后完成或失败，但不延迟 Full Gate 结果。Community Build 仅支持 main 分析，非 main 手动运行会明确失败；夜间仅在最近 24 小时有 Java、Maven、Sonar 扫描脚本/辅助脚本或该 workflow 改动时继续。无需外部 Sonar 主机、GitHub Sonar secret 或管理员 token：工作流在 runner 上启动固定 digest 的 SonarQube Community Build 容器（6 GiB、3 CPU），执行 Sonar Way Quality Gate，并将新代码基线设为滚动 30 天；最后删除容器。扫描报告作为短期 workflow artifact 保留 7 天。
 
 容器和数据库不跨任务持久化，因此 issue 状态、分析历史和项目配置不会保留；质量门禁每次按完整 Git 历史计算最近 30 天新代码，不依赖 Sonar 历史。Sonar 工作流独立构建测试，不消费 Full Gate artifact，也不接受 PR artifact。该方案不对 PR 执行 Sonar 分支分析，也不提供跨提交的 issue 生命周期/趋势。Java PR 的 Sonar 变更行审阅仍使用本地增量扫描。不得将临时扫描结果描述成持久 Sonar 项目状态。Sonar 不替代现有 PMD、Spotless、SpotBugs、依赖扫描和测试门禁；是否作为 required check 仍以仓库 Ruleset 为准。
+
+### 本次 Workflow 切换的人工跳过原因合同
+
+`check-openapi-breaking.sh` 依 ADR-048 和整合计划 I6/R35 精确登记 `POST /api/console/workflow-runs/{id}/skip-node` 新增必填 query `reason`。这是已批准的真实收紧，前后端必须同步部署；不是工具误报。登记只匹配该方法、路径、位置、参数名和差异种类，其他新增必填参数仍失败。定向正反例入口：`python3 -m unittest scripts/ci/tests/test_openapi_skip_reason_cutover.py`。

@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.worker.imports.infrastructure;
 
+import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService.BadRecordCommand;
+
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -19,6 +22,7 @@ import io.github.pinpols.batch.worker.imports.config.ImportSkipProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportBadRecordEntity;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -195,7 +199,13 @@ class ImportRecordGovernanceServiceTest {
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "BOTH"));
 
     ImportJobContext ctx = context();
-    service.recordSkippedRecord(ctx, ImportStage.PARSE, 10L, "E1", "msg-1", Map.of("k", "v"));
+    service.recordSkippedRecord(ctx, BadRecordCommand.builder()
+            .stage(ImportStage.PARSE)
+            .recordNo(10L)
+            .errorCode("E1")
+            .errorMessage("msg-1")
+            .rawRecord(Map.of("k", "v"))
+            .build());
 
     assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT, 1L);
     assertThat(ctx.getAttributes()).containsEntry("parseSkippedCount", 1L);
@@ -228,7 +238,13 @@ class ImportRecordGovernanceServiceTest {
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "BOTH"));
 
     ImportJobContext ctx = context();
-    service.recordFailedRecord(ctx, ImportStage.VALIDATE, 5L, "EFAIL", "boom", "raw");
+    service.recordFailedRecord(ctx, BadRecordCommand.builder()
+            .stage(ImportStage.VALIDATE)
+            .recordNo(5L)
+            .errorCode("EFAIL")
+            .errorMessage("boom")
+            .rawRecord("raw")
+            .build());
 
     assertThat(ctx.getAttributes()).containsEntry("failedCount", 1L);
     assertThat(ctx.getAttributes()).containsEntry("validateFailedCount", 1L);
@@ -242,7 +258,13 @@ class ImportRecordGovernanceServiceTest {
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "MANUAL_REVIEW", "BOTH"));
 
     ImportJobContext ctx = context();
-    service.recordSkippedRecord(ctx, ImportStage.PARSE, 1L, "E1", "m", "raw");
+    service.recordSkippedRecord(ctx, BadRecordCommand.builder()
+            .stage(ImportStage.PARSE)
+            .recordNo(1L)
+            .errorCode("E1")
+            .errorMessage("m")
+            .rawRecord("raw")
+            .build());
     assertThat(ctx.getAttributes()).containsEntry("manualReviewRequired", true);
   }
 
@@ -257,7 +279,13 @@ class ImportRecordGovernanceServiceTest {
             PipelineRuntimeKeys.TEMPLATE_CONFIG,
             Map.of("error_line_masking_enabled", true, "masking_rule_set", "default"));
 
-    service.recordFailedRecord(ctx, ImportStage.VALIDATE, 1L, "E", "user=alice", "raw-payload");
+    service.recordFailedRecord(ctx, BadRecordCommand.builder()
+            .stage(ImportStage.VALIDATE)
+            .recordNo(1L)
+            .errorCode("E")
+            .errorMessage("user=alice")
+            .rawRecord("raw-payload")
+            .build());
 
     ArgumentCaptor<FileErrorRecordParam> captor =
         ArgumentCaptor.forClass(FileErrorRecordParam.class);
@@ -275,7 +303,13 @@ class ImportRecordGovernanceServiceTest {
     ImportJobContext ctx = context();
     ctx.getAttributes()
         .put(PipelineRuntimeKeys.TEMPLATE_CONFIG, Map.of("error_line_masking_enabled", true));
-    service.recordFailedRecord(ctx, ImportStage.VALIDATE, 1L, "E", "raw-msg", "raw");
+    service.recordFailedRecord(ctx, BadRecordCommand.builder()
+            .stage(ImportStage.VALIDATE)
+            .recordNo(1L)
+            .errorCode("E")
+            .errorMessage("raw-msg")
+            .rawRecord("raw")
+            .build());
 
     ArgumentCaptor<FileErrorRecordParam> captor =
         ArgumentCaptor.forClass(FileErrorRecordParam.class);
@@ -321,7 +355,13 @@ class ImportRecordGovernanceServiceTest {
 
     ImportJobContext ctx = context();
     // 先塞 1 条坏记录
-    service.recordSkippedRecord(ctx, ImportStage.PARSE, 1L, "E", "m", "raw");
+    service.recordSkippedRecord(ctx, BadRecordCommand.builder()
+            .stage(ImportStage.PARSE)
+            .recordNo(1L)
+            .errorCode("E")
+            .errorMessage("m")
+            .rawRecord("raw")
+            .build());
     ctx.getAttributes().put("successCount", 10L);
     ctx.getAttributes().put("failedCount", 1L);
     ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 12L);
@@ -352,7 +392,13 @@ class ImportRecordGovernanceServiceTest {
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "ERROR_TABLE"));
 
     ImportJobContext ctx = context();
-    service.recordFailedRecord(ctx, ImportStage.PARSE, 1L, "E", "m", "raw");
+    service.recordFailedRecord(ctx, BadRecordCommand.builder()
+            .stage(ImportStage.PARSE)
+            .recordNo(1L)
+            .errorCode("E")
+            .errorMessage("m")
+            .rawRecord("raw")
+            .build());
     service.finalizeErrorOutput(ctx);
 
     verifyNoInteractions(errorOutputStorage);
@@ -370,7 +416,7 @@ class ImportRecordGovernanceServiceTest {
     ctx.getAttributes()
         .put(
             "badRecords",
-            new java.util.ArrayList<>(List.of(new ImportBadRecordEntity(
+            new ArrayList<>(List.of(new ImportBadRecordEntity(
                 1L, "PARSE", "E", "m", null, false, "CONTINUE", null, null, null))));
 
     service.finalizeErrorOutput(ctx);
@@ -388,9 +434,15 @@ class ImportRecordGovernanceServiceTest {
 
     ImportJobContext ctx = context();
     // 注入混入异型对象的旧列表
-    ctx.getAttributes().put("badRecords", new java.util.ArrayList<>(List.of("not-a-record")));
+    ctx.getAttributes().put("badRecords", new ArrayList<>(List.of("not-a-record")));
 
-    service.recordSkippedRecord(ctx, ImportStage.PARSE, 1L, "E", "m", "raw");
+    service.recordSkippedRecord(ctx, BadRecordCommand.builder()
+            .stage(ImportStage.PARSE)
+            .recordNo(1L)
+            .errorCode("E")
+            .errorMessage("m")
+            .rawRecord("raw")
+            .build());
 
     @SuppressWarnings("unchecked")
     List<ImportBadRecordEntity> bad =

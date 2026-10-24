@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：PostgreSQL 客户端 fallback。
+# 用法：在仓库根目录执行 bash scripts/ci/check-postgres-client-fallback.sh；参数与前置环境见下方说明及所属 README。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"

@@ -1,5 +1,7 @@
 #!/bin/sh
-# Generate local file discovery targets, then start Prometheus.
+# 用途：生成本地服务发现目标并启动 Prometheus。
+# 用法：由对应容器的 entrypoint/init 配置调用；环境参数见容器配置与下方说明。
+# 生成本地文件发现目标后启动 Prometheus。
 set -eu
 
 generate_targets() {

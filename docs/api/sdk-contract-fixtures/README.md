@@ -92,3 +92,11 @@
 2. 改 [`orchestrator-internal.openapi.yaml`](../orchestrator-internal.openapi.yaml)
 3. 改 [`wire-protocol.md`](../../sdk/wire-protocol.md) Changelog
 4. **改本目录对应 fixture**(或加新 fixture),BYO SDK 团队订阅本目录变更
+
+## 脚本与配套 SQL 索引
+
+本表登记本目录的执行入口、公共模块及配套 SQL；测试代码通过测试命令执行。新增、移动或删除资产时同步跳转和用途，SQL 正文保持独立维护。
+
+| 文件 | 用途 / 调用归属 |
+|---|---|
+| [validate.sh](validate.sh) | Lane P(漂移守护):用 fixture-schema.json 校验每个 fixture JSON。 |

@@ -2,6 +2,7 @@
 -- console-api 上传校验时用它拦住 Excel 里填的 targetColumn / jdbcMappedImport.columnMappings[*].to /
 -- sql_template_export.columns[*] 指向不存在的业务表或列（以前这类错只有 LoadStep 真往 biz 表写才抛）。
 -- 快照覆盖策略：每次 worker 启动先删自己模块的快照再 INSERT，已删表自动消失。
+
 CREATE TABLE IF NOT EXISTS batch.biz_table_schema (
   id            BIGSERIAL PRIMARY KEY,
   schema_name   VARCHAR(64)  NOT NULL,

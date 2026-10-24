@@ -62,10 +62,16 @@ class WorkerReportOutboxPgIntegrationTest {
         POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
     jdbcTemplate = new JdbcTemplate(dataSource);
 
-    jdbcTemplate.execute("drop schema if exists batch cascade");
-    jdbcTemplate.execute("create schema batch");
+    final String dropSql = """
+        drop schema if exists batch cascade
+    """;
+    jdbcTemplate.execute(dropSql);
+    final String createSql = """
+        create schema batch
+    """;
+    jdbcTemplate.execute(createSql);
     // V96 batch.worker_report_outbox DDL(平台 PG,worker 读写)。
-    jdbcTemplate.execute("""
+    final String createBatchWorkerReportOutboxSql = """
         create table batch.worker_report_outbox (
           id bigserial primary key,
           tenant_id varchar(64) not null,
@@ -80,7 +86,8 @@ class WorkerReportOutboxPgIntegrationTest {
           updated_at bigint not null,
           constraint uq_worker_report_outbox_tenant_task unique (tenant_id, task_id)
         )
-        """);
+        """;
+    jdbcTemplate.execute(createBatchWorkerReportOutboxSql);
 
     Configuration configuration =
         new Configuration(new Environment("it", new JdbcTransactionFactory(), dataSource));

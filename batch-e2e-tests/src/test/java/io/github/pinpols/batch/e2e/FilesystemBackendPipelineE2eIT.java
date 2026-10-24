@@ -15,7 +15,7 @@ import io.github.pinpols.batch.e2e.support.E2eOutboxPublishSupport;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
 import io.github.pinpols.batch.e2e.support.E2eTestSql;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.io.InputStream;
 import java.net.URLDecoder;
@@ -64,7 +64,7 @@ class FilesystemBackendPipelineE2eIT extends AbstractIntegrationTest {
   private static final String BATCH_NO = "E2E-SET-FS-1";
   private static final String SETTLEMENT_NO = "E2E-FS-SET-001";
 
-  private final LaunchService launchService;
+  private final WorkflowRunLaunchService launchService;
   private final JdbcTemplate jdbcTemplate;
   private final E2eOutboxPublishSupport e2eOutboxPublishSupport;
   private final BatchObjectStore objectStore;
@@ -73,7 +73,7 @@ class FilesystemBackendPipelineE2eIT extends AbstractIntegrationTest {
   private final DataSource businessDataSource;
 
   FilesystemBackendPipelineE2eIT(
-      LaunchService launchService,
+      WorkflowRunLaunchService launchService,
       JdbcTemplate jdbcTemplate,
       E2eOutboxPublishSupport e2eOutboxPublishSupport,
       BatchObjectStore objectStore,
@@ -93,6 +93,20 @@ class FilesystemBackendPipelineE2eIT extends AbstractIntegrationTest {
   @DisplayName("本地文件后端导出任务到达成功终态,产物落在根目录对应桶与键下,磁盘直读、抽象接口读取与预签名令牌校验结果一致")
   void shouldReadExportedArtifactViaDiskStoreAndPresignToken_whenFilesystemBackendSelected()
       throws Exception {
+    final String selectTaskStatusSql = """
+                      select t.task_status from batch.job_task t
+                      join batch.job_instance ji on ji.id = t.job_instance_id
+                      where ji.tenant_id = ? and ji.dedup_key = ?
+                      """;
+    final String selectStoragePathSql = """
+            select fr.storage_path, fr.file_status, fr.file_size_bytes
+            from batch.file_record fr
+            join batch.job_instance ji on ji.tenant_id = fr.tenant_id
+            where ji.tenant_id = ? and ji.dedup_key = ? and fr.file_category = 'OUTPUT'
+            order by fr.id desc
+            limit 1
+            """;
+
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
     seedSettlementData(businessJdbc);
 
@@ -108,7 +122,7 @@ class FilesystemBackendPipelineE2eIT extends AbstractIntegrationTest {
 
     launchService.launch(new LaunchRequest(
         TENANT,
-        seed.jobCode(),
+        seed.workflowDefinitionId(),
         LocalDate.of(2026, 1, 15),
         TriggerType.API,
         seed.requestId(),
@@ -121,22 +135,11 @@ class FilesystemBackendPipelineE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String status = jdbcTemplate.queryForObject("""
-                      select t.task_status from batch.job_task t
-                      join batch.job_instance ji on ji.id = t.job_instance_id
-                      where ji.tenant_id = ? and ji.dedup_key = ?
-                      """, String.class, TENANT, seed.dedupKey());
+          String status = jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
           assertThat(status).isEqualTo("SUCCESS");
         });
 
-    Map<String, Object> fileRecord = jdbcTemplate.queryForMap("""
-            select fr.storage_path, fr.file_status, fr.file_size_bytes
-            from batch.file_record fr
-            join batch.job_instance ji on ji.tenant_id = fr.tenant_id
-            where ji.tenant_id = ? and ji.dedup_key = ? and fr.file_category = 'OUTPUT'
-            order by fr.id desc
-            limit 1
-            """, TENANT, seed.dedupKey());
+    Map<String, Object> fileRecord = jdbcTemplate.queryForMap(selectStoragePathSql, TENANT, seed.dedupKey());
     String storagePath = String.valueOf(fileRecord.get("storage_path"));
     assertThat(storagePath).as("export: file_record.storage_path must be set").isNotBlank();
 
@@ -176,21 +179,24 @@ class FilesystemBackendPipelineE2eIT extends AbstractIntegrationTest {
   }
 
   private void seedSettlementData(JdbcTemplate businessJdbc) {
-    Long batchId = businessJdbc.queryForObject("""
+    final String insertSettlementBatchSql = """
             insert into biz.settlement_batch (
                 tenant_id, batch_no, biz_date, accounting_period, batch_status,
                 total_record_count, total_amount, currency
             ) values (?, ?, date '2026-01-15', '202601', 'READY', 1, 0, 'CNY')
             returning id
-            """, Long.class, TENANT, BATCH_NO);
-    assertThat(batchId).isNotNull();
-
-    businessJdbc.update("""
+            """;
+    final String insertSettlementDetailSql = """
         insert into biz.settlement_detail (
             tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,
             gross_amount, fee_amount, net_amount, currency, settlement_status
         ) values (?, ?, ?, ?, date '2026-01-15', '202601', 10.00, 1.00, 9.00, 'CNY', 'READY')
-        """, TENANT, batchId, SETTLEMENT_NO, "C-FS-1");
+        """;
+
+    Long batchId = businessJdbc.queryForObject(insertSettlementBatchSql, Long.class, TENANT, BATCH_NO);
+    assertThat(batchId).isNotNull();
+
+    businessJdbc.update(insertSettlementDetailSql, TENANT, batchId, SETTLEMENT_NO, "C-FS-1");
   }
 
   private static Map<String, String> parseQuery(String url) {

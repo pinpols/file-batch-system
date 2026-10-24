@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Require governance metadata for every Trivy vulnerability ignore entry."""
+# 用途：Trivy 忽略项有效期。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-trivy-ignore-expiry.py；参数与前置环境见下方说明及所属 README。
+"""Trivy 每项漏洞忽略规则都必须包含治理元数据。"""
 
 from __future__ import annotations
 

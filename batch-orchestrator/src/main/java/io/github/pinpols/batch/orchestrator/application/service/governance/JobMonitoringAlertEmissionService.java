@@ -29,6 +29,16 @@ public class JobMonitoringAlertEmissionService {
     }
 
     Map<String, Object> detail = new LinkedHashMap<>();
+    detail.put(
+        "jobInstanceId",
+        EmptyChecks.isNull(candidate.jobInstanceId()) ? null : candidate.jobInstanceId().toString());
+    detail.put("bizDate", EmptyChecks.isNull(candidate.bizDate()) ? null : candidate.bizDate().toString());
+    if (EmptyChecks.isNotNull(candidate.workflowRunId())) {
+      detail.put("workflowRunId", candidate.workflowRunId().toString());
+    }
+    if (!EmptyChecks.isBlank(candidate.nodeCode())) {
+      detail.put("nodeCode", candidate.nodeCode());
+    }
     detail.put("jobCode", candidate.jobCode());
     detail.put("instanceNo", candidate.instanceNo());
     detail.put("instanceStatus", candidate.instanceStatus());
@@ -42,13 +52,14 @@ public class JobMonitoringAlertEmissionService {
       detail.put("failedPartitionCount", candidate.failedPartitionCount());
     }
 
+    String detailJson = JsonUtils.toJson(detail);
     AlertEmitRequest request = AlertEmitRequest.builder()
         .tenantId(candidate.tenantId())
         .serviceName("batch-orchestrator")
         .alertType(violation.alertType())
         .severity(EmptyChecks.isBlank(candidate.severity()) ? "WARN" : candidate.severity())
         .title(violation.title(candidate.jobCode()))
-        .detailJson(JsonUtils.toJson(detail))
+        .detailJson(detailJson)
         .resourceKey(String.valueOf(candidate.jobInstanceId()))
         .traceId(candidate.traceId())
         .build();

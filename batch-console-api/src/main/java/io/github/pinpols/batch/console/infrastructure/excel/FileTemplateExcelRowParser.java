@@ -9,6 +9,8 @@ import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingl
 import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.requireText;
 import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.resolveTenantField;
 
+import lombok.Builder;
+
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.FileChecksumType;
 import io.github.pinpols.batch.common.enums.FileCompressType;
@@ -216,66 +218,106 @@ public final class FileTemplateExcelRowParser {
 
   private static void extractBasicFields(
       TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
-    builder
-        .templateCode(
-            CodeNormalizer.toConfigFormOrNull(requireText(values, COL_TEMPLATE_CODE, 128, issues)))
-        .templateName(requireText(values, COL_TEMPLATE_NAME, 256, issues))
-        .templateType(requireEnum(values, COL_TEMPLATE_TYPE, TEMPLATE_TYPES, 32, issues))
-        .bizType(optionalText(values, COL_BIZ_TYPE, 64, issues))
-        .fileFormatType(requireEnum(values, COL_FILE_FORMAT_TYPE, FILE_FORMAT_TYPES, 32, issues))
-        .enabled(optionalBoolean(values, COL_ENABLED, true, issues))
-        .version(optionalInteger(values, COL_VERSION, 1, 1, issues))
-        .description(optionalText(values, COL_DESCRIPTION, 1024, issues));
+    String templateCodeText = requireText(values, COL_TEMPLATE_CODE, 128, issues);
+    String templateCode = CodeNormalizer.toConfigFormOrNull(templateCodeText);
+    builder.templateCode(templateCode);
+    String templateName = requireText(values, COL_TEMPLATE_NAME, 256, issues);
+    builder.templateName(templateName);
+    String templateType = requireEnum(values, COL_TEMPLATE_TYPE, TEMPLATE_TYPES, 32, issues);
+    builder.templateType(templateType);
+    String bizType = optionalText(values, COL_BIZ_TYPE, 64, issues);
+    builder.bizType(bizType);
+    String fileFormatType =
+        requireEnum(values, COL_FILE_FORMAT_TYPE, FILE_FORMAT_TYPES, 32, issues);
+    builder.fileFormatType(fileFormatType);
+    Boolean enabled = optionalBoolean(values, COL_ENABLED, true, issues);
+    builder.enabled(enabled);
+    Integer version = optionalInteger(values, COL_VERSION, 1, 1, issues);
+    builder.version(version);
+    String description = optionalText(values, COL_DESCRIPTION, 1024, issues);
+    builder.description(description);
   }
 
   private static void extractFieldMappings(
       TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
-    builder
-        .charset(optionalText(values, COL_CHARSET, 32, issues))
-        .targetCharset(optionalText(values, COL_TARGET_CHARSET, 32, issues))
-        .withBom(optionalBoolean(values, COL_WITH_BOM, false, issues))
-        .lineSeparator(optionalText(values, COL_LINE_SEPARATOR, 16, issues))
-        .delimiter(optionalText(values, COL_DELIMITER, 8, issues))
-        .quoteChar(optionalText(values, COL_QUOTE_CHAR, 8, issues))
-        .escapeChar(optionalText(values, COL_ESCAPE_CHAR, 8, issues))
-        .recordLength(optionalInteger(values, COL_RECORD_LENGTH, 0, 0, issues))
-        .headerRows(optionalInteger(values, COL_HEADER_ROWS, 0, 0, issues))
-        .footerRows(optionalInteger(values, COL_FOOTER_ROWS, 0, 0, issues))
-        .headerTemplateJson(optionalJson(values, COL_HEADER_TEMPLATE, issues))
-        .trailerTemplateJson(optionalJson(values, COL_TRAILER_TEMPLATE, issues))
-        .checksumType(optionalEnum(values, COL_CHECKSUM_TYPE, CHECKSUM_TYPES, 32, "NONE", issues))
-        .compressType(optionalEnum(values, COL_COMPRESS_TYPE, COMPRESS_TYPES, 32, "NONE", issues))
-        .encryptType(optionalEnum(values, COL_ENCRYPT_TYPE, ENCRYPT_TYPES, 32, "NONE", issues))
-        .namingRule(optionalText(values, COL_NAMING_RULE, 512, issues))
-        .fieldMappingsJson(optionalJson(values, COL_FIELD_MAPPINGS, issues))
-        .validationRuleSetJson(optionalJson(values, COL_VALIDATION_RULE_SET, issues));
+    String charset = optionalText(values, COL_CHARSET, 32, issues);
+    builder.charset(charset);
+    String targetCharset = optionalText(values, COL_TARGET_CHARSET, 32, issues);
+    builder.targetCharset(targetCharset);
+    Boolean withBom = optionalBoolean(values, COL_WITH_BOM, false, issues);
+    builder.withBom(withBom);
+    String lineSeparator = optionalText(values, COL_LINE_SEPARATOR, 16, issues);
+    builder.lineSeparator(lineSeparator);
+    String delimiter = optionalText(values, COL_DELIMITER, 8, issues);
+    builder.delimiter(delimiter);
+    String quoteChar = optionalText(values, COL_QUOTE_CHAR, 8, issues);
+    builder.quoteChar(quoteChar);
+    String escapeChar = optionalText(values, COL_ESCAPE_CHAR, 8, issues);
+    builder.escapeChar(escapeChar);
+    Integer recordLength = optionalInteger(values, COL_RECORD_LENGTH, 0, 0, issues);
+    builder.recordLength(recordLength);
+    Integer headerRows = optionalInteger(values, COL_HEADER_ROWS, 0, 0, issues);
+    builder.headerRows(headerRows);
+    Integer footerRows = optionalInteger(values, COL_FOOTER_ROWS, 0, 0, issues);
+    builder.footerRows(footerRows);
+    String headerTemplateJson = optionalJson(values, COL_HEADER_TEMPLATE, issues);
+    builder.headerTemplateJson(headerTemplateJson);
+    String trailerTemplateJson = optionalJson(values, COL_TRAILER_TEMPLATE, issues);
+    builder.trailerTemplateJson(trailerTemplateJson);
+    String checksumType =
+        optionalEnum(values, COL_CHECKSUM_TYPE, CHECKSUM_TYPES, 32, "NONE", issues);
+    builder.checksumType(checksumType);
+    String compressType =
+        optionalEnum(values, COL_COMPRESS_TYPE, COMPRESS_TYPES, 32, "NONE", issues);
+    builder.compressType(compressType);
+    String encryptType = optionalEnum(values, COL_ENCRYPT_TYPE, ENCRYPT_TYPES, 32, "NONE", issues);
+    builder.encryptType(encryptType);
+    String namingRule = optionalText(values, COL_NAMING_RULE, 512, issues);
+    builder.namingRule(namingRule);
+    String fieldMappingsJson = optionalJson(values, COL_FIELD_MAPPINGS, issues);
+    builder.fieldMappingsJson(fieldMappingsJson);
+    String validationRuleSetJson = optionalJson(values, COL_VALIDATION_RULE_SET, issues);
+    builder.validationRuleSetJson(validationRuleSetJson);
   }
 
   private static void extractStepConfig(
       TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
-    builder
-        .defaultQueryCode(optionalText(values, COL_DEFAULT_QUERY_CODE, 128, issues))
-        .defaultQuerySql(optionalText(values, COL_DEFAULT_QUERY_SQL, 10000, issues))
-        .queryParamSchemaJson(optionalJson(values, COL_QUERY_PARAM_SCHEMA, issues))
-        .streamingEnabled(optionalBoolean(values, COL_STREAMING_ENABLED, true, issues))
-        .pageSize(optionalInteger(values, COL_PAGE_SIZE, 0, 1000, issues))
-        .fetchSize(optionalInteger(values, COL_FETCH_SIZE, 0, 1000, issues))
-        .chunkSize(optionalInteger(values, COL_CHUNK_SIZE, 0, 500, issues));
+    String defaultQueryCode = optionalText(values, COL_DEFAULT_QUERY_CODE, 128, issues);
+    builder.defaultQueryCode(defaultQueryCode);
+    String defaultQuerySql = optionalText(values, COL_DEFAULT_QUERY_SQL, 10000, issues);
+    builder.defaultQuerySql(defaultQuerySql);
+    String queryParamSchemaJson = optionalJson(values, COL_QUERY_PARAM_SCHEMA, issues);
+    builder.queryParamSchemaJson(queryParamSchemaJson);
+    Boolean streamingEnabled = optionalBoolean(values, COL_STREAMING_ENABLED, true, issues);
+    builder.streamingEnabled(streamingEnabled);
+    Integer pageSize = optionalInteger(values, COL_PAGE_SIZE, 0, 1000, issues);
+    builder.pageSize(pageSize);
+    Integer fetchSize = optionalInteger(values, COL_FETCH_SIZE, 0, 1000, issues);
+    builder.fetchSize(fetchSize);
+    Integer chunkSize = optionalInteger(values, COL_CHUNK_SIZE, 0, 500, issues);
+    builder.chunkSize(chunkSize);
   }
 
   private static void extractSecurityConfig(
       TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
-    builder
-        .previewMaskingEnabled(optionalBoolean(values, COL_PREVIEW_MASKING_ENABLED, false, issues))
-        .errorLineMaskingEnabled(
-            optionalBoolean(values, COL_ERROR_LINE_MASKING_ENABLED, false, issues))
-        .logMaskingEnabled(optionalBoolean(values, COL_LOG_MASKING_ENABLED, false, issues))
-        .contentEncryptionEnabled(
-            optionalBoolean(values, COL_CONTENT_ENCRYPTION_ENABLED, false, issues))
-        .encryptionKeyRef(optionalText(values, COL_ENCRYPTION_KEY_REF, 128, issues))
-        .downloadRequiresApproval(
-            optionalBoolean(values, COL_DOWNLOAD_REQUIRES_APPROVAL, false, issues))
-        .maskingRuleSet(optionalText(values, COL_MASKING_RULE_SET, 256, issues));
+    Boolean previewMaskingEnabled =
+        optionalBoolean(values, COL_PREVIEW_MASKING_ENABLED, false, issues);
+    builder.previewMaskingEnabled(previewMaskingEnabled);
+    Boolean errorLineMaskingEnabled =
+        optionalBoolean(values, COL_ERROR_LINE_MASKING_ENABLED, false, issues);
+    builder.errorLineMaskingEnabled(errorLineMaskingEnabled);
+    Boolean logMaskingEnabled = optionalBoolean(values, COL_LOG_MASKING_ENABLED, false, issues);
+    builder.logMaskingEnabled(logMaskingEnabled);
+    Boolean contentEncryptionEnabled =
+        optionalBoolean(values, COL_CONTENT_ENCRYPTION_ENABLED, false, issues);
+    builder.contentEncryptionEnabled(contentEncryptionEnabled);
+    String encryptionKeyRef = optionalText(values, COL_ENCRYPTION_KEY_REF, 128, issues);
+    builder.encryptionKeyRef(encryptionKeyRef);
+    Boolean downloadRequiresApproval =
+        optionalBoolean(values, COL_DOWNLOAD_REQUIRES_APPROVAL, false, issues);
+    builder.downloadRequiresApproval(downloadRequiresApproval);
+    String maskingRuleSet = optionalText(values, COL_MASKING_RULE_SET, 256, issues);
+    builder.maskingRuleSet(maskingRuleSet);
   }
 
   /** Excel 行模型，单一来源；独立 service 与 9+2 config-package service 共用。 */

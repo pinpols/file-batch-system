@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
+# 用途：按模块重启当前工作树的本地 Java 服务。
+# 用法：bash scripts/local/restart.sh <module> [module...]；模块名见下方说明。
 # =============================================================
 # restart.sh - 单个或多个模块热重启
 #
-# 用法：
+# 调用示例：
 #   ./scripts/local/restart.sh <module> [module...]
 #
 # 支持的模块名：
@@ -164,14 +166,14 @@ warm_cds() {
 # ── 端口映射 ──────────────────────────────────────────────────
 port_for() {
   case "$1" in
-    orchestrator)    echo "${BATCH_ORCHESTRATOR_PORT:-18082}" ;;
-    trigger)         echo "${BATCH_TRIGGER_PORT:-18081}" ;;
-    console)         echo "${BATCH_CONSOLE_PORT:-18080}" ;;
-    worker-import)   echo "${BATCH_WORKER_IMPORT_PORT:-18083}" ;;
-    worker-export)   echo "${BATCH_WORKER_EXPORT_PORT:-18084}" ;;
-    worker-process)  echo "${BATCH_WORKER_PROCESS_PORT:-18086}" ;;
-    worker-dispatch) echo "${BATCH_WORKER_DISPATCH_PORT:-18085}" ;;
-    worker-atomic)      echo "${BATCH_WORKER_ATOMIC_PORT:-18087}" ;;
+    orchestrator)    echo "${BATCH_ORCHESTRATOR_PORT:-$BATCH_DEFAULT_ORCHESTRATOR_PORT}" ;;
+    trigger)         echo "${BATCH_TRIGGER_PORT:-$BATCH_DEFAULT_TRIGGER_PORT}" ;;
+    console)         echo "${CONSOLE_API_PORT:-${BATCH_CONSOLE_API_PORT:-$BATCH_DEFAULT_CONSOLE_PORT}}" ;;
+    worker-import)   echo "${BATCH_WORKER_IMPORT_PORT:-$BATCH_DEFAULT_WORKER_IMPORT_PORT}" ;;
+    worker-export)   echo "${BATCH_WORKER_EXPORT_PORT:-$BATCH_DEFAULT_WORKER_EXPORT_PORT}" ;;
+    worker-process)  echo "${BATCH_WORKER_PROCESS_PORT:-$BATCH_DEFAULT_WORKER_PROCESS_PORT}" ;;
+    worker-dispatch) echo "${BATCH_WORKER_DISPATCH_PORT:-$BATCH_DEFAULT_WORKER_DISPATCH_PORT}" ;;
+    worker-atomic)      echo "${BATCH_WORKER_ATOMIC_PORT:-$BATCH_DEFAULT_WORKER_ATOMIC_PORT}" ;;
     *) echo "ERROR: 未知模块 '$1'" >&2; exit 1 ;;
   esac
 }
@@ -290,16 +292,19 @@ stop_module() {
     echo "  ${name} 由 Compose 管理，跳过宿主端口 kill"
     return 0
   fi
-  local port
+  local port expected_jar pid
   port="$(port_for "$name")"
+  expected_jar="$RUNTIME_JAR_DIR/$name.jar"
   local pids
   # 只停监听进程。纯端口连接扫描还可能返回连到该端口的客户端，
   # 重启时可能误杀依赖此服务的 worker。
-  pids="$(process_listen_pids "$port")"
+  pids="$(process_listeners_owned_by_jar "$port" "$expected_jar")" || return 1
   if [ -n "$pids" ]; then
     echo "  停止 ${name}（端口 ${port}，pid=${pids}）"
-    # shellcheck disable=SC2086
-    kill -9 $pids 2>/dev/null || true
+    while IFS= read -r pid; do
+      [[ -n "$pid" ]] || continue
+      kill -9 "$pid" 2>/dev/null || true
+    done <<<"$pids"
   else
     echo "  ${name} 未运行（端口 ${port} 空闲）"
   fi
@@ -349,6 +354,8 @@ start_module() {
     echo "ERROR: ${name} 容器在超时时间内未健康，请检查 docker logs ${container}" >&2
     return 1
   fi
+  batch_configure_local_jvm_port_env true
+  batch_configure_local_jvm_control_plane_env
   local jar="$RUNTIME_JAR_DIR/$name.jar"
   if [ ! -f "$jar" ]; then
     echo "ERROR: 未找到 ${jar}，请先执行 ./scripts/local/build-apps.sh" >&2
@@ -375,7 +382,7 @@ start_module() {
 
 # ── 等待 orchestrator 健康 ────────────────────────────────────
 wait_orchestrator() {
-  local port="${BATCH_ORCHESTRATOR_PORT:-18082}"
+  local port="${BATCH_ORCHESTRATOR_PORT:-$BATCH_DEFAULT_ORCHESTRATOR_PORT}"
   local url="http://127.0.0.1:${port}/actuator/health"
   echo "  等待 orchestrator 就绪（${url}）..."
   for _ in $(seq 1 60); do
@@ -405,6 +412,9 @@ TARGETS=("$@")
 # 校验所有模块名合法
 for name in "${TARGETS[@]}"; do
   port_for "$name" >/dev/null
+  if ! is_containerized_module "$name"; then
+    batch_configure_local_jvm_port_env true
+  fi
 done
 
 echo "==> 停止目标模块..."

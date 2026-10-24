@@ -2,19 +2,65 @@
 
 > 本文是仓库文档状态、待办和历史快照的维护规则。它不替代 `docs/agent-baseline.md` 的工程约束。
 >
-> 最后核查：2026-10-08
+> 最后核查：2026-10-24（日期命名、归档与索引职责复核）
 
 ## 1. 权威入口
 
 | 内容 | 唯一入口 | 说明 |
 |---|---|---|
 | 当前架构事实 | `docs/architecture/architecture-truth.md` | 稳定入口，指向代码、部署配置和当前架构文档；不复制易漂移统计 |
-| 当前问题与待办 | `docs/analysis/todo-master.md` | 唯一当前事项索引；专题计划和 ADR 提供设计依据 |
-| 当前硬化事项 | `docs/analysis/hardening-backlog.md` | 仅维护仍有效的工程硬化项及其证据要求 |
+| 当前问题与待办 | `docs/plans/todo-master.md` | 唯一当前事项索引；专题计划和 ADR 提供设计依据 |
+| 当前硬化事项 | `docs/plans/hardening-backlog.md` | 仅维护仍有效的工程硬化项及其证据要求 |
 | 历史分析与修复记录 | 日期快照及归档报告 | 保留当时结论，不代表当前代码状态或待办 |
 | 测试覆盖与发布门禁 | `docs/testing/` | 以最新验证记录和门禁脚本为准 |
 | 运维操作 | `docs/runbook/` | 必须标注适用环境、前置条件和回滚 |
-| 历史证据 | `docs/archive/` | 只读，不参与当前待办统计 |
+| 历史证据 | `docs/archive/` | 结论冻结，不参与当前待办统计 |
+
+## 1.1 方案、评审与治理结论必须留档
+
+改造方案、架构/系统评估、代码或项目治理审查、整改计划和验收结论，Agent 应主动在现有权威文档中记录，不依赖用户重复提出“写文档”。按工作产物选择唯一主记录：
+
+| 产物 | 主记录位置 | 同步要求 |
+|---|---|---|
+| 跨模块/重大改造方案 | `docs/plans/`；涉及长期架构决策时同时维护对应 ADR | 更新 `docs/plans/todo-master.md` 中的当前状态和下一步；索引长期有效方案 |
+| 当前架构、职责和运行事实 | 对应 `docs/architecture/` 文档 | 方案目标与已实现事实分开描述 |
+| 项目/代码/治理评审及周期审计 | `docs/review/` 或 `docs/audit/` 的日期化报告 | 写明基线、范围、排除项、证据、风险等级和未验证项；当前待改项登记到 todo-master |
+| 整改任务和持续治理台账 | `docs/plans/todo-master.md`；长期硬化项可进 `hardening-backlog.md` | 保留责任边界、优先级、证据、核查日期和下一步 |
+| 测试计划、验收或运行验证结果 | `docs/testing/` 或 `docs/verifications/` | 区分设计、实现、自动化验证和目标环境验证 |
+| 运维流程或运行风险 | `docs/runbook/` | 同步适用环境、前置条件、权限及回滚步骤 |
+
+优先增补现有方案、ADR、评审报告或台账；仅在没有合适权威入口且内容有持续价值时新建文档，并同步相应目录索引。短小的日常修改不因此强制新建文档，但改造、评审或治理过程中形成的实质决定、风险、范围、优先级和验收证据应留在任务主记录中。评估/审查阶段记录结论和建议，不据此自行开始未授权实施。根 `CHANGELOG.md` 与 `docs/changelog.md` 按各自职责更新，不用 changelog 代替方案或评审记录。
+
+## 1.2 文件名、日期与目录按文档职责确定
+
+| 文档职责 | 文件名日期 | 位置与规则 |
+|---|---|---|
+| 持续维护的契约、规范、设计和操作手册 | 不加日期 | 对应 `architecture/`、`design/`、`standards/`、`runbook/`、`sdk/`；正文可记录形成/复核日期 |
+| 可反复执行的检查清单、验证方法和模板 | 不加日期 | `standards/`、`testing/` 或 `runbook/`；实际执行结果另存日期报告 |
+| 一次性审计、复盘、压测、验收与技术试验证据 | 保留日期 | `audit/`、`review/`、`verifications/`，或已被取代后的对应归档目录 |
+| 阶段改造方案及验收矩阵、执行日志 | 保留原方案基线日期 | `plans/`；跨日推进不把文件名反复改成当天日期，正文更新进度 |
+| 持续治理台账和当前规模快照 | 不加日期 | 例如 TODO Master、硬化台账和 `loc-current-lean.md`；过往规模快照仍带日期 |
+| ADR | 保持 ADR 编号和主题 | 决策日期、实施状态、撤销记录写入正文；撤销 ADR 仍保留编号，不因退役而移动决策入口 |
+| 历史综合报告、已被承接或撤销的方案 | 保留或补齐原始日期 | `archive/`，不再列为当前事实或当前实施路径；统计历史由 `archive/stats/` 按既有口径集中管理 |
+
+日期优先采用正文明确的评估、执行或来源基线日期，不能把归档日当作新评估日期。持续有效的手册即使还缺目标环境接入，也不因“未验收”而归档。文件移动必须同步相对链接、机器契约、代码/Skill 引用和目录角色路径；仅存在性检查通过，不代表文档职责与归属已人工核实。
+
+### 统一命名风格
+
+- 文档主题使用小写英文和短横线，例如 `core-model.md`、`object-storage-lifecycle-policy.md`；不混用下划线、空格、日期前缀和中文文件名。
+- 原文档资产持续维护：`<topic>.md`。架构、模型、原语、协议、配置、系统边界、可复用检查清单和章节映射都按资产维护；正文保留版本和最后复核时间。
+- 增量报告与归档快照：`<topic>-YYYY-MM-DD.md`；日期取自原审查、修复、执行或方案基线，不能改成整理日期。
+- 同日多版本归档：`<topic>-vN-YYYY-MM-DD.md`；跨日记录：`<topic>-YYYY-MM-DD-to-YYYY-MM-DD.md`；所有日期统一 `YYYY-MM-DD`；月度/H2 等规划周期放正文或主题中，不能替代完整基线日期。
+- `README.md`、`RELEASING.md`、`THIRD-PARTY-LICENSES.md` 保留通用约定；ADR 使用 `ADR-NNN-<topic>.md`。机器契约、测试 fixture、SQL 和生成物按各自消费契约命名，不套用 Markdown 命名规则。
+- 每轮增量记录需链接对应原文档资产。只有系统事实或契约变化时才同步修改原文档，避免把定期问题清单不断追加到长期资产说明里。
+
+### 目录收敛与两种更新方式
+
+目录职责与“去哪里找、改动后更新哪里”统一见 [文档路由指南](document-routing-guide.md)。长期/阶段性是生命周期，维护原文/新增记录是更新方式：长期资产维护原文；阶段方案和矩阵在原文件更新状态；阶段执行日志追加批次；每轮审查、修复盘点与验收结果另存日期记录。
+
+当前待办与硬化台账位于 `plans/todo-master.md`、`plans/hardening-backlog.md`，长期维护且不带日期。`plans/` 同时收纳带基线日期的阶段方案，索引明确区分台账与阶段材料。原 `analysis/`、`backlog/`、`spike/` 不再作为当前目录；待办回台账、方案进 plans、审计进 audit/review、实测进 verifications、旧材料进 archive。
+
+根 `test-data/` 保存脚本/多模块共享的场景数据；模块专用资源仍归所属模块。持续机器清单 `stats/java-readability-inventory.md` 不带日期，人工审计与单次扫描证据按日期保存。原始自动执行产物写 reports/、logs/、build/，经整理的仓库验收结论才进 verifications/。
 
 ## 2. 状态分类
 
@@ -49,11 +95,11 @@
 
 ## 5. 更新规则
 
-1. 新事项先登记到 `docs/analysis/todo-master.md`，再在主题文档补充详情；不直接散落创建无索引 TODO。
+1. 新事项先登记到 `docs/plans/todo-master.md`，再在主题文档补充详情；不直接散落创建无索引 TODO。
 2. 完成事项同步更新来源文档、`todo-master.md` 和必要的 `docs/changelog.md`，并删除或改写旧的“未完成”表述。
 3. 每条当前事项必须包含：负责人边界、优先级、证据路径、最后核查日期、下一步或阻塞条件。
 4. 计划文档完成后保留决策和验收结果；剩余事项转入 `todo-master.md`，计划正文不能继续伪装成当前清单。
-5. 日期快照、一次性审计、被新版取代的方案移入 `docs/archive/`，归档文件不再修正正文。
+5. 日期快照、一次性审计、被新版取代的方案移入 `docs/archive/`，归档文件不再更新历史结论；允许修复失效链接、补充历史标签和指向现行入口。
 6. 文档只使用仓库相对链接，不写本机绝对路径；示例凭据、令牌和固定密码必须使用占位符。
 
 ## 6. 项目介绍与索引维护
@@ -66,7 +112,7 @@
 | `docs/README.md` | 文档总导航；只覆盖一级目录、顶层文档、重要专题入口和角色路径，不扁平展开全部二级文档 |
 | 子目录 `README.md` | 该目录的人读索引；新增当前有效的同级文档时必须列入，归档/历史目录除外 |
 | `docs/runbook/README.md` | 运维 SOP 导航；新增部署、容量、灰度、应急、配置治理文档时必须同步 |
-| `docs/audit/convention-drift-guard-index.md` | 守护总账；新增系统性约束或 CI 守卫时必须同步 |
+| `docs/standards/convention-drift-guard-index.md` | 守护总账；新增系统性约束或 CI 守卫时必须同步 |
 | `scripts/ci/README.md` | 可执行门禁说明；新增 `check-*` / `validate-*` 脚本必须登记 |
 
 索引文字要求：
@@ -103,7 +149,7 @@ bash scripts/python.sh scripts/ci/check-code-doc-references.py
 ```
 
 该门禁检查当前文档的个人绝对路径、运维旧端口、local profile 固定 Redis 地址、Kafka
-容器 CLI 路径散落和可变 Sonar 镜像。`docs/archive/` 是只读历史证据，不追溯改写。
+容器 CLI 路径散落和可变 Sonar 镜像。`docs/archive/` 的历史结论不追溯改写；迁移路径和索引可以修复。
 
 文档结构门禁检查主目录 README、总索引覆盖、仓库内相对链接、Finder 元数据和带日期的本机
 验收报告。外部 URL 不联网检查，避免第三方站点波动阻断 CI。
@@ -111,3 +157,12 @@ bash scripts/python.sh scripts/ci/check-code-doc-references.py
 ## 8. 维护责任
 
 代码变更作者负责同步直接受影响的文档；PR 审核者负责检查状态和证据是否更新。每次版本发布前复扫一次，重大架构或安全变更后立即复扫。
+
+## 目录与索引的同次维护
+
+每份文档在所属 README 中维护可点击跳转和用途说明；每个子目录在上级 README 中维护入口和职责。改名、迁移、归档与索引、正文链接、代码/脚本/生成器、Skill、CI 路由及跨仓引用同次更新。`check-docs-structure.py` 检查真实链接及用途文字，并覆盖归档目录索引；历史报告正文保留旧结论，归档 README 继续维护有效导航。
+
+归档子目录与当前目录职责对应，有实际材料才建立；不保留 analysis/backlog 混合分桶。归档中的 ADR 关联方案以业务主题命名，ADR 编号在正文追溯；正式 ADR 的稳定编号与状态仍在架构决策目录维护。日期字段统一 `YYYY-MM-DD`，执行时间使用 `YYYY-MM-DD HH:mm:ss` 并注明适用时区；历史记录不能补造精度、时刻或时区。
+
+
+脚本及 CI 索引由各职责 README 维护：`scripts/README.md` 提供任务路由，`scripts/ci/README.md` 介绍门禁，`.github/workflows/README.md` / `.github/actions/README.md` 分别登记完整工作流和共享动作，`scripts/ci/baselines/README.md` 说明历史预算。`check-script-governance.py` 检查新增遗漏、失效目标、用途和父级入口。SQL/Flyway 不按脚本头字段重写；配套 SQL 仅登记既有路径。

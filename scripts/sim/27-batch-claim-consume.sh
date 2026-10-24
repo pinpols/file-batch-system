@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：batch-claim-consume.sh:ADR-046 P2 worker 消费端攒批 sim 回归。
+# 用法：在仓库根目录执行 bash scripts/sim/27-batch-claim-consume.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # 27-batch-claim-consume.sh:ADR-046 P2 worker 消费端攒批 sim 回归
 #
@@ -27,6 +29,7 @@ batch_require_python
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/batch-claim-consume.log"
 import json, os, subprocess, sys, time, urllib.request
+from scripts.sim.launch_contract import workflow_id_for_fixture
 
 TRIGGER = os.environ["TRIGGER_BASE"]
 ORCH = os.environ["ORCH_BASE"]
@@ -69,7 +72,7 @@ def scrape(metric):
 
 def launch(job, label, params):
     rid = f"sim-batchclaim-{label}-{int(time.time()*1000)%100000000}"
-    body = {"tenantId": "ta", "jobCode": job, "triggerType": "API",
+    body = {"tenantId": "ta", "workflowDefinitionId": workflow_id_for_fixture("ta", job), "triggerType": "API",
             "bizDate": BIZ, "requestId": rid, "params": params}
     req = urllib.request.Request(
         f"{TRIGGER}/api/triggers/launch", data=json.dumps(body).encode(),

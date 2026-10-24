@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
+# 用途：import-mainline.sh:三租户 IMPORT 主线系统级验证。
+# 用法：在仓库根目录执行 bash scripts/sim/28-import-mainline.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # 28-import-mainline.sh:三租户 IMPORT 主线系统级验证
 #
 # 覆盖:
 #   - ta/TA_IMPORT_CUSTOMER -> biz.customer_account
-#   - tb/TB_IMPORT_TRANSACTION -> biz.transaction(NUMERIC + DATE typed load)
-#   - tc/TC_IMPORT_RISK_SCORE -> biz.risk_score(NUMERIC + DATE typed load)
+# tb/TB_IMPORT_TRANSACTION 写入 biz.transaction，覆盖 NUMERIC 与 DATE 类型。
+# tc/TC_IMPORT_RISK_SCORE 写入 biz.risk_score，覆盖 NUMERIC 与 DATE 类型。
 #
 # 触发方式:Trigger API -> Orchestrator -> Kafka -> worker-import -> biz.*。
 # 本脚本只验证 IMPORT,不混入 export / dispatch / workflow 的下游结果。
@@ -28,6 +30,7 @@ import json
 import os
 import subprocess
 import sys
+from scripts.sim.launch_contract import workflow_id_for_fixture
 import time
 import urllib.request
 
@@ -108,7 +111,7 @@ def launch(tenant, job, template_code, header, row_builder):
     content = f"{header}\n{rows}\n"
     body = {
         "tenantId": tenant,
-        "jobCode": job,
+        "workflowDefinitionId": workflow_id_for_fixture(tenant, job),
         "triggerType": "API",
         "bizDate": BIZ,
         "requestId": request_id,

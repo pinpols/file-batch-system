@@ -10,7 +10,7 @@ public class PendingCatchUpEntity {
   private Long id;
   private String tenantId;
   private String requestId;
-  private String jobCode;
+  private String workflowCode;
   private LocalDate bizDate;
   private String requestStatus;
   private String traceId;

@@ -128,10 +128,10 @@ class FileImportHandler:
                 f"file import failed: {ex}",
                 cause=ex,
             )
-        return SdkTaskResult.success_with(
-            output=counts.to_output(),
-            message=f"imported {counts.success()} rows",
-        )
+        output = counts.to_output()
+        successful_count = counts.success()
+        summary_message = f"imported {successful_count} rows"
+        return SdkTaskResult.success_with(output=output, message=summary_message)
 
     # -- 租户可覆盖钩子(对齐 Java SdkAbstractImportHandler) --------------------
 

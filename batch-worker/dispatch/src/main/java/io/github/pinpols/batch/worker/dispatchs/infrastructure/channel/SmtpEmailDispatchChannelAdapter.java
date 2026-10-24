@@ -47,6 +47,15 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
 
   private static final int DEFAULT_SMTP_TIMEOUT_MILLIS = 30_000;
 
+  private static final class SmtpOutcomeUnknownException extends Exception {
+
+    private SmtpOutcomeUnknownException(Exception cause) {
+      super(
+          "SMTP delivery outcome is unknown because the connection failed while awaiting send confirmation",
+          cause);
+    }
+  }
+
   /** JavaMail 标准属性名；生产装配与测试断言共用，避免字面量在多处漂移。 */
   public static final String MAIL_SMTP_HOST_KEY = "mail.smtp.host";
 
@@ -89,10 +98,9 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     if (mailConfig == null) {
       String host = stringProp(channelConfig, "smtp_host");
       if (!Texts.hasText(host)) {
-        return new DispatchResult(false, null, null, false, false, "smtp_host missing", null);
+        return DispatchResult.failureWithoutReceipt("smtp_host missing");
       }
-      return new DispatchResult(
-          false, null, null, false, false, "mail_from/mail_to or target_endpoint missing", null);
+      return DispatchResult.failureWithoutReceipt("mail_from/mail_to or target_endpoint missing");
     }
 
     DispatchReceiptSupport.Receipt receipt =
@@ -114,6 +122,13 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
           receipt.pending(),
           "sent via SMTP",
           "mailto:" + mailConfig.to());
+    } catch (SmtpOutcomeUnknownException ex) {
+      SwallowedExceptionLogger.warn(
+          SmtpEmailDispatchChannelAdapter.class, "smtp-outcome-unknown", ex);
+      return DispatchResult.externalOutcomeUnknown(
+          receipt.externalRequestId(),
+          receipt.receiptCode(),
+          "EXTERNAL_OUTCOME_UNKNOWN: " + ex.getMessage());
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(SmtpEmailDispatchChannelAdapter.class, "catch:Exception", ex);
 
@@ -148,9 +163,11 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
       startTls = true;
     }
 
-    String from = firstNonBlank(stringProp(channelConfig, "mail_from"), smtpUser);
-    String to = firstNonBlank(
-        stringProp(channelConfig, "mail_to"), stringProp(channelConfig, "target_endpoint"));
+    String configuredMailFrom = stringProp(channelConfig, "mail_from");
+    String from = firstNonBlank(configuredMailFrom, smtpUser);
+    String configuredMailTo = stringProp(channelConfig, "mail_to");
+    String configuredTargetEndpoint = stringProp(channelConfig, "target_endpoint");
+    String to = firstNonBlank(configuredMailTo, configuredTargetEndpoint);
     if (!Texts.hasText(from) || !Texts.hasText(to)) {
       return null;
     }
@@ -172,7 +189,9 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     if (raw == null) {
       return null;
     }
-    String cleaned = raw.replace("\r", "").replace("\n", "").trim();
+    String carriageReturnsRemoved = raw.replace("\r", "");
+    String lineFeedsRemoved = carriageReturnsRemoved.replace("\n", "");
+    String cleaned = lineFeedsRemoved.trim();
     return cleaned.length() > 998 ? cleaned.substring(0, 998) : cleaned;
   }
 
@@ -214,10 +233,13 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
 
     // S-1.7：from / to 走 header sanitize，阻止 "victim@evil\r\nBcc: attacker@..." 注入
     MimeMessage message = new MimeMessage(session);
-    message.setFrom(new InternetAddress(sanitizeHeader(mailConfig.from())));
-    message.setRecipients(
-        Message.RecipientType.TO,
-        InternetAddress.parse(sanitizeHeader(mailConfig.to().replace(";", ","))));
+    String sanitizedFrom = sanitizeHeader(mailConfig.from());
+    InternetAddress fromAddress = new InternetAddress(sanitizedFrom);
+    message.setFrom(fromAddress);
+    String normalizedRecipients = mailConfig.to().replace(";", ",");
+    String sanitizedRecipients = sanitizeHeader(normalizedRecipients);
+    InternetAddress[] recipients = InternetAddress.parse(sanitizedRecipients);
+    message.setRecipients(Message.RecipientType.TO, recipients);
     message.setSubject(subject, StandardCharsets.UTF_8.name());
 
     MimeBodyPart textPart = new MimeBodyPart();
@@ -256,9 +278,9 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
   private void addAttachment(
       MimeMessage message, byte[] attachmentBytes, Map<String, Object> fileRecord)
       throws MessagingException, IOException {
-    String attachName = firstNonBlank(
-        String.valueOf(fileRecord.getOrDefault("original_file_name", "")),
-        String.valueOf(fileRecord.getOrDefault("file_name", "attachment.bin")));
+    String originalFileName = String.valueOf(fileRecord.getOrDefault("original_file_name", ""));
+    String fileName = String.valueOf(fileRecord.getOrDefault("file_name", "attachment.bin"));
+    String attachName = firstNonBlank(originalFileName, fileName);
     String mimeType =
         String.valueOf(fileRecord.getOrDefault("mime_type", "application/octet-stream"));
 
@@ -273,11 +295,25 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     message.setContent(multipart);
   }
 
-  private void sendMail(MailConfig mailConfig, MimeMessage message) throws MessagingException {
-    try (Transport transport = message.getSession().getTransport("smtp")) {
+  private void sendMail(MailConfig mailConfig, MimeMessage message)
+      throws MessagingException, SmtpOutcomeUnknownException {
+    Transport transport = message.getSession().getTransport("smtp");
+    try {
       transport.connect(
           mailConfig.host(), mailConfig.port(), mailConfig.smtpUser(), mailConfig.smtpPass());
-      transport.sendMessage(message, message.getAllRecipients());
+      try {
+        transport.sendMessage(message, message.getAllRecipients());
+      } catch (MessagingException | RuntimeException exception) {
+        throw new SmtpOutcomeUnknownException(exception);
+      }
+    } finally {
+      try {
+        transport.close();
+      } catch (MessagingException exception) {
+        // 将 Worker 选定的系统 Pipeline 契约固定到任务中，以便确定性重放。
+        SwallowedExceptionLogger.warn(
+            SmtpEmailDispatchChannelAdapter.class, "smtp-transport-close-failed", exception);
+      }
     }
   }
 
@@ -300,7 +336,9 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
       return b;
     }
     if (v != null) {
-      return Boolean.parseBoolean(String.valueOf(v).trim());
+      String propertyText = String.valueOf(v);
+      String trimmedPropertyText = propertyText.trim();
+      return Boolean.parseBoolean(trimmedPropertyText);
     }
     return def;
   }

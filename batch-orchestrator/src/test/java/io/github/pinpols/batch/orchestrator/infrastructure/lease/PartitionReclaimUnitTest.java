@@ -1,10 +1,14 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.lease;
 
+import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
+
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -13,10 +17,13 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.RunMode;
+import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
 import io.github.pinpols.batch.orchestrator.config.PartitionLeaseProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
+import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -24,6 +31,7 @@ import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -44,6 +52,7 @@ class PartitionReclaimUnitTest {
   private JobStepInstanceMapper jobStepInstanceMapper;
   private JobInstanceMapper jobInstanceMapper;
   private TaskDispatchOutboxService outboxService;
+  private TaskOutcomeService taskOutcomeService;
   private PartitionReclaimUnit unit;
 
   @BeforeEach
@@ -53,6 +62,7 @@ class PartitionReclaimUnitTest {
     jobStepInstanceMapper = mock(JobStepInstanceMapper.class);
     jobInstanceMapper = mock(JobInstanceMapper.class);
     outboxService = mock(TaskDispatchOutboxService.class);
+    taskOutcomeService = mock(TaskOutcomeService.class);
 
     PartitionLeaseProperties props = new PartitionLeaseProperties();
     props.setExpireSeconds(60L);
@@ -66,6 +76,7 @@ class PartitionReclaimUnitTest {
         jobStepInstanceMapper,
         jobInstanceMapper,
         outboxService,
+        taskOutcomeService,
         governance);
   }
 
@@ -77,9 +88,23 @@ class PartitionReclaimUnitTest {
 
     unit.reclaim(partition);
 
-    verify(jobPartitionMapper).resetForDispatch("t1", 1L, PartitionStatus.READY.code(), 5L);
+    verify(jobPartitionMapper).resetForLeaseReclaim("t1", 1L, PartitionStatus.READY.code(), 5L);
     verify(outboxService, never())
-        .writeDispatchEvent(any(), any(), any(), anyString(), anyString(), any());
+        .writeDispatchEvent(org.mockito.ArgumentMatchers.argThat(command -> command != null && command.traceId() != null && command.eventKey() != null));
+  }
+
+  @Test
+  @DisplayName("回收先取得实例围栏再读取和修改运行态行")
+  void shouldAcquireInstanceFenceBeforeReadingAndChangingRuntimeRows() {
+    JobPartitionEntity partition = expiredPartition("t1", 1L, 10L, 5L);
+    when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of());
+
+    unit.reclaim(partition);
+
+    var order = inOrder(jobInstanceMapper, jobTaskMapper, jobPartitionMapper);
+    order.verify(jobInstanceMapper).acquireInstanceAdvisoryLock("t1", 10L);
+    order.verify(jobTaskMapper).selectByQuery(any());
+    order.verify(jobPartitionMapper).resetForLeaseReclaim("t1", 1L, PartitionStatus.READY.code(), 5L);
   }
 
   @Test
@@ -90,10 +115,10 @@ class PartitionReclaimUnitTest {
     JobInstanceEntity instance = jobInstance("t1", 10L);
     when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of(task));
     when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(instance);
-    when(jobPartitionMapper.resetForDispatch("t1", 1L, PartitionStatus.READY.code(), 5L))
+    when(jobPartitionMapper.resetForLeaseReclaim("t1", 1L, PartitionStatus.READY.code(), 5L))
         .thenReturn(1);
     // 第二步 task CAS 失败
-    when(jobTaskMapper.resetForRetry("t1", 100L, TaskStatus.READY.code(), 7L)).thenReturn(0);
+    when(jobTaskMapper.resetForLeaseReclaim("t1", 100L, TaskStatus.READY.code(), 7L)).thenReturn(0);
 
     assertThatThrownBy(() -> unit.reclaim(partition))
         .isInstanceOf(ReclaimRetryableException.class)
@@ -101,7 +126,7 @@ class PartitionReclaimUnitTest {
         .hasMessageContaining("taskId=100");
 
     verify(outboxService, never())
-        .writeDispatchEvent(any(), any(), any(), anyString(), anyString(), any());
+        .writeDispatchEvent(org.mockito.ArgumentMatchers.argThat(command -> command != null && command.traceId() != null && command.eventKey() != null));
   }
 
   @Test
@@ -113,14 +138,14 @@ class PartitionReclaimUnitTest {
     when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of(task));
     when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(instance);
     // partition 第一步就失败，task 不被触发
-    when(jobPartitionMapper.resetForDispatch("t1", 1L, PartitionStatus.READY.code(), 5L))
+    when(jobPartitionMapper.resetForLeaseReclaim("t1", 1L, PartitionStatus.READY.code(), 5L))
         .thenReturn(0);
 
     unit.reclaim(partition);
 
-    verify(jobTaskMapper, never()).resetForRetry(anyString(), any(), anyString(), any());
+    verify(jobTaskMapper, never()).resetForLeaseReclaim(anyString(), any(), anyString(), any());
     verify(outboxService, never())
-        .writeDispatchEvent(any(), any(), any(), anyString(), anyString(), any());
+        .writeDispatchEvent(org.mockito.ArgumentMatchers.argThat(command -> command != null && command.traceId() != null && command.eventKey() != null));
   }
 
   @Test
@@ -128,28 +153,35 @@ class PartitionReclaimUnitTest {
   void shouldWriteOutboxWithVersionedEventKeyOnSuccess() {
     JobPartitionEntity partition = expiredPartition("t1", 1L, 10L, 5L);
     JobTaskEntity task = runningTask("t1", 100L, 1L, 7L);
+    task.setAssignedWorkerCode("worker-instance-1");
     JobInstanceEntity instance = jobInstance("t1", 10L);
     when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of(task));
     when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(instance);
-    when(jobPartitionMapper.resetForDispatch("t1", 1L, PartitionStatus.READY.code(), 5L))
+    when(jobPartitionMapper.resetForLeaseReclaim("t1", 1L, PartitionStatus.READY.code(), 5L))
         .thenReturn(1);
-    when(jobTaskMapper.resetForRetry("t1", 100L, TaskStatus.READY.code(), 7L)).thenReturn(1);
+    when(jobTaskMapper.resetForLeaseReclaim("t1", 100L, TaskStatus.READY.code(), 7L)).thenReturn(1);
     when(jobStepInstanceMapper.resetForRetryByJobTaskId("t1", 100L, 0, TaskStatus.READY.code()))
         .thenReturn(1);
 
     unit.reclaim(partition);
 
-    ArgumentCaptor<String> eventKeyCaptor = ArgumentCaptor.forClass(String.class);
+    verify(jobPartitionMapper, never())
+        .resetForDispatch(anyString(), any(), anyString(), any());
+    verify(jobTaskMapper, never()).resetForRetry(anyString(), any(), anyString(), any());
+    ArgumentCaptor<TaskDispatchEventCommand> dispatchCaptor = ArgumentCaptor.forClass(TaskDispatchEventCommand.class);
     verify(outboxService, times(1))
         .writeDispatchEvent(
-            eq(instance),
-            eq(task),
-            eq(partition),
-            anyString(),
-            eventKeyCaptor.capture(),
-            eq(RunMode.RECOVER));
+            dispatchCaptor.capture());
+    assertThat(dispatchCaptor.getValue().jobInstance()).isEqualTo(instance);
+    assertThat(dispatchCaptor.getValue().partition()).isEqualTo(partition);
+    assertThat(dispatchCaptor.getValue().traceId()).isNotNull();
+    assertThat(dispatchCaptor.getValue().runModeOverride()).isEqualTo(RunMode.RECOVER);
+    assertThat(dispatchCaptor.getValue().task().getAssignedWorkerCode())
+        .as(
+            "reclaim resets the persisted assignment so the dispatch must not target the stale worker")
+        .isNull();
     // eventKey 必须包含 version；保证多次 reclaim 不被 outbox UNIQUE(tenant_id, event_key) ON CONFLICT 静默捕获并抑制
-    assertThat(eventKeyCaptor.getValue()).isEqualTo("t1:reclaim:1:v5");
+    assertThat(dispatchCaptor.getValue().eventKey()).isEqualTo("t1:reclaim:1:v5");
   }
 
   @Test
@@ -162,9 +194,40 @@ class PartitionReclaimUnitTest {
 
     unit.reclaim(partition);
 
-    verify(jobPartitionMapper, never()).resetForDispatch(anyString(), any(), anyString(), any());
+    verify(jobPartitionMapper, never()).resetForLeaseReclaim(anyString(), any(), anyString(), any());
     verify(outboxService, never())
-        .writeDispatchEvent(any(), any(), any(), anyString(), anyString(), any());
+        .writeDispatchEvent(org.mockito.ArgumentMatchers.argThat(command -> command != null && command.traceId() != null && command.eventKey() != null));
+  }
+
+  @Test
+  @DisplayName("已开始非幂等执行的过期任务以外部结果未知终结,不复位或重派")
+  void shouldCloseNonIdempotentTaskAsUnknownInsteadOfReplaying() {
+    JobPartitionEntity partition = expiredPartition("t1", 1L, 10L, 5L);
+    partition.setCurrentInvocationId("inv-7");
+    JobTaskEntity task = runningTask("t1", 100L, 1L, 7L);
+    task.setTaskStatus(TaskStatus.RUNNING.code());
+    task.setAssignedWorkerCode("worker-1");
+    task.setNonIdempotentStartedAt(Instant.parse("2026-10-21T00:00:00Z"));
+    JobInstanceEntity instance = jobInstance("t1", 10L);
+    when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of(task));
+    when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(instance);
+    when(jobPartitionMapper.selectById("t1", 1L)).thenReturn(partition);
+    when(taskOutcomeService.applyTaskOutcome(any())).thenReturn(task);
+
+    unit.reclaim(partition);
+
+    ArgumentCaptor<TaskOutcomeCommand> outcomeCaptor =
+        ArgumentCaptor.forClass(TaskOutcomeCommand.class);
+    verify(taskOutcomeService).applyTaskOutcome(outcomeCaptor.capture());
+    assertThat(outcomeCaptor.getValue().errorCode())
+        .isEqualTo(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN);
+    assertThat(outcomeCaptor.getValue().partitionInvocationId()).isEqualTo("inv-7");
+    assertThat(outcomeCaptor.getValue().workerId()).isEqualTo("worker-1");
+    verify(jobPartitionMapper, never()).resetForLeaseReclaim(anyString(), any(), anyString(), any());
+    verify(jobTaskMapper, never()).lockForReclaimNoWait(anyString(), any());
+    verify(jobTaskMapper, never()).resetForLeaseReclaim(anyString(), any(), anyString(), any());
+    verify(outboxService, never())
+        .writeDispatchEvent(org.mockito.ArgumentMatchers.argThat(command -> command != null && command.traceId() != null && command.eventKey() != null));
   }
 
   // ── 辅助方法 ──

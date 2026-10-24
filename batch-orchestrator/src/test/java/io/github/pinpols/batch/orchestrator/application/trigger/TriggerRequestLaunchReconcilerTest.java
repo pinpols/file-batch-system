@@ -9,6 +9,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.orchestrator.domain.query.TriggerRequestLaunchReconcileRow;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
@@ -49,10 +51,9 @@ class TriggerRequestLaunchReconcilerTest {
   @BeforeEach
   void setUp() {
     meterRegistry = new SimpleMeterRegistry();
-    io.github.pinpols.batch.orchestrator.application.trigger.TriggerLaunchReconcilerProperties
-        props =
-            new io.github.pinpols.batch.orchestrator.application.trigger
-                .TriggerLaunchReconcilerProperties();
+    TriggerLaunchReconcilerProperties props =
+        new io.github.pinpols.batch.orchestrator.application.trigger
+            .TriggerLaunchReconcilerProperties();
     props.setMinAgeSeconds(300);
     props.setBatchSize(200);
     reconciler = new TriggerRequestLaunchReconciler(
@@ -133,6 +134,27 @@ class TriggerRequestLaunchReconcilerTest {
     // 第一行抛了,第二行仍要处理
     verify(triggerRequestMapper).reconcileLaunched("tenant-c", "req-good", 302L);
     assertThat(reconciledCount("tenant-c")).isEqualTo(1.0);
+  }
+
+  @Test
+  @DisplayName("跨租户请求逐行在所属租户上下文内回写并清理上下文")
+  void reconcile_bindsTenantContextForEachCandidate() {
+    when(gracefulShutdown.isDraining()).thenReturn(false);
+    TriggerRequestLaunchReconcileRow tenantA = row("tenant-a", "req-a", 401L);
+    TriggerRequestLaunchReconcileRow tenantB = row("tenant-b", "req-b", 402L);
+    when(triggerRequestMapper.selectStaleAcceptedWithJobInstance(any(Instant.class), eq(200)))
+        .thenReturn(List.of(tenantA, tenantB));
+    Mockito.doAnswer(invocation -> {
+          String tenantId = invocation.getArgument(0);
+          assertThat(RlsTenantContextHolder.get()).isEqualTo(tenantId);
+          return 1;
+        })
+        .when(triggerRequestMapper)
+        .reconcileLaunched(any(), any(), any());
+
+    reconciler.reconcile();
+
+    assertThat(RlsTenantContextHolder.get()).isNull();
   }
 
   // ── helpers ────────────────────────────────────────────────────────────────

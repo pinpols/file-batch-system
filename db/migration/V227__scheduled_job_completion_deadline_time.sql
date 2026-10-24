@@ -1,3 +1,5 @@
+-- 为作业完成时限增加本地时间和跨业务日偏移配置。
+
 ALTER TABLE batch.job_monitoring_policy
     ADD COLUMN completion_deadline_local_time TIME WITHOUT TIME ZONE,
     ADD COLUMN completion_deadline_day_offset SMALLINT NOT NULL DEFAULT 0,
@@ -8,8 +10,8 @@ ALTER TABLE batch.job_monitoring_policy
     VALIDATE CONSTRAINT ck_job_monitoring_policy_completion_day_offset;
 
 COMMENT ON COLUMN batch.job_monitoring_policy.completion_deadline_local_time IS
-    'Local wall-clock completion deadline for scheduled jobs, interpreted in job_definition.timezone; NULL disables this scheduled-job alert.';
+    '定时作业的本地完成截止时刻，按 job_definition.timezone 解释；NULL 表示关闭此定时作业告警。';
 COMMENT ON COLUMN batch.job_monitoring_policy.completion_deadline_day_offset IS
-    'Calendar-day offset from the scheduled fire date for the local completion deadline: 0 same day, 1 next day.';
+    '本地完成截止日期相对计划触发日的日历日偏移：0 表示当天，1 表示次日。';
 COMMENT ON COLUMN batch.job_monitoring_policy.completion_deadline_seconds IS
-    'Deprecated legacy field retained for compatibility; scheduled-job not-completed-by-deadline monitoring now uses completion_deadline_local_time and completion_deadline_day_offset. Existing seconds values are not auto-converted.';
+    '为兼容旧配置而保留的已弃用字段；定时作业未按时完成告警已改用 completion_deadline_local_time 和 completion_deadline_day_offset。现有秒数值不会自动转换。';

@@ -53,11 +53,14 @@ public class ProcessTaskExecutor implements BatchTaskExecutor {
 
   @Override
   public TaskCapability capability() {
+    Set<ResourceKind> supportedResources = Set.of(ResourceKind.CPU, ResourceKind.DB);
+    long capabilityTimeoutSeconds = timeoutProperties.getCapabilityTimeoutSeconds();
+    Duration capabilityTimeout = Duration.ofSeconds(capabilityTimeoutSeconds);
     return new TaskCapability(
-        Set.of(ResourceKind.CPU, ResourceKind.DB),
+        supportedResources,
         false,
         true,
-        Duration.ofSeconds(timeoutProperties.getCapabilityTimeoutSeconds()));
+        capabilityTimeout);
   }
 
   @Override
@@ -66,8 +69,10 @@ public class ProcessTaskExecutor implements BatchTaskExecutor {
         ctx.tenantId(), ctx.jobCode(), taskType(), ctx.workerId(), ctx.runtimeAttributes());
     StepExecutionResponse resp = delegate.execute(req);
     if (resp.success()) {
-      return TaskResult.ok(EmptyChecks.isNull(resp.message()) ? "ok" : resp.message());
+      String successMessage = EmptyChecks.isNull(resp.message()) ? "ok" : resp.message();
+      return TaskResult.ok(successMessage);
     }
-    return TaskResult.fail(EmptyChecks.isNull(resp.message()) ? resp.code() : resp.message());
+    String failureMessage = EmptyChecks.isNull(resp.message()) ? resp.code() : resp.message();
+    return TaskResult.fail(failureMessage);
   }
 }

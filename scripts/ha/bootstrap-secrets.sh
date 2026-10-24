@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：② 凭据 secret 引导。在 apply CR 之前建好,避免弱默认(本仓 prod profile 会拦 minioadmin/弱口令)。
+# 用法：在仓库根目录执行 bash scripts/ha/bootstrap-secrets.sh；参数与前置环境见下方说明及所属 README。
 # ② 凭据 secret 引导。在 apply CR 之前建好,避免弱默认(本仓 prod profile 会拦 minioadmin/弱口令)。
 # 凭据从环境变量读;**不落盘、不进 git**。CI/生产建议用 ExternalSecret/Vault 替代本脚本。
 set -euo pipefail

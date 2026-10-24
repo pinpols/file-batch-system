@@ -2,15 +2,16 @@ package io.github.pinpols.batch.worker.processes.stage;
 
 import io.github.pinpols.batch.common.constants.NodeOutputKeys;
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.support.AbstractStageExecutor;
 import io.github.pinpols.batch.worker.core.support.PipelineStepTemplateProvider;
@@ -20,11 +21,14 @@ import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
 import io.github.pinpols.batch.worker.processes.metrics.ProcessMetrics;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /** PROCESS 主链路 stage 执行器。 */
@@ -35,7 +39,7 @@ public class DefaultProcessStageExecutor
     implements ProcessStageExecutor, PipelineStepTemplateProvider {
 
   /**
-   * P1 阶段级续跑对 PROCESS 的跳过安全 stage 集。仅这三个:
+   * P1 阶段级续跑对 PROCESS 的跳过安全 stage 集。仅 COMPUTE、VALIDATE 两个阶段:
    *
    * <ul>
    *   <li>{@code COMPUTE}——写 staging(按稳定 {@code process-<taskId>} 键),成功后重派可跳过、不重算(P1 头号收益); DIRECT
@@ -55,25 +59,63 @@ public class DefaultProcessStageExecutor
   private final List<PipelineStepTemplate> defaultStepDefinitions;
   private final ProcessMetrics metrics;
   private final WorkerCheckpointProperties checkpointProperties;
+  private final ProcessInvocationFence invocationFence;
+  private final ProcessPluginExecutionFence pluginExecutionFence;
 
+  DefaultProcessStageExecutor(
+      List<ProcessStageStep> steps,
+      List<ProcessComputePlugin> plugins,
+      PlatformPipelineRunRepository pipelineRuns,
+      ProcessMetrics metrics,
+      WorkerCheckpointProperties checkpointProperties,
+      ProcessInvocationFence invocationFence) {
+    this(
+        steps,
+        plugins,
+        pipelineRuns,
+        metrics,
+        checkpointProperties,
+        invocationFence,
+        ProcessPluginExecutionFence.disabledForUnitTests());
+  }
+
+  @Autowired
   public DefaultProcessStageExecutor(
       List<ProcessStageStep> steps,
       List<ProcessComputePlugin> plugins,
-      PlatformPipelineDefinitionRepository pipelineDefinitions,
       PlatformPipelineRunRepository pipelineRuns,
       ProcessMetrics metrics,
-      WorkerCheckpointProperties checkpointProperties) {
-    super(pipelineDefinitions, pipelineRuns);
+      WorkerCheckpointProperties checkpointProperties,
+      ProcessInvocationFence invocationFence,
+      ProcessPluginExecutionFence pluginExecutionFence) {
+    super(pipelineRuns);
     this.pluginsByImplCode = indexPlugins(plugins);
     this.stepsByStage = indexByStage(steps);
     this.defaultStepDefinitions = buildDefaultStepDefinitions();
     this.metrics = metrics;
     this.checkpointProperties = checkpointProperties;
+    this.invocationFence = invocationFence;
+    this.pluginExecutionFence = pluginExecutionFence;
+  }
+
+  DefaultProcessStageExecutor(
+      List<ProcessStageStep> steps,
+      List<ProcessComputePlugin> plugins,
+      PlatformPipelineRunRepository pipelineRuns,
+      ProcessMetrics metrics,
+      WorkerCheckpointProperties checkpointProperties) {
+    this(
+        steps,
+        plugins,
+        pipelineRuns,
+        metrics,
+        checkpointProperties,
+        (context, stage, stageExecution) -> stageExecution.get());
   }
 
   /**
    * P1 阶段级续跑:PROCESS 副作用落 {@code process_staging}(稳定 {@code process-<taskId>} 键,COMMIT/VALIDATE
-   * 均从该键重建),故可安全开启。开关默认 false(本 PR 只交付能力)。
+   * 均从该键重建),故可安全开启。开关默认 false，需显式启用。
    */
   @Override
   protected boolean stageSkipEnabled() {
@@ -111,7 +153,17 @@ public class DefaultProcessStageExecutor
   public List<ProcessStageResult> execute(ProcessJobContext context) {
     List<PipelineStepDefinition> steps = loadConfiguredSteps(context);
     if (!Texts.hasText(context.getBatchKey())) {
-      context.setBatchKey(generateBatchKey(context));
+      String batchKey = generateBatchKey(context);
+      context.setBatchKey(batchKey);
+    }
+    boolean shouldCreateFallbackStagingGeneration =
+        EmptyChecks.isNull(context.getAttributes().get(PipelineRuntimeKeys.TASK_ID))
+            && !Texts.hasText(context.getStagingGenerationId());
+    if (shouldCreateFallbackStagingGeneration) {
+      // 仅供低基数运维指标使用的跨租户汇总。
+      UUID generationUuid = UUID.randomUUID();
+      String generationId = generationUuid.toString();
+      context.setStagingGenerationId(generationId);
     }
     resolvePluginAndAttachToContext(context, steps);
     return runStageLoop(context);
@@ -164,6 +216,11 @@ public class DefaultProcessStageExecutor
   }
 
   private String resolvePluginCode(ProcessJobContext context, PipelineStepDefinition computeStep) {
+    return resolvePluginCode(context.getAttributes(), computeStep);
+  }
+
+  private String resolvePluginCode(
+      Map<String, Object> attributes, PipelineStepDefinition computeStep) {
     if (EmptyChecks.isNotNull(computeStep)) {
       String implCode = computeStep.implCode();
       boolean hasExplicitComputePlugin = Texts.hasText(implCode)
@@ -173,7 +230,7 @@ public class DefaultProcessStageExecutor
         return implCode;
       }
     }
-    Object fallback = context.getAttributes().get("processImplCode");
+    Object fallback = attributes.get(ComputeStep.ATTR_PROCESS_IMPL_CODE);
     return EmptyChecks.isNull(fallback) ? null : String.valueOf(fallback);
   }
 
@@ -185,7 +242,9 @@ public class DefaultProcessStageExecutor
    * <p>无 taskId 回退场景仅本地测试 / 一次性运行, 用 thread + nano 拼一个进程内唯一值即可, 不影响生产路径.
    */
   private String generateBatchKey(ProcessJobContext context) {
-    Long taskId = toLong(context.getAttributes().get(PipelineRuntimeKeys.TASK_ID));
+    Map<String, Object> attributes = context.getAttributes();
+    Object taskIdValue = attributes.get(PipelineRuntimeKeys.TASK_ID);
+    Long taskId = toLong(taskIdValue);
     if (EmptyChecks.isNotNull(taskId)) {
       return "process-" + taskId;
     }
@@ -200,7 +259,8 @@ public class DefaultProcessStageExecutor
       return number.longValue();
     }
     try {
-      return Long.parseLong(String.valueOf(value));
+      String taskIdText = String.valueOf(value);
+      return Long.parseLong(taskIdText);
     } catch (NumberFormatException ignored) {
       SwallowedExceptionLogger.info(
           DefaultProcessStageExecutor.class, "catch:NumberFormatException", ignored);
@@ -212,6 +272,43 @@ public class DefaultProcessStageExecutor
   @Override
   public List<PipelineStepTemplate> defaultStepDefinitions() {
     return defaultStepDefinitions;
+  }
+
+  /** 通过冻结 PROCESS 定义选定的插件解析重放元数据。 */
+  public ReplayCapabilityDeclaration replayCapability(
+      String implCode, Map<String, Object> frozenProcessConfig) {
+    ProcessComputePlugin plugin = pluginsByImplCode.get(implCode);
+    if (EmptyChecks.isNull(plugin)) {
+      throw new IllegalStateException(
+          "no ProcessComputePlugin registered for implCode: " + implCode);
+    }
+    return plugin.replayCapability(frozenProcessConfig);
+  }
+
+  @Override
+  public ReplayCapabilityDeclaration replayCapability(
+      List<PipelineStepDefinition> steps, Map<String, Object> attributes) {
+    PipelineStepDefinition computeStep = findComputeStep(steps);
+    String pluginCode = resolvePluginCode(attributes, computeStep);
+    if (!Texts.hasText(pluginCode)) {
+      return ReplayCapabilityDeclaration.unknown("PROCESS");
+    }
+    ProcessComputePlugin plugin = pluginsByImplCode.get(pluginCode);
+    if (EmptyChecks.isNull(plugin)) {
+      return ReplayCapabilityDeclaration.unknown(pluginCode);
+    }
+    Map<String, Object> frozenProcessConfig =
+        EmptyChecks.isNull(computeStep) || EmptyChecks.isNull(computeStep.stepParams())
+            ? Map.of()
+            : computeStep.stepParams();
+    return plugin.replayCapability(frozenProcessConfig);
+  }
+
+  public List<ReplayCapabilityDeclaration> replayCapabilityCatalog() {
+    return pluginsByImplCode.values().stream()
+        .sorted(Comparator.comparing(ProcessComputePlugin::implCode))
+        .map(ProcessComputePlugin::replayCapabilityDeclaration)
+        .toList();
   }
 
   @Override
@@ -242,7 +339,14 @@ public class DefaultProcessStageExecutor
     long startNanos = System.nanoTime();
     ProcessStageResult result;
     try {
-      result = stageStep.execute(context);
+      if (!pluginExecutionFence.authorize(context, stage)) {
+        result = ProcessStageResult.failure(
+            stage,
+            TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN,
+            "non-idempotent PROCESS plugin execution fence was not confirmed");
+      } else {
+        result = invocationFence.execute(context, stage, () -> stageStep.execute(context));
+      }
     } catch (BizException exception) {
       log.error(
           "process stage business error: stage={}, stepCode={}, implCode={}, tenantId={}",
@@ -338,10 +442,13 @@ public class DefaultProcessStageExecutor
       return Map.of();
     }
     for (ProcessComputePlugin plugin : plugins) {
-      if (EmptyChecks.isNull(plugin) || !Texts.hasText(plugin.implCode())) {
+      boolean pluginIsMissingOrHasNoImplementationCode =
+          EmptyChecks.isNull(plugin) || !Texts.hasText(plugin.implCode());
+      if (pluginIsMissingOrHasNoImplementationCode) {
         continue;
       }
-      if (EmptyChecks.isNotNull(indexed.putIfAbsent(plugin.implCode(), plugin))) {
+      ProcessComputePlugin existingPlugin = indexed.putIfAbsent(plugin.implCode(), plugin);
+      if (EmptyChecks.isNotNull(existingPlugin)) {
         throw new IllegalStateException("duplicate process compute plugin: " + plugin.implCode());
       }
     }
@@ -357,7 +464,8 @@ public class DefaultProcessStageExecutor
       if (EmptyChecks.isNull(step)) {
         continue;
       }
-      if (EmptyChecks.isNotNull(indexed.putIfAbsent(step.stage(), step))) {
+      ProcessStageStep existingStep = indexed.putIfAbsent(step.stage(), step);
+      if (EmptyChecks.isNotNull(existingStep)) {
         throw new IllegalStateException(
             "duplicate process stage registered: " + step.stage().name());
       }

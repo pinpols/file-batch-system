@@ -2,10 +2,12 @@ package io.github.pinpols.batch.worker.exports.sql;
 
 import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
 import io.github.pinpols.batch.common.sql.SelectSqlAstValidator.SchemaViolation;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.exports.config.SqlTemplateExportSecurityProperties;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.Statement;
@@ -61,15 +63,19 @@ public class SqlTemplateExportSqlValidator {
       checkNoSelectStar(select);
     }
 
-    if (security != null
-        && security.getAllowedSchemas() != null
-        && !security.getAllowedSchemas().isEmpty()) {
+    boolean schemaAllowlistIsConfigured =
+        EmptyChecks.isNotNull(security)
+            && EmptyChecks.isNotNull(security.getAllowedSchemas())
+            && !EmptyChecks.isEmpty(Objects.requireNonNull(security.getAllowedSchemas()));
+    if (schemaAllowlistIsConfigured) {
       checkAllowedSchemas(statement, security.getAllowedSchemas());
     }
 
-    if (security != null
-        && security.getForbiddenFunctions() != null
-        && !security.getForbiddenFunctions().isEmpty()) {
+    boolean forbiddenFunctionsAreConfigured =
+        EmptyChecks.isNotNull(security)
+            && EmptyChecks.isNotNull(security.getForbiddenFunctions())
+            && !EmptyChecks.isEmpty(Objects.requireNonNull(security.getForbiddenFunctions()));
+    if (forbiddenFunctionsAreConfigured) {
       checkNoForbiddenFunctions(statement, security.getForbiddenFunctions());
     }
 
@@ -202,11 +208,13 @@ public class SqlTemplateExportSqlValidator {
   }
 
   private static int captureNamedParameter(String sql, int start, Set<String> names) {
-    if (sql.charAt(start) != ':'
-        || start + 1 >= sql.length()
-        || !isParameterStart(sql.charAt(start + 1))
-        || (start > 0 && sql.charAt(start - 1) == ':')
-        || sql.charAt(start + 1) == ':') {
+    boolean isNotNamedParameterStart =
+        sql.charAt(start) != ':'
+            || start + 1 >= sql.length()
+            || !isParameterStart(sql.charAt(start + 1))
+            || (start > 0 && sql.charAt(start - 1) == ':')
+            || sql.charAt(start + 1) == ':';
+    if (isNotNamedParameterStart) {
       return start;
     }
     int end = start + 2;

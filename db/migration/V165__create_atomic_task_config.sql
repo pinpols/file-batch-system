@@ -44,16 +44,20 @@ COMMENT ON COLUMN batch.atomic_task_config.parameters IS 'parameters JSONB,key �
 COMMENT ON COLUMN batch.atomic_task_config.created_by IS '创建人 console 账号(UPDATE 不改,仅 INSERT 期间写入)';
 
 -- 列表主路径:按 (tenant_id, task_type) 过滤
+
 CREATE INDEX IF NOT EXISTS idx_atomic_task_config_tenant_type
     ON batch.atomic_task_config (tenant_id, task_type);
 
 -- ---------------------------------------------------------
 -- archive 镜像(docs/agent-baseline.md 红线;LIKE INCLUDING ALL 与 V159 一致)
+
 -- ---------------------------------------------------------
+
 CREATE TABLE IF NOT EXISTS archive.atomic_task_config_archive
     (LIKE batch.atomic_task_config INCLUDING DEFAULTS INCLUDING GENERATED INCLUDING IDENTITY INCLUDING CONSTRAINTS);
 
 -- LIKE INCLUDING CONSTRAINTS 不复制 PRIMARY KEY(归档 UPSERT ON CONFLICT(id) 依赖)
+
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -71,4 +75,4 @@ BEGIN
 END $$;
 
 COMMENT ON TABLE archive.atomic_task_config_archive IS
-    'V165 archive mirror of batch.atomic_task_config';
+    'V165 新增的 batch.atomic_task_config 归档镜像。';

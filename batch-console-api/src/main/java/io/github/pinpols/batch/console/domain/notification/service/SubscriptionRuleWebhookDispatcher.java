@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.notification.service;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationDeliveryLogMapper;
@@ -139,12 +140,13 @@ public class SubscriptionRuleWebhookDispatcher {
       return;
     }
     Map<String, Object> dataMap = dispatchPolicy.asDataMap(data);
+    Instant effectiveEmittedAt = EmptyChecks.isNull(emittedAt) ? BatchDateTimeSupport.utcNow() : emittedAt;
     WebhookEventPayload payload = new WebhookEventPayload(
         tenantId,
         normalizedEventType,
         stream,
         cursor,
-        emittedAt == null ? BatchDateTimeSupport.utcNow() : emittedAt,
+        effectiveEmittedAt,
         data);
     String payloadJson = JsonUtils.toJson(payload);
 
@@ -382,13 +384,12 @@ public class SubscriptionRuleWebhookDispatcher {
       String eventType,
       Map<String, Object> dataMap,
       String payloadJson) {
+    String tenantId = str(rule, "tenant_id");
+    Object ruleIdValue = rule.get("id");
+    Long ruleId = toLong(ruleIdValue);
+    Long alertEventId = extractAlertEventId(dataMap);
     return new DeliveryLogContext(
-        str(rule, "tenant_id"),
-        toLong(rule.get("id")),
-        channelCode,
-        eventType,
-        extractAlertEventId(dataMap),
-        payloadJson);
+        tenantId, ruleId, channelCode, eventType, alertEventId, payloadJson);
   }
 
   private static Long extractAlertEventId(Map<String, Object> dataMap) {
@@ -407,7 +408,8 @@ public class SubscriptionRuleWebhookDispatcher {
     }
     if (value instanceof String s && !s.isBlank()) {
       try {
-        return Long.parseLong(s.trim());
+        String trimmedValue = s.trim();
+        return Long.parseLong(trimmedValue);
       } catch (NumberFormatException ex) {
         return null;
       }

@@ -8,7 +8,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * P2-1(2026-06-03,docs/archive/analysis/2026-06-03-deep-scan-be-security.md): 启动期 CORS allowlist 强校验单测——拒
+ * P2-1(2026-06-03,docs/archive/audit/deep-scan-be-security-2026-06-03.md): 启动期 CORS allowlist 强校验单测——拒
  * {@code *} / {@code null} / 空白条目。
  */
 @DisplayName("控制台安全属性校验: 默认角色白名单与跨域来源列表的启动期强校验")

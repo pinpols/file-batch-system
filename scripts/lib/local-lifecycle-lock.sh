@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：串行化本地构建、启停操作，避免端口探测和 PID 文件更新互相覆盖。
+# 用法：由调用脚本 source scripts/lib/local-lifecycle-lock.sh 后使用公共变量或函数。
 
 # 串行化本地构建、启停操作，避免端口探测和 PID 文件更新互相覆盖。
 batch_local_lifecycle_lock_acquire() {

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.exports.jdbc;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.exports.config.ExportConfigValueSupport;
@@ -37,7 +38,9 @@ public record JdbcMappedExportSpec(
     if (root.isEmpty()) {
       throw new IllegalArgumentException("jdbc_mapped_export spec missing");
     }
-    String schema = String.valueOf(root.getOrDefault("schema", "biz")).trim();
+    Object schemaValue = root.getOrDefault("schema", "biz");
+    String rawSchema = String.valueOf(schemaValue);
+    String schema = rawSchema.trim();
     String batchTable = required(root, "batchTable");
     String batchTenantColumn = required(root, "batchTenantColumn");
     String batchNoColumn = required(root, "batchNoColumn");
@@ -94,10 +97,15 @@ public record JdbcMappedExportSpec(
 
   private static String required(Map<String, Object> root, String key) {
     Object v = root.get(key);
-    if (v == null || !Texts.hasText(String.valueOf(v))) {
+    if (EmptyChecks.isNull(v)) {
       throw new IllegalArgumentException("jdbc_mapped_export." + key + " is required");
     }
-    return String.valueOf(v).trim();
+    String presenceText = String.valueOf(v);
+    if (!Texts.hasText(presenceText)) {
+      throw new IllegalArgumentException("jdbc_mapped_export." + key + " is required");
+    }
+    String rawValue = String.valueOf(v);
+    return rawValue.trim();
   }
 
   @SuppressWarnings("unchecked")
@@ -126,7 +134,10 @@ public record JdbcMappedExportSpec(
     }
     return list.stream()
         .filter(o -> o != null && Texts.hasText(String.valueOf(o)))
-        .map(o -> String.valueOf(o).trim())
+        .map(o -> {
+          String rawValue = String.valueOf(o);
+          return rawValue.trim();
+        })
         .toList();
   }
 
@@ -160,7 +171,10 @@ public record JdbcMappedExportSpec(
         .map(Map.class::cast)
         .map(mapping -> mapping.get("sourceColumn"))
         .filter(src -> src != null && Texts.hasText(String.valueOf(src)))
-        .map(src -> String.valueOf(src).trim())
+        .map(src -> {
+          String rawValue = String.valueOf(src);
+          return rawValue.trim();
+        })
         .collect(Collectors.toCollection(LinkedHashSet::new))
         .stream()
         .toList();

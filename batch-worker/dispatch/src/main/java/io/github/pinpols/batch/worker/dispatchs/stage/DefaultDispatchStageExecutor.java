@@ -6,7 +6,6 @@ import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplateParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.support.AbstractStageExecutor;
 import io.github.pinpols.batch.worker.core.support.PipelineStepTemplateProvider;
@@ -52,10 +51,9 @@ public class DefaultDispatchStageExecutor
 
   public DefaultDispatchStageExecutor(
       List<DispatchStageStep> steps,
-      PlatformPipelineDefinitionRepository pipelineDefinitions,
       PlatformPipelineRunRepository pipelineRuns,
       MeterRegistry meterRegistry) {
-    super(pipelineDefinitions, pipelineRuns);
+    super(pipelineRuns);
     this.stepsByImplCode = indexByImplCode(steps);
     this.stepsByStage = indexByStage(steps);
     this.defaultStepDefinitions = buildDefaultStepDefinitions();
@@ -133,12 +131,14 @@ public class DefaultDispatchStageExecutor
           context.getTenantId(),
           context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
           exception);
+      String localizedMessageArgument = exception.getMessage();
+      String fallbackMessage = exception.getMessage();
       return DispatchStageResult.failure(
           stage,
           StageFailureCode.INFRA_ERROR.name(),
           "error.worker.stage_infra_error",
-          new Object[] {exception.getMessage()},
-          exception.getMessage(),
+          new Object[] {localizedMessageArgument},
+          fallbackMessage,
           ERROR_OBJECT_MAPPER);
     }
   }

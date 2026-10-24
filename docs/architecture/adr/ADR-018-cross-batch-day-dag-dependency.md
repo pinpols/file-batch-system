@@ -1,5 +1,7 @@
 # ADR-018 · 跨批量日 DAG 依赖（pipe 模型）
 
+> **当前适用性（2026-10-24）**：跨日依赖继续以持久化结果版本与冻结日期对齐，不能把图内控制边等同于跨运行数据依赖；闸门观察到的版本引用不能证明任意插件已按该版本读取业务数据。 原决策背景与阶段记录保留，正式关闭状态以当前验收矩阵为准。
+
 - **Status**: Accepted（Stage 1-5、7 已落地；Stage 6 系统级 E2E 证据待补）
 - **Date**: 2026-05-06（Accepted: 2026-05-06）
 - **Supersedes**: —
@@ -59,6 +61,10 @@
 | `bizDateRange` | enum | `PREV_5_BIZ_DAYS` / `MTD_TO_YESTERDAY` / `LAST_4_WEEKS`；多个上游版本，用于聚合场景 |
 | `scope` | enum | REQUIRED：缺则等；OPTIONAL：缺则跳过引用，节点照常启动 |
 | `consumeVersionStrategy` | enum | `EFFECTIVE_ONLY`（默认）/ `LATEST_INCLUDING_PENDING` / `SPECIFIC_VERSION`（需配 `version_no`） |
+
+`SPECIFIC_VERSION` 必须按租户、business key 和 version number 精确读取；不得先读取有限条数的展示列表再筛选，也不得在指定版本不存在时回退到其它版本。结果条目携带稳定 `resultVersionId`，供下游执行快照和消费审计定位所选版本。
+
+当前新模型只支持 `INLINE_JSON`：resolver 将 JSON 对象解析并写入 `crossDay.<alias>.output`，同时保留 `resultVersionId`、`versionNo`、`businessKey` 等审计身份；JOB 节点启动子 Job 时冻结整份参数。handler 按 `output.<key>` 消费所选版本，不能在执行时重新查询 effective/latest。`EXTERNAL_REF` 和 `FILE_RECORD` 尚无受验收的读取、租户授权及保留契约，resolver 对这些类型以及非法/非对象 inline JSON 失败关闭；不得通过透传 `payloadRef` 让节点看似可运行。`payload_ref` DSL 保留为后续契约扩展，本轮不得配置使用。
 
 ### 解析时机
 

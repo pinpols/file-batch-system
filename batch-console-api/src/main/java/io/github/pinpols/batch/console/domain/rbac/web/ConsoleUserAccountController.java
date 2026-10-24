@@ -49,8 +49,9 @@ public class ConsoleUserAccountController {
       @RequestParam(required = false) Boolean enabled,
       @RequestParam(defaultValue = "1") int pageNo,
       @RequestParam(defaultValue = "20") int pageSize) {
+    PageRequest pageRequest = new PageRequest(pageNo, pageSize);
     return responseFactory.success(
-        userAccountService.list(tenantId, keyword, enabled, new PageRequest(pageNo, pageSize)));
+        userAccountService.list(tenantId, keyword, enabled, pageRequest));
   }
 
   @GetMapping("/{id}")
@@ -65,20 +66,22 @@ public class ConsoleUserAccountController {
       targetTenantParam = "#request.tenantId")
   public CommonResponse<ConsoleUserAccountResponse> create(
       @Validated @RequestBody CreateUserAccountRequest request) {
-    return responseFactory.success(userAccountService.create(
+    ConsoleUserAccountResponse account = userAccountService.create(
         request.getTenantId(),
         request.getUsername(),
         request.getPassword(),
         request.getDisplayName(),
-        request.getAuthoritiesCsv()));
+        request.getAuthoritiesCsv());
+    return responseFactory.success(account);
   }
 
   @PutMapping("/{id}")
   @AuditAction(action = "user.update", aggregateType = "user_account", aggregateId = "#id")
   public CommonResponse<ConsoleUserAccountResponse> update(
       @PathVariable long id, @Validated @RequestBody UpdateUserAccountRequest request) {
-    return responseFactory.success(
-        userAccountService.update(id, request.getDisplayName(), request.getAuthoritiesCsv()));
+    ConsoleUserAccountResponse account =
+        userAccountService.update(id, request.getDisplayName(), request.getAuthoritiesCsv());
+    return responseFactory.success(account);
   }
 
   @PostMapping("/{id}/reset-password")

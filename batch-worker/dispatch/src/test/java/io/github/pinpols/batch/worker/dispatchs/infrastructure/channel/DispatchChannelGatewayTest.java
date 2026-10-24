@@ -19,6 +19,7 @@ import java.util.OptionalLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 @DisplayName("渠道分发网关:适配器解析与投递记账、健康与熔断拦截、许可释放与回读守卫")
 class DispatchChannelGatewayTest {
@@ -49,6 +50,17 @@ class DispatchChannelGatewayTest {
     gateway = new DispatchChannelGateway(
         List.of(httpAdapter), circuitBreaker, deliveryMetrics, healthService);
     clearInvocations(httpAdapter);
+  }
+
+  @Test
+  @DisplayName("能力查询只认可已注册的官方渠道适配器")
+  void shouldSupportOnlyRegisteredOfficialChannelType() {
+    assertThat(gateway.supports("API")).isTrue();
+    assertThat(gateway.supports("api")).isTrue();
+    assertThat(gateway.supports("SFTP")).isFalse();
+    assertThat(gateway.supports("WEBHOOK_RAW")).isFalse();
+    assertThat(gateway.supports(" ")).isFalse();
+    verify(httpAdapter, never()).dispatch(any());
   }
 
   @Test
@@ -251,6 +263,29 @@ class DispatchChannelGatewayTest {
     gateway.dispatch(command("t1", "API", "ch-1"));
 
     verify(healthService).recordDispatchOutcome(any(), anyBoolean(), anyString(), any());
+  }
+
+  @Test
+  @DisplayName("投递成功后健康快照写入失败不把已完成的外部副作用变成失败")
+  void shouldPreserveSuccessfulDispatchWhenHealthPersistenceFails() {
+    DispatchResult success = new DispatchResult(true, "req-1", null, true, false, "ok", null);
+    when(httpAdapter.dispatch(any())).thenReturn(success);
+    when(healthService.allowDispatch(any())).thenReturn(true);
+    Mockito.doThrow(new IllegalStateException("health FK rejected stale channel"))
+        .when(healthService)
+        .recordDispatchOutcome(any(), anyBoolean(), anyString(), any());
+
+    DispatchChannelCircuitBreaker cb = mock(DispatchChannelCircuitBreaker.class);
+    when(cb.allow(anyString())).thenReturn(true);
+    DispatchChannelGateway gatewayWithMockBreaker =
+        new DispatchChannelGateway(List.of(httpAdapter), cb, deliveryMetrics, healthService);
+
+    DispatchResult result = gatewayWithMockBreaker.dispatch(command("t1", "API", "ch-1"));
+
+    assertThat(result).isSameAs(success);
+    verify(cb).recordSuccess("t1|API|ch-1");
+    verify(cb, never()).recordFailure(anyString());
+    verify(deliveryMetrics).recordDelivery("API", true, false);
   }
 
   // --- helpers ---

@@ -38,9 +38,10 @@ public class ConsoleOidcAuthorizationRateLimitFilter extends OncePerRequestFilte
     String path = ServletRequestPaths.applicationPath(request);
     boolean oidcAuthorizationStart =
         HttpMethod.GET.matches(request.getMethod()) && path.startsWith(AUTHORIZATION_PATH_PREFIX);
-    if (!properties.isEnabled()
+    boolean requestDoesNotRequireRateLimitRejection = !properties.isEnabled()
         || !oidcAuthorizationStart
-        || loginIpRateLimiter.tryAcquire(request)) {
+        || loginIpRateLimiter.tryAcquire(request);
+    if (requestDoesNotRequireRateLimitRejection) {
       filterChain.doFilter(request, response);
       return;
     }

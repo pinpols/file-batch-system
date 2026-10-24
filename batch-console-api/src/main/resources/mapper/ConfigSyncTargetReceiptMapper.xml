@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.mapper.ConfigSyncTargetReceiptMapper">
+    <select id="setTenantContext" resultType="string">
+        SELECT set_config('app.tenant_id', #{tenantId}, true)
+    </select>
+
+    <select id="selectResult" resultType="string">
+        SELECT result_json::text
+          FROM batch.config_sync_target_receipt
+         WHERE audit_tenant_id = #{auditTenantId}
+           AND log_id = #{logId}
+           AND tenant_id = #{tenantId}
+    </select>
+
+    <insert id="insert">
+        INSERT INTO batch.config_sync_target_receipt
+            (audit_tenant_id, log_id, tenant_id, result_json)
+        VALUES (#{auditTenantId}, #{logId}, #{tenantId}, #{resultJson,jdbcType=VARCHAR}::jsonb)
+    </insert>
+</mapper>

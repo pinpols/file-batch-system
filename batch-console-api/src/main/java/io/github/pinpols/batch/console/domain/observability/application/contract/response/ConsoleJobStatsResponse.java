@@ -38,19 +38,24 @@ public record ConsoleJobStatsResponse(
     if (view == null) {
       return null;
     }
+    Map<String, Long> statusCounts = view.byStatus();
+    Long total = view.total();
+    List<DailyTrendEntry> dailyTrendEntries =
+        view.dailyTrend().stream().map(DailyTrendEntry::from).toList();
     return new ConsoleJobStatsResponse(
-        view.byStatus(),
-        view.total(),
-        view.dailyTrend().stream().map(DailyTrendEntry::from).toList());
+        statusCounts, total, dailyTrendEntries);
   }
 
   public static ConsoleJobStatsResponse from(Map<String, Object> row) {
     if (row == null) {
       return null;
     }
+    Map<String, Long> statusCounts = longMap(row, "byStatus");
+    Long total = longValue(row, "total");
+    List<Map<String, Object>> dailyTrendRows = mapList(row, "dailyTrend");
+    List<DailyTrendEntry> dailyTrendEntries =
+        dailyTrendRows.stream().map(DailyTrendEntry::from).toList();
     return new ConsoleJobStatsResponse(
-        longMap(row, "byStatus"),
-        longValue(row, "total"),
-        mapList(row, "dailyTrend").stream().map(DailyTrendEntry::from).toList());
+        statusCounts, total, dailyTrendEntries);
   }
 }

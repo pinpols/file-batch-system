@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：按不可变 release manifest 部署后端 Compose 服务，并在失败时恢复上一稳定版本。
+# 用法：bash scripts/deploy/compose-release.sh plan <manifest.json>；deploy/verify/rollback 的参数见 --help。
 # 按不可变 release manifest 部署后端 Compose 服务，并在失败时恢复上一稳定版本。
 
 set -euo pipefail

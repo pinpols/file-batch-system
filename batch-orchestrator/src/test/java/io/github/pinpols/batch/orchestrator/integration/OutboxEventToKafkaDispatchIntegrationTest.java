@@ -65,8 +65,10 @@ class OutboxEventToKafkaDispatchIntegrationTest extends AbstractIntegrationTest 
     outboxEventMapper.insert(event);
 
     // 确认事件在数据库中为 NEW 状态
-    String statusBefore = jdbcTemplate.queryForObject(
-        "select publish_status from batch.outbox_event where id = ?", String.class, event.getId());
+    String outboxStatusSql = """
+        select publish_status from batch.outbox_event where id = ?
+        """;
+    String statusBefore = jdbcTemplate.queryForObject(outboxStatusSql, String.class, event.getId());
     assertThat(statusBefore).isEqualTo(OutboxPublishStatus.NEW.code());
 
     // 驱动转发器（与调度器轮询执行的代码一致）
@@ -78,10 +80,7 @@ class OutboxEventToKafkaDispatchIntegrationTest extends AbstractIntegrationTest 
         .atMost(Duration.ofSeconds(10))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String statusAfter = jdbcTemplate.queryForObject(
-              "select publish_status from batch.outbox_event where id = ?",
-              String.class,
-              event.getId());
+          String statusAfter = jdbcTemplate.queryForObject(outboxStatusSql, String.class, event.getId());
           assertThat(statusAfter).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
         });
 
@@ -129,14 +128,14 @@ class OutboxEventToKafkaDispatchIntegrationTest extends AbstractIntegrationTest 
         .pollInterval(Duration.ofMillis(250))
         .untilAsserted(() -> {
           scheduleForwarder.advance(new SchedulePlan());
-          String s1 = jdbcTemplate.queryForObject(
-              "select publish_status from batch.outbox_event where id = ?",
-              String.class,
-              e1.getId());
-          String s2 = jdbcTemplate.queryForObject(
-              "select publish_status from batch.outbox_event where id = ?",
-              String.class,
-              e2.getId());
+          String firstOutboxStatusSql = """
+              select publish_status from batch.outbox_event where id = ?
+              """;
+          String s1 = jdbcTemplate.queryForObject(firstOutboxStatusSql, String.class, e1.getId());
+          String secondOutboxStatusSql = """
+              select publish_status from batch.outbox_event where id = ?
+              """;
+          String s2 = jdbcTemplate.queryForObject(secondOutboxStatusSql, String.class, e2.getId());
           assertThat(s1).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
           assertThat(s2).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
         });

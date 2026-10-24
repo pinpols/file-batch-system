@@ -36,6 +36,6 @@ CREATE INDEX IF NOT EXISTS idx_stateful_backend_cutover_history_feature
     ON batch.stateful_backend_cutover_history (feature_key, changed_at DESC);
 
 COMMENT ON TABLE batch.stateful_backend_binding IS
-    'Current backend and location identity for stateful pluggable features; guarded at application startup';
+    '有状态插件功能当前使用的后端及位置身份；应用启动时会校验该绑定。';
 COMMENT ON TABLE batch.stateful_backend_cutover_history IS
-    'Immutable baseline/cutover audit; cutover_id is one-time per feature';
+    '不可变的基线和切换审计记录；每项功能的 cutover_id 仅允许使用一次。';

@@ -20,7 +20,8 @@ public class ValidBizDateValidator implements ConstraintValidator<ValidBizDate, 
       return true;
     }
     try {
-      LocalDate.parse(value.trim(), FMT);
+      String trimmedValue = value.trim();
+      LocalDate.parse(trimmedValue, FMT);
       return true;
     } catch (DateTimeParseException ex) {
       SwallowedExceptionLogger.info(

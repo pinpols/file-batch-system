@@ -190,7 +190,10 @@ export class KafkaConsumerAdapter implements Consumer {
    * the offset disposition via the shared {@link dispositionOf}.
    */
   async runPipeline(pipeline: MessagePipeline): Promise<void> {
-    await this.#runLoop(async (record) => dispositionOf(await pipeline.onMessage(record)));
+    await this.#runLoop(async (record) => {
+      const outcome = await pipeline.onMessage(record);
+      return dispositionOf(outcome);
+    });
   }
 
   /** Shared connect → subscribe → run-with-policy loop for start()/runPipeline(). */
@@ -234,12 +237,13 @@ export class KafkaConsumerAdapter implements Consumer {
         if (action.type === "commit") {
           // never commit past a record withheld earlier on this partition — that
           // would silently skip it (§A/§1.9). Below the ceiling → advance normally.
-          if (commitBlockedByWithheld(this.#withheld.get(key), payload.message.offset)) {
+          const withheldCeiling = this.#withheld.get(key);
+          if (commitBlockedByWithheld(withheldCeiling, payload.message.offset)) {
             this.#logger.warn("commit withheld: offset at/past partition ceiling", {
               topic: action.topic,
               partition: action.partition,
               offset: payload.message.offset,
-              ceiling: this.#withheld.get(key),
+              ceiling: withheldCeiling,
             });
             return;
           }
@@ -256,7 +260,9 @@ export class KafkaConsumerAdapter implements Consumer {
           // on this partition still flow (no head-of-line block). Mirrors the Go
           // SDK's `withheld` ceiling; Java/Python/Rust use the same invariant,
           // without stalling the partition on a schema/foreign record.
-          this.#withheld.set(key, loweredCeiling(this.#withheld.get(key), action.offset));
+          const currentCeiling = this.#withheld.get(key);
+          const nextCeiling = loweredCeiling(currentCeiling, action.offset);
+          this.#withheld.set(key, nextCeiling);
           this.#logger.warn("offset withheld (ceiling set, still consuming)", {
             topic: action.topic,
             partition: action.partition,

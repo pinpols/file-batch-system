@@ -84,7 +84,9 @@ public class RecordRuleEvaluator {
     }
     for (String field :
         stringList(firstNonNull(nullCheck.get("fields"), nullCheck.get("requiredFields")))) {
-      if (!Texts.hasText(stringValue(row.get(field)))) {
+      Object rawValue = row.get(field);
+      String value = stringValue(rawValue);
+      if (!Texts.hasText(value)) {
         return new ValidationIssue(recordNo, ERROR_CODE_NULL, field + " must not be null", row);
       }
     }
@@ -112,67 +114,57 @@ public class RecordRuleEvaluator {
 
   private ValidationIssue validateOneField(
       String field, Map<String, Object> rule, long recordNo, Map<String, Object> row) {
-    String value = stringValue(row.get(field));
-    String errorCode =
-        defaultText(stringValue(rule.get(KEY_ERROR_CODE)), defaultErrorCode(field, rule));
+    Object rawValue = row.get(field);
+    String value = stringValue(rawValue);
+    String configuredErrorCode = stringValue(rule.get(KEY_ERROR_CODE));
+    String fallbackErrorCode = defaultErrorCode(field, rule);
+    String errorCode = defaultText(configuredErrorCode, fallbackErrorCode);
     String explicitMessage = stringValue(rule.get("errorMessage"));
-    if (booleanValue(firstNonNull(rule.get(KEY_REQUIRED), rule.get("notNull")), false)
-        && !Texts.hasText(value)) {
-      return new ValidationIssue(
-          recordNo, errorCode, defaultText(explicitMessage, field + " is required"), row);
+    Object requiredSetting = firstNonNull(rule.get(KEY_REQUIRED), rule.get("notNull"));
+    boolean required = booleanValue(requiredSetting, false);
+    if (required && !Texts.hasText(value)) {
+      String message = defaultText(explicitMessage, field + " is required");
+      return new ValidationIssue(recordNo, errorCode, message, row);
     }
     if (!Texts.hasText(value)) {
       return null;
     }
     Integer minLength = integerValue(rule.get("minLength"));
     if (minLength != null && value.length() < minLength) {
-      return new ValidationIssue(
-          recordNo,
-          errorCode,
-          defaultText(explicitMessage, field + " length must be >= " + minLength),
-          row);
+      String message = defaultText(explicitMessage, field + " length must be >= " + minLength);
+      return new ValidationIssue(recordNo, errorCode, message, row);
     }
     Integer maxLength = integerValue(rule.get("maxLength"));
     if (maxLength != null && value.length() > maxLength) {
-      return new ValidationIssue(
-          recordNo,
-          errorCode,
-          defaultText(explicitMessage, field + " length must be <= " + maxLength),
-          row);
+      String message = defaultText(explicitMessage, field + " length must be <= " + maxLength);
+      return new ValidationIssue(recordNo, errorCode, message, row);
     }
-    String pattern = stringValue(firstNonNull(rule.get("regex"), rule.get("pattern")));
+    Object patternSetting = firstNonNull(rule.get("regex"), rule.get("pattern"));
+    String pattern = stringValue(patternSetting);
     if (Texts.hasText(pattern) && !value.matches(pattern)) {
-      return new ValidationIssue(
-          recordNo,
-          errorCode,
-          defaultText(explicitMessage, field + " does not match pattern " + pattern),
-          row);
+      String message = defaultText(explicitMessage, field + " does not match pattern " + pattern);
+      return new ValidationIssue(recordNo, errorCode, message, row);
     }
-    List<String> allowedValues =
-        stringList(firstNonNull(rule.get(KEY_ALLOWED_VALUES), rule.get("enum")));
+    Object allowedValuesSetting = firstNonNull(rule.get(KEY_ALLOWED_VALUES), rule.get("enum"));
+    List<String> allowedValues = stringList(allowedValuesSetting);
     if (!allowedValues.isEmpty() && !containsIgnoreCase(allowedValues, value)) {
-      return new ValidationIssue(
-          recordNo,
-          errorCode,
-          defaultText(explicitMessage, field + " value is not allowed: " + value),
-          row);
+      String message = defaultText(explicitMessage, field + " value is not allowed: " + value);
+      return new ValidationIssue(recordNo, errorCode, message, row);
     }
     BigDecimal numberValue = decimalValue(value);
     BigDecimal minValue = decimalValue(rule.get(KEY_MIN));
-    if (minValue != null && numberValue != null && numberValue.compareTo(minValue) < 0) {
-      return new ValidationIssue(
-          recordNo,
-          errorCode,
-          defaultText(explicitMessage, field + " must be >= " + minValue),
-          row);
+    boolean numberIsBelowMinimum =
+        minValue != null && numberValue != null && numberValue.compareTo(minValue) < 0;
+    if (numberIsBelowMinimum) {
+      String message = defaultText(explicitMessage, field + " must be >= " + minValue);
+      return new ValidationIssue(recordNo, errorCode, message, row);
     }
     BigDecimal maxValue = decimalValue(rule.get(KEY_MAX));
-    if (maxValue != null && numberValue != null && numberValue.compareTo(maxValue) > 0) {
-      return new ValidationIssue(
-          recordNo,
-          errorCode,
-          defaultText(explicitMessage, field + " must be <= " + maxValue),
-          row);
+    boolean numberExceedsMaximum =
+        maxValue != null && numberValue != null && numberValue.compareTo(maxValue) > 0;
+    if (numberExceedsMaximum) {
+      String message = defaultText(explicitMessage, field + " must be <= " + maxValue);
+      return new ValidationIssue(recordNo, errorCode, message, row);
     }
     return null;
   }
@@ -183,7 +175,8 @@ public class RecordRuleEvaluator {
       List<String> uniqueFields,
       Map<String, Set<String>> seenValues) {
     for (String field : uniqueFields) {
-      String value = stringValue(row.get(field));
+      Object rawValue = row.get(field);
+      String value = stringValue(rawValue);
       if (!Texts.hasText(value)) {
         continue;
       }

@@ -68,8 +68,9 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     this.jdbcTemplate = new JdbcTemplate(importBusinessDataSource);
     this.objectMapper = objectMapper;
     this.securityProperties = securityProperties;
-    this.txTemplate =
-        new TransactionTemplate(new DataSourceTransactionManager(importBusinessDataSource));
+    DataSourceTransactionManager transactionManager =
+        new DataSourceTransactionManager(importBusinessDataSource);
+    this.txTemplate = new TransactionTemplate(transactionManager);
   }
 
   @Override
@@ -94,9 +95,8 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
       return 0;
     }
     JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(context.templateConfig(), objectMapper);
-    // A-3.5：严格幂等模式下，模板必须声明 conflictColumns；否则立即拒绝加载
-    spec.validateIdentifiers(
-        securityProperties.getAllowedSchemas(), securityProperties.isStrictIdempotency());
+    // BATCH_UPSERT 必须声明业务唯一键；该重放安全约束不提供配置关闭路径。
+    spec.validateIdentifiers(securityProperties.getAllowedSchemas());
     // 地区(per-run):触发未传 region 时用模板 defaultRegion 回退;allowedRegions 非空时做字典校验。
     // 用新局部变量(不重赋参数)——下方匿名内部类引用要求 effectively final。
     final ImportLoadContext loadContext = applyRegion(context, spec);
@@ -106,23 +106,11 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
       return copyChunk(loadContext, spec, insertCols, records);
     }
     if (spec.loadStrategy() == ImportLoadStrategy.PARTITION_STAGE_SWAP_COPY) {
-      return copyChunk(loadContext, spec, insertCols, records, stagingTableName(loadContext, spec));
+      String stagingTable = stagingTableName(loadContext, spec);
+      return copyChunk(loadContext, spec, insertCols, records, stagingTable);
     }
     String sql = buildSql(spec, insertCols);
-    // C-2.7 b / R2-P1-4: 模板未声明 conflict_columns → 纯 INSERT，partition reclaim 重试时已 COMMIT 的 chunk
-    // 会再次落入 → 业务表重复行。开发期允许（INFO），但 prod 必须开 strictIdempotency=true（启动期 parse 即拒）。
-    // 此处保留 ERROR 级日志 + 指明影响范围，运维按关键字 "idempotency=OFF" 监控并强制治理。
-    if (spec.conflictColumns() == null || spec.conflictColumns().isEmpty()) {
-      log.error(
-          "jdbc-mapped-import LOAD running without ON CONFLICT clause: tenantId={},"
-              + " template={}, schema={}, table={}, idempotency=OFF — RETRY WILL DUPLICATE ROWS."
-              + " Add conflict_columns to template or set"
-              + " batch.worker.import.jdbc-mapped.strict-idempotency=true to enforce.",
-          context.tenantId(),
-          context.templateCode(),
-          spec.schema(),
-          spec.table());
-    } else if (log.isInfoEnabled()) {
+    if (log.isInfoEnabled()) {
       log.info(
           "jdbc-mapped-import LOAD idempotency=ON: tenantId={}, template={}, schema={},"
               + " table={}, conflictColumns={}",
@@ -171,9 +159,10 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
       return records;
     }
     List<Map<String, Object>> ordered = new ArrayList<>(records);
-    ordered.sort(Comparator.comparing(
+    Comparator<Map<String, Object>> conflictColumnOrder = Comparator.comparing(
         row -> conflictSortKey(context, spec, insertCols, conflictIndexes, row),
-        Comparator.nullsFirst(String::compareTo)));
+        Comparator.nullsFirst(String::compareTo));
+    ordered.sort(conflictColumnOrder);
     return ordered;
   }
 
@@ -205,8 +194,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
   @SuppressWarnings("java:S2077")
   public void preparePartitionReplace(ImportLoadContext context) {
     JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(context.templateConfig(), objectMapper);
-    spec.validateIdentifiers(
-        securityProperties.getAllowedSchemas(), securityProperties.isStrictIdempotency());
+    spec.validateIdentifiers(securityProperties.getAllowedSchemas());
     ImportLoadContext loadContext = applyRegion(context, spec);
     String sql = buildDeleteSql(spec);
     Object[] args = buildPartitionArgs(spec, loadContext);
@@ -236,8 +224,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
   @SuppressWarnings("java:S2077")
   public void finishPartitionStageSwap(ImportLoadContext context) {
     JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(context.templateConfig(), objectMapper);
-    spec.validateIdentifiers(
-        securityProperties.getAllowedSchemas(), securityProperties.isStrictIdempotency());
+    spec.validateIdentifiers(securityProperties.getAllowedSchemas());
     ImportLoadContext loadContext = applyRegion(context, spec);
     String parent = tableName(spec);
     String partition = qualifiedTableName(spec.schema(), spec.stageSwap().partitionTable());
@@ -246,10 +233,11 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
       RlsTenantSessionSupport.applyIfPresent(businessDataSource);
       jdbcTemplate.execute("ALTER TABLE " + parent + " DETACH PARTITION " + partition);
       jdbcTemplate.execute("DROP TABLE " + partition);
-      jdbcTemplate.execute("ALTER TABLE "
-          + staging
-          + " RENAME TO "
-          + JdbcMappedSqlValidator.quotePg(spec.stageSwap().partitionTable()));
+      String partitionTableName = spec.stageSwap().partitionTable();
+      String quotedPartitionTableName = JdbcMappedSqlValidator.quotePg(partitionTableName);
+      String renamePartitionSql =
+          "ALTER TABLE " + staging + " RENAME TO " + quotedPartitionTableName;
+      jdbcTemplate.execute(renamePartitionSql);
       jdbcTemplate.execute("ALTER TABLE "
           + parent
           + " ATTACH PARTITION "
@@ -295,7 +283,8 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     }
     for (JdbcMappedImportSpec.ColumnMapping m : spec.columnMappings()) {
       if (m.to().equals(col)) {
-        return coerceMappedValue(resolveRowValue(row, m.from()), m);
+        Object sourceValue = resolveRowValue(row, m.from());
+        return coerceMappedValue(sourceValue, m);
       }
     }
     String pattern = spec.systemBindings().get(col);
@@ -310,11 +299,15 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     if (EmptyChecks.isNull(value) || EmptyChecks.isNull(mapping.type())) {
       return value;
     }
-    String type = mapping.type().trim().toUpperCase(Locale.ROOT);
-    if (EmptyChecks.isEmpty(type) || value instanceof Number || value instanceof Boolean) {
+    String normalizedType = mapping.type().trim();
+    String type = normalizedType.toUpperCase(Locale.ROOT);
+    boolean valueNeedsNoJdbcTypeConversion =
+        EmptyChecks.isEmpty(type) || value instanceof Number || value instanceof Boolean;
+    if (valueNeedsNoJdbcTypeConversion) {
       return value;
     }
-    String text = String.valueOf(value).trim();
+    String rawText = String.valueOf(value);
+    String text = rawText.trim();
     if (EmptyChecks.isEmpty(text)) {
       return null;
     }
@@ -344,7 +337,8 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     if (EmptyChecks.isBlank(format) || "yyyy-MM-dd".equals(format)) {
       return LocalDate.parse(text);
     }
-    return LocalDate.parse(text, DateTimeFormatter.ofPattern(format));
+    DateTimeFormatter formatter = DateTimeFormatter.ofPattern(format);
+    return LocalDate.parse(text, formatter);
   }
 
   /**
@@ -394,7 +388,9 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
         ? context.region()
         : spec.defaultRegion();
     List<String> allowed = spec.allowedRegions();
-    if (allowed != null && !allowed.isEmpty() && (region == null || !allowed.contains(region))) {
+    boolean regionViolatesAllowlist =
+        EmptyChecks.isNotNull(allowed) && !EmptyChecks.isEmpty(allowed) && (EmptyChecks.isNull(region) || !allowed.contains(region));
+    if (regionViolatesAllowlist) {
       throw new WorkerConfigException(
           "import region not in allowedRegions: region=" + region + ", allowed=" + allowed);
     }
@@ -419,17 +415,27 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     if (EmptyChecks.isNull(pattern)) {
       return null;
     }
-    return pattern
-        .replace("${tenantId}", nullSafe(context.tenantId()))
-        .replace("${traceId}", nullSafe(context.traceId()))
-        .replace("${workerId}", nullSafe(context.workerId()))
-        .replace("${sourceFileName}", nullSafe(context.sourceFileName()))
-        .replace("${batchNo}", nullSafe(context.batchNo()))
-        .replace("${bizDate}", nullSafe(context.bizDate()))
-        .replace("${bizType}", nullSafe(context.bizType()))
-        .replace("${region}", nullSafe(context.region()))
-        .replace("${jobCode}", nullSafe(context.jobCode()))
-        .replace("${templateCode}", nullSafe(context.templateCode()));
+    String resolvedPattern = pattern;
+    String tenantId = nullSafe(context.tenantId());
+    resolvedPattern = resolvedPattern.replace("${tenantId}", tenantId);
+    String traceId = nullSafe(context.traceId());
+    resolvedPattern = resolvedPattern.replace("${traceId}", traceId);
+    String workerId = nullSafe(context.workerId());
+    resolvedPattern = resolvedPattern.replace("${workerId}", workerId);
+    String sourceFileName = nullSafe(context.sourceFileName());
+    resolvedPattern = resolvedPattern.replace("${sourceFileName}", sourceFileName);
+    String batchNo = nullSafe(context.batchNo());
+    resolvedPattern = resolvedPattern.replace("${batchNo}", batchNo);
+    String bizDate = nullSafe(context.bizDate());
+    resolvedPattern = resolvedPattern.replace("${bizDate}", bizDate);
+    String bizType = nullSafe(context.bizType());
+    resolvedPattern = resolvedPattern.replace("${bizType}", bizType);
+    String region = nullSafe(context.region());
+    resolvedPattern = resolvedPattern.replace("${region}", region);
+    String jobCode = nullSafe(context.jobCode());
+    resolvedPattern = resolvedPattern.replace("${jobCode}", jobCode);
+    String templateCode = nullSafe(context.templateCode());
+    return resolvedPattern.replace("${templateCode}", templateCode);
   }
 
   private static Object resolveSystemBinding(String pattern, ImportLoadContext context) {
@@ -487,7 +493,8 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
       JdbcMappedImportSpec spec,
       List<String> insertCols,
       List<Map<String, Object>> records) {
-    return copyChunk(context, spec, insertCols, records, tableName(spec));
+    String targetTable = tableName(spec);
+    return copyChunk(context, spec, insertCols, records, targetTable);
   }
 
   @SuppressWarnings("java:S2077")
@@ -506,7 +513,10 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
           DataSourceConnectionLease.acquire(businessDataSource)) {
         Connection conn = lease.connection();
         if (isRowLevelSecurityEnabled(conn, destinationTable)) {
-          String tempTable = "batch_import_copy_" + UUID.randomUUID().toString().replace("-", "");
+          UUID tempTableUuid = UUID.randomUUID();
+          String tempTableUuidText = tempTableUuid.toString();
+          String tempTableSuffix = tempTableUuidText.replace("-", "");
+          String tempTable = "batch_import_copy_" + tempTableSuffix;
           String quotedTempTable = JdbcMappedSqlValidator.quotePg(tempTable);
           try (Statement statement = conn.createStatement()) {
             statement.execute("CREATE TEMP TABLE " + quotedTempTable + " ON COMMIT DROP AS SELECT "
@@ -519,8 +529,9 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
               destinationTable,
               n);
           CopyManager copyManager = conn.unwrap(PGConnection.class).getCopyAPI();
-          long copied = copyManager.copyIn(
-              buildCopySql("pg_temp." + quotedTempTable, insertCols), new StringReader(csv));
+          String tempDestinationTable = "pg_temp." + quotedTempTable;
+          String tempCopySql = buildCopySql(tempDestinationTable, insertCols);
+          long copied = copyManager.copyIn(tempCopySql, new StringReader(csv));
           if (copied != n) {
             throw new IllegalStateException(
                 "PostgreSQL temporary COPY row count mismatch: expected=" + n + ", copied="
@@ -606,18 +617,24 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
   }
 
   private String stagingTableName(ImportLoadContext context, JdbcMappedImportSpec spec) {
-    String suffix = Integer.toHexString(Objects.hash(
-        context.tenantId(),
-        context.traceId(),
-        context.batchNo(),
-        context.bizDate(),
-        context.templateCode()));
-    return qualifiedTableName(
-        spec.schema(), spec.stageSwap().partitionTable() + "__stage_" + suffix);
+    String tenantId = context.tenantId();
+    String traceId = context.traceId();
+    String batchNo = context.batchNo();
+    String bizDate = context.bizDate();
+    String templateCode = context.templateCode();
+    int stagingIdentityHash =
+        Objects.hash(tenantId, traceId, batchNo, bizDate, templateCode);
+    String suffix = Integer.toHexString(stagingIdentityHash);
+    String schema = spec.schema();
+    String partitionTable = spec.stageSwap().partitionTable();
+    String stagingTable = partitionTable + "__stage_" + suffix;
+    return qualifiedTableName(schema, stagingTable);
   }
 
   private String qualifiedTableName(String schema, String table) {
-    return JdbcMappedSqlValidator.quotePg(schema) + "." + JdbcMappedSqlValidator.quotePg(table);
+    String quotedSchema = JdbcMappedSqlValidator.quotePg(schema);
+    String quotedTable = JdbcMappedSqlValidator.quotePg(table);
+    return quotedSchema + "." + quotedTable;
   }
 
   private String buildCopyCsv(
@@ -625,13 +642,16 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
       JdbcMappedImportSpec spec,
       List<Map<String, Object>> records,
       ImportLoadContext context) {
-    StringBuilder sb = new StringBuilder(Math.max(1024, records.size() * insertCols.size() * 16));
+    int estimatedCsvCapacity = Math.max(1024, records.size() * insertCols.size() * 16);
+    StringBuilder sb = new StringBuilder(estimatedCsvCapacity);
     for (Map<String, Object> row : records) {
       for (int i = 0; i < insertCols.size(); i++) {
         if (i > 0) {
           sb.append(',');
         }
-        appendCsvValue(sb, valueForColumn(insertCols.get(i), spec, row, context));
+        String columnName = insertCols.get(i);
+        Object columnValue = valueForColumn(columnName, spec, row, context);
+        appendCsvValue(sb, columnValue);
       }
       sb.append('\n');
     }

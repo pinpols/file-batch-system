@@ -8,8 +8,10 @@ import static io.github.pinpols.batch.console.application.contract.response.conf
 
 import java.time.Instant;
 import java.util.Map;
+import lombok.Builder;
 
 /** 资源队列响应。 */
+@Builder
 public record ResourceQueueResponse(
     Long id,
     String tenantId,
@@ -32,22 +34,23 @@ public record ResourceQueueResponse(
     if (row == null) {
       return null;
     }
-    return new ResourceQueueResponse(
-        longValue(row, "id"),
-        stringValue(row, "tenantId", "tenant_id"),
-        stringValue(row, "queueCode", "queue_code"),
-        stringValue(row, "queueName", "queue_name"),
-        stringValue(row, "queueType", "queue_type"),
-        integerValue(row, "maxRunningJobs", "max_running_jobs"),
-        integerValue(row, "maxRunningPartitions", "max_running_partitions"),
-        integerValue(row, "maxQps", "max_qps"),
-        stringValue(row, "workerGroup", "worker_group"),
-        stringValue(row, "resourceTag", "resource_tag"),
-        stringValue(row, "priorityPolicy", "priority_policy"),
-        integerValue(row, "fairShareWeight", "fair_share_weight"),
-        booleanValue(row, "enabled"),
-        stringValue(row, "description"),
-        instantValue(row, "createdAt", "created_at"),
-        instantValue(row, "updatedAt", "updated_at"));
+    return ResourceQueueResponse.builder()
+        .id(longValue(row, "id"))
+        .tenantId(stringValue(row, "tenantId", "tenant_id"))
+        .queueCode(stringValue(row, "queueCode", "queue_code"))
+        .queueName(stringValue(row, "queueName", "queue_name"))
+        .queueType(stringValue(row, "queueType", "queue_type"))
+        .maxRunningJobs(integerValue(row, "maxRunningJobs", "max_running_jobs"))
+        .maxRunningPartitions(integerValue(row, "maxRunningPartitions", "max_running_partitions"))
+        .maxQps(integerValue(row, "maxQps", "max_qps"))
+        .workerGroup(stringValue(row, "workerGroup", "worker_group"))
+        .resourceTag(stringValue(row, "resourceTag", "resource_tag"))
+        .priorityPolicy(stringValue(row, "priorityPolicy", "priority_policy"))
+        .fairShareWeight(integerValue(row, "fairShareWeight", "fair_share_weight"))
+        .enabled(booleanValue(row, "enabled"))
+        .description(stringValue(row, "description"))
+        .createdAt(instantValue(row, "createdAt", "created_at"))
+        .updatedAt(instantValue(row, "updatedAt", "updated_at"))
+        .build();
   }
 }

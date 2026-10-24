@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.trigger.application;
 
+import io.github.pinpols.batch.trigger.domain.param.TriggerOutboxEventMarkFailedParam;
+
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -24,6 +27,8 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
 import io.github.pinpols.batch.trigger.mapper.TriggerOutboxEventMapper;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
@@ -31,6 +36,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.junit.jupiter.api.AfterEach;
@@ -96,7 +102,7 @@ class TriggerOutboxRelayTest {
         .thenAnswer(invocation -> invocation.getArgument(0));
     when(mapper.markPublishedBatch(anyList(), anyString(), anyString()))
         .thenAnswer(invocation -> ((List<?>) invocation.getArgument(0)).size());
-    when(mapper.markFailed(anyLong(), anyString(), anyString(), any(), anyString()))
+    when(mapper.markFailed(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.status() != null && parameters.lastError() != null && parameters.publishingStatus() != null)))
         .thenReturn(1);
     // executeWithLock(Task,LockConfiguration) 返回 void → 必须用 doAnswer 而非 when
     doAnswer(inv -> {
@@ -232,7 +238,7 @@ class TriggerOutboxRelayTest {
             eq(List.of(101L)),
             eq(OutboxPublishStatus.PUBLISHED.code()),
             eq(OutboxPublishStatus.PUBLISHING.code()));
-    verify(mapper, never()).markFailed(anyLong(), anyString(), anyString(), any(), anyString());
+    verify(mapper, never()).markFailed(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.status() != null && parameters.lastError() != null && parameters.publishingStatus() != null));
   }
 
   @Test
@@ -250,11 +256,7 @@ class TriggerOutboxRelayTest {
 
     verify(mapper)
         .markFailed(
-            eq(102L),
-            eq(OutboxPublishStatus.FAILED.code()),
-            eq("kafka broker not reachable"),
-            any(Instant.class),
-            eq(OutboxPublishStatus.PUBLISHING.code()));
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.id(), 102L) && java.util.Objects.equals(parameters.status(), OutboxPublishStatus.FAILED.code()) && java.util.Objects.equals(parameters.lastError(), "kafka broker not reachable") && parameters.nextPublishAt() != null && java.util.Objects.equals(parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())));
     verify(mapper, never()).markPublishedBatch(anyList(), anyString(), anyString());
   }
 
@@ -272,11 +274,7 @@ class TriggerOutboxRelayTest {
 
     verify(mapper)
         .markFailed(
-            eq(108L),
-            eq(OutboxPublishStatus.FAILED.code()),
-            contains("future failed"),
-            any(Instant.class),
-            eq(OutboxPublishStatus.PUBLISHING.code()));
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.id(), 108L) && java.util.Objects.equals(parameters.status(), OutboxPublishStatus.FAILED.code()) && (parameters.lastError() != null && parameters.lastError().contains("future failed")) && parameters.nextPublishAt() != null && java.util.Objects.equals(parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())));
     verify(mapper, never()).markPublishedBatch(anyList(), anyString(), anyString());
   }
 
@@ -293,11 +291,7 @@ class TriggerOutboxRelayTest {
 
     verify(mapper)
         .markFailed(
-            eq(109L),
-            eq(OutboxPublishStatus.FAILED.code()),
-            contains("future failed"),
-            any(Instant.class),
-            eq(OutboxPublishStatus.PUBLISHING.code()));
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.id(), 109L) && java.util.Objects.equals(parameters.status(), OutboxPublishStatus.FAILED.code()) && (parameters.lastError() != null && parameters.lastError().contains("future failed")) && parameters.nextPublishAt() != null && java.util.Objects.equals(parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())));
     verify(mapper, never()).markPublishedBatch(anyList(), anyString(), anyString());
   }
 
@@ -317,11 +311,7 @@ class TriggerOutboxRelayTest {
 
     verify(mapper)
         .markFailed(
-            eq(107L),
-            eq(OutboxPublishStatus.GIVE_UP.code()),
-            eq("kafka still down"),
-            any(Instant.class),
-            eq(OutboxPublishStatus.PUBLISHING.code()));
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.id(), 107L) && java.util.Objects.equals(parameters.status(), OutboxPublishStatus.GIVE_UP.code()) && java.util.Objects.equals(parameters.lastError(), "kafka still down") && parameters.nextPublishAt() != null && java.util.Objects.equals(parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())));
     verify(mapper, never()).markPublishedBatch(anyList(), anyString(), anyString());
   }
 
@@ -336,11 +326,7 @@ class TriggerOutboxRelayTest {
 
     verify(mapper)
         .markFailed(
-            eq(103L),
-            eq(OutboxPublishStatus.GIVE_UP.code()),
-            contains("payload deserialize"),
-            any(Instant.class),
-            eq(OutboxPublishStatus.PUBLISHING.code()));
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.id(), 103L) && java.util.Objects.equals(parameters.status(), OutboxPublishStatus.GIVE_UP.code()) && (parameters.lastError() != null && parameters.lastError().contains("payload deserialize")) && parameters.nextPublishAt() != null && java.util.Objects.equals(parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())));
     verify(publisher, never()).publishAsync(any(), any(), any(), any());
   }
 
@@ -357,7 +343,7 @@ class TriggerOutboxRelayTest {
 
     verify(publisher, never()).publishAsync(any(), any(), any(), any());
     verify(mapper, never()).markPublishedBatch(anyList(), anyString(), anyString());
-    verify(mapper, never()).markFailed(anyLong(), anyString(), anyString(), any(), anyString());
+    verify(mapper, never()).markFailed(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.status() != null && parameters.lastError() != null && parameters.publishingStatus() != null));
   }
 
   @Test
@@ -398,6 +384,33 @@ class TriggerOutboxRelayTest {
     // 2^6 = 64, capped to MAX 60
     assertThat(TriggerOutboxRelay.backoffSeconds(6)).isEqualTo(60);
     assertThat(TriggerOutboxRelay.backoffSeconds(10)).isEqualTo(60);
+  }
+
+  @Test
+  @DisplayName("单调时钟异常返回负时长时跳过延迟样本并递增异常计数")
+  void recordLatencySample_negativeDuration_skipsTimerAndCountsAnomaly() {
+    SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    Timer timer = registry.timer("batch.trigger.outbox.publish.latency", "result", "ok");
+    Counter anomalies = registry.counter("batch.trigger.outbox.publish.latency.negative_duration");
+
+    TriggerOutboxRelay.recordLatencySample(timer, anomalies, 100L, 37L);
+
+    assertThat(timer.count()).isZero();
+    assertThat(anomalies.count()).isEqualTo(1.0);
+  }
+
+  @Test
+  @DisplayName("非负发布时长正常记录且不增加异常计数")
+  void recordLatencySample_nonNegativeDuration_recordsTimer() {
+    SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    Timer timer = registry.timer("batch.trigger.outbox.publish.latency", "result", "ok");
+    Counter anomalies = registry.counter("batch.trigger.outbox.publish.latency.negative_duration");
+
+    TriggerOutboxRelay.recordLatencySample(timer, anomalies, 100L, 150L);
+
+    assertThat(timer.count()).isEqualTo(1L);
+    assertThat(timer.totalTime(TimeUnit.NANOSECONDS)).isEqualTo(50.0);
+    assertThat(anomalies.count()).isZero();
   }
 
   // ---------- helpers ----------

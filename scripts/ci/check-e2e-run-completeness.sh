@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：守护:e2e shard 实际跑数 == 清单声明数(运行侧闭环)。
+# 用法：bash scripts/ci/check-e2e-run-completeness.sh "<逗号分隔测试类>" <reports-dir>。
 # 守护:e2e shard 实际跑数 == 清单声明数(运行侧闭环)。
 #
 # 背景:full-ci-gate / staging-gate 的 e2e 用 `-Dtest=<逗号分隔类名>` +

@@ -112,10 +112,11 @@ func ClassifyHTTP(status, clientErrorCount, baseMs, attempts int) Decision {
 		return Decision{Action: "client-error", Retry: boolPtr(false), FailFast: boolPtr(false)}
 	// 5xx and transport errors (status <= 0 or >= 500) — exponential backoff
 	default:
+		retryBackoffMs := ExponentialBackoff(baseMs, attempts)
 		return Decision{
 			Action:         "retry-then-drop",
 			Retry:          boolPtr(true),
-			RetryBackoffMs: ExponentialBackoff(baseMs, attempts),
+			RetryBackoffMs: retryBackoffMs,
 			MaxAttempts:    intPtr(attempts),
 		}
 	}
@@ -180,7 +181,10 @@ func ParseISO8601DurationMs(iso string) (int, error) {
 	hours := parse(m[1])
 	minutes := parse(m[2])
 	seconds := parse(m[3])
-	return int(math.Round((hours*3600 + minutes*60 + seconds) * 1000)), nil
+	totalSeconds := hours*3600 + minutes*60 + seconds
+	totalMilliseconds := totalSeconds * 1000
+	roundedMilliseconds := math.Round(totalMilliseconds)
+	return int(roundedMilliseconds), nil
 }
 
 // hintToMs normalizes a nextHeartbeatHint (ISO duration string or raw seconds)

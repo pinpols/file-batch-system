@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.shared.client;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.i18n.AcceptLanguageRequestInterceptor;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.config.ConsoleTriggerClientProperties;
 import java.time.Duration;
@@ -10,6 +11,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
 import org.springframework.boot.http.client.HttpClientSettings;
 import org.springframework.core.env.Environment;
+import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.function.SingletonSupplier;
 import org.springframework.web.client.RestClient;
@@ -56,15 +58,18 @@ public class TriggerInternalRestClient {
     String baseUrl = ConsoleInternalBaseUrlResolver.resolve(
         environment, triggerClientProperties.getBaseUrl(), "batch.console.trigger.base-url");
     String secret = batchSecurityProperties.getInternalSecret();
+    HttpClientSettings httpClientSettings = HttpClientSettings.defaults();
+    Duration connectTimeout = Duration.ofMillis(triggerClientProperties.getConnectTimeoutMillis());
+    httpClientSettings = httpClientSettings.withConnectTimeout(connectTimeout);
+    Duration readTimeout = Duration.ofMillis(triggerClientProperties.getReadTimeoutMillis());
+    httpClientSettings = httpClientSettings.withReadTimeout(readTimeout);
+    ClientHttpRequestFactory requestFactory =
+        ClientHttpRequestFactoryBuilder.detect().build(httpClientSettings);
     RestClient.Builder builder = restClientBuilderProvider
         .getObject()
         .baseUrl(baseUrl)
-        .requestFactory(ClientHttpRequestFactoryBuilder.detect()
-            .build(HttpClientSettings.defaults()
-                .withConnectTimeout(
-                    Duration.ofMillis(triggerClientProperties.getConnectTimeoutMillis()))
-                .withReadTimeout(
-                    Duration.ofMillis(triggerClientProperties.getReadTimeoutMillis()))));
+        .requestInterceptor(new AcceptLanguageRequestInterceptor())
+        .requestFactory(requestFactory);
     if (Texts.hasText(secret)) {
       builder = builder.defaultHeader(X_INTERNAL_SECRET_HEADER, secret);
     }

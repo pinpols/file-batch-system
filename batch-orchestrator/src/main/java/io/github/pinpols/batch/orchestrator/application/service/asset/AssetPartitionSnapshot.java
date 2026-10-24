@@ -21,4 +21,5 @@ public record AssetPartitionSnapshot(
     Instant effectiveAt,
     String payloadStorage,
     String payloadJson,
-    String payloadRef) {}
+    String payloadRef,
+    Long resultVersionId) {}

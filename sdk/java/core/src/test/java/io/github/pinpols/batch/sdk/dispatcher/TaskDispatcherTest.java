@@ -1,31 +1,42 @@
 package io.github.pinpols.batch.sdk.dispatcher;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
+import io.github.pinpols.batch.sdk.task.SdkDependencyResultReference;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.io.IOException;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 
 @DisplayName("TaskDispatcher 主链路 — 认领执行回报、异常回退与异步派发")
 class TaskDispatcherTest {
@@ -52,6 +63,13 @@ class TaskDispatcherTest {
         42L, "tx", "job-1", taskType, "ti-9", Map.of("p", 1), Map.of("traceId", "abc"));
   }
 
+  private void stubCurrentClaim(PlatformHttpClient http, long taskId, String invocationId)
+      throws IOException {
+    PlatformHttpClient.TaskClaimResponse response =
+        new PlatformHttpClient.TaskClaimResponse(invocationId);
+    when(http.claim(eq(taskId), anyString(), any())).thenReturn(response);
+  }
+
   @SuppressWarnings({"unchecked", "rawtypes"})
   private static ArgumentCaptor<Map<String, Object>> mapCaptor() {
     return ArgumentCaptor.forClass((Class) Map.class);
@@ -68,6 +86,8 @@ class TaskDispatcherTest {
   @DisplayName("认领成功后执行处理器并回报成功结果,上下文与回报字段完整")
   void shouldRunHandlerAndReport_whenClaimSucceeds() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
+    when(http.claim(eq(42L), anyString(), any()))
+        .thenReturn(new PlatformHttpClient.TaskClaimResponse("inv-42", "{\"p\":1}", List.of()));
     AtomicReference<SdkTaskContext> seenCtx = new AtomicReference<>();
     SdkTaskHandler handler = new SdkTaskHandler() {
       @Override
@@ -107,6 +127,7 @@ class TaskDispatcherTest {
   @DisplayName("分区调用标识透传到认领与回报报文,任务结束后映射被清理")
   void shouldThreadPartitionInvocation_toClaimAndReport() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
+    stubCurrentClaim(http, 42L, "inv-77");
     SdkTaskHandler handler = new SdkTaskHandler() {
       @Override
       public String taskType() {
@@ -171,12 +192,115 @@ class TaskDispatcherTest {
     assertThat(dispatcher.partitionInvocation(42L)).isNull();
   }
 
+  @Test
+  @DisplayName("依赖结果引用从 CLAIM 回包透传给自托管 Worker handler")
+  void shouldExposeDependencyResultSnapshotFromClaimResponse() throws Exception {
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    SdkDependencyResultReference reference = new SdkDependencyResultReference(
+        "UPSTREAM_JOB",
+        "PREVIOUS_BIZ_DAY",
+        LocalDate.parse("2026-04-30"),
+        "job:UPSTREAM_JOB:2026-04-30",
+        4,
+        9001L,
+        8001L,
+        Instant.parse("2026-05-01T00:00:00Z"));
+    when(http.claim(eq(42L), anyString(), any()))
+        .thenReturn(new PlatformHttpClient.TaskClaimResponse("inv-1", List.of(reference)));
+    AtomicReference<SdkTaskContext> observed = new AtomicReference<>();
+    SdkTaskHandler handler = new SdkTaskHandler() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
+
+      @Override
+      public SdkTaskResult execute(SdkTaskContext ctx) {
+        observed.set(ctx);
+        return SdkTaskResult.ok("done", Map.of());
+      }
+    };
+    dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http);
+
+    dispatcher.processInWorkerThread(
+        new TaskDispatchMessage(42L, "tx", "job-1", "tt", "ti-9", Map.of(), Map.of()));
+
+    assertThat(observed.get().dependencyResultSnapshot()).containsExactly(reference);
+  }
+
+  @Test
+  @DisplayName("handler 使用 CLAIM 冻结参数，不使用派发消息中的旧参数")
+  void shouldUseClaimPayloadAsHandlerParameters() throws Exception {
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    String pinnedPayload =
+        "{\"crossDay\":{\"prior_day\":{\"resultVersionId\":9876,\"output\":{\"total\":42}}}}";
+    when(http.claim(eq(42L), anyString(), any()))
+        .thenReturn(new PlatformHttpClient.TaskClaimResponse("inv-1", pinnedPayload, List.of()));
+    AtomicReference<SdkTaskContext> observed = new AtomicReference<>();
+    SdkTaskHandler handler = new SdkTaskHandler() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
+
+      @Override
+      public SdkTaskResult execute(SdkTaskContext ctx) {
+        observed.set(ctx);
+        return SdkTaskResult.ok("done", Map.of());
+      }
+    };
+    dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http);
+
+    dispatcher.processInWorkerThread(new TaskDispatchMessage(
+        "v2",
+        42L,
+        "tx",
+        "job-1",
+        "tt",
+        "ti-9",
+        Map.of("crossDay", Map.of("prior_day", Map.of("resultVersionId", 111L))),
+        Map.of()));
+
+    assertThat(observed.get().parameters())
+        .containsEntry(
+            "crossDay",
+            Map.of("prior_day", Map.of("resultVersionId", 9876, "output", Map.of("total", 42))));
+  }
+
+  @Test
+  @DisplayName("CLAIM 参数不是 JSON 对象时 handler 不执行并回报失败")
+  void shouldFailTaskWhenClaimPayloadIsNotObjectJson() throws Exception {
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    when(http.claim(eq(42L), anyString(), any()))
+        .thenReturn(new PlatformHttpClient.TaskClaimResponse("inv-1", "[1,2]", List.of()));
+    SdkTaskHandler handler = new SdkTaskHandler() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
+
+      @Override
+      public SdkTaskResult execute(SdkTaskContext ctx) {
+        throw new AssertionError("handler must not run with malformed task parameters");
+      }
+    };
+    dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http);
+
+    dispatcher.processInWorkerThread(msg("tt"));
+
+    ArgumentCaptor<Map<String, Object>> report = mapCaptor();
+    verify(http).report(eq(42L), anyString(), report.capture());
+    assertThat(report.getValue()).containsEntry("success", false);
+    assertThat(report.getValue()).containsKey("errorCode");
+  }
+
   // ─── handler 异常回退 ────────────────────────────────────────────────────────
 
   @Test
   @DisplayName("处理器抛出异常时仍回报失败,统一错误码且摘要保留异常细节")
   void shouldReportFailure_whenHandlerThrows() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
+    stubCurrentClaim(http, 42L, "inv-42");
     SdkTaskHandler handler = new SdkTaskHandler() {
       @Override
       public String taskType() {
@@ -211,6 +335,7 @@ class TaskDispatcherTest {
   @DisplayName("处理器返回空结果按失败回报,并给出明确原因")
   void shouldTreatAsFailure_whenHandlerReturnsNull() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
+    stubCurrentClaim(http, 42L, "inv-42");
     SdkTaskHandler handler = new SdkTaskHandler() {
       @Override
       public String taskType() {
@@ -288,6 +413,7 @@ class TaskDispatcherTest {
     BatchPlatformClientConfig noRetryConfig =
         config.toBuilder().claimMax5xxRetries(0).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
+    stubCurrentClaim(http, 42L, "inv-42");
     doThrow(new IOException("503 down")).when(http).report(anyLong(), anyString(), any());
     dispatcher = new TaskDispatcher(noRetryConfig, Map.of("tt", noopHandler()), http);
 
@@ -300,9 +426,48 @@ class TaskDispatcherTest {
   // ─── 异步路径 onMessage 集成测试 ───────────────────────────────────────────────
 
   @Test
+  @DisplayName("已接纳的工作项晚于前一 Error 才进入执行器时，不得再次认领或执行同一任务")
+  void shouldNotExecutePreviouslySubmittedTask_whenFatalPrecedesWorkerEntry() throws Exception {
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    stubCurrentClaim(http, 42L, "inv-42");
+    AssertionError fatal = new AssertionError("execution thread terminated after effect");
+    AtomicInteger effects = new AtomicInteger();
+    SdkTaskHandler handler = new SdkTaskHandler() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
+
+      @Override
+      public SdkTaskResult execute(SdkTaskContext ctx) {
+        int execution = effects.incrementAndGet();
+        if (execution == 1) throw fatal;
+        return SdkTaskResult.ok("late duplicate executed");
+      }
+    };
+    dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http);
+    TaskDispatchMessage message = msg("tt");
+
+    Throwable observed = catchThrowable(() -> dispatcher.processInWorkerThread(message));
+    assertThat(observed).isSameAs(fatal);
+    assertThat(dispatcher.isFatal()).isTrue();
+    assertThat(dispatcher.inFlightTaskIds()).isEmpty();
+    assertThat(dispatcher.partitionInvocation(42L)).isNull();
+    // 包可见入口就是 executor 已接纳的工作项；它可能在 onMessage 的早期检查后才被调度。
+    dispatcher.processInWorkerThread(message);
+
+    assertThat(effects.get()).isEqualTo(1);
+    verify(http, times(1)).claim(eq(42L), anyString(), any());
+    verify(http, never()).report(anyLong(), anyString(), any());
+    assertThat(dispatcher.inFlightTaskIds()).isEmpty();
+    assertThat(dispatcher.partitionInvocation(42L)).isNull();
+  }
+
+  @Test
   @DisplayName("消息派发在线程池异步执行,处理器被真正调用")
   void shouldRunAsync_whenMessageDispatched() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
+    stubCurrentClaim(http, 42L, "inv-42");
     CountDownLatch executed = new CountDownLatch(1);
     SdkTaskHandler handler = new SdkTaskHandler() {
       @Override
@@ -321,6 +486,64 @@ class TaskDispatcherTest {
     dispatcher.onMessage(msg("tt"));
 
     assertThat(executed.await(2, TimeUnit.SECONDS)).isTrue();
+  }
+
+  @Test
+  @DisplayName("同owner认领均可成功的重复消息只执行一次,重复调用不得移除仍执行任务的续租上下文")
+  void shouldExecuteOnlyOnce_whenSameOwnerReceivesConcurrentDuplicate() throws Exception {
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    PlatformHttpClient.TaskClaimResponse claim =
+        new PlatformHttpClient.TaskClaimResponse("inv-42", "{}", List.of());
+    when(http.claim(eq(42L), anyString(), any())).thenReturn(claim);
+    AtomicInteger executions = new AtomicInteger();
+    CountDownLatch firstEntered = new CountDownLatch(1);
+    CountDownLatch releaseFirst = new CountDownLatch(1);
+    SdkTaskHandler handler = new SdkTaskHandler() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
+
+      @Override
+      public SdkTaskResult execute(SdkTaskContext context) {
+        if (executions.incrementAndGet() == 1) {
+          firstEntered.countDown();
+          try {
+            if (!releaseFirst.await(5, TimeUnit.SECONDS)) {
+              throw new IllegalStateException("first handler was not released");
+            }
+          } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(interrupted);
+          }
+        }
+        return SdkTaskResult.ok();
+      }
+    };
+    dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http);
+    TaskDispatchMessage message = msg("tt");
+    ExecutorService callers = Executors.newFixedThreadPool(2);
+    Future<?> first = callers.submit(() -> dispatcher.processInWorkerThread(message));
+    try {
+      boolean firstStarted = firstEntered.await(2, TimeUnit.SECONDS);
+      assertThat(firstStarted).isTrue();
+      Future<?> duplicate = callers.submit(() -> dispatcher.processInWorkerThread(message));
+      duplicate.get(2, TimeUnit.SECONDS);
+
+      assertThat(executions.get()).isEqualTo(1);
+      assertThat(dispatcher.inFlightTaskIds()).containsExactly(42L);
+      assertThat(dispatcher.partitionInvocation(42L)).isEqualTo("inv-42");
+    } finally {
+      releaseFirst.countDown();
+      try {
+        first.get(2, TimeUnit.SECONDS);
+      } finally {
+        callers.shutdownNow();
+        callers.awaitTermination(2, TimeUnit.SECONDS);
+      }
+    }
+    verify(http, times(1)).report(eq(42L), anyString(), any());
+    assertThat(dispatcher.inFlightTaskIds()).isEmpty();
   }
 
   // ─── invalid message 跳过 ────────────────────────────────────────────────────
@@ -356,6 +579,6 @@ class TaskDispatcherTest {
   }
 
   private static <T> T eq(T v) {
-    return org.mockito.ArgumentMatchers.eq(v);
+    return ArgumentMatchers.eq(v);
   }
 }

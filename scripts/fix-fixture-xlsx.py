@@ -1,22 +1,14 @@
 #!/usr/bin/env python3
-"""Idempotent patches for sim-e2e fixture xlsx workbooks.
-
-Patches applied to ta/tb/tc-tenant-config-package-test.xlsx:
-  1. job_definition.schedule_expr Linux 5-field -> Quartz 6-field
-     e.g.  '0 2 * * *'  ->  '0 0 2 * * ?'
-  2. file_channel_config.config_json SFTP key rename
-     host/port/username/password/remotePath -> sftp_*  (also legacy snake forms)
-  3. workflow_node: ensure START / END boundary nodes exist
-     - rename node_code NODE_START/NODE_END -> START/END if present
-     - if missing, append START (node_type=START) + END (node_type=END)
-     - workflow_edge wired START -> first JOB node, last JOB node -> END
-  4. job_definition.execution_mode required by current Console package validator.
-     Add column when absent and fill FULL for every job row.
-  5. file_template_config JSON/SQL preview hardening:
-     - field_mappings entries must carry name.
-     - export default_query_sql must list columns explicitly.
-  6. pipeline_step_definition follows each pipeline type's complete ordered stage chain.
-"""
+# 用途：校验或修复 SIM 配置包 Excel 的结构与场景约束。
+# 用法：python3 scripts/fix-fixture-xlsx.py --check 只读校验；省略 --check 将更新配置包。
+"""幂等修复 SIM 配置包 Excel。
+针对 ta/tb/tc 配置包执行以下调整：
+1. 将旧 Linux 五字段调度表达式转换为 Quartz 六字段表达式。
+2. 将 SFTP 的 host/port/username/password/remotePath 及旧蛇形字段迁移到 sftp_*。
+3. 统一 Workflow 的 START/END 边界节点，补齐缺失节点及首尾边。
+4. 补充当前校验要求的 job_definition.execution_mode，缺失值填 FULL。
+5. 为 field_mappings 补充 name，导出 default_query_sql 显式列出字段。
+6. 移除当前导入 fixture 中已退役的租户自定义 Pipeline sheet。"""
 from __future__ import annotations
 
 import json
@@ -26,7 +18,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 
 ROOT = Path(__file__).resolve().parent.parent
-SUITE_DIR = ROOT / "docs/test-data/test-full-coverage-import-suite"
+SUITE_DIR = ROOT / "test-data/tenant-config-packages"
 TARGETS = ["ta-tenant-config-package-test.xlsx",
            "tb-tenant-config-package-test.xlsx",
            "tc-tenant-config-package-test.xlsx",
@@ -78,22 +70,15 @@ CANONICAL_COLUMNS: dict[str, list[str]] = {
         "download_requires_approval", "masking_rule_set", "enabled", "version",
         "description",
     ],
-    "pipeline_definition": [
-        "tenant_id", "job_code", "pipeline_name", "pipeline_type", "biz_type",
-        "worker_group", "version", "enabled", "description",
-    ],
-    "pipeline_step_definition": [
-        "job_code", "version", "step_code", "step_name", "stage_code", "step_order",
-        "impl_code", "step_params", "timeout_seconds", "retry_policy",
-        "retry_max_count", "enabled",
-    ],
     "workflow_definition": [
         "tenant_id", "workflow_code", "workflow_name", "workflow_type", "version",
-        "enabled", "description",
+        "single_job_code", "enabled", "schedule_enabled", "schedule_type",
+        "schedule_expr", "timezone", "trigger_mode", "calendar_code",
+        "depends_on_job_code", "description",
     ],
     "workflow_node": [
         "tenant_id", "workflow_code", "workflow_version", "node_code", "node_name",
-        "node_type", "related_job_code", "related_pipeline_code", "worker_group",
+        "node_type", "related_job_code", "worker_group",
         "window_code", "node_order", "retry_policy", "retry_max_count",
         "timeout_seconds", "node_params", "enabled",
     ],
@@ -103,18 +88,22 @@ CANONICAL_COLUMNS: dict[str, list[str]] = {
     ],
 }
 
+RETIRED_SHEETS = {"pipeline_definition", "pipeline_step_definition"}
+
 SFTP_KEY_MAP = {
     "host": "sftp_host",
     "sftpHost": "sftp_host",
     "port": "sftp_port",
     "sftpPort": "sftp_port",
-    "username": "sftp_username",
-    "sftpUsername": "sftp_username",
+    "username": "sftp_user",
+    "sftpUsername": "sftp_user",
+    "sftp_username": "sftp_user",
     "password": "sftp_password",
     "sftpPassword": "sftp_password",
-    "remotePath": "sftp_remote_path",
-    "sftpRemotePath": "sftp_remote_path",
-    "remote_path": "sftp_remote_path",
+    "remotePath": "sftp_remote_directory",
+    "sftpRemotePath": "sftp_remote_directory",
+    "remote_path": "sftp_remote_directory",
+    "sftp_remote_path": "sftp_remote_directory",
 }
 
 TEMPLATE_MAPPINGS: dict[str, list[dict[str, object]]] = {
@@ -277,50 +266,6 @@ JOB_DEFAULT_PARAMS: dict[str, dict[str, object]] = {
     "TC_EXPORT_RISK_ALERT": {"templateCode": "TC_EXPORT_RISK_ALERT_TPL"},
 }
 
-IMPORT_STAGE_CHAIN = [
-    ("STEP_RECEIVE", "接收文件", "RECEIVE", 0, "IMPORT_RECEIVE"),
-    ("STEP_PREPROCESS", "预处理", "PREPROCESS", 1, "IMPORT_PREPROCESS"),
-    ("STEP_PARSE", "解析", "PARSE", 2, "IMPORT_PARSE"),
-    ("STEP_VALIDATE", "校验", "VALIDATE", 3, "IMPORT_VALIDATE"),
-    ("STEP_LOAD", "入库", "LOAD", 4, "IMPORT_LOAD"),
-    ("STEP_FEEDBACK", "回执写回", "FEEDBACK", 5, "IMPORT_FEEDBACK"),
-]
-
-PIPELINE_STAGE_CHAINS = {
-    "IMPORT": [stage for _, _, stage, _, _ in IMPORT_STAGE_CHAIN],
-    "EXPORT": ["PREPARE", "GENERATE", "STORE", "REGISTER", "COMPLETE"],
-    "PROCESS": ["PREPARE", "COMPUTE", "VALIDATE", "COMMIT", "FEEDBACK"],
-    "DISPATCH": ["PREPARE", "DISPATCH", "ACK", "RETRY", "COMPENSATE", "COMPLETE"],
-}
-
-PIPELINE_STAGE_NAMES = {
-    "PREPARE": "执行前准备",
-    "RECEIVE": "接收文件",
-    "PREPROCESS": "预处理",
-    "PARSE": "解析",
-    "VALIDATE": "校验",
-    "COMPUTE": "计算",
-    "LOAD": "入库",
-    "STORE": "存储",
-    "REGISTER": "登记",
-    "COMMIT": "提交",
-    "ACK": "确认",
-    "RETRY": "重试",
-    "COMPENSATE": "补偿",
-    "GENERATE": "生成",
-    "DISPATCH": "分发",
-    "COMPLETE": "完成",
-    "FEEDBACK": "回执写回",
-}
-
-IMPORT_JOBS = {
-    "TA_IMPORT_CUSTOMER",
-    "TA_IMPORT_ORDER",
-    "TB_IMPORT_TRANSACTION",
-    "TC_IMPORT_RISK_SCORE",
-}
-
-
 def linux5_to_quartz6(expr: str) -> str | None:
     if not expr:
         return None
@@ -329,7 +274,7 @@ def linux5_to_quartz6(expr: str) -> str | None:
         return None
     parts = s.split()
     if len(parts) in (6, 7):
-        return None  # already quartz
+        return None  # 已经是 Quartz 表达式，无需重复转换。
     m = LINUX_5FIELD_RE.match(s)
     if not m:
         return None
@@ -576,142 +521,6 @@ def patch_job_default_params(ws) -> int:
     return fixed
 
 
-def patch_import_pipeline_steps(ws) -> int:
-    headers = [c.value for c in ws[1]]
-    required = {
-        "job_code",
-        "version",
-        "step_code",
-        "step_name",
-        "stage_code",
-        "step_order",
-        "impl_code",
-        "step_params",
-        "timeout_seconds",
-        "retry_policy",
-        "retry_max_count",
-        "enabled",
-    }
-    if not required.issubset(set(headers)):
-        return 0
-    idx = {h: i for i, h in enumerate(headers)}
-    fixed = 0
-    rows_by_job: dict[str, list] = {}
-    for row in ws.iter_rows(min_row=2):
-        job_code = row[idx["job_code"]].value
-        if job_code in IMPORT_JOBS:
-            rows_by_job.setdefault(job_code, []).append(row)
-
-    for job_code, rows in rows_by_job.items():
-        by_stage = {row[idx["stage_code"]].value: row for row in rows}
-        for step_code, step_name, stage_code, step_order, impl_code in IMPORT_STAGE_CHAIN:
-            row = by_stage.get(stage_code)
-            if row is None:
-                values = [None] * len(headers)
-                values[idx["job_code"]] = job_code
-                values[idx["version"]] = 1
-                values[idx["step_code"]] = step_code
-                values[idx["step_name"]] = step_name
-                values[idx["stage_code"]] = stage_code
-                values[idx["step_order"]] = step_order
-                values[idx["impl_code"]] = impl_code
-                values[idx["step_params"]] = "{}"
-                values[idx["timeout_seconds"]] = 120
-                values[idx["retry_policy"]] = "NONE"
-                values[idx["retry_max_count"]] = 0
-                values[idx["enabled"]] = "TRUE"
-                ws.append(values)
-                fixed += 1
-                continue
-            desired = {
-                "step_code": step_code,
-                "step_name": step_name,
-                "stage_code": stage_code,
-                "step_order": step_order,
-                "impl_code": impl_code,
-                "step_params": json.dumps(
-                    {"spec": "jdbcMappedImport", "version": "1", "commitBatchSize": 500},
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                )
-                if stage_code in {"PARSE", "VALIDATE", "LOAD"}
-                else "{}",
-                "timeout_seconds": row[idx["timeout_seconds"]].value or 120,
-                "retry_policy": row[idx["retry_policy"]].value or "NONE",
-                "retry_max_count": row[idx["retry_max_count"]].value
-                if row[idx["retry_max_count"]].value not in (None, "")
-                else 0,
-                "enabled": "TRUE",
-            }
-            for column, value in desired.items():
-                cell = row[idx[column]]
-                if cell.value != value:
-                    cell.value = value
-                    fixed += 1
-    return fixed
-
-
-def patch_pipeline_stage_sequences(pipeline_ws, step_ws) -> int:
-    pipeline_headers = [cell.value for cell in pipeline_ws[1]]
-    step_headers = [cell.value for cell in step_ws[1]]
-    pipeline_idx = {header: index for index, header in enumerate(pipeline_headers)}
-    step_idx = {header: index for index, header in enumerate(step_headers)}
-    rows_by_pipeline: dict[tuple[object, object], list] = {}
-    for row in step_ws.iter_rows(min_row=2):
-        job_code = row[step_idx["job_code"]].value
-        version = row[step_idx["version"]].value
-        if job_code not in (None, ""):
-            rows_by_pipeline.setdefault((job_code, version), []).append(row)
-
-    fixed = 0
-    for pipeline in pipeline_ws.iter_rows(min_row=2):
-        job_code = pipeline[pipeline_idx["job_code"]].value
-        version = pipeline[pipeline_idx["version"]].value
-        pipeline_type = str(pipeline[pipeline_idx["pipeline_type"]].value or "").upper()
-        stages = PIPELINE_STAGE_CHAINS.get(pipeline_type)
-        if job_code in (None, "") or stages is None:
-            continue
-
-        rows = rows_by_pipeline.setdefault((job_code, version), [])
-        rows_by_stage = {row[step_idx["stage_code"]].value: row for row in rows}
-        for order, stage_code in enumerate(stages):
-            row = rows_by_stage.get(stage_code)
-            if row is None:
-                values = [None] * len(step_headers)
-                defaults = {
-                    "job_code": job_code,
-                    "version": version,
-                    "step_code": f"STEP_{stage_code}",
-                    "step_name": PIPELINE_STAGE_NAMES[stage_code],
-                    "stage_code": stage_code,
-                    "step_order": order,
-                    "impl_code": f"{pipeline_type}_{stage_code}",
-                    "step_params": "{}",
-                    "timeout_seconds": 300,
-                    "retry_policy": "NONE",
-                    "retry_max_count": 0,
-                    "enabled": "TRUE",
-                }
-                for column, value in defaults.items():
-                    values[step_idx[column]] = value
-                step_ws.append(values)
-                rows_by_pipeline[(job_code, version)].append(
-                    step_ws[step_ws.max_row]
-                )
-                fixed += 1
-                continue
-
-            order_cell = row[step_idx["step_order"]]
-            if order_cell.value != order:
-                order_cell.value = order
-                fixed += 1
-            enabled_cell = row[step_idx["enabled"]]
-            if str(enabled_cell.value).upper() != "TRUE":
-                enabled_cell.value = "TRUE"
-                fixed += 1
-    return fixed
-
-
 def ensure_mapping_names(raw: object, template_type: str) -> str | None:
     if raw in (None, ""):
         return None
@@ -744,10 +553,8 @@ def ensure_mapping_names(raw: object, template_type: str) -> str | None:
 
 
 def ensure_workflow_boundary_nodes(wb) -> tuple[int, int]:
-    """Make sure each (workflow_code, workflow_version) has node_code=START+END.
-
-    Renames NODE_START/NODE_END -> START/END; appends missing; wires edges.
-    """
+    """确保每个 workflow_code/workflow_version 都有 START 与 END。
+    将 NODE_START/NODE_END 统一为 START/END，补齐缺失节点并连接首尾边。"""
     if "workflow_node" not in wb.sheetnames:
         return 0, 0
     node_ws = wb["workflow_node"]
@@ -895,11 +702,71 @@ def ensure_workflow_boundary_nodes(wb) -> tuple[int, int]:
     return renamed + appended, edges_added
 
 
+def retire_workflow_job_wrappers(wb) -> int:
+    """将 fixture 调度从已退役的 Workflow Job 迁移到 Workflow 定义行。"""
+    if "job_definition" not in wb.sheetnames or "workflow_definition" not in wb.sheetnames:
+        return 0
+    job_ws = wb["job_definition"]
+    workflow_ws = wb["workflow_definition"]
+    job_headers = [cell.value for cell in job_ws[1]]
+    workflow_headers = [cell.value for cell in workflow_ws[1]]
+    job_index = {header: index for index, header in enumerate(job_headers)}
+    workflow_index = {header: index for index, header in enumerate(workflow_headers)}
+    required_job_columns = {"tenant_id", "job_code", "job_type", "schedule_type", "schedule_expr", "calendar_code", "enabled"}
+    required_workflow_columns = {"tenant_id", "workflow_code", "schedule_type", "schedule_expr", "schedule_enabled", "trigger_mode", "calendar_code", "timezone"}
+    if not required_job_columns.issubset(job_index) or not required_workflow_columns.issubset(workflow_index):
+        raise ValueError("fixture sheets lack columns needed to retire WORKFLOW Job wrappers")
+
+    workflow_rows = {}
+    for row in workflow_ws.iter_rows(min_row=2):
+        tenant = row[workflow_index["tenant_id"]].value
+        code = row[workflow_index["workflow_code"]].value
+        if tenant not in (None, "") and code not in (None, ""):
+            workflow_rows[(str(tenant).strip(), str(code).strip())] = row
+
+    wrapper_rows = []
+    for row in job_ws.iter_rows(min_row=2):
+        if str(row[job_index["job_type"]].value or "").strip().upper() != "WORKFLOW":
+            continue
+        tenant = str(row[job_index["tenant_id"]].value or "").strip()
+        code = str(row[job_index["job_code"]].value or "").strip()
+        workflow_row = workflow_rows.get((tenant, code))
+        if workflow_row is None:
+            raise ValueError(f"WORKFLOW Job wrapper has no matching Workflow definition: {tenant}/{code}")
+
+        def set_if_blank(column: str, value: object) -> None:
+            index = workflow_index[column]
+            if workflow_row[index].value in (None, "") and value not in (None, ""):
+                workflow_row[index].value = value
+
+        schedule_type = str(row[job_index["schedule_type"]].value or "MANUAL").strip().upper()
+        scheduled = schedule_type in {"CRON", "FIXED_RATE"}
+        enabled = str(row[job_index["enabled"]].value or "TRUE").strip().upper() in {"TRUE", "1", "YES"}
+        set_if_blank("schedule_type", schedule_type)
+        set_if_blank("schedule_expr", row[job_index["schedule_expr"]].value)
+        set_if_blank("schedule_enabled", "TRUE" if scheduled and enabled else "FALSE")
+        set_if_blank("trigger_mode", "SCHEDULED" if scheduled else "MANUAL")
+        set_if_blank("calendar_code", row[job_index["calendar_code"]].value)
+        set_if_blank("timezone", "Asia/Shanghai")
+        if "depends_on_job_code" in job_index and "depends_on_job_code" in workflow_index:
+            set_if_blank(
+                "depends_on_job_code", row[job_index["depends_on_job_code"]].value
+            )
+        if "description" in job_index and "description" in workflow_index:
+            set_if_blank("description", row[job_index["description"]].value)
+        wrapper_rows.append(row[0].row)
+
+    for row_number in reversed(wrapper_rows):
+        job_ws.delete_rows(row_number, 1)
+    return len(wrapper_rows)
+
+
 def process(path: Path) -> dict:
     before = path.stat().st_size
     wb = load_workbook(path)
     result = {"file": path.name, "before_bytes": before}
     result["sheets_aligned"] = align_workbook_columns(wb)
+    result["workflow_job_wrappers_retired"] = retire_workflow_job_wrappers(wb)
     if "job_definition" in wb.sheetnames:
         ws = wb["job_definition"]
         result["schedule_expr_fixed"] = patch_schedule_expr(ws)
@@ -909,14 +776,12 @@ def process(path: Path) -> dict:
         result["sftp_keys_renamed"] = patch_channel_config_json(wb["file_channel_config"])
     if "file_template_config" in wb.sheetnames:
         result["file_template_config_fixed"] = patch_file_template_config(wb["file_template_config"])
-    if "pipeline_step_definition" in wb.sheetnames:
-        result["import_pipeline_steps_fixed"] = patch_import_pipeline_steps(
-            wb["pipeline_step_definition"]
-        )
-        if "pipeline_definition" in wb.sheetnames:
-            result["pipeline_stage_sequences_fixed"] = patch_pipeline_stage_sequences(
-                wb["pipeline_definition"], wb["pipeline_step_definition"]
-            )
+    removed_retired_sheets = 0
+    for sheet_name in RETIRED_SHEETS:
+        if sheet_name in wb.sheetnames:
+            del wb[sheet_name]
+            removed_retired_sheets += 1
+    result["retired_pipeline_sheets_removed"] = removed_retired_sheets
     nodes_touched, edges_added = ensure_workflow_boundary_nodes(wb)
     result["workflow_nodes_touched"] = nodes_touched
     result["workflow_edges_added"] = edges_added
@@ -945,11 +810,14 @@ def verify(path: Path) -> dict:
         ws = wb["job_definition"]
         headers = [c.value for c in ws[1]]
         col = headers.index("schedule_expr")
+        job_type_col = headers.index("job_type")
         type_col = headers.index("schedule_type") if "schedule_type" in headers else -1
         em_col = headers.index("execution_mode") if "execution_mode" in headers else -1
         bad = []
         missing_execution_mode = 0
         for row in ws.iter_rows(min_row=2, values_only=True):
+            if str(row[job_type_col] or "").strip().upper() == "WORKFLOW":
+                out["workflow_job_wrapper_rows"] = out.get("workflow_job_wrapper_rows", 0) + 1
             v = row[col]
             schedule_type = str(row[type_col] or "").strip().upper() if type_col >= 0 else "CRON"
             if schedule_type != "CRON" or v is None or str(v).strip() == "":
@@ -1012,49 +880,7 @@ def verify(path: Path) -> dict:
         out["field_mapping_missing_name_count"] = missing_name
         out["export_select_star_count"] = select_star
         out["import_specs_missing"] = import_specs_missing
-    if "pipeline_step_definition" in wb.sheetnames:
-        ws = wb["pipeline_step_definition"]
-        headers = [c.value for c in ws[1]]
-        idx = {h: i for i, h in enumerate(headers)}
-        steps_by_pipeline: dict[tuple[object, object], list[tuple[object, str, object]]] = {}
-        for row in ws.iter_rows(min_row=2, values_only=True):
-            job_code = row[idx["job_code"]]
-            version = row[idx["version"]]
-            if job_code not in (None, ""):
-                steps_by_pipeline.setdefault((job_code, version), []).append(
-                    (row[idx["step_order"]], str(row[idx["stage_code"]]), row[idx["enabled"]])
-                )
-        pipeline_ws = wb["pipeline_definition"]
-        pipeline_headers = [cell.value for cell in pipeline_ws[1]]
-        pipeline_idx = {header: i for i, header in enumerate(pipeline_headers)}
-        mismatches = {}
-        for row in pipeline_ws.iter_rows(min_row=2, values_only=True):
-            job_code = row[pipeline_idx["job_code"]]
-            version = row[pipeline_idx["version"]]
-            pipeline_type = str(row[pipeline_idx["pipeline_type"]] or "").upper()
-            expected = PIPELINE_STAGE_CHAINS.get(pipeline_type)
-            if job_code in (None, "") or expected is None:
-                continue
-            configured = steps_by_pipeline.get((job_code, version), [])
-            ordered = sorted(
-                configured,
-                key=lambda item: step_order_sort_key(item[0]),
-            )
-            actual_stages = [stage for _, stage, _ in ordered]
-            actual_orders = [order for order, _, _ in ordered]
-            expected_orders = list(range(len(expected)))
-            if (
-                actual_stages != expected
-                or actual_orders != expected_orders
-                or any(str(enabled).upper() != "TRUE" for _, _, enabled in ordered)
-            ):
-                mismatches[job_code] = {
-                    "expected_stages": expected,
-                    "actual_stages": actual_stages,
-                    "expected_orders": expected_orders,
-                    "actual_orders": actual_orders,
-                }
-        out["pipeline_stage_sequence_mismatches"] = mismatches
+    out["retired_sheets_present"] = sorted(RETIRED_SHEETS.intersection(wb.sheetnames))
     if "workflow_node" in wb.sheetnames:
         ws = wb["workflow_node"]
         headers = [c.value for c in ws[1]]
@@ -1072,25 +898,34 @@ def verify(path: Path) -> dict:
                 seen[k]["end"] += 1
         out["workflow_boundary_ok"] = all(v["start"] == 1 and v["end"] == 1 for v in seen.values())
         out["workflows_checked"] = len(seen)
+    if "workflow_definition" in wb.sheetnames:
+        ws = wb["workflow_definition"]
+        headers = [cell.value for cell in ws[1]]
+        indices = {header: index for index, header in enumerate(headers)}
+        invalid_schedules = 0
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            schedule_type = str(row[indices["schedule_type"]] or "MANUAL").strip().upper()
+            trigger_mode = str(row[indices["trigger_mode"]] or "MANUAL").strip().upper()
+            schedule_expr = row[indices["schedule_expr"]]
+            if schedule_type in {"CRON", "FIXED_RATE"} and (
+                not schedule_expr or trigger_mode != "SCHEDULED"
+            ):
+                invalid_schedules += 1
+        out["invalid_workflow_schedule_count"] = invalid_schedules
     return out
-
-
-def step_order_sort_key(value: object) -> tuple[int, int]:
-    try:
-        return 0, int(value)
-    except (TypeError, ValueError):
-        return 1, 0
 
 
 def verify_failed(result: dict) -> bool:
     return bool(result.get("header_mismatches")) \
         or result.get("non_quartz_schedule_count", 0) != 0 \
         or result.get("missing_execution_mode_count", 0) != 0 \
+        or result.get("workflow_job_wrapper_rows", 0) != 0 \
+        or result.get("invalid_workflow_schedule_count", 0) != 0 \
         or result.get("sftp_legacy_keys_left", 0) != 0 \
         or result.get("field_mapping_missing_name_count", 0) != 0 \
         or result.get("export_select_star_count", 0) != 0 \
         or bool(result.get("import_specs_missing")) \
-        or bool(result.get("pipeline_stage_sequence_mismatches")) \
+        or bool(result.get("retired_sheets_present")) \
         or result.get("workflow_boundary_ok") is False
 
 

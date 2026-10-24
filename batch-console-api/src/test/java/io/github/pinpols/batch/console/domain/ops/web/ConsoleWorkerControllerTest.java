@@ -18,6 +18,7 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.view.ConsoleWorkerRegistryResponse;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -71,19 +72,16 @@ class ConsoleWorkerControllerTest {
   @DisplayName("排空成功:返回成功响应并回填排空后状态")
   void shouldDrainAndReturnCommonResponseOnSuccess() throws Exception {
     when(applicationService.drain(anyString(), any(), anyString()))
-        .thenReturn(new ConsoleWorkerRegistryResponse(
-            1L,
-            "t1",
-            "w1",
-            "group-a",
-            null,
-            null,
-            "DRAINING",
-            BatchDateTimeSupport.utcNow(),
-            0,
-            null,
-            null,
-            null));
+        .thenReturn(ConsoleWorkerRegistryResponse.builder()
+            .id(1L)
+            .tenantId("t1")
+            .workerCode("w1")
+            .workerGroup("group-a")
+            .status("DRAINING")
+            .heartbeatAt(BatchDateTimeSupport.utcNow())
+            .currentLoad(0)
+            .taskCapabilities(List.of())
+            .build());
 
     mockMvc
         .perform(post("/api/console/workers/w1/drain")

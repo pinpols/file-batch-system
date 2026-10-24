@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.kafka;
 
 import java.time.LocalDate;
+import lombok.Builder;
 
 /**
  * SDK Phase 2 §2.1:派单时随 {@link TaskDispatchMessage} 下沉的"调度上下文"。
@@ -21,6 +22,7 @@ import java.time.LocalDate;
  *   <li>{@code triggerCode} / {@code workflowRunId}:平台当前无对应来源列,统一置 null;待后续补列后填充。
  * </ul>
  */
+@Builder
 public record SchedulingContext(
     LocalDate bizDate,
     LocalDate prevBizDate,

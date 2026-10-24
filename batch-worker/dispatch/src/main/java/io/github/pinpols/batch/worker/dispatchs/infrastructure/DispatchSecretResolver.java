@@ -50,7 +50,8 @@ public class DispatchSecretResolver {
     }
     Long secretVersionId;
     try {
-      secretVersionId = Long.valueOf(String.valueOf(rawId));
+      String secretVersionIdText = String.valueOf(rawId);
+      secretVersionId = Long.valueOf(secretVersionIdText);
     } catch (NumberFormatException exception) {
       throw new DispatchSecretBlockedException("DISPATCH_SECRET_VERSION_INVALID");
     }
@@ -61,7 +62,8 @@ public class DispatchSecretResolver {
     }
     Map<String, Object> credentials;
     try {
-      credentials = parseCredentials(secretPayloadProtector.reveal(protectedPayload));
+      String revealedPayload = secretPayloadProtector.reveal(protectedPayload);
+      credentials = parseCredentials(revealedPayload);
     } catch (RuntimeException exception) {
       throw new DispatchSecretBlockedException("DISPATCH_SECRET_PAYLOAD_INVALID");
     }

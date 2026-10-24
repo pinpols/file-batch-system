@@ -12,10 +12,12 @@ import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.testing.TestPostgresContainers;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressRegistry;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPosition;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingStage;
+import io.github.pinpols.batch.worker.core.support.TaskExecutionClient;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration.FileProcessing;
 import io.github.pinpols.batch.worker.imports.config.JdbcMappedImportSecurityProperties;
@@ -91,19 +93,25 @@ class LoadStepCheckpointCrashResumeIntegrationTest {
 
     JdbcMappedImportSecurityProperties security = new JdbcMappedImportSecurityProperties();
     security.setAllowedSchemas(List.of("biz"));
-    security.setStrictIdempotency(true);
     plugin = new GenericJdbcMappedImportLoadPlugin(dataSource, objectMapper, security);
 
-    jdbcTemplate.execute("DROP SCHEMA IF EXISTS biz CASCADE");
-    jdbcTemplate.execute("CREATE SCHEMA biz");
-    jdbcTemplate.execute("""
+    final String dropSql = """
+        DROP SCHEMA IF EXISTS biz CASCADE
+    """;
+    jdbcTemplate.execute(dropSql);
+    final String createSql = """
+        CREATE SCHEMA biz
+    """;
+    jdbcTemplate.execute(createSql);
+    final String createBizCkptCustomerSql = """
         CREATE TABLE biz.ckpt_customer (
           tenant_id text NOT NULL,
           customer_no text NOT NULL,
           customer_name text,
           PRIMARY KEY (tenant_id, customer_no)
         )
-        """);
+        """;
+    jdbcTemplate.execute(createBizCkptCustomerSql);
 
     runtimeRepository = mock(PlatformFileRecordRepository.class);
     workerConfig = new ImportWorkerConfiguration(
@@ -187,7 +195,14 @@ class LoadStepCheckpointCrashResumeIntegrationTest {
       ProcessingPositionStore positionStore) {
     ImportLoadPluginRegistry registry = new ImportLoadPluginRegistry(List.of(loadPlugin));
     return new LoadStep(
-        registry, runtimeRepository, workerConfig, objectMapper, checkpointProps, positionStore);
+        registry,
+        runtimeRepository,
+        workerConfig,
+        objectMapper,
+        checkpointProps,
+        positionStore,
+        new PipelineStageProgressRegistry(),
+        mock(TaskExecutionClient.class));
   }
 
   private ImportJobContext newContext(Path validated) {
@@ -230,13 +245,19 @@ class LoadStepCheckpointCrashResumeIntegrationTest {
   }
 
   private List<String> customerNos() {
+    final String selectBizCkptCustomerSql = """
+        SELECT customer_no FROM biz.ckpt_customer ORDER BY customer_no
+    """;
     return jdbcTemplate.queryForList(
-        "SELECT customer_no FROM biz.ckpt_customer ORDER BY customer_no", String.class);
+        selectBizCkptCustomerSql, String.class);
   }
 
   private int rowCount() {
+    final String selectBizCkptCustomerSqlValue1 = """
+        SELECT count(*) FROM biz.ckpt_customer
+    """;
     Integer n =
-        jdbcTemplate.queryForObject("SELECT count(*) FROM biz.ckpt_customer", Integer.class);
+        jdbcTemplate.queryForObject(selectBizCkptCustomerSqlValue1, Integer.class);
     return n == null ? 0 : n;
   }
 
@@ -347,8 +368,11 @@ class LoadStepCheckpointCrashResumeIntegrationTest {
     @Override
     public int loadChunk(ImportLoadContext context, List<Map<String, Object>> records) {
       for (Map<String, Object> r : records) {
+        final String insertBizCkptCustomerSql = """
+            INSERT INTO biz.ckpt_customer(tenant_id,customer_no,customer_name) VALUES (?,?,?)
+        """;
         jdbc.update(
-            "INSERT INTO biz.ckpt_customer(tenant_id,customer_no,customer_name) VALUES (?,?,?)",
+            insertBizCkptCustomerSql,
             context.tenantId(),
             String.valueOf(r.get("customer_no")),
             String.valueOf(r.get("name")));

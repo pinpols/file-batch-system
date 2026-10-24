@@ -13,7 +13,7 @@
 -- 字段:
 --   upstream_code   必须先到指定状态的上游 calendar
 --   downstream_code 等待 upstream 的下游 calendar
---   rule            WAIT_SETTLED   - upstream batch_day_instance.day_status='SETTLED'
+--   rule            WAIT_SETTLED   - 上游 batch_day_instance.day_status='SETTLED'
 --                   WAIT_CUTOFF    - upstream cutoff_at 已过
 --                   SAME_DAY_PARALLEL - 同 bizDate 并行（占位，v1 不强校验）
 --
@@ -44,6 +44,6 @@ CREATE INDEX IF NOT EXISTS idx_calendar_dependency_downstream
 COMMENT ON TABLE batch.calendar_dependency IS
     'ADR-023 跨 calendar 串联依赖：A SETTLED 才起 B（中港美等跨境联动）';
 COMMENT ON COLUMN batch.calendar_dependency.rule IS
-    'WAIT_SETTLED: upstream batch_day_instance.day_status=SETTLED;'
-    ' WAIT_CUTOFF: upstream cutoff_at 已过;'
+    'WAIT_SETTLED 表示上游 batch_day_instance.day_status 为 SETTLED。'
+    ' WAIT_CUTOFF：上游 cutoff_at 已过；'
     ' SAME_DAY_PARALLEL: 同日并行（占位）';

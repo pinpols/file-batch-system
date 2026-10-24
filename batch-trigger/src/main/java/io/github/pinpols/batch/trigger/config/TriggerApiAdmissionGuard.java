@@ -151,9 +151,11 @@ public class TriggerApiAdmissionGuard {
       adaptiveLimit = configuredMax;
       return configuredMax;
     }
-    int configuredMin =
-        Math.min(configuredMax, Math.max(1, properties.getApiLaunchMinConcurrency()));
-    adaptiveLimit = Math.max(configuredMin, Math.min(configuredMax, adaptiveLimit));
+    int requestedMinimum = properties.getApiLaunchMinConcurrency();
+    int minimumConcurrency = Math.max(1, requestedMinimum);
+    int configuredMin = Math.min(configuredMax, minimumConcurrency);
+    int limitAtConfiguredMaximum = Math.min(configuredMax, adaptiveLimit);
+    adaptiveLimit = Math.max(configuredMin, limitAtConfiguredMaximum);
     return adaptiveLimit;
   }
 
@@ -162,11 +164,14 @@ public class TriggerApiAdmissionGuard {
       return;
     }
     int configuredMax = configuredMaxConcurrency();
-    int configuredMin =
-        Math.min(configuredMax, Math.max(1, properties.getApiLaunchMinConcurrency()));
+    int requestedMinimum = properties.getApiLaunchMinConcurrency();
+    int minimumConcurrency = Math.max(1, requestedMinimum);
+    int configuredMin = Math.min(configuredMax, minimumConcurrency);
     long slowThresholdMillis = Math.max(1L, properties.getApiLaunchSlowRequestThresholdMillis());
-    if (elapsedNanos >= TimeUnit.MILLISECONDS.toNanos(slowThresholdMillis)) {
-      adaptiveLimit = Math.max(configuredMin, Math.max(1, adaptiveLimit / 2));
+    long slowThresholdNanos = TimeUnit.MILLISECONDS.toNanos(slowThresholdMillis);
+    if (elapsedNanos >= slowThresholdNanos) {
+      int halvedLimitAtLeastOne = Math.max(1, adaptiveLimit / 2);
+      adaptiveLimit = Math.max(configuredMin, halvedLimitAtLeastOne);
     } else {
       adaptiveLimit = Math.min(configuredMax, adaptiveLimit + 1);
     }

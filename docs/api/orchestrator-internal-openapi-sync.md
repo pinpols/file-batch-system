@@ -12,7 +12,7 @@
 
 ### 为什么只做单向(spec → controller)
 
-`orchestrator-internal.openapi.yaml` 是 **SDK/Trigger + 实际 Console BFF 上游路径的精选集**（当前 33 条路径），不是全部 25 个 internal controller 的镜像 —— ops / admin / 治理类 internal 端点有意不纳入该契约。Worker register/status/drain 等响应、Console BFF 使用的 replay、DQ rule、result-version、scheduler snapshot DTO 已按真实调用关系登记。故:
+`orchestrator-internal.openapi.yaml` 是 **SDK/Trigger + 实际 Console BFF 上游路径的精选集**，并收录跨服务传递文件/事件输入义务的内部契约（路径以 YAML 的 `paths` 为准），不是所有 internal controller 的镜像 —— ops / admin / 治理类 internal 端点有意不纳入该契约。Worker register/status/drain 等响应、Console BFF 使用的 replay、DQ rule、result-version、scheduler snapshot DTO 与 Workflow 归属的文件/事件预期 DTO 已按实际调用边界登记。故:
 
 - **spec → controller**(每条 spec 路径必须真实存在):有意义,能抓 spec 引用了已改名/删除端点的漂移 → 校验。
 - **controller → spec**(每个 controller 端点都要文档化):与子集设计冲突,会对所有非 SDK 端点误报 → 不校验。
@@ -27,6 +27,8 @@ log-only 起步:`continue-on-error` + 只写 job summary。稳定一轮后把脚
 2. 加一个只对 internal controller group 产 spec 的最小配置(`GroupedOpenApi` 限定 `/internal/**`),用 `@WebMvcTest` 或轻量 boot 在 test 阶段 dump spec 到文件。
 3. CI 用 `openapi-diff`(如 `openapitools/openapi-diff`)比对生成 spec 与手写 yaml,BREAKING diff 报警。
 4. 工程量:引 springdoc + group 配置 + test dump + diff 工具接入,约中等;需评估对 orchestrator 启动 / 依赖面的影响(核心运行时模块,谨慎)。落地前先在本页登记方案,避免误加重依赖。
+
+本次按 DTO 补齐 EffectiveTaskConfig、Replay 能力声明/执行围栏、整图预览凭证及批量 claim/report 与非幂等开始标记。字段清单核对不等同于真实 HTTP 验证；基础 fixture 也不覆盖全部 Replay 外部副作用。
 
 在字段级 diff 落地前,手写 yaml 仍靠 code review + 本页的路径守护 + `SdkPlatformContractTest`(SDK 侧字段集契约)三者兜底。
 

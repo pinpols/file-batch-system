@@ -16,18 +16,27 @@ class TaskOutcomeStatePolicyTest {
   @Test
   @DisplayName("按成功与失败分片数解析实例终态, 并保持试运行语义不变")
   void shouldResolveInstanceTerminalStates_whenCountsVary() {
-    assertThat(TaskOutcomeStatePolicy.resolveInstanceEvent(0, 0, false, false, false))
+    assertThat(TaskOutcomeStatePolicy.resolveInstanceEvent(0, 0, 0, 0, false, false))
         .isEqualTo(JobInstanceStatus.RUNNING.code());
-    assertThat(TaskOutcomeStatePolicy.resolveInstanceEvent(1, 0, true, true, false))
-        .isEqualTo(JobInstanceStatus.RUNNING.code());
-    assertThat(TaskOutcomeStatePolicy.resolveInstanceEvent(1, 1, true, false, false))
+    assertThat(TaskOutcomeStatePolicy.resolveInstanceEvent(1, 0, 0, 0, true, false))
+        .isEqualTo(JobInstanceStatus.SUCCESS.code());
+    assertThat(TaskOutcomeStatePolicy.resolveInstanceEvent(1, 1, 0, 0, true, false))
         .isEqualTo(JobInstanceStatus.PARTIAL_FAILED.code());
-    assertThat(TaskOutcomeStatePolicy.resolveInstanceEvent(1, 1, true, false, true))
+    assertThat(TaskOutcomeStatePolicy.resolveInstanceEvent(1, 1, 0, 0, true, true))
         .isEqualTo(JobInstanceStatus.FAILED_DRY_RUN.code());
-    assertThat(TaskOutcomeStatePolicy.resolveInstanceEvent(0, 1, true, false, false))
+    assertThat(TaskOutcomeStatePolicy.resolveInstanceEvent(0, 1, 0, 0, true, false))
         .isEqualTo(JobInstanceStatus.FAILED.code());
-    assertThat(TaskOutcomeStatePolicy.resolveInstanceEvent(1, 0, true, false, true))
+    assertThat(TaskOutcomeStatePolicy.resolveInstanceEvent(1, 0, 0, 0, true, true))
         .isEqualTo(JobInstanceStatus.SUCCESS_DRY_RUN.code());
+  }
+
+  @Test
+  @DisplayName("取消和终止分区均计为非成功终态")
+  void shouldClassifyCancelledAndTerminatedPartitionsAsUnsuccessful_whenAllPartitionsTerminal() {
+    assertThat(TaskOutcomeStatePolicy.resolveInstanceEvent(1, 0, 1, 0, true, false))
+        .isEqualTo(JobInstanceStatus.PARTIAL_FAILED.code());
+    assertThat(TaskOutcomeStatePolicy.resolveInstanceEvent(0, 0, 0, 1, true, false))
+        .isEqualTo(JobInstanceStatus.FAILED.code());
   }
 
   @Test
@@ -63,20 +72,18 @@ class TaskOutcomeStatePolicyTest {
   @Test
   @DisplayName("仅当实例停留失败且全部分片成功时才提升为成功终态")
   void shouldPromote_whenStaleFailureAndAllPartitionsSucceeded() {
-    assertThat(TaskOutcomeStatePolicy.shouldPromoteTerminalFailure(
-            "FAILED", "SUCCESS", 1, 0, true, false))
+    assertThat(TaskOutcomeStatePolicy.shouldPromoteTerminalFailure("FAILED", "SUCCESS", 1, 0, true))
         .isTrue();
     assertThat(TaskOutcomeStatePolicy.shouldPromoteTerminalFailure(
-            "PARTIAL_FAILED", "SUCCESS", 1, 0, true, false))
+            "PARTIAL_FAILED", "SUCCESS", 1, 0, true))
         .isTrue();
-    assertThat(TaskOutcomeStatePolicy.shouldPromoteTerminalFailure(
-            "FAILED", "SUCCESS", 1, 1, true, false))
+    assertThat(TaskOutcomeStatePolicy.shouldPromoteTerminalFailure("FAILED", "SUCCESS", 1, 1, true))
         .isFalse();
-    assertThat(TaskOutcomeStatePolicy.shouldPromoteTerminalFailure(
-            "FAILED", "SUCCESS", 1, 0, false, false))
+    assertThat(
+            TaskOutcomeStatePolicy.shouldPromoteTerminalFailure("FAILED", "SUCCESS", 1, 0, false))
         .isFalse();
-    assertThat(TaskOutcomeStatePolicy.shouldPromoteTerminalFailure(
-            "CANCELLED", "SUCCESS", 1, 0, true, false))
+    assertThat(
+            TaskOutcomeStatePolicy.shouldPromoteTerminalFailure("CANCELLED", "SUCCESS", 1, 0, true))
         .isFalse();
   }
 }

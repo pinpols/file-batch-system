@@ -18,6 +18,7 @@ import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepos
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.stereotype.Component;
 
 /** 分发 ACK 阶段：处理回执确认，更新分发记录及文件状态为 DISPATCHED。 */
@@ -41,8 +42,8 @@ public class AckDispatchStep implements DispatchStageStep {
   @Override
   public DispatchStageResult execute(DispatchJobContext context) {
     // ADR-026: 演练模式不更新 file_dispatch_record，跳过 ack。
-    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes())
-        .isDryRun()) {
+    Map<String, Object> dryRunAttributes = EmptyChecks.isNull(context) ? null : context.getAttributes();
+    if (DryRunGuard.fromAttributes(dryRunAttributes).isDryRun()) {
       return DispatchStageResult.success(stage());
     }
     Object payload = EmptyChecks.isNull(context)
@@ -64,23 +65,28 @@ public class AckDispatchStep implements DispatchStageStep {
             ? result
             : null;
     String receiptCode = dispatchPayload.receiptCode();
-    if ((receiptCode == null || receiptCode.isBlank()) && dispatchResult != null) {
+    boolean dispatchResultCanSupplyReceiptCode =
+        (EmptyChecks.isNull(receiptCode) || EmptyChecks.isBlank(receiptCode)) && EmptyChecks.isNotNull(dispatchResult);
+    if (dispatchResultCanSupplyReceiptCode) {
       receiptCode = dispatchResult.receiptCode();
     }
     boolean acknowledged = dispatchResult != null && dispatchResult.acknowledged();
     boolean pending = dispatchResult != null && dispatchResult.receiptPending();
-    if (acknowledged || (receiptCode != null && !receiptCode.isBlank())) {
+    boolean hasAcknowledgementEvidence =
+        acknowledged || (EmptyChecks.isNotNull(receiptCode) && !EmptyChecks.isBlank(Objects.requireNonNull(receiptCode)));
+    if (hasAcknowledgementEvidence) {
       int updated = fileDispatchRepository.markAcked(
           context.getTenantId(),
           fileId,
           dispatchPayload.channelCode(),
           receiptCode == null ? "ACK-" + fileId : receiptCode);
       if (updated <= 0) {
+        String nextStage = Boolean.TRUE.equals(attrs.get(DispatchRuntimeKeys.RETRY_REQUESTED))
+            ? DispatchStage.RETRY.name()
+            : DispatchStage.COMPENSATE.name();
         attrs.put(
             PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE,
-            Boolean.TRUE.equals(attrs.get(DispatchRuntimeKeys.RETRY_REQUESTED))
-                ? DispatchStage.RETRY.name()
-                : DispatchStage.COMPENSATE.name());
+            nextStage);
         return DispatchStageResult.failure(
             stage(),
             "DISPATCH_ACK_FAILED",
@@ -89,21 +95,20 @@ public class AckDispatchStep implements DispatchStageStep {
             "failed to mark acked",
             ERROR_OBJECT_MAPPER);
       }
-      fileRecords.updateFileStatus(
-          fileId,
-          FileStatus.DISPATCHED.code(),
-          buildFileMetadata(dispatchPayload, context, receiptCode));
+      String dispatchedStatus = FileStatus.DISPATCHED.code();
+      Map<String, Object> fileMetadata = buildFileMetadata(dispatchPayload, context, receiptCode);
+      fileRecords.updateFileStatus(fileId, dispatchedStatus, fileMetadata);
       attrs.put(DispatchRuntimeKeys.RECEIPT_STATUS, FileReceiptStatus.SUCCESS.code());
       return DispatchStageResult.success(stage());
     }
-    if (pending || Boolean.TRUE.equals(dispatchPayload.ackRequired())) {
+    boolean receiptRequiresPolling = pending || Boolean.TRUE.equals(dispatchPayload.ackRequired());
+    if (receiptRequiresPolling) {
       attrs.put(DispatchRuntimeKeys.RECEIPT_STATUS, FileReceiptStatus.PENDING.code());
       return DispatchStageResult.success(stage());
     }
-    fileRecords.updateFileStatus(
-        fileId,
-        FileStatus.DISPATCHED.code(),
-        buildFileMetadata(dispatchPayload, context, receiptCode));
+    String dispatchedStatus = FileStatus.DISPATCHED.code();
+    Map<String, Object> fileMetadata = buildFileMetadata(dispatchPayload, context, receiptCode);
+    fileRecords.updateFileStatus(fileId, dispatchedStatus, fileMetadata);
     return DispatchStageResult.success(stage());
   }
 

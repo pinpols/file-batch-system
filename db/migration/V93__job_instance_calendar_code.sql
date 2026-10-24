@@ -13,6 +13,7 @@ ALTER TABLE batch.job_instance
     ADD COLUMN IF NOT EXISTS calendar_code VARCHAR(64);
 
 -- 历史回填: 从 job_definition 反查 (与历史漂移风险并存, 但比 NULL 强; 业务侧约定: V93 之前的历史 instance 不再追溯精度)
+
 UPDATE batch.job_instance i
    SET calendar_code = d.calendar_code
   FROM batch.job_definition d
@@ -22,6 +23,7 @@ UPDATE batch.job_instance i
    AND d.calendar_code IS NOT NULL;
 
 -- settle 加速索引: settle scheduler 按 (tenant_id, calendar_code, biz_date) 聚合
+
 CREATE INDEX IF NOT EXISTS idx_job_instance_calendar_bizdate
     ON batch.job_instance (tenant_id, calendar_code, biz_date)
  WHERE calendar_code IS NOT NULL;

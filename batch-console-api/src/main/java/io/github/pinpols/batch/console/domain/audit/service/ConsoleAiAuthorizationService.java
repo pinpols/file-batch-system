@@ -28,9 +28,10 @@ public class ConsoleAiAuthorizationService implements ConsoleCapabilityProvider 
   /** 未配置在白名单则抛出 FORBIDDEN。 */
   public void assertAllowed() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (authentication == null
+    boolean authenticationIsMissingOrAnonymous = authentication == null
         || !authentication.isAuthenticated()
-        || authentication instanceof AnonymousAuthenticationToken) {
+        || authentication instanceof AnonymousAuthenticationToken;
+    if (authenticationIsMissingOrAnonymous) {
       throw BizException.of(
           ResultCode.FORBIDDEN,
           ResultCode.FORBIDDEN.detailKey(),

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -94,6 +95,44 @@ class WorkflowGraphValidatorTest {
   void shouldReportConfigError_whenCrossDayDependencyFormatInvalid() {
     var nodes = nodes("START", "A", "END");
     nodes.get(1).setCrossDayDependencies("not-json{[");
+    seed(nodes, edges(edge("START", "A"), edge("A", "END")));
+    var result = validator.validate(1L);
+    assertThat(result.errors()).anySatisfy(i -> assertThat(i.code()).isEqualTo("V6"));
+  }
+
+  @Test
+  @DisplayName("跨天依赖使用未知消费策略时在启用前判定为配置错误")
+  void shouldReportConfigError_whenCrossDayDependencyStrategyUnknown() {
+    var nodes = nodes("START", "A", "END");
+    nodes
+        .get(1)
+        .setCrossDayDependencies("[{\"jobCode\":\"X\",\"bizDateOffset\":-1,\"scope\":\"OPTIONAL\","
+            + "\"consumeVersionStrategy\":\"BOGUS\"}]");
+    seed(nodes, edges(edge("START", "A"), edge("A", "END")));
+    var result = validator.validate(1L);
+    assertThat(result.errors()).anySatisfy(i -> assertThat(i.code()).isEqualTo("V6"));
+  }
+
+  @Test
+  @DisplayName("跨天依赖指定版本策略缺少正版本号时在启用前判定为配置错误")
+  void shouldReportConfigError_whenSpecificVersionSelectorIsInvalid() {
+    var nodes = nodes("START", "A", "END");
+    nodes
+        .get(1)
+        .setCrossDayDependencies("[{\"jobCode\":\"X\",\"bizDateOffset\":-1,"
+            + "\"consumeVersionStrategy\":\"SPECIFIC_VERSION\",\"specificVersionNo\":0}]");
+    seed(nodes, edges(edge("START", "A"), edge("A", "END")));
+    var result = validator.validate(1L);
+    assertThat(result.errors()).anySatisfy(i -> assertThat(i.code()).isEqualTo("V6"));
+  }
+
+  @Test
+  @DisplayName("跨天依赖使用未知 scope 时在启用前判定为配置错误")
+  void shouldReportConfigError_whenCrossDayDependencyScopeUnknown() {
+    var nodes = nodes("START", "A", "END");
+    nodes
+        .get(1)
+        .setCrossDayDependencies("[{\"jobCode\":\"X\",\"bizDateOffset\":-1,\"scope\":\"MAYBE\"}]");
     seed(nodes, edges(edge("START", "A"), edge("A", "END")));
     var result = validator.validate(1L);
     assertThat(result.errors()).anySatisfy(i -> assertThat(i.code()).isEqualTo("V6"));
@@ -366,6 +405,51 @@ class WorkflowGraphValidatorTest {
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────
+
+  @Test
+  @DisplayName("JOB 节点引用缺失或停用作业时运行准入必须报错")
+  void shouldRejectUnresolvableJobReference() {
+    WorkflowNodeEntity job = node("JOB1", "JOB");
+    job.setTenantId("tenant-a");
+    job.setRelatedJobCode("missing_job");
+    seed(
+        List.of(node("START", "START"), job, node("END", "END")),
+        edges(edge("START", "JOB1"), edge("JOB1", "END")));
+
+    assertThat(validator.validate(1L).errors()).anySatisfy(error -> {
+      assertThat(error.code()).isEqualTo("JOB_REF_NOT_FOUND");
+      assertThat(error.nodeCode()).isEqualTo("JOB1");
+    });
+  }
+
+  @Test
+  @DisplayName("JOB 节点缺少作业编码时不能被跳过")
+  void shouldRejectBlankJobReference() {
+    WorkflowNodeEntity job = node("JOB1", "JOB");
+    seed(
+        List.of(node("START", "START"), job, node("END", "END")),
+        edges(edge("START", "JOB1"), edge("JOB1", "END")));
+
+    assertThat(validator.validate(1L).errors())
+        .anySatisfy(error -> assertThat(error.code()).isEqualTo("JOB_REF_MISSING"));
+  }
+
+  @Test
+  @DisplayName("Job 查询故障必须传播，不能吞掉后将图判为可执行")
+  void shouldFailClosedWhenJobLookupFails() {
+    WorkflowNodeEntity job = node("JOB1", "JOB");
+    job.setTenantId("tenant-a");
+    job.setRelatedJobCode("job_a");
+    seed(
+        List.of(node("START", "START"), job, node("END", "END")),
+        edges(edge("START", "JOB1"), edge("JOB1", "END")));
+    when(jobDefMapper.selectFirstByTenantAndCodeAndEnabled("tenant-a", "job_a", true))
+        .thenThrow(new IllegalStateException("fixture lookup unavailable"));
+
+    assertThatThrownBy(() -> validator.validate(1L))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("fixture lookup unavailable");
+  }
 
   private void seed(List<WorkflowNodeEntity> nodes, List<WorkflowEdgeEntity> edges) {
     when(nodeMapper.selectByWorkflowDefinitionId(1L)).thenReturn(nodes);

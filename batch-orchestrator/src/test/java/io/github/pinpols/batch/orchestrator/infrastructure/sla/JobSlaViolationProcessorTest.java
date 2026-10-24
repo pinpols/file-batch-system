@@ -64,6 +64,13 @@ class JobSlaViolationProcessorTest {
     verify(alertEventService).emit(alert.capture());
     assertThat(alert.getValue().alertType()).isEqualTo("JOB_SLA_VIOLATION");
     assertThat(alert.getValue().title()).isEqualTo("job SLA violated: DEADLINE_EXCEEDED");
+    Map<String, Object> alertDetail =
+        JsonUtils.fromJson(alert.getValue().detailJson(), new TypeReference<>() {});
+    assertThat(alertDetail)
+        .containsEntry("jobInstanceId", "42")
+        .containsEntry("bizDate", "2026-10-11")
+        .containsEntry("workflowRunId", "84")
+        .containsEntry("nodeCode", "IMPORT_NODE");
   }
 
   @Test
@@ -97,6 +104,39 @@ class JobSlaViolationProcessorTest {
     verify(alertEventService, never()).emit(any());
   }
 
+  @Test
+  @DisplayName("升级前当前实例不再满足策略时跳过外部告警")
+  void shouldSkipEscalationWhenCurrentInstanceIsNoLongerEligible() {
+    Instant now = Instant.parse("2026-10-11T12:00:00Z");
+    assertThat(processor.processEscalation(candidate(), now, 300, "ERROR")).isFalse();
+    verify(alertEventService, never()).emit(any());
+  }
+
+  @Test
+  @DisplayName("升级事件使用事务内锁定的当前 Job 状态与配置严重级别")
+  void shouldBuildEscalationFromLockedCurrentJob() {
+    Instant now = Instant.parse("2026-10-11T12:00:00Z");
+    JobInstanceEntity current = candidate();
+    current.setInstanceStatus("READY");
+    current.setSlaAlertedAt(now.minusSeconds(900));
+    when(jobMonitoringMapper.selectSlaEscalationCandidateForUpdate(
+            "tenant-a", 42L, now.minusSeconds(300)))
+        .thenReturn(current);
+    assertThat(processor.processEscalation(candidate(), now, 300, "ERROR")).isTrue();
+    ArgumentCaptor<AlertEmitRequest> emitted = ArgumentCaptor.forClass(AlertEmitRequest.class);
+    verify(alertEventService).emit(emitted.capture());
+    assertThat(emitted.getValue().alertType()).isEqualTo("JOB_SLA_VIOLATION_ESCALATED");
+    assertThat(emitted.getValue().severity()).isEqualTo("ERROR");
+    assertThat(emitted.getValue().resourceKey()).isEqualTo("42");
+    Map<String, Object> extra =
+        JsonUtils.fromJson(emitted.getValue().detailJson(), new TypeReference<>() {});
+    assertThat(extra)
+        .containsEntry("instanceStatus", "READY")
+        .containsEntry("alertedElapsedSeconds", 900)
+        .containsEntry("workflowRunId", "84")
+        .containsEntry("nodeCode", "IMPORT_NODE");
+  }
+
   private static JobInstanceEntity candidate() {
     JobInstanceEntity candidate = new JobInstanceEntity();
     candidate.setTenantId("tenant-a");
@@ -105,6 +145,9 @@ class JobSlaViolationProcessorTest {
     candidate.setJobCode("JOB-A");
     candidate.setInstanceStatus("RUNNING");
     candidate.setTraceId("trace-42");
+    candidate.setBizDate(java.time.LocalDate.parse("2026-10-11"));
+    candidate.setParentWorkflowRunId(84L);
+    candidate.setParentNodeCode("IMPORT_NODE");
     return candidate;
   }
 }

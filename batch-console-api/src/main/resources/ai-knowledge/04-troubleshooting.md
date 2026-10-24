@@ -10,7 +10,7 @@
 
 ## outbox 事件不投递 / 卡住
 - 原因:outbox 写入与状态同事务,投递失败走 `event_outbox_retry` 退避重试;若卡住可能是 Kafka 不可用或重试耗尽。
-- 处理:经 `ConsoleOrchestratorPort` 的默认实现 `application.ops.infrastructure.DefaultConsoleOrchestratorProxyService` → orchestrator `/internal/outbox/*` 做 republish;**console-api 不能直接 UPDATE/DELETE outbox_event**。运维脚本 `scripts/ops/heal-stuck-outbox.sh`。
+- 处理:经 `ConsoleOrchestratorPort` 的默认实现 `application.ops.infrastructure.DefaultConsoleOrchestratorProxyService` → orchestrator `/internal/outbox/*` 做 republish;**console-api 不能直接 UPDATE/DELETE outbox_event**。`scripts/ops/heal-stuck-outbox.sh` 仅只读统计 stale `PUBLISHING` 候选。
 
 ## dispatch(下发)失败 / 渠道熔断
 - 原因:下游渠道(API push / 远程文件系统等)连续失败触发熔断;或渠道配置(endpoint/白名单)不对。
@@ -18,7 +18,7 @@
 
 ## 死信里堆了一批失败消息
 - 原因:消费方持续失败累计到上限;也可能是负向测试用例(故意失败)或定时 cron 自我延续刷出来的。
-- 处理:区分真实故障 vs 测试污染;真实故障定位 root cause 后重投,测试污染清理即可。脚本 `scripts/ops/heal-dead-letters.sh`。
+- 处理:区分真实故障与测试污染并保留证据;用 `scripts/ops/inspect-dead-letters.sh` 只读查看候选。人工重放通过 Console 审批;UNKNOWN 必须先核实外部动作未执行并由独立审批人批准后一次性恢复。
 
 ## 任务卡在 RUNNING 不终结(疑似 worker 崩了)
 - 原因:worker 在执行中崩溃,租约未续、未 REPORT。

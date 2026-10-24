@@ -6,11 +6,13 @@ import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.EncryptingObjectStore;
 import io.github.pinpols.batch.common.storage.FilesystemObjectStore;
 import io.github.pinpols.batch.common.storage.MeteredObjectStore;
+import io.github.pinpols.batch.common.storage.NamespacedObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectStorageBackendGuard;
 import io.github.pinpols.batch.common.storage.S3ObjectStore;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.micrometer.core.instrument.MeterRegistry;
 import javax.sql.DataSource;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.ApplicationRunner;
@@ -21,6 +23,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.env.Environment;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
@@ -52,7 +55,11 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
   ObjectStoreEncryptionProperties.class
 })
 @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
+@RequiredArgsConstructor
 public class BatchObjectStoreAutoConfiguration {
+
+  // 只在装配默认存储时解析命名空间，保留完整存储实现覆盖的退避条件。
+  private final ObjectProvider<KafkaNamespaceProperties> deploymentNamespaceProvider;
 
   @Bean
   @ConditionalOnBean(DataSource.class)
@@ -62,7 +69,7 @@ public class BatchObjectStoreAutoConfiguration {
       FilesystemStorageProperties filesystemProperties,
       StorageBackendGuardProperties backendGuardProperties,
       StorageBackendProperties backendProperties,
-      org.springframework.core.env.Environment environment) {
+      Environment environment) {
     return new ObjectStorageBackendGuard(
         dataSource,
         s3Properties,
@@ -78,7 +85,8 @@ public class BatchObjectStoreAutoConfiguration {
   @ConditionalOnProperty(name = "batch.storage.backend", havingValue = "s3", matchIfMissing = true)
   public RawObjectStoreBackend s3RawObjectStore(
       S3Client s3Client, S3Presigner presigner, S3StorageProperties properties) {
-    return new RawObjectStoreBackend(new S3ObjectStore(s3Client, presigner, properties));
+    S3ObjectStore s3ObjectStore = new S3ObjectStore(s3Client, presigner, properties);
+    return new RawObjectStoreBackend(s3ObjectStore);
   }
 
   /** FS 后端 raw 实现。 */
@@ -90,12 +98,13 @@ public class BatchObjectStoreAutoConfiguration {
     String secret = Texts.hasText(properties.getPresignSecret())
         ? properties.getPresignSecret()
         : securityProperties.getInternalSecret();
-    return new RawObjectStoreBackend(new FilesystemObjectStore(
+    FilesystemObjectStore filesystemObjectStore = new FilesystemObjectStore(
         properties.getRoot(),
         properties.getDownloadBaseUrl(),
         secret,
         properties.getDefaultPresignTtl(),
-        properties.getMaxListScanEntries()));
+        properties.getMaxListScanEntries());
+    return new RawObjectStoreBackend(filesystemObjectStore);
   }
 
   /**
@@ -112,13 +121,18 @@ public class BatchObjectStoreAutoConfiguration {
       ObjectProvider<BatchObjectCryptoService> cryptoProvider,
       ObjectProvider<BatchKmsProperties> kmsPropertiesProvider,
       ObjectProvider<MeterRegistry> meterRegistryProvider) {
+    KafkaNamespaceProperties deploymentNamespace = deploymentNamespaceProvider.getObject();
     BatchObjectStore raw = rawBackend.delegate();
+    if (Texts.hasText(deploymentNamespace.getNamespace())) {
+      raw = new NamespacedObjectStore(raw, deploymentNamespace.getNamespace());
+    }
     BatchObjectCryptoService crypto = cryptoProvider.getIfAvailable();
     BatchKmsProperties kmsProperties = kmsPropertiesProvider.getIfAvailable();
     BatchObjectStore store;
-    if (!encryptionProperties.isDecoratorEnabled()
+    boolean objectStoreEncryptionIsUnavailable = !encryptionProperties.isDecoratorEnabled()
         || securityProperties.isBypassMode()
-        || crypto == null) {
+        || crypto == null;
+    if (objectStoreEncryptionIsUnavailable) {
       store = raw;
     } else {
       String defaultKeyRef = kmsProperties == null ? null : kmsProperties.getDefaultKeyRef();

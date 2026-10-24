@@ -66,7 +66,8 @@ public final class DnsResolveGuard {
    * 记录控制客户端最终选择的目标。返回结果去重但保持解析器顺序，供支持 Happy Eyeballs 的客户端直接建连。
    */
   public static List<InetAddress> resolveAllAndValidate(String host) throws UnknownHostException {
-    return validateResolvedAddresses(host, InetAddress.getAllByName(host));
+    InetAddress[] resolvedAddresses = InetAddress.getAllByName(host);
+    return validateResolvedAddresses(host, resolvedAddresses);
   }
 
   static List<InetAddress> validateResolvedAddresses(String host, InetAddress[] resolved)
@@ -97,7 +98,9 @@ public final class DnsResolveGuard {
     if (isAllowPrivateOverride()) {
       return false;
     }
-    if (addr.isLoopbackAddress() || addr.isLinkLocalAddress() || addr.isSiteLocalAddress()) {
+    boolean resolvedAddressIsPrivate =
+        addr.isLoopbackAddress() || addr.isLinkLocalAddress() || addr.isSiteLocalAddress();
+    if (resolvedAddressIsPrivate) {
       return true;
     }
     byte[] bytes = addr.getAddress();

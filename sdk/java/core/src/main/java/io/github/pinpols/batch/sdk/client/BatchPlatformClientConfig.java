@@ -189,31 +189,62 @@ public class BatchPlatformClientConfig {
         .kafkaSaslMechanism(env.apply(prefix + "KAFKA_SASL_MECHANISM"))
         .kafkaSaslJaasConfig(env.apply(prefix + "KAFKA_SASL_JAAS_CONFIG"));
 
+    applyExecutionEnvironment(builder, prefix, env);
+    applyClaimRetryEnvironment(builder, prefix, env);
+    applySecurityEnvironment(builder, prefix, env);
+
+    BatchPlatformClientConfig config = builder.build();
+    config.validate();
+    return config;
+  }
+
+  /** 执行并发与运行时序属于同一启动快照；只覆盖显式环境值，不改 Builder 默认值。 */
+  private static void applyExecutionEnvironment(
+      BatchPlatformClientConfigBuilder builder, String prefix, UnaryOperator<String> env) {
     String dryRunSafe = env.apply(prefix + "DRY_RUN_SAFE");
     if (!EmptyChecks.isBlank(dryRunSafe)) {
-      builder.dryRunSafe(parseBoolean(dryRunSafe.trim()));
+      String dryRunSafeValue = dryRunSafe.trim();
+      boolean dryRunSafeEnabled = parseBoolean(dryRunSafeValue);
+      builder.dryRunSafe(dryRunSafeEnabled);
     }
 
     String maxConcurrent = env.apply(prefix + "MAX_CONCURRENT_TASKS");
     if (maxConcurrent != null && !maxConcurrent.isBlank()) {
-      builder.maxConcurrentTasks(Integer.parseInt(maxConcurrent.trim()));
+      String maxConcurrentValue = maxConcurrent.trim();
+      int maxConcurrentTasks = Integer.parseInt(maxConcurrentValue);
+      builder.maxConcurrentTasks(maxConcurrentTasks);
     }
     String heartbeat = env.apply(prefix + "HEARTBEAT_INTERVAL_SECONDS");
     if (heartbeat != null && !heartbeat.isBlank()) {
-      builder.heartbeatInterval(Duration.ofSeconds(Long.parseLong(heartbeat.trim())));
+      String heartbeatValue = heartbeat.trim();
+      long heartbeatSeconds = Long.parseLong(heartbeatValue);
+      Duration heartbeatInterval = Duration.ofSeconds(heartbeatSeconds);
+      builder.heartbeatInterval(heartbeatInterval);
     }
     String httpTimeout = env.apply(prefix + "HTTP_TIMEOUT_SECONDS");
     if (httpTimeout != null && !httpTimeout.isBlank()) {
-      builder.httpTimeout(Duration.ofSeconds(Long.parseLong(httpTimeout.trim())));
+      String httpTimeoutValue = httpTimeout.trim();
+      long httpTimeoutSeconds = Long.parseLong(httpTimeoutValue);
+      Duration httpTimeoutDuration = Duration.ofSeconds(httpTimeoutSeconds);
+      builder.httpTimeout(httpTimeoutDuration);
     }
     // Lane I:lease 续约间隔也开放 env 覆盖,方便运维联调 heartbeat / lease 配比
     String leaseRenew = env.apply(prefix + "LEASE_RENEW_INTERVAL_SECONDS");
     if (leaseRenew != null && !leaseRenew.isBlank()) {
-      builder.leaseRenewInterval(Duration.ofSeconds(Long.parseLong(leaseRenew.trim())));
+      String leaseRenewValue = leaseRenew.trim();
+      long leaseRenewSeconds = Long.parseLong(leaseRenewValue);
+      Duration leaseRenewInterval = Duration.ofSeconds(leaseRenewSeconds);
+      builder.leaseRenewInterval(leaseRenewInterval);
     }
+  }
+
+  /** 重试总次数转换与退避校验保持同一阶段，非法次数仍先于后续开关解析失败。 */
+  private static void applyClaimRetryEnvironment(
+      BatchPlatformClientConfigBuilder builder, String prefix, UnaryOperator<String> env) {
     String retryMaxAttempts = env.apply(prefix + "RETRY_MAX_ATTEMPTS");
     if (!EmptyChecks.isBlank(retryMaxAttempts)) {
-      int totalAttempts = Integer.parseInt(retryMaxAttempts.trim());
+      String retryMaxAttemptsValue = retryMaxAttempts.trim();
+      int totalAttempts = Integer.parseInt(retryMaxAttemptsValue);
       if (totalAttempts < 1) {
         throw new IllegalArgumentException(prefix + "RETRY_MAX_ATTEMPTS must be >= 1");
       }
@@ -221,26 +252,36 @@ public class BatchPlatformClientConfig {
     }
     String retryBaseDelay = env.apply(prefix + "RETRY_BASE_DELAY_MS");
     if (!EmptyChecks.isBlank(retryBaseDelay)) {
-      builder.claimRetryBaseDelay(Duration.ofMillis(Long.parseLong(retryBaseDelay.trim())));
+      String retryBaseDelayValue = retryBaseDelay.trim();
+      long retryBaseDelayMillis = Long.parseLong(retryBaseDelayValue);
+      Duration retryBaseDelayDuration = Duration.ofMillis(retryBaseDelayMillis);
+      builder.claimRetryBaseDelay(retryBaseDelayDuration);
     }
     String clientErrorThreshold = env.apply(prefix + "CLIENT_ERROR_FAIL_FAST_THRESHOLD");
     if (!EmptyChecks.isBlank(clientErrorThreshold)) {
-      builder.clientErrorFailFastThreshold(Integer.parseInt(clientErrorThreshold.trim()));
+      String clientErrorThresholdValue = clientErrorThreshold.trim();
+      int clientErrorFailFastThreshold = Integer.parseInt(clientErrorThresholdValue);
+      builder.clientErrorFailFastThreshold(clientErrorFailFastThreshold);
     }
+  }
+
+  /** 签名和时序严格度均在启动时确定，沿用显式降级与默认严格的原有语义。 */
+  private static void applySecurityEnvironment(
+      BatchPlatformClientConfigBuilder builder, String prefix, UnaryOperator<String> env) {
     // R3-4(Round-2 P0 #4):时序校验严格度开关,env 默认 true(保持 fail-fast)。
     // 仅当显式设为 false / 0 / no / off 时降级为 WARN-only。
     String requestSigning = env.apply(prefix + "REQUEST_SIGNING_ENABLED");
     if (requestSigning != null && !requestSigning.isBlank()) {
-      builder.requestSigningEnabled(parseBoolean(requestSigning.trim()));
+      String requestSigningValue = requestSigning.trim();
+      boolean requestSigningEnabled = parseBoolean(requestSigningValue);
+      builder.requestSigningEnabled(requestSigningEnabled);
     }
     String strictTiming = env.apply(prefix + "STRICT_TIMING");
     if (strictTiming != null && !strictTiming.isBlank()) {
-      builder.strictTimingValidation(parseBoolean(strictTiming.trim()));
+      String strictTimingValue = strictTiming.trim();
+      boolean strictTimingEnabled = parseBoolean(strictTimingValue);
+      builder.strictTimingValidation(strictTimingEnabled);
     }
-
-    BatchPlatformClientConfig config = builder.build();
-    config.validate();
-    return config;
   }
 
   /**

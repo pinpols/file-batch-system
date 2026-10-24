@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.support.maintenance;
 
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -21,7 +22,7 @@ public class MaintenanceStateMetrics {
   }
 
   /** 注册低基数 gauge；状态值从持有者实时读取，不在指标标签中放租户或实例号。 */
-  @jakarta.annotation.PostConstruct
+  @PostConstruct
   void register() {
     Gauge.builder(
             "batch.console.maintenance.enabled",

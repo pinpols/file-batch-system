@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.shared.command;
 import io.github.pinpols.batch.common.validation.ValidBizDate;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -15,6 +16,9 @@ public class ConsoleCatchUpApprovalRequest {
   @NotBlank
   @Size(max = 128, message = "requestId too long (max 128)")
   private String requestId;
+
+  @Positive
+  private Long workflowDefinitionId;
 
   @NotBlank
   @Size(max = 128, message = "jobCode too long (max 128)")

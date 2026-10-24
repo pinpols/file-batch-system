@@ -45,9 +45,10 @@ public final class AtomicConnectionManager {
    */
   public static String resolveDataSourceBeanName(
       String configuredBeanName, String paramBeanName, Set<String> allowedBeans) {
-    if (paramBeanName == null
+    boolean usesConfiguredDataSourceBean = paramBeanName == null
         || paramBeanName.isBlank()
-        || paramBeanName.equals(configuredBeanName)) {
+        || paramBeanName.equals(configuredBeanName);
+    if (usesConfiguredDataSourceBean) {
       return configuredBeanName;
     }
     Set<String> allow = allowedBeans == null ? Set.of() : allowedBeans;
@@ -85,7 +86,8 @@ public final class AtomicConnectionManager {
         boolean prog = rs.getBoolean("prog");
         boolean rdf = rs.getBoolean("rdf");
         boolean wsf = rs.getBoolean("wsf");
-        if (superuser || prog || rdf || wsf) {
+        boolean roleHasOperatingSystemCapabilities = superuser || prog || rdf || wsf;
+        if (roleHasOperatingSystemCapabilities) {
           throw new SecurityException(String.format(
               Locale.ROOT,
               "DB role has OS capability (superuser=%s, exec_server_program=%s,"
@@ -135,7 +137,8 @@ public final class AtomicConnectionManager {
           try {
             conn.rollback();
           } catch (SQLException rb) {
-            log.warn("rollback failed: {}", SwallowedExceptionLogger.summary(rb));
+            String causeSummary = SwallowedExceptionLogger.summary(rb);
+            log.warn("rollback failed: {}", causeSummary);
           }
         }
         throw ex;
@@ -143,13 +146,15 @@ public final class AtomicConnectionManager {
         try {
           conn.setAutoCommit(originalAutoCommit);
         } catch (SQLException restore) {
-          log.warn("restore autoCommit failed: {}", SwallowedExceptionLogger.summary(restore));
+          String causeSummary = SwallowedExceptionLogger.summary(restore);
+          log.warn("restore autoCommit failed: {}", causeSummary);
         }
         if (o.readOnly) {
           try {
             conn.setReadOnly(originalReadOnly);
           } catch (SQLException restore) {
-            log.warn("restore readOnly failed: {}", SwallowedExceptionLogger.summary(restore));
+            String causeSummary = SwallowedExceptionLogger.summary(restore);
+            log.warn("restore readOnly failed: {}", causeSummary);
           }
         }
       }

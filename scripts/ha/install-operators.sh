@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：① 安装 4 个 HA operator(集群级,各一次)。配合 deploy/ha/*.yaml。
+# 用法：在仓库根目录执行 bash scripts/ha/install-operators.sh；参数与前置环境见下方说明及所属 README。
 # ① 安装 4 个 HA operator(集群级,各一次)。配合 deploy/ha/*.yaml。
 # 幂等:helm upgrade --install;重复跑安全。
 # 前置:kubectl 指向目标集群 + helm 3。版本用变量便于锁定/升级。
@@ -23,7 +25,7 @@ require helm
 log "kubectl context = $(kubectl config current-context)"
 read -r -p "确认在此集群安装 4 个 operator?[y/N] " ok; [ "$ok" = "y" ] || exit 1
 
-# 1) Strimzi(Kafka)
+# 安装 Strimzi Kafka Operator。
 helm repo add strimzi https://strimzi.io/charts/ >/dev/null 2>&1 || true
 helm repo update >/dev/null
 helm upgrade --install strimzi strimzi/strimzi-kafka-operator \
@@ -39,14 +41,14 @@ helm upgrade --install postgres-operator postgres-operator-charts/postgres-opera
 log "postgres-operator OK ($PG_OP_NS)"
 log "  ⚠️ 备份/WAL→MinIO 需在 operator configmap 配 AWS_S3_ENDPOINT/凭据(见 deploy/ha/10-postgres-zalando.yaml 注释)"
 
-# 3) spotahome redis-operator(Sentinel)
+# 安装基于 Sentinel 的 spotahome redis-operator。
 helm repo add redis-operator https://spotahome.github.io/redis-operator >/dev/null 2>&1 || true
 helm repo update >/dev/null
 helm upgrade --install redis-operator redis-operator/redis-operator \
   --namespace "$REDIS_OP_NS" --create-namespace --version "$REDIS_OP_VER" --wait
 log "redis-operator OK ($REDIS_OP_NS)"
 
-# 4) MinIO Operator
+# 安装 MinIO Operator。
 helm repo add minio-operator https://operator.min.io >/dev/null 2>&1 || true
 helm repo update >/dev/null
 helm upgrade --install minio-operator minio-operator/operator \

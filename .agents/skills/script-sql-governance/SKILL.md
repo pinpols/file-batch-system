@@ -5,6 +5,13 @@ description: 创建或审查 shell/Python 自动化及独立运维 SQL 时使用
 
 # 脚本与 SQL 治理
 
+## 入口与归属
+
+- 先读 `scripts/README.md` 的任务路由，沿用已有职责目录。脚本头必须按 `docs/coding-conventions.md` §19.5 写“用途、用法”；Python 也适用，公共库说明引用方式，测试脚本说明测试入口。
+- 说明性注释及 Python 文档字符串使用简体中文；保留命令、协议名、工具指令与代码示例。必要说明关注隔离、顺序、并发、失败传播和资源释放，不逐行翻译代码。
+- 路径变化同步调用方、README、配置、测试与 CI；运行 `check-script-governance.py` 和定向回归。根 db/migration 管 Flyway，scripts/db 管数据库操作，根 test-data 管共享场景数据，不为整理目录改写历史迁移。
+- CI 机器基线归 `scripts/ci/baselines/`，按真实差异收紧，不盲目全量生成或扩张预算；工作流和复用 Action 分别在 `.github` 下对应 README 登记。
+
 ## 脚本审查
 
 1. 从仓库文档和 CI 确认支持的操作系统、shell、运行时和调用方式。

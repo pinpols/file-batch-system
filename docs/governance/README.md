@@ -6,7 +6,7 @@
 | [java-contract-governance-baseline.json](./java-contract-governance-baseline.json) | JCON 存量违规计数基线，当前为空，不使用行号作为标识 |
 | [application-governance-contract.yaml](./application-governance-contract.yaml) | 应用治理检查的机器可读契约；由 CI 校验，不在 Markdown 中复制字段 |
 | [direct-config-key-access-baseline.txt](./direct-config-key-access-baseline.txt) | 直接读取项目配置/密钥 Key 的存量基线；新增命中由专项守卫检查，基线扩张仍需人工审查 |
-| [document-naming-and-archive-policy.md](./document-naming-and-archive-policy.md) | 文档命名、日期后缀和归档边界约束 |
+| [document-naming-and-archive-policy.md](./document-naming-and-archive-policy.md) | 旧规范路径兼容入口；实际规则统一在 standards/ |
 | [soft-gates.json](./soft-gates.json) | 软门禁责任人、当前基线、升级期限与目标 |
 | [test-conventions-baseline.txt](./test-conventions-baseline.txt) | 测试 `@DisplayName` 存量缺口基线；新增命中由专项守卫检查，基线扩张仍需人工审查 |
 | [baseline-expansion-approvals.json](./baseline-expansion-approvals.json) | 基线新增/调高的限期审批记录；每项必须包含 owner、理由、复审日期和移除条件 |

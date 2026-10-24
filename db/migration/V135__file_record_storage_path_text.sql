@@ -1,5 +1,5 @@
 -- =========================================================
--- V135: file_record.storage_path VARCHAR(1024) → TEXT
+-- V135：将 file_record.storage_path 从 VARCHAR(1024) 扩展为 TEXT。
 --
 -- 依据: docs/analysis/dba-schema-review-2026-05-20.md §4.1 / Quick wins §8
 --

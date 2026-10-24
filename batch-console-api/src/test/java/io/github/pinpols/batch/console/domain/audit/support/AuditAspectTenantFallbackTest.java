@@ -27,6 +27,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 import org.slf4j.MDC;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -85,17 +87,17 @@ class AuditAspectTenantFallbackTest {
     try {
       aspect.wrap(buildJoinPoint());
 
-      org.mockito.Mockito.verifyNoInteractions(usageRecorder);
+      Mockito.verifyNoInteractions(usageRecorder);
       assertThat(TransactionSynchronizationManager.getSynchronizations()).hasSize(1);
 
       TransactionSynchronizationManager.getSynchronizations().getFirst().afterCommit();
 
       verify(usageRecorder)
           .record(
-              org.mockito.ArgumentMatchers.eq("system"),
-              org.mockito.ArgumentMatchers.eq("auth.logout"),
-              org.mockito.ArgumentMatchers.eq(true),
-              org.mockito.ArgumentMatchers.any());
+              ArgumentMatchers.eq("system"),
+              ArgumentMatchers.eq("auth.logout"),
+              ArgumentMatchers.eq(true),
+              ArgumentMatchers.any());
     } finally {
       TransactionSynchronizationManager.clearSynchronization();
     }

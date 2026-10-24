@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.domain.notification.mapper.WorkflowTerminalNotificationMapper">
+    <select id="bindTenant" resultType="string">
+        select set_config('app.tenant_id',#{tenantId},true)
+    </select>
+    <select id="lockReceipt" resultType="boolean">
+        select true from pg_advisory_xact_lock(
+            hashtextextended('terminal-notification:'||#{tenantId}||':'||#{eventKey},0))
+    </select>
+    <insert id="insertReceipt">
+        insert into batch.workflow_terminal_notification_receipt (tenant_id,event_key,payload_json)
+        select #{tenantId},#{eventKey},#{payload}::jsonb
+         where not exists (
+             select 1 from archive.workflow_terminal_notification_receipt_archive
+              where tenant_id=#{tenantId} and event_key=#{eventKey})
+        on conflict (tenant_id,event_key) do nothing
+    </insert>
+    <select id="receiptPayload" resultType="string">
+        select payload_json::text from batch.workflow_terminal_notification_receipt
+        where tenant_id=#{tenantId} and event_key=#{eventKey}
+        union
+        select payload_json::text from archive.workflow_terminal_notification_receipt_archive
+        where tenant_id=#{tenantId} and event_key=#{eventKey}
+    </select>
+    <insert id="insertWebhook">
+        insert into batch.webhook_delivery_log
+            (tenant_id,subscription_id,terminal_event_key,event_type,payload_json,delivery_status,attempt,next_retry_at)
+        values (#{tenantId},#{recipientId},#{eventKey},#{eventType},#{payload}::jsonb,'PENDING',0,current_timestamp)
+        on conflict (tenant_id,subscription_id,terminal_event_key) where terminal_event_key is not null do nothing
+    </insert>
+    <insert id="insertRule">
+        insert into batch.notification_delivery_log
+            (tenant_id,rule_id,channel_code,terminal_event_key,event_type,payload_json,delivery_status,attempt,next_retry_at)
+        values (#{tenantId},#{recipientId},#{channelCode},#{eventKey},#{eventType},#{payload}::jsonb,'PENDING',0,current_timestamp)
+        on conflict (tenant_id,rule_id,terminal_event_key) where terminal_event_key is not null do nothing
+    </insert>
+    <select id="pending" resultType="io.github.pinpols.batch.console.domain.notification.view.TerminalNotificationDelivery">
+        select source,id,tenant_id,recipient_id,channel_code,event_key,payload_json,attempt from (
+            select 'WEBHOOK' as source,id,tenant_id,subscription_id as recipient_id,
+                   null::text as channel_code,terminal_event_key as event_key,payload_json::text,
+                   attempt,next_retry_at from batch.webhook_delivery_log
+             where terminal_event_key is not null and next_retry_at &lt;= #{now}
+               and delivery_status in ('PENDING','EXHAUSTED')
+               and (delivery_claim_until is null or delivery_claim_until &lt;= #{now})
+            union all
+            select 'RULE' as source,id,tenant_id,rule_id as recipient_id,channel_code,
+                   terminal_event_key as event_key,payload_json::text,attempt,next_retry_at
+              from batch.notification_delivery_log
+             where terminal_event_key is not null and next_retry_at &lt;= #{now}
+               and delivery_status in ('PENDING','EXHAUSTED')
+               and (delivery_claim_until is null or delivery_claim_until &lt;= #{now})
+        ) candidates order by next_retry_at,id,source limit #{limit}
+    </select>
+    <sql id="deliveryTable">
+        <choose><when test="row.source == 'WEBHOOK'">batch.webhook_delivery_log</when>
+            <otherwise>batch.notification_delivery_log</otherwise></choose>
+    </sql>
+    <update id="claim">
+        update <include refid="deliveryTable"/>
+        set delivery_claim_token=#{token}::uuid,delivery_claim_until=#{until},
+            attempt=least(attempt+1,#{maxAttempts})
+        where tenant_id=#{row.tenantId} and id=#{row.id} and terminal_event_key=#{row.eventKey}
+          and delivery_status in ('PENDING','EXHAUSTED') and next_retry_at &lt;= #{now}
+          and (delivery_claim_until is null or delivery_claim_until &lt;= #{now})
+    </update>
+    <update id="finish">
+        update <include refid="deliveryTable"/>
+        set delivery_status=#{status},next_retry_at=#{nextRetry,jdbcType=TIMESTAMP_WITH_TIMEZONE},
+            delivery_claim_token=null,delivery_claim_until=null,
+            <choose><when test="row.source == 'WEBHOOK'">response_body</when>
+                <otherwise>error_message</otherwise></choose> = #{error,jdbcType=VARCHAR}
+        where tenant_id=#{row.tenantId} and id=#{row.id} and terminal_event_key=#{row.eventKey}
+          and delivery_claim_token=#{token}::uuid
+    </update>
+</mapper>

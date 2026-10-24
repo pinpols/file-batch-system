@@ -56,7 +56,10 @@ class HttpDispatchHandlerTest {
     ResultSetMetaData meta = mock(ResultSetMetaData.class);
     when(ds.getConnection()).thenReturn(conn);
     when(conn.createStatement()).thenReturn(st);
-    when(st.executeQuery("select id from t")).thenReturn(rs);
+    final String selectTSql = """
+        select id from t
+    """;
+    when(st.executeQuery(selectTSql)).thenReturn(rs);
     when(rs.getMetaData()).thenReturn(meta);
     when(meta.getColumnCount()).thenReturn(1);
     when(meta.getColumnLabel(1)).thenReturn("id");

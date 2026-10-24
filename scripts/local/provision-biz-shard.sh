@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：幂等「加一片 biz 分片」:起 PG → 建库建表 → rls-phase-a(角色+授权+RLS)→ 只读排故角色 → 写 secrets。
+# 用法：bash scripts/local/provision-biz-shard.sh <placement-key> <host-port>；会准备本地业务库。
 # 幂等「加一片 biz 分片」:起 PG → 建库建表 → rls-phase-a(角色+授权+RLS)→ 只读排故角色 → 写 secrets。
 # 重复跑安全(容器复用、SQL 全幂等、secret 存在不覆盖)。
 #
@@ -22,9 +24,16 @@ if [ -z "$KEY" ] || [ -z "$PORT" ]; then
   echo "用法: $0 <placement-key> <host-port>   例: $0 shard-1 15442" >&2
   exit 2
 fi
+if ! [[ "$BUSINESS_DB" =~ ^[A-Za-z0-9_]{1,63}$ && "$POSTGRES_DB" =~ ^[A-Za-z0-9_]{1,63}$ ]]; then
+  echo "✗ BUSINESS_DB / POSTGRES_DB 必须是 1-63 位字母、数字或下划线" >&2
+  exit 2
+fi
 
 SECRETS_DIR="${BIZ_SHARD_SECRETS_DIR:-secrets/biz-shards}"
 CONTAINER="batch-postgres-biz-$KEY"
+if [[ "$KEY" == "shard-1" ]]; then
+  CONTAINER="${BIZ_SHARD_1_CONTAINER:-$CONTAINER}"
+fi
 PRIMARY_NAME="${PG_CONTAINER:-$BATCH_DEFAULT_POSTGRES_CONTAINER}"
 
 # biz 角色密码:必须显式注入(SQL 脚本不再含默认密码)。本地默认复用本地 DB 密码;
@@ -45,12 +54,26 @@ IMAGE="$(docker inspect "$PRIMARY_NAME" --format '{{.Config.Image}}')"
 echo "    network=$NETWORK image=$IMAGE container=$CONTAINER host=:$PORT"
 
 if docker ps -a --format '{{.Names}}' | grep -Fx "$CONTAINER" >/dev/null; then
+  if [ "${BATCH_SIM_RESIDUE_CONTAINER:-false}" = true ]; then
+    existing_owner="$(docker inspect --format '{{ index .Config.Labels "io.github.pinpols.batch.testcontainers.owner" }}' "$CONTAINER" 2>/dev/null)" || existing_owner=""
+    existing_sim_project="$(docker inspect --format '{{ index .Config.Labels "io.github.pinpols.batch.sim.project" }}' "$CONTAINER" 2>/dev/null)" || existing_sim_project=""
+    existing_project="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' "$CONTAINER" 2>/dev/null)" || existing_project=""
+    if [[ ! ( "$existing_owner" == file-batch-system \
+        && "$existing_sim_project" == "${COMPOSE_PROJECT_NAME:-batch-platform}" ) \
+        && "$existing_project" != "${COMPOSE_PROJECT_NAME:-batch-platform}" ]]; then
+      echo "    ✗ $CONTAINER 已存在但无 SIM 或当前 Compose 所有权标记；拒绝把未知容器当作临时分片复用" >&2
+      exit 2
+    fi
+  fi
   echo "    复用已存在容器"
   docker start "$CONTAINER" >/dev/null
 else
   ownership_label_args=()
   if [ "${BATCH_SIM_RESIDUE_CONTAINER:-false}" = true ]; then
-    ownership_label_args=(--label io.github.pinpols.batch.testcontainers.owner=file-batch-system)
+    ownership_label_args=(
+      --label io.github.pinpols.batch.testcontainers.owner=file-batch-system
+      --label "io.github.pinpols.batch.sim.project=${COMPOSE_PROJECT_NAME:-batch-platform}"
+    )
   fi
   docker run -d --name "$CONTAINER" "${ownership_label_args[@]}" --network "$NETWORK" \
     -p "$PORT:5432" \
@@ -66,23 +89,48 @@ else
   echo "    已创建容器"
 fi
 
-echo "==> [${KEY}] 2/5 等待就绪(含 init 建库建表)"
+echo "==> [${KEY}] 2/5 等待 PostgreSQL 基准库就绪"
 for _ in $(seq 1 40); do
-  # 初始化期间 entrypoint 会短暂启动一个临时 PostgreSQL；pg_isready 在它即将关闭时也可能成功。
-  # 正式服务 exec 为容器 PID 1 后再做真实查询，避免首次 provision 的关闭窗口竞态。
-  if docker exec "$CONTAINER" sh -c 'test "$(head -n 1 "$PGDATA/postmaster.pid" 2>/dev/null)" = "1"' \
-      && docker exec "$CONTAINER" pg_isready -U "$POSTGRES_USER" -d "$BUSINESS_DB" >/dev/null 2>&1 \
-      && docker exec -i "$CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
-        -tA -v ON_ERROR_STOP=1 \
-        -f /dev/stdin < "$LOCAL_SQL_DIR/check-database-ready.sql" >/dev/null 2>&1; then
-    ready=1; break
+  # BUSINESS_DB / POSTGRES_DB 可能是尚未创建的隔离库；postgres 维护库始终存在。
+  if docker exec "$CONTAINER" pg_isready -U "$POSTGRES_USER" -d postgres >/dev/null 2>&1; then
+    ready=1
+    break
   fi
   sleep 2
 done
 [ "${ready:-0}" = 1 ] || { echo "    ✗ 未就绪"; docker logs --tail 30 "$CONTAINER"; exit 1; }
+echo "==> [${KEY}] 确认所选业务库和 biz schema($BUSINESS_DB)"
+database_exists=$(docker exec -i "$CONTAINER" psql -X -U "$POSTGRES_USER" -d postgres \
+  -v ON_ERROR_STOP=1 -v database_name="$BUSINESS_DB" -tA -f /dev/stdin \
+  < scripts/db/backup/sql/database-exists.sql | tr -d '[:space:]')
+if [[ "$database_exists" != 1 ]]; then
+  docker exec -i "$CONTAINER" psql -X -U "$POSTGRES_USER" -d postgres \
+    -v ON_ERROR_STOP=1 -v database_name="$BUSINESS_DB" -v database_owner="$POSTGRES_USER" \
+    -f /dev/stdin < "$LOCAL_SQL_DIR/ensure-business-database.sql" >/dev/null
+fi
+
+n_tables=$(docker exec -i "$CONTAINER" psql -X -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
+  -tA -v ON_ERROR_STOP=1 -f /dev/stdin < "$LOCAL_SQL_DIR/count-biz-schema-tables.sql")
+if [[ "$n_tables" == 0 ]]; then
+  has_staging=$(docker exec -i "$CONTAINER" psql -X -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
+    -v ON_ERROR_STOP=1 -tA -f /dev/stdin < "$LOCAL_SQL_DIR/check-biz-shard-initialization-state.sql")
+  if [[ "$has_staging" == t ]]; then
+    echo "    ✗ $BUSINESS_DB 缺少 biz 表但已有 process_staging；拒绝在未知状态上重放业务 DDL" >&2
+    exit 1
+  fi
+  echo "    空业务库，初始化 biz 表"
+  docker exec -i "$CONTAINER" psql -X -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
+    -v ON_ERROR_STOP=1 -f /dev/stdin < scripts/db/business/create_biz_tables.sql >/dev/null
+elif ! docker exec -i "$CONTAINER" psql -X -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
+    -tA -v ON_ERROR_STOP=1 -f /dev/stdin < "$LOCAL_SQL_DIR/check-biz-shard-ready.sql" | grep -Fx 1 >/dev/null; then
+  echo "    ✗ $BUSINESS_DB 已有部分 biz 表但缺少必需关系；为避免覆盖部分数据，停止自动修复" >&2
+  exit 1
+fi
+docker exec -i "$CONTAINER" psql -X -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
+  -tA -v ON_ERROR_STOP=1 -f /dev/stdin < "$LOCAL_SQL_DIR/check-biz-shard-ready.sql" | grep -Fx 1 >/dev/null \
+  || { echo "    ✗ $BUSINESS_DB 缺少 SIM 必需的业务表" >&2; exit 1; }
 n_tables="$(docker exec -i "$CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
-  -tA -v ON_ERROR_STOP=1 \
-  -f /dev/stdin < "$LOCAL_SQL_DIR/count-biz-schema-tables.sql")"
+  -tA -v ON_ERROR_STOP=1 -f /dev/stdin < "$LOCAL_SQL_DIR/count-biz-schema-tables.sql")"
 echo "    就绪;biz 表数=$n_tables"
 
 echo "==> [${KEY}] 3/5 角色+授权+RLS(rls-phase-a,幂等)"
@@ -99,17 +147,30 @@ docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 \
   < scripts/db/business/diagnostic-readonly-role.sql >/dev/null
 echo "    readonly / readonly_all 已建"
 
-echo "==> [${KEY}] 5/5 写 secrets(存在不覆盖)"
+echo "==> [${KEY}] 5/5 写/验证本次目标库 secret"
 SECRET="$SECRETS_DIR/$KEY.env"
 if [ -f "$SECRET" ]; then
-  echo "    $SECRET 已存在,跳过"
+  # shellcheck disable=SC1090 # 仓库 gitignore 下的本地运行凭据。
+  source "$SECRET"
+  expected_url="jdbc:postgresql://localhost:$PORT/$BUSINESS_DB?currentSchema=biz&reWriteBatchedInserts=true"
+  if [[ "${BIZ_SHARD_URL:-}" != "$expected_url" \
+      || "${BIZ_SHARD_USERNAME:-}" != "$POSTGRES_USER" \
+      || "${BIZ_SHARD_PASSWORD:-}" != "$POSTGRES_PASSWORD" ]]; then
+    echo "    ✗ $SECRET 指向不同数据库或凭据；拒绝复用过期 secret" >&2
+    exit 1
+  fi
+  chmod 600 "$SECRET"
+  echo "    $SECRET 与目标库匹配"
 else
+  mkdir -p "$SECRETS_DIR"
+  umask 077
   {
     echo "# biz $KEY 凭据(provision-biz-shard.sh 生成)。prod 把 username 换 batch_business_writer。"
     echo "BIZ_SHARD_URL=\"jdbc:postgresql://localhost:$PORT/$BUSINESS_DB?currentSchema=biz&reWriteBatchedInserts=true\""
     echo "BIZ_SHARD_USERNAME=$POSTGRES_USER"
     echo "BIZ_SHARD_PASSWORD=$POSTGRES_PASSWORD"
   } > "$SECRET"
+  chmod 600 "$SECRET"
   echo "    生成 $SECRET"
 fi
 

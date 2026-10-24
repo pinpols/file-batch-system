@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -16,6 +15,8 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentBindingInput;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentBindParam;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAttachmentEntity;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAttachmentMapper;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
@@ -25,21 +26,31 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.List;
+import org.mockito.ArgumentCaptor;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
+@ExtendWith(MockitoExtension.class)
 @DisplayName("AI 附件服务:图片上传开关、草稿配额与对象加密约束")
 class ConsoleAiAttachmentServiceTest {
-  private final ConsoleAiAttachmentMapper mapper = mock(ConsoleAiAttachmentMapper.class);
-  private final BatchObjectCryptoService crypto = mock(BatchObjectCryptoService.class);
-  private final BatchObjectStore store = mock(BatchObjectStore.class);
-  private final PlatformTransactionManager transactionManager =
-      mock(PlatformTransactionManager.class);
-  private final SlidingWindowRateLimiter rateLimiter = mock(SlidingWindowRateLimiter.class);
+  @Mock
+  private ConsoleAiAttachmentMapper mapper;
+  @Mock
+  private BatchObjectCryptoService crypto;
+  @Mock
+  private BatchObjectStore store;
+  @Mock
+  private PlatformTransactionManager transactionManager;
+  @Mock
+  private SlidingWindowRateLimiter rateLimiter;
   private final ConsoleAiProperties properties = new ConsoleAiProperties();
   private ConsoleAiAttachmentService service;
 
@@ -47,10 +58,59 @@ class ConsoleAiAttachmentServiceTest {
   void setUp() {
     properties.setImageInputEnabled(true);
     properties.getPersistence().setEnabled(true);
-    when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
-    when(rateLimiter.tryAcquire(anyString(), eq(12))).thenReturn(true);
     service = new ConsoleAiAttachmentService(
         mapper, properties, crypto, store, transactionManager, rateLimiter);
+  }
+
+  @Test
+  @DisplayName("无附件时绑定保持空操作，不触发开关或数据库检查")
+  void shouldLeaveBindingEmpty_whenAttachmentIdsAreNullOrEmpty() {
+    properties.setImageInputEnabled(false);
+    ConsoleAiAttachmentBindingInput nullIds = ConsoleAiAttachmentBindingInput.builder().build();
+    ConsoleAiAttachmentBindingInput emptyIds = ConsoleAiAttachmentBindingInput.builder()
+        .ids(List.of())
+        .build();
+
+    service.bind(nullIds);
+    service.bind(emptyIds);
+
+    org.mockito.Mockito.verifyNoInteractions(mapper);
+  }
+
+  @Test
+  @DisplayName("有效草稿按原租户、所有者、会话及轮次绑定")
+  void shouldKeepDraftBindingIdentityAndExpiration_whenBindingValidDraft() {
+    UUID attachmentId = UUID.randomUUID();
+    Instant expiration = Instant.now().plusSeconds(3600);
+    ConsoleAiAttachmentEntity draft = new ConsoleAiAttachmentEntity();
+    draft.setId(attachmentId);
+    draft.setOwnerUserId("owner-a");
+    draft.setStatus("DRAFT");
+    draft.setExpiresAt(expiration);
+    draft.setByteSize(10L);
+    when(mapper.byId("tenant-a", attachmentId)).thenReturn(draft);
+    when(mapper.bind(any(ConsoleAiAttachmentBindParam.class))).thenReturn(1);
+    ConsoleAiAttachmentBindingInput binding = ConsoleAiAttachmentBindingInput.builder()
+        .tenantId("tenant-a")
+        .ownerUserId("owner-a")
+        .ids(List.of(attachmentId))
+        .conversationId("conversation-a")
+        .turnNo(7L)
+        .expiresAt(expiration)
+        .build();
+
+    service.bind(binding);
+
+    ArgumentCaptor<ConsoleAiAttachmentBindParam> captor =
+        ArgumentCaptor.forClass(ConsoleAiAttachmentBindParam.class);
+    verify(mapper).bind(captor.capture());
+    ConsoleAiAttachmentBindParam parameter = captor.getValue();
+    assertThat(parameter.tenantId()).isEqualTo("tenant-a");
+    assertThat(parameter.id()).isEqualTo(attachmentId);
+    assertThat(parameter.ownerUserId()).isEqualTo("owner-a");
+    assertThat(parameter.conversationId()).isEqualTo("conversation-a");
+    assertThat(parameter.turnNo()).isEqualTo(7L);
+    assertThat(parameter.expiresAt()).isEqualTo(expiration);
   }
 
   @Test
@@ -69,6 +129,8 @@ class ConsoleAiAttachmentServiceTest {
   @Test
   @DisplayName("同一客户端附件标识内容变更:按冲突拒绝且不写入对象存储")
   void shouldRejectUpload_whenContentDiffersFromExistingId() throws Exception {
+    when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+    when(rateLimiter.tryAcquire(anyString(), eq(12))).thenReturn(true);
     UUID clientId = UUID.randomUUID();
     ConsoleAiAttachmentEntity existing = new ConsoleAiAttachmentEntity();
     existing.setInputSha256("0".repeat(64));
@@ -86,6 +148,8 @@ class ConsoleAiAttachmentServiceTest {
   @Test
   @DisplayName("草稿配额已满:按限流拒绝且不插入记录,也不写入对象存储")
   void shouldRejectUpload_whenDraftQuotaFull() throws Exception {
+    when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+    when(rateLimiter.tryAcquire(anyString(), eq(12))).thenReturn(true);
     when(mapper.activeDraftCount("tenant", "owner")).thenReturn(16);
 
     assertThatThrownBy(() -> service.upload("tenant", "owner", UUID.randomUUID(), png()))
@@ -100,6 +164,7 @@ class ConsoleAiAttachmentServiceTest {
   @Test
   @DisplayName("已绑定归属的图片:对象未加密时拒绝读取,且不触发解密")
   void shouldRejectContent_whenObjectNotEncrypted() {
+    when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
     UUID id = UUID.randomUUID();
     ConsoleAiAttachmentEntity row = new ConsoleAiAttachmentEntity();
     row.setId(id);

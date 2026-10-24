@@ -181,6 +181,7 @@ class ConsoleIdempotencyInterceptorTest {
     assertThat(allowed).isFalse();
     assertThat(response.getStatus()).isEqualTo(409);
     assertThat(response.getContentAsString()).contains("duplicate request");
+    assertThat(response.getContentAsString()).contains("\"idempotentReplay\":true");
     verify(store).get(redisKey);
     verify(store, never()).setIfAbsent(anyString(), anyString(), any(Duration.class));
   }
@@ -220,6 +221,7 @@ class ConsoleIdempotencyInterceptorTest {
     assertThat(allowed).isFalse();
     assertThat(response.getStatus()).isEqualTo(409);
     assertThat(response.getContentAsString()).contains("duplicate request");
+    assertThat(response.getContentAsString()).contains("\"idempotentReplay\":true");
   }
 
   static class SampleController {

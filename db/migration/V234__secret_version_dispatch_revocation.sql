@@ -1,4 +1,5 @@
 -- SecretVersion 运行时撤销标记。保留既有生命周期状态，撤销是独立的紧急阻断信号。
+
 ALTER TABLE batch.secret_version
     ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS revoked_by VARCHAR(64),

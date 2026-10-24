@@ -196,23 +196,28 @@ public final class StatefulBackendGuard {
     if (desired == null) {
       throw new IllegalArgumentException("desired backend is required");
     }
-    return new DesiredBackend(
-        required(desired.featureKey(), "featureKey", FEATURE_KEY_MAX),
-        required(desired.backend(), "backend", BACKEND_MAX).toLowerCase(),
-        required(desired.backendIdentity(), "backendIdentity", IDENTITY_MAX),
-        optional(desired.cutoverId(), "cutoverId", CUTOVER_ID_MAX),
-        required(desired.actor(), "actor", ACTOR_MAX));
+    String featureKey = required(desired.featureKey(), "featureKey", FEATURE_KEY_MAX);
+    String backend = required(desired.backend(), "backend", BACKEND_MAX).toLowerCase();
+    String backendIdentity = required(desired.backendIdentity(), "backendIdentity", IDENTITY_MAX);
+    String cutoverId = optional(desired.cutoverId(), "cutoverId", CUTOVER_ID_MAX);
+    String actor = required(desired.actor(), "actor", ACTOR_MAX);
+    return new DesiredBackend(featureKey, backend, backendIdentity, cutoverId, actor);
   }
 
   private static String required(String value, String field, int maxLength) {
     if (!Texts.hasText(value)) {
       throw new IllegalArgumentException(field + " is required");
     }
-    return bounded(value.trim(), field, maxLength);
+    String trimmedValue = value.trim();
+    return bounded(trimmedValue, field, maxLength);
   }
 
   private static String optional(String value, String field, int maxLength) {
-    return Texts.hasText(value) ? bounded(value.trim(), field, maxLength) : null;
+    if (!Texts.hasText(value)) {
+      return null;
+    }
+    String trimmedValue = value.trim();
+    return bounded(trimmedValue, field, maxLength);
   }
 
   private static String bounded(String value, String field, int maxLength) {

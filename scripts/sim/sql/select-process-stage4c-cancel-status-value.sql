@@ -1,4 +1,5 @@
 SELECT instance.instance_status || '|' || partition.partition_status || '|' || task.task_status
+       || '|' || task.cancel_requested::text || '|' || coalesce(task.error_code, '')
 FROM batch.job_instance instance
 JOIN batch.job_partition partition
   ON partition.tenant_id = instance.tenant_id

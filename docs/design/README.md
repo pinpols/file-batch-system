@@ -1,9 +1,9 @@
 # 设计文档索引
 
-业务向静态设计：数据模型、链路、能力评估。沿用原 8000 行《批量调度系统设计说明》的章节号切分。
+业务与能力设计、数据库逻辑模型。系统原语、运行主链与 ADR 见 architecture；当前设计原位维护，历史能力评估须保留原时点边界。
 原 mega 版已**清空为存根** [`../archive/design/system-design-2026-03-21.md`](../archive/design/system-design-2026-03-21.md)（仅保留 20 章+95 子节标题供 §X.Y 兼容历史链接；正文需 git 历史回溯）。
 
-> **2026-04-26 拆分完成**：mega 文档原 20 章中"独立设计"的 3 章（技术栈 / SLA / 多租户与安全）已抽出为单文件。其余 5 章（5/7/8/10/13）以**散落在多个子文件 + ADR + runbook** 的形式覆盖，详见 [`../archive/design/mega-chapter-map.md`](../archive/design/mega-chapter-map.md) 章号导航表。
+> **2026-04-26 拆分完成**：mega 文档原 20 章中"独立设计"的 3 章（技术栈 / SLA / 多租户与安全）已抽出为单文件。其余 5 章（5/7/8/10/13）以**散落在多个子文件 + ADR + runbook** 的形式覆盖，详见 [`../archive/design/legacy-design-chapter-map.md`](legacy-design-chapter-map.md) 章号导航表。
 
 ## 文件清单（编号即推荐阅读顺序）
 
@@ -18,19 +18,17 @@
 | 02c | [batch-day-timezone-dst-optimized-design.md](./batch-day-timezone-dst-optimized-design.md) | 基于 02 / 02a / 02b 的优化收敛设计 | 改批量日、cron 时区、DST、前日门闩 |
 | 02d | [time-date-semantics.md](./time-date-semantics.md) | 当前运行口径：事件时间、业务日期、文件接收时间、调度与 Console 展示时区 | 配置跨时区租户 / 排查日期差异 |
 | 03 | [file-pipeline-design.md](./file-pipeline-design.md) | 文件处理链路（preprocess / receive / dispatch / publish）| 写新 file step |
+| 03a | [Workflow 统一运行与 Pipeline 按类型关联实施方案](../plans/workflow-unified-execution-and-system-pipeline-plan-2026-10-14.md) | Pipeline 模型保留、定义表退出；作业/工作流双菜单联动、统一顶层运行与迁移验收 | 实施新运行模型前；当前为方案，代码待迁移 |
 | 04 | [redis-usage-design.md](./redis-usage-design.md) | Redis 使用清单（quota / rate-limit / cache / pub-sub / SSE replay）| 改任何 Redis 相关代码 |
 | 05 | [logging-architecture.md](./logging-architecture.md) | 日志架构（MDC / 结构化 / Loki 分发） | 加日志埋点前 |
 | 06 | [delete-strategy.md](./delete-strategy.md) | 删除策略（job_instance / file_record / outbox archive 等）| 删数据前 |
 | 07 | [capability-assessment.md](./capability-assessment.md) | 设计方案覆盖度评估；不代表当前实现或生产能力 | 评估方案范围；核实现状请查 todo-master、代码和验证记录 |
-| 08 | [project-structure-pom.md](./project-structure-pom.md) | 早期模块结构 / POM 设计稿（当前事实以 architecture/project-structure 为准） | 查历史设计背景 |
 | 09 | [runtime-default-parameters.md](./runtime-default-parameters.md) | 运行时默认参数基线（pool / timeout / batch size 等）| 调参前看默认值 |
 | 10 | [console-sidebar-menu-tree.md](./console-sidebar-menu-tree.md) | 控制台侧边栏菜单树 + 角色可见性 | 加 console 页面 |
-| 11 | [api-gap-analysis.md](./api-gap-analysis.md) | 2026-04-10 Console API 差距快照 | 历史审计；当前接口以 OpenAPI 为准 |
 | 12 | [tech-stack-and-principles.md](./tech-stack-and-principles.md) | 技术栈清单 / MyBatis 单一栈原则 / 开源协议合规 / AI 接入合规 | 加新依赖 / 评估技术选型 |
 | 13 | [sla-and-quality.md](./sla-and-quality.md) | 任务 SLA / 文件到达 SLA / 数据质量校验 | 配 SLA / 补质量校验规则 |
 | 14 | [multi-tenant-and-security.md](./multi-tenant-and-security.md) | 多租户隔离边界 / 角色权限 / 密钥轮换 / 配置发布治理 / AI 输入边界 | 安全评审 / 加敏感字段 |
 | 15 | [batch-classification-and-gaps.md](./batch-classification-and-gaps.md) | 批量业务与执行类型，并拆分调度计划、触发模式、实例来源、事件来源和依赖关系 | 加新业务类型 / 评估增量执行 / 规划调度、触发与依赖 |
-| 16 | [process-worker-known-issues.md](./process-worker-known-issues.md) | 2026-04-28 PROCESS Worker 问题与修复快照 | 历史审计；当前待办以 todo-master 为准 |
 | 17 | [tenant-config-package-excel-9plus2-design.md](./tenant-config-package-excel-9plus2-design.md) | 当前已实现的租户配置包设计基线：9 个业务 sheet + 可选依赖、字段说明与跨 sheet 校验 | 核对现行配置包实现 |
 | 17a | [租户作业配置与资源边界收敛计划](../plans/tenant-job-configuration-simplification-plan-2026-10-09.md) | 待实施方案：降低租户填写量、场景化模板、平台托管资源配置及旧包迁移 | 规划配置包与租户资源权限改造 |
 | 18 | [pipeline-stage-progress-display.md](./pipeline-stage-progress-display.md) | Pipeline step 进度展示与 SSE 刷新设计：低频 dirty event、轮询快照、Worker 支持矩阵、降级策略 | 改 Pipeline Observability / SSE / Worker progress 前 |
@@ -41,11 +39,20 @@
 | 主题 | 文档 |
 |---|---|
 | API 与安全 | [API abuse protection](./api-abuse-protection.md)、[登录防暴力破解](./console-login-bruteforce-protection.md)、[i18n](./i18n.md) |
-| 文件与存储 | [对象存储抽象](./object-storage-abstraction.md)、[文件完整性 sidecar](./file-integrity-sidecar-manifest-design-2026-06-07.md)、[文件完整性与恢复](./file-integrity-recovery.md)、[字段映射推断](./import-export-column-mapping-default-inference-2026-06-20.md) |
+| 文件与存储 | [对象存储抽象](./object-storage-abstraction.md)、[文件完整性 sidecar](file-integrity-sidecar-manifest-design.md)、[文件完整性与恢复](./file-integrity-recovery.md)、[字段映射推断](import-export-column-mapping-default-inference.md) |
 | Pipeline / Workflow | [边界定义](./pipeline-vs-workflow-definition.md)、[DAG 设计器](./workflow-dag-designer.md)、[动态 fan-out](./workflow-dynamic-fanout.md)、[状态机](./status-state-machines.md) |
 | 幂等与 readiness | [分区幂等](./partition-idempotency-decision.md)、[资产分区 readiness](./asset-partition-readiness.md) |
-| Worker / SDK | [Task SPI](./task-spi-design.md)、[部署模型](./worker-deployment-models.md)、[task type 配置](./sdk-task-type-configuration.md)、[行业对标](./sdk-industry-benchmark.md) |
+| Worker / SDK | [Task SPI](./task-spi-design.md)、[部署模型](./worker-deployment-models.md)、[task type 配置](./sdk-task-type-configuration.md)、[行业对标历史分析](../archive/audit/sdk-industry-benchmark-2026-05-31.md) |
 | 账户与权限 | [批量账号开户后端设计](./bulk-user-provisioning.md)：Preview/Apply、租户与角色边界、事务、幂等和凭据交付 |
+
+[legacy-design-chapter-map.md](legacy-design-chapter-map.md) 持续维护原 mega 设计稿章节与当前资产的映射；原稿快照留在归档目录。
+
+## 历史设计与问题快照
+
+- [早期模块与 POM 设计稿](../archive/design/project-structure-pom-2026-03-21.md)，日期表示原 mega 设计稿来源；当前模块结构见 [项目结构](../architecture/project-structure.md)。
+- [API 缺口（2026-04-10）](../archive/audit/api-gap-analysis-2026-04-10.md)、[PROCESS 问题（2026-04-28）](../archive/audit/process-worker-known-issues-2026-04-28.md)；当前待办见 [TODO Master](../plans/todo-master.md)。
+
+[五类资产逐文件核查](../audit/architecture-and-contract-assets-review-2026-10-24.md)列出本次 Workflow 改造需要更新的原文档及保留的历史基线；目录中的历史 SQL/实施排期不得作为当前部署或待办清单。
 
 ## 与 architecture/ 的分工
 
@@ -59,7 +66,7 @@
 | 主题 | 静态设计 | 运行态架构 | 运维 SOP |
 |---|---|---|---|
 | 数据模型 | 01 data-model-ddl | [`../architecture/core-model.md`](../architecture/core-model.md) | [`../runbook/pg-table-partitioning.md`](../runbook/pg-table-partitioning.md) |
-| 文件链路 | 03 file-pipeline-design | [`../architecture/system-flow-overview.md`](../architecture/system-flow-overview.md) §4 | [`../runbook/worker-stage-coverage.md`](../runbook/worker-stage-coverage.md) |
+| 文件链路 | 03 file-pipeline-design | [`../architecture/system-flow-overview.md`](../architecture/system-flow-overview.md) §4 | [后端 Sim 可靠性场景组](../testing/backend-sim-reliability.md) |
 | Redis | 04 redis-usage-design | — | [`../runbook/feature-switches.md`](../runbook/feature-switches.md) |
 | 日志 | 05 logging-architecture | — | [`../runbook/observability-stack.md`](../runbook/observability-stack.md) |
 | 技术栈 / 合规 | 12 tech-stack-and-principles | [`../architecture/adr/ADR-001-dual-orm.md`](../architecture/adr/ADR-001-dual-orm.md) | [`../runbook/security-scan.md`](../runbook/security-scan.md) |

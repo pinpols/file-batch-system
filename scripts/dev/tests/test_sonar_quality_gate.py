@@ -1,3 +1,5 @@
+# 用途：验证Sonar Quality Gate 评估条件核对。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/dev/tests/test_sonar_quality_gate.py。
 import re
 import unittest
 from pathlib import Path

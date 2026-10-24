@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.imports.runtime;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerIdentityProperties;
@@ -9,6 +10,8 @@ import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
 import io.github.pinpols.batch.worker.core.support.HeartbeatService;
 import io.github.pinpols.batch.worker.core.support.WorkerLifecycleManager;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
+import io.github.pinpols.batch.worker.imports.plugin.ImportLoadPluginRegistry;
+import java.util.List;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -23,6 +26,7 @@ import org.springframework.stereotype.Service;
 public class ImportWorkerLoop extends AbstractWorkerLoop {
 
   private final ImportWorkerConfiguration configuration;
+  private final ImportLoadPluginRegistry pluginRegistry;
 
   public ImportWorkerLoop(
       WorkerLifecycleManager workerLifecycleManager,
@@ -31,7 +35,8 @@ public class ImportWorkerLoop extends AbstractWorkerLoop {
       ImportWorkerConfiguration configuration,
       WorkerIdentityProperties identityProperties,
       WorkerRegistryStartupProperties workerRegistryStartupProperties,
-      WorkerConcurrencyProperties concurrencyProperties) {
+      WorkerConcurrencyProperties concurrencyProperties,
+      ImportLoadPluginRegistry pluginRegistry) {
     super(
         workerLifecycleManager,
         heartbeatService,
@@ -40,6 +45,7 @@ public class ImportWorkerLoop extends AbstractWorkerLoop {
         identityProperties,
         workerRegistryStartupProperties);
     this.configuration = configuration;
+    this.pluginRegistry = pluginRegistry;
   }
 
   @Override
@@ -50,6 +56,11 @@ public class ImportWorkerLoop extends AbstractWorkerLoop {
   @Override
   protected String workerGroup() {
     return "import";
+  }
+
+  @Override
+  protected List<ReplayCapabilityDeclaration> replayCapabilities() {
+    return pluginRegistry.replayCapabilityCatalog();
   }
 
   @Scheduled(fixedDelayString = "${batch.worker.import.heartbeat-interval-millis:15000}")

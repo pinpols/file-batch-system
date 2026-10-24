@@ -130,21 +130,24 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
       String status,
       String title,
       Instant lastSeenAt) {
+    final String insertAlertEventSql = """
+    INSERT INTO batch.alert_event
+    (tenant_id, service_name, alert_type, severity, title, detail_json, dedup_fingerprint,
+    occurrence_count, first_seen_at, last_seen_at, status, created_at, updated_at)
+    VALUES (?, 'batch-orchestrator', ?, ?, ?, '{}', ?,
+    1, ?, ?, ?, now(), now())
+    """;
+    Timestamp firstSeenAt = Timestamp.from(lastSeenAt);
+    Timestamp persistedLastSeenAt = Timestamp.from(lastSeenAt);
     jdbcTemplate.update(
-        """
-        INSERT INTO batch.alert_event
-          (tenant_id, service_name, alert_type, severity, title, detail_json, dedup_fingerprint,
-           occurrence_count, first_seen_at, last_seen_at, status, created_at, updated_at)
-        VALUES (?, 'batch-orchestrator', ?, ?, ?, '{}', ?,
-                1, ?, ?, ?, now(), now())
-        """,
+        insertAlertEventSql,
         tenantId,
         alertType,
         severity,
         title,
         tenantId + ":" + alertType + ":" + System.nanoTime(),
-        Timestamp.from(lastSeenAt),
-        Timestamp.from(lastSeenAt),
+        firstSeenAt,
+        persistedLastSeenAt,
         status);
   }
 }

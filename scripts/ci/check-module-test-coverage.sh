@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：Maven 测试模块覆盖。
+# 用法：在仓库根目录执行 bash scripts/ci/check-module-test-coverage.sh；参数与前置环境见下方说明及所属 README。
 # 守护:根 reactor 里「有测试的模块」是否都被某个 CI workflow 的 -pl 覆盖。
 #
 # 背景:pr-gate / full-ci-gate 用硬编码 `-pl <模块列表>` 分 shard 跑测试。风险:

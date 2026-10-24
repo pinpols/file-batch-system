@@ -122,8 +122,9 @@ ALTER TABLE batch.job_instance_p
     ADD CONSTRAINT job_instance_p_job_definition_id_fkey
     FOREIGN KEY (job_definition_id) REFERENCES batch.job_definition(id);
 ALTER TABLE batch.job_instance_p
-    ADD CONSTRAINT job_instance_p_trigger_request_id_fkey
-    FOREIGN KEY (trigger_request_id) REFERENCES batch.trigger_request(id);
+    ADD CONSTRAINT fk_job_instance_trigger_request_tenant
+    FOREIGN KEY (tenant_id, trigger_request_id)
+    REFERENCES batch.trigger_request(tenant_id, id);
 
 -- B) 建月分区（同 outbox-event 模式，前 24 月 + 后 12 月 + 默认）
 DO $$
@@ -167,6 +168,9 @@ CREATE INDEX idx_job_instance_p_sla_tracking ON batch.job_instance_p (instance_s
 CREATE INDEX idx_job_instance_p_tenant_bizdate_status ON batch.job_instance_p (tenant_id, biz_date DESC, instance_status);
 CREATE INDEX idx_job_instance_p_tenant_status_started ON batch.job_instance_p (tenant_id, instance_status, started_at DESC);
 CREATE INDEX idx_job_instance_p_trace_id ON batch.job_instance_p (trace_id);
+CREATE INDEX idx_job_instance_p_trigger_request_id
+    ON batch.job_instance_p (trigger_request_id, tenant_id)
+    WHERE trigger_request_id IS NOT NULL;
 
 -- D) 复制数据(显式全列;biz_date NULL 用 created_at::date 回退)
 INSERT INTO batch.job_instance_p (

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.notification.support;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsolePushProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushApprovalNotificationEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsolePushApprovalNotificationMapper;
@@ -89,9 +90,8 @@ public class ConsolePushApprovalNotifier {
       pollOnce();
     } catch (RuntimeException e) {
       if (stopping.get() && isShutdownNoise(e)) {
-        log.info(
-            "[push] approval-notify poll skipped during shutdown: {}",
-            SwallowedExceptionLogger.summary(e));
+        String causeSummary = SwallowedExceptionLogger.summary(e);
+        log.info("[push] approval-notify poll skipped during shutdown: {}", causeSummary);
         return;
       }
       log.error("[push] approval-notify poll failed", e);
@@ -131,9 +131,11 @@ public class ConsolePushApprovalNotifier {
     String title = String.format("%s 申请%s", typeLabel, statusLabel);
     String reason =
         "REJECTED".equals(p.getApprovalStatus()) ? p.getRejectionReason() : p.getApprovalReason();
-    String body = reason == null || reason.isBlank()
-        ? String.format("approver=%s · %s", nullToDash(p.getApproverId()), p.getApprovalNo())
-        : String.format("approver=%s · %s", nullToDash(p.getApproverId()), truncate(reason, 80));
+    boolean reasonMissing = EmptyChecks.isNull(reason) || EmptyChecks.isBlank(reason);
+    String approverId = nullToDash(p.getApproverId());
+    String body = reasonMissing
+        ? String.format("approver=%s · %s", approverId, p.getApprovalNo())
+        : String.format("approver=%s · %s", approverId, truncate(reason, 80));
     String tag = "approval-" + p.getApprovalNo();
     // 前端 /m/approvals 是列表页;带 ?id 让列表页打开后高亮/滚动到目标条。
     // 如果未来 FE 加了详情页 /m/approvals/:no,把这里改成 path 段即可。
@@ -172,10 +174,11 @@ public class ConsolePushApprovalNotifier {
     Throwable current = throwable;
     while (current != null) {
       String message = current.getMessage();
-      if (message != null
+      boolean isConnectionShutdownMessage = message != null
           && (message.contains("has been closed")
               || message.contains("Connection pool shut down")
-              || message.contains("Interrupted"))) {
+              || message.contains("Interrupted"));
+      if (isConnectionShutdownMessage) {
         return true;
       }
       current = current.getCause();

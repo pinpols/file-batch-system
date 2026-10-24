@@ -20,8 +20,8 @@ import org.springframework.stereotype.Component;
 /**
  * ADR-028 S3：周期扫到期 WAIT 节点 → 调 {@link SensorStateMachine}。
  *
- * <p>单 tick 上限 {@link #MAX_PER_TICK} 防压垮 DB；行锁 {@code SELECT FOR UPDATE SKIP LOCKED} + ShedLock
- * 双层保证多实例 orchestrator 不会重复探同一节点。
+ * <p>单 tick 上限 {@link #MAX_PER_TICK} 防压垮 DB；ShedLock 降低重复扫描，单节点事务中的条件认领
+ * 再校验到期状态，防止扫描锁释放后旧候选被并发重复探测。
  *
  * <p>每节点用独立事务执行（{@link Propagation#REQUIRES_NEW}），避免单个故障节点拖挂整 tick。
  */
@@ -65,12 +65,16 @@ public class SensorPollScheduler {
         // 先解 tenantId（workflow_run.selectByIdAnyTenant 走 RLS-bypass，安全）。
         String tenantId = resolveTenantId(nodeRun);
         if (tenantId == null || tenantId.isBlank()) {
-          // 拿不到 tenant 退回原行为，避免 nodeRun 残留长期停滞整 tick。
-          transactionExecutor.probeOne(nodeRun, now);
-        } else {
-          RlsTenantContextHolder.runWithTenant(
-              tenantId, () -> transactionExecutor.probeOne(nodeRun, now));
+          // 所属工作流缺失或租户不可解析时不能在无租户上下文下执行状态变更。
+          log.warn(
+              "Skipping WAIT sensor probe because owning tenant could not be resolved:"
+                  + " nodeRunId={}, workflowRunId={}",
+              nodeRun.getId(),
+              nodeRun.getWorkflowRunId());
+          continue;
         }
+        RlsTenantContextHolder.runWithTenant(
+            tenantId, () -> transactionExecutor.probeOne(nodeRun, now));
       } catch (Exception e) {
         // R2-P2-6：e.toString() 只给类名 + message 不带 stack；sensor policy 内部 NPE 等代码缺陷
         // 会留下数千行无 actionable 信息的 warn。带 stack 让运维能直接定位根因。

@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.config.ConsoleRealtimeProperties;
@@ -41,7 +42,10 @@ class ConsoleRealtimeReplayStoreTest {
   void shouldReplayEventsAfterCursor() {
     when(redisTemplate.opsForList()).thenReturn(listOperations);
     ConsoleRealtimeReplayStore store = new ConsoleRealtimeReplayStore(
-        redisTemplate, properties(), new ConsoleRealtimeMetrics(new SimpleMeterRegistry()));
+        redisTemplate,
+        new BatchRedisNamespace(""),
+        properties(),
+        new ConsoleRealtimeMetrics(new SimpleMeterRegistry()));
     ConsoleRealtimeStreamEnvelope first = new ConsoleRealtimeStreamEnvelope(
         "console-a",
         "t1",
@@ -76,7 +80,10 @@ class ConsoleRealtimeReplayStoreTest {
   void shouldTrimAndExpireReplayBufferUsingConfiguredRetention() {
     when(redisTemplate.opsForList()).thenReturn(listOperations);
     ConsoleRealtimeReplayStore store = new ConsoleRealtimeReplayStore(
-        redisTemplate, properties(), new ConsoleRealtimeMetrics(new SimpleMeterRegistry()));
+        redisTemplate,
+        new BatchRedisNamespace(""),
+        properties(),
+        new ConsoleRealtimeMetrics(new SimpleMeterRegistry()));
 
     store.append(new ConsoleRealtimeStreamEnvelope(
         "console-a",

@@ -10,9 +10,11 @@ public final class ConsoleNotificationCryptoSupport {
   public static String toHex(byte[] bytes) {
     StringBuilder result = new StringBuilder(bytes.length * 2);
     for (byte value : bytes) {
-      result
-          .append(Character.forDigit((value >> 4) & 0xF, 16))
-          .append(Character.forDigit(value & 0xF, 16));
+      int highNibble = (value >> 4) & 0xF;
+      int lowNibble = value & 0xF;
+      char highDigit = Character.forDigit(highNibble, 16);
+      char lowDigit = Character.forDigit(lowNibble, 16);
+      result.append(highDigit).append(lowDigit);
     }
     return result.toString();
   }

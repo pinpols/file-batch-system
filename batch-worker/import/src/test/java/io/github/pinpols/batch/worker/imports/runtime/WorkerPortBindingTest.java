@@ -99,7 +99,8 @@ class WorkerPortBindingTest {
           configuration,
           new WorkerIdentityProperties(),
           new WorkerRegistryStartupProperties(),
-          new WorkerConcurrencyProperties());
+          new WorkerConcurrencyProperties(),
+          new io.github.pinpols.batch.worker.imports.plugin.ImportLoadPluginRegistry(List.of()));
     }
   }
 }

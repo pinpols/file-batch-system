@@ -76,7 +76,7 @@ public class ConsoleSelfServiceJobController {
       @NotBlank String tenantId,
       @NotBlank @Size(max = 128) String jobCode,
       @NotBlank String bizDate,
-      String compensationType,
-      String targetInstanceNo,
+      @NotBlank String compensationType,
+      @NotBlank String targetInstanceNo,
       @Size(max = 512) String reason) {}
 }

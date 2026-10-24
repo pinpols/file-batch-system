@@ -132,8 +132,9 @@ public class OutboxPollScheduler {
   public void onApplicationReady(ApplicationReadyEvent ignored) {
     OutboxProperties outbox = governance.outbox();
     // STATIC 模式下校验 ENV 里的 shard 配置合法性；DYNAMIC 模式下由 ShardAssignmentProvider 保证
-    if (outbox.getShardingMode() == OutboxProperties.ShardingMode.STATIC
-        && (outbox.getShardIndex() < 0 || outbox.getShardIndex() >= outbox.getShardTotal())) {
+    boolean staticShardIndexIsInvalid = outbox.getShardingMode() == OutboxProperties.ShardingMode.STATIC
+        && (outbox.getShardIndex() < 0 || outbox.getShardIndex() >= outbox.getShardTotal());
+    if (staticShardIndexIsInvalid) {
       throw new IllegalStateException("Invalid Outbox shard configuration: shardIndex="
           + outbox.getShardIndex()
           + " 必须在 [0, shardTotal="
@@ -145,7 +146,9 @@ public class OutboxPollScheduler {
     }
     long initialDelay = outbox.getMinPollIntervalMillis();
     currentIntervalMillis.set(initialDelay);
-    scheduleAt(BatchDateTimeSupport.utcNow().plusMillis(initialDelay));
+    Instant schedulerStartedAt = BatchDateTimeSupport.utcNow();
+    Instant firstPollAt = schedulerStartedAt.plusMillis(initialDelay);
+    scheduleAt(firstPollAt);
     ShardAssignment initial = shardAssignmentProvider.current();
     log.info(
         "OutboxPollScheduler started (adaptive mode): min={}ms max={}ms backoff={}x mode={} shard={}/{}",
@@ -222,11 +225,13 @@ public class OutboxPollScheduler {
     } catch (DataAccessException dae) {
       // 数据库连接/查询异常 — 瞬时故障（PG 重启 / 网络抖动），自动退避重试，不需要人介入
       // 用 WARN 而非 ERROR：ERROR 留给真正不可恢复 / 需要人介入的场景
+      Throwable mostSpecificCause = dae.getMostSpecificCause();
+      String failureSummary = EmptyChecks.isNull(mostSpecificCause)
+          ? SwallowedExceptionLogger.summary(dae)
+          : SwallowedExceptionLogger.summary(mostSpecificCause);
       log.warn(
           "Outbox poll transient database failure; retrying on the next cycle: {}",
-          dae.getMostSpecificCause() == null
-              ? SwallowedExceptionLogger.summary(dae)
-              : SwallowedExceptionLogger.summary(dae.getMostSpecificCause()));
+          failureSummary);
       log.debug("Outbox poll database exception", dae);
     } catch (OutOfMemoryError oom) {
       // 内存溢出 — 严重故障，记录后让 JVM 默认 OOM handler 接管
@@ -289,11 +294,13 @@ public class OutboxPollScheduler {
       }
     } catch (DataAccessException ex) {
       // 瞬时 PG 不可用，下轮自然重试；ERROR 留给真异常
+      Throwable mostSpecificCause = ex.getMostSpecificCause();
+      String failureSummary = EmptyChecks.isNull(mostSpecificCause)
+          ? SwallowedExceptionLogger.summary(ex)
+          : SwallowedExceptionLogger.summary(mostSpecificCause);
       log.warn(
           "Failed to reset stale PUBLISHING events (transient database failure; retrying on the next cycle): {}",
-          ex.getMostSpecificCause() == null
-              ? SwallowedExceptionLogger.summary(ex)
-              : SwallowedExceptionLogger.summary(ex.getMostSpecificCause()));
+          failureSummary);
       log.debug("Failed to reset stale PUBLISHING events", ex);
     }
   }
@@ -333,7 +340,9 @@ public class OutboxPollScheduler {
         nextDelay,
         result == null ? "n/a" : result.attemptedEvents());
 
-    scheduleAt(BatchDateTimeSupport.utcNow().plusMillis(nextDelay));
+    Instant pollCompletedAt = BatchDateTimeSupport.utcNow();
+    Instant nextPollAt = pollCompletedAt.plusMillis(nextDelay);
+    scheduleAt(nextPollAt);
   }
 
   private void scheduleAt(Instant triggerTime) {
@@ -348,9 +357,10 @@ public class OutboxPollScheduler {
         future.cancel(false);
       }
     } catch (RejectedExecutionException ex) {
-      if (stopping.get()
+      boolean publisherIsStopping = stopping.get()
           || gracefulShutdown.isDraining()
-          || executor.getScheduledExecutor().isShutdown()) {
+          || executor.getScheduledExecutor().isShutdown();
+      if (publisherIsStopping) {
         log.debug("Skipping the next Outbox poll: scheduler is shutting down");
         return;
       }

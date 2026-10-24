@@ -1,3 +1,7 @@
-SELECT count(*) FROM batch.trigger_request request
-JOIN batch.job_instance instance ON instance.tenant_id = request.tenant_id AND instance.id = request.related_job_instance_id
+SELECT count(DISTINCT request.id) FROM batch.trigger_request request
+JOIN batch.workflow_run workflow_run ON workflow_run.tenant_id = request.tenant_id
+  AND workflow_run.trigger_request_id = request.id
+JOIN batch.workflow_node_run node_run ON node_run.workflow_run_id = workflow_run.id
+JOIN batch.job_instance instance ON instance.tenant_id = workflow_run.tenant_id
+  AND instance.id = node_run.job_instance_id
 WHERE request.request_id = ANY(string_to_array(:'request_ids', ',')) AND instance.instance_status = 'SUCCESS';

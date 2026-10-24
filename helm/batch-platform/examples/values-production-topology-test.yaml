@@ -12,6 +12,7 @@ postgresql:
 
 kafka:
   bootstrapServers: kafka-test.messaging-test.svc.cluster.test:9092
+  namespace: batch-platform-topology-test
 
 redis:
   host: redis-test.cache-test.svc.cluster.test

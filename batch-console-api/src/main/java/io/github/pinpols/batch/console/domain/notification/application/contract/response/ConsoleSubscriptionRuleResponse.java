@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
 import java.time.Instant;
 import java.util.Map;
+import lombok.Builder;
 
 /**
  * 订阅规则行响应（{@code SubscriptionRuleMapper.selectByTenant/selectById} 投影）。
@@ -16,6 +17,7 @@ import java.util.Map;
  * <p>MyBatis {@code resultType="map"} 省略 null 列 → {@code NON_NULL} 保键集对等。
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Builder
 public record ConsoleSubscriptionRuleResponse(
     Long id,
     @JsonProperty("tenant_id") String tenantId,
@@ -34,18 +36,19 @@ public record ConsoleSubscriptionRuleResponse(
     if (row == null) {
       return null;
     }
-    return new ConsoleSubscriptionRuleResponse(
-        ConsoleResponseFieldReader.longValue(row, "id"),
-        ConsoleResponseFieldReader.stringValue(row, "tenant_id"),
-        ConsoleResponseFieldReader.stringValue(row, "rule_name"),
-        ConsoleResponseFieldReader.stringValue(row, "channel_code"),
-        ConsoleResponseFieldReader.stringValue(row, "event_types"),
-        ConsoleResponseFieldReader.stringValue(row, "severity_filter"),
-        ConsoleResponseFieldReader.stringValue(row, "job_code_filter"),
-        ConsoleResponseFieldReader.booleanValue(row, "enabled"),
-        ConsoleResponseFieldReader.stringValue(row, "created_by"),
-        ConsoleResponseFieldReader.stringValue(row, "updated_by"),
-        ConsoleResponseFieldReader.instantValue(row, "created_at"),
-        ConsoleResponseFieldReader.instantValue(row, "updated_at"));
+    return ConsoleSubscriptionRuleResponse.builder()
+        .id(ConsoleResponseFieldReader.longValue(row, "id"))
+        .tenantId(ConsoleResponseFieldReader.stringValue(row, "tenant_id"))
+        .ruleName(ConsoleResponseFieldReader.stringValue(row, "rule_name"))
+        .channelCode(ConsoleResponseFieldReader.stringValue(row, "channel_code"))
+        .eventTypes(ConsoleResponseFieldReader.stringValue(row, "event_types"))
+        .severityFilter(ConsoleResponseFieldReader.stringValue(row, "severity_filter"))
+        .jobCodeFilter(ConsoleResponseFieldReader.stringValue(row, "job_code_filter"))
+        .enabled(ConsoleResponseFieldReader.booleanValue(row, "enabled"))
+        .createdBy(ConsoleResponseFieldReader.stringValue(row, "created_by"))
+        .updatedBy(ConsoleResponseFieldReader.stringValue(row, "updated_by"))
+        .createdAt(ConsoleResponseFieldReader.instantValue(row, "created_at"))
+        .updatedAt(ConsoleResponseFieldReader.instantValue(row, "updated_at"))
+        .build();
   }
 }

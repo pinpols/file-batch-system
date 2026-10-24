@@ -32,6 +32,8 @@ import io.github.pinpols.batch.console.domain.workflow.query.WorkflowRunQuery;
 import io.github.pinpols.batch.console.domain.workflow.support.ConsoleWorkflowQueryMappers;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.shared.query.TenantScope;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -50,11 +52,14 @@ public class ConsoleWorkflowQueryService {
   public PageResponse<ConsoleWorkflowDefinitionResponse> workflowDefinitions(
       WorkflowDefinitionQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+    String tenantId = resolveTenant(tenantGuard, request.getTenantId());
     WorkflowDefinitionQuery query = new WorkflowDefinitionQuery(
-        resolveTenant(tenantGuard, request.getTenantId()),
+        tenantId,
         request.getWorkflowCode(),
         request.getWorkflowName(),
         request.getWorkflowType(),
+        request.getRelatedJobCode(),
+        request.getSingleJobWorkflow(),
         request.getVersion(),
         request.getEnabled(),
         pageRequest);
@@ -66,8 +71,10 @@ public class ConsoleWorkflowQueryService {
 
   public PageResponse<ConsoleWorkflowNodeResponse> workflowNodes(WorkflowNodeQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+    String tenantId = resolveTenant(tenantGuard, request.getTenantId());
+    String requiredTenantId = TenantScope.requireTenant(tenantId);
     WorkflowNodeQuery query = new WorkflowNodeQuery(
-        TenantScope.requireTenant(resolveTenant(tenantGuard, request.getTenantId())),
+        requiredTenantId,
         request.getWorkflowDefinitionId(),
         request.getWorkflowCode(),
         request.getNodeCode(),
@@ -81,8 +88,10 @@ public class ConsoleWorkflowQueryService {
 
   public PageResponse<ConsoleWorkflowEdgeResponse> workflowEdges(WorkflowEdgeQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+    String tenantId = resolveTenant(tenantGuard, request.getTenantId());
+    String requiredTenantId = TenantScope.requireTenant(tenantId);
     WorkflowEdgeQuery query = new WorkflowEdgeQuery(
-        TenantScope.requireTenant(resolveTenant(tenantGuard, request.getTenantId())),
+        requiredTenantId,
         request.getWorkflowDefinitionId(),
         request.getWorkflowCode(),
         request.getFromNodeCode(),
@@ -100,15 +109,17 @@ public class ConsoleWorkflowQueryService {
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
+    String tenantId = resolveTenant(tenantGuard, request.getTenantId());
+    Long decodedCursorId = decodeCursorId(request.getCursor());
     WorkflowRunQuery query = new WorkflowRunQuery(
-        resolveTenant(tenantGuard, request.getTenantId()),
+        tenantId,
         request.getWorkflowDefinitionId(),
         request.getRelatedJobInstanceId(),
         request.getRunStatus(),
         request.getCurrentNodeCode(),
         request.getTraceId(),
         pageRequest,
-        decodeCursorId(request.getCursor()));
+        decodedCursorId);
     List<WorkflowRunEntity> rows = workflowMappers.workflowRunMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(pageRequest, rows, this::toWorkflowRunResponse, WorkflowRunEntity::getId);
@@ -118,9 +129,10 @@ public class ConsoleWorkflowQueryService {
   }
 
   public ConsoleWorkflowRunResponse workflowRun(String tenantId, Long id) {
-    WorkflowRunEntity entity =
-        workflowMappers.workflowRunMapper.selectById(resolveTenant(tenantGuard, tenantId), id);
-    return toWorkflowRunResponse(requireNotNull(entity, "workflow run not found"));
+    String resolvedTenantId = resolveTenant(tenantGuard, tenantId);
+    WorkflowRunEntity entity = workflowMappers.workflowRunMapper.selectById(resolvedTenantId, id);
+    WorkflowRunEntity existingRun = requireNotNull(entity, "workflow run not found");
+    return toWorkflowRunResponse(existingRun);
   }
 
   public PageResponse<ConsoleWorkflowNodeRunResponse> workflowNodeRuns(
@@ -129,14 +141,16 @@ public class ConsoleWorkflowQueryService {
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
+    String tenantId = resolveTenant(tenantGuard, request.getTenantId());
+    Long decodedCursorId = decodeCursorId(request.getCursor());
     WorkflowNodeRunQuery query = new WorkflowNodeRunQuery(
-        resolveTenant(tenantGuard, request.getTenantId()),
+        tenantId,
         request.getWorkflowRunId(),
         request.getNodeCode(),
         request.getNodeStatus(),
         request.getTraceId(),
         pageRequest,
-        decodeCursorId(request.getCursor()));
+        decodedCursorId);
     List<WorkflowNodeRunEntity> rows = workflowMappers.workflowNodeRunMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(
@@ -147,14 +161,19 @@ public class ConsoleWorkflowQueryService {
   }
 
   public ConsoleWorkflowNodeRunResponse workflowNodeRun(String tenantId, Long id) {
+    String resolvedTenantId = resolveTenant(tenantGuard, tenantId);
     WorkflowNodeRunEntity entity =
-        workflowMappers.workflowNodeRunMapper.selectById(resolveTenant(tenantGuard, tenantId), id);
-    return toWorkflowNodeRunResponse(requireNotNull(entity, "workflow node run not found"));
+        workflowMappers.workflowNodeRunMapper.selectById(resolvedTenantId, id);
+    WorkflowNodeRunEntity existingNodeRun = requireNotNull(entity, "workflow node run not found");
+    return toWorkflowNodeRunResponse(existingNodeRun);
   }
 
   public ConsoleWorkflowTopologyResponse workflowTopology(WorkflowTopologyQueryRequest request) {
-    WorkflowDefinitionQuery definitionQuery = WorkflowDefinitionQuery.builder()
-        .tenantId(resolveTenant(tenantGuard, request.getTenantId()))
+    WorkflowDefinitionQuery.WorkflowDefinitionQueryBuilder definitionQueryBuilder =
+        WorkflowDefinitionQuery.builder();
+    String definitionTenantId = resolveTenant(tenantGuard, request.getTenantId());
+    WorkflowDefinitionQuery definitionQuery = definitionQueryBuilder
+        .tenantId(definitionTenantId)
         .workflowCode(request.getWorkflowCode())
         .version(request.getVersion())
         .enabled(true)
@@ -165,16 +184,16 @@ public class ConsoleWorkflowQueryService {
     if (selectedDefinition == null) {
       return new ConsoleWorkflowTopologyResponse(null, List.of(), List.of(), List.of(), List.of());
     }
-    String nodeTenantId =
-        TenantScope.requireTenant(resolveTenant(tenantGuard, request.getTenantId()));
+    String nodeResolvedTenantId = resolveTenant(tenantGuard, request.getTenantId());
+    String nodeTenantId = TenantScope.requireTenant(nodeResolvedTenantId);
     WorkflowNodeQuery nodeQuery = WorkflowNodeQuery.builder()
         .tenantId(nodeTenantId)
         .workflowDefinitionId(selectedDefinition.getId())
         .enabled(true)
         .build();
     List<WorkflowNodeEntity> nodes = workflowMappers.workflowNodeMapper.selectByQuery(nodeQuery);
-    String edgeTenantId =
-        TenantScope.requireTenant(resolveTenant(tenantGuard, request.getTenantId()));
+    String edgeResolvedTenantId = resolveTenant(tenantGuard, request.getTenantId());
+    String edgeTenantId = TenantScope.requireTenant(edgeResolvedTenantId);
     WorkflowEdgeQuery edgeQuery = WorkflowEdgeQuery.builder()
         .tenantId(edgeTenantId)
         .workflowDefinitionId(selectedDefinition.getId())
@@ -187,11 +206,12 @@ public class ConsoleWorkflowQueryService {
       String runTenantId = resolveTenant(tenantGuard, request.getTenantId());
       WorkflowRunQuery workflowRunQuery =
           WorkflowRunQuery.ofDefinition(runTenantId, selectedDefinition.getId());
-      WorkflowRunEntity run =
-          workflowMappers.workflowRunMapper.selectByQuery(workflowRunQuery).stream()
-              .filter(item -> request.getWorkflowRunId().equals(item.getId()))
-              .findFirst()
-              .orElse(null);
+      List<WorkflowRunEntity> definitionRuns =
+          workflowMappers.workflowRunMapper.selectByQuery(workflowRunQuery);
+      WorkflowRunEntity run = definitionRuns.stream()
+          .filter(item -> request.getWorkflowRunId().equals(item.getId()))
+          .findFirst()
+          .orElse(null);
       if (run != null) {
         workflowRuns = List.of(run);
         String nodeRunTenantId = resolveTenant(tenantGuard, request.getTenantId());
@@ -200,87 +220,143 @@ public class ConsoleWorkflowQueryService {
         nodeRuns = workflowMappers.workflowNodeRunMapper.selectByQuery(nodeRunQuery);
       }
     }
+    ConsoleWorkflowDefinitionResponse definitionResponse =
+        toWorkflowDefinitionResponse(selectedDefinition);
+    List<ConsoleWorkflowNodeResponse> nodeResponses =
+        nodes.stream().map(this::toWorkflowNodeResponse).toList();
+    List<ConsoleWorkflowEdgeResponse> edgeResponses =
+        edges.stream().map(this::toWorkflowEdgeResponse).toList();
+    List<ConsoleWorkflowRunResponse> workflowRunResponses =
+        workflowRuns.stream().map(this::toWorkflowRunResponse).toList();
+    List<ConsoleWorkflowNodeRunResponse> nodeRunResponses =
+        nodeRuns.stream().map(this::toWorkflowNodeRunResponse).toList();
     return new ConsoleWorkflowTopologyResponse(
-        toWorkflowDefinitionResponse(selectedDefinition),
-        nodes.stream().map(this::toWorkflowNodeResponse).toList(),
-        edges.stream().map(this::toWorkflowEdgeResponse).toList(),
-        workflowRuns.stream().map(this::toWorkflowRunResponse).toList(),
-        nodeRuns.stream().map(this::toWorkflowNodeRunResponse).toList());
+        definitionResponse, nodeResponses, edgeResponses, workflowRunResponses, nodeRunResponses);
   }
 
   private ConsoleWorkflowDefinitionResponse toWorkflowDefinitionResponse(
       WorkflowDefinitionEntity entity) {
-    return new ConsoleWorkflowDefinitionResponse(
-        entity.getId(),
-        display(entity.getTenantId()),
-        display(entity.getWorkflowCode()),
-        display(entity.getWorkflowName()),
-        display(entity.getWorkflowType()),
-        entity.getVersion(),
-        entity.getEnabled(),
-        display(entity.getDescription()),
-        entity.getCreatedAt(),
-        entity.getUpdatedAt());
+    ConsoleWorkflowDefinitionResponse response = ConsoleWorkflowDefinitionResponse.builder()
+        .id(entity.getId())
+        .tenantId(display(entity.getTenantId()))
+        .workflowCode(display(entity.getWorkflowCode()))
+        .workflowName(display(entity.getWorkflowName()))
+        .workflowType(display(entity.getWorkflowType()))
+        .scheduleType(display(entity.getScheduleType()))
+        .scheduleExpr(display(entity.getScheduleExpr()))
+        .timezone(display(entity.getTimezone()))
+        .triggerMode(display(entity.getTriggerMode()))
+        .calendarCode(display(entity.getCalendarCode()))
+        .dependsOnJobCode(display(entity.getDependsOnJobCode()))
+        .version(entity.getVersion())
+        .enabled(entity.getEnabled())
+        .scheduleEnabled(entity.getScheduleEnabled())
+        .description(display(entity.getDescription()))
+        .createdAt(entity.getCreatedAt())
+        .updatedAt(entity.getUpdatedAt())
+        .singleJobDefinitionId(entity.getSingleJobDefinitionId())
+        .build();
+    return response;
   }
 
   private ConsoleWorkflowNodeResponse toWorkflowNodeResponse(WorkflowNodeEntity entity) {
-    return new ConsoleWorkflowNodeResponse(
-        entity.getId(),
-        entity.getWorkflowDefinitionId(),
-        display(entity.getNodeCode()),
-        display(entity.getNodeName()),
-        display(entity.getNodeType()),
-        display(entity.getRelatedJobCode()),
-        display(entity.getRelatedPipelineCode()),
-        display(entity.getWorkerGroup()),
-        display(entity.getWindowCode()),
-        entity.getNodeOrder(),
-        display(entity.getRetryPolicy()),
-        entity.getRetryMaxCount(),
-        entity.getTimeoutSeconds(),
-        SecretMasking.maskSensitiveJson(entity.getNodeParams()),
-        entity.getEnabled(),
-        entity.getCreatedAt(),
-        entity.getUpdatedAt(),
-        display(entity.getCrossDayDependencies()),
-        entity.getCrossDayDependencyTimeoutSeconds());
+    Long id = entity.getId();
+    Long workflowDefinitionId = entity.getWorkflowDefinitionId();
+    String nodeCode = display(entity.getNodeCode());
+    String nodeName = display(entity.getNodeName());
+    String nodeType = display(entity.getNodeType());
+    String relatedJobCode = display(entity.getRelatedJobCode());
+    String workerGroup = display(entity.getWorkerGroup());
+    String windowCode = display(entity.getWindowCode());
+    Integer nodeOrder = entity.getNodeOrder();
+    String retryPolicy = display(entity.getRetryPolicy());
+    Integer retryMaxCount = entity.getRetryMaxCount();
+    Integer timeoutSeconds = entity.getTimeoutSeconds();
+    String maskedNodeParams = SecretMasking.maskSensitiveJson(entity.getNodeParams());
+    Boolean enabled = entity.getEnabled();
+    Instant createdAt = entity.getCreatedAt();
+    Instant updatedAt = entity.getUpdatedAt();
+    String crossDayDependencies = display(entity.getCrossDayDependencies());
+    Integer crossDayDependencyTimeoutSeconds = entity.getCrossDayDependencyTimeoutSeconds();
+    return ConsoleWorkflowNodeResponse.builder()
+        .id(id)
+        .workflowDefinitionId(workflowDefinitionId)
+        .nodeCode(nodeCode)
+        .nodeName(nodeName)
+        .nodeType(nodeType)
+        .relatedJobCode(relatedJobCode)
+        .workerGroup(workerGroup)
+        .windowCode(windowCode)
+        .nodeOrder(nodeOrder)
+        .retryPolicy(retryPolicy)
+        .retryMaxCount(retryMaxCount)
+        .timeoutSeconds(timeoutSeconds)
+        .nodeParams(maskedNodeParams)
+        .enabled(enabled)
+        .createdAt(createdAt)
+        .updatedAt(updatedAt)
+        .crossDayDependencies(crossDayDependencies)
+        .crossDayDependencyTimeoutSeconds(crossDayDependencyTimeoutSeconds)
+        .build();
   }
 
   private ConsoleWorkflowEdgeResponse toWorkflowEdgeResponse(WorkflowEdgeEntity entity) {
+    Long id = entity.getId();
+    Long workflowDefinitionId = entity.getWorkflowDefinitionId();
+    String fromNodeCode = display(entity.getFromNodeCode());
+    String toNodeCode = display(entity.getToNodeCode());
+    String edgeType = display(entity.getEdgeType());
+    String conditionExpr = display(entity.getConditionExpr());
+    Boolean enabled = entity.getEnabled();
+    Instant createdAt = entity.getCreatedAt();
+    Instant updatedAt = entity.getUpdatedAt();
     return new ConsoleWorkflowEdgeResponse(
-        entity.getId(),
-        entity.getWorkflowDefinitionId(),
-        display(entity.getFromNodeCode()),
-        display(entity.getToNodeCode()),
-        display(entity.getEdgeType()),
-        display(entity.getConditionExpr()),
-        entity.getEnabled(),
-        entity.getCreatedAt(),
-        entity.getUpdatedAt());
+        id,
+        workflowDefinitionId,
+        fromNodeCode,
+        toNodeCode,
+        edgeType,
+        conditionExpr,
+        enabled,
+        createdAt,
+        updatedAt);
   }
 
   private ConsoleWorkflowRunResponse toWorkflowRunResponse(WorkflowRunEntity entity) {
+    Long id = entity.getId();
+    String tenantId = display(entity.getTenantId());
+    Long workflowDefinitionId = entity.getWorkflowDefinitionId();
+    Long relatedJobInstanceId = entity.getRelatedJobInstanceId();
+    LocalDate bizDate = entity.getBizDate();
+    String runStatus = display(entity.getRunStatus());
+    String currentNodeCode = display(entity.getCurrentNodeCode());
+    String traceId = display(entity.getTraceId());
+    Instant startedAt = entity.getStartedAt();
+    Instant finishedAt = entity.getFinishedAt();
+    Instant createdAt = entity.getCreatedAt();
+    Instant updatedAt = entity.getUpdatedAt();
     return new ConsoleWorkflowRunResponse(
-        entity.getId(),
-        display(entity.getTenantId()),
-        entity.getWorkflowDefinitionId(),
-        entity.getRelatedJobInstanceId(),
-        entity.getBizDate(),
-        display(entity.getRunStatus()),
-        display(entity.getCurrentNodeCode()),
-        display(entity.getTraceId()),
-        entity.getStartedAt(),
-        entity.getFinishedAt(),
-        entity.getCreatedAt(),
-        entity.getUpdatedAt());
+        id,
+        tenantId,
+        workflowDefinitionId,
+        relatedJobInstanceId,
+        bizDate,
+        runStatus,
+        currentNodeCode,
+        traceId,
+        startedAt,
+        finishedAt,
+        createdAt,
+        updatedAt);
   }
 
   private ConsoleWorkflowNodeRunResponse toWorkflowNodeRunResponse(WorkflowNodeRunEntity entity) {
     // i18n 持久化:有 errorKey 时按当前 Locale 重渲染,否则透传 errorMessage(老 literal / 第三方异常)。
     String errorMessage = localizedErrorRenderer.render(entity);
-    return new ConsoleWorkflowNodeRunResponse(
+    ConsoleWorkflowNodeRunResponse response = new ConsoleWorkflowNodeRunResponse(
         entity.getId(),
         entity.getWorkflowRunId(),
+        entity.getJobInstanceId(),
         display(entity.getNodeCode()),
         display(entity.getNodeType()),
         entity.getRunSeq(),
@@ -288,8 +364,11 @@ public class ConsoleWorkflowQueryService {
         entity.getRetryCount(),
         display(entity.getErrorCode()),
         display(errorMessage),
+        display(entity.getSkipReasonCode()),
+        display(entity.getSkipReason()),
         entity.getStartedAt(),
         entity.getFinishedAt(),
         entity.getDurationMs());
+    return response;
   }
 }

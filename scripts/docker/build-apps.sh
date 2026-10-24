@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
+# 用途：统一构建本地应用镜像（默认启用 BuildKit）。
+# 用法：在仓库根目录执行 bash scripts/docker/build-apps.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
-# build-apps.sh - 一键构建本地应用镜像（默认启用 BuildKit）
+# build-apps.sh - 统一构建本地应用镜像（默认启用 BuildKit）
 # 说明：
 # 1) 默认使用 .env.local。
 # 2) 默认构建 docker-compose.yml + deploy/docker/compose/app.yml 的 apps + replica profile

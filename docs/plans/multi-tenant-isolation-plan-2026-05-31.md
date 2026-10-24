@@ -423,7 +423,7 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 - ADR-029 dedicated SPI worker(本 plan 不变其定位)
 - ADR-034 CAP 定位(本 plan 三件套不影响 CAP,主链不变)
 - docs/agent-baseline.md §架构硬约束(本 plan 全部 phase 都保留「orchestrator 唯一状态主机」「worker 必须 CLAIM」)
-- `docs/architecture/scalability-assessment.md`(扩容能 / 不能解决的边界)
+- `docs/archive/audit/scalability-assessment-2026-07-28.md`(扩容能 / 不能解决的边界)
 - `BizTableSchemaRegistrar.java` javadoc(已留 Phase C 扩展点注释)
 
 ## 11. 检查点

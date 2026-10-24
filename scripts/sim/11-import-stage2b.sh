@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：import-stage2b.sh:Import LOAD/幂等/分片保护业务分支验证。
+# 用法：在仓库根目录执行 bash scripts/sim/11-import-stage2b.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # 11-import-stage2b.sh:Import LOAD/幂等/分片保护业务分支验证
 #
@@ -24,10 +26,10 @@ SQL_DIR="$ROOT/scripts/sim/sql"
 
 echo "==> apply bootstrap + stage2b fixtures"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
-  -v ON_ERROR_STOP=1 -v mockserver_host_port="${MOCKSERVER_HOST_PORT:-11080}" \
-  -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
+  -v ON_ERROR_STOP=1 -v mockserver_host_port="${MOCKSERVER_HOST_PORT}" \
+  -f /dev/stdin < test-data/sim/sim-e2e-bootstrap.sql >/dev/null
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
-  -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-stage2b-import-fixtures.sql >/dev/null
+  -v ON_ERROR_STOP=1 -f /dev/stdin < test-data/sim/sim-stage2b-import-fixtures.sql >/dev/null
 
 START_TS="$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -tA -v ON_ERROR_STOP=1 -f /dev/stdin < "$SQL_DIR/select-current-timestamp.sql")"
@@ -35,6 +37,7 @@ export START_TS
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/import-stage2b.log"
 import json, os, subprocess, sys, time, urllib.request
+from scripts.sim.launch_contract import workflow_id_for_fixture
 
 BASE = os.environ["TRIGGER_BASE"]
 SECRET = os.environ["INTERNAL_SECRET"]
@@ -66,7 +69,7 @@ def launch(label, job, params):
     request_ids.append(rid)
     body = {
         "tenantId": "ta",
-        "jobCode": job,
+        "workflowDefinitionId": workflow_id_for_fixture("ta", job),
         "triggerType": "API",
         "bizDate": BIZ,
         "requestId": rid,

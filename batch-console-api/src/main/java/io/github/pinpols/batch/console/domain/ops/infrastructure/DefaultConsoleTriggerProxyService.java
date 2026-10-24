@@ -24,7 +24,10 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
   private static final String TENANT_ID = "tenantId";
   // 固定内部路由属于 API 契约，部署地址由 TriggerInternalRestClient 的配置提供。
   @SuppressWarnings("java:S1075")
-  private static final String ACTION_PATH = "/api/triggers/management/{action}";
+  private static final String MANAGEMENT_PATH = "/api/triggers/management";
+
+  private static final String ACTION_PATH = MANAGEMENT_PATH + "/{action}";
+  private static final String WORKFLOW_ACTION_PATH = MANAGEMENT_PATH + "/workflow/{action}";
 
   private static final ParameterizedTypeReference<CommonResponse<ConsoleSchedulerCommandResponse>>
       SCHEDULER_RESPONSE = new ParameterizedTypeReference<>() {};
@@ -86,8 +89,9 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
                   tenantScope)
               .retrieve()
               .body(LIST_RESPONSE);
-          return filterByTenant(
-              EmptyChecks.isNotNull(response) ? response.data() : List.of(), tenantScope);
+          List<ConsoleTriggerStatusResponse> responseItems =
+              EmptyChecks.isNotNull(response) ? response.data() : List.of();
+          return filterByTenant(responseItems, tenantScope);
         },
         ex -> List.of());
   }
@@ -108,16 +112,16 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
 
   @Override
   public ConsoleTriggerActionResponse triggerAction(
-      String tenantId, String jobCode, String action) {
+      String tenantId, String workflowCode, String action) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return downstreamFallback.callOrThrow(SVC, "action", () -> {
       CommonResponse<ConsoleTriggerActionResponse> response = triggerInternalRestClient
           .client()
           .post()
           .uri(uriBuilder -> uriBuilder
-              .path(ACTION_PATH)
+              .path(WORKFLOW_ACTION_PATH)
               .queryParam(TENANT_ID, resolved)
-              .queryParam("jobCode", jobCode)
+              .queryParam("workflowCode", workflowCode)
               .build(action))
           .retrieve()
           .body(ACTION_RESPONSE);

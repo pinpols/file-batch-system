@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：Helm 环境变量同步。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-helm-env-sync.py；参数与前置环境见下方说明及所属 README。
 """
 校验 Helm 模板里注入的 BATCH_* 环境变量不会漂移成应用不消费的名字。
 

@@ -14,6 +14,8 @@ import io.github.pinpols.batch.console.application.contract.query.ConfigReleaseQ
 import io.github.pinpols.batch.console.application.contract.response.config.ConsoleConfigReleaseResponse;
 import io.github.pinpols.batch.console.application.observability.ConsoleQueryApplicationService;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.time.Clock;
 import java.util.List;
 import org.apache.poi.ss.usermodel.Row;
@@ -35,36 +37,34 @@ class DefaultConsoleReportExcelApplicationServiceTest {
         new DefaultConsoleReportExcelApplicationService(
             configService, queryService, orchestratorPort, dateTimeSupport());
     when(configService.configReleases(any()))
-        .thenReturn(List.of(new ConsoleConfigReleaseResponse(
-            1L,
-            "t1",
-            "FILE",
-            "cfg1",
-            "Config 1",
-            "DRAFT",
-            1,
-            "DYNAMIC_DB",
-            "IMMEDIATE_AFTER_CONFIRMATION",
-            false,
-            "NOT_RELEASED",
-            "{}",
-            "{}",
-            BatchDateTimeSupport.utcNow(),
-            BatchDateTimeSupport.utcNow(),
-            null,
-            null,
-            "u1",
-            "u1",
-            BatchDateTimeSupport.utcNow(),
-            BatchDateTimeSupport.utcNow())));
+        .thenReturn(List.of(ConsoleConfigReleaseResponse.builder()
+            .id(1L)
+            .tenantId("t1")
+            .configType("FILE")
+            .configKey("cfg1")
+            .configName("Config 1")
+            .configStatus("DRAFT")
+            .versionNo(1)
+            .configSource("DYNAMIC_DB")
+            .activationMode("IMMEDIATE_AFTER_CONFIRMATION")
+            .restartRequired(false)
+            .applyConfirmationStatus("NOT_RELEASED")
+            .grayScopeJson("{}")
+            .configPayloadJson("{}")
+            .effectiveFromAt(BatchDateTimeSupport.utcNow())
+            .effectiveToAt(BatchDateTimeSupport.utcNow())
+            .createdBy("u1")
+            .updatedBy("u1")
+            .createdAt(BatchDateTimeSupport.utcNow())
+            .updatedAt(BatchDateTimeSupport.utcNow())
+            .build()));
 
     // R2-P1-9: 返回类型已切到 StreamingResponseBody；通过 lambda 写出到 ByteArrayOutputStream 再校验
     var response = service.exportConfigReleases(new ConfigReleaseQueryRequest());
     assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
-    java.io.ByteArrayOutputStream sink = new java.io.ByteArrayOutputStream();
+    ByteArrayOutputStream sink = new ByteArrayOutputStream();
     response.getBody().writeTo(sink);
-    try (Workbook workbook =
-        WorkbookFactory.create(new java.io.ByteArrayInputStream(sink.toByteArray()))) {
+    try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(sink.toByteArray()))) {
       assertThat(workbook.getNumberOfSheets()).isEqualTo(2);
       assertThat(workbook.getSheetAt(0).getSheetName()).isEqualTo("config_releases");
       Row header = workbook.getSheetAt(0).getRow(0);

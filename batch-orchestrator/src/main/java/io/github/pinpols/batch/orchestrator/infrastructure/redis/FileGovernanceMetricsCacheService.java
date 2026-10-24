@@ -97,8 +97,13 @@ public class FileGovernanceMetricsCacheService {
 
   private Map<String, Object> toResponse(Map<Object, Object> cached) {
     Map<String, Object> response = new LinkedHashMap<>();
-    cached.forEach((key, value) ->
-        response.put(String.valueOf(key), readJson(String.valueOf(key), String.valueOf(value))));
+    cached.forEach((key, value) -> {
+      String responseKey = String.valueOf(key);
+      String jsonKey = String.valueOf(key);
+      String cachedJson = String.valueOf(value);
+      Object parsedValue = readJson(jsonKey, cachedJson);
+      response.put(responseKey, parsedValue);
+    });
     return response;
   }
 

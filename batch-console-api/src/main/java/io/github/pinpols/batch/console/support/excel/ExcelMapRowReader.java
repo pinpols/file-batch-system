@@ -23,8 +23,7 @@ import java.util.Set;
  *   <li>{@link SheetValidationHelpers}：调用方已持有 normalize 过的标量值，仅追加 issue，不返回值。
  * </ul>
  *
- * <p>用于消除 {@code DefaultConsoleBusinessCalendarExcelApplicationService} 与 {@code
- * DefaultConsolePipelineDefinitionExcelApplicationService} 此前各自一份的 5/6 重叠 helper 家族。
+ * <p>统一Console各工作表的行值读取与校验，避免复制同类解析规则。
  */
 public final class ExcelMapRowReader {
 

@@ -1,4 +1,5 @@
 -- 正式工作流与 dry-run 演练允许在同一业务日并存；每种模式仍仅允许一个活跃 run。
+
 DROP INDEX IF EXISTS batch.uk_workflow_run_active;
 
 CREATE UNIQUE INDEX uk_workflow_run_active

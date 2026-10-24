@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper">
-    <select id="selectSlaViolationCandidates"
-            resultMap="io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper.JobInstanceResultMap">
-        <!-- 按租户轮转排序，避免一个租户占满批次后让其他租户的 SLA 告警长期饥饿。 -->
-        SELECT *
-        FROM batch.job_instance
-        WHERE instance_status IN ('WAITING', 'READY', 'RUNNING')
+    <!-- SLA 是专属业务策略,不等同于所有活跃生命周期状态。写入时重复准入,防扫描后的终态/策略竞争。 -->
+    <sql id="slaViolationEligibility">
+        instance_status IN ('WAITING', 'READY', 'RUNNING')
+          AND dry_run = false
           AND sla_alerted_at IS NULL
           AND (
                 (deadline_at IS NOT NULL AND deadline_at &lt; current_timestamp)
@@ -23,6 +21,34 @@
                     )
                 )
               )
+    </sql>
+    <sql id="slaEscalationEligibility">
+        instance_status IN ('WAITING', 'READY', 'RUNNING')
+        AND dry_run = false
+        AND sla_alerted_at IS NOT NULL
+        AND sla_alerted_at &lt; #{escalationBefore}
+    </sql>
+    <sql id="slaWorkflowContextColumns">
+        workflow_context.parent_workflow_run_id,
+        workflow_context.parent_node_code
+    </sql>
+    <sql id="slaWorkflowContextJoin">
+        LEFT JOIN LATERAL (
+            SELECT tr.parent_workflow_run_id, tr.parent_node_code
+            FROM batch.trigger_request tr
+            WHERE tr.tenant_id = job_instance.tenant_id
+              AND tr.id = job_instance.trigger_request_id
+        ) workflow_context ON true
+    </sql>
+
+    <select id="selectSlaViolationCandidates"
+            resultMap="io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper.JobInstanceResultMap">
+        <!-- 按租户轮转排序，避免一个租户占满批次后让其他租户的 SLA 告警长期饥饿。 -->
+        SELECT job_instance.*,
+               <include refid="slaWorkflowContextColumns"/>
+        FROM batch.job_instance
+        <include refid="slaWorkflowContextJoin"/>
+        WHERE <include refid="slaViolationEligibility"/>
         ORDER BY tenant_id ASC,
                  coalesce(
                     deadline_at,
@@ -36,23 +62,8 @@
     <select id="countSlaViolationCandidates" resultType="long">
         SELECT count(1)
         FROM batch.job_instance
-        WHERE instance_status IN ('WAITING', 'READY', 'RUNNING')
-          AND sla_alerted_at IS NULL
-          AND (
-                (deadline_at IS NOT NULL AND deadline_at &lt; current_timestamp)
-                OR (
-                    expected_duration_seconds &gt; 0
-                    AND started_at IS NOT NULL
-                    AND started_at &lt; current_timestamp - (expected_duration_seconds * interval '1 second')
-                    AND NOT EXISTS (
-                        SELECT 1
-                        FROM batch.job_monitoring_policy mp
-                        WHERE mp.tenant_id = job_instance.tenant_id
-                          AND mp.job_definition_id = job_instance.job_definition_id
-                          AND mp.soft_runtime_seconds &gt; 0
-                    )
-                )
-              )
+        WHERE <include refid="slaViolationEligibility"/>
+
     </select>
 
     <update id="markSlaAlerted">
@@ -60,16 +71,16 @@
         SET sla_alerted_at = #{slaAlertedAt}, updated_at = current_timestamp
         WHERE tenant_id = #{tenantId}
           AND id = #{id}
-          AND sla_alerted_at IS NULL
+          AND <include refid="slaViolationEligibility"/>
     </update>
 
     <select id="selectSlaEscalationCandidates"
             resultMap="io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper.JobInstanceResultMap">
-        SELECT *
+        SELECT job_instance.*,
+               <include refid="slaWorkflowContextColumns"/>
         FROM batch.job_instance
-        WHERE instance_status IN ('WAITING', 'READY', 'RUNNING')
-          AND sla_alerted_at IS NOT NULL
-          AND sla_alerted_at &lt; #{escalationBefore}
+        <include refid="slaWorkflowContextJoin"/>
+        WHERE <include refid="slaEscalationEligibility"/>
         ORDER BY tenant_id ASC, sla_alerted_at ASC, id ASC
         LIMIT #{limit}
     </select>
@@ -77,14 +88,24 @@
     <select id="countSlaEscalationCandidates" resultType="long">
         SELECT count(1)
         FROM batch.job_instance
-        WHERE instance_status IN ('WAITING', 'READY', 'RUNNING')
-          AND sla_alerted_at IS NOT NULL
-          AND sla_alerted_at &lt; #{escalationBefore}
+        WHERE <include refid="slaEscalationEligibility"/>
+
+    </select>
+    <select id="selectSlaEscalationCandidateForUpdate"
+            resultMap="io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper.JobInstanceResultMap">
+        SELECT job_instance.*,
+               <include refid="slaWorkflowContextColumns"/>
+        FROM batch.job_instance
+        <include refid="slaWorkflowContextJoin"/>
+        WHERE tenant_id=#{tenantId} AND id=#{id}
+          AND <include refid="slaEscalationEligibility"/>
+        FOR UPDATE OF job_instance
     </select>
     <resultMap id="candidateMap" type="io.github.pinpols.batch.orchestrator.domain.view.JobMonitoringAlertCandidate">
         <constructor>
             <arg column="tenant_id" javaType="java.lang.String"/>
             <arg column="job_instance_id" javaType="java.lang.Long"/>
+            <arg column="biz_date" javaType="java.time.LocalDate"/>
             <arg column="job_code" javaType="java.lang.String"/>
             <arg column="instance_no" javaType="java.lang.String"/>
             <arg column="instance_status" javaType="java.lang.String"/>
@@ -97,6 +118,8 @@
             <arg column="threshold_seconds" javaType="java.lang.Integer"/>
             <arg column="failed_partition_count" javaType="java.lang.Integer"/>
             <arg column="severity" javaType="java.lang.String"/>
+            <arg column="workflow_run_id" javaType="java.lang.Long"/>
+            <arg column="node_code" javaType="java.lang.String"/>
         </constructor>
     </resultMap>
 
@@ -121,6 +144,7 @@
     <sql id="candidateColumns">
         ji.tenant_id,
         ji.id AS job_instance_id,
+        ji.biz_date,
         ji.job_code,
         ji.instance_no,
         ji.instance_status,
@@ -129,7 +153,14 @@
         ji.created_at,
         ji.started_at,
         ji.finished_at,
-        ji.failed_partition_count
+        ji.failed_partition_count,
+        tr.parent_workflow_run_id AS workflow_run_id,
+        tr.parent_node_code AS node_code
+    </sql>
+
+    <sql id="triggerWorkflowContextJoin">
+        LEFT JOIN batch.trigger_request tr
+          ON tr.tenant_id = ji.tenant_id AND tr.id = ji.trigger_request_id
     </sql>
 
     <select id="selectRunningTooLong" resultMap="candidateMap" timeout="5">
@@ -138,6 +169,7 @@
                mp.soft_runtime_seconds AS threshold_seconds,
                mp.soft_runtime_severity AS severity
         FROM batch.job_instance ji
+        <include refid="triggerWorkflowContextJoin"/>
         JOIN batch.job_monitoring_policy mp
           ON mp.tenant_id = ji.tenant_id AND mp.job_definition_id = ji.job_definition_id
         WHERE ji.instance_status = 'RUNNING'
@@ -161,6 +193,7 @@
                mp.start_grace_seconds AS threshold_seconds,
                mp.start_grace_severity AS severity
         FROM batch.job_instance ji
+        <include refid="triggerWorkflowContextJoin"/>
         JOIN batch.job_monitoring_policy mp
           ON mp.tenant_id = ji.tenant_id AND mp.job_definition_id = ji.job_definition_id
         JOIN batch.job_definition jd
@@ -201,6 +234,7 @@
                END AS threshold_seconds,
                mp.completion_deadline_severity AS severity
         FROM batch.job_instance ji
+        <include refid="triggerWorkflowContextJoin"/>
         JOIN batch.job_monitoring_policy mp
           ON mp.tenant_id = ji.tenant_id AND mp.job_definition_id = ji.job_definition_id
         JOIN batch.job_definition jd
@@ -256,6 +290,7 @@
                0::integer AS threshold_seconds,
                'WARN'::varchar AS severity
         FROM batch.job_instance ji
+        <include refid="triggerWorkflowContextJoin"/>
         WHERE ji.instance_status IN ('FAILED', 'PARTIAL_FAILED')
           AND ji.failed_partition_count &gt; 0
           AND ji.finished_at &gt;= current_timestamp - (#{lookbackSeconds} * interval '1 second')

@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -18,13 +19,12 @@ import io.github.pinpols.batch.orchestrator.domain.query.JobTaskQuery;
 import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.WorkerRegistryCache;
 import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
-import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.LaunchSeed;
+import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowLaunchSeed;
 import io.github.pinpols.batch.orchestrator.integration.support.WorkerRegistryCacheTestSupport;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
 import java.time.Month;
@@ -57,7 +57,7 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JANUARY, 15);
 
   @Autowired
-  private LaunchService launchService;
+  private WorkflowRunLaunchService workflowRunLaunchService;
 
   @Autowired
   private TaskExecutionService taskExecutionService;
@@ -89,7 +89,7 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("两个执行器同时认领同一任务时数据库只落一个胜出者,分区状态与归属同步收敛")
   void assignWorker_onlyOneWorkerWins_whenTwoWorkersRaceConcurrently() throws Exception {
-    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "DEFAULT", TriggerType.MANUAL);
     String winnerWorker = seed.workerCode();
     String loserWorker = "worker-race-b";
@@ -97,18 +97,17 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
 
     LaunchRequest launchRequest = LaunchRequest.builder()
         .tenantId(TENANT)
-        .jobCode(seed.jobCode())
+        .workflowDefinitionId(seed.workflowDefinitionId())
         .bizDate(BIZ_DATE)
         .triggerType(TriggerType.MANUAL)
         .requestId(seed.requestId())
         .traceId("trace-concurrent-claim")
         .params(Map.of())
         .build();
-    LaunchResponse response = launchService.launch(launchRequest);
+    LaunchResponse response = workflowRunLaunchService.launch(launchRequest);
     assertThat(response.instanceNo()).isNotBlank();
 
-    JobInstanceEntity jobInstance =
-        jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
+    JobInstanceEntity jobInstance = jobInstanceForWorkflowRun(response);
     assertThat(jobInstance).isNotNull();
 
     List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(
@@ -157,16 +156,16 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("任务登记在执行器池上时,认领后用具体实例替换并同步分区归属")
   void assignWorker_poolRouteIsReplacedByConcreteInstanceOnClaim() {
-    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "DEFAULT", TriggerType.MANUAL);
     String workerInstanceId = "import-memory-pod-a";
     String workerPoolCode = "import-memory";
     workerRegistryMapper.saveLikeSdj(
         onlineWorker(TENANT, workerInstanceId, "DEFAULT", workerPoolCode));
 
-    LaunchResponse response = launchService.launch(LaunchRequest.builder()
+    LaunchResponse response = workflowRunLaunchService.launch(LaunchRequest.builder()
         .tenantId(TENANT)
-        .jobCode(seed.jobCode())
+        .workflowDefinitionId(seed.workflowDefinitionId())
         .bizDate(BIZ_DATE)
         .triggerType(TriggerType.MANUAL)
         .requestId(seed.requestId())
@@ -175,16 +174,17 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
         .build());
     assertThat(response.instanceNo()).isNotBlank();
 
-    JobInstanceEntity jobInstance =
-        jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
-    JobTaskEntity task = jobTaskMapper
-        .selectByQuery(new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null))
-        .getFirst();
-    JobPartitionEntity partition = jobPartitionMapper
-        .selectByQuery(new JobPartitionQuery(TENANT, jobInstance.getId(), null, null))
-        .getFirst();
+    JobInstanceEntity jobInstance = jobInstanceForWorkflowRun(response);
+    JobTaskQuery taskQuery = new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null);
+    JobTaskEntity task = jobTaskMapper.selectByQuery(taskQuery).getFirst();
+    JobPartitionQuery partitionQuery =
+        new JobPartitionQuery(TENANT, jobInstance.getId(), null, null);
+    JobPartitionEntity partition = jobPartitionMapper.selectByQuery(partitionQuery).getFirst();
+    String updateAssignedWorkerCodeSql = """
+        update batch.job_task set assigned_worker_code = ? where tenant_id = ? and id = ?
+        """;
     jdbcTemplate.update(
-        "update batch.job_task set assigned_worker_code = ? where tenant_id = ? and id = ?",
+        updateAssignedWorkerCodeSql,
         workerPoolCode,
         TENANT,
         task.getId());
@@ -201,7 +201,7 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("同一执行器池内两个实例并发认领时仍只有一个胜出者")
   void assignWorker_onlyOneConcreteInstanceWinsWithinSamePool() throws Exception {
-    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "DEFAULT", TriggerType.MANUAL);
     String suffix = String.valueOf(System.nanoTime());
     String workerPoolCode = "import-memory-" + suffix;
@@ -212,9 +212,9 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
     workerRegistryMapper.saveLikeSdj(
         onlineWorker(TENANT, secondInstance, "DEFAULT", workerPoolCode));
 
-    LaunchResponse response = launchService.launch(LaunchRequest.builder()
+    LaunchResponse response = workflowRunLaunchService.launch(LaunchRequest.builder()
         .tenantId(TENANT)
-        .jobCode(seed.jobCode())
+        .workflowDefinitionId(seed.workflowDefinitionId())
         .bizDate(BIZ_DATE)
         .triggerType(TriggerType.MANUAL)
         .requestId(seed.requestId())
@@ -223,16 +223,17 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
         .build());
     assertThat(response.instanceNo()).isNotBlank();
 
-    JobInstanceEntity jobInstance =
-        jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
-    JobTaskEntity task = jobTaskMapper
-        .selectByQuery(new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null))
-        .getFirst();
-    JobPartitionEntity partition = jobPartitionMapper
-        .selectByQuery(new JobPartitionQuery(TENANT, jobInstance.getId(), null, null))
-        .getFirst();
+    JobInstanceEntity jobInstance = jobInstanceForWorkflowRun(response);
+    JobTaskQuery taskQuery = new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null);
+    JobTaskEntity task = jobTaskMapper.selectByQuery(taskQuery).getFirst();
+    JobPartitionQuery partitionQuery =
+        new JobPartitionQuery(TENANT, jobInstance.getId(), null, null);
+    JobPartitionEntity partition = jobPartitionMapper.selectByQuery(partitionQuery).getFirst();
+    String updateAssignedWorkerCodeSql = """
+        update batch.job_task set assigned_worker_code = ? where tenant_id = ? and id = ?
+        """;
     jdbcTemplate.update(
-        "update batch.job_task set assigned_worker_code = ? where tenant_id = ? and id = ?",
+        updateAssignedWorkerCodeSql,
         workerPoolCode,
         TENANT,
         task.getId());
@@ -266,7 +267,7 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
 
   private void assertOneClaimWinnerForFreshLaunch() throws Exception {
     WorkerRegistryCacheTestSupport.evictTenantWorkerSelectors(workerRegistryCache, TENANT);
-    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "DEFAULT", TriggerType.MANUAL);
     String winnerWorker = seed.workerCode();
     String loserWorker = "worker-race-b-" + System.nanoTime();
@@ -275,18 +276,17 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
 
     LaunchRequest launchRequest = LaunchRequest.builder()
         .tenantId(TENANT)
-        .jobCode(seed.jobCode())
+        .workflowDefinitionId(seed.workflowDefinitionId())
         .bizDate(BIZ_DATE)
         .triggerType(TriggerType.MANUAL)
         .requestId(seed.requestId())
         .traceId("trace-concurrent-claim-loop-" + seed.requestId())
         .params(Map.of())
         .build();
-    LaunchResponse response = launchService.launch(launchRequest);
+    LaunchResponse response = workflowRunLaunchService.launch(launchRequest);
     assertThat(response.instanceNo()).isNotBlank();
 
-    JobInstanceEntity jobInstance =
-        jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
+    JobInstanceEntity jobInstance = jobInstanceForWorkflowRun(response);
     List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(
         new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
     assertThat(tasks).hasSize(1);
@@ -344,6 +344,12 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
     JobPartitionEntity finalPartition = jobPartitionMapper.selectById(tenantId, partitionId);
     assertThat(finalPartition.getPartitionStatus()).isEqualTo("RUNNING");
     assertThat(finalPartition.getWorkerCode()).isEqualTo(assignee);
+  }
+
+  private JobInstanceEntity jobInstanceForWorkflowRun(LaunchResponse response) {
+    Long jobInstanceId = LaunchIntegrationFixture.selectDispatchedJobInstanceId(
+        jdbcTemplate, TENANT, response.instanceNo());
+    return jobInstanceMapper.selectById(TENANT, jobInstanceId);
   }
 
   private static WorkerRegistryEntity onlineWorker(

@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -86,7 +87,7 @@ class HttpTaskExecutorDryRunTest {
         .containsEntry("method", "POST")
         .containsEntry("url", url);
     assertThat(result.output().get("headerKeys"))
-        .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.list(String.class))
+        .asInstanceOf(InstanceOfAssertFactories.list(String.class))
         .contains("X-Tenant", "Authorization");
     // 关键 1:真 server 一个请求都没收到
     assertThat(requestCount.get()).isZero();

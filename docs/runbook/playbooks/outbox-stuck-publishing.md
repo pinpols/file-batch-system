@@ -85,9 +85,9 @@
    ```
 3. 若 10 min 内归零 → 收尾。
 
-### 方案 B:手动触发 reset(5 min)
+### 方案 B:调度复核与受审计重投(5 min)
 
-适用:stale 回收持续未运行或阈值经配置核查确实过大；仅凭无日志不能认定是 ShedLock 锁残留。
+适用:stale 回收持续未运行，或 `FAILED`/`GIVE_UP` 事件经审批需要重新投递；仅凭无日志不能认定是 ShedLock 锁残留。
 
 1. **stale 行(卡 PUBLISHING)无独立手动接口**:回收只由调度自动调 `OutboxEventMapper.resetStalePublishing` 完成。先核实调度、provider 和实例健康，不要手工删除 ShedLock。**对已转 `FAILED`/`GIVE_UP` 的行**,走 orchestrator 治理接口重投(docs/agent-baseline.md 红线:console-api / 运维**不能**直接 `UPDATE batch.outbox_event`):
    ```bash
@@ -98,6 +98,8 @@
    # dryRun=true 只返回符合条件的候选数，不改变状态。确认 tenant、event IDs 和审批后，再将 dryRun 改为 false 执行。
    # republish 将指定 tenant 下 FAILED/GIVE_UP 重置为 NEW，由 OutboxForwarder 重发。
    ```
+
+   只读诊断可运行 `bash scripts/ops/heal-stuck-outbox.sh --dry-run`。该脚本只统计并按事件类型分组报告 stale `PUBLISHING`，不更新 Outbox，也不发送 `NOTIFY`；不支持 `BATCH_HEAL_DRY_RUN=false`。若自动回收未运行，保留状态与调度器证据并升级处理，不能把脚本当作手动 reset 接口。
 
 2. 不要手工删除 JDBC ShedLock 行或 Redis key。锁应在租约到期后自然回收；强删可能造成仍运行的实例与另一实例并发执行。Redis 故障按 [`redis-shedlock-down.md`](redis-shedlock-down.md) 处理。需要核对 Redis key 时，仅执行只读扫描：
    ```bash

@@ -77,8 +77,9 @@ public class ConsoleJobDefinitionController {
       aggregateType = "job_definition",
       targetTenantParam = "#request.tenantId")
   public CommonResponse<Integer> batchPatch(@Valid @RequestBody BatchEnabledPatchRequest request) {
-    return responseFactory.success(jobDefinitionApplicationService.batchToggle(
-        request.getTenantId(), request.getIds(), request.getEnabled()));
+    int updatedCount = jobDefinitionApplicationService.batchToggle(
+        request.getTenantId(), request.getIds(), request.getEnabled());
+    return responseFactory.success(updatedCount);
   }
 
   @PostMapping("/{id}/copy")

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Validate tracked env files that are sourced by local/CI shell scripts."""
+# 用途：环境文件 Shell 安全。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-env-file-shell-safety.py；参数与前置环境见下方说明及所属 README。
+"""校验本地与 CI Shell 脚本会 source 的入库环境文件。"""
 
 from __future__ import annotations
 

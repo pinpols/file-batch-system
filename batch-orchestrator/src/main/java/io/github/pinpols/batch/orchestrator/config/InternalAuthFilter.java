@@ -83,7 +83,9 @@ public class InternalAuthFilter extends OncePerRequestFilter {
     // Path 1: API Key (ADR-035 P2 租户自托管 worker)
     String apiKey = request.getHeader(HEADER_API_KEY);
     String tenantHeader = request.getHeader(HEADER_TENANT);
-    if (apiKey != null && !apiKey.isBlank() && apiKeyVerifier != null) {
+    boolean apiKeyAuthenticationIsAvailable =
+        apiKey != null && !apiKey.isBlank() && apiKeyVerifier != null;
+    if (apiKeyAuthenticationIsAvailable) {
       // 租户 API-Key 只允许自托管 worker 的 task/worker 生命周期端点;其它内部治理接口仍必须走
       // X-Internal-Secret,避免 per-tenant key 横向触达平台级内部能力。
       if (!isApiKeyAllowedUri(path)) {

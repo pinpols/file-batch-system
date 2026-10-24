@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.config.ApplicationNameProvider;
 import io.github.pinpols.batch.common.config.RuntimeInfrastructureInspector;
 import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
 import io.github.pinpols.batch.common.stateful.StatefulBackendIdentity;
+import java.nio.file.Path;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -67,9 +68,14 @@ public class WorkerReportOutboxBackendGuard implements ApplicationRunner, Ordere
     String backend = storage.name().toLowerCase();
     String identity =
         switch (storage) {
-          case PLATFORM_PG ->
-            StatefulBackendIdentity.database(infrastructureInspector.datasourceUrl());
-          case SQLITE -> StatefulBackendIdentity.sqlite(properties.resolveSqlitePath());
+          case PLATFORM_PG -> {
+            String datasourceUrl = infrastructureInspector.datasourceUrl();
+            yield StatefulBackendIdentity.database(datasourceUrl);
+          }
+          case SQLITE -> {
+            Path sqlitePath = properties.resolveSqlitePath();
+            yield StatefulBackendIdentity.sqlite(sqlitePath);
+          }
         };
     return new StatefulBackendGuard.DesiredBackend(
         featureKey,

@@ -25,6 +25,7 @@ ALTER TABLE batch.archive_policy
     ));
 
 -- 默认种子: 30 天保留(执行日志主要供"最近运行回查"价值,长期靠 archive 冷库)。
+
 INSERT INTO batch.archive_policy (
     tenant_id, target_table, retention_days,
     archive_enabled, cleanup_enabled, batch_size,

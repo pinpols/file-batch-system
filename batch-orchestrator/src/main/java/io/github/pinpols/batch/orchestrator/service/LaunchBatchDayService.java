@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
@@ -67,6 +68,7 @@ public class LaunchBatchDayService {
   void upsertBatchDayInstance(
       LaunchRequest request,
       JobDefinitionEntity jobDefinition,
+      String calendarCode,
       Map<String, Object> effectiveParams,
       Instant batchDaySlaDeadlineAt) {
     DataAccessException last = null;
@@ -74,7 +76,7 @@ public class LaunchBatchDayService {
       try {
         newBatchDayTransaction()
             .executeWithoutResult(ignored -> doUpsertBatchDayInstance(
-                request, jobDefinition, effectiveParams, batchDaySlaDeadlineAt));
+                request, jobDefinition, calendarCode, effectiveParams, batchDaySlaDeadlineAt));
         return;
       } catch (OptimisticLockingFailureException conflict) {
         SwallowedExceptionLogger.info(
@@ -109,12 +111,13 @@ public class LaunchBatchDayService {
   public void doUpsertBatchDayInstance(
       LaunchRequest request,
       JobDefinitionEntity jobDefinition,
+      String calendarCode,
       Map<String, Object> effectiveParams,
       Instant batchDaySlaDeadlineAt) {
     if (isMissingLaunchContext(request, jobDefinition)) {
       return;
     }
-    String calendarCode = LaunchParamResolver.textValue(jobDefinition.calendarCode());
+    calendarCode = LaunchParamResolver.textValue(calendarCode);
     if (!Texts.hasText(calendarCode)) {
       return;
     }
@@ -126,6 +129,20 @@ public class LaunchBatchDayService {
     } else {
       updateExistingBatchDay(request, ctx, existing, batchDaySlaDeadlineAt);
     }
+  }
+
+  /** 供定向服务测试和 Workflow 引入前调用方使用的兼容重载。 */
+  public void doUpsertBatchDayInstance(
+      LaunchRequest request,
+      JobDefinitionEntity jobDefinition,
+      Map<String, Object> effectiveParams,
+      Instant batchDaySlaDeadlineAt) {
+    doUpsertBatchDayInstance(
+        request,
+        jobDefinition,
+        EmptyChecks.isNull(jobDefinition) ? null : jobDefinition.calendarCode(),
+        effectiveParams,
+        batchDaySlaDeadlineAt);
   }
 
   private TransactionTemplate newBatchDayTransaction() {
@@ -266,7 +283,9 @@ public class LaunchBatchDayService {
       updated = updated.withCutoffAt(ctx.cutoffAt(), ctx.now());
       changed = true;
     }
-    if (shouldMoveToCutoff && !ctx.lateAccepted() && !ctx.catchUpLaunch()) {
+    boolean shouldCloseAtCutoff =
+        shouldMoveToCutoff && !ctx.lateAccepted() && !ctx.catchUpLaunch();
+    if (shouldCloseAtCutoff) {
       updated = updated.withDayStatus("CUTOFF", ctx.now());
       changed = true;
       reasonCode = "CUTOFF_REACHED";
@@ -344,11 +363,16 @@ public class LaunchBatchDayService {
   Instant resolveBatchDaySlaDeadlineAt(String tenantId, String calendarCode, LocalDate bizDate) {
     BusinessCalendarEntity calendar =
         configCacheService.findEnabledBusinessCalendar(tenantId, calendarCode);
-    if (!hasValidSlaOffset(calendar)) {
+    if (EmptyChecks.isNull(calendar)) {
+      return null;
+    }
+    Integer slaOffsetMinutes = calendar.slaOffsetMin();
+    if (EmptyChecks.isNull(slaOffsetMinutes) || slaOffsetMinutes <= 0) {
       return null;
     }
     Instant cutoffAt = timePolicyResolver.resolveCutoffAt(calendar, bizDate);
-    return cutoffAt.plusSeconds(calendar.slaOffsetMin() * 60L);
+    long slaOffsetSeconds = slaOffsetMinutes * 60L;
+    return cutoffAt.plusSeconds(slaOffsetSeconds);
   }
 
   /**
@@ -382,8 +406,10 @@ public class LaunchBatchDayService {
     if (cutoffAt == null) {
       return false;
     }
-    Instant cutoffCloseAt = cutoffAt.plusSeconds(
-        Math.max(0, resolveLateArrivalToleranceMin(batchDay.tenantId(), calendarCode)) * 60L);
+    int lateArrivalToleranceMin =
+        resolveLateArrivalToleranceMin(batchDay.tenantId(), calendarCode);
+    long lateArrivalToleranceSeconds = Math.max(0, lateArrivalToleranceMin) * 60L;
+    Instant cutoffCloseAt = cutoffAt.plusSeconds(lateArrivalToleranceSeconds);
     return !dateTimeSupport.nowInstant().isAfter(cutoffCloseAt);
   }
 
@@ -402,10 +428,6 @@ public class LaunchBatchDayService {
 
   private boolean isIncompleteBatchDay(BatchDayInstanceEntity batchDay) {
     return batchDay == null || batchDay.bizDate() == null || batchDay.tenantId() == null;
-  }
-
-  private boolean hasValidSlaOffset(BusinessCalendarEntity calendar) {
-    return calendar != null && calendar.slaOffsetMin() != null && calendar.slaOffsetMin() > 0;
   }
 
   private boolean hasValidLateArrivalTolerance(BusinessCalendarEntity calendar) {
@@ -437,10 +459,11 @@ public class LaunchBatchDayService {
    * 跳过窗口检查; 其余路径 (EVENT/SCHEDULED/API/MANUAL) 都按 batch_day 状态决定走 LATE_ACCEPTED 还是翻 CATCH_UP 路由补跑.
    */
   LaunchRequest routeLateArrivalIfNeeded(LaunchRequest request, LaunchLoadResult loaded) {
-    if (request == null
+    boolean lateArrivalContextIncomplete = EmptyChecks.isNull(request)
         || loaded == null
         || loaded.jobDefinition() == null
-        || request.bizDate() == null) {
+        || EmptyChecks.isNull(request.bizDate());
+    if (lateArrivalContextIncomplete) {
       return request;
     }
     // RERUN / CATCH_UP 是显式的"操作员/系统知情重跑", 不走 late_arrival 窗口检查
@@ -448,7 +471,7 @@ public class LaunchBatchDayService {
     if (triggerType == TriggerType.RERUN || triggerType == TriggerType.CATCH_UP) {
       return request;
     }
-    String calendarCode = LaunchParamResolver.textValue(loaded.jobDefinition().calendarCode());
+    String calendarCode = LaunchParamResolver.textValue(loaded.effectiveCalendarCode());
     if (!Texts.hasText(calendarCode)) {
       return request;
     }
@@ -459,8 +482,9 @@ public class LaunchBatchDayService {
     }
     String dayStatus = batchDay.dayStatus();
     boolean pastCutoff = isPastBatchDayCutoff(batchDay, calendarCode);
-    if ("IN_FLIGHT".equalsIgnoreCase(dayStatus)
-        || ("OPEN".equalsIgnoreCase(dayStatus) && !pastCutoff)) {
+    boolean batchDayStillAllowsLaunch = "IN_FLIGHT".equalsIgnoreCase(dayStatus)
+        || ("OPEN".equalsIgnoreCase(dayStatus) && !pastCutoff);
+    if (batchDayStillAllowsLaunch) {
       return request;
     }
 
@@ -477,17 +501,12 @@ public class LaunchBatchDayService {
       routedParams.put("batchDayCutoffAt", batchDay.cutoffAt().toString());
     }
     if (lateAccepted) {
-      routedParams.put(
-          "lateArrivalToleranceMin",
-          resolveLateArrivalToleranceMin(request.tenantId(), calendarCode));
+      String tenantId = request.tenantId();
+      Integer lateArrivalToleranceMin = resolveLateArrivalToleranceMin(tenantId, calendarCode);
+      routedParams.put("lateArrivalToleranceMin", lateArrivalToleranceMin);
       emitLateArrivalAlert(request, calendarCode, batchDay, "BATCH_DAY_LATE_ACCEPTED", "WARN");
-      return LaunchRequest.builder()
-          .tenantId(request.tenantId())
-          .jobCode(request.jobCode())
-          .bizDate(request.bizDate())
+      return request.toBuilder()
           .triggerType(TriggerType.EVENT)
-          .requestId(request.requestId())
-          .traceId(request.traceId())
           .params(routedParams)
           .build();
     }
@@ -510,24 +529,14 @@ public class LaunchBatchDayService {
       if (!TriggerType.CATCH_UP.code().equals(latest.getTriggerType())) {
         return request;
       }
-      return LaunchRequest.builder()
-          .tenantId(request.tenantId())
-          .jobCode(request.jobCode())
-          .bizDate(request.bizDate())
+      return request.toBuilder()
           .triggerType(TriggerType.CATCH_UP)
-          .requestId(request.requestId())
-          .traceId(request.traceId())
           .params(routedParams)
           .build();
     }
     loaded.triggerRequest().setTriggerType(TriggerType.CATCH_UP.code());
-    return LaunchRequest.builder()
-        .tenantId(request.tenantId())
-        .jobCode(request.jobCode())
-        .bizDate(request.bizDate())
+    return request.toBuilder()
         .triggerType(TriggerType.CATCH_UP)
-        .requestId(request.requestId())
-        .traceId(request.traceId())
         .params(routedParams)
         .build();
   }
@@ -601,7 +610,8 @@ public class LaunchBatchDayService {
     extra.put("lateCount", p.lateCount());
     extra.put("catchupCount", p.catchupCount());
     extra.put("cutoffAt", p.cutoffAt() == null ? null : p.cutoffAt().toString());
-    logEntity.setExtraJson(JsonUtils.toJson(extra));
+    String extraJson = JsonUtils.toJson(extra);
+    logEntity.setExtraJson(extraJson);
     jobExecutionLogMapper.insert(logEntity);
   }
 }

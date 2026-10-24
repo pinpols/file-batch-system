@@ -62,6 +62,14 @@ class StaleTempFileCleanupTest {
     Files.setLastModifiedTime(
         oldBatch, FileTime.from(BatchDateTimeSupport.utcNow().minus(Duration.ofHours(7))));
 
+    Path oldPrivateImport =
+        PrivateTempFiles.createTempFile(BatchFileConstants.IMPORT_STAGE_PREFIX, ".ndjson");
+    Files.setLastModifiedTime(
+        oldPrivateImport, FileTime.from(BatchDateTimeSupport.utcNow().minus(Duration.ofHours(7))));
+
+    Path newPrivateImport =
+        PrivateTempFiles.createTempFile(BatchFileConstants.IMPORT_STAGE_PREFIX, ".ndjson");
+
     Path newBatch = tempDir.resolve("batch-export-new.tmp");
     Files.writeString(newBatch, "y");
     Files.setLastModifiedTime(
@@ -76,6 +84,8 @@ class StaleTempFileCleanupTest {
     cleanup.cleanStaleTempFiles();
 
     assertThat(Files.exists(oldBatch)).isFalse();
+    assertThat(oldPrivateImport).doesNotExist();
+    assertThat(newPrivateImport).exists();
     assertThat(Files.exists(newBatch)).isTrue();
     assertThat(Files.exists(oldOther)).isTrue();
   }

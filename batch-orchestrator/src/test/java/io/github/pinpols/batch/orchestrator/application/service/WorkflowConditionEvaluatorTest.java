@@ -2,7 +2,9 @@ package io.github.pinpols.batch.orchestrator.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowConditionEvaluator;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,16 +25,16 @@ class WorkflowConditionEvaluatorTest {
   @DisplayName("条件表达式为空时抛出业务异常并提示表达式缺失")
   void shouldThrowWhenConditionIsNull() {
     // 旧行为 blank → true 已改为 fail-closed：CONDITION 边必须配置非空表达式
-    org.assertj.core.api.Assertions.assertThatThrownBy(() -> evaluator.matches(null, "{}"))
-        .isInstanceOf(io.github.pinpols.batch.common.exception.BizException.class)
+    Assertions.assertThatThrownBy(() -> evaluator.matches(null, "{}"))
+        .isInstanceOf(BizException.class)
         .hasMessageContaining("condition_expr_blank");
   }
 
   @Test
   @DisplayName("条件表达式为空白时抛出业务异常并提示表达式缺失")
   void shouldThrowWhenConditionIsBlank() {
-    org.assertj.core.api.Assertions.assertThatThrownBy(() -> evaluator.matches("  ", "{}"))
-        .isInstanceOf(io.github.pinpols.batch.common.exception.BizException.class)
+    Assertions.assertThatThrownBy(() -> evaluator.matches("  ", "{}"))
+        .isInstanceOf(BizException.class)
         .hasMessageContaining("condition_expr_blank");
   }
 

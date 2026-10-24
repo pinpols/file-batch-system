@@ -8,6 +8,7 @@ ALTER TABLE batch.console_user_account
     ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- 内置出厂账号:首次登录强制改密。
+
 UPDATE batch.console_user_account
    SET must_change_password = TRUE
  WHERE tenant_id = 'system'

@@ -1,4 +1,6 @@
 #!/usr/bin/env sh
+# 用途：准备可写 Sentinel 配置并启动 Valkey Sentinel。
+# 用法：由对应容器的 entrypoint/init 配置调用；环境参数见容器配置与下方说明。
 set -eu
 
 : "${SENTINEL_MASTER_NAME:?SENTINEL_MASTER_NAME is required}"

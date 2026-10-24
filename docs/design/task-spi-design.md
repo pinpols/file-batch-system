@@ -1,6 +1,8 @@
 # Task SPI / Plugin 化设计(P0)
 
-> 立项:[p0-p1-p2-roadmap §P0](../architecture/p0-p1-p2-roadmap.md#p0-任务类型-spi--plugin-化)
+> **当前适用范围**：原子任务 SPI 与文件 Pipeline 分层继续适用。当前 JobType 为 GENERAL、四类文件/加工类型、ATOMIC 与三类 BUNDLE，没有 WORKFLOW；顶层编排由 WorkflowRun 承载。下文带阶段排期和旧类型数量的章节是立项背景，不能据此恢复旧 Job wrapper 或租户自定义阶段。
+
+> 立项:[p0-p1-p2-roadmap §P0](../archive/plans/p0-p1-p2-roadmap-2026-05-29.md#p0-任务类型-spi--plugin-化)
 >
 > 目标:让"加新任务类型"从"开新 worker module + 改 BE"降到"实现 1 个 SPI 类 + 1 行注册"。
 
@@ -13,17 +15,17 @@
 | 抽象 | 包 | 职责 | 实现数 |
 |---|---|---|---:|
 | `StepExecutionAdapter` | `batch-worker-core.support` | 单步执行入口:`StepExecutionResponse execute(StepExecutionRequest)` | 5(default + 4 worker) |
-| `AbstractPipelineStepExecutionAdapter<C,R>` | `batch-worker-core.support` | Pipeline 生命周期模板(确保定义 → 创建实例 → 跑 stage loop → 标记终态) | 4(import/export/process/dispatch) |
-| `AbstractStageExecutor<C,R>` | `batch-worker-core.support` | Stage 内部 while loop 模板 | 3(import/export/dispatch 共用) |
+| `AbstractPipelineStepExecutionAdapter<C,R>` | `batch-worker-core.support` | Pipeline 生命周期模板(校验系统模板 → 创建实例 → 跑 stage loop → 标记终态) | 4(import/export/process/dispatch) |
+| `AbstractStageExecutor<C,R>` | `batch-worker-core.support` | Pipeline 阶段循环模板 | 4(import/export/process/dispatch 共用) |
 | `TaskExecutionWrapper` | `batch-worker-core.support` | CLAIM + execute + report 一站 | 1(`DefaultTaskExecutionWrapper`) |
-| `WorkerRouteAdapter` | `batch-worker-core.route` | 注册 worker 元信息(`worker_type` 等) | 4 |
-| `PipelineStepTemplateProvider` | `batch-worker-core.support` | 给 pipeline_definition 自动登记默认步骤 | 4 |
+| `WorkerRouteAdapter` | `batch-worker-core.route` | 注册 worker 元信息(`worker_type` 等) | 5(四类文件 Worker + ATOMIC) |
+| `PipelineStepTemplateProvider` | `batch-worker-core.support` | 提供本地固定步骤模板，供系统阶段校验与参数合并 | 4 |
 
 **关键发现**:已经有"Step → Stage → Pipeline → Task"四层模型,worker 内部抽象不薄。问题不在抽象**不够**,而在抽象**绑死了 Pipeline 形态**。
 
 ### 1.2 Pipeline 形态绑死在哪
 
-- `JobType` 6 枚举(`GENERAL/IMPORT/EXPORT/PROCESS/DISPATCH/WORKFLOW`),硬编码
+- 旧立项时 `JobType` 含 WORKFLOW；该包装类型已在新根模型中退役，当前类型见 JobType.java
 - worker module 物理拆分(`batch-worker-{import,export,process,dispatch}`),每个 module 一种 pipeline
 - `AbstractPipelineStepExecutionAdapter` 强制要求:必须有 `pipelineType()` / `defaultPipelineSteps()` / `executeStages()` —— 这一套是为"文件处理 5-6 stage"设计的
 - `JobType.GENERAL` 是占位枚举,**无 worker handler 实现**(grep 0 处)
@@ -267,7 +269,7 @@ official channel_type -> exactly one DispatchChannelAdapter
 
 > 实现订正:原设计曾提议把 4 件套放进 `batch-worker-core`(理由:所有 worker 启动即加载 core,builtin 自动可用)。落地时按 [ADR-029 专用 SPI worker](../architecture/adr/ADR-029-dedicated-spi-worker.md)改为**独立隔离在 `batch-worker/atomic` 子模块**——特权执行器(shell/sql/stored-proc/http)有 RCE 风险面,必须与普通 worker 进程隔离、独立开关与审批,不随 core 默认进每个 worker。
 
-**安全 / 隔离硬约束**:见 [roadmap §P0 Phase 3](../architecture/p0-p1-p2-roadmap.md#phase-3通用执行能力-4-件套-builtin)。
+**安全 / 隔离硬约束**:见 [roadmap §P0 Phase 3](../archive/plans/p0-p1-p2-roadmap-2026-05-29.md#phase-3通用执行能力-4-件套-builtin)。
 
 ---
 
@@ -369,7 +371,7 @@ batch.worker.enabled-task-types:
 |---|---|
 | 双路抽象造成"什么是 Pipeline 什么是 Task"模糊 | 文档明确:多 stage / 文件生命周期 = Pipeline;单步无生命周期 = Atomic。中间形态不存在,有就硬归一类 |
 | 第三方 jar 引错 batch-common 版本 → ServiceLoader 加载 ClassCastException | `BatchTaskExecutorRegistry` 启动期校验 classloader 一致性 + 日志显式提示 |
-| Builtin Shell 被滥用执行 `rm -rf` | 安全硬约束(白名单 + 隔离 + 审计)见 [roadmap §P0 Phase 3](../architecture/p0-p1-p2-roadmap.md) |
+| Builtin Shell 被滥用执行 `rm -rf` | 安全硬约束(白名单 + 隔离 + 审计)见 [roadmap §P0 Phase 3](../archive/plans/p0-p1-p2-roadmap-2026-05-29.md) |
 | Spring bean + ServiceLoader 重复注册 | Registry 启动期 fail-fast,清晰报错 |
 
 ### 不做的
@@ -426,8 +428,8 @@ batch.worker.enabled-task-types:
 
 ## 10. 关联文档
 
-- 路线全景:[p0-p1-p2-roadmap.md](../architecture/p0-p1-p2-roadmap.md)
-- 缺陷盘点(P0 对应缺陷 1+2):[deficiencies-2026-05-30.md](../architecture/deficiencies-2026-05-30.md)
+- 路线全景:[p0-p1-p2-roadmap-2026-05-29.md](../archive/plans/p0-p1-p2-roadmap-2026-05-29.md)
+- 缺陷盘点(P0 对应缺陷 1+2):[deficiencies-2026-05-30.md](../archive/audit/deficiencies-2026-05-30.md)
 - 现有 Pipeline 设计:[file-pipeline-design.md](file-pipeline-design.md)
 - Pipeline vs Workflow 边界:[pipeline-vs-workflow-definition.md](pipeline-vs-workflow-definition.md)
 - 后续 builtin 用法手册(随 PR-2 落地):`docs/design/builtin-task-executors.md`

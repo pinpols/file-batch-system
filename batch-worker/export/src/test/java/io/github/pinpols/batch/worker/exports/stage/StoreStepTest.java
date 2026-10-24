@@ -11,8 +11,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.infrastructure.S3ExportStorage;
 import java.nio.file.Files;
@@ -203,6 +205,85 @@ class StoreStepTest {
     verify(storage)
         .writeObject(anyString(), uploadedPath.capture(), eq("application/octet-stream"));
     assertThat(Files.exists(uploadedPath.getValue())).isFalse();
+  }
+
+  @Test
+  @DisplayName("已登记产物重派时校验并复用原密文,不重新加密或覆盖对象")
+  void execute_reusesRegisteredArtifactOnWholePipelineRetry() throws Exception {
+    S3ExportStorage storage = mock(S3ExportStorage.class);
+    BatchObjectCryptoService crypto = mock(BatchObjectCryptoService.class);
+    PlatformFileRecordRepository records = mock(PlatformFileRecordRepository.class);
+    S3StorageProperties properties = new S3StorageProperties();
+    properties.setBucket("exports");
+    Path generated = Files.createTempFile("export-retry-", ".json");
+    Files.writeString(generated, "regenerated output");
+    String checksum = "a".repeat(64);
+    when(records.loadFileRecordByStoragePath("tenant", "exports", "same-key.json"))
+        .thenReturn(Map.of(
+            "checksum_value",
+            checksum,
+            "checksum_type",
+            "SHA-256",
+            "file_size_bytes",
+            123L,
+            "metadata_json",
+            Map.of("contentEncryptionEnabled", true, "encryptionKeyRef", "key-v1", "jobInstanceId", 101L)));
+    when(storage.sha256Hex("same-key.json")).thenReturn(checksum);
+    ExportJobContext context = new ExportJobContext();
+    context.setTenantId("tenant");
+    context.getAttributes().put(PipelineRuntimeKeys.JOB_INSTANCE_ID, 101L);
+    context.getAttributes().put(PipelineRuntimeKeys.GENERATED_FILE_PATH, generated.toString());
+    context.getAttributes().put(PipelineRuntimeKeys.OBJECT_NAME, "same-key.json");
+    context
+        .getAttributes()
+        .put(
+            PipelineRuntimeKeys.TEMPLATE_CONFIG,
+            Map.of("content_encryption_enabled", true, "encryption_key_ref", "key-v2"));
+
+    var result = new StoreStep(storage, crypto, null, records, properties).execute(context);
+
+    assertThat(result.success()).isTrue();
+    assertThat(context.getAttributes())
+        .containsEntry(PipelineRuntimeKeys.CHECKSUM_VALUE, checksum)
+        .containsEntry(PipelineRuntimeKeys.FILE_SIZE_BYTES, 123L)
+        .containsEntry("contentEncryptionEnabled", true)
+        .containsEntry("encryptionKeyRef", "key-v1")
+        .containsEntry(PipelineRuntimeKeys.EXPORT_STORE_COMMITTED, true);
+    assertThat(generated).doesNotExist();
+    verifyNoInteractions(crypto);
+    verify(storage, never()).writeObject(anyString(), any(Path.class), anyString());
+    verify(storage, never()).copyObject(anyString(), anyString());
+  }
+
+  @Test
+  @DisplayName("已登记产物与存储对象摘要不符时拒绝覆盖并保留本地文件")
+  void execute_rejectsRegisteredArtifactDriftWithoutOverwriting() throws Exception {
+    S3ExportStorage storage = mock(S3ExportStorage.class);
+    PlatformFileRecordRepository records = mock(PlatformFileRecordRepository.class);
+    S3StorageProperties properties = new S3StorageProperties();
+    properties.setBucket("exports");
+    Path generated = Files.createTempFile("export-retry-drift-", ".json");
+    Files.writeString(generated, "regenerated output");
+    when(records.loadFileRecordByStoragePath("tenant", "exports", "same-key.json"))
+        .thenReturn(Map.of("checksum_value", "a".repeat(64), "checksum_type", "SHA-256",
+            "metadata_json", Map.of("jobInstanceId", 101L)));
+    when(storage.sha256Hex("same-key.json")).thenReturn("b".repeat(64));
+    ExportJobContext context = new ExportJobContext();
+    context.setTenantId("tenant");
+    context.getAttributes().put(PipelineRuntimeKeys.JOB_INSTANCE_ID, 101L);
+    context.getAttributes().put(PipelineRuntimeKeys.GENERATED_FILE_PATH, generated.toString());
+    context.getAttributes().put(PipelineRuntimeKeys.OBJECT_NAME, "same-key.json");
+
+    var result = new StoreStep(
+            storage, mock(BatchObjectCryptoService.class), null, records, properties)
+        .execute(context);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("EXPORT_STORE_ARTIFACT_CONFLICT");
+    assertThat(generated).exists();
+    verify(storage, never()).writeObject(anyString(), any(Path.class), anyString());
+    verify(storage, never()).copyObject(anyString(), anyString());
+    Files.deleteIfExists(generated);
   }
 
   /** Local helper to avoid duplicating StoreStep's sha256 calculation logic in tests. */

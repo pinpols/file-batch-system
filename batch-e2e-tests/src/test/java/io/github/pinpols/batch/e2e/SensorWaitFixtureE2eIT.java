@@ -32,21 +32,32 @@ class SensorWaitFixtureE2eIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("ta 租户种子里的等待文件到达工作流合法:等待节点参数与前后两条连线齐备,图校验无错误")
   void shouldContainValidWaitFileArrivalWorkflow_whenTaTenantSeedLoaded() {
-    Long workflowDefinitionId = jdbcTemplate.queryForObject("""
+    final String selectIdSql = """
             select id
               from batch.workflow_definition
              where tenant_id = 'ta'
                and workflow_code = 'TA_WF_WAIT_FILE'
                and version = 1
-            """, Long.class);
-
-    Map<String, Object> waitNode = jdbcTemplate.queryForMap("""
+            """;
+    final String selectNodeTypeSql = """
             select node_type, node_params
               from batch.workflow_node
              where tenant_id = 'ta'
                and workflow_definition_id = ?
                and node_code = 'WAIT_BANK_FILE'
-            """, workflowDefinitionId);
+            """;
+    final String selectCountSql = """
+            select count(*)
+              from batch.workflow_edge
+             where tenant_id = 'ta'
+               and workflow_definition_id = ?
+               and ((from_node_code = 'START' and to_node_code = 'WAIT_BANK_FILE')
+                 or (from_node_code = 'WAIT_BANK_FILE' and to_node_code = 'END'))
+            """;
+
+    Long workflowDefinitionId = jdbcTemplate.queryForObject(selectIdSql, Long.class);
+
+    Map<String, Object> waitNode = jdbcTemplate.queryForMap(selectNodeTypeSql, workflowDefinitionId);
 
     assertThat(waitNode.get("node_type")).isEqualTo("WAIT");
     assertThat(String.valueOf(waitNode.get("node_params")))
@@ -54,14 +65,7 @@ class SensorWaitFixtureE2eIT extends AbstractIntegrationTest {
         .contains("\"pattern\": \"settle-*.csv\"")
         .contains("\"timeout_seconds\": 3600");
 
-    Integer edgeCount = jdbcTemplate.queryForObject("""
-            select count(*)
-              from batch.workflow_edge
-             where tenant_id = 'ta'
-               and workflow_definition_id = ?
-               and ((from_node_code = 'START' and to_node_code = 'WAIT_BANK_FILE')
-                 or (from_node_code = 'WAIT_BANK_FILE' and to_node_code = 'END'))
-            """, Integer.class, workflowDefinitionId);
+    Integer edgeCount = jdbcTemplate.queryForObject(selectCountSql, Integer.class, workflowDefinitionId);
     assertThat(edgeCount).isEqualTo(2);
 
     WorkflowValidationResult result = workflowGraphValidator.validate(workflowDefinitionId);

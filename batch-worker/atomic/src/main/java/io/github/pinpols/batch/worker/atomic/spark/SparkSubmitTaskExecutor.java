@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.io.BufferedReader;
@@ -24,6 +25,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -168,10 +170,10 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
           ctx.tenantId(),
           ctx.jobCode(),
           ex);
-      return AtomicErrorCode.fail(
-          AtomicErrorCode.EXECUTION_FAILED,
-          ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage(),
-          ex);
+      String exceptionMessage = ex.getMessage();
+      String failureMessage =
+          EmptyChecks.isNull(exceptionMessage) ? ex.getClass().getSimpleName() : ex.getMessage();
+      return AtomicErrorCode.fail(AtomicErrorCode.EXECUTION_FAILED, failureMessage, ex);
     }
   }
 
@@ -237,7 +239,9 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
       argv.add(props.getOutputPathConfKey() + "=" + outputPath);
     }
     argv.add(appResource); // appResource 必须在 spark-submit 选项之后、app args 之前
-    argv.addAll(parseAppArgs(params.get(PARAM_APP_ARGS)));
+    Object rawAppArgs = params.get(PARAM_APP_ARGS);
+    List<String> appArgs = parseAppArgs(rawAppArgs);
+    argv.addAll(appArgs);
 
     Duration timeout = parseTimeout(params.get(PARAM_TIMEOUT_SECONDS));
     return new SparkInvocation(appResource, argv, timeout, outputPath);
@@ -277,7 +281,9 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
     Map<String, String> conf = new LinkedHashMap<>();
     for (Map.Entry<?, ?> e : map.entrySet()) {
       String k = String.valueOf(e.getKey());
-      if (!allowedPrefixes.isEmpty() && allowedPrefixes.stream().noneMatch(k::startsWith)) {
+      boolean confKeyIsOutsideConfiguredPrefixes =
+          !EmptyChecks.isEmpty(Objects.requireNonNull(allowedPrefixes)) && allowedPrefixes.stream().noneMatch(k::startsWith);
+      if (confKeyIsOutsideConfiguredPrefixes) {
         throw new SparkValidationException("sparkConf key does not match an allowed prefix: " + k);
       }
       conf.put(k, String.valueOf(e.getValue()));
@@ -303,7 +309,9 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
         throw new SparkValidationException("appArgs contains a null element");
       }
       String arg = String.valueOf(o);
-      if (!allowRegex.isEmpty() && allowRegex.stream().noneMatch(arg::matches)) {
+      boolean appArgMatchesNoConfiguredPattern =
+          !EmptyChecks.isEmpty(Objects.requireNonNull(allowRegex)) && allowRegex.stream().noneMatch(arg::matches);
+      if (appArgMatchesNoConfiguredPattern) {
         throw new SparkValidationException("appArg does not match any allowed pattern: " + arg);
       }
       args.add(arg);
@@ -317,7 +325,8 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
     }
     long seconds;
     try {
-      seconds = Long.parseLong(String.valueOf(raw));
+      String timeoutText = String.valueOf(raw);
+      seconds = Long.parseLong(timeoutText);
     } catch (NumberFormatException ex) {
       throw new SparkValidationException("timeoutSeconds must be an integer: " + raw);
     }
@@ -375,7 +384,9 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
           output.put("outputUri", inv.outputPath);
           // 可选:防"Spark 退 0 但没写出"。仅对本地 FS 路径(无 scheme)校验 _SUCCESS 标记;
           // 远端(s3a:// / hdfs://)本执行器够不着,需下游消费步骤按类注释自行核验。
-          if (props.isVerifyLocalSuccessMarker() && isLocalPath(inv.outputPath)) {
+          boolean shouldVerifyLocalSuccessMarker =
+              props.isVerifyLocalSuccessMarker() && isLocalPath(inv.outputPath);
+          if (shouldVerifyLocalSuccessMarker) {
             Path marker = Paths.get(inv.outputPath, "_SUCCESS");
             if (!Files.exists(marker)) {
               return AtomicErrorCode.fail(

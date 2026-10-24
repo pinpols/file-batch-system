@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.trigger.mapper.auth.TriggerApiKeyAuthMapper">
+    <resultMap id="TriggerApiKeyCredentialMap" type="io.github.pinpols.batch.trigger.auth.TriggerApiKeyCredential">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="key_name" javaType="java.lang.String"/>
+            <arg column="scopes" javaType="java.lang.String"/>
+            <arg column="enabled" javaType="java.lang.Boolean"/>
+            <arg column="expires_at" javaType="java.time.Instant"/>
+            <arg column="key_hash" javaType="java.lang.String"/>
+            <arg column="salt" javaType="java.lang.String"/>
+            <arg column="key_hash_algo" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findActiveCandidatesByPrefixAndTenant" resultMap="TriggerApiKeyCredentialMap">
+        select id, tenant_id, key_name, scopes, enabled, expires_at,
+               key_hash, salt, key_hash_algo
+        from batch.api_key
+        where key_prefix = #{keyPrefix}
+          and tenant_id = #{tenantId}
+          and enabled = true
+          and revoked_at is null
+          and (expires_at is null or expires_at > current_timestamp)
+    </select>
+
+    <update id="touchLastUsedAt">
+        update batch.api_key
+        set last_used_at = current_timestamp
+        where id = #{id}
+          and tenant_id = #{tenantId}
+          and enabled = true
+          and revoked_at is null
+    </update>
+</mapper>

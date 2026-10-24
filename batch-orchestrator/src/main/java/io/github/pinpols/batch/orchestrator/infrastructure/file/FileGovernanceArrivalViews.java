@@ -18,21 +18,35 @@ public final class FileGovernanceArrivalViews {
 
   /** {@code selectArrivalGovernanceCandidates} 出参视图：治理候选行，仅基础设施内部消费。 */
   static ArrivalCandidateView arrivalCandidate(Map<String, Object> row) {
+    Long fileId = longValue(row.get("id"));
+    String tenantId = textValue(row.get("tenant_id"));
+    String fileName = textValue(row.get("file_name"));
+    String bizDate = textValue(row.get("biz_date"));
+    String fileGroupCode = textValue(row.get("file_group_code"));
+    String waitFileGroupMode = textValue(row.get("wait_file_group_mode"));
+    String requiredFileSet = textValue(row.get("required_file_set"));
+    String arrivalTimeoutAction = textValue(row.get("arrival_timeout_action"));
+    String arrivalState = textValue(row.get("arrival_state"));
+    String arrivalReason = textValue(row.get("arrival_reason"));
+    String latestTolerableTime = textValue(row.get("latest_tolerable_time"));
+    String triggerOnComplete = textValue(row.get("trigger_on_complete"));
+    String checksumType = textValue(row.get("checksum_type"));
+    Object metadataJson = row.get("metadata_json");
     return new ArrivalCandidateView(
-        longValue(row.get("id")),
-        textValue(row.get("tenant_id")),
-        textValue(row.get("file_name")),
-        textValue(row.get("biz_date")),
-        textValue(row.get("file_group_code")),
-        textValue(row.get("wait_file_group_mode")),
-        textValue(row.get("required_file_set")),
-        textValue(row.get("arrival_timeout_action")),
-        textValue(row.get("arrival_state")),
-        textValue(row.get("arrival_reason")),
-        textValue(row.get("latest_tolerable_time")),
-        textValue(row.get("trigger_on_complete")),
-        textValue(row.get("checksum_type")),
-        row.get("metadata_json"));
+        fileId,
+        tenantId,
+        fileName,
+        bizDate,
+        fileGroupCode,
+        waitFileGroupMode,
+        requiredFileSet,
+        arrivalTimeoutAction,
+        arrivalState,
+        arrivalReason,
+        latestTolerableTime,
+        triggerOnComplete,
+        checksumType,
+        metadataJson);
   }
 
   /** {@code selectArrivalGroupFiles} 出参视图：人工到达组操作只读取这几个列。 */
@@ -64,14 +78,26 @@ public final class FileGovernanceArrivalViews {
         stringValue(row, "last_updated_at"));
   }
 
+  static ArrivalGroupBacklogView arrivalGroupBacklog(Map<String, Object> row) {
+    Long waitingGroups = longValue(row.get("waiting_groups"));
+    Long oldestWaitSeconds = longValue(row.get("oldest_wait_seconds"));
+    ArrivalGroupBacklogView backlog = new ArrivalGroupBacklogView(waitingGroups, oldestWaitSeconds);
+    return backlog;
+  }
+
   private static Long longValue(Object value) {
     if (value instanceof Number number) {
       return number.longValue();
     }
-    if (EmptyChecks.isNull(value) || EmptyChecks.isBlank(String.valueOf(value))) {
+    if (EmptyChecks.isNull(value)) {
       return null;
     }
-    return Long.valueOf(String.valueOf(value));
+    String presenceText = String.valueOf(value);
+    if (EmptyChecks.isBlank(presenceText)) {
+      return null;
+    }
+    String rawValue = String.valueOf(value);
+    return Long.valueOf(rawValue);
   }
 
   private static String textValue(Object value) {
@@ -126,6 +152,8 @@ public final class FileGovernanceArrivalViews {
       boolean allowEmptyRun,
       boolean allowSkipBizDate,
       String latestTolerableTime) {}
+
+  record ArrivalGroupBacklogView(Long waitingGroups, Long oldestWaitSeconds) {}
 
   /** 到达组汇总行：分组维度 + 到达/触发/超时/等待计数。 */
   public record ArrivalGroupSummaryView(

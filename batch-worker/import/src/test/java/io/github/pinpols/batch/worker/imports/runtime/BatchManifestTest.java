@@ -60,7 +60,7 @@ class BatchManifestTest {
           "bizDate": "2026-06-21",
           "tenantId": "t1",
           "requiredFiles": ["order.csv", "cust.csv"],
-          "jobCode": "BUNDLE_IMPORT_DAILY",
+          "workflowCode": "BUNDLE_IMPORT_DAILY",
           "fileMapping": [
             { "fileName": "order.csv", "templateCode": "TPL_ORDER" },
             { "fileName": "cust.csv", "templateCode": "TPL_CUST", "targetTable": "biz.customer" }
@@ -68,7 +68,7 @@ class BatchManifestTest {
         }
         """;
     BatchManifest m = objectMapper.readValue(json, BatchManifest.class);
-    assertThat(m.jobCode()).isEqualTo("BUNDLE_IMPORT_DAILY");
+    assertThat(m.workflowCode()).isEqualTo("BUNDLE_IMPORT_DAILY");
     assertThat(m.hasFileMapping()).isTrue();
     assertThat(m.fileMapping()).hasSize(2);
     assertThat(m.templateCodeFor("order.csv")).contains("TPL_ORDER");
@@ -90,7 +90,7 @@ class BatchManifestTest {
           "bizDate": "2026-06-21",
           "tenantId": "t1",
           "requiredFiles": ["risk.csv", "trade.csv"],
-          "jobCode": "BUNDLE_DISPATCH_EOD",
+          "workflowCode": "BUNDLE_DISPATCH_EOD",
           "fileMapping": [
             { "fileName": "risk.csv", "targetRef": "CH_SFTP" },
             { "fileName": "trade.csv", "targetRef": "CH_OSS" }
@@ -98,7 +98,7 @@ class BatchManifestTest {
         }
         """;
     BatchManifest m = objectMapper.readValue(json, BatchManifest.class);
-    assertThat(m.jobCode()).isEqualTo("BUNDLE_DISPATCH_EOD");
+    assertThat(m.workflowCode()).isEqualTo("BUNDLE_DISPATCH_EOD");
     assertThat(m.hasFileMapping()).isTrue();
     assertThat(m.targetRefFor("risk.csv")).contains("CH_SFTP");
     assertThat(m.targetRefFor("trade.csv")).contains("CH_OSS");
@@ -115,15 +115,15 @@ class BatchManifestTest {
   }
 
   @Test
-  @DisplayName("manifest-only 导出束:jobCode + 模板集 + 无 requiredFiles → isManifestOnlyExport")
-  void shouldDetectManifestOnlyExport_whenJobCodeAndTemplatesPresent() throws Exception {
+  @DisplayName("manifest-only 导出束:workflowCode + 模板集 + 无 requiredFiles → isManifestOnlyExport")
+  void shouldDetectManifestOnlyExport_whenWorkflowCodeAndTemplatesPresent() throws Exception {
     String json = """
         {
           "schemaVersion": "batch-manifest-v2",
           "fileGroupCode": "export-eod",
           "bizDate": "2026-06-21",
           "tenantId": "t1",
-          "jobCode": "BUNDLE_EXPORT_EOD",
+          "workflowCode": "BUNDLE_EXPORT_EOD",
           "fileMapping": [
             { "fileName": "risk_out", "templateCode": "EXP_RISK" },
             { "fileName": "trade_out", "templateCode": "EXP_TRADE" }
@@ -142,7 +142,7 @@ class BatchManifestTest {
         {
           "schemaVersion": "batch-manifest-v2",
           "fileGroupCode": "bundle-daily",
-          "jobCode": "BUNDLE_IMPORT_DAILY",
+          "workflowCode": "BUNDLE_IMPORT_DAILY",
           "requiredFiles": ["order.csv"],
           "fileMapping": [ { "fileName": "order.csv", "templateCode": "TPL_ORDER" } ]
         }
@@ -152,7 +152,7 @@ class BatchManifestTest {
   }
 
   @Test
-  @DisplayName("无 jobCode 或无模板 → 不是 manifest-only 导出")
+  @DisplayName("无 workflowCode 或无模板 → 不是 manifest-only 导出")
   void shouldNotDetectManifestOnlyExport_whenJobCodeOrTemplatesMissing() throws Exception {
     BatchManifest noJob = objectMapper.readValue(
         "{\"fileMapping\":[{\"fileName\":\"o\",\"templateCode\":\"EXP_A\"}]}", BatchManifest.class);
@@ -160,6 +160,7 @@ class BatchManifestTest {
     BatchManifest noTpl =
         objectMapper.readValue("{\"jobCode\":\"BUNDLE_EXPORT_X\"}", BatchManifest.class);
     assertThat(noTpl.isManifestOnlyExport()).isFalse();
+    assertThat(noTpl.hasRetiredJobTarget()).isTrue();
     assertThat(noTpl.exportTemplateCodes()).isEmpty();
   }
 }

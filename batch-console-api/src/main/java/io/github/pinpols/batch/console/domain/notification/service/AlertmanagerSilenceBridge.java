@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
@@ -16,6 +17,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import jakarta.annotation.PreDestroy;
+import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -39,7 +41,7 @@ import org.springframework.stereotype.Component;
  *
  * <ul>
  *   <li><b>silence</b>:{@code POST /api/v2/silences} 建 label matcher(alertname=alert_type +
- *       tenant), 时长取请求或默认;AM 在时窗内压住这一类告警。
+ *       tenant + fingerprint), 时长取请求或默认;AM 在时窗内压住该业务告警。
  *   <li><b>close</b>:{@code POST /api/v2/alerts} 带 {@code endsAt=now} 发 resolved,让 AM 立即消解,不必等
  *       {@code resolve_timeout}(5m)。
  * </ul>
@@ -148,15 +150,22 @@ public class AlertmanagerSilenceBridge {
     if (Texts.hasText(alert.getTenantId())) {
       matchers.add(matcher("tenant", alert.getTenantId()));
     }
+    if (Texts.hasText(alert.getDedupFingerprint())) {
+      matchers.add(matcher("fingerprint", alert.getDedupFingerprint()));
+    }
     Map<String, Object> silence = new LinkedHashMap<>();
     silence.put("matchers", matchers);
     silence.put("startsAt", now.toString());
-    silence.put("endsAt", now.plusSeconds((long) minutes * 60).toString());
+    long durationSeconds = (long) minutes * 60;
+    Instant endsAt = now.plusSeconds(durationSeconds);
+    String endsAtText = endsAt.toString();
+    silence.put("endsAt", endsAtText);
     silence.put("createdBy", CREATED_BY);
     silence.put(
         "comment",
         "console silence for alert_event id=" + alert.getId() + " type=" + alert.getAlertType());
-    post(stripTrailingSlash(props.getApiBaseUrl()) + SILENCES_PATH, silence, "silence");
+    String silenceUri = stripTrailingSlash(props.getApiBaseUrl()) + SILENCES_PATH;
+    post(silenceUri, silence, "silence");
   }
 
   private void sendResolved(AlertEventEntity alert) {
@@ -168,7 +177,8 @@ public class AlertmanagerSilenceBridge {
     resolved.put("labels", labels);
     // endsAt=now → AM 立即判定 resolved,不必等 resolve_timeout。
     resolved.put("endsAt", now.toString());
-    post(stripTrailingSlash(props.getApiBaseUrl()) + ALERTS_PATH, List.of(resolved), "resolve");
+    String resolvedUri = stripTrailingSlash(props.getApiBaseUrl()) + ALERTS_PATH;
+    post(resolvedUri, List.of(resolved), "resolve");
   }
 
   private Map<String, Object> matcher(String name, String value) {
@@ -182,21 +192,25 @@ public class AlertmanagerSilenceBridge {
 
   private void post(String uri, Object body, String action) {
     try {
-      OutboundHttpResponse response = httpTransport.execute(OutboundHttpRequest.post(
+      String serializedBody = JsonUtils.toJson(body);
+      Duration connectTimeout = Duration.ofMillis(props.getConnectTimeoutMillis());
+      Duration responseTimeout = Duration.ofMillis(props.getTimeoutMillis());
+      OutboundHttpContent httpContent = new OutboundHttpContent(serializedBody, "application/json; charset=utf-8");
+      OutboundHttpRequest request = OutboundHttpRequest.post(
           uri,
           Map.of(),
-          JsonUtils.toJson(body),
-          "application/json; charset=utf-8",
-          Duration.ofMillis(props.getConnectTimeoutMillis()),
-          Duration.ofMillis(props.getTimeoutMillis()),
-          OutboundAddressPolicy.TRUSTED));
+          httpContent,
+          connectTimeout,
+          responseTimeout,
+          OutboundAddressPolicy.TRUSTED);
+      OutboundHttpResponse response = httpTransport.execute(request);
       if (response.isSuccessful()) {
         recordSilenceMetric("success", action);
       } else {
         recordSilenceMetric("http_error", action);
         log.warn("am_silence bridge non-2xx: action={} status={}", action, response.statusCode());
       }
-    } catch (RuntimeException | java.io.IOException ex) {
+    } catch (RuntimeException | IOException ex) {
       recordSilenceMetric("failed", action);
       SwallowedExceptionLogger.warn(AlertmanagerSilenceBridge.class, "catch:am_silence", ex);
     }

@@ -2,12 +2,12 @@ package io.github.pinpols.batch.worker.exports.infrastructure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.constants.NodeOutputKeys;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
@@ -52,15 +52,14 @@ public class ExportStepExecutionAdapter
   public ExportStepExecutionAdapter(
       ExportStageExecutor exportStageExecutor,
       ObjectMapper objectMapper,
-      PlatformPipelineDefinitionRepository pipelineDefinitions,
       PlatformPipelineRunRepository pipelineRuns,
       PlatformFileRecordRepository fileRecords,
       ObjectProvider<PipelineVerifierHook> verifierHookProvider,
       ObjectProvider<PipelineCompensationHook> compensationHookProvider) {
     super(
-        pipelineDefinitions,
         pipelineRuns,
         fileRecords,
+        exportStageExecutor,
         verifierHookProvider,
         compensationHookProvider);
     this.exportStageExecutor = exportStageExecutor;
@@ -82,16 +81,40 @@ public class ExportStepExecutionAdapter
       StepExecutionRequest request, Map<String, Object> contextMap, Long fileId) throws Exception {
     ExportJobContext context = new ExportJobContext();
     populateCommonFields(context, request, contextMap);
-    context.setBizDate(String.valueOf(contextMap.getOrDefault(PipelineRuntimeKeys.BIZ_DATE, "")));
+    Object rawBizDate = contextMap.getOrDefault(PipelineRuntimeKeys.BIZ_DATE, "");
+    String bizDate = String.valueOf(rawBizDate);
+    context.setBizDate(bizDate);
     context.setFileId(fileId == null ? "" : String.valueOf(fileId));
     Object exportPayload = contextMap.get(ExportRuntimeKeys.EXPORT_PAYLOAD);
-    if (exportPayload == null
+    boolean rawExportPayloadNeedsDecoding = exportPayload == null
         && context.getRawPayload() != null
-        && !context.getRawPayload().isBlank()) {
+        && !context.getRawPayload().isBlank();
+    if (rawExportPayloadNeedsDecoding) {
       exportPayload = objectMapper.readValue(context.getRawPayload(), ExportPayload.class);
       context.getAttributes().put(ExportRuntimeKeys.EXPORT_PAYLOAD, exportPayload);
     }
     return context;
+  }
+
+  @Override
+  public ReplayCapabilityDeclaration resolveReplayCapability(StepExecutionRequest request) {
+    if (EmptyChecks.isNull(request)
+        || !pipelineType().equalsIgnoreCase(request.stepCode())) {
+      return ReplayCapabilityDeclaration.unknown(ExportWorkerType.EXPORT);
+    }
+    Map<String, Object> requestContext = request.context();
+    Map<String, Object> attributes = EmptyChecks.isNull(requestContext)
+        ? new LinkedHashMap<>()
+        : new LinkedHashMap<>(requestContext);
+    resolveSystemPipelineSteps(attributes);
+    Long fileId = PlatformRuntimeValues.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
+    ExportJobContext context;
+    try {
+      context = buildContext(request, attributes, fileId);
+    } catch (Exception exception) {
+      throw new IllegalArgumentException("invalid EXPORT replay request", exception);
+    }
+    return exportStageExecutor.resolveReplayCapability(context);
   }
 
   @Override

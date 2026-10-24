@@ -8,6 +8,7 @@ ON CONFLICT (tenant_id) DO NOTHING;
 
 -- ── RESOURCE_QUEUE ────────────────────────────────────────────────────────────
 -- 保守额度：max_running_jobs / max_qps 约为测试环境的 50%
+
 INSERT INTO batch.resource_queue (
     tenant_id, queue_code, queue_name, queue_type,
     max_running_jobs, max_running_partitions, max_qps,
@@ -31,6 +32,7 @@ ON CONFLICT (tenant_id, queue_code) DO NOTHING;
 
 -- ── TENANT_QUOTA_POLICY ───────────────────────────────────────────────────────
 -- 保守额度：单租户并发上限较低，防止新租户上线初期冲高负载
+
 INSERT INTO batch.tenant_quota_policy (
     tenant_id, policy_code,
     max_running_jobs_per_tenant, max_partitions_per_tenant, max_qps_per_tenant,
@@ -46,6 +48,7 @@ ON CONFLICT (tenant_id, policy_code) DO NOTHING;
 
 -- ── BATCH_WINDOW ──────────────────────────────────────────────────────────────
 -- 全天开放，最宽松窗口；租户可按批量时间窗收窄
+
 INSERT INTO batch.batch_window (
     tenant_id, window_code, window_name, timezone,
     start_time, end_time, end_strategy, out_of_window_action,
@@ -58,6 +61,7 @@ ON CONFLICT (tenant_id, window_code) DO NOTHING;
 
 -- ── BUSINESS_CALENDAR ─────────────────────────────────────────────────────────
 -- 无节假日占位，catchup 自动触发；租户可添加节假日列表并调整 holiday_roll_rule
+
 INSERT INTO batch.business_calendar (
     tenant_id, calendar_code, calendar_name, timezone,
     holiday_roll_rule, catch_up_policy, catch_up_max_days, enabled
@@ -69,6 +73,7 @@ ON CONFLICT (tenant_id, calendar_code) DO NOTHING;
 -- ── FILE_TEMPLATE ─────────────────────────────────────────────────────────────
 -- 通用占位模板：field_mappings / validation_rule_set 为空对象，
 -- 拷贝到业务租户后需填写实际映射和 default_query_sql 再启用。
+
 INSERT INTO batch.file_template_config (
     tenant_id, template_code, template_name, template_type, biz_type,
     file_format_type, charset, target_charset,

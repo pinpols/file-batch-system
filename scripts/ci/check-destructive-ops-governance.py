@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Detect growth of repository scripts that can delete local or service data."""
+# 用途：高风险操作清单。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-destructive-ops-governance.py；参数与前置环境见下方说明及所属 README。
+"""检查能够删除本机或服务数据的脚本是否超出登记范围。"""
 
 from __future__ import annotations
 
@@ -12,7 +14,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_BASELINE = ROOT / "scripts/ci/destructive-ops-baseline.json"
+DEFAULT_BASELINE = ROOT / "scripts/ci/baselines/destructive-ops-baseline.json"
 SCAN_ROOTS = ("scripts", "load-tests/scripts", "db", "deploy", ".github/workflows", "docs/runbook")
 EXTENSIONS = {".sh", ".sql", ".py", ".yml", ".yaml", ".md"}
 PATTERNS = {
@@ -134,7 +136,7 @@ def main() -> int:
         print("发现新增或扩大的高风险操作，必须先审查目标范围、确认机制和恢复方案：", file=sys.stderr)
         for key, (old, new) in sorted(growth.items()):
             print(f"  {key}: {old} -> {new}", file=sys.stderr)
-        print("审查通过后才可更新 scripts/ci/destructive-ops-baseline.json，并同步治理文档。", file=sys.stderr)
+        print("审查通过后才可更新 scripts/ci/baselines/destructive-ops-baseline.json，并同步治理文档。", file=sys.stderr)
         return 1
 
     stale = sorted(set(baseline) - set(current))

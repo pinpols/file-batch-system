@@ -11,6 +11,7 @@ import io.github.pinpols.batch.worker.atomic.sql.SqlExecutorProperties;
 import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcExecutorProperties;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Set;
 import javax.sql.DataSource;
@@ -147,7 +148,7 @@ class AtomicRuntimeStatusServiceTest {
     sql.setEnabled(true);
     when(sqlProvider.getIfAvailable()).thenReturn(sql);
     DataSource ds = mock(DataSource.class);
-    when(ds.getConnection()).thenThrow(new java.sql.SQLException("boom"));
+    when(ds.getConnection()).thenThrow(new SQLException("boom"));
     when(dataSourceProvider.getIfAvailable()).thenReturn(ds);
 
     assertThat(newService().snapshot().sql().dialect()).isEqualTo("unknown");

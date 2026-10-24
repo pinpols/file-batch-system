@@ -63,7 +63,9 @@ public class TaskExecutionPool {
     this.delegate = new ThreadPoolExecutor(
         size, size, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(size), runnable -> {
           Thread thread = new Thread(runnable);
-          thread.setName("worker-task-exec-" + threadIndex.incrementAndGet());
+          long threadNumber = threadIndex.incrementAndGet();
+          String threadName = "worker-task-exec-" + threadNumber;
+          thread.setName(threadName);
           thread.setDaemon(properties.isDaemonThreads());
           return thread;
         });

@@ -66,7 +66,9 @@ final class ExcelStyleSupport {
    */
   static int autoColumnWidth(String header) {
     int len = header == null ? 0 : header.length();
-    return Math.min(12000, Math.max(18, len + 4) * 256);
+    int minimumWidthCharacters = Math.max(18, len + 4);
+    int poiWidthUnits = minimumWidthCharacters * 256;
+    return Math.min(12000, poiWidthUnits);
   }
 
   /**
@@ -78,7 +80,8 @@ final class ExcelStyleSupport {
       return value;
     }
     char first = value.charAt(0);
-    if (first == '=' || first == '+' || first == '-' || first == '@') {
+    boolean startsWithFormulaMarker = first == '=' || first == '+' || first == '-' || first == '@';
+    if (startsWithFormulaMarker) {
       return "'" + value;
     }
     return value;

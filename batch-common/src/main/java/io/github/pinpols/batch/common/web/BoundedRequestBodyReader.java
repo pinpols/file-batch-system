@@ -23,7 +23,8 @@ public final class BoundedRequestBodyReader {
     if (maxBytes <= 0) {
       return inputStream.readAllBytes();
     }
-    ByteArrayOutputStream output = new ByteArrayOutputStream((int) Math.min(maxBytes, BUFFER_SIZE));
+    int initialCapacity = (int) Math.min(maxBytes, BUFFER_SIZE);
+    ByteArrayOutputStream output = new ByteArrayOutputStream(initialCapacity);
     byte[] buffer = new byte[BUFFER_SIZE];
     long total = 0L;
     while (true) {

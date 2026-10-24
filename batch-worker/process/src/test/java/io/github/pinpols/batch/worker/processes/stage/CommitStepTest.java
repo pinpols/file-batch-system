@@ -11,6 +11,7 @@ import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -111,7 +112,7 @@ class CommitStepTest {
     ProcessJobContext ctx = new ProcessJobContext();
     ctx.setResolvedPlugin(plugin);
 
-    org.assertj.core.api.Assertions.assertThatThrownBy(() -> new CommitStep().execute(ctx))
+    Assertions.assertThatThrownBy(() -> new CommitStep().execute(ctx))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("conflict");
   }

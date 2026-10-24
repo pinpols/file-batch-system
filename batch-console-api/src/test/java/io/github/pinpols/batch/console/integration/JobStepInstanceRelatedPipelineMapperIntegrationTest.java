@@ -72,66 +72,74 @@ class JobStepInstanceRelatedPipelineMapperIntegrationTest extends AbstractIntegr
 
   private long insertJobInstance(String tenantId) {
     String jobCode = "JOB_" + BatchDateTimeSupport.utcEpochMillis() + "_" + System.nanoTime();
+    String insertJobDefinitionSql = """
+        INSERT INTO batch.job_definition
+          (tenant_id, job_code, job_name, job_type, schedule_type, timezone, created_at, updated_at)
+        VALUES (?, ?, ?, 'GENERAL', 'MANUAL', 'Asia/Shanghai', now(), now())
+        RETURNING id
+        """;
+    String jobName = jobCode + "-name";
     long jobDefinitionId =
-        jdbcTemplate.queryForObject("""
-            INSERT INTO batch.job_definition
-              (tenant_id, job_code, job_name, job_type, schedule_type, timezone, created_at, updated_at)
-            VALUES (?, ?, ?, 'GENERAL', 'MANUAL', 'Asia/Shanghai', now(), now())
-            RETURNING id
-            """, Long.class, tenantId, jobCode, jobCode + "-name");
+        jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, tenantId, jobCode, jobName);
     String instanceNo = "INST-" + System.nanoTime();
-    return jdbcTemplate.queryForObject(
-        """
+    Date bizDate = Date.valueOf(LocalDate.now());
+    String insertJobInstanceSql = """
         INSERT INTO batch.job_instance
           (tenant_id, job_definition_id, job_code, instance_no, biz_date,
            trigger_type, instance_status, priority, dedup_key, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, 'MANUAL', 'RUNNING', 5, ?, now(), now())
         RETURNING id
-        """,
+        """;
+    String dedupKey = tenantId + ":" + instanceNo;
+    return jdbcTemplate.queryForObject(
+        insertJobInstanceSql,
         Long.class,
         tenantId,
         jobDefinitionId,
         jobCode,
         instanceNo,
-        Date.valueOf(LocalDate.now()),
-        tenantId + ":" + instanceNo);
+        bizDate,
+        dedupKey);
   }
 
   private long insertPipelineInstance(String tenantId, long relatedJobInstanceId) {
     String jobCode = "PIPE_" + System.nanoTime();
-    long pipelineDefinitionId =
-        jdbcTemplate.queryForObject("""
-            INSERT INTO batch.pipeline_definition
-              (tenant_id, job_code, pipeline_name, pipeline_type, created_at, updated_at)
-            VALUES (?, ?, ?, 'IMPORT', now(), now())
-            RETURNING id
-            """, Long.class, tenantId, jobCode, jobCode + "-name");
-    return jdbcTemplate.queryForObject(
-        """
+    String insertPipelineInstanceSql = """
         INSERT INTO batch.pipeline_instance
-          (tenant_id, pipeline_definition_id, job_code, pipeline_type, related_job_instance_id,
+          (tenant_id, system_pipeline_code, system_pipeline_version, job_code, pipeline_type,\s\
+          related_job_instance_id,
            run_status, created_at, updated_at)
-        VALUES (?, ?, ?, 'IMPORT', ?, 'RUNNING', now(), now())
+        VALUES (?, 'IMPORT', 1, ?, 'IMPORT', ?, 'RUNNING', now(), now())
         RETURNING id
-        """, Long.class, tenantId, pipelineDefinitionId, jobCode, relatedJobInstanceId);
+        """;
+    return jdbcTemplate.queryForObject(
+        insertPipelineInstanceSql, Long.class, tenantId, jobCode, relatedJobInstanceId);
   }
 
   private long insertTask(String tenantId, long jobInstanceId) {
-    return jdbcTemplate.queryForObject("""
+    String insertJobTaskSql = """
         INSERT INTO batch.job_task
-          (tenant_id, job_instance_id, task_type, task_seq, task_status, created_at, updated_at)
-        VALUES (?, ?, 'EXECUTION', 1, 'RUNNING', now(), now())
+          (tenant_id, job_instance_id, job_instance_biz_date, task_type, task_seq, task_status,
+           created_at, updated_at)
+        VALUES (
+          ?, ?, (SELECT biz_date FROM batch.job_instance WHERE tenant_id = ? AND id = ?),
+          'EXECUTION', 1, 'RUNNING', now(), now()
+        )
         RETURNING id
-        """, Long.class, tenantId, jobInstanceId);
+        """;
+    return jdbcTemplate.queryForObject(
+        insertJobTaskSql, Long.class, tenantId, jobInstanceId, tenantId, jobInstanceId);
   }
 
   private long insertStep(String tenantId, long jobInstanceId, long taskId, String stepCode) {
-    return jdbcTemplate.queryForObject("""
+    String insertJobStepInstanceSql = """
         INSERT INTO batch.job_step_instance
           (tenant_id, job_instance_id, job_task_id, step_code, step_type, step_status,
            created_at, updated_at)
         VALUES (?, ?, ?, ?, 'MAIN', 'RUNNING', now(), now())
         RETURNING id
-        """, Long.class, tenantId, jobInstanceId, taskId, stepCode);
+        """;
+    return jdbcTemplate.queryForObject(
+        insertJobStepInstanceSql, Long.class, tenantId, jobInstanceId, taskId, stepCode);
   }
 }

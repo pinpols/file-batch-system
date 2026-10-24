@@ -23,14 +23,22 @@ public record FileGovernanceLatencyMetrics(
     if (EmptyChecks.isEmpty(values)) {
       return empty(null);
     }
+    String tenantId = text(values.get("tenantId"));
+    long arrivalDelayViolations = number(values.get("arrivalDelayViolations"));
+    long maxArrivalDelaySeconds = number(values.get("maxArrivalDelaySeconds"));
+    long processingDelayViolations = number(values.get("processingDelayViolations"));
+    long maxProcessingDelaySeconds = number(values.get("maxProcessingDelaySeconds"));
+    List<Map<String, Object>> arrivalDelaySamples = samples(values.get("arrivalDelaySamples"));
+    List<Map<String, Object>> processingDelaySamples =
+        samples(values.get("processingDelaySamples"));
     return new FileGovernanceLatencyMetrics(
-        text(values.get("tenantId")),
-        number(values.get("arrivalDelayViolations")),
-        number(values.get("maxArrivalDelaySeconds")),
-        number(values.get("processingDelayViolations")),
-        number(values.get("maxProcessingDelaySeconds")),
-        samples(values.get("arrivalDelaySamples")),
-        samples(values.get("processingDelaySamples")));
+        tenantId,
+        arrivalDelayViolations,
+        maxArrivalDelaySeconds,
+        processingDelayViolations,
+        maxProcessingDelaySeconds,
+        arrivalDelaySamples,
+        processingDelaySamples);
   }
 
   public static FileGovernanceLatencyMetrics empty(String tenantId) {
@@ -41,7 +49,11 @@ public record FileGovernanceLatencyMetrics(
     if (value instanceof Number number) {
       return number.longValue();
     }
-    return value == null ? 0L : Long.parseLong(String.valueOf(value));
+    if (EmptyChecks.isNull(value)) {
+      return 0L;
+    }
+    String numericText = String.valueOf(value);
+    return Long.parseLong(numericText);
   }
 
   @SuppressWarnings("unchecked")

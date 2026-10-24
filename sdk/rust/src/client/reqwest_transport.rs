@@ -337,9 +337,10 @@ fn new_idempotency_key() -> String {
 /// Epoch milliseconds for the `X-Batch-Timestamp` signing header.
 fn current_epoch_millis() -> u128 {
     use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis())
+    let current_time = SystemTime::now();
+    let elapsed_since_epoch = current_time.duration_since(UNIX_EPOCH);
+    elapsed_since_epoch
+        .map(|elapsed| elapsed.as_millis())
         .unwrap_or(0)
 }
 
@@ -361,11 +362,14 @@ fn current_protocol_version() -> &'static str {
 fn with_register_defaults(body: &str, max_concurrent_tasks: i64) -> String {
     match serde_json::from_str::<serde_json::Value>(body) {
         Ok(serde_json::Value::Object(mut map)) => {
-            map.entry("protocolVersion".to_string())
-                .or_insert_with(|| serde_json::Value::from(current_protocol_version()));
+            map.entry("protocolVersion".to_string()).or_insert_with(|| {
+                let protocol_version = current_protocol_version();
+                serde_json::Value::from(protocol_version)
+            });
             map.entry("maxConcurrent".to_string())
                 .or_insert_with(|| serde_json::Value::from(max_concurrent_tasks));
-            serde_json::Value::Object(map).to_string()
+            let completed_register_body = serde_json::Value::Object(map);
+            completed_register_body.to_string()
         }
         _ => body.to_string(),
     }
@@ -394,12 +398,14 @@ impl Transport for ReqwestTransport {
 
     fn claim(&self, task_id: &str, body: &str) -> HttpResponse {
         let path = format!("/internal/tasks/{task_id}/claim");
-        self.post(&path, body, Some(&new_idempotency_key()))
+        let idempotency_key = new_idempotency_key();
+        self.post(&path, body, Some(&idempotency_key))
     }
 
     fn report(&self, task_id: &str, body: &str) -> HttpResponse {
         let path = format!("/internal/tasks/{task_id}/report");
-        self.post(&path, body, Some(&new_idempotency_key()))
+        let idempotency_key = new_idempotency_key();
+        self.post(&path, body, Some(&idempotency_key))
     }
 
     fn renew(&self, task_id: &str, body: &str) -> HttpResponse {

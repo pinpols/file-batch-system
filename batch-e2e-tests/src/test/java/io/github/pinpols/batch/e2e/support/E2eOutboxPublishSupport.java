@@ -90,9 +90,10 @@ public class E2eOutboxPublishSupport {
     }
     TaskDispatchMessage message =
         JsonUtils.fromJson(event.getPayloadJson(), TaskDispatchMessage.class);
-    if (message == null
+    boolean outboxMessageHasNoSelectedWorker = message == null
         || message.selectedWorkerId() == null
-        || message.selectedWorkerId().isBlank()) {
+        || message.selectedWorkerId().isBlank();
+    if (outboxMessageHasNoSelectedWorker) {
       return baseTopic;
     }
     return BatchTopics.directDispatchTopic(baseTopic, message.selectedWorkerId());

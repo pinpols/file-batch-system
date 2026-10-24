@@ -19,7 +19,9 @@ import hmac
 
 def body_sha256_hex(body: bytes | None) -> str:
     """body 原始 bytes 的 SHA-256,小写 hex(空 body 也算)。"""
-    return hashlib.sha256(body or b"").hexdigest()
+    hash_input = body or b""
+    body_digest = hashlib.sha256(hash_input)
+    return body_digest.hexdigest()
 
 
 def canonical_string(
@@ -30,13 +32,15 @@ def canonical_string(
     body: bytes | None,
 ) -> str:
     """拼装待签名的规范串 —— 与服务端 / Java SDK 逐字节一致。"""
+    normalized_method = (method or "").upper()
+    body_digest = body_sha256_hex(body)
     return "\n".join(
         (
-            (method or "").upper(),
+            normalized_method,
             path or "",
             timestamp or "",
             nonce or "",
-            body_sha256_hex(body),
+            body_digest,
         )
     )
 
@@ -52,8 +56,7 @@ def sign(
 ) -> str:
     """HMAC-SHA256(apiKey, canonical) 的小写 hex。"""
     canonical = canonical_string(method, path, timestamp, nonce, body)
-    return hmac.new(
-        (api_key or "").encode("utf-8"),
-        canonical.encode("utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
+    key_bytes = (api_key or "").encode("utf-8")
+    canonical_bytes = canonical.encode("utf-8")
+    signature = hmac.new(key_bytes, canonical_bytes, hashlib.sha256)
+    return signature.hexdigest()

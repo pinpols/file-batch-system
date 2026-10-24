@@ -61,7 +61,6 @@ public record LineageEvidenceResponse(
   public record PipelineInstance(
       Long id,
       @JsonProperty("tenant_id") String tenantId,
-      @JsonProperty("pipeline_definition_id") Long pipelineDefinitionId,
       @JsonProperty("job_code") String jobCode,
       @JsonProperty("pipeline_type") String pipelineType,
       @JsonProperty("file_id") Long fileId,

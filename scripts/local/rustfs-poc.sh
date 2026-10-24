@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：验证 RustFS 的 S3 兼容能力与本地接入。
+# 用法：在仓库根目录执行 bash scripts/local/rustfs-poc.sh；参数与前置环境见下方说明及所属 README。
 set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

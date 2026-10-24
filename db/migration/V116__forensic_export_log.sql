@@ -20,19 +20,26 @@ CREATE TABLE IF NOT EXISTS batch.forensic_export_log (
     export_id          VARCHAR(128) NOT NULL,
     biz_date_from      DATE         NOT NULL,
     biz_date_to        DATE         NOT NULL,
-    job_codes          JSONB,                 -- ["JOB_A", "JOB_B"] 可选过滤; null = 全部
-    scope              JSONB        NOT NULL, -- ["job_instances","files","retries",...]
-    export_format      VARCHAR(32)  NOT NULL, -- BUNDLE / JSON / CSV
-    status             VARCHAR(32)  NOT NULL, -- PROCESSING / COMPLETED / FAILED
-    storage_path       VARCHAR(1024),         -- 本地 fs 路径或 OSS URI
+    -- ["JOB_A", "JOB_B"] 可选过滤; null = 全部
+    job_codes          JSONB,
+    -- ["job_instances","files","retries",...]
+    scope              JSONB        NOT NULL,
+    -- BUNDLE / JSON / CSV
+    export_format      VARCHAR(32)  NOT NULL,
+    -- PROCESSING / COMPLETED / FAILED
+    status             VARCHAR(32)  NOT NULL,
+    -- 本地 fs 路径或 OSS URI
+    storage_path       VARCHAR(1024),
     file_size_bytes    BIGINT,
     sha256             VARCHAR(64),
-    row_counts         JSONB,                 -- 每个 scope 实际导出行数
+    -- 每个 scope 实际导出行数
+    row_counts         JSONB,
     error_message      VARCHAR(2048),
     requested_by       VARCHAR(128) NOT NULL,
     requested_at       TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     completed_at       TIMESTAMPTZ,
-    retention_until    DATE,                  -- v0.2 OSS 接入后才填
+    -- v0.2 OSS 接入后才填
+    retention_until    DATE,
     trace_id           VARCHAR(128),
     UNIQUE (tenant_id, export_id)
 );

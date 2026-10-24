@@ -4,6 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
@@ -106,6 +113,85 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
     assertThat(approvalRecord.approvalStatus()).isEqualTo("PENDING");
     assertThat(approvalRecord.tenantId()).isEqualTo("t1");
     assertThat(approvalRecord.approvalType()).isEqualTo("COMPENSATION");
+  }
+
+  @Test
+  @DisplayName("并发安全的来源幂等键重试返回同一审批单且不重复落库")
+  void shouldReuseApprovalForRepeatedSourceIdempotencyKey() {
+    String key = "workflow-replay-" + java.util.UUID.randomUUID();
+    ApprovalSubmissionSpec submission = new ApprovalSubmissionSpec()
+        .actionType("RETRY")
+        .targetType("JOB_PARTITION")
+        .targetId("idempotent-target")
+        .payloadJson("{\"value\":1,\"nested\":{\"x\":true}}")
+        .sourceIdempotencyKey(key)
+        .approvalReason("same replay request");
+
+    String firstApprovalNo = approvalWorkflowService.submit(submission.build());
+    String retriedApprovalNo = approvalWorkflowService.submit(new ApprovalSubmissionSpec()
+        .actionType("RETRY")
+        .targetType("JOB_PARTITION")
+        .targetId("idempotent-target")
+        .payloadJson("{\"nested\":{\"x\":true},\"value\":1}")
+        .sourceIdempotencyKey(key)
+        .approvalReason("same replay request")
+        .build());
+
+    assertThat(retriedApprovalNo).isEqualTo(firstApprovalNo);
+    assertThatThrownBy(() -> approvalWorkflowService.submit(new ApprovalSubmissionSpec()
+            .actionType("RETRY")
+            .targetType("JOB_PARTITION")
+            .targetId("different-target")
+            .payloadJson("{\"value\":1}")
+            .sourceIdempotencyKey(key)
+            .approvalReason("same replay request")
+            .build()))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.approval.idempotency_conflict");
+  }
+
+  @Test
+  @DisplayName("并发提交同一幂等审批只返回一个审批单号")
+  void shouldCoalesceConcurrentSubmissionsForSourceIdempotencyKey() throws Exception {
+    String key = "workflow-replay-concurrent-" + java.util.UUID.randomUUID();
+    ApprovalWorkflowService.ApprovalSubmitCommand command = new ApprovalSubmissionSpec()
+        .actionType("RETRY")
+        .targetType("JOB_PARTITION")
+        .targetId("concurrent-target")
+        .payloadJson("{\"value\":1}")
+        .sourceIdempotencyKey(key)
+        .approvalReason("concurrent replay request")
+        .build();
+    int submitterCount = 6;
+    CountDownLatch startGate = new CountDownLatch(1);
+    ExecutorService executor = Executors.newFixedThreadPool(submitterCount);
+    try {
+      List<Future<String>> submissions = IntStream.range(0, submitterCount)
+          .mapToObj(index -> executor.submit(() -> {
+            startGate.await();
+            return approvalWorkflowService.submit(command);
+          }))
+          .toList();
+      startGate.countDown();
+
+      List<String> approvalNumbers = submissions.stream()
+          .map(future -> getApprovalNo(future))
+          .toList();
+
+      assertThat(approvalNumbers).hasSize(submitterCount).doesNotContainNull();
+      assertThat(approvalNumbers).containsOnly(approvalNumbers.getFirst());
+    } finally {
+      executor.shutdownNow();
+      assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+    }
+  }
+
+  private String getApprovalNo(Future<String> submission) {
+    try {
+      return submission.get(10, TimeUnit.SECONDS);
+    } catch (Exception exception) {
+      throw new AssertionError("Concurrent approval submission did not finish", exception);
+    }
   }
 
   @Test

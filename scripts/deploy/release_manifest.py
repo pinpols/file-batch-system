@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：校验发布清单、生成 Compose 覆盖层并提取后端镜像 digest。
+# 用法：python3 scripts/deploy/release_manifest.py validate <manifest.json>；其它子命令见 --help。
 """校验发布清单、生成 Compose 覆盖层并提取后端镜像 digest。"""
 
 from __future__ import annotations
@@ -178,7 +180,7 @@ def render_compose(manifest: dict[str, Any]) -> str:
 
 
 def render_helm_values(manifest: dict[str, Any]) -> dict[str, Any]:
-    """Render immutable backend image references accepted by the Helm chart."""
+    """渲染 Helm Chart 接受的后端不可变镜像引用。"""
     validate_manifest(manifest)
     return {
         "release": {

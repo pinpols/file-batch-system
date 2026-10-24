@@ -65,9 +65,10 @@ public final class SdkRetryableHandler implements SdkTaskHandler {
     Duration initial = Duration.ofMillis(ann.initialDelayMillis());
     return switch (ann.backoff()) {
       case FIXED -> SdkRetryPolicy.fixed(ann.maxAttempts(), initial);
-      case EXPONENTIAL ->
-        SdkRetryPolicy.exponential(
-            ann.maxAttempts(), initial, Duration.ofMillis(ann.maxDelayMillis()));
+      case EXPONENTIAL -> {
+        Duration maxDelay = Duration.ofMillis(ann.maxDelayMillis());
+        yield SdkRetryPolicy.exponential(ann.maxAttempts(), initial, maxDelay);
+      }
     };
   }
 
@@ -77,8 +78,14 @@ public final class SdkRetryableHandler implements SdkTaskHandler {
   }
 
   @Override
+  public boolean isSafeToReplay(SdkTaskContext ctx) {
+    return delegate.isSafeToReplay(ctx);
+  }
+
+  @Override
   public SdkTaskResult execute(SdkTaskContext ctx) {
-    int maxAttempts = policy.maxAttempts();
+    // 未知结果的非幂等动作不能在 SDK 内再次发起；只有当前调用已证明安全才沿用注解重试。
+    int maxAttempts = delegate.isSafeToReplay(ctx) ? policy.maxAttempts() : 1;
     Duration delay = policy.initialDelay();
     SdkTaskResult lastResult = null;
     RuntimeException lastThrown = null;

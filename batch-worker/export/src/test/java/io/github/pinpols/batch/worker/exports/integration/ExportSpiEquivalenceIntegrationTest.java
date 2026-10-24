@@ -2,6 +2,8 @@ package io.github.pinpols.batch.worker.exports.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutorRegistry;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
@@ -9,7 +11,9 @@ import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
 import io.github.pinpols.batch.worker.exports.BatchWorkerExportApplication;
 import io.github.pinpols.batch.worker.exports.infrastructure.ExportStepExecutionAdapter;
 import io.github.pinpols.batch.worker.exports.infrastructure.ExportTaskExecutor;
+import io.github.pinpols.batch.worker.exports.plugin.ExportDataPluginRegistry;
 import java.lang.reflect.Field;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +39,9 @@ class ExportSpiEquivalenceIT extends AbstractIntegrationTest {
   @Autowired
   BatchTaskExecutorRegistry registry;
 
+  @Autowired
+  ExportDataPluginRegistry exportDataPluginRegistry;
+
   @Test
   @DisplayName("上下文加载后,任务执行器注册表包含导出类型")
   void shouldRegisterExportTaskType_whenContextLoads() {
@@ -56,5 +63,27 @@ class ExportSpiEquivalenceIT extends AbstractIntegrationTest {
     f.setAccessible(true);
     Object delegate = f.get(exec);
     assertThat(delegate).isSameAs(primaryAdapter);
+  }
+
+  @Test
+  @DisplayName("Worker Spring 注册表发布 JDBC 映射导出的静态重放声明并保留 SQL 模板失败关闭")
+  void shouldExposeConservativeReplayCatalog_whenContextLoads() {
+    List<ReplayCapabilityDeclaration> declarations = exportDataPluginRegistry.replayCapabilityCatalog();
+    ReplayCapabilityDeclaration jdbcMapped = declarations
+        .stream()
+        .filter(declaration ->
+            declaration.pluginId().equals(WorkerPluginIds.EXPORT_DATA_JDBC_MAPPED))
+        .findFirst()
+        .orElseThrow();
+    ReplayCapabilityDeclaration sqlTemplate = declarations
+        .stream()
+        .filter(declaration ->
+            declaration.pluginId().equals(WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE))
+        .findFirst()
+        .orElseThrow();
+
+    assertThat(jdbcMapped.isFullyDeclared()).isTrue();
+    assertThat(jdbcMapped.externalEffectCategories()).containsExactly("BUSINESS_DATABASE_READ");
+    assertThat(sqlTemplate.isFullyDeclared()).isFalse();
   }
 }

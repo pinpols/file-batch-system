@@ -2,8 +2,10 @@ package io.github.pinpols.batch.console.domain.rbac.application.contract.respons
 
 import io.github.pinpols.batch.console.domain.rbac.entity.ApiKeyEntity;
 import java.time.Instant;
+import lombok.Builder;
 
 /** Public API key view; hash and KDF material are deliberately excluded. */
+@Builder
 public record ApiKeyResponse(
     Long id,
     String tenantId,
@@ -19,18 +21,19 @@ public record ApiKeyResponse(
     Instant createdAt) {
 
   public static ApiKeyResponse from(ApiKeyEntity entity) {
-    return new ApiKeyResponse(
-        entity.getId(),
-        entity.getTenantId(),
-        entity.getKeyName(),
-        entity.getKeyPrefix(),
-        entity.getScopes(),
-        entity.getEnabled(),
-        entity.getExpiresAt(),
-        entity.getLastUsedAt(),
-        entity.getCreatedBy(),
-        entity.getRevokedBy(),
-        entity.getRevokedAt(),
-        entity.getCreatedAt());
+    return ApiKeyResponse.builder()
+        .id(entity.getId())
+        .tenantId(entity.getTenantId())
+        .keyName(entity.getKeyName())
+        .keyPrefix(entity.getKeyPrefix())
+        .scopes(entity.getScopes())
+        .enabled(entity.getEnabled())
+        .expiresAt(entity.getExpiresAt())
+        .lastUsedAt(entity.getLastUsedAt())
+        .createdBy(entity.getCreatedBy())
+        .revokedBy(entity.getRevokedBy())
+        .revokedAt(entity.getRevokedAt())
+        .createdAt(entity.getCreatedAt())
+        .build();
   }
 }

@@ -103,7 +103,7 @@ MinIO 主进程及 `minio-init` 应为 1001:1001，Valkey 的 PID 1 与服务进
 - Loki
 - Grafana
 
-对应脚本在 [scripts/docker/observability/](../../scripts/docker/observability/)。
+对应脚本在 [scripts/docker/observability/](../../scripts/docker/observability)。
 
 如果你只需要业务运行，不需要监控面板和 trace/log 链路，这一层可以不启。
 业务栈和观测栈仍然是分开的 compose 文件，但会通过 `${COMPOSE_PROJECT_NAME:-batch-platform}_batch-network` 共享网络互通。
@@ -123,7 +123,7 @@ MinIO 主进程及 `minio-init` 应为 1001:1001，Valkey 的 PID 1 与服务进
 - 构建时通过 `MODULE` 参数选择模块
 - 运行时通过 `depends_on` 等待数据库、Kafka topic 初始化和 MinIO bucket 初始化完成
 - 镜像内置 `curl`，用于容器健康检查
-- 只有 `console-api`、`trigger`、`orchestrator` 暴露 HTTP 健康检查；三个 worker 是非 Web 进程，靠容器重启策略和启动顺序保障
+- `console-api`、`trigger`、`orchestrator` 与五类 Worker 均配置 HTTP 健康检查；Worker 的 Compose 探针访问各自业务端口（18083–18087）的 `/actuator/health`
 - `console-api` 的普通 REST 接口可以直接做负载均衡；SSE 实时接口通过 Redis Pub/Sub 广播并结合 replay buffer 回放，允许多实例部署
 - `console-api` realtime 层会消费 Redis Pub/Sub 并转发到本机 SSE 连接，不再依赖 sticky session
 

@@ -13,7 +13,7 @@
 | 004 | [ADR-004-worker-lifecycle-template.md](./ADR-004-worker-lifecycle-template.md)           | Worker 生命周期用模板方法模式，子类只填扩展点                                                                    |
 | 005 | [ADR-005-partition-count-resolver-chain.md](./ADR-005-partition-count-resolver-chain.md) | 分区数解析用责任链（job override → tenant default → global default）                                     |
 | 006 | [ADR-006-compensation-requires-new.md](./ADR-006-compensation-requires-new.md)           | 补偿 / 重试方法用 `REQUIRES_NEW`，避免外层事务 rollback 把补偿也回滚                                              |
-| 007 | [ADR-007-dual-datasource.md](./ADR-007-dual-datasource.md)                               | 单 PG 实例双 schema 隔离 platform / business                                                        |
+| 007 | [ADR-007-dual-datasource.md](./ADR-007-dual-datasource.md)                               | 平台库与业务数据源职责隔离；同库双 schema 是历史部署示意                                                        |
 | 008 | [ADR-008-god-class-decomposition.md](./ADR-008-god-class-decomposition.md)               | God Class 分解为子服务 + Facade 模式（实例：`DefaultLaunchApplicationService`）                            |
 | 009 | [ADR-009-workflow-param-dsl.md](./ADR-009-workflow-param-dsl.md)                         | Workflow 节点间参数串联 DSL（JSONPath-like `$.nodes.X.output.fileId`，分 4 stage 落地，~3 人天）              |
 | 010 | [ADR-010-trigger-async-decoupling.md](./ADR-010-trigger-async-decoupling.md)             | Trigger → Orchestrator 异步解耦（trigger_outbox + Kafka，复用 ADR-002 模式，~7-8 人天分 7 stage）            |
@@ -23,8 +23,8 @@
 | 014 | [ADR-014-claim-idempotency.md](./ADR-014-claim-idempotency.md)                           | Worker CLAIM 幂等（invocation-id，**V95 已落地**）                                                    |
 | 015 | [ADR-015-worker-side-outbox.md](./ADR-015-worker-side-outbox.md)                         | Worker REPORT outbox（PG/SQLite、SKIP LOCKED、熔断协同；Accepted）                                     |
 | 016 | [ADR-016-batch-renew-lease-api.md](./ADR-016-batch-renew-lease-api.md)                   | Renew lease 批量 API 收敛 HTTP（Accepted，MVP）                                                      |
-| 017 | [ADR-017-result-version-model.md](./ADR-017-result-version-model.md)                     | 结果版本（result_version）主模型：重跑产物多版本归属、EFFECTIVE 单版裁决、GC 策略（Accepted；Stage 1-5 已落 V108，Stage 6 console 待接入） |
-| 018 | [ADR-018-cross-batch-day-dag-dependency.md](./ADR-018-cross-batch-day-dag-dependency.md) | 跨批量日 DAG 依赖；按 ADR 当前记录 Stage 1-5、7 已落，Stage 6 系统级 E2E 证据待补；历史阶段编号不代表新的实施待办 |
+| 017 | [ADR-017-result-version-model.md](./ADR-017-result-version-model.md)                     | 结果版本（result_version）主模型：重跑产物多版本归属、EFFECTIVE 单版裁决、GC 策略（Accepted；Stage 1-5 已落 V108，历史UI阶段状态不作为当前待办统计） |
+| 018 | [ADR-018-cross-batch-day-dag-dependency.md](./ADR-018-cross-batch-day-dag-dependency.md) | 跨批量日 DAG 依赖；按 ADR 当前记录 Stage 1-5、7 已落，历史Stage 6 E2E记录不代表当前仍未验证，状态见现行矩阵 |
 | 019 | [ADR-019-cross-domain-rate-limit.md](./ADR-019-cross-domain-rate-limit.md)               | 跨业务域限流：business_domain 一等模型 + 域级 quota + 父子借调（Accepted；实施前置触发条件已明确，未触发不开工）                       |
 | 020 | [ADR-020-batch-day-replay.md](./ADR-020-batch-day-replay.md)                             | 批量日维度重放：batch_day_replay_session 聚合 + scope/policy 分发 + 接审批（Accepted；Stage 2 schema V110 已落，依赖 ADR-017） |
 | 021 | [ADR-021-data-quality-reconciliation.md](./ADR-021-data-quality-reconciliation.md)       | 数据对账闭环：`data_quality_rule` + `data_quality_check` + 4 类规则（行/表/跨表/跨日）+ 接 ADR-017 EFFECTIVE gate（Accepted，**第 2 阶段 / P0-P1 应做但收敛边界**：只做批量交付对账，不做数据治理平台）   |
@@ -54,10 +54,13 @@
 | 044 | [ADR-044-instance-pause-resume-batch-day-serial.md](./ADR-044-instance-pause-resume-batch-day-serial.md) | 实例/工作流 pause-resume 决策；`PAUSED` 状态与相关 API/派发约束已存在，完整业务场景和并发验收需以专项测试报告为准 |
 | 045 | [ADR-045-console-ai-ops-assistant.md](./ADR-045-console-ai-ops-assistant.md) | 控制台 AI 运维助手定位:只读问答(指路 + 取数)、默认关、不裁定业务对错/不写状态/不进主链、可无损下沉移除（Accepted） |
 | 046 | [ADR-046-file-bundle-aggregation.md](./ADR-046-file-bundle-aggregation.md) | 文件束聚合；基础迁移、编排入口和集成测试已存在，完整 profile 覆盖及性能结论仍按专项测试/压测分别确认 |
+| 047 | [ADR-047-workflow-scheduling-and-daily-obligations.md](./ADR-047-workflow-scheduling-and-daily-obligations.md) | 历史共同契约；Superseded by ADR-048，旧兼容及旧库升级要求已退出范围 |
+| 048 | [ADR-048-workflow-fresh-database-cutover.md](./ADR-048-workflow-fresh-database-cutover.md) | 当前契约 2026-10-14.2：全新库、单一 Workflow 运行与恢复；已有分支实现，正式状态见验收矩阵 |
+| 049 | [ADR-049-replay-operation-scopes.md](ADR-049-replay-operation-scopes.md) | 已批准并有分支实现：区间/失败节点/整图 Replay 身份、快照与副作用合同；能力与验收边界见正文 |
 
 ### 历史优先级与范围边界
 
-> ADR-012 / 021..027 的"做不做 / 什么时候做 / 边界在哪"决策档已归档：[`docs/archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md`](../../archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md)
+> ADR-012 / 021..027 的"做不做 / 什么时候做 / 边界在哪"决策档已归档：[`docs/archive/standards/worker-capability-priority-and-scope-2026-05-06.md`](../../archive/standards/worker-capability-priority-and-scope-2026-05-06.md)
 >
 > 系统定位一句话：**"批量运行控制面 + 文件 / 任务交付闭环"，不扩张为"企业数据治理 + 容器资源编排 + 合规审计平台"**。
 

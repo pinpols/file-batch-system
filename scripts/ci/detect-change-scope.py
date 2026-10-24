@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Detect changed repository scopes for local and GitHub Actions routing.
-
-The classifier is intentionally conservative. A pull request diff is classified
-by comparing the ``base`` and ``head`` trees directly. Events without a trustworthy PR diff fall back to the
-full scope so a routing failure cannot silently skip a required gate.
-"""
+# 用途：分类变更文件并输出本地与 CI 门禁的执行范围。
+# 用法：在仓库根目录执行 python3 scripts/ci/detect-change-scope.py；参数与前置环境见下方说明及所属 README。
+"""分类变更范围，供本地与 GitHub Actions 路由使用。
+PR 直接比较 base 与 head 两棵源码树；无法获得可信 PR 差异的事件回退到完整范围，
+避免路由失败时静默跳过必要门禁。"""
 
 from __future__ import annotations
 
@@ -90,7 +89,7 @@ def is_config(path: str) -> bool:
 
 
 def classify_path(path: str) -> set[str]:
-    """Return every scope touched by one repository-relative path."""
+    """返回一个仓库相对路径所影响的全部检查范围。"""
     scopes: set[str] = set()
     normalized = path.removeprefix("./")
     name = PurePosixPath(normalized).name
@@ -108,6 +107,8 @@ def classify_path(path: str) -> set[str]:
 
     if normalized.endswith(".java"):
         scopes.add("java")
+    if under(normalized, "config/quality") and normalized.endswith(".xml"):
+        scopes.update({"java", "config", "ci"})
     if normalized == "pom.xml" or normalized.endswith("/pom.xml") or under(
         normalized, ".mvn"
     ) or normalized.startswith("mvnw"):
@@ -120,7 +121,7 @@ def classify_path(path: str) -> set[str]:
 
     if under(normalized, "scripts") or under(normalized, "load-tests") or under(
         normalized, ".githooks"
-    ) or name == "Makefile":
+    ) or name == "Makefile" or normalized.endswith((".sh", ".bash", ".zsh", ".ps1")) or "/scripts/" in f"/{normalized}":
         scopes.add("scripts")
 
     if under(normalized, "sdk") or under(normalized, "docs/api/sdk-contract-fixtures"):
@@ -140,7 +141,7 @@ def classify_path(path: str) -> set[str]:
         normalized, "batch-e2e-tests"
     ):
         scopes.add("tests")
-    if under(normalized, "docs/test-data") and normalized.endswith(".xlsx"):
+    if under(normalized, "test-data"):
         scopes.add("tests")
 
     if normalized.startswith(("Dockerfile", "docker/")) or name.startswith(
@@ -168,7 +169,7 @@ def classify_path(path: str) -> set[str]:
 
 
 def required_unit_shards(path: str) -> set[str]:
-    """Return the conservative unit-test shards affected by one path."""
+    """保守确定一个路径所影响的单元测试分片。"""
     normalized = path.removeprefix("./")
     # E2E 源码由 static-java-quality 的全 reactor test-compile 保证可编译，并在 main / nightly
     # 的六片 E2E 中执行；PR 单元分片不重复启动。

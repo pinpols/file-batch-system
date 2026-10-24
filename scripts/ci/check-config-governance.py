@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：配置治理注册表。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-config-governance.py；参数与前置环境见下方说明及所属 README。
 """校验启动期配置登记完整性，并阻止引入未经治理的运行时刷新机制。"""
 
 from __future__ import annotations
@@ -40,7 +42,7 @@ def production_java_files() -> list[Path]:
     return sorted(
         path
         for path in ROOT.glob("**/src/main/java/**/*.java")
-        if "/target/" not in path.as_posix()
+        if not {"build", "target"}.intersection(path.relative_to(ROOT).parts)
     )
 
 

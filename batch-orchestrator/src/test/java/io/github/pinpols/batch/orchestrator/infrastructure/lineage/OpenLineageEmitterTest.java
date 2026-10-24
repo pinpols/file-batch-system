@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
@@ -157,7 +158,7 @@ class OpenLineageEmitterTest {
     String a = OpenLineageEmitter.deterministicRunId(42L);
     String b = OpenLineageEmitter.deterministicRunId(42L);
     assertThat(a).isEqualTo(b);
-    assertThat(java.util.UUID.fromString(a)).isNotNull();
+    assertThat(UUID.fromString(a)).isNotNull();
   }
 
   private OpenLineageDatasetRow dataset(

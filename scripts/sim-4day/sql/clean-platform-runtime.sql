@@ -5,6 +5,7 @@ BEGIN
   END IF;
 END $$;
 
+
 TRUNCATE TABLE
   batch.file_record, batch.file_audit_log, batch.file_error_record,
   batch.file_dispatch_record, batch.file_channel_health,
@@ -15,18 +16,19 @@ TRUNCATE TABLE
   batch.outbox_event, batch.outbox_event_dedup_key, batch.event_delivery_log, batch.event_outbox_retry,
   batch.worker_report_outbox,
   batch.trigger_outbox_event, batch.trigger_request,
-  batch.trigger_misfire_pending, batch.trigger_runtime_state,
-  batch.batch_day_instance, batch.batch_day_operation_audit,
-  batch.batch_day_replay_entry, batch.batch_day_replay_session,
+  batch.trigger_misfire_pending, batch.batch_day_instance, batch.batch_day_operation_audit,
+  batch.batch_day_replay_entry, batch.batch_day_replay_preview_token,
+  batch.batch_day_replay_session,
   batch.batch_day_waiting_launch,
   batch.dead_letter_task, batch.retry_schedule,
-  batch.compensation_command, batch.compensation_checkpoint,
-  batch.approval_command, batch.idempotency_record, batch.result_version,
+  batch.compensation_command, batch.approval_command, batch.idempotency_record, batch.result_version,
   batch.alert_event, batch.notification_delivery_log, batch.webhook_delivery_log,
-  batch.console_push_approval_notification, batch.console_push_job_notification,
+  batch.console_push_job_delivery, batch.workflow_terminal_notification_receipt,
+  batch.console_push_approval_notification,
   batch.quota_runtime_state, batch.tenant_scheduler_snapshot,
   batch.data_quality_check, batch.forensic_export_log,
   batch.console_operation_audit, batch.console_ai_audit_log,
   batch.shedlock
 RESTART IDENTITY CASCADE;
+
 -- 注意:batch.process_staging 属业务库(batch_business),由 clean-business-runtime.sql 清理,勿在平台库 TRUNCATE。

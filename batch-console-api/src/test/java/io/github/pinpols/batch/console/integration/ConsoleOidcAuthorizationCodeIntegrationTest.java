@@ -19,6 +19,7 @@ import io.github.pinpols.batch.console.support.maintenance.MaintenanceModeFilter
 import io.github.pinpols.batch.console.support.ratelimit.ConsoleOidcAuthorizationRateLimitFilter;
 import io.github.pinpols.batch.console.support.ratelimit.ConsoleRateLimitFilter;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import jakarta.servlet.Filter;
 import jakarta.servlet.http.Cookie;
 import java.net.InetAddress;
 import java.net.URLDecoder;
@@ -26,6 +27,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
+import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
@@ -46,6 +48,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -54,6 +57,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
+import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 import org.springframework.security.web.FilterChainProxy;
 import org.springframework.security.web.WebAttributes;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -135,23 +139,24 @@ class ConsoleOidcAuthorizationCodeIntegrationTest extends AbstractIntegrationTes
     String suffix = UUID.randomUUID().toString().replace("-", "");
     tenantId = "oidc-flow-it";
     username = "oidc-flow-user-" + suffix;
-    jdbcTemplate.update(
-        "insert into batch.tenant (tenant_id, tenant_name, status, created_by) "
-            + "values (?, ?, 'ACTIVE', 'oidc-flow-it')",
-        tenantId,
-        tenantId);
-    jdbcTemplate.update(
-        "insert into batch.console_user_account "
-            + "(tenant_id, username, display_name, password_hash, authorities_csv, enabled) "
-            + "values (?, ?, 'OIDC flow test', 'test-only-not-a-password', 'ROLE_TENANT_USER', true)",
-        tenantId,
-        username);
-    jdbcTemplate.update("""
+    String insertTenantSql = """
+        insert into batch.tenant (tenant_id, tenant_name, status, created_by)
+        values (?, ?, 'ACTIVE', 'oidc-flow-it')
+        """;
+    jdbcTemplate.update(insertTenantSql, tenantId, tenantId);
+    String insertConsoleUserAccountSql = """
+        insert into batch.console_user_account
+            (tenant_id, username, display_name, password_hash, authorities_csv, enabled)
+        values (?, ?, 'OIDC flow test', 'test-only-not-a-password', 'ROLE_TENANT_USER', true)
+        """;
+    jdbcTemplate.update(insertConsoleUserAccountSql, tenantId, username);
+    String insertExternalIdentitySql = """
         insert into batch.console_external_identity
             (tenant_id, account_id, issuer, subject, linked_by)
         select ?, id, ?, 'test-subject-oidc', 'oidc-flow-it'
         from batch.console_user_account where tenant_id = ? and username = ?
-        """, tenantId, ISSUER, tenantId, username);
+        """;
+    jdbcTemplate.update(insertExternalIdentitySql, tenantId, ISSUER, tenantId, username);
   }
 
   @AfterEach
@@ -159,11 +164,14 @@ class ConsoleOidcAuthorizationCodeIntegrationTest extends AbstractIntegrationTes
     if (tenantId == null) {
       return;
     }
-    jdbcTemplate.update(
-        "delete from batch.console_user_account where tenant_id = ? and username = ?",
-        tenantId,
-        username);
-    jdbcTemplate.update("delete from batch.tenant where tenant_id = ?", tenantId);
+    String deleteConsoleUserAccountSql = """
+        delete from batch.console_user_account where tenant_id = ? and username = ?
+        """;
+    jdbcTemplate.update(deleteConsoleUserAccountSql, tenantId, username);
+    String deleteTenantSql = """
+        delete from batch.tenant where tenant_id = ?
+    """;
+    jdbcTemplate.update(deleteTenantSql, tenantId);
   }
 
   @Test
@@ -183,14 +191,11 @@ class ConsoleOidcAuthorizationCodeIntegrationTest extends AbstractIntegrationTes
     String nonce = parameters.getFirst("nonce");
     EXPECTED_NONCE.set(nonce);
     EXPECTED_CHALLENGE.set(parameters.getFirst("code_challenge"));
-    ArgumentCaptor<org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest>
-        savedRequest = ArgumentCaptor.forClass(
-            org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest.class);
+    ArgumentCaptor<OAuth2AuthorizationRequest> savedRequest =
+        ArgumentCaptor.forClass(OAuth2AuthorizationRequest.class);
     verify(authorizationRequestRepository)
         .saveAuthorizationRequest(
-            savedRequest.capture(),
-            org.mockito.ArgumentMatchers.any(),
-            org.mockito.ArgumentMatchers.any());
+            savedRequest.capture(), ArgumentMatchers.any(), ArgumentMatchers.any());
     String savedState = savedRequest.getValue().getState();
     assertThat(state.equals(savedState))
         .as("redirect state hash=%s, stored state hash=%s", hash(state), hash(savedState))
@@ -241,11 +246,12 @@ class ConsoleOidcAuthorizationCodeIntegrationTest extends AbstractIntegrationTes
         .andExpect(status().is3xxRedirection())
         .andReturn();
 
+    String latestErrorCodeSql = """
+        select error_code from batch.console_operation_audit
+        where tenant_id = ? and action = 'auth.oidc.login' order by id desc limit 1
+        """;
     String latestErrorCode = jdbcTemplate.query(
-        "select error_code from batch.console_operation_audit "
-            + "where tenant_id = ? and action = 'auth.oidc.login' order by id desc limit 1",
-        result -> result.next() ? result.getString(1) : null,
-        tenantId);
+        latestErrorCodeSql, result -> result.next() ? result.getString(1) : null, tenantId);
     Object authenticationFailure =
         callback.getRequest().getAttribute(WebAttributes.AUTHENTICATION_EXCEPTION);
     assertThat(callback.getResponse().getRedirectedUrl())
@@ -293,8 +299,7 @@ class ConsoleOidcAuthorizationCodeIntegrationTest extends AbstractIntegrationTes
   @Test
   @DisplayName("真实安全过滤器链在 OAuth2 重定向处理前运行 OIDC 登录限流")
   void shouldRunOidcRateLimitBeforeAuthorizationRedirectFilter() {
-    List<jakarta.servlet.Filter> filters =
-        securityFilterChain.getFilters("/oauth2/authorization/pilot-tenant");
+    List<Filter> filters = securityFilterChain.getFilters("/oauth2/authorization/pilot-tenant");
     int rateLimitIndex = indexOfFilter(filters, ConsoleOidcAuthorizationRateLimitFilter.class);
     int redirectIndex = indexOfFilter(filters, OAuth2AuthorizationRequestRedirectFilter.class);
 
@@ -336,8 +341,7 @@ class ConsoleOidcAuthorizationCodeIntegrationTest extends AbstractIntegrationTes
         .andExpect(status().isTooManyRequests());
   }
 
-  private int indexOfFilter(
-      List<jakarta.servlet.Filter> filters, Class<? extends jakarta.servlet.Filter> filterType) {
+  private int indexOfFilter(List<Filter> filters, Class<? extends Filter> filterType) {
     for (int index = 0; index < filters.size(); index++) {
       if (filterType.isInstance(filters.get(index))) {
         return index;
@@ -419,7 +423,7 @@ class ConsoleOidcAuthorizationCodeIntegrationTest extends AbstractIntegrationTes
       KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
       generator.initialize(2048);
       KeyPair pair = generator.generateKeyPair();
-      return new RSAKey.Builder((java.security.interfaces.RSAPublicKey) pair.getPublic())
+      return new RSAKey.Builder((RSAPublicKey) pair.getPublic())
           .privateKey(pair.getPrivate())
           .keyID("oidc-it-key")
           .build();

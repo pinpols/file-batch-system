@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Guard the shared SDK environment-variable contract across language implementations."""
+# 用途：SDK 配置环境一致性。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-sdk-config-env-parity.py；参数与前置环境见下方说明及所属 README。
+"""核对多语言 SDK 实现共用的环境变量契约。"""
 
 from __future__ import annotations
 

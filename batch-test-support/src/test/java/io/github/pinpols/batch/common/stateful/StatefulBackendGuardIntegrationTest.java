@@ -25,17 +25,10 @@ class StatefulBackendGuardIntegrationTest {
   @SuppressWarnings("resource")
   @BeforeAll
   static void startPostgres() {
-    postgres = TestPostgresContainers.platform();
-    postgres.start();
-    HikariConfig config = new HikariConfig();
-    config.setJdbcUrl(postgres.getJdbcUrl());
-    config.setUsername(postgres.getUsername());
-    config.setPassword(postgres.getPassword());
-    config.setMaximumPoolSize(3);
-    dataSource = new HikariDataSource(config);
-    jdbc = new JdbcTemplate(dataSource);
-    jdbc.execute("CREATE SCHEMA batch");
-    jdbc.execute("""
+    final String createSchemaSql = """
+        CREATE SCHEMA batch
+    """;
+    final String createStatefulBackendBindingSql = """
         CREATE TABLE batch.stateful_backend_binding (
           feature_key VARCHAR(160) PRIMARY KEY,
           backend VARCHAR(64) NOT NULL,
@@ -45,8 +38,8 @@ class StatefulBackendGuardIntegrationTest {
           updated_by VARCHAR(160) NOT NULL,
           updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
-        """);
-    jdbc.execute("""
+        """;
+    final String createStatefulBackendCutoverHistorySql = """
         CREATE TABLE batch.stateful_backend_cutover_history (
           id BIGSERIAL PRIMARY KEY,
           feature_key VARCHAR(160) NOT NULL,
@@ -60,12 +53,26 @@ class StatefulBackendGuardIntegrationTest {
           changed_by VARCHAR(160) NOT NULL,
           changed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
-        """);
-    jdbc.execute("""
+        """;
+    final String createUniqueSql = """
         CREATE UNIQUE INDEX uk_stateful_backend_cutover_token
           ON batch.stateful_backend_cutover_history(feature_key, cutover_id)
           WHERE cutover_id IS NOT NULL
-        """);
+        """;
+
+    postgres = TestPostgresContainers.platform();
+    postgres.start();
+    HikariConfig config = new HikariConfig();
+    config.setJdbcUrl(postgres.getJdbcUrl());
+    config.setUsername(postgres.getUsername());
+    config.setPassword(postgres.getPassword());
+    config.setMaximumPoolSize(3);
+    dataSource = new HikariDataSource(config);
+    jdbc = new JdbcTemplate(dataSource);
+    jdbc.execute(createSchemaSql);
+    jdbc.execute(createStatefulBackendBindingSql);
+    jdbc.execute(createStatefulBackendCutoverHistorySql);
+    jdbc.execute(createUniqueSql);
   }
 
   @AfterAll
@@ -80,22 +87,30 @@ class StatefulBackendGuardIntegrationTest {
 
   @BeforeEach
   void reset() {
-    jdbc.execute("TRUNCATE batch.stateful_backend_cutover_history, batch.stateful_backend_binding");
+    final String truncateStatefulBackendCutoverHistorySql = """
+        TRUNCATE batch.stateful_backend_cutover_history, batch.stateful_backend_binding
+    """;
+
+    jdbc.execute(truncateStatefulBackendCutoverHistorySql);
     guard = new StatefulBackendGuard(dataSource);
   }
 
   @Test
   @DisplayName("首次校验记录后端身份基线, 同一后端再次校验返回已验证, 且切换历史仅落一条基线记录")
   void recordsBaseline_thenVerifiesSameBackend() {
+    final String selectCountSql = """
+        SELECT count(*) FROM batch.stateful_backend_cutover_history
+    """;
+
     StatefulBackendGuard.DesiredBackend redis =
         desired("redis", "host=valkey|port=6379|db=0", null);
 
     assertThat(guard.verify(redis).action())
         .isEqualTo(StatefulBackendGuard.GuardAction.BASELINE_RECORDED);
     assertThat(guard.verify(redis).action()).isEqualTo(StatefulBackendGuard.GuardAction.VERIFIED);
-    assertThat(jdbc.queryForObject(
-            "SELECT count(*) FROM batch.stateful_backend_cutover_history", Long.class))
-        .isEqualTo(1L);
+    Long selectedStatefulBackendCutoverHistoryCount =
+        jdbc.queryForObject(selectCountSql, Long.class);
+    assertThat(selectedStatefulBackendCutoverHistoryCount).isEqualTo(1L);
   }
 
   @Test

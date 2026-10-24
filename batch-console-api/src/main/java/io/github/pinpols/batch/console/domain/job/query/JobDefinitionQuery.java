@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.domain.job.query;
 
-import io.github.pinpols.batch.common.model.PageRequest;
 import lombok.Builder;
 
+import io.github.pinpols.batch.common.model.PageRequest;
 @Builder
 public record JobDefinitionQuery(
     String tenantId,

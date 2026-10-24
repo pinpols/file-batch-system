@@ -49,6 +49,23 @@ class DispatchSpiEquivalenceIT extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("Worker 注册目录发布完整且唯一的 DISPATCH 重放能力声明")
+  void shouldPublishDispatchReplayContract_whenRegisteringWorker() {
+    assertThat(registry.replayCapabilityCatalog())
+        .filteredOn(declaration -> "DISPATCH".equals(declaration.pluginId()))
+        .singleElement()
+        .satisfies(declaration -> {
+          assertThat(declaration.pluginVersion()).isEqualTo("1");
+          assertThat(declaration.externalEffectCategories())
+              .containsExactly("FILE_CHANNEL_DELIVERY");
+          assertThat(declaration.idempotencyKeyScope()).isEqualTo("tenantId:fileId:channelCode");
+          assertThat(declaration.recoveryProtocolId())
+              .isEqualTo("file-dispatch-record-state-machine-v1");
+          assertThat(declaration.isFullyDeclared()).isTrue();
+        });
+  }
+
+  @Test
   @DisplayName("执行器内部持有的委派与主适配器是同一实例,SPI 与主适配器两条路径等价")
   void shouldShareSameDelegate_whenComparingExecutorWithPrimaryAdapter() throws Exception {
     DispatchTaskExecutor exec = (DispatchTaskExecutor) registry.find("DISPATCH");

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Guard shell scripts from macOS/BSD-only commands without Linux fallbacks."""
+# 用途：Shell Linux 兼容性。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-shell-linux-portability.py；参数与前置环境见下方说明及所属 README。
+"""检查 Shell 脚本是否使用缺少 Linux 替代方案的 macOS/BSD 专属命令。"""
 
 from __future__ import annotations
 
@@ -72,7 +74,12 @@ def tracked_shell_files(candidates: list[str] | None = None) -> list[Path]:
         text=True,
         stdout=subprocess.PIPE,
     )
-    return [ROOT / line for line in result.stdout.splitlines() if line.strip()]
+    # Git 索引仍可能包含工作树中已删除的脚本，检查对象以现存文件为准。
+    return [
+        ROOT / line
+        for line in result.stdout.splitlines()
+        if line.strip() and (ROOT / line).is_file()
+    ]
 
 
 def is_comment_or_blank(line: str) -> bool:

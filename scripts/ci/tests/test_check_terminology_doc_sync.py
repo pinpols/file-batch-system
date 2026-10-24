@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：核心术语文档同步门禁测试。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_check_terminology_doc_sync.py。
 """核心术语文档同步门禁测试。"""
 
 from __future__ import annotations

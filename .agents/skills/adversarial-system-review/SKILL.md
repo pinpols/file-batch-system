@@ -49,7 +49,7 @@ description: 用户要求对项目或关键链路做全面、对抗式安全/韧
 
 ## 审查报告参考
 
-- `docs/runbook/go-live-realism-audit-2026-06-21.md`：业务真实性、数据可信、容量/恢复、租户隔离、调度、时区、生命周期、迁移、兼容和安全的审核维度及“形式化落地”反例。
+- `docs/standards/go-live-audit-checklist.md`：业务真实性、数据可信、容量/恢复、租户隔离、调度、时区、生命周期、迁移、兼容和安全的审核维度及“形式化落地”反例。
 - `docs/audit/backend-six-round-adversarial-audit-2026-07-27.md`、`docs/audit/backend-adversarial-audit-2026-07-27.md`：模块边界、安全/租户、数据库/迁移、并发/状态机、资源、部署与 staging 证据的分轮审查方式。
-- `docs/archive/analysis/2026-06-03-deep-scan-summary.md`：后端架构/资源/安全/业务运维、前端交互/反馈/布局/a11y、SDK 数据完整性和 CI/CD 的多 lane 覆盖方法。
+- `docs/archive/audit/deep-scan-summary-2026-06-03.md`：后端架构/资源/安全/业务运维、前端交互/反馈/布局/a11y、SDK 数据完整性和 CI/CD 的多 lane 覆盖方法。
 - 上述均为历史报告，用于提取审查维度，不作为当前缺陷或修复状态依据。当前状态以最新代码、守护和验证记录为准。

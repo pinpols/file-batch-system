@@ -39,11 +39,12 @@ public class TenantConfigPackageExcelApplyAuthorization {
     if (!authorities.contains(ConsoleRoles.TENANT_ADMIN)) {
       throw forbidden();
     }
-    if (EmptyChecks.isNotEmpty(result.validResourceQueues())
+    boolean packageContainsPlatformManagedFields =
+        EmptyChecks.isNotEmpty(result.validResourceQueues())
         || hasValues(result.validJobs(), Set.of(COL_QUEUE_CODE, COL_WORKER_GROUP))
-        || hasValues(result.validPipelines(), Set.of(COL_WORKER_GROUP))
         || hasValues(result.validWfNodes(), Set.of(COL_WORKER_GROUP))
-        || hasValues(result.validJobMonitoringPolicies(), PLATFORM_MONITORING_FIELDS)) {
+        || hasValues(result.validJobMonitoringPolicies(), PLATFORM_MONITORING_FIELDS);
+    if (packageContainsPlatformManagedFields) {
       throw BizException.of(ResultCode.FORBIDDEN, "error.config_package.platform_fields_forbidden");
     }
   }

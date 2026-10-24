@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
@@ -47,13 +48,15 @@ public class CalendarBizDateResolver {
       Instant fireTime, ZoneId fallbackZoneId, CalendarBizDateDefinition calendar) {
     Objects.requireNonNull(fireTime, "fireTime");
     ZoneId zoneId = resolveZoneId(fallbackZoneId, calendar);
+    ZonedDateTime zonedFireTime = fireTime.atZone(zoneId);
     if (EmptyChecks.isNull(calendar)) {
-      return fireTime.atZone(zoneId).toLocalDate();
+      return zonedFireTime.toLocalDate();
     }
-    LocalDate localDate = fireTime.atZone(zoneId).toLocalDate();
-    LocalTime localTime = fireTime.atZone(zoneId).toLocalTime();
-    LocalDate rawBizDate =
-        localTime.isBefore(resolveCutoffTime(calendar)) ? localDate.minusDays(1) : localDate;
+    LocalDate localDate = zonedFireTime.toLocalDate();
+    LocalTime localTime = zonedFireTime.toLocalTime();
+    LocalTime cutoffTime = resolveCutoffTime(calendar);
+    boolean cutoffHasNotBeenReached = localTime.isBefore(cutoffTime);
+    LocalDate rawBizDate = cutoffHasNotBeenReached ? localDate.minusDays(1) : localDate;
     return adjustForHoliday(rawBizDate, calendar);
   }
 
@@ -118,6 +121,10 @@ public class CalendarBizDateResolver {
   }
 
   private String normalize(String value) {
-    return EmptyChecks.isNull(value) ? "SKIP" : value.trim().toUpperCase(Locale.ROOT);
+    if (EmptyChecks.isNull(value)) {
+      return "SKIP";
+    }
+    String trimmedValue = value.trim();
+    return trimmedValue.toUpperCase(Locale.ROOT);
   }
 }

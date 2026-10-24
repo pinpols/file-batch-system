@@ -2,60 +2,155 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.worker.processes.mapper.business.ProcessStagingMapper">
 
-    <!--
-      孤儿清理：staged_at 早于 retentionHours 小时的行，单次最多删 batchSize 条。
-      WHERE ctid IN (SELECT ctid ... LIMIT) 把锁范围限制在选中的物理行。
-      ORDER BY staged_at 优先清最老的行。
-    -->
-    <delete id="deleteOrphansOlderThan">
-        DELETE FROM batch.process_staging
-        WHERE ctid IN (
-          SELECT ctid FROM batch.process_staging
-          WHERE staged_at &lt; now() - make_interval(hours => #{retentionHours})
-          ORDER BY staged_at
-          LIMIT #{batchSize}
-        )
-    </delete>
+    <resultMap id="processStagingGenerationCandidateMap"
+               type="io.github.pinpols.batch.worker.processes.cleanup.ProcessStagingGenerationCandidate">
+        <id column="generation_id" property="generationId" javaType="java.lang.String"/>
+        <result column="tenant_id" property="tenantId" javaType="java.lang.String"/>
+        <result column="job_task_id" property="taskId" javaType="java.lang.Long"/>
+        <result column="batch_key" property="batchKey" javaType="java.lang.String"/>
+    </resultMap>
 
-    <select id="selectMinStagedAt" resultType="java.time.Instant">
-        SELECT min(staged_at) FROM batch.process_staging
+    <select id="listExpiredGenerations" resultMap="processStagingGenerationCandidateMap">
+        SELECT tenant_id,
+               job_task_id,
+               generation_id,
+               batch_key
+        FROM batch.process_staging_generation
+        WHERE tenant_id = #{tenantId}
+          AND generation_status IN ('OPEN', 'SEALED')
+          AND job_task_id IS NOT NULL
+          AND created_at &lt; now() - make_interval(hours => #{retentionHours})
+        ORDER BY created_at, generation_id
+        LIMIT #{batchSize}
+        OFFSET #{offset}
     </select>
 
-    <select id="countOrphansOlderThan" resultType="long">
-        SELECT count(*) FROM batch.process_staging
-        WHERE staged_at &lt; now() - make_interval(hours => #{retentionHours})
+    <select id="countExpiredGenerations" resultType="long">
+        SELECT count(*)
+        FROM batch.process_staging_generation
+        WHERE tenant_id = #{tenantId}
+          AND generation_status IN ('OPEN', 'SEALED')
+          AND job_task_id IS NOT NULL
+          AND created_at &lt; now() - make_interval(hours => #{retentionHours})
     </select>
 
-    <!--
-      天级 RANGE 子分区幂等创建。partitionName / fromTs / toTs 全由调度器从日期派生
-      (process_staging_p<YYYYMMDD> / UTC 时间戳),非用户输入 → ${} 插值无注入面。
-      分区边界值是 DDL 字面量,JDBC 占位符不支持,只能 ${} 插值。
-      父表索引由 PG 自动附加到新分区,无需在此重复建索引。
-    -->
-    <update id="createDailyPartition">
-        CREATE TABLE IF NOT EXISTS batch.${partitionName}
-            PARTITION OF batch.process_staging
-            FOR VALUES FROM ('${fromTs}') TO ('${toTs}')
+    <select id="listActiveGenerationsAfter" resultMap="processStagingGenerationCandidateMap">
+        SELECT tenant_id,
+               job_task_id,
+               generation_id,
+               batch_key
+        FROM batch.process_staging_generation
+        WHERE tenant_id = #{tenantId}
+          AND generation_status IN ('OPEN', 'SEALED')
+          AND job_task_id IS NOT NULL
+          AND generation_id &gt; COALESCE(CAST(#{generationId} AS uuid), '00000000-0000-0000-0000-000000000000'::uuid)
+        ORDER BY generation_id
+        LIMIT #{batchSize}
+    </select>
+
+    <select id="countGenerationRowsOlderThan" resultType="long">
+        SELECT count(*)
+        FROM batch.process_staging
+        WHERE tenant_id = #{candidate.tenantId}
+          AND staging_generation_id = CAST(#{candidate.generationId} AS uuid)
+          AND batch_key = #{candidate.batchKey}
+          AND staged_at &lt; now() - make_interval(hours => #{retentionHours})
+    </select>
+
+    <select id="selectOldestGenerationRow" resultType="java.time.Instant">
+        SELECT min(staged_at)
+        FROM batch.process_staging
+        WHERE tenant_id = #{candidate.tenantId}
+          AND staging_generation_id = CAST(#{candidate.generationId} AS uuid)
+          AND batch_key = #{candidate.batchKey}
+    </select>
+
+    <select id="selectGenerationStatusForUpdate" resultType="string">
+        SELECT generation_status
+        FROM batch.process_staging_generation
+        WHERE tenant_id = #{tenantId}
+          AND job_task_id = #{taskId}
+          AND generation_id = CAST(#{generationId} AS uuid)
+          AND batch_key = #{batchKey}
+        FOR UPDATE
+    </select>
+
+    <update id="sealOpenGenerationWithStatus">
+        UPDATE batch.process_staging_generation
+        SET generation_status = #{targetStatus}, sealed_at = now()
+        WHERE tenant_id = #{candidate.tenantId}
+          AND job_task_id = #{candidate.taskId}
+          AND generation_id = CAST(#{candidate.generationId} AS uuid)
+          AND batch_key = #{candidate.batchKey}
+          AND generation_status = 'OPEN'
     </update>
 
-    <!--
-      列出早于 cutoffYmd 的天级子分区,排除 DEFAULT 回退分区(名为 process_staging_default,不匹配正则)。
-      relname 形如 process_staging_p20260607,截末 8 位日期串按字典序比较(定宽等价数值序)。
-    -->
-    <select id="listExpiredDailyPartitions" resultType="java.lang.String">
-        SELECT c.relname
-        FROM pg_inherits i
-        JOIN pg_class c ON c.oid = i.inhrelid
-        JOIN pg_class p ON p.oid = i.inhparent
-        JOIN pg_namespace n ON n.oid = p.relnamespace
-        WHERE n.nspname = 'batch'
-          AND p.relname = 'process_staging'
-          AND c.relname ~ '^process_staging_p[0-9]{8}$'
-          AND substring(c.relname FROM 'p([0-9]{8})$') &lt; #{cutoffYmd}
+    <update id="markGenerationReclaimedIfEmptyWithStatus">
+        UPDATE batch.process_staging_generation generation
+        SET generation_status = #{targetStatus}
+        WHERE generation.tenant_id = #{candidate.tenantId}
+          AND generation.job_task_id = #{candidate.taskId}
+          AND generation.generation_id = CAST(#{candidate.generationId} AS uuid)
+          AND generation.batch_key = #{candidate.batchKey}
+          AND generation.generation_status = 'SEALED'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM batch.process_staging staging
+            WHERE staging.tenant_id = generation.tenant_id
+              AND staging.staging_generation_id = generation.generation_id
+              AND staging.batch_key = generation.batch_key
+          )
+    </update>
+
+    <select id="setGenerationRlsContext" resultType="string">
+        SELECT set_config('app.process_staging_generation_id', #{generationId}, true)
     </select>
 
-    <update id="dropPartition">
-        DROP TABLE IF EXISTS batch.${partitionName}
+    <delete id="deleteGenerationRows">
+        DELETE FROM batch.process_staging AS target
+        USING (
+          SELECT tableoid, ctid
+          FROM batch.process_staging
+          WHERE tenant_id = #{candidate.tenantId}
+            AND staging_generation_id = CAST(#{candidate.generationId} AS uuid)
+            AND batch_key = #{candidate.batchKey}
+          ORDER BY staged_at
+          LIMIT #{batchSize}
+          FOR UPDATE SKIP LOCKED
+        ) AS victims
+        WHERE target.tableoid = victims.tableoid
+          AND target.ctid = victims.ctid
+    </delete>
+
+    <!--
+      天级 RANGE 子分区创建与严格租户策略在同一个 DO 事务内完成。父表访问策略不会保护直接命名访问的叶子,
+      因此新建/已存在的叶子都要 ENABLE + FORCE RLS 并应用 strict policy。
+      分区名和 UTC 日期由调度器从 LocalDate 派生;边界通过 format(%L) 作为 DDL 字面量,父表索引由 PG 自动附加。
+    -->
+    <update id="createDailyPartition">
+        DO $partition$
+        BEGIN
+          EXECUTE format(
+            'CREATE TABLE IF NOT EXISTS batch.%I PARTITION OF batch.process_staging '
+                || 'FOR VALUES FROM (%L) TO (%L)',
+            '${partitionName}',
+            '${fromTs}',
+            '${toTs}');
+          EXECUTE format('ALTER TABLE batch.%I ENABLE ROW LEVEL SECURITY', '${partitionName}');
+          EXECUTE format('ALTER TABLE batch.%I FORCE ROW LEVEL SECURITY', '${partitionName}');
+          EXECUTE format(
+            'DROP POLICY IF EXISTS tenant_isolation_transition ON batch.%I', '${partitionName}');
+          EXECUTE format(
+            'DROP POLICY IF EXISTS tenant_isolation_strict ON batch.%I', '${partitionName}');
+          EXECUTE format(
+            'CREATE POLICY tenant_isolation_strict ON batch.%I AS PERMISSIVE FOR ALL TO PUBLIC '
+                || 'USING (tenant_id = current_setting(''app.tenant_id'', true) '
+                || 'AND staging_generation_id::text = current_setting(''app.process_staging_generation_id'', true)) '
+                || 'WITH CHECK (tenant_id = current_setting(''app.tenant_id'', true) '
+                || 'AND staging_generation_id::text = current_setting(''app.process_staging_generation_id'', true))',
+            '${partitionName}');
+        END
+        $partition$
     </update>
 
 </mapper>

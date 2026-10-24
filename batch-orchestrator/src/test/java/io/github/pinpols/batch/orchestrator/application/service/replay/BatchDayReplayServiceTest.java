@@ -1,8 +1,12 @@
 package io.github.pinpols.batch.orchestrator.application.service.replay;
 
+import io.github.pinpols.batch.orchestrator.domain.query.JobInstanceBatchDayCandidatesQuery;
+
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -38,8 +42,10 @@ import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayPreviewTokenMap
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.DisasterDayOverrideMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
+import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
+import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper;
 import io.github.pinpols.batch.orchestrator.mapper.view.BatchDayReplayAssetPartitionImpactView;
 import io.github.pinpols.batch.orchestrator.mapper.view.BatchDayReplayDispatchImpactView;
 import java.time.Clock;
@@ -65,6 +71,7 @@ class BatchDayReplayServiceTest {
   private JobInstanceMapper jobInstanceMapper;
   private ResultVersionMapper resultVersionMapper;
   private ResultVersionPromoteService promoteService;
+  private JobExecutionLogMapper jobExecutionLogMapper;
   private BatchDayReplayService service;
   private final AtomicReference<BatchDayReplayPreviewTokenEntity> storedPreviewToken =
       new AtomicReference<>();
@@ -110,6 +117,7 @@ class BatchDayReplayServiceTest {
     jobInstanceMapper = mock(JobInstanceMapper.class);
     resultVersionMapper = mock(ResultVersionMapper.class);
     promoteService = mock(ResultVersionPromoteService.class);
+    jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
     BatchDayDryRunProperties dryRunProperties = new BatchDayDryRunProperties();
     BatchTimezoneProvider timezoneProvider =
         new BatchTimezoneProvider(new BatchTimezoneProperties());
@@ -128,14 +136,16 @@ class BatchDayReplayServiceTest {
         mock(SchedulePlanBuilder.class),
         mock(BatchDayPlanCalendarMapper.class),
         mock(DisasterDayOverrideMapper.class),
-        timezoneProvider);
+        timezoneProvider,
+        mock(ReplayOperationMapper.class),
+        jobExecutionLogMapper);
   }
 
   @Test
   @DisplayName("全失败范围提交时按候选实例生成重放条目并创建会话")
   void shouldMaterializeEntries_whenSubmittingAllFailedScope() {
     when(jobInstanceMapper.selectBatchDayCandidates(
-            eq("t1"), eq("CAL"), eq(LocalDate.of(2026, Month.MAY, 4)), anyList(), anyList()))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "t1") && java.util.Objects.equals(parameters.calendarCode(), "CAL") && java.util.Objects.equals(parameters.bizDate(), LocalDate.of(2026, Month.MAY, 4)) && parameters.statuses() != null && parameters.jobCodes() != null)))
         .thenReturn(List.of(jobInstance(101L, "JOB_A"), jobInstance(102L, "JOB_B")));
     when(sessionMapper.insert(any(BatchDayReplaySessionEntity.class))).thenReturn(1);
     when(sessionMapper.selectActiveByCalendarBizDate("t1", "CAL", LocalDate.of(2026, Month.MAY, 4)))
@@ -159,10 +169,38 @@ class BatchDayReplayServiceTest {
   }
 
   @Test
+  @DisplayName("会话持久租户与请求租户不一致时拒绝写入条目")
+  void shouldRejectReplayEntryInsertWhenPersistedSessionTenantDiffers() {
+    when(jobInstanceMapper.selectBatchDayCandidates(
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "t1") && java.util.Objects.equals(parameters.calendarCode(), "CAL") && java.util.Objects.equals(parameters.bizDate(), LocalDate.of(2026, Month.MAY, 4)) && parameters.statuses() != null && parameters.jobCodes() != null)))
+        .thenReturn(List.of(jobInstance(101L, "JOB_A")));
+    when(sessionMapper.insert(any(BatchDayReplaySessionEntity.class))).thenReturn(1);
+    when(sessionMapper.selectActiveByCalendarBizDate("t1", "CAL", LocalDate.of(2026, Month.MAY, 4)))
+        .thenReturn(sessionAt("t2", 7L, "RUNNING", "ALL_FAILED"));
+
+    BatchDayReplaySubmitCommand command = BatchDayReplaySubmitCommand.builder()
+        .tenantId("t1")
+        .calendarCode("CAL")
+        .bizDate(LocalDate.of(2026, Month.MAY, 4))
+        .scope("ALL_FAILED")
+        .resultPolicy("CREATE_NEW_VERSION")
+        .configVersionPolicy("USE_ORIGINAL_CONFIG")
+        .reason("tenant identity guard")
+        .requestedBy("ops")
+        .autoApprove(true)
+        .build();
+
+    assertThatThrownBy(() -> service.submit(withPreviewToken(service, command)))
+        .isInstanceOf(BizException.class);
+
+    verify(entryMapper, never()).insertBatch(anyList());
+  }
+
+  @Test
   @DisplayName("提交时历史配置版本策略被归一化为使用最新配置")
   void shouldNormalizePolicy_whenLegacyConfigVersionPolicyGiven() {
     when(jobInstanceMapper.selectBatchDayCandidates(
-            eq("t1"), eq("CAL"), eq(LocalDate.of(2026, Month.MAY, 4)), anyList(), anyList()))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "t1") && java.util.Objects.equals(parameters.calendarCode(), "CAL") && java.util.Objects.equals(parameters.bizDate(), LocalDate.of(2026, Month.MAY, 4)) && parameters.statuses() != null && parameters.jobCodes() != null)))
         .thenReturn(List.of(jobInstance(101L, "JOB_A")));
     when(sessionMapper.insert(any(BatchDayReplaySessionEntity.class))).thenReturn(1);
     when(sessionMapper.selectActiveByCalendarBizDate("t1", "CAL", LocalDate.of(2026, Month.MAY, 4)))
@@ -190,7 +228,7 @@ class BatchDayReplayServiceTest {
   @DisplayName("预览时历史指定版本策略被归一化为使用指定版本")
   void shouldNormalizePolicy_whenPreviewUsesLegacySpecificVersionPolicy() {
     when(jobInstanceMapper.selectBatchDayCandidates(
-            eq("t1"), eq("CAL"), eq(LocalDate.of(2026, Month.MAY, 4)), anyList(), anyList()))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "t1") && java.util.Objects.equals(parameters.calendarCode(), "CAL") && java.util.Objects.equals(parameters.bizDate(), LocalDate.of(2026, Month.MAY, 4)) && parameters.statuses() != null && parameters.jobCodes() != null)))
         .thenReturn(List.of(jobInstance(101L, "JOB_A")));
 
     BatchDayReplayPreviewResponse result = service.preview(BatchDayReplaySubmitCommand.builder()
@@ -211,7 +249,7 @@ class BatchDayReplayServiceTest {
   @DisplayName("预览返回影响面统计, 不落库会话与条目")
   void shouldReturnImpactWithoutWriting_whenPreviewing() {
     when(jobInstanceMapper.selectBatchDayCandidates(
-            eq("t1"), eq("CAL"), eq(LocalDate.of(2026, Month.MAY, 4)), anyList(), anyList()))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "t1") && java.util.Objects.equals(parameters.calendarCode(), "CAL") && java.util.Objects.equals(parameters.bizDate(), LocalDate.of(2026, Month.MAY, 4)) && parameters.statuses() != null && parameters.jobCodes() != null)))
         .thenReturn(List.of(jobInstance(101L, "JOB_A"), jobInstance(102L, "JOB_B")));
 
     BatchDayReplayPreviewResponse result = service.preview(BatchDayReplaySubmitCommand.builder()
@@ -240,7 +278,7 @@ class BatchDayReplayServiceTest {
   @DisplayName("提交必须携带未过期的一次性预览凭证且同一凭证不能重复使用")
   void shouldRequireAndConsumeSingleUsePreviewToken() {
     when(jobInstanceMapper.selectBatchDayCandidates(
-            anyString(), anyString(), any(), anyList(), anyList()))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.calendarCode() != null && parameters.statuses() != null && parameters.jobCodes() != null)))
         .thenReturn(List.of(jobInstance(101L, "JOB_A")));
     when(sessionMapper.insert(any(BatchDayReplaySessionEntity.class))).thenReturn(1);
     when(sessionMapper.selectActiveByCalendarBizDate("t1", "CAL", LocalDate.of(2026, Month.MAY, 4)))
@@ -272,7 +310,7 @@ class BatchDayReplayServiceTest {
   @DisplayName("缺少预览凭证时不能创建重放会话")
   void shouldRejectSubmit_whenPreviewTokenIsMissing() {
     when(jobInstanceMapper.selectBatchDayCandidates(
-            anyString(), anyString(), any(), anyList(), anyList()))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.calendarCode() != null && parameters.statuses() != null && parameters.jobCodes() != null)))
         .thenReturn(List.of(jobInstance(101L, "JOB_A")));
     BatchDayReplaySubmitCommand command = BatchDayReplaySubmitCommand.builder()
         .tenantId("t1")
@@ -292,7 +330,7 @@ class BatchDayReplayServiceTest {
   @DisplayName("并发消费同一预览凭证时返回预览失效业务冲突")
   void shouldRejectSubmit_whenPreviewTokenWasConsumedConcurrently() {
     when(jobInstanceMapper.selectBatchDayCandidates(
-            anyString(), anyString(), any(), anyList(), anyList()))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.calendarCode() != null && parameters.statuses() != null && parameters.jobCodes() != null)))
         .thenReturn(List.of(jobInstance(101L, "JOB_A")));
     BatchDayReplaySubmitCommand command = BatchDayReplaySubmitCommand.builder()
         .tenantId("t1")
@@ -315,7 +353,7 @@ class BatchDayReplayServiceTest {
   @DisplayName("提交参数与已预览参数不同时拒绝创建会话")
   void shouldRejectSubmit_whenRequestChangedAfterPreview() {
     when(jobInstanceMapper.selectBatchDayCandidates(
-            anyString(), anyString(), any(), anyList(), anyList()))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.calendarCode() != null && parameters.statuses() != null && parameters.jobCodes() != null)))
         .thenReturn(List.of(jobInstance(101L, "JOB_A")));
     BatchDayReplaySubmitCommand command = BatchDayReplaySubmitCommand.builder()
         .tenantId("t1")
@@ -338,7 +376,7 @@ class BatchDayReplayServiceTest {
   @DisplayName("预览后候选发生变化时拒绝提交旧快照")
   void shouldRejectSubmit_whenCandidateSnapshotChanged() {
     when(jobInstanceMapper.selectBatchDayCandidates(
-            anyString(), anyString(), any(), anyList(), anyList()))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.calendarCode() != null && parameters.statuses() != null && parameters.jobCodes() != null)))
         .thenReturn(List.of(jobInstance(101L, "JOB_A")))
         .thenReturn(List.of(jobInstance(102L, "JOB_A")));
     BatchDayReplaySubmitCommand command = BatchDayReplaySubmitCommand.builder()
@@ -360,7 +398,7 @@ class BatchDayReplayServiceTest {
   @DisplayName("过期预览凭证不能提交")
   void shouldRejectSubmit_whenPreviewTokenExpired() {
     when(jobInstanceMapper.selectBatchDayCandidates(
-            anyString(), anyString(), any(), anyList(), anyList()))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.calendarCode() != null && parameters.statuses() != null && parameters.jobCodes() != null)))
         .thenReturn(List.of(jobInstance(101L, "JOB_A")));
     BatchDayReplaySubmitCommand command = BatchDayReplaySubmitCommand.builder()
         .tenantId("t1")
@@ -389,7 +427,7 @@ class BatchDayReplayServiceTest {
   @DisplayName("预览结果同时包含资产分区影响与派发影响明细")
   void shouldIncludeImpacts_whenPreviewing() {
     when(jobInstanceMapper.selectBatchDayCandidates(
-            eq("t1"), eq("CAL"), eq(LocalDate.of(2026, Month.MAY, 4)), anyList(), anyList()))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "t1") && java.util.Objects.equals(parameters.calendarCode(), "CAL") && java.util.Objects.equals(parameters.bizDate(), LocalDate.of(2026, Month.MAY, 4)) && parameters.statuses() != null && parameters.jobCodes() != null)))
         .thenReturn(List.of(jobInstance(101L, "JOB_A")));
     when(entryMapper.selectAssetPartitionImpacts(eq("t1"), any()))
         .thenReturn(List.of(new BatchDayReplayAssetPartitionImpactView(
@@ -421,7 +459,7 @@ class BatchDayReplayServiceTest {
   @DisplayName("没有候选实例时预览返回提示, 不创建空会话")
   void shouldReturnWarning_whenNoCandidates() {
     when(jobInstanceMapper.selectBatchDayCandidates(
-            eq("t1"), eq("CAL"), eq(LocalDate.of(2026, Month.MAY, 4)), anyList(), anyList()))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "t1") && java.util.Objects.equals(parameters.calendarCode(), "CAL") && java.util.Objects.equals(parameters.bizDate(), LocalDate.of(2026, Month.MAY, 4)) && parameters.statuses() != null && parameters.jobCodes() != null)))
         .thenReturn(List.of());
 
     BatchDayReplayPreviewResponse result = service.preview(BatchDayReplaySubmitCommand.builder()
@@ -443,7 +481,7 @@ class BatchDayReplayServiceTest {
   @DisplayName("没有候选实例时提交被拒绝并抛出业务异常")
   void shouldThrow_whenSubmittingWithoutCandidates() {
     when(jobInstanceMapper.selectBatchDayCandidates(
-            eq("t1"), eq("CAL"), eq(LocalDate.of(2026, Month.MAY, 4)), anyList(), anyList()))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "t1") && java.util.Objects.equals(parameters.calendarCode(), "CAL") && java.util.Objects.equals(parameters.bizDate(), LocalDate.of(2026, Month.MAY, 4)) && parameters.statuses() != null && parameters.jobCodes() != null)))
         .thenReturn(List.of());
 
     assertThatThrownBy(() -> service.submit(BatchDayReplaySubmitCommand.builder()
@@ -462,7 +500,7 @@ class BatchDayReplayServiceTest {
   @DisplayName("试运行提交默认关闭时被拒绝, 且不写会话")
   void shouldRejectDryRunSubmit_whenDisabledByDefault() {
     when(jobInstanceMapper.selectBatchDayCandidates(
-            anyString(), anyString(), any(), anyList(), anyList()))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.calendarCode() != null && parameters.statuses() != null && parameters.jobCodes() != null)))
         .thenReturn(List.of(jobInstance(101L, "JOB_A")));
 
     assertThatThrownBy(() -> service.submit(baseDryRunCommand().build()))
@@ -475,7 +513,7 @@ class BatchDayReplayServiceTest {
   void shouldForceDryRunPolicy_whenDryRunSubmitEnabled() {
     BatchDayReplayService dryRunService = dryRunService(true);
     when(jobInstanceMapper.selectBatchDayCandidates(
-            anyString(), anyString(), any(), anyList(), anyList()))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.calendarCode() != null && parameters.statuses() != null && parameters.jobCodes() != null)))
         .thenReturn(List.of(jobInstance(101L, "JOB_A")));
     when(sessionMapper.insert(any())).thenReturn(1);
     when(sessionMapper.selectActiveByCalendarBizDate("t1", "CAL", LocalDate.of(2026, Month.MAY, 4)))
@@ -537,7 +575,7 @@ class BatchDayReplayServiceTest {
   @DisplayName("同日历营业日已有活动会话时提交抛出业务异常")
   void shouldThrow_whenActiveSessionAlreadyExists() {
     when(jobInstanceMapper.selectBatchDayCandidates(
-            anyString(), anyString(), any(), anyList(), anyList()))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.calendarCode() != null && parameters.statuses() != null && parameters.jobCodes() != null)))
         .thenReturn(List.of(jobInstance(101L, "JOB_A")));
     when(sessionMapper.insert(any(BatchDayReplaySessionEntity.class)))
         .thenThrow(new DuplicateKeyException("uk_replay_session_active"));
@@ -600,7 +638,7 @@ class BatchDayReplayServiceTest {
     assertThat(result.scope()).isEqualTo(BatchDayReplayScope.OUTPUTS_ONLY.code());
     verify(entryMapper).insertBatch(anyList());
     verify(jobInstanceMapper, never())
-        .selectBatchDayCandidates(anyString(), anyString(), any(), anyList(), anyList());
+        .selectBatchDayCandidates(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.calendarCode() != null && parameters.statuses() != null && parameters.jobCodes() != null));
   }
 
   @Test
@@ -634,14 +672,20 @@ class BatchDayReplayServiceTest {
   @Test
   @DisplayName("审批待处理会话后状态推进为运行中")
   void shouldAdvanceToRunning_whenApprovingPendingSession() {
-    when(sessionMapper.selectById("t1", 1L))
-        .thenReturn(
-            sessionAt("t1", 1L, ConfigLifecycleStatus.PENDING_APPROVAL.code(), "ALL_FAILED"))
-        .thenReturn(sessionAt("t1", 1L, "RUNNING", "ALL_FAILED"));
-    when(sessionMapper.updateStatus(any(UpdateBatchDayReplaySessionStatusParam.class)))
+    BatchDayReplaySessionEntity pending =
+        sessionAt("t1", 1L, ConfigLifecycleStatus.PENDING_APPROVAL.code(), "ALL_FAILED");
+    BatchDayReplaySessionEntity running = sessionAt("t1", 1L, "RUNNING", "ALL_FAILED");
+    when(sessionMapper.selectById("t1", 1L)).thenReturn(pending, running);
+    when(sessionMapper.selectForUpdate("t1", 1L)).thenReturn(pending);
+    when(sessionMapper.updateStatus(argThat(update ->
+        "t1".equals(update.getTenantId())
+            && Long.valueOf(1L).equals(update.getId())
+            && "RUNNING".equals(update.getToStatus())
+            && List.of("PENDING_APPROVAL").equals(update.getExpectedStatuses())
+            && "approver".equals(update.getApprovedBy()))))
         .thenReturn(1);
 
-    var result = service.approve("t1", 1L, "approver");
+    BatchDayReplaySessionEntity result = service.approve("t1", 1L, "approver");
 
     assertThat(result.status()).isEqualTo("RUNNING");
   }
@@ -649,23 +693,31 @@ class BatchDayReplayServiceTest {
   @Test
   @DisplayName("会话已在运行中时审批被拒绝")
   void shouldThrow_whenApprovingRunningSession() {
-    when(sessionMapper.selectById("t1", 1L))
-        .thenReturn(sessionAt("t1", 1L, "RUNNING", "ALL_FAILED"));
+    BatchDayReplaySessionEntity running = sessionAt("t1", 1L, "RUNNING", "ALL_FAILED");
+    when(sessionMapper.selectById("t1", 1L)).thenReturn(running);
+    when(sessionMapper.selectForUpdate("t1", 1L)).thenReturn(running);
 
     assertThatThrownBy(() -> service.approve("t1", 1L, "approver"))
-        .isInstanceOf(BizException.class);
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.batch_day_replay.approve_state_invalid");
+    verify(sessionMapper, never()).updateStatus(any(UpdateBatchDayReplaySessionStatusParam.class));
   }
 
   @Test
   @DisplayName("取消运行中的会话后状态变为已取消")
   void shouldMoveToCancelled_whenCancellingActiveSession() {
-    when(sessionMapper.selectById("t1", 1L))
-        .thenReturn(sessionAt("t1", 1L, "RUNNING", "ALL_FAILED"))
-        .thenReturn(sessionAt("t1", 1L, "CANCELLED", "ALL_FAILED"));
-    when(sessionMapper.updateStatus(any(UpdateBatchDayReplaySessionStatusParam.class)))
+    BatchDayReplaySessionEntity running = sessionAt("t1", 1L, "RUNNING", "ALL_FAILED");
+    BatchDayReplaySessionEntity cancelled = sessionAt("t1", 1L, "CANCELLED", "ALL_FAILED");
+    when(sessionMapper.selectById("t1", 1L)).thenReturn(running, cancelled);
+    when(sessionMapper.selectForUpdate("t1", 1L)).thenReturn(running);
+    when(sessionMapper.updateStatus(argThat(update ->
+        "t1".equals(update.getTenantId())
+            && Long.valueOf(1L).equals(update.getId())
+            && "CANCELLED".equals(update.getToStatus())
+            && List.of("PENDING_APPROVAL", "RUNNING").equals(update.getExpectedStatuses()))))
         .thenReturn(1);
 
-    var result = service.cancel("t1", 1L);
+    BatchDayReplaySessionEntity result = service.cancel("t1", 1L);
 
     assertThat(result.status()).isEqualTo("CANCELLED");
   }
@@ -673,10 +725,14 @@ class BatchDayReplayServiceTest {
   @Test
   @DisplayName("会话已处于终态时取消被拒绝")
   void shouldThrow_whenCancellingTerminalSession() {
-    when(sessionMapper.selectById("t1", 1L))
-        .thenReturn(sessionAt("t1", 1L, "SUCCEEDED", "ALL_FAILED"));
+    BatchDayReplaySessionEntity succeeded = sessionAt("t1", 1L, "SUCCEEDED", "ALL_FAILED");
+    when(sessionMapper.selectById("t1", 1L)).thenReturn(succeeded);
+    when(sessionMapper.selectForUpdate("t1", 1L)).thenReturn(succeeded);
 
-    assertThatThrownBy(() -> service.cancel("t1", 1L)).isInstanceOf(BizException.class);
+    assertThatThrownBy(() -> service.cancel("t1", 1L))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.batch_day_replay.cancel_state_invalid");
+    verify(sessionMapper, never()).updateStatus(any(UpdateBatchDayReplaySessionStatusParam.class));
   }
 
   @Test
@@ -698,9 +754,12 @@ class BatchDayReplayServiceTest {
   @Test
   @DisplayName("执行仅产出会话时逐条提升结果版本, 完成后会话置为成功")
   void shouldPromoteEachEntryAndComplete_whenExecutingOutputsOnly() {
-    when(sessionMapper.selectById("t1", 5L))
-        .thenReturn(sessionAt("t1", 5L, "RUNNING", BatchDayReplayScope.OUTPUTS_ONLY.code()))
-        .thenReturn(sessionAt("t1", 5L, "SUCCEEDED", BatchDayReplayScope.OUTPUTS_ONLY.code()));
+    BatchDayReplaySessionEntity running =
+        sessionAt("t1", 5L, "RUNNING", BatchDayReplayScope.OUTPUTS_ONLY.code());
+    BatchDayReplaySessionEntity succeeded =
+        sessionAt("t1", 5L, "SUCCEEDED", BatchDayReplayScope.OUTPUTS_ONLY.code());
+    when(sessionMapper.selectById("t1", 5L)).thenReturn(running, succeeded);
+    when(sessionMapper.selectForUpdate("t1", 5L)).thenReturn(running);
     BatchDayReplayEntryEntity e1 = BatchDayReplayEntryEntity.builder()
         .id(1L)
         .sessionId(5L)
@@ -717,35 +776,61 @@ class BatchDayReplayServiceTest {
         .resultVersionId(12L)
         .status("PENDING")
         .build();
-    when(entryMapper.selectBySessionAndStatus(eq(5L), eq("t1"), eq("PENDING"), anyInt()))
+    when(entryMapper.selectBySessionAndStatus(5L, "t1", "PENDING", Integer.MAX_VALUE))
         .thenReturn(List.of(e1, e2));
 
-    var result = service.executeOutputsOnly("t1", 5L);
+    BatchDayReplaySessionEntity result = service.executeOutputsOnly("t1", 5L);
 
-    verify(promoteService, times(2)).promote(eq("t1"), any(Long.class));
+    verify(promoteService).promote("t1", 11L);
+    verify(promoteService).promote("t1", 12L);
+    verify(entryMapper).updateStatus(argThat(update ->
+        Long.valueOf(1L).equals(update.getId())
+            && Long.valueOf(11L).equals(update.getResultVersionId())
+            && "SUCCEEDED".equals(update.getToStatus())));
+    verify(entryMapper).updateStatus(argThat(update ->
+        Long.valueOf(2L).equals(update.getId())
+            && Long.valueOf(12L).equals(update.getResultVersionId())
+            && "SUCCEEDED".equals(update.getToStatus())));
+    verify(sessionMapper).updateCounts(argThat(update ->
+        "t1".equals(update.tenantId())
+            && Long.valueOf(5L).equals(update.id())
+            && Integer.valueOf(2).equals(update.succeededCount())
+            && Integer.valueOf(0).equals(update.failedCount())
+            && Integer.valueOf(0).equals(update.inFlightCount())
+            && Integer.valueOf(2).equals(update.totalCount())));
+    verify(sessionMapper).updateStatus(argThat(update ->
+        "t1".equals(update.getTenantId())
+            && Long.valueOf(5L).equals(update.getId())
+            && "SUCCEEDED".equals(update.getToStatus())
+            && List.of("RUNNING").equals(update.getExpectedStatuses())));
     assertThat(result.status()).isEqualTo("SUCCEEDED");
   }
 
   @Test
   @DisplayName("对非仅产出范围的会话执行提升时被拒绝")
   void shouldThrow_whenExecutingNonOutputsOnlyScope() {
-    when(sessionMapper.selectById("t1", 5L))
-        .thenReturn(sessionAt("t1", 5L, "RUNNING", "ALL_FAILED"));
+    BatchDayReplaySessionEntity running = sessionAt("t1", 5L, "RUNNING", "ALL_FAILED");
+    when(sessionMapper.selectById("t1", 5L)).thenReturn(running);
+    when(sessionMapper.selectForUpdate("t1", 5L)).thenReturn(running);
 
-    assertThatThrownBy(() -> service.executeOutputsOnly("t1", 5L)).isInstanceOf(BizException.class);
+    assertThatThrownBy(() -> service.executeOutputsOnly("t1", 5L))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.batch_day_replay.outputs_only_scope_required");
+    verifyNoInteractions(promoteService);
   }
 
   @Test
   @DisplayName("会话不处于运行中时执行提升被拒绝")
   void shouldThrow_whenExecutingSessionNotRunning() {
-    when(sessionMapper.selectById("t1", 5L))
-        .thenReturn(sessionAt(
-            "t1",
-            5L,
-            ConfigLifecycleStatus.PENDING_APPROVAL.code(),
-            BatchDayReplayScope.OUTPUTS_ONLY.code()));
+    BatchDayReplaySessionEntity pending = sessionAt(
+        "t1", 5L, ConfigLifecycleStatus.PENDING_APPROVAL.code(), BatchDayReplayScope.OUTPUTS_ONLY.code());
+    when(sessionMapper.selectById("t1", 5L)).thenReturn(pending);
+    when(sessionMapper.selectForUpdate("t1", 5L)).thenReturn(pending);
 
-    assertThatThrownBy(() -> service.executeOutputsOnly("t1", 5L)).isInstanceOf(BizException.class);
+    assertThatThrownBy(() -> service.executeOutputsOnly("t1", 5L))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.batch_day_replay.not_running");
+    verifyNoInteractions(promoteService);
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────
@@ -782,7 +867,73 @@ class BatchDayReplayServiceTest {
         planBuilder,
         calendarMapper,
         overrideMapper,
-        timezoneProvider);
+        timezoneProvider,
+        mock(ReplayOperationMapper.class),
+        jobExecutionLogMapper);
+  }
+
+  @DisplayName("仅重试未绑定执行的失败提交并审计操作员")
+  @Test
+  void shouldRetryFailedSubmission_whenExecutionUnbound() {
+    BatchDayReplaySessionEntity session = BatchDayReplaySessionEntity.builder()
+        .id(31L)
+        .tenantId("tenant-a")
+        .bizDate(LocalDate.parse("2026-10-21"))
+        .status("PARTIAL_FAILED")
+        .totalCount(2)
+        .build();
+    BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
+        .id(77L)
+        .sessionId(31L)
+        .tenantId("tenant-a")
+        .jobCode("JOB_A")
+        .status("FAILED")
+        .build();
+    when(sessionMapper.selectForUpdate("tenant-a", 31L)).thenReturn(session);
+    when(entryMapper.selectByIdForUpdate("tenant-a", 31L, 77L)).thenReturn(entry);
+    when(sessionMapper.reopenPartialFailedForRetry(eq("tenant-a"), eq(31L), any()))
+        .thenReturn(1);
+    when(entryMapper.retryFailedUnbound(eq("tenant-a"), eq(31L), eq(77L), any()))
+        .thenReturn(1);
+    when(entryMapper.countBySessionAndStatus(31L, "SUCCEEDED")).thenReturn(1L);
+    when(entryMapper.countBySessionAndStatus(31L, "FAILED")).thenReturn(0L);
+    when(entryMapper.countBySessionAndStatus(31L, "PENDING")).thenReturn(1L);
+    when(entryMapper.countBySessionAndStatus(31L, "RUNNING")).thenReturn(0L);
+    when(jobExecutionLogMapper.insertWithInstanceReferenceGuard(any())).thenReturn(1);
+    when(sessionMapper.selectById("tenant-a", 31L)).thenReturn(session.toBuilder()
+        .status("RUNNING")
+        .failedCount(0)
+        .inFlightCount(1)
+        .build());
+
+    BatchDayReplaySessionEntity retried = service.retryFailedSubmission(
+        "tenant-a", 31L, 77L, "operator-a", "submission confirmed not created");
+
+    assertThat(retried.status()).isEqualTo("RUNNING");
+    verify(entryMapper).retryFailedUnbound(eq("tenant-a"), eq(31L), eq(77L), any());
+    verify(jobExecutionLogMapper).insert(any());
+  }
+
+  @DisplayName("已创建子执行时拒绝重新提交失败条目")
+  @Test
+  void shouldRejectFailedEntry_whenChildExecutionExists() {
+    BatchDayReplaySessionEntity session = BatchDayReplaySessionEntity.builder()
+        .id(31L)
+        .tenantId("tenant-a")
+        .status("PARTIAL_FAILED")
+        .build();
+    BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
+        .id(77L)
+        .status("FAILED")
+        .rerunInstanceId(901L)
+        .build();
+    when(sessionMapper.selectForUpdate("tenant-a", 31L)).thenReturn(session);
+    when(entryMapper.selectByIdForUpdate("tenant-a", 31L, 77L)).thenReturn(entry);
+
+    assertThatThrownBy(() -> service.retryFailedSubmission(
+            "tenant-a", 31L, 77L, "operator-a", "retry"))
+        .isInstanceOf(BizException.class);
+    verify(entryMapper, never()).retryFailedUnbound(anyString(), anyLong(), anyLong(), any());
   }
 
   private BatchDayReplaySubmitCommand withPreviewToken(

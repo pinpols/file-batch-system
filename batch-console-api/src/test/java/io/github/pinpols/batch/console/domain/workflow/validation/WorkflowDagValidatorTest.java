@@ -3,24 +3,12 @@ package io.github.pinpols.batch.console.domain.workflow.validation;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.application.workflow.WorkflowJobReferencePort;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest.EdgeItem;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest.NodeItem;
-import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
-import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
-import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
-import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
-import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -28,31 +16,18 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
-import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * 纯单测 WorkflowDagValidator(no Spring),每条规则一个 case + 成功路径 + 边界。
  *
- * <p>Pipeline 存在性校验:mock PipelineDefinitionMapper.countByJobCode,只在涉及 FILE_STEP 的 case 调用。
+ * <p>FILE_STEP 已从 Workflow 节点契约移除，并由校验器显式拒绝。
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("编排 DAG 校验: 节点拓扑、网关汇聚与跨编排环检测")
 class WorkflowDagValidatorTest {
 
   private static final String TENANT = "ta";
-
-  @Mock
-  private PipelineDefinitionMapper pipelineDefinitionMapper;
-
-  @Mock
-  private WorkflowJobReferencePort workflowJobReferencePort;
-
-  @Mock
-  private WorkflowDefinitionMapper workflowDefinitionMapper;
-
-  @Mock
-  private WorkflowNodeMapper workflowNodeMapper;
 
   @InjectMocks
   private WorkflowDagValidator validator;
@@ -68,7 +43,6 @@ class WorkflowDagValidatorTest {
 
     // 执行并断言
     assertThatCode(() -> validator.validate(TENANT, req)).doesNotThrowAnyException();
-    verify(pipelineDefinitionMapper, never()).countByJobCode(anyString(), anyString());
   }
 
   @Test
@@ -192,46 +166,37 @@ class WorkflowDagValidatorTest {
   }
 
   @Test
-  @DisplayName("FILE_STEP related_pipeline_code 空 → file_step_related_pipeline_missing")
+  @DisplayName("FILE_STEP 节点在新 Workflow 定义中已退役")
   void shouldFail_whenFileStepPipelineCodeMissing() {
     WorkflowDefinitionSaveRequest req = baseRequest();
     NodeItem fs = node("fs", "FILE_STEP");
     req.setNodes(Arrays.asList(node("start", "START"), fs, node("end", "END")));
     req.setEdges(Arrays.asList(edge("start", "fs"), edge("fs", "end")));
 
-    assertBizError(req, "error.workflow.dag.file_step_related_pipeline_missing");
+    assertBizError(req, "error.workflow.dag.file_step_retired");
   }
 
   @Test
-  @DisplayName("FILE_STEP pipelineCode 在 pipeline_definition 不存在 → file_step_pipeline_not_found")
+  @DisplayName("FILE_STEP 不因旧 Pipeline 定义仍存在而重新开放")
   void shouldFail_whenFileStepPipelineNotFound() {
     WorkflowDefinitionSaveRequest req = baseRequest();
     NodeItem fs = node("fs", "FILE_STEP");
-    fs.setRelatedPipelineCode("ghost_pipeline");
     req.setNodes(Arrays.asList(node("start", "START"), fs, node("end", "END")));
     req.setEdges(Arrays.asList(edge("start", "fs"), edge("fs", "end")));
-    when(pipelineDefinitionMapper.countByJobCode(TENANT, "ghost_pipeline")).thenReturn(0L);
-
-    // 不能走 assertBizError helper(那个 helper 会 lenient stub 覆盖此处的 0L)
-    assertThatThrownBy(() -> validator.validate(TENANT, req))
-        .isInstanceOfSatisfying(BizException.class, ex -> {
-          assertThat(ex.getCode()).isEqualTo(ResultCode.VALIDATION_ERROR);
-          assertThat(ex.getMessageKey())
-              .isEqualTo("error.workflow.dag.file_step_pipeline_not_found");
-        });
+    assertBizError(req, "error.workflow.dag.file_step_retired");
   }
 
   @Test
-  @DisplayName("FILE_STEP pipelineCode 存在 → 通过")
-  void shouldPass_whenFileStepPipelineExists() {
+  @DisplayName("FILE_STEP 已退役，即使旧 Pipeline 定义存在也拒绝新写入")
+  void shouldFail_whenFileStepPipelineExists() {
     WorkflowDefinitionSaveRequest req = baseRequest();
     NodeItem fs = node("fs", "FILE_STEP");
-    fs.setRelatedPipelineCode("known_pipeline");
     req.setNodes(Arrays.asList(node("start", "START"), fs, node("end", "END")));
     req.setEdges(Arrays.asList(edge("start", "fs"), edge("fs", "end")));
-    when(pipelineDefinitionMapper.countByJobCode(TENANT, "known_pipeline")).thenReturn(1L);
-
-    assertThatCode(() -> validator.validate(TENANT, req)).doesNotThrowAnyException();
+    assertThatThrownBy(() -> validator.validate(TENANT, req))
+        .isInstanceOfSatisfying(
+            BizException.class,
+            ex -> assertThat(ex.getMessageKey()).isEqualTo("error.workflow.dag.file_step_retired"));
   }
 
   @Test
@@ -327,96 +292,7 @@ class WorkflowDagValidatorTest {
 
   // ── helpers ───────────────────────────────────────────────────────────────
 
-  // ── 跨 workflow 嵌套环检测 validateNoCrossWorkflowCycle ──────────────────────
-
-  @Test
-  @DisplayName("跨wf环-自引用:WF_A 的 JOB 节点指向 WORKFLOW 类型的 WF_A 自身 → 判环")
-  void shouldFail_whenSelfReferenceWorkflowCycle() {
-    // arrange
-    WorkflowDefinitionSaveRequest req = baseRequest();
-    req.setNodes(Arrays.asList(node("start", "START"), jobNode("j1", "WF_A"), node("end", "END")));
-    when(workflowJobReferencePort.isWorkflowType(TENANT, "WF_A")).thenReturn(true);
-
-    // act / assert
-    assertThatThrownBy(() -> validator.validateNoCrossWorkflowCycle(TENANT, "WF_A", req))
-        .isInstanceOfSatisfying(
-            BizException.class,
-            ex -> assertThat(ex.getMessageKey())
-                .isEqualTo("error.workflow.dag.cross_workflow_cycle_detected"));
-  }
-
-  @Test
-  @DisplayName("跨wf环-间接:WF_A→WF_B(DB),WF_B 又→WF_A → 判环")
-  void shouldFail_whenIndirectCrossWorkflowCycle() {
-    // arrange：root WF_A 引用 WF_B;WF_B 的 DB 定义里又有 JOB 节点引用 WF_A
-    WorkflowDefinitionSaveRequest req = baseRequest();
-    req.setNodes(Arrays.asList(node("start", "START"), jobNode("j1", "WF_B"), node("end", "END")));
-    when(workflowJobReferencePort.isWorkflowType(TENANT, "WF_B")).thenReturn(true);
-    when(workflowJobReferencePort.isWorkflowType(TENANT, "WF_A")).thenReturn(true);
-    when(workflowDefinitionMapper.selectByQuery(any()))
-        .thenReturn(List.of(workflowDef(2L, "WF_B")));
-    when(workflowNodeMapper.selectByQuery(any()))
-        .thenReturn(List.of(workflowNodeEntity("JOB", "WF_A")));
-
-    // act / assert
-    assertThatThrownBy(() -> validator.validateNoCrossWorkflowCycle(TENANT, "WF_A", req))
-        .isInstanceOfSatisfying(
-            BizException.class,
-            ex -> assertThat(ex.getMessageKey())
-                .isEqualTo("error.workflow.dag.cross_workflow_cycle_detected"));
-  }
-
-  @Test
-  @DisplayName("跨wf无环:WF_A→WF_B,WF_B 无下游 WORKFLOW 引用 → 放行")
-  void shouldPass_whenNoCrossWorkflowCycle() {
-    WorkflowDefinitionSaveRequest req = baseRequest();
-    req.setNodes(Arrays.asList(node("start", "START"), jobNode("j1", "WF_B"), node("end", "END")));
-    when(workflowJobReferencePort.isWorkflowType(TENANT, "WF_B")).thenReturn(true);
-    when(workflowDefinitionMapper.selectByQuery(any()))
-        .thenReturn(List.of(workflowDef(2L, "WF_B")));
-    // WF_B 的节点只有一个 IMPORT 子作业引用(非 WORKFLOW 类型) → 不构成跨 wf 边
-    when(workflowNodeMapper.selectByQuery(any()))
-        .thenReturn(List.of(workflowNodeEntity("JOB", "IMPORT_X")));
-    when(workflowJobReferencePort.isWorkflowType(TENANT, "IMPORT_X")).thenReturn(false);
-
-    assertThatCode(() -> validator.validateNoCrossWorkflowCycle(TENANT, "WF_A", req))
-        .doesNotThrowAnyException();
-  }
-
-  @Test
-  @DisplayName("跨wf无环:JOB 节点指向非 WORKFLOW 类型 job → 不构成跨 wf 边,放行")
-  void shouldPass_whenJobNodeRefersNonWorkflowJob() {
-    WorkflowDefinitionSaveRequest req = baseRequest();
-    req.setNodes(
-        Arrays.asList(node("start", "START"), jobNode("j1", "IMPORT_X"), node("end", "END")));
-    when(workflowJobReferencePort.isWorkflowType(TENANT, "IMPORT_X")).thenReturn(false);
-
-    assertThatCode(() -> validator.validateNoCrossWorkflowCycle(TENANT, "WF_A", req))
-        .doesNotThrowAnyException();
-    // 非 WORKFLOW 引用不应触发 DB 图展开
-    verify(workflowDefinitionMapper, never()).selectByQuery(any());
-  }
-
-  private static WorkflowDefinitionEntity workflowDef(Long id, String code) {
-    WorkflowDefinitionEntity d = new WorkflowDefinitionEntity();
-    d.setId(id);
-    d.setTenantId(TENANT);
-    d.setWorkflowCode(code);
-    return d;
-  }
-
-  private static WorkflowNodeEntity workflowNodeEntity(String nodeType, String relatedJobCode) {
-    WorkflowNodeEntity n = new WorkflowNodeEntity();
-    n.setNodeType(nodeType);
-    n.setRelatedJobCode(relatedJobCode);
-    return n;
-  }
-
   private void assertBizError(WorkflowDefinitionSaveRequest req, String expectedKey) {
-    // 部分 case 下 mapper 可能被 stub 但不触发,保留 lenient 防 strict 噪音(仅在含 FILE_STEP 的 path 才会被调用)
-    lenient()
-        .when(pipelineDefinitionMapper.countByJobCode(anyString(), anyString()))
-        .thenReturn(1L);
     assertThatThrownBy(() -> validator.validate(TENANT, req))
         .isInstanceOfSatisfying(BizException.class, ex -> {
           assertThat(ex.getCode()).isEqualTo(ResultCode.VALIDATION_ERROR);

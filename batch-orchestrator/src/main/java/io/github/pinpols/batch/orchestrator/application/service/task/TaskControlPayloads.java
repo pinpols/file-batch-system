@@ -17,6 +17,9 @@ public final class TaskControlPayloads {
 
   public record TaskClaimCommand(String tenantId, String workerId, String partitionInvocationId) {}
 
+  public record TaskNonIdempotentStartCommand(
+      String tenantId, String workerId, String partitionInvocationId) {}
+
   public record TaskClaimBatchCommand(List<TaskClaimItemCommand> items) {}
 
   public record TaskClaimItemCommand(

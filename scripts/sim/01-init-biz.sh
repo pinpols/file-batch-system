@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：初始化 SIM 业务表、权限与对象存储空间。
+# 用法：在仓库根目录执行 bash scripts/sim/01-init-biz.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # 01-init-biz.sh:模拟器初始化(幂等)
 #   1. 在 BUSINESS_DB 配置的业务库应用 scripts/db/business/create_biz_tables.sql(biz.* 业务表)

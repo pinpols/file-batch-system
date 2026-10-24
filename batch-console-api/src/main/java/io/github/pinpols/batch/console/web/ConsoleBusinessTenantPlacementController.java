@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.common.persistence.entity.BusinessTenantPlacementEntity;
 import io.github.pinpols.batch.console.application.contract.response.BusinessTenantPlacementResponse;
 import io.github.pinpols.batch.console.domain.param.BusinessTenantPlacementUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
@@ -43,9 +44,10 @@ public class ConsoleBusinessTenantPlacementController {
 
   @GetMapping
   public CommonResponse<List<BusinessTenantPlacementResponse>> list() {
-    return responseFactory.success(placementService.list().stream()
-        .map(BusinessTenantPlacementResponse::from)
-        .toList());
+    List<BusinessTenantPlacementEntity> placements = placementService.list();
+    List<BusinessTenantPlacementResponse> responses =
+        placements.stream().map(BusinessTenantPlacementResponse::from).toList();
+    return responseFactory.success(responses);
   }
 
   @PutMapping
@@ -56,11 +58,12 @@ public class ConsoleBusinessTenantPlacementController {
       targetTenantParam = "#request.tenantId")
   public CommonResponse<Void> upsert(@Valid @RequestBody UpsertTenantPlacementRequest request) {
     String operator = requestMetadataResolver.current().operatorId();
-    placementService.upsert(BusinessTenantPlacementUpsertParam.builder()
+    BusinessTenantPlacementUpsertParam upsertParam = BusinessTenantPlacementUpsertParam.builder()
         .tenantId(request.tenantId())
         .placementKey(request.placementKey())
         .operator(operator)
-        .build());
+        .build();
+    placementService.upsert(upsertParam);
     return responseFactory.success(null);
   }
 

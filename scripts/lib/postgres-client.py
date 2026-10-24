@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：为运维和压测脚本提供一个最小的 psql 兼容执行入口。
+# 用法：由调用脚本 source scripts/lib/postgres-client.py 后使用公共变量或函数。
 """为运维和压测脚本提供一个最小的 psql 兼容执行入口。"""
 
 from __future__ import annotations

@@ -1,6 +1,9 @@
 package io.github.pinpols.batch.orchestrator.domain.workflow;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import java.util.Locale;
+import java.util.Objects;
 import lombok.Builder;
 
 /**
@@ -44,9 +47,24 @@ public record CrossDayDependencySpec(
 
   /** EFFECTIVE_ONLY 是默认策略（未声明等价 EFFECTIVE_ONLY）。 */
   public String resolvedStrategy() {
-    return consumeVersionStrategy == null || consumeVersionStrategy.isBlank()
-        ? STRATEGY_EFFECTIVE_ONLY
-        : consumeVersionStrategy;
+    if (EmptyChecks.isNull(consumeVersionStrategy) || EmptyChecks.isBlank(Objects.requireNonNull(consumeVersionStrategy))) {
+      return STRATEGY_EFFECTIVE_ONLY;
+    }
+    String trimmedStrategy = consumeVersionStrategy.trim();
+    return trimmedStrategy.toUpperCase(Locale.ROOT);
+  }
+
+  public boolean hasSupportedStrategy() {
+    String strategy = resolvedStrategy();
+    return STRATEGY_EFFECTIVE_ONLY.equals(strategy)
+        || STRATEGY_LATEST_INCLUDING_PENDING.equals(strategy)
+        || STRATEGY_SPECIFIC_VERSION.equals(strategy);
+  }
+
+  public boolean hasValidVersionSelector() {
+    String strategy = resolvedStrategy();
+    return !STRATEGY_SPECIFIC_VERSION.equals(strategy)
+        || (EmptyChecks.isNotNull(specificVersionNo) && specificVersionNo > 0);
   }
 
   public boolean isOffsetMode() {

@@ -3,7 +3,7 @@
 - **Status**: Accepted（实施前置：见 §"实施触发条件"，未触发期间不开工）
 - **Date**: 2026-05-06（Accepted: 2026-05-06）
 - **Supersedes**: —
-- **Related**: §14.3.2（设计层缺口）/ `docs/runbook/quota-runbook.md` / `docs/runbook/rate-limit-runbook.md` / `docs/architecture/scalability-assessment.md`
+- **Related**: §14.3.2（设计层缺口）/ `docs/runbook/quota-runbook.md` / `docs/runbook/rate-limit-runbook.md` / `docs/archive/audit/scalability-assessment-2026-07-28.md`
 
 ## 背景
 

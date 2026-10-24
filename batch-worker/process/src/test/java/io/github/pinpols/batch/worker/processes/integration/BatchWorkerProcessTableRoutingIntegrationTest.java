@@ -61,8 +61,11 @@ class BatchWorkerProcessTableRoutingIntegrationTest extends AbstractIntegrationT
   void shouldBootWithTablePlacementAndFallbackToHashRouting() {
     assertThat(businessDataSource).isInstanceOf(BusinessRoutingDataSource.class);
     RlsTenantContextHolder.set("t_table_routing");
-    assertThat(new JdbcTemplate(businessDataSource)
-            .queryForObject("select current_database()", String.class))
-        .isNotBlank();
+    final String selectSql = """
+        select current_database()
+    """;
+    String selectedDatabase =
+        new JdbcTemplate(businessDataSource).queryForObject(selectSql, String.class);
+    assertThat(selectedDatabase).isNotBlank();
   }
 }

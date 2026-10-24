@@ -1,5 +1,11 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentBindingInput;
+
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentBindParam;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentMarkDraftParam;
+
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
@@ -54,13 +60,15 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
           mapper.byClientId(tenantId, ownerUserId, clientAttachmentId);
       if (EmptyChecks.isNotNull(existing)) return new UploadReservation(existing, false);
       ConsoleAiProperties.Image limits = aiProperties.getImage();
-      if (mapper.activeDraftCount(tenantId, ownerUserId) >= limits.getMaxDraftsPerUser()
+      boolean uploadWouldExceedQuota =
+          mapper.activeDraftCount(tenantId, ownerUserId) >= limits.getMaxDraftsPerUser()
           || mapper.activeDraftBytes(tenantId, ownerUserId) + image.bytes().length
               > limits.getMaxDraftBytesPerUser()
           || mapper.retainedBytesForUser(tenantId, ownerUserId) + image.bytes().length
               > limits.getMaxRetainedBytesPerUser()
           || mapper.retainedBytesForTenant(tenantId) + image.bytes().length
-              > limits.getMaxRetainedBytesPerTenant()) {
+              > limits.getMaxRetainedBytesPerTenant();
+      if (uploadWouldExceedQuota) {
         throw BizException.of(ResultCode.RATE_LIMITED, "error.ai.rate_limited");
       }
       ConsoleAiAttachmentEntity created = new ConsoleAiAttachmentEntity();
@@ -71,11 +79,14 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
       created.setInputSha256(inputSha256);
       created.setObjectKey("ai/images/" + UUID.randomUUID());
       created.setByteSize((long) image.bytes().length);
-      created.setExpiresAt(
-          Instant.now().plus(aiProperties.getImage().getDraftRetentionHours(), ChronoUnit.HOURS));
+      Instant draftCreatedAt = Instant.now();
+      long draftRetentionHours = aiProperties.getImage().getDraftRetentionHours();
+      Instant draftExpiresAt = draftCreatedAt.plus(draftRetentionHours, ChronoUnit.HOURS);
+      created.setExpiresAt(draftExpiresAt);
       boolean inserted = mapper.insert(created) == 1;
-      return new UploadReservation(
-          mapper.byClientId(tenantId, ownerUserId, clientAttachmentId), inserted);
+      ConsoleAiAttachmentEntity currentRow =
+          mapper.byClientId(tenantId, ownerUserId, clientAttachmentId);
+      return new UploadReservation(currentRow, inserted);
     });
     ConsoleAiAttachmentEntity row = EmptyChecks.isNull(reservation) ? null : reservation.row();
     if (EmptyChecks.isNull(row)) throw unavailable();
@@ -95,19 +106,29 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
         "application/octet-stream");
     int updated = template().execute(status -> {
       mapper.setTenantContext(tenantId);
+      UUID attachmentId = row.getId();
+      String mediaType = image.mediaType();
+      byte[] normalizedImageBytes = image.bytes();
+      int imageByteSize = normalizedImageBytes.length;
+      int imageWidth = image.width();
+      int imageHeight = image.height();
+      ConsoleAiAttachmentMarkDraftParam consoleAiAttachmentMarkDraftParam = ConsoleAiAttachmentMarkDraftParam.builder()
+          .tenantId(tenantId)
+          .id(attachmentId)
+          .mediaType(mediaType)
+          .byteSize(imageByteSize)
+          .width(imageWidth)
+          .height(imageHeight)
+          .build();
       return mapper.markDraft(
-          tenantId,
-          row.getId(),
-          image.mediaType(),
-          image.bytes().length,
-          image.width(),
-          image.height());
+          consoleAiAttachmentMarkDraftParam);
     });
     if (updated != 1) throw unavailable();
-    return view(template().execute(status -> {
+    ConsoleAiAttachmentEntity refreshedRow = template().execute(status -> {
       mapper.setTenantContext(tenantId);
       return mapper.byId(tenantId, row.getId());
-    }));
+    });
+    return view(refreshedRow);
   }
 
   @Override
@@ -116,7 +137,9 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
     return template().execute(status -> {
       mapper.setTenantContext(tenantId);
       ConsoleAiAttachmentEntity row = mapper.byClientId(tenantId, ownerUserId, clientAttachmentId);
-      if (EmptyChecks.isNull(row) || row.getExpiresAt().isBefore(Instant.now())) throw notFound();
+      boolean attachmentIsMissingOrExpired =
+          EmptyChecks.isNull(row) || row.getExpiresAt().isBefore(Instant.now());
+      if (attachmentIsMissingOrExpired) throw notFound();
       return view(row);
     });
   }
@@ -128,7 +151,12 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
     try (InputStream stream = objectStore.get(attachmentBucket(), row.getObjectKey())) {
       int limit = aiProperties.getImage().getMaxFileBytes() + 1024;
       byte[] encrypted = stream.readNBytes(limit + 1);
-      if (encrypted.length > limit || !cryptoService.isEncryptedContent(encrypted)) {
+      boolean ciphertextExceedsReadLimit = encrypted.length > limit;
+      if (ciphertextExceedsReadLimit) {
+        throw unavailable();
+      }
+      boolean hasBatchEncryptedFormat = cryptoService.isEncryptedContent(encrypted);
+      if (!hasBatchEncryptedFormat) {
         throw unavailable();
       }
       byte[] decrypted = cryptoService.decrypt(encrypted);
@@ -144,9 +172,10 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
     template().executeWithoutResult(status -> {
       mapper.setTenantContext(tenantId);
       ConsoleAiAttachmentEntity row = mapper.byId(tenantId, id);
-      if (EmptyChecks.isNull(row)
+      boolean attachmentCannotBeDeletedByOwner = EmptyChecks.isNull(row)
           || !ownerUserId.equals(row.getOwnerUserId())
-          || "BOUND".equals(row.getStatus())) throw notFound();
+          || "BOUND".equals(row.getStatus());
+      if (attachmentCannotBeDeletedByOwner) throw notFound();
       mapper.enqueueOne(tenantId, id);
       mapper.deleteOne(tenantId, id);
     });
@@ -155,42 +184,57 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
   public List<ConsoleAiAttachmentEntity> validateDrafts(
       String tenantId, String ownerUserId, List<UUID> ids) {
     requireEnabled();
-    if (EmptyChecks.isEmpty(ids)
+    boolean attachmentIdsAreInvalid = EmptyChecks.isEmpty(ids)
         || ids.size() > aiProperties.getImage().getMaxImages()
-        || ids.stream().distinct().count() != ids.size()) {
+        || ids.stream().distinct().count() != ids.size();
+    if (attachmentIdsAreInvalid) {
       throw invalid();
     }
     mapper.setTenantContext(tenantId);
     List<ConsoleAiAttachmentEntity> rows = ids.stream()
         .map(id -> {
           ConsoleAiAttachmentEntity row = mapper.byId(tenantId, id);
-          if (EmptyChecks.isNull(row)
+          boolean draftIdentityOrStatusIsInvalid = EmptyChecks.isNull(row)
               || !ownerUserId.equals(row.getOwnerUserId())
-              || !"DRAFT".equals(row.getStatus())
-              || !row.getExpiresAt().isAfter(Instant.now())) {
+              || !"DRAFT".equals(row.getStatus());
+          if (draftIdentityOrStatusIsInvalid) {
+            throw notFound();
+          }
+          boolean draftIsUnexpired = row.getExpiresAt().isAfter(Instant.now());
+          if (!draftIsUnexpired) {
             throw notFound();
           }
           return row;
         })
         .toList();
-    if (rows.stream().mapToLong(ConsoleAiAttachmentEntity::getByteSize).sum()
-        > aiProperties.getImage().getMaxTotalBytes()) {
+    long totalAttachmentBytes = rows.stream()
+        .mapToLong(ConsoleAiAttachmentEntity::getByteSize)
+        .sum();
+    if (totalAttachmentBytes > aiProperties.getImage().getMaxTotalBytes()) {
       throw invalid();
     }
     return rows;
   }
 
-  public void bind(
-      String tenantId,
-      String ownerUserId,
-      List<UUID> ids,
-      String conversationId,
-      long turnNo,
-      Instant expiresAt) {
+  public void bind(ConsoleAiAttachmentBindingInput input) {
+    List<UUID> ids = input.ids();
     if (EmptyChecks.isEmpty(ids)) return;
+    String tenantId = input.tenantId();
+    String ownerUserId = input.ownerUserId();
+    String conversationId = input.conversationId();
+    long turnNo = input.turnNo();
+    Instant expiresAt = input.expiresAt();
     validateDrafts(tenantId, ownerUserId, ids);
     for (UUID id : ids) {
-      if (mapper.bind(tenantId, id, ownerUserId, conversationId, turnNo, expiresAt) != 1) {
+      ConsoleAiAttachmentBindParam consoleAiAttachmentBindParam = ConsoleAiAttachmentBindParam.builder()
+          .tenantId(tenantId)
+          .id(id)
+          .ownerUserId(ownerUserId)
+          .conversationId(conversationId)
+          .turnNo(turnNo)
+          .expiresAt(expiresAt)
+          .build();
+      if (mapper.bind(consoleAiAttachmentBindParam) != 1) {
         throw BizException.of(ResultCode.CONFLICT, "error.common.state_conflict");
       }
     }
@@ -259,9 +303,10 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
       mapper.setTenantContext(tenantId);
       return mapper.byId(tenantId, id);
     });
-    if (EmptyChecks.isNull(row)
+    boolean attachmentIsUnavailableToOwner = EmptyChecks.isNull(row)
         || !ownerUserId.equals(row.getOwnerUserId())
-        || !row.getExpiresAt().isAfter(Instant.now())) throw notFound();
+        || !row.getExpiresAt().isAfter(Instant.now());
+    if (attachmentIsUnavailableToOwner) throw notFound();
     return row;
   }
 
@@ -306,7 +351,9 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
 
   private static String sha256(byte[] input) {
     try {
-      return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(input));
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      byte[] digestBytes = digest.digest(input);
+      return HexFormat.of().formatHex(digestBytes);
     } catch (NoSuchAlgorithmException exception) {
       throw new IllegalStateException("SHA-256 unavailable", exception);
     }

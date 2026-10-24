@@ -30,7 +30,6 @@ class TenantConfigMatrixBuilderTest {
               .containsExactlyInAnyOrder(
                   ConfigType.JOB_DEFINITION,
                   ConfigType.WORKFLOW_DEFINITION,
-                  ConfigType.PIPELINE_DEFINITION,
                   ConfigType.FILE_CHANNEL,
                   ConfigType.FILE_TEMPLATE,
                   ConfigType.RESOURCE_QUEUE,

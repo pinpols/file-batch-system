@@ -68,7 +68,11 @@ export class HeartbeatScheduler {
    */
   async tick(): Promise<number> {
     try {
-      const resp = await this.#transport.heartbeat(this.#hooks.workerCode, this.#hooks.buildBody());
+      const transport = this.#transport;
+      const heartbeat = transport.heartbeat;
+      const workerCode = this.#hooks.workerCode;
+      const heartbeatBody = this.#hooks.buildBody();
+      const resp = await heartbeat.call(transport, workerCode, heartbeatBody);
       const decision = applyHeartbeatDirective(resp);
 
       if (decision.fsmTransition) {
@@ -164,7 +168,11 @@ export class LeaseRenewalScheduler {
     const tasks = this.#hooks.inFlight();
     for (const task of tasks) {
       try {
-        const resp = await this.#transport.renew(task.taskId, this.#hooks.buildBody(task.taskId));
+        const transport = this.#transport;
+        const renew = transport.renew;
+        const taskId = task.taskId;
+        const renewalBody = this.#hooks.buildBody(taskId);
+        const resp = await renew.call(transport, taskId, renewalBody);
         const decision = applyRenew(resp);
         if (decision.action === "cancel") {
           task.cancellation.markCancelled();

@@ -24,7 +24,7 @@ services:
     logging: *container-logging
     image: postgres:${POSTGRES_IMAGE_TAG}
     user: postgres
-    container_name: batch-postgres-primary
+    container_name: ${PG_CONTAINER:-batch-postgres-primary}
     restart: unless-stopped
     # 防止异常查询/连接风暴独占 Docker VM；生产 Operator 使用独立 4Gi Pod 预算。
     mem_limit: ${POSTGRES_MEMORY_LIMIT:-3072m}
@@ -116,7 +116,7 @@ services:
     profiles: ["replica"]
     image: postgres:${POSTGRES_IMAGE_TAG}
     user: postgres
-    container_name: batch-postgres-replica
+    container_name: ${PG_REPLICA_CONTAINER:-batch-postgres-replica}
     restart: unless-stopped
     mem_limit: ${POSTGRES_MEMORY_LIMIT:-3072m}
     entrypoint: ["/usr/local/bin/replica-entrypoint.sh"]
@@ -176,7 +176,7 @@ services:
     profiles: ["biz-shard"]
     image: postgres:${POSTGRES_IMAGE_TAG}
     user: postgres
-    container_name: batch-postgres-biz-shard-1
+    container_name: ${BIZ_SHARD_1_CONTAINER:-batch-postgres-biz-shard-1}
     restart: unless-stopped
     mem_limit: ${POSTGRES_MEMORY_LIMIT:-3072m}
     command:
@@ -218,7 +218,7 @@ services:
   kafka:
     logging: *container-logging
     image: apache/kafka:${KAFKA_IMAGE_TAG}
-    container_name: batch-kafka
+    container_name: ${KAFKA_CONTAINER:-batch-kafka}
     restart: unless-stopped
     # Docker Desktop 的总内存通常明显小于生产节点。显式限制 broker 原生内存和 JVM 堆，
     # 避免容量测试时 Kafka 与 PostgreSQL/应用争抢宿主机内存并被 OOM kill。
@@ -260,7 +260,7 @@ services:
   kafka-init:
     logging: *container-logging
     image: apache/kafka:${KAFKA_IMAGE_TAG}
-    container_name: batch-kafka-init
+    container_name: ${KAFKA_INIT_CONTAINER:-batch-kafka-init}
     depends_on:
       kafka:
         condition: service_healthy
@@ -268,6 +268,7 @@ services:
       <<: *common-runtime-env
       KAFKA_BOOTSTRAP_SERVER: kafka:29092
       KAFKA_TOPICS: ${KAFKA_TOPICS}
+      BATCH_KAFKA_NAMESPACE: ${BATCH_KAFKA_NAMESPACE:-}
       KAFKA_TOPIC_PARTITIONS: ${KAFKA_DEFAULT_PARTITIONS}
       KAFKA_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_PARTITIONS_DISPATCH: ${KAFKA_PARTITIONS_DISPATCH:-${KAFKA_DEFAULT_PARTITIONS}}
@@ -293,7 +294,7 @@ services:
   kafka-ui:
     logging: *container-logging
     image: provectuslabs/kafka-ui:${KAFKA_UI_IMAGE_TAG:-v0.7.2}
-    container_name: batch-kafka-ui
+    container_name: ${KAFKA_UI_CONTAINER:-batch-kafka-ui}
     restart: unless-stopped
     depends_on:
       kafka:
@@ -327,7 +328,7 @@ services:
     logging: *container-logging
     image: ${MINIO_IMAGE_REPOSITORY:-bitnamilegacy/minio}:${MINIO_IMAGE_TAG:-2025.7.23-debian-12-r1}
     user: *minio-runtime-user
-    container_name: batch-minio
+    container_name: ${MINIO_CONTAINER:-batch-minio}
     restart: unless-stopped
     # 本地依赖也必须有 cgroup 边界，避免异常 multipart/扫描占满宿主机内存。
     # 精确生产规格由 MinIO Tenant 清单按节点资源单独定义。
@@ -364,7 +365,7 @@ services:
     # 独立 CLI 容器使用已验证内置 mc 的固定镜像，避免失效的 minio/mc 仓库。
     image: ${MINIO_MC_IMAGE_REPOSITORY:-bitnamilegacy/minio}:${MINIO_MC_IMAGE_TAG:-2025.7.23-debian-12-r1}
     user: *minio-runtime-user
-    container_name: batch-minio-init
+    container_name: ${MINIO_INIT_CONTAINER:-batch-minio-init}
     depends_on:
       minio:
         condition: service_healthy
@@ -391,7 +392,7 @@ services:
     logging: *container-logging
     image: valkey/valkey:${VALKEY_IMAGE_TAG:-8.1.10}
     user: valkey
-    container_name: batch-valkey
+    container_name: ${REDIS_CONTAINER:-batch-valkey}
     restart: unless-stopped
     # 数据上限保留 25% 给复制/AOF fork、连接缓冲和 allocator 碎片。
     # noeviction 保护 ShedLock/quota 等正确性键；写满后显式失败并由应用熔断，而非静默淘汰。
@@ -434,7 +435,7 @@ services:
         MINIO_MC_IMAGE_REPOSITORY: ${MINIO_MC_IMAGE_REPOSITORY:-bitnamilegacy/minio}
         MINIO_MC_IMAGE_TAG: ${MINIO_MC_IMAGE_TAG:-2025.7.23-debian-12-r1}
     image: batch-ops-toolbox:${OPS_TOOLBOX_IMAGE_TAG:-dev}
-    container_name: batch-ops-toolbox
+    container_name: ${OPS_TOOLBOX_CONTAINER:-batch-ops-toolbox}
     restart: "no"
     environment:
       <<: *common-runtime-env

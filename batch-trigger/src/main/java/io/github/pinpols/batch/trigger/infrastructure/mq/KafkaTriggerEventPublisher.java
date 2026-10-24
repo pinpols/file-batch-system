@@ -2,6 +2,7 @@ package io.github.pinpols.batch.trigger.infrastructure.mq;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.LaunchEnvelope;
+import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.mq.MqMessage;
 import io.github.pinpols.batch.common.mq.MqMessagePublisher;
 import io.github.pinpols.batch.common.mq.MqPublishResult;
@@ -15,6 +16,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
@@ -48,7 +51,12 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
   @Override
   public CompletableFuture<PublishResult> publishAsync(
       String topic, String messageKey, LaunchEnvelope envelope, String traceId) {
-    if (EmptyChecks.isNull(envelope) || EmptyChecks.isNull(envelope.launchRequest())) {
+    if (EmptyChecks.isNull(envelope)) {
+      return CompletableFuture.completedFuture(
+          PublishResult.fail("envelope or launchRequest is null"));
+    }
+    LaunchRequest launchRequest = envelope.launchRequest();
+    if (EmptyChecks.isNull(launchRequest)) {
       return CompletableFuture.completedFuture(
           PublishResult.fail("envelope or launchRequest is null"));
     }
@@ -58,18 +66,19 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
     } catch (RuntimeException ex) {
       log.error(
           "KafkaTriggerEventPublisher failed to serialize envelope: tenantId={} requestId={}",
-          envelope.launchRequest().tenantId(),
-          envelope.launchRequest().requestId(),
+          launchRequest.tenantId(),
+          launchRequest.requestId(),
           ex);
-      return CompletableFuture.completedFuture(
-          PublishResult.fail("serialize envelope: " + ex.getMessage()));
+      String failureMessage = "serialize envelope: " + ex.getMessage();
+      PublishResult failure = PublishResult.fail(failureMessage);
+      return CompletableFuture.completedFuture(failure);
     }
     Map<String, String> headers = new LinkedHashMap<>();
     if (EmptyChecks.isNotBlank(traceId)) {
       headers.put(HEADER_TRACE_ID, traceId);
     }
-    if (EmptyChecks.isNotNull(envelope.launchRequest().tenantId())) {
-      headers.put(HEADER_TENANT_ID, envelope.launchRequest().tenantId());
+    if (EmptyChecks.isNotNull(launchRequest.tenantId())) {
+      headers.put(HEADER_TENANT_ID, launchRequest.tenantId());
     }
     headers.put(HEADER_ENVELOPE_VERSION, String.valueOf(envelope.envelopeVersion()));
     try {
@@ -77,9 +86,11 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
       try (Scope ignored = OtelTracePropagation.restore(envelope.traceContext())) {
         sendFuture = mqMessagePublisher.publish(new MqMessage(topic, messageKey, payload, headers));
       }
-      return sendFuture
-          .orTimeout(kafkaProperties.getSendTimeoutSeconds(), java.util.concurrent.TimeUnit.SECONDS)
-          .handle((result, throwable) -> toPublishResult(topic, messageKey, result, throwable));
+      int sendTimeoutSeconds = kafkaProperties.getSendTimeoutSeconds();
+      CompletableFuture<MqPublishResult> timedFuture =
+          sendFuture.orTimeout(sendTimeoutSeconds, TimeUnit.SECONDS);
+      return timedFuture.handle(
+          (result, throwable) -> toPublishResult(topic, messageKey, result, throwable));
     } catch (RuntimeException ex) {
       // KafkaProducer.send() 在 ensureValidRecordSize / SerializationException 等校验失败时
       // 同步抛 RuntimeException,绕过上面 ExecutionException catch。补 broad catch 避免 outbox
@@ -90,8 +101,9 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
           topic,
           messageKey,
           ex);
-      return CompletableFuture.completedFuture(
-          PublishResult.fail("kafka send sync: " + ex.getMessage()));
+      String failureMessage = "kafka send sync: " + ex.getMessage();
+      PublishResult failure = PublishResult.fail(failureMessage);
+      return CompletableFuture.completedFuture(failure);
     }
   }
 
@@ -113,7 +125,7 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
       return PublishResult.ok();
     }
     Throwable cause = unwrapCompletionException(throwable);
-    if (cause instanceof java.util.concurrent.TimeoutException) {
+    if (cause instanceof TimeoutException) {
       return PublishResult.fail(
           "kafka send timeout " + kafkaProperties.getSendTimeoutSeconds() + "s");
     }

@@ -1,0 +1,3 @@
+interface:
+  display_name: "对象存储治理"
+  short_description: "审查本地与 S3 兼容存储、加密、校验和、分发及文件完整性契约"

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.event.DomainEvent;
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.persistence.entity.TriggerOutboxEventEntity;
 import io.github.pinpols.batch.trigger.mapper.TriggerOutboxEventMapper;
@@ -35,7 +36,8 @@ class TriggerOutboxDomainEventPublisherTest {
   @BeforeEach
   void setUp() {
     MockitoAnnotations.openMocks(this);
-    publisher = new TriggerOutboxDomainEventPublisher(triggerOutboxEventMapper);
+    publisher = new TriggerOutboxDomainEventPublisher(
+        triggerOutboxEventMapper, new BatchKafkaTopicNamespace(""));
   }
 
   @Test
@@ -70,5 +72,26 @@ class TriggerOutboxDomainEventPublisherTest {
     assertThat(row.getTraceId()).isEqualTo("trace-xyz");
     assertThat(row.getNextPublishAt()).isNotNull();
     assertThat(row.getPayload()).contains("launchRequest").contains("JOB_X");
+  }
+
+  @Test
+  @DisplayName("Trigger outbox 持久化部署命名空间下的 launch topic")
+  void publish_usesDeploymentNamespacedTopic() {
+    publisher = new TriggerOutboxDomainEventPublisher(
+        triggerOutboxEventMapper, new BatchKafkaTopicNamespace("workflow-east-1"));
+
+    publisher.publish(DomainEvent.builder("tenant-A")
+        .aggregate("TRIGGER_REQUEST", 101L)
+        .type("trigger.launch.v1")
+        .key("req-namespaced")
+        .payloadEntry("launchRequest", Map.of("jobCode", "JOB_X"))
+        .traceId("trace-namespaced")
+        .build());
+
+    ArgumentCaptor<TriggerOutboxEventEntity> captor =
+        ArgumentCaptor.forClass(TriggerOutboxEventEntity.class);
+    verify(triggerOutboxEventMapper).insert(captor.capture());
+    assertThat(captor.getValue().getTopic())
+        .isEqualTo("workflow-east-1." + BatchTopics.TRIGGER_LAUNCH_V1);
   }
 }

@@ -1,8 +1,10 @@
 # ADR-040 · 清单驱动的动态到达组 —— 上游批次清单声明当天预期文件
 
+> **当前适用性（2026-10-24）**：到达组与预期义务继续适用；当前规则及逐日预期的运行归属是 Workflow ID，不能由 Job code 推断。输入 ARRIVED/SATISFIED 与最终业务成功是两个事实。 原决策背景与阶段记录保留，正式关闭状态以当前验收矩阵为准。
+
 - **Status**: Accepted；仓库已包含 manifest/到达组相关扫描、治理与触发实现。协议边界及真实部署验收仍按下文实施记录分别确认（复核：2026-10-08）
 - **Date**: 2026-06-20
-- **Related**: PR #570（入站 sidecar manifest 强校验 / PR1）、PR #571（到达组 verified 触发 / PR2）、`docs/design/file-integrity-sidecar-manifest-design-2026-06-07.md`、`docs/design/file-pipeline-design.md` §完成标记 / §到达组
+- **Related**: PR #570（入站 sidecar manifest 强校验 / PR1）、PR #571（到达组 verified 触发 / PR2）、`docs/design/file-integrity-sidecar-manifest-design.md`、`docs/design/file-pipeline-design.md` §完成标记 / §到达组
 - **Plan**: 本文包含最初的协议、时序和实施拆分；这些段落是设计记录，不表示实现仍未开始。代码入口包括 `FileGovernanceArrivalGroupScheduler`、`BundleArrivalLauncher` 及 `FileArrivalGroupMapper`。
 
 ## 范围边界

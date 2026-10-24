@@ -37,10 +37,8 @@ public class S3ExportStorage {
    * @return 实际写入的对象路径
    */
   public String writeJson(String objectName, String jsonContent) {
-    return writeObject(
-        objectName,
-        jsonContent.getBytes(StandardCharsets.UTF_8),
-        BatchFileConstants.CONTENT_TYPE_JSON);
+    byte[] jsonBytes = jsonContent.getBytes(StandardCharsets.UTF_8);
+    return writeObject(objectName, jsonBytes, BatchFileConstants.CONTENT_TYPE_JSON);
   }
 
   /**
@@ -159,7 +157,8 @@ public class S3ExportStorage {
           }
         }
       }
-      return digestToHex(digest.digest());
+      byte[] checksumBytes = digest.digest();
+      return digestToHex(checksumBytes);
     } catch (Exception ex) {
       throw new IllegalStateException("failed to checksum export object", ex);
     }

@@ -3,20 +3,22 @@ package io.github.pinpols.batch.orchestrator.application.service.workflow;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
+import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
-import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
-import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanCommand;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
 import io.github.pinpols.batch.orchestrator.application.service.task.ChildJobLaunchSupport;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
@@ -24,43 +26,37 @@ import io.github.pinpols.batch.orchestrator.application.service.task.PartitionLi
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskCreationService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService.DagNodeResolution;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
-import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceAdmissionAction;
-import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
+import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
+import io.github.pinpols.batch.orchestrator.mapper.JobDependencyWaitingLaunchMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.time.LocalDate;
-import java.time.Month;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-/**
- * 守护 DAG 节点派发的早退分支(避免重复激活):
- *
- * <ul>
- *   <li>任意 null 入参 → 返 0,不读 DB
- *   <li>节点已激活(READY/RUNNING/SUCCESS)→ 返 0,不再走 DAG ready 检查
- *   <li>DAG readiness 不满足 → 返 0
- *   <li>workflow_node 不存在 → 返 0
- * </ul>
- *
- * <p>gateway / JOB / task 三条主路径涉及众多 collaborator,留集成测覆盖。
- */
 @ExtendWith(MockitoExtension.class)
-@DisplayName("流程节点派发服务: 入参短路, 就绪判断与节点派发口径")
+@DisplayName("Workflow 节点派发的根归属和重复激活约束")
 class DefaultWorkflowNodeDispatchServiceTest {
 
   @Mock
@@ -83,6 +79,12 @@ class DefaultWorkflowNodeDispatchServiceTest {
 
   @Mock
   private WorkflowRunMapper workflowRunMapper;
+
+  @Mock
+  private BatchDayInstanceMapper batchDayInstanceMapper;
+
+  @Mock
+  private WorkflowDefinitionMapper workflowDefinitionMapper;
 
   @Mock
   private WorkflowNodeRunMapper workflowNodeRunMapper;
@@ -114,21 +116,25 @@ class DefaultWorkflowNodeDispatchServiceTest {
   @Mock
   private CrossDayDependencyResolver crossDayDependencyResolver;
 
+  @Mock
+  private WorkflowNodeTerminalFinalizer workflowNodeTerminalFinalizer;
+
+  @Mock
+  private SecretPayloadProtector secretPayloadProtector;
+
   private DefaultWorkflowNodeDispatchService service;
 
   @BeforeEach
   void setUp() {
-    OrchestratorJobMappers jobMappers = new OrchestratorJobMappers(
-        jobInstanceMapper,
-        jobPartitionMapper,
-        jobTaskMapper,
-        jobStepInstanceMapper,
-        triggerRequestMapper);
-    OrchestratorWorkflowMappers workflowMappers = new OrchestratorWorkflowMappers(
-        workflowNodeMapper, workflowRunMapper, workflowNodeRunMapper);
     service = new DefaultWorkflowNodeDispatchService(
-        jobMappers,
-        workflowMappers,
+        new OrchestratorJobMappers(
+            jobInstanceMapper,
+            jobPartitionMapper,
+            jobTaskMapper,
+            jobStepInstanceMapper,
+            triggerRequestMapper),
+        new OrchestratorWorkflowMappers(
+            workflowNodeMapper, workflowRunMapper, workflowNodeRunMapper),
         schedulePlanBuilder,
         partitionLifecycleService,
         taskDispatchOutboxService,
@@ -137,204 +143,302 @@ class DefaultWorkflowNodeDispatchServiceTest {
         taskCreationService,
         payloadBuilder,
         childJobLaunchSupport,
-        crossDayDependencyResolver);
+        crossDayDependencyResolver,
+        workflowNodeTerminalFinalizer,
+        secretPayloadProtector,
+        Mockito.mock(JobDependencyWaitingLaunchMapper.class),
+        batchDayInstanceMapper,
+        workflowDefinitionMapper);
+    lenient()
+        .when(workflowDefinitionMapper.selectById(50L))
+        .thenReturn(new WorkflowDefinitionEntity(
+            50L, "ta", "FLOW", "Flow", "COMPOSITE", 1, true, null, "CAL"));
+    lenient()
+        .when(workflowRunMapper.selectByTenantAndIdForUpdate("ta", 10L))
+        .thenAnswer(invocation -> workflowRun());
   }
 
-  private JobInstanceEntity instance() {
-    JobInstanceEntity j = new JobInstanceEntity();
-    j.setId(100L);
-    j.setTenantId("ta");
-    j.setJobCode("WF_JOB");
-    j.setBizDate(LocalDate.of(2026, Month.JUNE, 29));
-    return j;
+  @Test
+  @DisplayName("缺少 Workflow Run 或节点时不访问存储")
+  void shouldReturnZeroWhenRequiredInputMissing() {
+    assertThat(service.dispatchNode(null, workflowRun(), resolution("JOB"), null, "trace"))
+        .isZero();
+    assertThat(service.dispatchNode(null, null, resolution("JOB"), null, "trace"))
+        .isZero();
+    assertThat(service.dispatchNode(null, workflowRun(), null, null, "trace")).isZero();
+    verify(workflowNodeRunMapper, times(1)).selectLatestForUpdate(any(), anyString());
+  }
+
+  @Test
+  @DisplayName("拒绝旧 Job Instance 根运行，避免恢复 Job 根复用语义")
+  void shouldRejectLegacyJobInstanceRoot() {
+    WorkflowRunEntity run = workflowRun();
+    run.setRelatedJobInstanceId(100L);
+
+    assertThatThrownBy(
+            () -> service.dispatchNode(jobInstance(), run, resolution("JOB"), null, "trace"))
+        .isInstanceOf(BizException.class)
+        .hasMessage("error.workflow.root_job_launch_retired");
+    verify(workflowNodeRunMapper, never()).selectLatestForUpdate(any(), anyString());
+  }
+
+  @Test
+  @DisplayName("暂停中的 Workflow 不激活新节点")
+  void shouldNotDispatchPausedWorkflow() {
+    WorkflowRunEntity run = workflowRun();
+    run.setRunStatus("PAUSED");
+    when(workflowRunMapper.selectByTenantAndIdForUpdate("ta", 10L)).thenReturn(run);
+
+    assertThat(service.dispatchNode(jobInstance(), run, resolution("JOB"), null, "trace"))
+        .isZero();
+    verify(workflowNodeRunMapper, never()).selectLatestForUpdate(any(), anyString());
+  }
+
+  @Test
+  @DisplayName("已激活节点不会再次检查 readiness 或分发")
+  void shouldSkipAlreadyActivatedNode() {
+    WorkflowNodeRunEntity existing = new WorkflowNodeRunEntity();
+    existing.setNodeStatus(WorkflowNodeRunStatus.READY.code());
+    when(workflowNodeRunMapper.selectLatestForUpdate(10L, "N1")).thenReturn(existing);
+
+    assertThat(service.dispatchNode(jobInstance(), workflowRun(), resolution("JOB"), null, "trace"))
+        .isZero();
+    verify(workflowDagService, never()).isNodeReadyForRunDispatch(any(), anyString(), any());
+    verify(childJobLaunchSupport, never()).dispatchJobNode(any(), any(), any(), any(), anyString());
+  }
+
+  @ParameterizedTest(name = "父运行终态 {0} 时不派发后续节点")
+  @MethodSource("terminalRunStatuses")
+  void shouldSkipDispatchWhenParentWorkflowIsTerminal(String terminalStatus) {
+    WorkflowRunEntity terminated = workflowRun();
+    terminated.setRunStatus(terminalStatus);
+    when(workflowRunMapper.selectByTenantAndIdForUpdate("ta", 10L)).thenReturn(terminated);
+
+    assertThat(service.dispatchNode(jobInstance(), workflowRun(), resolution("JOB"), null, "trace"))
+        .isZero();
+    verify(batchDayInstanceMapper).acquireSettlementFence("ta", "CAL", LocalDate.of(2026, 6, 29));
+    verify(workflowNodeRunMapper, never()).selectLatestForUpdate(any(), anyString());
+  }
+
+  @Test
+  @DisplayName("冻结 Workflow 快照决定批次日围栏且不重读当前定义日历")
+  void shouldUseFrozenCalendarForSettlementFence_whenWorkflowDefinitionCalendarChanges() {
+    WorkflowRunEntity run = workflowRun();
+    run.setWorkflowVersionSnapshot(1);
+    run.setExecutionSnapshot(frozenCalendarSnapshot());
+    WorkflowNodeRunEntity activated = new WorkflowNodeRunEntity();
+    activated.setNodeStatus(WorkflowNodeRunStatus.READY.code());
+    when(workflowNodeRunMapper.selectLatestForUpdate(10L, "N1")).thenReturn(activated);
+    when(workflowRunMapper.selectByTenantAndIdForUpdate("ta", 10L)).thenReturn(run);
+
+    assertThat(service.dispatchNode(jobInstance(), run, resolution("JOB"), "{}", "trace"))
+        .isZero();
+
+    verify(batchDayInstanceMapper)
+        .acquireSettlementFence("ta", "FROZEN_CALENDAR", LocalDate.of(2026, 6, 29));
+    verify(workflowDefinitionMapper, never()).selectById(50L);
+  }
+
+  private static Stream<String> terminalRunStatuses() {
+    return WorkflowRunStatus.terminalCodes().stream();
+  }
+
+  @Test
+  @DisplayName("DAG readiness 未满足时不读取节点定义")
+  void shouldSkipNodeWhenDagIsNotReady() {
+    when(workflowNodeRunMapper.selectLatestForUpdate(10L, "N1")).thenReturn(null);
+    when(workflowDagService.isNodeReadyForRunDispatch(any(), eq("N1"), any())).thenReturn(false);
+
+    assertThat(service.dispatchNode(jobInstance(), workflowRun(), resolution("JOB"), null, "trace"))
+        .isZero();
+    verify(workflowNodeMapper, never()).selectByWorkflowDefinitionIdAndNodeCode(any(), anyString());
+  }
+
+  @Test
+  @DisplayName("快照外节点定义缺失时不创建节点运行或子 Job")
+  void shouldSkipWhenNodeDefinitionMissing() {
+    when(workflowNodeRunMapper.selectLatestForUpdate(10L, "N1")).thenReturn(null);
+    when(workflowDagService.isNodeReadyForRunDispatch(any(), eq("N1"), any())).thenReturn(true);
+    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(50L, "N1")).thenReturn(null);
+
+    assertThat(service.dispatchNode(jobInstance(), workflowRun(), resolution("JOB"), null, "trace"))
+        .isZero();
+    verify(childJobLaunchSupport, never()).dispatchJobNode(any(), any(), any(), any(), anyString());
+  }
+
+  @Test
+  @DisplayName("JOB 节点通过 Workflow Run 启动子 Job，不把报告携带的实例当作父容器")
+  void shouldDispatchJobNodeFromWorkflowRoot() {
+    when(workflowNodeRunMapper.selectLatestForUpdate(10L, "N1")).thenReturn(null);
+    when(workflowDagService.isNodeReadyForRunDispatch(any(), eq("N1"), any())).thenReturn(true);
+    WorkflowNodeEntity node = new WorkflowNodeEntity();
+    node.setNodeCode("N1");
+    node.setNodeType("JOB");
+    node.setRelatedJobCode("JOB_B");
+    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(50L, "N1")).thenReturn(node);
+    when(childJobLaunchSupport.dispatchJobNode(
+            any(WorkflowRunEntity.class), any(), any(), any(), anyString()))
+        .thenReturn(1);
+
+    assertThat(service.dispatchNode(jobInstance(), workflowRun(), resolution("JOB"), "{}", "trace"))
+        .isEqualTo(1);
+    verify(childJobLaunchSupport)
+        .dispatchJobNode(any(WorkflowRunEntity.class), any(), eq(node), eq("{}"), eq("trace"));
+  }
+
+  @Test
+  @DisplayName("整 Workflow 重放派发只按快照中的结果版本解析跨日依赖")
+  void shouldResolvePinnedCrossDayVersions_whenWorkflowReplayIsDispatched() {
+    WorkflowRunEntity run = workflowRun();
+    run.setWorkflowVersionSnapshot(1);
+    run.setExecutionSnapshot(workflowReplaySnapshot());
+    when(workflowRunMapper.selectByTenantAndIdForUpdate("ta", 10L)).thenReturn(run);
+    when(workflowNodeRunMapper.selectLatestForUpdate(10L, "N1")).thenReturn(null);
+    when(workflowDagService.isNodeReadyForRunDispatch(any(), eq("N1"), any())).thenReturn(true);
+    when(crossDayDependencyResolver.resolvePinned(
+            eq("ta"),
+            eq(LocalDate.of(2026, 6, 29)),
+            eq("[{\"alias\":\"previous\",\"jobCode\":\"JOB_PREVIOUS\",\"bizDateOffset\":-1}]"),
+            eq(false),
+            eq(Map.of("previous", List.of(812L)))))
+        .thenReturn(CrossDayDependencyResolver.ResolutionResult.builder()
+            .status(CrossDayDependencyResolver.ResolutionStatus.RESOLVED)
+            .resolved(Map.of("previous", Map.of("output", Map.of("value", "frozen"))))
+            .waitingReasons(List.of())
+            .resultVersionIdsByAlias(Map.of("previous", List.of(812L)))
+            .build());
+    when(childJobLaunchSupport.dispatchJobNode(
+            any(WorkflowRunEntity.class), any(), any(), anyString(), anyString()))
+        .thenReturn(1);
+
+    assertThat(service.dispatchNode(jobInstance(), run, resolution("JOB"), "{}", "trace"))
+        .isEqualTo(1);
+
+    verify(crossDayDependencyResolver).resolvePinned(
+        "ta",
+        LocalDate.of(2026, 6, 29),
+        "[{\"alias\":\"previous\",\"jobCode\":\"JOB_PREVIOUS\",\"bizDateOffset\":-1}]",
+        false,
+        Map.of("previous", List.of(812L)));
+    verify(crossDayDependencyResolver, never())
+        .resolve(anyString(), any(), anyString(), eq(false));
+  }
+
+  @Test
+  @DisplayName("遗留 TASK 节点没有 Job 根时明确拒绝，不尝试合成父实例")
+  void shouldRejectLegacyTaskNodeWithoutJobRoot() {
+    when(workflowNodeRunMapper.selectLatestForUpdate(10L, "N1")).thenReturn(null);
+    when(workflowDagService.isNodeReadyForRunDispatch(any(), eq("N1"), any())).thenReturn(true);
+    WorkflowNodeEntity node = new WorkflowNodeEntity();
+    node.setNodeCode("N1");
+    node.setNodeType("TASK");
+    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(50L, "N1")).thenReturn(node);
+
+    assertThatThrownBy(() ->
+            service.dispatchNode(jobInstance(), workflowRun(), resolution("TASK"), "{}", "trace"))
+        .isInstanceOf(BizException.class)
+        .hasMessage("error.workflow.legacy_task_node_requires_job_migration");
+    verify(schedulePlanBuilder, never()).build(any());
   }
 
   private WorkflowRunEntity workflowRun() {
-    WorkflowRunEntity r = new WorkflowRunEntity();
-    r.setId(10L);
-    r.setWorkflowDefinitionId(50L);
-    r.setTenantId("ta");
-    return r;
+    WorkflowRunEntity run = new WorkflowRunEntity();
+    run.setId(10L);
+    run.setWorkflowDefinitionId(50L);
+    run.setTenantId("ta");
+    run.setBizDate(LocalDate.of(2026, 6, 29));
+    run.setRunStatus("RUNNING");
+    return run;
   }
 
-  // ===== null inputs =====
-
-  @Test
-  @DisplayName("null jobInstance → 返 0,不读 DB")
-  void shouldReturnZero_whenJobInstanceMissing() {
-    assertThat(service.dispatchNode(
-            null, workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
-        .isZero();
-    verify(workflowNodeRunMapper, never()).selectLatestForUpdate(anyLong(), anyString());
-  }
-
-  @Test
-  @DisplayName("null workflowRun → 返 0")
-  void shouldReturnZero_whenWorkflowRunMissing() {
-    assertThat(service.dispatchNode(
-            instance(), null, new DagNodeResolution("n1", "TASK"), null, "trace"))
-        .isZero();
-  }
-
-  @Test
-  @DisplayName("null node → 返 0")
-  void shouldReturnZero_whenNodeResolutionMissing() {
-    assertThat(service.dispatchNode(instance(), workflowRun(), null, null, "trace"))
-        .isZero();
-  }
-
-  // ===== 已激活早退 =====
-
-  @Test
-  @DisplayName("节点已 READY → 返 0,不走 DAG ready check")
-  void shouldReturnZero_whenNodeAlreadyReady() {
-    WorkflowNodeRunEntity existing = new WorkflowNodeRunEntity();
-    existing.setNodeStatus(WorkflowNodeRunStatus.READY.code());
-    when(workflowNodeRunMapper.selectLatestForUpdate(10L, "n1")).thenReturn(existing);
-
-    int result = service.dispatchNode(
-        instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace");
-    assertThat(result).isZero();
-    verify(workflowDagService, never())
-        .isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), any());
-  }
-
-  @Test
-  @DisplayName("节点已 RUNNING → 返 0")
-  void shouldReturnZero_whenNodeAlreadyRunning() {
-    WorkflowNodeRunEntity existing = new WorkflowNodeRunEntity();
-    existing.setNodeStatus(WorkflowNodeRunStatus.RUNNING.code());
-    when(workflowNodeRunMapper.selectLatestForUpdate(10L, "n1")).thenReturn(existing);
-
-    assertThat(service.dispatchNode(
-            instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
-        .isZero();
-  }
-
-  @Test
-  @DisplayName("节点已 SUCCESS → 返 0(终态去重)")
-  void shouldReturnZero_whenNodeAlreadySucceeded() {
-    WorkflowNodeRunEntity existing = new WorkflowNodeRunEntity();
-    existing.setNodeStatus(WorkflowNodeRunStatus.SUCCESS.code());
-    when(workflowNodeRunMapper.selectLatestForUpdate(10L, "n1")).thenReturn(existing);
-
-    assertThat(service.dispatchNode(
-            instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
-        .isZero();
-  }
-
-  @Test
-  @DisplayName("节点已 FAILED → 不视为 active,继续走 ready check(允许重试)")
-  void shouldProceedToReadinessCheck_whenNodeAlreadyFailed() {
-    WorkflowNodeRunEntity existing = new WorkflowNodeRunEntity();
-    existing.setNodeStatus(WorkflowNodeRunStatus.FAILED.code());
-    when(workflowNodeRunMapper.selectLatestForUpdate(10L, "n1")).thenReturn(existing);
-    when(workflowDagService.isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), any()))
-        .thenReturn(false);
-
-    assertThat(service.dispatchNode(
-            instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
-        .isZero();
-    verify(workflowDagService).isNodeReadyForDispatch(eq(10L), eq(50L), eq("n1"), any());
-  }
-
-  // ===== DAG ready check =====
-
-  @Test
-  @DisplayName("DAG readiness=false → 返 0,不读 workflow_node")
-  void shouldReturnZero_whenNodeNotReady() {
-    when(workflowNodeRunMapper.selectLatestForUpdate(anyLong(), anyString())).thenReturn(null);
-    when(workflowDagService.isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), any()))
-        .thenReturn(false);
-
-    assertThat(service.dispatchNode(
-            instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
-        .isZero();
-    verify(workflowNodeMapper, never())
-        .selectByWorkflowDefinitionIdAndNodeCode(anyLong(), anyString());
-  }
-
-  // ===== workflow_node 缺失 =====
-
-  @Test
-  @DisplayName("workflow_node 不存在 → 返 0,不调任何 dispatch 路径")
-  void shouldReturnZero_whenWorkflowNodeMissing() {
-    when(workflowNodeRunMapper.selectLatestForUpdate(anyLong(), anyString())).thenReturn(null);
-    when(workflowDagService.isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), any()))
-        .thenReturn(true);
-    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(50L, "n1")).thenReturn(null);
-
-    assertThat(service.dispatchNode(
-            instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
-        .isZero();
-    verify(childJobLaunchSupport, never())
-        .dispatchJobNode(any(), any(), any(), any(), any(), any());
-  }
-
-  @Test
-  @DisplayName("workflow_node 存在但 cross-day 依赖 halt → 返 0,不进入 dispatch 路径")
-  void shouldReturnZero_whenCrossDayDependencyHalts() {
-    when(workflowNodeRunMapper.selectLatestForUpdate(anyLong(), anyString())).thenReturn(null);
-    when(workflowDagService.isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), any()))
-        .thenReturn(true);
+  private String frozenCalendarSnapshot() {
     WorkflowNodeEntity node = new WorkflowNodeEntity();
-    node.setNodeCode("n1");
-    node.setNodeType("TASK");
+    node.setTenantId("ta");
+    node.setWorkflowDefinitionId(50L);
+    node.setNodeCode("N1");
+    node.setNodeType("JOB");
+    node.setRelatedJobCode("JOB_A");
+    node.setEnabled(true);
+    JobDefinitionEntity job = JobDefinitionEntity.builder()
+        .id(101L)
+        .tenantId("ta")
+        .jobCode("JOB_A")
+        .jobType("ATOMIC")
+        .version(1)
+        .build();
+    Map<String, Object> jobIdentity = Map.of(
+        "jobDefinitionId", job.id(),
+        "jobCode", job.jobCode(),
+        "jobType", job.jobType(),
+        "jobDefinitionVersion", job.version(),
+        "executionDefinition", job);
+    Map<String, Object> snapshot = Map.of(
+        "schemaVersion", 2,
+        "workflowDefinitionId", 50L,
+        "workflowVersion", 1,
+        "workflowCalendarCode", "FROZEN_CALENDAR",
+        "replaySessionId", "",
+        "nodes", List.of(node),
+        "edges", List.of(),
+        "jobDefinitions", Map.of("N1", jobIdentity));
+    return JsonUtils.toJson(snapshot);
+  }
+
+  private String workflowReplaySnapshot() {
+    WorkflowNodeEntity node = new WorkflowNodeEntity();
+    node.setTenantId("ta");
+    node.setWorkflowDefinitionId(50L);
+    node.setNodeCode("N1");
+    node.setNodeType("JOB");
+    node.setRelatedJobCode("JOB_A");
+    node.setEnabled(true);
     node.setCrossDayDependencies(
-        "[{\"jobCode\":\"upstream\",\"daysOffset\":-1,\"required\":true}]");
-    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(50L, "n1")).thenReturn(node);
-    // 跨日依赖未就绪 → WAITING
-    when(crossDayDependencyResolver.resolve(any(), any(), any()))
-        .thenReturn(CrossDayDependencyResolver.ResolutionResult.builder()
-            .status(CrossDayDependencyResolver.ResolutionStatus.WAITING)
-            .resolved(java.util.Map.of())
-            .waitingReasons(java.util.List.of("upstream"))
-            .build());
-
-    assertThat(service.dispatchNode(
-            instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
-        .isZero();
-    verify(childJobLaunchSupport, never())
-        .dispatchJobNode(any(), any(), any(), any(), any(), any());
+        "[{\"alias\":\"previous\",\"jobCode\":\"JOB_PREVIOUS\",\"bizDateOffset\":-1}]");
+    JobDefinitionEntity definition = JobDefinitionEntity.builder()
+        .id(101L)
+        .tenantId("ta")
+        .jobCode("JOB_A")
+        .jobType("ATOMIC")
+        .version(1)
+        .build();
+    Map<String, Object> jobMetadata = Map.of(
+        "jobDefinitionId", 101L,
+        "jobCode", "JOB_A",
+        "jobType", "ATOMIC",
+        "jobDefinitionVersion", 1,
+        "executionDefinition", definition,
+        "replayExecutionGuard", Map.of(
+            "replayOperationId", 701L,
+            "declaration", Map.of(
+                "pluginId", "atomic-plugin",
+                "pluginVersion", "1.0.0",
+                "externalEffectCategories", List.of("DATABASE_WRITE"),
+                "idempotencyCapability", "IDEMPOTENT_BY_UNIQUE_CONSTRAINT",
+                "idempotencyKeyScope", "tenant+business-key",
+                "recoveryProtocolId", "unique-key",
+                "contractVersion", 1)));
+    return JsonUtils.toJson(Map.of(
+        "schemaVersion", 2,
+        "workflowDefinitionId", 50L,
+        "workflowVersion", 1,
+        "workflowCalendarCode", "CAL",
+        "replayOperationId", 701L,
+        "nodes", List.of(node),
+        "edges", List.of(),
+        "jobDefinitions", Map.of("N1", jobMetadata),
+        "crossDayDependencyResultVersionIdsByNode", Map.of("N1", Map.of("previous", List.of(812L)))));
   }
 
-  @Test
-  @DisplayName("TASK 节点资源准入 REJECT → 抛业务拒绝且不创建分区")
-  void shouldThrowBusinessError_whenAdmissionRejected() {
-    when(workflowNodeRunMapper.selectLatestForUpdate(anyLong(), anyString())).thenReturn(null);
-    when(workflowDagService.isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), any()))
-        .thenReturn(true);
-    WorkflowNodeEntity node = new WorkflowNodeEntity();
-    node.setNodeCode("n1");
-    node.setNodeType("TASK");
-    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(50L, "n1")).thenReturn(node);
-    when(payloadBuilder.buildTaskPayload(any(), any(), any(), any(), any(), any()))
-        .thenReturn("{\"channelCode\":\"dispatch-primary\",\"resourceProfile\":\"io-heavy\"}");
-    SchedulePlan plan = new SchedulePlan();
-    plan.setTenantId("ta");
-    plan.setJobCode("WF_JOB");
-    plan.setBizDate("2026-06-29");
-    plan.setDefaultWorkerType("IMPORT");
-    plan.setPartitionCount(1);
-    plan.setPartitions(List.of(new SchedulePlan.PartitionPlan()));
-    when(schedulePlanBuilder.build(any())).thenReturn(plan);
-    ResourceSchedulingDecision decision = new ResourceSchedulingDecision();
-    decision.setAdmissionAction(ResourceAdmissionAction.REJECT);
-    decision.setFailFast(true);
-    decision.setReasonCode("TENANT_JOB_LIMIT");
-    decision.setReasonMessage("tenant quota exceeded");
-    when(resourceScheduler.schedule(any())).thenReturn(decision);
+  private JobInstanceEntity jobInstance() {
+    JobInstanceEntity instance = new JobInstanceEntity();
+    instance.setId(100L);
+    instance.setTenantId("ta");
+    instance.setJobCode("JOB_A");
+    instance.setBizDate(LocalDate.of(2026, 6, 29));
+    return instance;
+  }
 
-    assertThatThrownBy(() -> service.dispatchNode(
-            instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), "{}", "trace"))
-        .isInstanceOf(BizException.class)
-        .hasMessage("error.partition.dispatch_business_error");
-    ArgumentCaptor<SchedulePlanCommand> commandCaptor =
-        ArgumentCaptor.forClass(SchedulePlanCommand.class);
-    verify(schedulePlanBuilder).build(commandCaptor.capture());
-    assertThat(commandCaptor.getValue().params())
-        .containsEntry("channelCode", "dispatch-primary")
-        .containsEntry("resourceProfile", "io-heavy");
-    verify(partitionLifecycleService, never()).createPartitions(any(), any(), any());
+  private DagNodeResolution resolution(String type) {
+    return new DagNodeResolution("N1", type);
   }
 }

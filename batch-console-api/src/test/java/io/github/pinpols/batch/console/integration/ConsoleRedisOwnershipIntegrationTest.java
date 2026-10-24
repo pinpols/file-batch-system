@@ -2,7 +2,10 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
+import io.github.pinpols.batch.common.redis.BatchRedisNamespaceSerializer;
 import io.github.pinpols.batch.console.domain.rbac.infrastructure.ConsoleUserBatchProvisioningStore;
+import io.github.pinpols.batch.console.support.cache.RedisKeyUtils;
 import io.github.pinpols.batch.console.support.web.RedisConsoleIdempotencyStore;
 import io.github.pinpols.batch.testing.TestValkeyContainers;
 import java.time.Duration;
@@ -18,6 +21,42 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 /** 使用真实 Redis 兼容服务验证 Lua 的 owner 校验和预览 CAS，不启动整套应用。 */
 @DisplayName("Redis 占位归属: 陈旧持有者不能改写,并发预览更新只有一个赢家")
 class ConsoleRedisOwnershipIntegrationTest {
+  @Test
+  @DisplayName("部署命名空间隔离模板 key,SCAN 清理只删除本部署匹配的物理 key")
+  void shouldScanAndDeleteOnlyMatchingKeysFromCurrentNamespace() {
+    try (var redis = TestValkeyContainers.create()) {
+      redis.start();
+      var connectionFactory = new LettuceConnectionFactory(
+          redis.getHost(), redis.getMappedPort(TestValkeyContainers.REDIS_PORT));
+      connectionFactory.afterPropertiesSet();
+      try {
+        BatchRedisNamespace namespace = new BatchRedisNamespace("console-isolation-test");
+        StringRedisTemplate template = namespacedTemplate(connectionFactory, namespace);
+        StringRedisTemplate otherTemplate =
+            namespacedTemplate(connectionFactory, new BatchRedisNamespace("other-deployment"));
+        StringRedisTemplate rawTemplate = new StringRedisTemplate(connectionFactory);
+        rawTemplate.afterPropertiesSet();
+
+        template.opsForValue().set("cleanup:match:first", "first", Duration.ofMinutes(1));
+        template.opsForValue().set("cleanup:match:second", "second", Duration.ofMinutes(1));
+        template.opsForValue().set("cleanup:keep", "keep", Duration.ofMinutes(1));
+        otherTemplate.opsForValue().set("cleanup:match:other", "other", Duration.ofMinutes(1));
+
+        long deleted =
+            RedisKeyUtils.scanAndDeleteOrThrow(template, "cleanup:match:*", 1, namespace);
+
+        assertThat(deleted).isEqualTo(2);
+        assertThat(template.opsForValue().get("cleanup:match:first")).isNull();
+        assertThat(template.opsForValue().get("cleanup:match:second")).isNull();
+        assertThat(template.opsForValue().get("cleanup:keep")).isEqualTo("keep");
+        assertThat(otherTemplate.opsForValue().get("cleanup:match:other")).isEqualTo("other");
+        assertThat(rawTemplate.keys("console-isolation-test:cleanup:match:*")).isEmpty();
+      } finally {
+        connectionFactory.destroy();
+      }
+    }
+  }
+
   @Test
   @DisplayName("占位归属校验: 过期持有者改写被拒,并发替换只有一个请求成功")
   void shouldRejectStaleOwnersAndLetOnlyOneConcurrentPreviewWin_whenReplacing() throws Exception {
@@ -68,5 +107,13 @@ class ConsoleRedisOwnershipIntegrationTest {
         connectionFactory.destroy();
       }
     }
+  }
+
+  private static StringRedisTemplate namespacedTemplate(
+      LettuceConnectionFactory connectionFactory, BatchRedisNamespace namespace) {
+    StringRedisTemplate template = new StringRedisTemplate(connectionFactory);
+    template.setKeySerializer(new BatchRedisNamespaceSerializer(namespace));
+    template.afterPropertiesSet();
+    return template;
   }
 }

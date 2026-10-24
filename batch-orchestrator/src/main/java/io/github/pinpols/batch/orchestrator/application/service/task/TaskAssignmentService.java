@@ -46,6 +46,10 @@ public interface TaskAssignmentService {
   boolean renewTaskLease(
       String tenantId, Long taskId, String workerCode, String partitionInvocationId);
 
+  /** 持久化当前租约所有者即将运行非幂等执行器这一事实。 */
+  boolean markNonIdempotentExecutionStarted(
+      String tenantId, Long taskId, String workerCode, String partitionInvocationId);
+
   /**
    * ORCH-P4-1：worker 心跳(renew)合并续租 + 进度上报 + 取消感知,单事务一次完成。
    *

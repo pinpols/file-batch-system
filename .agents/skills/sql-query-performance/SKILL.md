@@ -27,7 +27,7 @@ description: 用户要求审查或优化 PostgreSQL 查询、Mapper SQL、索引
 ## 参考入口
 
 - `docs/architecture/adr/ADR-031-dual-track-pagination.md`
-- `docs/runbook/sql-audit-2026-05-20.md`（历史基线，需复核现状）
+- `docs/archive/audit/sql-audit-2026-05-20.md`（历史基线，需复核现状）
 - `docs/design/database-schema-guide.md`
 - `docs/runbook/distributed-locking-checklist.md`（涉及热点队列索引时）
 - `database-migration-safety`、`performance-validation`

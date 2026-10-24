@@ -62,7 +62,7 @@ public class ConsoleMetaController {
 
   /**
    * Pipeline 9 stages 白名单（与 {@code ConfigPackageExcelValidator.STAGES_BY_TYPE} 一致）。 用于 FE
-   * PipelineDefinitionList 步骤编辑器把 stageCode 改成下拉选择。
+   * Job配置和文件Pipeline观测使用固定阶段目录。
    */
   @GetMapping("/pipeline-stages")
   public CommonResponse<Map<String, List<String>>> pipelineStages() {

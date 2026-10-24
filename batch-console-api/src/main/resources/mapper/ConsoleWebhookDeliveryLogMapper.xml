@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper">
+
+    <select id="bindTenant" resultType="string">
+        select set_config('app.tenant_id', #{tenantId}, true)
+    </select>
     <resultMap id="deliveryLogMap"
                type="io.github.pinpols.batch.console.domain.notification.entity.WebhookDeliveryLogEntity">
         <id column="id" property="id"/>
@@ -21,9 +25,17 @@
         response_body, delivery_status, attempt, next_retry_at, created_at
     </sql>
 
+    <sql id="hotAndColdHistory">
+        (select h.* from batch.webhook_delivery_log h
+         union all
+         select c.* from archive.webhook_delivery_log_archive c
+          where not exists (select 1 from batch.webhook_delivery_log h
+                             where h.tenant_id=c.tenant_id and h.id=c.id)) history
+    </sql>
+
     <select id="findRecentByTenant" resultMap="deliveryLogMap">
         select <include refid="selectColumns"/>
-          from batch.webhook_delivery_log
+          from <include refid="hotAndColdHistory"/>
          where tenant_id = #{tenantId}
          order by created_at desc
          limit #{limit}
@@ -31,7 +43,7 @@
 
     <select id="findBySubscription" resultMap="deliveryLogMap">
         select <include refid="selectColumns"/>
-          from batch.webhook_delivery_log
+          from <include refid="hotAndColdHistory"/>
          where tenant_id = #{tenantId} and subscription_id = #{subscriptionId}
          order by created_at desc
          limit #{limit}
@@ -65,7 +77,8 @@
     <select id="findEligibleRetriesByStatuses" resultMap="deliveryLogMap">
         select <include refid="selectColumns"/>
           from batch.webhook_delivery_log
-         where delivery_status in
+         where terminal_event_key is null
+           and delivery_status in
          <foreach collection="eligibleStatuses" item="status" open="(" separator="," close=")">
              #{status}
          </foreach>
@@ -78,7 +91,7 @@
 
     <select id="findById" resultMap="deliveryLogMap">
         select <include refid="selectColumns"/>
-          from batch.webhook_delivery_log
+          from <include refid="hotAndColdHistory"/>
          where id = #{id}
          limit 1
     </select>

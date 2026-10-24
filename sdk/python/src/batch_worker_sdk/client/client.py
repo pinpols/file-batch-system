@@ -203,7 +203,8 @@ class BatchPlatformClient:
 
             self._config._validate_timings()
 
-            await self._http.register(self._build_register_body())
+            register_body = self._build_register_body()
+            await self._http.register(register_body)
 
             self._dispatcher = self._build_dispatcher()
             self._heartbeat = HeartbeatScheduler(
@@ -304,17 +305,19 @@ class BatchPlatformClient:
     def _build_dispatcher(self) -> DispatcherLike:
         """构造 dispatcher;测试可通过 ``dispatcher_factory`` 注入,避免依赖默认实现。"""
         if self._dispatcher_factory is not None:
+            decorated_handler_snapshot = self._decorated_handlers()
             built: DispatcherLike = self._dispatcher_factory(
-                self._config, self._http, self._decorated_handlers()
+                self._config, self._http, decorated_handler_snapshot
             )
             return built
         # 默认走 ``batch_worker_sdk.dispatcher.dispatcher.TaskDispatcher``。
         from batch_worker_sdk.dispatcher.dispatcher import TaskDispatcher  # noqa: PLC0415
 
+        handler_snapshot = dict(self._handlers)
         return TaskDispatcher(
             self._config,
             self._http,
-            dict(self._handlers),
+            handler_snapshot,
             idempotency_store=self._idempotency_store,
         )
 

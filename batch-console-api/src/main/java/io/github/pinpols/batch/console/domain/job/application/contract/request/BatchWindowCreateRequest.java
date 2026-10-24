@@ -59,11 +59,15 @@ public class BatchWindowCreateRequest {
   /** 非跨天窗口 startTime 必须早于 endTime，拒绝 20:00-08:00 或 start==end 的退化区间。 */
   @AssertTrue(message = "startTime must be earlier than endTime when allowCrossDay is false")
   public boolean isWindowRangeValid() {
-    if (Boolean.TRUE.equals(allowCrossDay) || startTime == null || endTime == null) {
+    boolean sameDayWindowValidationIsNotApplicable =
+        Boolean.TRUE.equals(allowCrossDay) || startTime == null || endTime == null;
+    if (sameDayWindowValidationIsNotApplicable) {
       return true;
     }
     try {
-      return LocalTime.parse(startTime).isBefore(LocalTime.parse(endTime));
+      LocalTime parsedStartTime = LocalTime.parse(startTime);
+      LocalTime parsedEndTime = LocalTime.parse(endTime);
+      return parsedStartTime.isBefore(parsedEndTime);
     } catch (RuntimeException e) {
       return true; // 时间格式错误交由其它校验处理，这里只管区间逻辑
     }

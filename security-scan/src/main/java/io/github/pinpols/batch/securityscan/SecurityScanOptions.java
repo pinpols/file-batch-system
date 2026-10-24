@@ -79,7 +79,11 @@ public record SecurityScanOptions(
             String value = arg.substring(separator + 1);
             switch (key) {
                 case "mode" -> mode = ScanMode.fromCli(value);
-                case "root" -> root = Paths.get(value).toAbsolutePath().normalize();
+                case "root" -> {
+                    Path configuredRoot = Paths.get(value);
+                    Path absoluteRoot = configuredRoot.toAbsolutePath();
+                    root = absoluteRoot.normalize();
+                }
                 case "target-url" -> targetUrl = value;
                 case "image-name" -> imageName = value;
                 case "zap-image" -> zapImage = value;
@@ -88,7 +92,9 @@ public record SecurityScanOptions(
                 case "zap-scan" -> zapScan = value.toLowerCase(Locale.ROOT);
                 case "zap-api-spec" -> zapApiSpec = value;
                 case "report-dir" -> {
-                    reportDir = Paths.get(value).toAbsolutePath().normalize();
+                    Path configuredReportDir = Paths.get(value);
+                    Path absoluteReportDir = configuredReportDir.toAbsolutePath();
+                    reportDir = absoluteReportDir.normalize();
                     zapReport = reportDir.resolve("zap-report.html").toString();
                 }
                 case "zap-report" -> zapReport = value;
@@ -140,7 +146,9 @@ public record SecurityScanOptions(
     private static Path defaultRoot() {
         Path current = Paths.get("").toAbsolutePath().normalize();
         Path fileName = current.getFileName();
-        if (fileName != null && "security-scan".equals(fileName.toString()) && current.getParent() != null) {
+        boolean currentDirectoryIsSecurityScanRoot =
+            fileName != null && "security-scan".equals(fileName.toString()) && current.getParent() != null;
+        if (currentDirectoryIsSecurityScanRoot) {
             return current.getParent();
         }
         return current;

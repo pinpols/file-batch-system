@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.rbac.support.captcha;
 
+import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
@@ -78,14 +79,15 @@ public class CloudflareTurnstileVerifier implements CaptchaVerifier {
 
   /** 执行 application/x-www-form-urlencoded POST,返回响应体字符串。抽成 protected 以便单测覆盖、无网络验证 verify 各分支。 */
   protected String postForm(String url, String body) throws IOException, InterruptedException {
-    OutboundHttpResponse response = httpTransport.execute(OutboundHttpRequest.post(
+    OutboundHttpContent httpContent = new OutboundHttpContent(body, "application/x-www-form-urlencoded; charset=utf-8");
+    OutboundHttpRequest httpRequest = OutboundHttpRequest.post(
         url,
         Map.of(),
-        body,
-        "application/x-www-form-urlencoded; charset=utf-8",
+        httpContent,
         CONNECT_TIMEOUT,
         REQUEST_TIMEOUT,
-        OutboundAddressPolicy.GUARDED));
+        OutboundAddressPolicy.GUARDED);
+    OutboundHttpResponse response = httpTransport.execute(httpRequest);
     return response.body();
   }
 

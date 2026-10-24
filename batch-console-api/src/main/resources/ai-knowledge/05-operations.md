@@ -9,9 +9,9 @@
 - AI 审计记录:`/api/console/queries/ai-audits`(只记哈希 + 512 字预览,不存原文)。
 
 ## 常用运维脚本(scripts/ops 等)
-- `heal-stuck-outbox.sh`:修卡住的 outbox。
-- `heal-dead-letters.sh`:处理死信。
-- `heal-zombie-pipelines.sh`:清理僵尸 pipeline。
+- `heal-stuck-outbox.sh`:只读诊断 stale `PUBLISHING`；状态由 Orchestrator 调度或审计接口处理。
+- `inspect-dead-letters.sh`:只读检查死信候选;人工重放经 Console 审批,UNKNOWN 仅核实未执行后一次性恢复。
+- `inspect-stale-pipelines.sh`:只读检查超期 RUNNING pipeline;终态转换由 Orchestrator stale sweep 负责。
 - `heal-retry-tasks.sh` / `heal-retry-partitions.sh`:重试任务/分区。
 - `inspect-db.sh` / `inspect-workers.sh` / `inspect-all.sh`:巡检。
 

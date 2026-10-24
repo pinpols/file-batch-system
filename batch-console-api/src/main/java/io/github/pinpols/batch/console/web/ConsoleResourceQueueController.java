@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.web;
 
+import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueListRequest;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.application.config.ConsoleResourceQueueApplicationService;
@@ -35,8 +36,10 @@ public class ConsoleResourceQueueController {
       @RequestParam(value = "enabled", required = false) Boolean enabled,
       @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
       @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
-    return responseFactory.success(resourceQueueApplicationService.list(
-        tenantId, queueCode, queueType, enabled, pageNo, pageSize));
+    ResourceQueueListRequest request = new ResourceQueueListRequest(
+        tenantId, queueCode, queueType, enabled, pageNo, pageSize);
+    PageResponse<ResourceQueueResponse> page = resourceQueueApplicationService.list(request);
+    return responseFactory.success(page);
   }
 
   @PostMapping

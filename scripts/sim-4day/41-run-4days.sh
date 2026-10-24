@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：ADR-sim 4day · P4 四天驱动:连续 4 个 bizDate 跑批,行数逐日递增(增量放大)。
+# 用法：在仓库根目录执行 bash scripts/sim-4day/41-run-4days.sh；参数与前置环境见下方说明及所属 README。
 # ADR-sim 4day · P4 四天驱动:连续 4 个 bizDate 跑批,行数逐日递增(增量放大)。
 # 用法: bash 41-run-4days.sh [startDate YYYY-MM-DD] [baseRows]
 #   bash 41-run-4days.sh 2026-06-06 300

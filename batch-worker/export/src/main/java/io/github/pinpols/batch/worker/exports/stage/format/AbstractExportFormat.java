@@ -178,10 +178,11 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     if (value == null) {
       return "null";
     }
-    String collapsed = value.replace("\r", "\\r").replace("\n", "\\n");
-    return collapsed.length() <= 120
-        ? "\"" + collapsed + "\""
-        : "\"" + collapsed.substring(0, 120) + "...\"";
+    String carriageReturnsEscaped = value.replace("\r", "\\r");
+    String lineBreaksEscaped = carriageReturnsEscaped.replace("\n", "\\n");
+    return lineBreaksEscaped.length() <= 120
+        ? "\"" + lineBreaksEscaped + "\""
+        : "\"" + lineBreaksEscaped.substring(0, 120) + "...\"";
   }
 
   /** 本次 generate 是否为续跑(已有可用位点 + 残文件)。 */
@@ -195,14 +196,15 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       ExportDataPlugin dataPlugin,
       Map<String, Object> batch,
       List<Map<String, Object>> firstPage) {
-    return resolveColumns(
-        dataCtx,
-        firstPage,
-        new ColumnResolutionSpec(
-            "delimited",
-            templateDelimitedColumns(dataCtx.templateConfig()),
-            dataPlugin.describeDelimitedColumns(dataCtx, batch),
-            key -> new ColumnLayout(key, KEY_DETAIL_PREFIX + key, null, false, ' ')));
+    List<ColumnLayout> configuredColumns = templateDelimitedColumns(dataCtx.templateConfig());
+    List<ExportDataPlugin.DelimitedColumn> describedColumns =
+        dataPlugin.describeDelimitedColumns(dataCtx, batch);
+    ColumnResolutionSpec spec = new ColumnResolutionSpec(
+        "delimited",
+        configuredColumns,
+        describedColumns,
+        key -> new ColumnLayout(key, KEY_DETAIL_PREFIX + key, null, false, ' '));
+    return resolveColumns(dataCtx, firstPage, spec);
   }
 
   protected List<ColumnLayout> resolveExcelColumns(
@@ -218,15 +220,19 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       ExportDataPlugin dataPlugin,
       Map<String, Object> batch,
       List<Map<String, Object>> firstPage) {
-    return resolveColumns(
-        dataCtx,
-        firstPage,
-        new ColumnResolutionSpec(
-            "fixed-width",
-            templateFixedWidthColumns(dataCtx.templateConfig()),
-            dataPlugin.describeFixedWidthColumns(dataCtx, batch),
-            key -> new ColumnLayout(
-                key, KEY_DETAIL_PREFIX + key, Math.max(key.length(), 16), false, ' ')));
+    List<ColumnLayout> configuredColumns = templateFixedWidthColumns(dataCtx.templateConfig());
+    List<ExportDataPlugin.DelimitedColumn> describedColumns =
+        dataPlugin.describeFixedWidthColumns(dataCtx, batch);
+    ColumnResolutionSpec spec = new ColumnResolutionSpec(
+        "fixed-width",
+        configuredColumns,
+        describedColumns,
+        key -> {
+          int minimumColumnWidth = Math.max(key.length(), 16);
+          return new ColumnLayout(
+              key, KEY_DETAIL_PREFIX + key, minimumColumnWidth, false, ' ');
+        });
+    return resolveColumns(dataCtx, firstPage, spec);
   }
 
   /**
@@ -310,8 +316,9 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     }
     Object querySchema = templateConfig.get(KEY_QUERY_PARAM_SCHEMA);
     Map<String, Object> schemaMap = toMap(querySchema);
-    return parseDelimitedColumns(
-        firstNonNull(schemaMap.get("csvColumns"), schemaMap.get("delimitedColumns")), false);
+    Object schemaColumns =
+        firstNonNull(schemaMap.get("csvColumns"), schemaMap.get("delimitedColumns"));
+    return parseDelimitedColumns(schemaColumns, false);
   }
 
   protected List<ColumnLayout> templateFixedWidthColumns(Map<String, Object> templateConfig) {
@@ -326,9 +333,9 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     }
     Object querySchema = templateConfig.get(KEY_QUERY_PARAM_SCHEMA);
     Map<String, Object> schemaMap = toMap(querySchema);
-    return parseDelimitedColumns(
-        firstNonNull(schemaMap.get("fixedWidthColumns"), schemaMap.get("fixed_width_columns")),
-        true);
+    Object schemaColumns =
+        firstNonNull(schemaMap.get("fixedWidthColumns"), schemaMap.get("fixed_width_columns"));
+    return parseDelimitedColumns(schemaColumns, true);
   }
 
   protected List<ColumnLayout> parseDelimitedColumns(Object raw, boolean fixedWidth) {
@@ -437,10 +444,12 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       return null;
     }
     if (source.startsWith("batch.")) {
-      return batch.get(source.substring("batch.".length()));
+      String batchField = source.substring("batch.".length());
+      return batch.get(batchField);
     }
     if (source.startsWith(KEY_DETAIL_PREFIX)) {
-      return detail.get(source.substring(KEY_DETAIL_PREFIX.length()));
+      String detailField = source.substring(KEY_DETAIL_PREFIX.length());
+      return detail.get(detailField);
     }
     Object detailValue = detail.get(source);
     return EmptyChecks.isNotNull(detailValue) ? detailValue : batch.get(source);
@@ -476,12 +485,13 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
 
   protected String escapeDelimited(String value, DelimitedFormatConfig formatConfig) {
     return switch (formatConfig.escapePolicy()) {
-      case BACKSLASH ->
-        value
-            .replace("\\", "\\\\")
-            .replace(formatConfig.quoteChar(), "\\" + formatConfig.quoteChar())
-            .replace("\r", "\\r")
-            .replace("\n", "\\n");
+      case BACKSLASH -> {
+        String escapedBackslashes = value.replace("\\", "\\\\");
+        String escapedQuotes = escapedBackslashes.replace(
+            formatConfig.quoteChar(), "\\" + formatConfig.quoteChar());
+        String escapedCarriageReturns = escapedQuotes.replace("\r", "\\r");
+        yield escapedCarriageReturns.replace("\n", "\\n");
+      }
       case NONE -> value;
       case DOUBLE_QUOTE ->
         value.replace(
@@ -493,10 +503,13 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       List<ColumnLayout> columns, int recordLength, Function<ColumnLayout, String> valueMapper) {
     StringBuilder builder = new StringBuilder();
     for (ColumnLayout column : columns) {
-      builder.append(fixedWidth(valueMapper.apply(column), column));
+      String mappedValue = valueMapper.apply(column);
+      String formattedValue = fixedWidth(mappedValue, column);
+      builder.append(formattedValue);
     }
     if (recordLength > 0) {
-      return padRight(builder.toString(), recordLength);
+      String serializedLine = builder.toString();
+      return padRight(serializedLine, recordLength);
     }
     return builder.toString();
   }
@@ -575,7 +588,8 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     if (EmptyChecks.isNull(value)) {
       return null;
     }
-    String text = String.valueOf(value).trim();
+    String rawText = String.valueOf(value);
+    String text = rawText.trim();
     if (!Texts.hasText(text)) {
       return null;
     }
@@ -601,12 +615,14 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       return bigDecimal;
     }
     if (value instanceof Number number) {
-      return new BigDecimal(number.toString());
+      String numericText = number.toString();
+      return new BigDecimal(numericText);
     }
     if (EmptyChecks.isNull(value)) {
       return null;
     }
-    String text = String.valueOf(value).trim();
+    String rawText = String.valueOf(value);
+    String text = rawText.trim();
     if (!Texts.hasText(text)) {
       return null;
     }
@@ -656,7 +672,10 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
         return STRING;
       }
       try {
-        return ColumnType.valueOf(String.valueOf(value).trim().toUpperCase());
+        String rawValue = String.valueOf(value);
+        String trimmedValue = rawValue.trim();
+        String normalizedValue = trimmedValue.toUpperCase();
+        return ColumnType.valueOf(normalizedValue);
       } catch (Exception ignored) {
         SwallowedExceptionLogger.warn(AbstractExportFormat.class, "catch:Exception", ignored);
         return STRING;
@@ -681,7 +700,10 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
         return REQUIRED;
       }
       try {
-        return QuotePolicy.valueOf(String.valueOf(value).trim().toUpperCase());
+        String rawValue = String.valueOf(value);
+        String trimmedValue = rawValue.trim();
+        String normalizedValue = trimmedValue.toUpperCase();
+        return QuotePolicy.valueOf(normalizedValue);
       } catch (Exception ignored) {
         SwallowedExceptionLogger.warn(AbstractExportFormat.class, "catch:Exception", ignored);
 
@@ -700,7 +722,10 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
         return DOUBLE_QUOTE;
       }
       try {
-        return EscapePolicy.valueOf(String.valueOf(value).trim().toUpperCase());
+        String rawValue = String.valueOf(value);
+        String trimmedValue = rawValue.trim();
+        String normalizedValue = trimmedValue.toUpperCase();
+        return EscapePolicy.valueOf(normalizedValue);
       } catch (Exception ignored) {
         SwallowedExceptionLogger.warn(AbstractExportFormat.class, "catch:Exception", ignored);
 

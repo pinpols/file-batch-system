@@ -97,6 +97,11 @@ public final class OutboxEventKeyGenerator {
     return build(tenantId, "workflow", String.valueOf(workflowRunId), "terminal");
   }
 
+  /** Job 终态事实:同状态重投唯一,失败修正为成功是另一事实。 */
+  public static String forJobTerminal(String tenantId, Long jobInstanceId, String status) {
+    return build(tenantId, "job", String.valueOf(jobInstanceId), "terminal", status);
+  }
+
   // ── helpers ──────────────────────────────────────────────────────────
 
   private static String build(String tenantId, String scope, String... parts) {

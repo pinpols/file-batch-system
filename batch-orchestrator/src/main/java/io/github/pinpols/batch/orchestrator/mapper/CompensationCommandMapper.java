@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import io.github.pinpols.batch.orchestrator.domain.param.StaleCompensationFailureParam;
 import io.github.pinpols.batch.orchestrator.domain.entity.CompensationCommandEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateCompensationStatusParam;
 import java.time.Instant;
@@ -14,6 +15,9 @@ public interface CompensationCommandMapper {
   CompensationCommandEntity selectByCommandNo(
       @Param("tenantId") String tenantId, @Param("commandNo") String commandNo);
 
+  CompensationCommandEntity selectByTenantAndApprovalId(
+      @Param("tenantId") String tenantId, @Param("approvalId") String approvalId);
+
   int updateStatus(UpdateCompensationStatusParam param);
 
   int countRunningByTarget(
@@ -22,11 +26,5 @@ public interface CompensationCommandMapper {
       @Param("targetId") Long targetId,
       @Param("runningStatus") String runningStatus);
 
-  int markStaleRunningFailed(
-      @Param("runningStatus") String runningStatus,
-      @Param("failedStatus") String failedStatus,
-      @Param("cutoff") Instant cutoff,
-      @Param("errorCode") String errorCode,
-      @Param("errorMessage") String errorMessage,
-      @Param("limit") int limit);
+  int markStaleRunningFailed(StaleCompensationFailureParam param);
 }

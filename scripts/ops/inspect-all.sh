@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：全量巡检主入口。
+# 用法：在仓库根目录执行 bash scripts/ops/inspect-all.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # inspect-all.sh - 全量巡检主入口
 # 说明：
@@ -128,10 +130,10 @@ if [[ "${overall_status}" -ne 0 ]]; then
   printf '\nOVERALL: FAILED — review FAIL lines above\n'
   printf 'Self-healing scripts available:\n'
   printf '  heal-drain-timeout.sh  — force-offline DRAINING workers past deadline\n'
-  printf '  heal-dead-letters.sh   — replay NEW dead-letter tasks\n'
+  printf '  inspect-dead-letters.sh — inspect NEW dead letters; replay via Console approval\n'
   printf '  heal-retry-tasks.sh    — replay FAILED job_task tasks\n'
   printf '  heal-retry-partitions.sh — replay FAILED job_partition partitions\n'
-  printf '  heal-stuck-outbox.sh   — reset stuck outbox events\n'
+  printf '  heal-stuck-outbox.sh   — diagnose stale outbox events (read-only)\n'
   exit 1
 fi
 

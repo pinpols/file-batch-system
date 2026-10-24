@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Guard the production logging and telemetry delivery contract."""
+# 用途：日志与遥测交付契约。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-observability-contract.py；参数与前置环境见下方说明及所属 README。
+"""核对生产日志与遥测交付契约。"""
 
 from __future__ import annotations
 

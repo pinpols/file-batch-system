@@ -6,4 +6,6 @@ import io.github.pinpols.batch.orchestrator.domain.command.CompensationSubmitCom
 public interface CompensationService {
 
   String submit(CompensationSubmitCommand command);
+
+  void rejectWorkflowNodeReplayApproval(String tenantId, Long replayOperationId);
 }

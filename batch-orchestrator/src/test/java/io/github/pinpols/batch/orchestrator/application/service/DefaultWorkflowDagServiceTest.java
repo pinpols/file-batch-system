@@ -12,6 +12,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
+import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.DefaultWorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowConditionEvaluator;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
@@ -23,10 +25,16 @@ import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.testing.TestConstants.Edge;
 import io.github.pinpols.batch.testing.TestConstants.Workflow;
+import io.micrometer.core.instrument.MeterRegistry;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
 
 @DisplayName("流程有向图服务: 出边解析, 汇聚就绪判定与不可达下游级联跳过口径")
 class DefaultWorkflowDagServiceTest {
@@ -45,8 +53,7 @@ class DefaultWorkflowDagServiceTest {
     conditionEvaluator = mock(WorkflowConditionEvaluator.class);
     // R3-P2-4：DagService 新增 MeterRegistry ObjectProvider 依赖；测试用空 provider（getIfAvailable→null）
     @SuppressWarnings("unchecked")
-    org.springframework.beans.factory.ObjectProvider<io.micrometer.core.instrument.MeterRegistry>
-        meterProvider = mock(org.springframework.beans.factory.ObjectProvider.class);
+    ObjectProvider<MeterRegistry> meterProvider = mock(ObjectProvider.class);
     dagService = new DefaultWorkflowDagService(
         edgeMapper, nodeMapper, nodeRunMapper, conditionEvaluator, meterProvider);
 
@@ -57,8 +64,8 @@ class DefaultWorkflowDagServiceTest {
         .when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCodesIn(anyLong(), any()))
         .thenAnswer(inv -> {
           Long runId = inv.getArgument(0);
-          java.util.Collection<String> codes = inv.getArgument(1);
-          java.util.List<WorkflowNodeRunEntity> out = new java.util.ArrayList<>();
+          Collection<String> codes = inv.getArgument(1);
+          List<WorkflowNodeRunEntity> out = new ArrayList<>();
           for (String c : codes) {
             WorkflowNodeRunEntity e =
                 nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(runId, c);
@@ -74,8 +81,8 @@ class DefaultWorkflowDagServiceTest {
         .when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCodesIn(any(), any()))
         .thenAnswer(inv -> {
           Long defId = inv.getArgument(0);
-          java.util.Collection<String> codes = inv.getArgument(1);
-          java.util.List<WorkflowNodeEntity> out = new java.util.ArrayList<>();
+          Collection<String> codes = inv.getArgument(1);
+          List<WorkflowNodeEntity> out = new ArrayList<>();
           for (String c : codes) {
             WorkflowNodeEntity e = nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(defId, c);
             if (e != null) {
@@ -121,6 +128,55 @@ class DefaultWorkflowDagServiceTest {
 
     assertThat(result).hasSize(1);
     assertThat(result.get(0).nodeCode()).isEqualTo("NODE_B");
+  }
+
+  @Test
+  @DisplayName("运行快照存在时解析固定拓扑,不读取已编辑的实时定义")
+  void shouldResolveNextNodeFromRunSnapshotAfterDefinitionChanges() {
+    WorkflowEdgeEntity pinnedEdge = edge("NODE_A", "PINNED_NODE", Edge.ALWAYS, null);
+    pinnedEdge.setEnabled(true);
+    pinnedEdge.setTenantId("tenant-a");
+    pinnedEdge.setWorkflowDefinitionId(9L);
+    WorkflowNodeEntity sourceNode = node("NODE_A", WorkflowNodeType.TASK.code());
+    sourceNode.setTenantId("tenant-a");
+    sourceNode.setWorkflowDefinitionId(9L);
+    WorkflowNodeEntity pinnedNode = node("PINNED_NODE", WorkflowNodeType.JOB.code());
+    pinnedNode.setTenantId("tenant-a");
+    pinnedNode.setWorkflowDefinitionId(9L);
+    pinnedNode.setRelatedJobCode("PINNED_JOB");
+    WorkflowNodeEntity editedNode = node("LIVE_EDITED_NODE", WorkflowNodeType.JOB.code());
+    editedNode.setTenantId("tenant-a");
+    editedNode.setWorkflowDefinitionId(9L);
+    editedNode.setRelatedJobCode("EDITED_JOB");
+    WorkflowRunEntity run = new WorkflowRunEntity();
+    run.setId(77L);
+    run.setTenantId("tenant-a");
+    run.setWorkflowDefinitionId(9L);
+    run.setWorkflowVersionSnapshot(3);
+    run.setExecutionSnapshot(JsonUtils.toJson(Map.of(
+        "schemaVersion",
+        2,
+        "workflowDefinitionId",
+        9,
+        "workflowVersion",
+        3,
+        "nodes",
+        List.of(sourceNode, pinnedNode, editedNode),
+        "edges",
+        List.of(pinnedEdge),
+        "jobDefinitions",
+        Map.of(
+            "PINNED_NODE", frozenJob("PINNED_JOB"),
+            "LIVE_EDITED_NODE", frozenJob("EDITED_JOB")))));
+
+    List<WorkflowDagService.DagNodeResolution> result =
+        dagService.resolveNextNodesForRun(run, "NODE_A", true, null);
+
+    assertThat(result)
+        .containsExactly(
+            new WorkflowDagService.DagNodeResolution("PINNED_NODE", WorkflowNodeType.JOB.code()));
+    verify(edgeMapper, never()).selectOutgoingEdges(9L, "NODE_A");
+    verify(nodeMapper, never()).selectByWorkflowDefinitionIdAndNodeCode(9L, "PINNED_NODE");
   }
 
   @Test
@@ -348,7 +404,11 @@ class DefaultWorkflowDagServiceTest {
     List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAIL_NODE");
 
     assertThat(skipped).containsExactly("NEXT");
-    verify(nodeRunMapper).insert(any());
+    ArgumentCaptor<WorkflowNodeRunEntity> inserted =
+        ArgumentCaptor.forClass(WorkflowNodeRunEntity.class);
+    verify(nodeRunMapper).insert(inserted.capture());
+    assertThat(inserted.getValue().getSkipReasonCode()).isEqualTo("UPSTREAM_FAILED");
+    assertThat(inserted.getValue().getSkipReason()).isNull();
   }
 
   @Test
@@ -370,6 +430,61 @@ class DefaultWorkflowDagServiceTest {
 
     assertThat(skipped).isEmpty();
     verify(nodeRunMapper, never()).insert(any());
+  }
+
+  @Test
+  @DisplayName("ALL 汇聚的全部上游终态但部分边匹配时必须记录未满足原因")
+  void shouldSkipAllJoinWhenTerminalPredecessorsCannotSatisfyEveryIncomingEdge() {
+    WorkflowEdgeEntity fromSuccess = edge("SUCCESS_NODE", "JOIN", Edge.SUCCESS, null);
+    WorkflowEdgeEntity fromFailure = edge("FAILED_NODE", "JOIN", Edge.SUCCESS, null);
+    when(edgeMapper.selectOutgoingEdges(1L, "FAILED_NODE")).thenReturn(List.of(fromFailure));
+    when(edgeMapper.selectIncomingEdges(1L, "JOIN")).thenReturn(List.of(fromSuccess, fromFailure));
+    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "SUCCESS_NODE"))
+        .thenReturn(nodeRun("SUCCESS_NODE", Workflow.SUCCESS));
+    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "FAILED_NODE"))
+        .thenReturn(nodeRun("FAILED_NODE", Workflow.FAILED));
+    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "JOIN")).thenReturn(null);
+    when(edgeMapper.selectOutgoingEdges(1L, "JOIN")).thenReturn(List.of());
+    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "JOIN"))
+        .thenReturn(node("JOIN", WorkflowNodeType.TASK.code()));
+
+    List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAILED_NODE");
+
+    assertThat(skipped).containsExactly("JOIN");
+    ArgumentCaptor<WorkflowNodeRunEntity> inserted =
+        ArgumentCaptor.forClass(WorkflowNodeRunEntity.class);
+    verify(nodeRunMapper).insert(inserted.capture());
+    assertThat(inserted.getValue().getSkipReasonCode()).isEqualTo("UPSTREAM_FAILED");
+  }
+
+  @Test
+  @DisplayName("N_OF 汇聚达不到阈值时即使有一条匹配边也必须记录跳过原因")
+  void shouldSkipNOfJoinWhenAllPredecessorsAreTerminalBelowThreshold() {
+    WorkflowEdgeEntity fromSuccess = edge("SUCCESS_NODE", "JOIN", Edge.SUCCESS, null);
+    WorkflowEdgeEntity fromFirstFailure = edge("FAILED_NODE_1", "JOIN", Edge.SUCCESS, null);
+    WorkflowEdgeEntity fromLastFailure = edge("FAILED_NODE_2", "JOIN", Edge.SUCCESS, null);
+    when(edgeMapper.selectOutgoingEdges(1L, "FAILED_NODE_2")).thenReturn(List.of(fromLastFailure));
+    when(edgeMapper.selectIncomingEdges(1L, "JOIN"))
+        .thenReturn(List.of(fromSuccess, fromFirstFailure, fromLastFailure));
+    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "SUCCESS_NODE"))
+        .thenReturn(nodeRun("SUCCESS_NODE", Workflow.SUCCESS));
+    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "FAILED_NODE_1"))
+        .thenReturn(nodeRun("FAILED_NODE_1", Workflow.FAILED));
+    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "FAILED_NODE_2"))
+        .thenReturn(nodeRun("FAILED_NODE_2", Workflow.FAILED));
+    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "JOIN")).thenReturn(null);
+    when(edgeMapper.selectOutgoingEdges(1L, "JOIN")).thenReturn(List.of());
+    WorkflowNodeEntity join = node("JOIN", WorkflowNodeType.TASK.code());
+    join.setNodeParams("{\"joinMode\":\"N_OF\",\"joinThreshold\":2}");
+    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "JOIN")).thenReturn(join);
+
+    List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAILED_NODE_2");
+
+    assertThat(skipped).containsExactly("JOIN");
+    ArgumentCaptor<WorkflowNodeRunEntity> inserted =
+        ArgumentCaptor.forClass(WorkflowNodeRunEntity.class);
+    verify(nodeRunMapper).insert(inserted.capture());
+    assertThat(inserted.getValue().getSkipReasonCode()).isEqualTo("UPSTREAM_FAILED");
   }
 
   @Test
@@ -448,5 +563,30 @@ class DefaultWorkflowDagServiceTest {
     run.setNodeCode(nodeCode);
     run.setNodeStatus(status);
     return run;
+  }
+
+  private static Map<String, Object> frozenJob(String jobCode) {
+    Map<String, Object> executionDefinition = Map.of(
+        "id",
+        jobCode.equals("PINNED_JOB") ? 101 : 102,
+        "tenantId",
+        "tenant-a",
+        "jobCode",
+        jobCode,
+        "jobType",
+        "GENERAL",
+        "version",
+        1);
+    return Map.of(
+        "jobDefinitionId",
+        executionDefinition.get("id"),
+        "jobCode",
+        jobCode,
+        "jobType",
+        "GENERAL",
+        "jobDefinitionVersion",
+        1,
+        "executionDefinition",
+        executionDefinition);
   }
 }

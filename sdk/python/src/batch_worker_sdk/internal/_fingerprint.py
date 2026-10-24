@@ -30,7 +30,10 @@ def host_name() -> str | None:
     except OSError:
         pass
     env = os.environ.get("HOSTNAME")
-    return env.strip() if env and env.strip() else None
+    if not env:
+        return None
+    normalized_env = env.strip()
+    return normalized_env or None
 
 
 @lru_cache(maxsize=1)

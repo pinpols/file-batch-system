@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.console.application.ops.infrastructure;
 
+import io.github.pinpols.batch.console.application.ops.command.ForensicExportCommand;
+import io.github.pinpols.batch.console.application.ops.command.CalendarDependencyActionCommand;
+import io.github.pinpols.batch.console.application.ops.command.BatchDayOperationCommand;
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.resilience.DownstreamFallback;
@@ -8,19 +11,26 @@ import io.github.pinpols.batch.console.application.contract.response.ops.AssetPa
 import io.github.pinpols.batch.console.application.contract.response.ops.CapacityProfileResponse;
 import io.github.pinpols.batch.console.application.contract.response.ops.LineageEvidenceResponse;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayCatchupPreviewResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayHistoricalGapInventoryResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayOperateResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleCalendarDependencyWaitResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleInstanceActionResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleJobDependencyWaitResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsolePartitionActionResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleRetryFailedPartitionsResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunActionResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunSkipNodeResponse;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayReplayRangeRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayReplaySubmitRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.DryRunPlanRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayReplayEntryResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayReplayPreviewResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayReplaySessionResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleDryRunPlanResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleReplayOperationPreviewResponse;
+import io.github.pinpols.batch.console.application.contract.response.ConsoleReplayOperationResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleResultVersionResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleForensicExportResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OutboxCleanupProxyResponse;
@@ -56,6 +66,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
 
   private static final String SVC = "orchestrator";
   private static final String PARAM_TENANT_ID = "tenantId";
+  private static final String PARAM_LIMIT = "limit";
 
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final TenantIdResolver tenantGuard;
@@ -132,19 +143,18 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
 
   @Override
   public ConsoleWorkflowRunSkipNodeResponse workflowRunSkipNode(
-      Long id, String tenantId, String nodeCode) {
+      Long id, String tenantId, String nodeCode, String operatorId, String reason) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    String skipNodeUri =
+        "/internal/workflow-runs/{id}/skip-node?tenantId={tenantId}&nodeCode={nodeCode}"
+            + "&operatorId={operatorId}&reason={reason}";
     ConsoleWorkflowRunSkipNodeResponse response = downstreamFallback.callOrThrow(
         SVC,
         "workflow-run-skip-node",
         () -> orchestratorInternalRestClient
             .client()
             .post()
-            .uri(
-                "/internal/workflow-runs/{id}/skip-node?tenantId={tenantId}&nodeCode={nodeCode}",
-                id,
-                resolved,
-                nodeCode)
+            .uri(skipNodeUri, id, resolved, nodeCode, operatorId, reason)
             .retrieve()
             .body(ConsoleWorkflowRunSkipNodeResponse.class));
     publishRefresh(resolved);
@@ -199,7 +209,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
             .uri(uriBuilder -> uriBuilder
                 .path("/internal/scheduler/snapshot/history")
                 .queryParam(PARAM_TENANT_ID, resolved)
-                .queryParam("limit", limit)
+                .queryParam(PARAM_LIMIT, limit)
                 .build())
             .retrieve()
             .body(
@@ -277,13 +287,13 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   }
 
   @Override
-  public ConsoleBatchDayOperateResponse batchDayOperate(
-      String tenantId,
-      String calendarCode,
-      LocalDate bizDate,
-      String action,
-      String operatorId,
-      String reason) {
+  public ConsoleBatchDayOperateResponse batchDayOperate(BatchDayOperationCommand command) {
+    String tenantId = command.tenantId();
+    String calendarCode = command.calendarCode();
+    LocalDate bizDate = command.bizDate();
+    String action = command.action();
+    String operatorId = command.operatorId();
+    String reason = command.reason();
     String resolved = tenantGuard.resolveTenant(tenantId);
     Map<String, Object> body = new LinkedHashMap<>();
     body.put(PARAM_TENANT_ID, resolved);
@@ -307,13 +317,150 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   }
 
   @Override
-  public ConsoleForensicExportResponse requestForensicExport(
-      String tenantId,
-      LocalDate bizDateFrom,
-      LocalDate bizDateTo,
-      List<String> jobCodes,
-      String exportFormat,
-      String requestedBy) {
+  public ConsoleBatchDayCatchupPreviewResponse previewBatchDayCatchup(
+      String tenantId, String calendarCode) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "batch-day-catchup-preview",
+        () -> orchestratorInternalRestClient
+            .client()
+            .get()
+            .uri(uriBuilder -> uriBuilder
+                .path("/internal/batch-days/catch-up-preview")
+                .queryParam(PARAM_TENANT_ID, resolved)
+                .queryParam("calendarCode", calendarCode)
+                .build())
+            .retrieve()
+            .body(ConsoleBatchDayCatchupPreviewResponse.class));
+  }
+
+  @Override
+  public ConsoleBatchDayHistoricalGapInventoryResponse inventoryBatchDayHistoricalGaps(
+      String tenantId, String calendarCode, LocalDate fromDate, LocalDate throughDate) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "batch-day-historical-gap-inventory",
+        () -> orchestratorInternalRestClient
+            .client()
+            .get()
+            .uri(uriBuilder -> uriBuilder
+                .path("/internal/batch-days/catch-up-preview/historical-gaps")
+                .queryParam(PARAM_TENANT_ID, resolved)
+                .queryParam("calendarCode", calendarCode)
+                .queryParam("fromDate", fromDate)
+                .queryParam("throughDate", throughDate)
+                .build())
+            .retrieve()
+            .body(ConsoleBatchDayHistoricalGapInventoryResponse.class));
+  }
+
+  @Override
+  public ConsoleBatchDayCatchupPreviewResponse changeBatchDayCatchupControl(
+      String tenantId, String calendarCode, String action, String operatorId, String reason) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put(PARAM_TENANT_ID, resolved);
+    body.put("calendarCode", calendarCode);
+    body.put("action", action);
+    body.put("operatorId", operatorId);
+    body.put("reason", reason);
+    downstreamFallback.callOrThrow(
+        SVC,
+        "batch-day-catchup-control",
+        () -> orchestratorInternalRestClient
+            .client()
+            .post()
+            .uri("/internal/batch-days/catch-up-preview/control")
+            .body(body)
+            .retrieve()
+            .toBodilessEntity());
+    publishRefresh(resolved);
+    return previewBatchDayCatchup(resolved, calendarCode);
+  }
+
+  @Override
+  public List<ConsoleCalendarDependencyWaitResponse> listCalendarDependencyWaits(
+      String tenantId, String calendarCode, String waitStatus, int limit) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "calendar-dependency-waits-list",
+        () -> orchestratorInternalRestClient
+            .client()
+            .get()
+            .uri(uriBuilder -> uriBuilder
+                .path("/internal/calendar-dependency-waits")
+                .queryParam(PARAM_TENANT_ID, resolved)
+                .queryParam("calendarCode", calendarCode)
+                .queryParam("waitStatus", waitStatus)
+                .queryParam(PARAM_LIMIT, limit)
+                .build())
+            .retrieve()
+            .body(
+                new ParameterizedTypeReference<List<ConsoleCalendarDependencyWaitResponse>>() {}));
+  }
+
+  @Override
+  public List<ConsoleJobDependencyWaitResponse> listJobDependencyWaits(
+      String tenantId, String waitStatus, String jobCode, int limit) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "job-dependency-waits-list",
+        () -> orchestratorInternalRestClient
+            .client()
+            .get()
+            .uri(uriBuilder -> uriBuilder
+                .path("/internal/job-dependency-waits")
+                .queryParam(PARAM_TENANT_ID, resolved)
+                .queryParam("waitStatus", waitStatus)
+                .queryParam("jobCode", jobCode)
+                .queryParam(PARAM_LIMIT, limit)
+                .build())
+            .retrieve()
+            .body(new ParameterizedTypeReference<List<ConsoleJobDependencyWaitResponse>>() {}));
+  }
+
+  @Override
+  public ConsoleCalendarDependencyWaitResponse requestCalendarDependencyWaitAction(CalendarDependencyActionCommand command) {
+    String tenantId = command.tenantId();
+    String calendarCode = command.calendarCode();
+    LocalDate bizDate = command.bizDate();
+    String action = command.action();
+    String operatorId = command.operatorId();
+    String reason = command.reason();
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put(PARAM_TENANT_ID, resolved);
+    body.put("calendarCode", calendarCode);
+    body.put("bizDate", EmptyChecks.isNull(bizDate) ? null : bizDate.toString());
+    body.put("action", action);
+    body.put("operatorId", operatorId);
+    body.put("reason", reason);
+    ConsoleCalendarDependencyWaitResponse response = downstreamFallback.callOrThrow(
+        SVC,
+        "calendar-dependency-wait-manual-action",
+        () -> orchestratorInternalRestClient
+            .client()
+            .post()
+            .uri("/internal/calendar-dependency-waits/manual-action")
+            .body(body)
+            .retrieve()
+            .body(ConsoleCalendarDependencyWaitResponse.class));
+    publishRefresh(resolved);
+    return response;
+  }
+
+  @Override
+  public ConsoleForensicExportResponse requestForensicExport(ForensicExportCommand command) {
+    String tenantId = command.tenantId();
+    LocalDate bizDateFrom = command.bizDateFrom();
+    LocalDate bizDateTo = command.bizDateTo();
+    List<String> jobCodes = command.jobCodes();
+    String exportFormat = command.exportFormat();
+    String requestedBy = command.requestedBy();
     String resolved = tenantGuard.resolveTenant(tenantId);
     Map<String, Object> body = new LinkedHashMap<>();
     body.put(PARAM_TENANT_ID, resolved);
@@ -401,7 +548,8 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
 
   @Override
   public CommonResponse<ConsoleDryRunPlanResponse> dryRunPlan(DryRunPlanRequest request) {
-    request.setTenantId(tenantGuard.resolveTenant(request.getTenantId()));
+    String resolvedTenantId = tenantGuard.resolveTenant(request.getTenantId());
+    request.setTenantId(resolvedTenantId);
     return downstreamFallback.callOrThrow(
         SVC,
         "dry-run-plan",
@@ -417,7 +565,8 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   @Override
   public CommonResponse<ConsoleBatchDayReplaySessionResponse> batchDayReplaySubmit(
       BatchDayReplaySubmitRequest request) {
-    request.setTenantId(tenantGuard.resolveTenant(request.getTenantId()));
+    String resolvedTenantId = tenantGuard.resolveTenant(request.getTenantId());
+    request.setTenantId(resolvedTenantId);
     return postReplay(
         "batch-day-replay-submit",
         "/internal/orchestrator/batch-day-replay/sessions",
@@ -428,12 +577,131 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   @Override
   public CommonResponse<ConsoleBatchDayReplayPreviewResponse> batchDayReplayPreview(
       BatchDayReplaySubmitRequest request) {
-    request.setTenantId(tenantGuard.resolveTenant(request.getTenantId()));
+    String resolvedTenantId = tenantGuard.resolveTenant(request.getTenantId());
+    request.setTenantId(resolvedTenantId);
     return postReplay(
         "batch-day-replay-preview",
         "/internal/orchestrator/batch-day-replay/sessions/preview",
         request,
         new ParameterizedTypeReference<>() {});
+  }
+
+  @Override
+  public CommonResponse<ConsoleReplayOperationPreviewResponse> batchDayReplayRangePreview(
+      BatchDayReplayRangeRequest request) {
+    String resolvedTenantId = tenantGuard.resolveTenant(request.getTenantId());
+    request.setTenantId(resolvedTenantId);
+    return postReplay(
+        "batch-day-replay-range-preview",
+        "/internal/orchestrator/batch-day-replay/operations/date-range/preview",
+        request,
+        new ParameterizedTypeReference<>() {});
+  }
+
+  @Override
+  public CommonResponse<ConsoleReplayOperationResponse> batchDayReplayRangeSubmit(
+      BatchDayReplayRangeRequest request) {
+    String resolvedTenantId = tenantGuard.resolveTenant(request.getTenantId());
+    request.setTenantId(resolvedTenantId);
+    return postReplay(
+        "batch-day-replay-range-submit",
+        "/internal/orchestrator/batch-day-replay/operations/date-range",
+        request,
+        new ParameterizedTypeReference<>() {});
+  }
+
+  @Override
+  public CommonResponse<List<ConsoleReplayOperationResponse>> replayOperationList(
+      String tenantId, int limit) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "replay-operation-list",
+        () -> orchestratorInternalRestClient
+            .client()
+            .get()
+            .uri(
+                "/internal/orchestrator/batch-day-replay/operations?tenantId={tenantId}&limit={limit}",
+                resolved,
+                limit)
+            .retrieve()
+            .body(new ParameterizedTypeReference<>() {}));
+  }
+
+  @Override
+  public CommonResponse<ConsoleReplayOperationResponse> replayOperationDetail(
+      Long operationId, String tenantId) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "replay-operation-detail",
+        () -> orchestratorInternalRestClient
+            .client()
+            .get()
+            .uri(
+                "/internal/orchestrator/batch-day-replay/operations/{id}?tenantId={tenantId}",
+                operationId,
+                resolved)
+            .retrieve()
+            .body(new ParameterizedTypeReference<>() {}));
+  }
+
+  @Override
+  public CommonResponse<List<ConsoleBatchDayReplaySessionResponse>> replayOperationSessions(
+      Long operationId, String tenantId) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "replay-operation-sessions",
+        () -> orchestratorInternalRestClient
+            .client()
+            .get()
+            .uri(
+                "/internal/orchestrator/batch-day-replay/operations/{id}/sessions?tenantId={tenantId}",
+                operationId,
+                resolved)
+            .retrieve()
+            .body(new ParameterizedTypeReference<>() {}));
+  }
+
+  @Override
+  public CommonResponse<ConsoleReplayOperationResponse> replayOperationApprove(
+      Long operationId, String tenantId, String approver) {
+    return postReplayOperationAction(
+        "replay-operation-approve", operationId, tenantId, approver, true);
+  }
+
+  @Override
+  public CommonResponse<ConsoleReplayOperationResponse> replayOperationCancel(
+      Long operationId, String tenantId) {
+    return postReplayOperationAction("replay-operation-cancel", operationId, tenantId, null, false);
+  }
+
+  private CommonResponse<ConsoleReplayOperationResponse> postReplayOperationAction(
+      String operation,
+      Long operationId,
+      String tenantId,
+      String approver,
+      boolean includeApprover) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return downstreamFallback.callOrThrow(
+        SVC,
+        operation,
+        () -> orchestratorInternalRestClient
+            .client()
+            .post()
+            .uri(uriBuilder -> {
+              UriBuilder builder = uriBuilder
+                  .path("/internal/orchestrator/batch-day-replay/operations/{id}/"
+                      + (includeApprover ? "approve" : "cancel"))
+                  .queryParam(PARAM_TENANT_ID, resolved);
+              if (includeApprover) {
+                builder.queryParam("approver", approver);
+              }
+              return builder.build(operationId);
+            })
+            .retrieve()
+            .body(new ParameterizedTypeReference<>() {}));
   }
 
   @Override
@@ -450,7 +718,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
               UriBuilder builder = uriBuilder
                   .path("/internal/orchestrator/batch-day-replay/sessions")
                   .queryParam(PARAM_TENANT_ID, resolved)
-                  .queryParam("limit", limit);
+                  .queryParam(PARAM_LIMIT, limit);
               if (EmptyChecks.isNotBlank(status)) {
                 builder.queryParam("status", status);
               }
@@ -518,12 +786,33 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
               UriBuilder builder = uriBuilder
                   .path("/internal/orchestrator/batch-day-replay/sessions/{id}/entries")
                   .queryParam(PARAM_TENANT_ID, resolved)
-                  .queryParam("limit", limit);
+                  .queryParam(PARAM_LIMIT, limit);
               if (EmptyChecks.isNotBlank(status)) {
                 builder.queryParam("status", status);
               }
               return builder.build(sessionId);
             })
+            .retrieve()
+            .body(new ParameterizedTypeReference<>() {}));
+  }
+
+  @Override
+  public CommonResponse<ConsoleBatchDayReplaySessionResponse> batchDayReplayRetryFailedSubmission(
+      Long sessionId, Long entryId, String tenantId, String operatorId, String reason) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "batch-day-replay-retry-submission",
+        () -> orchestratorInternalRestClient
+            .client()
+            .post()
+            .uri(uriBuilder -> uriBuilder
+                .path(
+                    "/internal/orchestrator/batch-day-replay/sessions/{sessionId}/entries/{entryId}/retry-submission")
+                .queryParam(PARAM_TENANT_ID, resolved)
+                .queryParam("operatorId", operatorId)
+                .queryParam("reason", reason)
+                .build(sessionId, entryId))
             .retrieve()
             .body(new ParameterizedTypeReference<>() {}));
   }
@@ -647,7 +936,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                   .path("/internal/orchestrator/capacity-profile")
                   .queryParam(PARAM_TENANT_ID, resolved)
                   .queryParam("groupBy", groupBy)
-                  .queryParam("limit", limit);
+                  .queryParam(PARAM_LIMIT, limit);
               if (EmptyChecks.isNotBlank(from)) {
                 builder.queryParam("from", from);
               }
@@ -721,7 +1010,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                   .queryParam(PARAM_TENANT_ID, resolved)
                   .queryParam("businessKey", businessKey);
               if (EmptyChecks.isNotNull(limit)) {
-                builder.queryParam("limit", limit);
+                builder.queryParam(PARAM_LIMIT, limit);
               }
               return builder.build();
             })

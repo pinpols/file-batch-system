@@ -13,6 +13,7 @@ import io.github.pinpols.batch.orchestrator.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TenantQuotaPolicyMapper;
 import java.lang.reflect.Method;
 import java.util.List;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -84,7 +85,6 @@ class QuotaRuntimeStateSnapshotSchedulerTest {
     Method write = QuotaRuntimeStateSnapshotWriter.class.getDeclaredMethod(
         "writeIfActive", String.class, String.class, String.class, String.class, int.class);
 
-    org.assertj.core.api.Assertions.assertThat(write.getAnnotation(Transactional.class))
-        .isNotNull();
+    Assertions.assertThat(write.getAnnotation(Transactional.class)).isNotNull();
   }
 }

@@ -20,7 +20,7 @@ import lombok.Builder;
  *   <li>{@code SdkWireContractTest}(batch-orchestrator) 重新跑过
  * </ol>
  *
- * <p>Phase 0 ({@code docs/plans/sdk-roadmap-2026-h2.md} §2)— SDK 协议演进基础。
+ * <p>Phase 0 ({@code docs/plans/sdk-h2-roadmap-2026-05-31.md} §2)— SDK 协议演进基础。
  *
  * <p>反序列化 {@link JsonIgnoreProperties}{@code (ignoreUnknown=true)} 容忍平台未来新增字段,SDK 不 break。
  */

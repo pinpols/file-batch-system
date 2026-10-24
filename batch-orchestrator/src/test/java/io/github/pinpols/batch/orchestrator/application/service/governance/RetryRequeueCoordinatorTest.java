@@ -1,7 +1,11 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
+import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
+
+
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -11,10 +15,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.RetryScheduleStatus;
 import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.enums.StepInstanceStatus;
+import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
@@ -28,10 +34,13 @@ import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.RetryScheduleMapper;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 @DisplayName("重试重排队协调器: 认领丢失, 分区与任务复位及重试派发事件")
 class RetryRequeueCoordinatorTest {
@@ -58,7 +67,8 @@ class RetryRequeueCoordinatorTest {
         jobPartitionMapper,
         jobInstanceMapper,
         jobStepInstanceMapper,
-        taskDispatchOutboxService);
+        taskDispatchOutboxService,
+        mock(WorkflowRunMapper.class));
   }
 
   @Test
@@ -101,12 +111,32 @@ class RetryRequeueCoordinatorTest {
     verify(jobTaskMapper).resetForRetry("tenant-a", 30L, TaskStatus.READY.code(), 8L);
     verify(taskDispatchOutboxService)
         .writeDispatchEvent(
-            same(instance),
-            same(firstTask),
-            same(partition),
-            eq("trace-20"),
-            eq("retry-event"),
-            eq(RunMode.RETRY));
+            org.mockito.ArgumentMatchers.argThat(command -> command != null && command.jobInstance() == instance && command.task() == firstTask && command.partition() == partition && java.util.Objects.equals(command.traceId(), "trace-20") && java.util.Objects.equals(command.eventKey(), "retry-event") && java.util.Objects.equals(command.runModeOverride(), RunMode.RETRY)));
+  }
+
+  @Test
+  @DisplayName("分区内任一任务副作用结果未知时拒绝重排队且不产生派发副作用")
+  void shouldRejectPartitionRequeueWhenAnyTaskHasUnknownExternalOutcome() {
+    JobPartitionEntity partition = partition(10L, 20L, 4L);
+    JobInstanceEntity instance = instance(20L);
+    JobTaskEntity firstTask = task(30L, 20L, 0, 8L);
+    JobTaskEntity unknownLaterTask = task(31L, 20L, 1, 9L);
+    unknownLaterTask.setErrorCode(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN);
+    when(jobPartitionMapper.selectById("tenant-a", 10L)).thenReturn(partition);
+    when(jobInstanceMapper.selectById("tenant-a", 20L)).thenReturn(instance);
+    when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of(firstTask, unknownLaterTask));
+
+    assertThatThrownBy(() -> coordinator.requeuePartition("tenant-a", 10L, "retry-event"))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.task.retry_unknown_outcome_requires_resolution");
+
+    verify(jobStepInstanceMapper, never())
+        .resetForRetryByJobTaskId(anyString(), anyLong(), anyInt(), anyString());
+    verify(jobPartitionMapper, never())
+        .resetForDispatch(anyString(), anyLong(), anyString(), anyLong());
+    verify(jobTaskMapper, never()).resetForRetry(anyString(), anyLong(), anyString(), anyLong());
+    verify(taskDispatchOutboxService, never())
+        .writeDispatchEvent(org.mockito.ArgumentMatchers.any(TaskDispatchEventCommand.class));
   }
 
   @Test
@@ -127,7 +157,7 @@ class RetryRequeueCoordinatorTest {
 
     verify(jobTaskMapper, never()).resetForRetry(anyString(), anyLong(), anyString(), anyLong());
     verify(taskDispatchOutboxService, never())
-        .writeDispatchEvent(any(), any(), any(), any(), any(), any());
+        .writeDispatchEvent(org.mockito.ArgumentMatchers.any(TaskDispatchEventCommand.class));
   }
 
   @Test
@@ -147,12 +177,27 @@ class RetryRequeueCoordinatorTest {
         .resetForRetryByJobTaskId("tenant-a", 30L, 1, StepInstanceStatus.READY.code());
     verify(taskDispatchOutboxService)
         .writeDispatchEvent(
-            same(instance),
-            same(task),
-            eq(null),
-            eq("trace-20"),
-            eq("retry-task"),
-            eq(RunMode.RETRY));
+            org.mockito.ArgumentMatchers.argThat(command -> command != null && command.jobInstance() == instance && command.task() == task && java.util.Objects.equals(command.partition(), null) && java.util.Objects.equals(command.traceId(), "trace-20") && java.util.Objects.equals(command.eventKey(), "retry-task") && java.util.Objects.equals(command.runModeOverride(), RunMode.RETRY)));
+  }
+
+  @Test
+  @DisplayName("无分区任务副作用结果未知时拒绝重排队且不重置任务")
+  void shouldRejectUnpartitionedRetryWhenExternalOutcomeIsUnknown() {
+    JobInstanceEntity instance = instance(20L);
+    JobTaskEntity task = task(30L, 20L, 0, 8L);
+    task.setErrorCode(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN);
+    when(jobInstanceMapper.selectById("tenant-a", 20L)).thenReturn(instance);
+
+    assertThatThrownBy(
+            () -> coordinator.requeueTaskWithoutPartition("tenant-a", task, "retry-task"))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.task.retry_unknown_outcome_requires_resolution");
+
+    verify(jobStepInstanceMapper, never())
+        .resetForRetryByJobTaskId(anyString(), anyLong(), anyInt(), anyString());
+    verify(jobTaskMapper, never()).resetForRetry(anyString(), anyLong(), anyString(), anyLong());
+    verify(taskDispatchOutboxService, never())
+        .writeDispatchEvent(org.mockito.ArgumentMatchers.any(TaskDispatchEventCommand.class));
   }
 
   @Test
@@ -166,7 +211,71 @@ class RetryRequeueCoordinatorTest {
 
     verify(jobInstanceMapper, never()).selectById(anyString(), anyLong());
     verify(taskDispatchOutboxService, never())
-        .writeDispatchEvent(any(), any(), any(), any(), any(), any());
+        .writeDispatchEvent(org.mockito.ArgumentMatchers.any(TaskDispatchEventCommand.class));
+  }
+
+  @ParameterizedTest
+  @EnumSource(
+      value = JobInstanceStatus.class,
+      names = {
+        "SUCCESS",
+        "FAILED",
+        "PARTIAL_FAILED",
+        "CANCELLED",
+        "TERMINATED",
+        "SUCCESS_DRY_RUN",
+        "FAILED_DRY_RUN",
+        "PAUSED"
+      })
+  @DisplayName("父实例已终结或暂停时不能原地复活分区与任务")
+  void shouldRejectPartitionRetry_whenParentCannotExecute(JobInstanceStatus status) {
+    JobInstanceEntity instance = instance(20L);
+    instance.setInstanceStatus(status.code());
+    when(jobPartitionMapper.selectById("tenant-a", 10L)).thenReturn(partition(10L, 20L, 4L));
+    when(jobInstanceMapper.selectById("tenant-a", 20L)).thenReturn(instance);
+
+    assertThatThrownBy(() -> coordinator.requeuePartition("tenant-a", 10L, "retry-event"))
+        .isInstanceOf(
+            status == JobInstanceStatus.PAUSED
+                ? RetryRequeueCoordinator.ExecutionPausedException.class
+                : BizException.class);
+
+    verify(jobTaskMapper, never()).selectByQuery(any());
+    verify(jobPartitionMapper, never())
+        .resetForDispatch(anyString(), anyLong(), anyString(), anyLong());
+    verify(taskDispatchOutboxService, never())
+        .writeDispatchEvent(org.mockito.ArgumentMatchers.any(TaskDispatchEventCommand.class));
+  }
+
+  @ParameterizedTest
+  @EnumSource(
+      value = JobInstanceStatus.class,
+      names = {
+        "SUCCESS",
+        "FAILED",
+        "PARTIAL_FAILED",
+        "CANCELLED",
+        "TERMINATED",
+        "SUCCESS_DRY_RUN",
+        "FAILED_DRY_RUN",
+        "PAUSED"
+      })
+  @DisplayName("无分区任务也不能绕过父实例终态与暂停保护")
+  void shouldRejectUnpartitionedRetry_whenParentCannotExecute(JobInstanceStatus status) {
+    JobInstanceEntity instance = instance(20L);
+    instance.setInstanceStatus(status.code());
+    when(jobInstanceMapper.selectById("tenant-a", 20L)).thenReturn(instance);
+
+    assertThatThrownBy(() -> coordinator.requeueTaskWithoutPartition(
+            "tenant-a", task(30L, 20L, 0, 8L), "retry-task"))
+        .isInstanceOf(
+            status == JobInstanceStatus.PAUSED
+                ? RetryRequeueCoordinator.ExecutionPausedException.class
+                : BizException.class);
+
+    verify(jobTaskMapper, never()).resetForRetry(anyString(), anyLong(), anyString(), anyLong());
+    verify(taskDispatchOutboxService, never())
+        .writeDispatchEvent(org.mockito.ArgumentMatchers.any(TaskDispatchEventCommand.class));
   }
 
   private static RetryScheduleEntity retrySchedule(Long id, Long relatedId) {
@@ -189,6 +298,7 @@ class RetryRequeueCoordinatorTest {
     JobInstanceEntity instance = new JobInstanceEntity();
     instance.setId(id);
     instance.setTenantId("tenant-a");
+    instance.setInstanceStatus(JobInstanceStatus.RUNNING.code());
     instance.setTraceId("trace-" + id);
     return instance;
   }

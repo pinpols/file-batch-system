@@ -67,8 +67,11 @@ pub use scheduler::{
 pub use sensitive::{SensitiveValidator, Validation};
 pub use signing::{body_sha256_hex, canonical_string, sign};
 pub use testkit::FakePlatform;
+pub use transport::DependencyResultReference;
 #[allow(deprecated)] // HttpTransport is a deprecated stub re-exported to pin the trait surface
 pub use transport::{
     classify_response, outcome_from_decision, FakeTransport, HttpResponse, HttpTransport,
     Transport, TransportOutcome,
 };
+#[cfg(feature = "serde")]
+pub use transport::{decode_claim_response, TaskClaimResponse};

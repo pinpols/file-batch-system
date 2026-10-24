@@ -43,8 +43,10 @@ public class ConsolePushController {
    */
   @GetMapping("/vapid-public-key")
   public CommonResponse<ConsolePushVapidPublicKeyResponse> vapidPublicKey() {
-    return responseFactory.success(
-        new ConsolePushVapidPublicKeyResponse(subscriptionService.vapidPublicKey()));
+    String vapidPublicKey = subscriptionService.vapidPublicKey();
+    ConsolePushVapidPublicKeyResponse response =
+        new ConsolePushVapidPublicKeyResponse(vapidPublicKey);
+    return responseFactory.success(response);
   }
 
   /**

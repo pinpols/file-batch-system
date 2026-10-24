@@ -1,19 +1,20 @@
 package io.github.pinpols.batch.console.domain.job.web;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.common.constants.CommonErrorMessages;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobApprovalService;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobRecoveryService;
-import io.github.pinpols.batch.console.domain.job.application.ConsoleJobTriggerService;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayCatchUpRequest;
+import io.github.pinpols.batch.console.application.contract.request.WorkflowNodeReplayPreviewRequest;
+import io.github.pinpols.batch.console.application.contract.request.WorkflowRunReplayRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.CompensateRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayCatchUpResponse;
-import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchTriggerEntryResponse;
-import io.github.pinpols.batch.console.domain.job.view.JobTriggerResult;
-import io.github.pinpols.batch.console.domain.job.view.TriggeredJobResult;
+import io.github.pinpols.batch.console.application.contract.response.ConsoleWorkflowNodeReplayPreviewResponse;
+import io.github.pinpols.batch.console.application.contract.response.ConsoleWorkflowRunReplayPreviewResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleWorkflowRunReplaySubmissionResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.command.CompensationCommandRequest;
@@ -22,14 +23,13 @@ import io.github.pinpols.batch.console.shared.command.DeadLetterReplayRequest;
 import io.github.pinpols.batch.console.shared.command.PartitionReplayRequest;
 import io.github.pinpols.batch.console.shared.command.RerunRequest;
 import io.github.pinpols.batch.console.shared.command.TaskReplayRequest;
-import io.github.pinpols.batch.console.shared.command.TriggerRequest;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.Size;
-import java.util.List;
+import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -51,34 +51,9 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleJobController {
 
-  private final ConsoleJobTriggerService triggerService;
   private final ConsoleJobRecoveryService recoveryService;
   private final ConsoleJobApprovalService approvalService;
   private final ConsoleResponseFactory responseFactory;
-
-  /** 手工触发作业运行（所有已认证用户均可触发）。dryRun=true 时仅校验不执行。 */
-  @PostMapping("/trigger")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_USER)
-  public CommonResponse<JobTriggerResult> trigger(
-      @RequestHeader(value = CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, required = false)
-          String idempotencyKey,
-      @Valid @RequestBody TriggerRequest request) {
-    if (request.isDryRun()) {
-      return responseFactory.success(triggerService.dryRunTrigger(request));
-    }
-    requireIdempotencyKey(idempotencyKey);
-    return responseFactory.success(
-        new TriggeredJobResult(triggerService.trigger(request, idempotencyKey)));
-  }
-
-  /** 批量触发多个作业。 */
-  @PostMapping("/batch-trigger")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_USER)
-  public CommonResponse<List<ConsoleBatchTriggerEntryResponse>> batchTrigger(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @RequestBody @NotEmpty @Size(max = 50) List<@Valid TriggerRequest> items) {
-    return responseFactory.success(triggerService.batchTrigger(items, idempotencyKey));
-  }
 
   /** 登记补偿命令。 */
   @PostMapping("/compensations")
@@ -87,6 +62,31 @@ public class ConsoleJobController {
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody CompensationCommandRequest request) {
     return responseFactory.success(recoveryService.compensation(request, idempotencyKey));
+  }
+
+  /** 预览失败 Workflow JOB 节点重放的冻结来源和策略，尚不创建审批或执行。 */
+  @PostMapping("/workflow-node/replay-preview")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+  public CommonResponse<ConsoleWorkflowNodeReplayPreviewResponse> previewWorkflowNodeReplay(
+      @Valid @RequestBody WorkflowNodeReplayPreviewRequest request) {
+    return responseFactory.success(recoveryService.previewWorkflowNodeReplay(request));
+  }
+
+  /** 提交整 Workflow 重放审批前预览全部节点。 */
+  @PostMapping("/workflow-run/replay-preview")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+  public CommonResponse<ConsoleWorkflowRunReplayPreviewResponse> previewWorkflowRunReplay(
+      @Valid @RequestBody WorkflowRunReplayRequest request) {
+    return responseFactory.success(recoveryService.previewWorkflowRunReplay(request));
+  }
+
+  /** 持久化重放操作，并创建既有 Console 审批记录。 */
+  @PostMapping("/workflow-run/replay-operations")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+  public CommonResponse<ConsoleWorkflowRunReplaySubmissionResponse> submitWorkflowRunReplay(
+      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+      @Valid @RequestBody WorkflowRunReplayRequest request) {
+    return responseFactory.success(recoveryService.submitWorkflowRunReplay(request, idempotencyKey));
   }
 
   /** 执行补偿。 */
@@ -112,8 +112,23 @@ public class ConsoleJobController {
   @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   public CommonResponse<String> replayDeadLetter(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @Valid @RequestBody DeadLetterReplayRequest request) {
+      @Valid @RequestBody DeadLetterReplayRequest request,
+      Principal principal) {
+    if (EmptyChecks.isNull(principal) && Boolean.TRUE.equals(request.getExternalActionVerifiedNotExecuted())) {
+      throw BizException.of(ResultCode.UNAUTHORIZED, "error.common.unauthorized_detail");
+    }
+    if (EmptyChecks.isNotNull(principal)) {
+      request.setOperatorId(authenticatedUsername(principal));
+    }
     return responseFactory.success(recoveryService.replayDeadLetter(request, idempotencyKey));
+  }
+
+  private static String authenticatedUsername(Principal principal) {
+    if (principal instanceof Authentication authentication
+        && authentication.getPrincipal() instanceof ConsolePrincipal consolePrincipal) {
+      return consolePrincipal.username();
+    }
+    return principal.getName();
   }
 
   /** 任务重放（job_task 粒度）。 */
@@ -152,14 +167,5 @@ public class ConsoleJobController {
       @Valid @RequestBody BatchDayCatchUpRequest request) {
     return responseFactory.success(
         approvalService.catchUpBatchDay(bizDate, request, idempotencyKey));
-  }
-
-  private void requireIdempotencyKey(String idempotencyKey) {
-    if (idempotencyKey == null || idempotencyKey.isBlank()) {
-      throw BizException.of(
-          ResultCode.MISSING_IDEMPOTENCY_KEY,
-          ResultCode.MISSING_IDEMPOTENCY_KEY.detailKey(),
-          CommonErrorMessages.MISSING_IDEMPOTENCY_KEY);
-    }
   }
 }

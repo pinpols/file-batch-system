@@ -27,6 +27,10 @@ public interface TaskExecutionClient {
 
   boolean renewLease(String tenantId, Long taskId, String workerId, String partitionInvocationId);
 
+  /** 对来源载荷中的条件入边进行判定时，级联跳过后继节点。 */
+  boolean markNonIdempotentExecutionStarted(
+      String tenantId, Long taskId, String workerId, String partitionInvocationId);
+
   /**
    * ADR-016:用尽可能少的 orchestrator HTTP 调用续租多个 task。每个 task 的取值与单条 {@link #renewLease}
    * 一致;批量传输失败时,实现应回退到逐条 {@link #renewLease}。

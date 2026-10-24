@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：契约防漂移 snapshot 测试(迁移方案 §7.2):给定固定 alert_routing_config 行 → 固定 alertmanager.yml 输出。
+# 用法：在仓库根目录执行 bash scripts/ops/gen-alertmanager-config-test.sh；参数与前置环境见下方说明及所属 README。
 # 契约防漂移 snapshot 测试(迁移方案 §7.2):给定固定 alert_routing_config 行 → 固定 alertmanager.yml 输出。
 # 生成器逻辑一改动、输出漂移即红。可在 CI/本地跑:bash scripts/ops/gen-alertmanager-config-test.sh
 set -euo pipefail

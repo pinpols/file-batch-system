@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.worker.core.reportoutbox.sqlite;
 
+import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.param.WorkerReportOutboxSqliteUpdateRetryParam;
+
+
 import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxRow;
 import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxUpsertParam;
 import org.apache.ibatis.annotations.Param;
@@ -30,11 +33,7 @@ public interface WorkerReportOutboxSqliteMapper {
       @Param("updatedAt") long updatedAt);
 
   int updateRetry(
-      @Param("id") long id,
-      @Param("attemptCount") int attemptCount,
-      @Param("nextAttemptAt") long nextAttemptAt,
-      @Param("updatedAt") long updatedAt,
-      @Param("publishStatus") String publishStatus);
+      WorkerReportOutboxSqliteUpdateRetryParam parameters);
 
   // CPD-OFF: PostgreSQL and SQLite report-outbox mappers intentionally mirror the same contract.
   int resetStalePublishing(

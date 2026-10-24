@@ -24,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.stubbing.Answer;
 
 /**
  * R3-5 — {@link ConsoleAtomicTaskConfigService} 单测。
@@ -184,7 +185,7 @@ class ConsoleAtomicTaskConfigServiceTest {
   }
 
   /** 模拟 mapper.insertAtomicTaskConfig 的 useGeneratedKeys 副作用:回写 id 到 param。 */
-  private static org.mockito.stubbing.Answer<Integer> assignIdAndReturn(long id) {
+  private static Answer<Integer> assignIdAndReturn(long id) {
     return (InvocationOnMock inv) -> {
       AtomicTaskConfigCreateParam param = inv.getArgument(0);
       param.setId(id);

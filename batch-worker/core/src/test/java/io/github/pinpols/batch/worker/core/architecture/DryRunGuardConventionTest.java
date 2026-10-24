@@ -144,7 +144,7 @@ class DryRunGuardConventionTest {
             .filter(DryRunGuardConventionTest::isDryRunBoundaryClass)
             .forEach(stepFile -> {
               String relative =
-                  repoRoot.relativize(stepFile).toString().replace(java.io.File.separatorChar, '/');
+                  repoRoot.relativize(stepFile).toString().replace(File.separatorChar, '/');
               boolean inGuarded = SIDE_EFFECTING_GUARDED.stream().anyMatch(relative::matches);
               boolean inReadOnly = READ_ONLY_OR_LOCAL.stream().anyMatch(relative::matches);
               if (!inGuarded && !inReadOnly) {
@@ -172,7 +172,9 @@ class DryRunGuardConventionTest {
               }
               // READ_ONLY plugin 偷偷长出 jdbc/mybatis/http/objectStore/kafka 写调用 = dry-run 边界静默裂开。
               // 文件头加 "// dry-run-allow-internal: <reason>" 才允许豁免(staging 中间态读写场景)。
-              if (inReadOnly && !usesGuard && !content.contains(SUSPICIOUS_ALLOW_MARKER)) {
+              boolean readOnlyOperationHasNoGuard =
+                  inReadOnly && !usesGuard && !content.contains(SUSPICIOUS_ALLOW_MARKER);
+              if (readOnlyOperationHasNoGuard) {
                 SUSPICIOUS_WRITE_SYMBOLS.stream()
                     .filter(p -> p.matcher(content).find())
                     .findFirst()

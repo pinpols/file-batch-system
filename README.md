@@ -94,6 +94,8 @@ flowchart LR
 
 ## 模块结构
 
+工程配置见 [config/README.md](config/README.md)，部署资源与执行入口见 [deploy/README.md](deploy/README.md)，Helm Chart 与环境覆盖值见 [helm/README.md](helm/README.md)。`build/` 存放本地构建与运行产物。
+
 | 模块 | 端口 | 职责 |
 |------|------|------|
 | `batch-common` | — | 公共枚举、DTO、Kafka 消息定义、运行时基础设施 |
@@ -372,7 +374,7 @@ DB (job_task: READY)
 |------|------|
 | [文档总入口](docs/README.md) | `docs/` 目录分层、角色阅读路径、归档与状态规则 |
 | [文档治理](docs/standards/document-governance.md) | 文档索引、状态、待办、归档和漂移检查规则 |
-| [约定与 CI 周期复核](docs/audit/convention-drift-guard-index.md) | 前后端规范漂移、守卫漏扫/误拦与人工/AI 复核入口；本轮证据见[审计快照](docs/audit/cross-repo-governance-drift-review-2026-10-12.md) |
+| [约定与 CI 周期复核](docs/standards/convention-drift-guard-index.md) | 前后端规范漂移、守卫漏扫/误拦与人工/AI 复核入口；本轮证据见[审计快照](docs/audit/cross-repo-governance-drift-review-2026-10-12.md) |
 | [运维手册总入口](docs/runbook/README.md) | 部署、容量、灰度、观测、应急和配置治理 SOP |
 | [设计文档索引](docs/design/README.md) | 系统设计文档入口，含数据模型、流程、接口与专题设计 |
 | [项目结构](docs/architecture/project-structure.md) | 当前 Maven reactor、平台运行时模块、SDK、文档/脚本目录与运行系统边界 |
@@ -403,7 +405,7 @@ DB (job_task: READY)
 | [观测栈 Docker 环境](deploy/docker/observability/README.md) | Prometheus / Exporter / OTel Collector / Tempo / Loki / Grafana 的独立启动与管理 |
 | [运行时通信](docs/architecture/runtime-module-communication.md) | 模块间消息协议与接口规范 |
 | [平台 Worker 续跑位点](docs/runbook/platform-worker-checkpoint-howto.md) | checkpoint 断点续跑的位点语义与运维说明 |
-| [历史设计差距审计](docs/archive/architecture/design-gap-audit-2026-04-09.md) | 2026-04-09 时点快照，仅用于历史审计 |
+| [历史设计差距审计](docs/archive/audit/design-gap-audit-2026-04-09.md) | 2026-04-09 时点快照，仅用于历史审计 |
 | [默认运行参数](docs/design/runtime-default-parameters.md) | 调度器、Worker、Outbox 等默认参数说明 |
 | [Flyway 迁移脚本](db/migration) | 数据库迁移脚本目录 |
 

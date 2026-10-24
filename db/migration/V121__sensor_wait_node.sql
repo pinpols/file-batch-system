@@ -8,6 +8,7 @@
 -- 兼容性：旧行 sensor_* 列保持 NULL；非 WAIT 节点永远不读这些列。
 
 -- 1) 放宽 node_type CHECK 约束（旧约束已无 WAIT/JOB，sensor + ADR-016 job node 同步开放）
+
 ALTER TABLE batch.workflow_node_run
     DROP CONSTRAINT IF EXISTS ck_workflow_node_run_type;
 ALTER TABLE batch.workflow_node_run
@@ -15,6 +16,7 @@ ALTER TABLE batch.workflow_node_run
     CHECK (node_type IN ('TASK', 'GATEWAY', 'FILE_STEP', 'START', 'END', 'WAIT', 'JOB'));
 
 -- 2) sensor 探测状态列
+
 ALTER TABLE batch.workflow_node_run
     ADD COLUMN IF NOT EXISTS sensor_next_probe_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS sensor_last_probe_at TIMESTAMPTZ,
@@ -35,6 +37,7 @@ COMMENT ON COLUMN batch.workflow_node_run.sensor_error_count IS
     'ADR-028 连续 ERROR 次数；达 3 次推进 FAILED';
 
 -- 3) archive 镜像同步（ArchiveSchemaDriftCheck 启动期对齐校验）
+
 ALTER TABLE archive.workflow_node_run_archive
     ADD COLUMN IF NOT EXISTS sensor_next_probe_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS sensor_last_probe_at TIMESTAMPTZ,

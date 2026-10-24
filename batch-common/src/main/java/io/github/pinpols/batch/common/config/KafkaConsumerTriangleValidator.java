@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.common.config;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import jakarta.annotation.PostConstruct;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 /**
  * P1-10 启动期 fail-fast 校验 Kafka consumer 三角时序 + 分配策略。
@@ -24,23 +26,33 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
  */
 @Slf4j
 @AutoConfiguration
+@EnableConfigurationProperties(KafkaConsumerTimingProperties.class)
 @ConditionalOnClass(name = "org.apache.kafka.clients.consumer.ConsumerConfig")
 @ConditionalOnProperty(prefix = "spring.kafka", name = "bootstrap-servers")
 public class KafkaConsumerTriangleValidator {
 
-  @Value("${spring.kafka.consumer.properties.session.timeout.ms:45000}")
-  private int sessionTimeoutMs;
+  private final int sessionTimeoutMs;
+  private final int heartbeatIntervalMs;
+  private final int maxPollIntervalMs;
+  private final String partitionAssignmentStrategy;
 
-  @Value("${spring.kafka.consumer.properties.heartbeat.interval.ms:15000}")
-  private int heartbeatIntervalMs;
+  public KafkaConsumerTriangleValidator(KafkaConsumerTimingProperties kafkaProperties) {
+    Map<String, String> properties = kafkaProperties.getProperties();
+    sessionTimeoutMs = integerProperty(properties, "session.timeout.ms", 45_000);
+    heartbeatIntervalMs = integerProperty(properties, "heartbeat.interval.ms", 15_000);
+    int legacyMaxPollIntervalMs =
+        integerProperty(properties, "max-poll-interval-ms", kafkaProperties.getMaxPollIntervalMs());
+    maxPollIntervalMs =
+        integerProperty(properties, "max.poll.interval.ms", legacyMaxPollIntervalMs);
+    partitionAssignmentStrategy = properties.getOrDefault(
+        "partition.assignment.strategy",
+        "org.apache.kafka.clients.consumer.CooperativeStickyAssignor");
+  }
 
-  @Value(
-      "${spring.kafka.consumer.max-poll-interval-ms:${spring.kafka.consumer.properties.max.poll.interval.ms:300000}}")
-  private int maxPollIntervalMs;
-
-  @Value(
-      "${spring.kafka.consumer.properties.partition.assignment.strategy:org.apache.kafka.clients.consumer.CooperativeStickyAssignor}")
-  private String partitionAssignmentStrategy;
+  private static int integerProperty(Map<String, String> properties, String key, int fallback) {
+    String value = properties.get(key);
+    return EmptyChecks.isNull(value) ? fallback : Integer.parseInt(value);
+  }
 
   @PostConstruct
   void validate() {

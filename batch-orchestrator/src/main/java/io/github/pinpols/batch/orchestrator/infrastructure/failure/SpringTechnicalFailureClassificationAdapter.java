@@ -25,15 +25,17 @@ public class SpringTechnicalFailureClassificationAdapter
   @Override
   public FailureClass classify(Throwable throwable) {
     for (Throwable cursor = throwable; EmptyChecks.isNotNull(cursor); cursor = cursor.getCause()) {
-      if (cursor instanceof TimeoutException
+      boolean isTechnicalTimeout = cursor instanceof TimeoutException
           || cursor instanceof QueryTimeoutException
-          || cursor instanceof SQLTimeoutException) {
+          || cursor instanceof SQLTimeoutException;
+      if (isTechnicalTimeout) {
         return FailureClass.TIMEOUT;
       }
-      if (cursor instanceof TransientDataAccessException
+      boolean isTransientTechnicalFailure = cursor instanceof TransientDataAccessException
           || cursor instanceof SQLTransientException
           || cursor instanceof OptimisticLockingFailureException
-          || cursor instanceof ResourceAccessException) {
+          || cursor instanceof ResourceAccessException;
+      if (isTransientTechnicalFailure) {
         return FailureClass.INFRASTRUCTURE;
       }
       if (cursor instanceof DataIntegrityViolationException) {
@@ -53,11 +55,12 @@ public class SpringTechnicalFailureClassificationAdapter
   }
 
   private FailureClass classifySqlState(String sqlState) {
-    if (sqlState.startsWith("08")
+    boolean isInfrastructureSqlState = sqlState.startsWith("08")
         || sqlState.startsWith("40")
         || sqlState.startsWith("53")
         || sqlState.startsWith("57")
-        || sqlState.startsWith("58")) {
+        || sqlState.startsWith("58");
+    if (isInfrastructureSqlState) {
       return FailureClass.INFRASTRUCTURE;
     }
     if (sqlState.startsWith("22") || sqlState.startsWith("23")) {

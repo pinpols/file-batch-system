@@ -168,9 +168,13 @@ deploy smoke 现在分两层：
 
 可通过环境变量覆盖：
 
+- `BATCH_LOAD_SMOKE_WORKFLOW_ID`：必填，指向已启用且关联单个 Job 的 Workflow。
 - `BATCH_LOAD_SMOKE_USERS_PEAK`
 - `BATCH_LOAD_SMOKE_DURATION_SECONDS`
 - `BATCH_LOAD_SMOKE_RAMP_SECONDS`
+
+容量基线（`RUN_LOAD_CAPACITY=true`）同样要求显式配置 `BATCH_LOAD_CAPACITY_WORKFLOW_ID`；可选配置
+`BATCH_LOAD_CAPACITY_TENANT_ID`。Workflow ID 必须来自目标环境，门禁不会再按 Job code 推断或回退选择。
 
 ## 建议放行标准
 

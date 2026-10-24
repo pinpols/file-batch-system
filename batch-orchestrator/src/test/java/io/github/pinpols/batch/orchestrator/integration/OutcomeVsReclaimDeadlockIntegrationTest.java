@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.task.JobInstanceTerminalStatusApplicationService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.command.JobInstanceTerminalStatusCommand;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -19,12 +20,11 @@ import io.github.pinpols.batch.orchestrator.domain.query.JobTaskQuery;
 import io.github.pinpols.batch.orchestrator.infrastructure.lease.PartitionReclaimUnit;
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.WorkerRegistryCache;
 import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
-import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.LaunchSeed;
+import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowLaunchSeed;
 import io.github.pinpols.batch.orchestrator.integration.support.WorkerRegistryCacheTestSupport;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -65,15 +65,15 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li>outcome({@code applyTaskOutcome}):先取 instance advisory lock → {@code finishTask}(X-lock
  *       <b>task</b> 行)→ {@code markStatus}(X-lock <b>partition</b> 行)。即锁序 <b>instance → task →
  *       partition</b>。
- *   <li>reclaim({@code PartitionReclaimUnit.doReclaim}):先 {@code resetForDispatch}(X-lock
- *       <b>partition</b> 行)→ {@code resetForRetry}(X-lock <b>task</b> 行)。即锁序 <b>partition →
- *       task</b>。
+ *   <li>reclaim({@code PartitionReclaimUnit.reclaim}):先取同一 instance advisory lock，再 {@code
+ *       resetForDispatch}(X-lock <b>partition</b> 行)→ {@code resetForRetry}(X-lock <b>task</b>
+ *       行)。即锁序 <b>instance → partition → task</b>；task {@code FOR UPDATE NOWAIT} 仍处理不遵循
+ *       instance fence 的旁路竞争。
  * </ul>
  *
- * <p>两层约束共同消除等待环：outcome 在任何状态写入前先取得 instance advisory lock，避免等待实例锁时持有 task
- * 行；reclaim 不取该实例锁，因此仍用 {@code FOR UPDATE NOWAIT} 试取 task 行，抢不到就回滚让路。缺少任一约束都可能在
- * outcome 并发收敛和 reclaim 交错时形成 advisory/row-lock 环。本测作为回归守护，断言 60s 并发风暴内没有任何
- * SQLState {@code 40P01}。
+ * <p>两条路径现在先由同一实例 advisory lock 串行化，因此不会互相持有 task/partition 行锁后等待对方；reclaim 的
+ * {@code FOR UPDATE NOWAIT} 继续为不遵循实例 fence 的写入方提供让路保护。本测作为回归守护，断言 60s 并发风暴内没有任何
+ * SQLState {@code 40P01}，并在风暴后核对实例与子状态收敛。
  *
  * <p>做法:ADR-046 束作业展开成单 instance + N 个 partition/task,claim 进 RUNNING;逐轮把 (task,partition,step) 重置回
  * RUNNING + 过期 lease,再用栅栏让 N 个 outcome 线程与 N 个 reclaim 线程同刻起跑抢同索引的 (task,partition)。跑 R 轮放大命中窗口。
@@ -96,7 +96,7 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
   private static final int ROUNDS = 10;
 
   @Autowired
-  private LaunchService launchService;
+  private WorkflowRunLaunchService workflowRunLaunchService;
 
   @Autowired
   private TaskExecutionService taskExecutionService;
@@ -133,6 +133,20 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("上报事务持有分区行锁时,终止态更新先等待锁再执行,且不覆盖实例的成功终态")
   void shouldWaitForReleasedPartitionLock_whenTerminalUpdateTakesParentLock() throws Exception {
+    final String setLocalSql = """
+        set local lock_timeout = '5s'
+    """;
+
+    final String selectIdSql = """
+        select id from batch.job_partition where tenant_id = ? and id = ? for update
+    """;
+    final String selectPgBackendPidSql = """
+        select pg_backend_pid()
+    """;
+    final String selectExistsSql = """
+        select exists(select 1 from pg_stat_activity where pid = ? and wait_event_type = 'Lock')
+    """;
+
     var instance = launchBundle(1);
     var shard = claimAllShards(instance).getFirst();
     String invocation = "terminal-race-" + UUID.randomUUID();
@@ -145,10 +159,10 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
     try {
       Future<?> report = pool.submit(() -> new TransactionTemplate(transactionManager)
           .executeWithoutResult(status -> {
-            jdbcTemplate.execute("set local lock_timeout = '5s'");
+            jdbcTemplate.execute(setLocalSql);
             jobInstanceMapper.acquireInstanceAdvisoryLock(TENANT, instance.instanceId());
             jdbcTemplate.queryForObject(
-                "select id from batch.job_partition where tenant_id = ? and id = ? for update",
+                selectIdSql,
                 Long.class,
                 TENANT,
                 shard.partitionId());
@@ -173,9 +187,9 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
       assertThat(reportLocked.await(10, TimeUnit.SECONDS)).isTrue();
       Future<Integer> terminal =
           pool.submit(() -> new TransactionTemplate(transactionManager).execute(status -> {
-            jdbcTemplate.execute("set local lock_timeout = '5s'");
+            jdbcTemplate.execute(setLocalSql);
             terminalPid.complete(
-                jdbcTemplate.queryForObject("select pg_backend_pid()", Integer.class));
+            jdbcTemplate.queryForObject(selectPgBackendPidSql, Integer.class));
             return terminalStatusService.updateTerminalStatusAndReconcileChildren(
                 new JobInstanceTerminalStatusCommand(
                     TENANT,
@@ -189,7 +203,7 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
           .alias("终止事务必须实际进入锁等待")
           .atMost(3, TimeUnit.SECONDS)
           .until(() -> Boolean.TRUE.equals(jdbcTemplate.queryForObject(
-              "select exists(select 1 from pg_stat_activity where pid = ? and wait_event_type = 'Lock')",
+              selectExistsSql,
               Boolean.class,
               pid)));
       releaseReport.countDown();
@@ -258,7 +272,7 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
             }
             return null;
           }));
-          // reclaim 线程:真 PartitionReclaimUnit.reclaim——partition→task 锁序。
+          // reclaim 线程:真实 PartitionReclaimUnit，先取得实例 fence，再执行 partition→task 的防御性锁序。
           futures.add(pool.submit(() -> {
             await(startGate);
             try {
@@ -302,11 +316,15 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
   // ---- 收尾结算 ----
 
   private void assertStateConverges(FannedOutInstance fannedOut, List<Shard> shards) {
+    final String updateJobInstanceSql = """
+        update batch.job_instance set instance_status = 'RUNNING', finished_at = null, success_partition_count =\s\
+        0, failed_partition_count = 0, version = version + 1, updated_at = current_timestamp where tenant_id = ?\s\
+        and id = ?\
+        """;
+
     // 把 instance / partition / task / step 全部复位到干净 RUNNING,再单线程逐分片报 success → 必然收敛 SUCCESS。
     jdbcTemplate.update(
-        "update batch.job_instance set instance_status = 'RUNNING', finished_at = null,"
-            + " success_partition_count = 0, failed_partition_count = 0, version = version + 1,"
-            + " updated_at = current_timestamp where tenant_id = ? and id = ?",
+        updateJobInstanceSql,
         TENANT,
         fannedOut.instanceId());
     String[] settleInvocations = new String[shards.size()];
@@ -379,25 +397,39 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
   // ---- fixture helpers（复用 PartitionJoinPromotionIntegrationTest 的 launch/claim 范式）----
 
   private FannedOutInstance launchBundle(int count) {
-    LaunchSeed seed = LaunchIntegrationFixture.prepareBundleLaunchWithWorker(
+    final String insertFileRecordSql = """
+        insert into batch.file_record (tenant_id, file_category, file_name, file_format_type, storage_type,\s\
+        storage_path, source_type, file_status)\s\
+        values (?, 'INPUT', ?, 'DELIMITED', 'LOCAL', ?, 'UPLOAD', 'RECEIVED') returning id\
+        """;
+
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareBundleLaunchWithWorker(
         jdbcTemplate, TENANT, "BUNDLE_IMPORT", "IMPORT");
     List<Map<String, Object>> bundleFiles = new ArrayList<>();
     for (int i = 0; i < count; i++) {
-      bundleFiles.add(Map.of("sourceFileId", 4000 + i, "templateCode", "TPL_" + i));
+      String suffix = UUID.randomUUID().toString();
+      Long fileId = jdbcTemplate.queryForObject(
+          insertFileRecordSql,
+          Long.class,
+          TENANT,
+          "outcome-reclaim-source-" + suffix,
+          "/test/outcome-reclaim/" + suffix);
+      bundleFiles.add(Map.of("sourceFileId", fileId, "templateCode", "TPL_" + i));
     }
     LaunchRequest request = LaunchRequest.builder()
         .tenantId(TENANT)
-        .jobCode(seed.jobCode())
+        .workflowDefinitionId(seed.workflowDefinitionId())
         .bizDate(BIZ_DATE)
         .triggerType(TriggerType.EVENT)
         .requestId(seed.requestId())
         .traceId("trace-deadlock-" + seed.requestId())
         .params(Map.of("bundleFiles", bundleFiles))
         .build();
-    launchService.launch(request);
+    var response = workflowRunLaunchService.launch(request);
 
-    JobInstanceEntity instance =
-        jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
+    Long jobInstanceId = LaunchIntegrationFixture.selectDispatchedJobInstanceId(
+        jdbcTemplate, TENANT, response.instanceNo());
+    JobInstanceEntity instance = jobInstanceMapper.selectById(TENANT, jobInstanceId);
     assertThat(instance).as("bundle launch must create the instance").isNotNull();
     List<JobPartitionEntity> partitions = jobPartitionMapper.selectByQuery(
         new JobPartitionQuery(TENANT, instance.getId(), null, null));
@@ -434,34 +466,43 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
    * version 全部 +1 保证 reclaim 传入的旧实体不会误命中(上一轮 CAS 幂等短路),每轮都是真争用。
    */
   private void resetShardToRunning(Shard shard, String workerCode, String invocation) {
+    final String updateJobTaskSql = """
+        update batch.job_task set task_status = 'RUNNING', assigned_worker_code = ?, version = version + 1,\s\
+        updated_at = current_timestamp where tenant_id = ? and id = ?\
+        """;
+    final String updateJobPartitionSql = """
+        update batch.job_partition set partition_status = 'RUNNING', worker_code = ?, current_invocation_id = ?,\s\
+        invocation_started_at = current_timestamp, lease_expire_at = current_timestamp - interval '1 hour',\s\
+        finished_at = null, version = version + 1, updated_at = current_timestamp where tenant_id = ? and id = ?\
+        """;
+    final String updateJobStepInstanceSql = """
+        update batch.job_step_instance set step_status = 'RUNNING', finished_at = null, version = version + 1,\s\
+        updated_at = current_timestamp where tenant_id = ? and job_task_id = ?\
+        """;
+
     jdbcTemplate.update(
-        "update batch.job_task set task_status = 'RUNNING', assigned_worker_code = ?,"
-            + " version = version + 1, updated_at = current_timestamp"
-            + " where tenant_id = ? and id = ?",
+        updateJobTaskSql,
         workerCode,
         TENANT,
         shard.taskId());
     jdbcTemplate.update(
-        "update batch.job_partition set partition_status = 'RUNNING', worker_code = ?,"
-            + " current_invocation_id = ?, invocation_started_at = current_timestamp,"
-            + " lease_expire_at = current_timestamp - interval '1 hour', finished_at = null,"
-            + " version = version + 1, updated_at = current_timestamp"
-            + " where tenant_id = ? and id = ?",
+        updateJobPartitionSql,
         workerCode,
         invocation,
         TENANT,
         shard.partitionId());
     jdbcTemplate.update(
-        "update batch.job_step_instance set step_status = 'RUNNING', finished_at = null,"
-            + " version = version + 1, updated_at = current_timestamp"
-            + " where tenant_id = ? and job_task_id = ?",
+        updateJobStepInstanceSql,
         TENANT,
         shard.taskId());
   }
 
   private int countColumn(String column, Long instanceId) {
-    Integer value = jdbcTemplate.queryForObject(
-        "select " + column + " from batch.job_instance where tenant_id = ? and id = ?",
+  final String selectStatementSql = """
+      select %s from batch.job_instance where tenant_id = ? and id = ?\
+      """.formatted(column);
+  Integer value = jdbcTemplate.queryForObject(
+        selectStatementSql,
         Integer.class,
         TENANT,
         instanceId);
@@ -477,7 +518,7 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
     }
   }
 
-  private record FannedOutInstance(LaunchSeed seed, Long instanceId) {}
+  private record FannedOutInstance(WorkflowLaunchSeed seed, Long instanceId) {}
 
   private record Shard(Long taskId, Long partitionId) {}
 }

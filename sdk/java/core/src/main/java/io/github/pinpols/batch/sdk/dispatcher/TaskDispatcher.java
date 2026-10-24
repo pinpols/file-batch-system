@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.sdk.dispatcher;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.sdk.client.BatchPlatformClient;
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
@@ -16,12 +17,17 @@ import io.github.pinpols.batch.sdk.retry.RetryOn;
 import io.github.pinpols.batch.sdk.retry.SdkRetryableHandler;
 import io.github.pinpols.batch.sdk.task.CancellationSignal;
 import io.github.pinpols.batch.sdk.task.ProgressReporter;
+import io.github.pinpols.batch.sdk.task.SdkDependencyResultReference;
 import io.github.pinpols.batch.sdk.task.SdkErrorCode;
+import io.github.pinpols.batch.sdk.task.SdkSchedulingContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
+import io.github.pinpols.batch.sdk.task.SdkTaskTypeDescriptor;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -65,6 +71,9 @@ public class TaskDispatcher {
   private static final String KEY_WORKER_ID = "workerId";
   private static final String KEY_MESSAGE = "message";
   private static final ObjectMapper RESULT_SUMMARY_MAPPER = SdkJsonMapperFactory.create();
+  private static final ObjectMapper CLAIM_PAYLOAD_MAPPER = SdkJsonMapperFactory.create();
+  private static final TypeReference<Map<String, Object>> CLAIM_PAYLOAD_TYPE =
+      new TypeReference<>() {};
 
   /**
    * 平台 {@code result_summary} 是 JSONB 列(mapper {@code #{resultSummary}::jsonb}):必须是合法 JSON,
@@ -82,6 +91,9 @@ public class TaskDispatcher {
   private final Semaphore capacity;
 
   private final Set<Long> inFlight = ConcurrentHashMap.newKeySet();
+
+  // 执行占位早于 CLAIM；与续租集合分开，避免为尚未认领的任务续租。
+  private final Set<Long> activeDispatches = ConcurrentHashMap.newKeySet();
 
   /**
    * Lane J:高频路径(claim 5xx 重试、平台态门控、4xx 持续等)log 节流;同 key 在 60s 内只放行第一条, 其余抑制并计数,下次放行附 suppressed
@@ -104,8 +116,7 @@ public class TaskDispatcher {
   private final Map<Long, ProgressReporter> progressReporters = new ConcurrentHashMap<>();
 
   /**
-   * taskId → partitionInvocationId 内存映射。claim 时从 {@link TaskDispatchMessage#runtimeAttributes()}
-   * 落入,renew/report 必须带上(平台 R3-P1-10/R3-P0-5 对分区任务强制该不变量:缺失 → renew 返 false→409→ 不续租→lease
+   * taskId → partitionInvocationId 内存映射。CLAIM 成功后存入当前响应的权威调用标识，renew/report 必须带上(平台 R3-P1-10/R3-P0-5 对分区任务强制该不变量:缺失 → renew 返 false→409→ 不续租→lease
    * 超时→分区任务被重派双跑;report 缺失则 late-invocation CAS 防覆盖守卫被跳过)。task 结束随其它槽表一起清。
    */
   private final Map<Long, String> partitionInvocations = new ConcurrentHashMap<>();
@@ -114,8 +125,8 @@ public class TaskDispatcher {
   private final AtomicBoolean draining = new AtomicBoolean(false);
 
   /**
-   * P1-2 fail-fast:CLAIM 收到 401/403 后置 true,后续 onMessage 直接拒收(等 K8s liveness probe 拉起或运维人工介入)。 与
-   * {@link #draining} 区分:retry coordinator 的 fatal 是"不可恢复",draining 是"主动 stop"。两者都让 onMessage 静默 drop。
+   * CLAIM 鉴权失效、持续契约错误或执行线程 Error 后拒绝新派发，等待宿主重启。
+   * 与 {@link #draining} 的主动停止不同，fatal 不随平台恢复指令清除；消息保留消费位点等待恢复。
    */
   private final TaskDispatcherRetryCoordinator retryCoordinator;
 
@@ -180,7 +191,8 @@ public class TaskDispatcher {
 
   /**
    * SDK-P5 auto-wrap:注册时自动探测 handler 上的 {@link Idempotent} / {@link RetryOn} 注解并织入装饰器,接入方无需手工
-   * {@code wrap}。织入顺序固定 <b>idempotent 外 / retry 内</b>:幂等先查 key,未命中才进重试执行单元,重试到成功后记一次幂等。
+   * {@code wrap}。织入顺序固定为幂等缓存、开始确认、业务重试；缓存命中不触发外部动作的开始标记。
+   * 只有当前调用证明可安全重复时才执行注解重试，成功后记一次幂等。
    *
    * @param idempotencyStore 声明式幂等所需的去重存储;若没有任何 handler 标 {@link Idempotent} 可传 {@code null},否则在此构造期
    *     fail-fast(见 {@link SdkIdempotentHandler#wrapAround})
@@ -192,7 +204,8 @@ public class TaskDispatcher {
       SdkIdempotencyStore idempotencyStore) {
     this.config = config;
     Map<String, SdkTaskHandler> decorated = new HashMap<>(handlers.size());
-    handlers.forEach((type, handler) -> decorated.put(type, decorate(handler, idempotencyStore)));
+    handlers.forEach((type, handler) ->
+        decorated.put(type, decorate(handler, idempotencyStore, httpClient)));
     this.handlers = Map.copyOf(decorated);
     this.retryCoordinator = new TaskDispatcherRetryCoordinator(config, httpClient, throttledLog);
     this.executor = Executors.newFixedThreadPool(
@@ -204,12 +217,67 @@ public class TaskDispatcher {
 
   /**
    * 按声明式注解给单个 handler 织入装饰器链。两个 {@code wrapAround} 的 {@code source} 都传原始 {@code h}(注解只在原始 class 上),
-   * {@code delegate} 串起来形成 idempotent(retry(h)) 的链。
+   * {@code delegate} 串起来形成 idempotent(startGuard(retry(h)))，缓存命中不写开始标记。
    */
-  private static SdkTaskHandler decorate(SdkTaskHandler h, SdkIdempotencyStore store) {
-    SdkTaskHandler chain = SdkRetryableHandler.wrapAround(h, h); // 内层:retry
-    chain = SdkIdempotentHandler.wrapAround(h, chain, store); // 外层:idempotent
-    return chain;
+  private static SdkTaskHandler decorate(
+      SdkTaskHandler h, SdkIdempotencyStore store, PlatformHttpClient httpClient) {
+    SdkTaskHandler chain = SdkRetryableHandler.wrapAround(h, h);
+    // 已缓存结果直接返回；仅真正进入业务重试单元时才确认一次当前 invocation 的开始标记。
+    chain = new ExecutionStartGuard(chain, httpClient);
+    return SdkIdempotentHandler.wrapAround(h, chain, store);
+  }
+
+  private record ExecutionStartGuard(SdkTaskHandler delegate, PlatformHttpClient httpClient)
+      implements SdkTaskHandler {
+    @Override
+    public String taskType() {
+      return delegate.taskType();
+    }
+
+    @Override
+    public boolean isSafeToReplay(SdkTaskContext ctx) {
+      return delegate.isSafeToReplay(ctx);
+    }
+
+    @Override
+    public SdkTaskResult execute(SdkTaskContext ctx) {
+      if (!isSafeToReplay(ctx)) {
+        Object rawInvocation = ctx.runtimeAttributes().get("partitionInvocationId");
+        if (!(rawInvocation instanceof String invocationId) || invocationId.isBlank()) {
+          throw new ExecutionStartNotConfirmedException(
+              "claimed non-idempotent execution has no current invocation", null);
+        }
+        Map<String, Object> body = Map.of(
+            MDC_TENANT_ID, ctx.tenantId(),
+            KEY_WORKER_ID, ctx.workerId(),
+            "partitionInvocationId", invocationId);
+        try {
+          httpClient.markNonIdempotentExecutionStarted(ctx.taskId(), body);
+        } catch (IOException ex) {
+          throw new ExecutionStartNotConfirmedException(
+              "non-idempotent execution start was not confirmed", ex);
+        }
+      }
+      return delegate.execute(ctx);
+    }
+
+    @Override
+    public void cancel(String taskInstanceId) {
+      delegate.cancel(taskInstanceId);
+    }
+
+    @Override
+    public SdkTaskTypeDescriptor descriptor() {
+      return delegate.descriptor();
+    }
+  }
+
+  private static final class ExecutionStartNotConfirmedException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+
+    private ExecutionStartNotConfirmedException(String message, Throwable cause) {
+      super(message, cause);
+    }
   }
 
   /** dispatcher 对单条派单消息的处理决定,由 Kafka consumer 决定是否提交 offset。 */
@@ -315,12 +383,30 @@ public class TaskDispatcher {
 
   /** 单消息处理:claim → execute → report。所有异常都被 catch。 */
   void processInWorkerThread(TaskDispatchMessage msg) {
-    // P0 hardening:把 trace 信息塞 MDC,所有 handler 日志(claim/execute/report)自动带 traceId/tenantId/taskId
     Map<String, String> previousContext = MDC.getCopyOfContextMap();
-    setupMdc(msg);
+    Long taskId = msg.taskId();
+    if (!activeDispatches.add(taskId)) {
+      log.info("duplicate dispatch ignored while task is already executing: taskId={}", taskId);
+      return;
+    }
     try {
+      // 已接纳的工作项可能晚于 Error 才开始；取得占位后重验，防止同一调用重新执行。
+      if (retryCoordinator.isFatal()) {
+        return;
+      }
+      setupMdc(msg);
       processCore(msg);
+    } catch (Error executionError) {
+      // 执行线程会被线程池重建；严重错误后必须暂停新派发，不能让同一调用再次产生效果。
+      retryCoordinator.markExecutionFatal(executionError);
+      throw executionError;
     } finally {
+      // 仅取得占位的调用可以清理；先释放租约上下文，再允许下一次调用接手。
+      inFlight.remove(taskId);
+      cancellations.remove(taskId);
+      progressReporters.remove(taskId);
+      partitionInvocations.remove(taskId);
+      activeDispatches.remove(taskId);
       restoreMdc(previousContext);
     }
   }
@@ -342,47 +428,82 @@ public class TaskDispatcher {
     claimBody.put(MDC_TENANT_ID, msg.tenantId());
     claimBody.put(
         KEY_WORKER_ID, config.getWorkerCode()); // ADR-035 §9:workerId==workerCode(P4 后 server 分配)
-    String partitionInvocationId = extractPartitionInvocation(msg);
-    if (partitionInvocationId != null) {
-      claimBody.put("partitionInvocationId", partitionInvocationId);
+    String dispatchedInvocationId = extractPartitionInvocation(msg);
+    if (dispatchedInvocationId != null) {
+      claimBody.put("partitionInvocationId", dispatchedInvocationId);
     }
     TaskDispatcherRetryCoordinator.ClaimResult claimResult =
         retryCoordinator.claimWithRetry(msg, idemClaim, claimBody);
     if (!claimResult.claimed()) {
-      // claim 失败直接返回,不进 finally 清理块 —— partitionInvocations 必须在 claim 成功后才落,否则泄漏。
+      // 未认领不进入执行；外层拥有者 finally 统一释放本次占位和可能建立的上下文。
       return;
     }
-    if (partitionInvocationId == null) {
-      String claimedInvocation = claimResult.response().partitionInvocationId();
-      if (!EmptyChecks.isBlank(claimedInvocation)) {
-        partitionInvocationId = claimedInvocation;
-      }
+    String partitionInvocationId = claimResult.response().partitionInvocationId();
+    if (EmptyChecks.isBlank(partitionInvocationId)) {
+      // 普通任务必须持有本次 CLAIM 的分区身份；安全动作也不能用消息中的旧身份执行。
+      log.warn("claim returned no current invocation, execution stopped for taskId={}", msg.taskId());
+      return;
     }
-    if (partitionInvocationId != null) {
-      // 留存供 renew(只有 taskId、拿不到 msg)+ report 带上,贯穿分区不变量。
-      partitionInvocations.put(msg.taskId(), partitionInvocationId);
-    }
+    partitionInvocations.put(msg.taskId(), partitionInvocationId);
     inFlight.add(msg.taskId());
     CancellationSignal cancellation = new CancellationSignal();
     cancellations.put(msg.taskId(), cancellation);
     ProgressReporter progress = new ProgressReporter();
     progressReporters.put(msg.taskId(), progress);
 
-    // EXECUTE
-    SdkTaskContext ctx = new SdkTaskContext(
-        msg.tenantId(),
-        msg.jobCode(),
-        msg.taskInstanceId(),
-        msg.taskId(),
-        config.getWorkerCode(),
-        msg.parameters() == null ? Map.of() : msg.parameters(),
-        msg.runtimeAttributes() == null ? Map.of() : msg.runtimeAttributes(),
-        msg.schedulingContext(),
-        cancellation,
-        progress);
-
     SdkTaskResult result;
     try {
+      result = executeClaimedTask(msg, handler, claimResult, cancellation, progress);
+    } catch (ExecutionStartNotConfirmedException ex) {
+      // 开始确认属于控制面所有权，拒绝或响应未知均不等于业务动作执行失败。
+      log.warn("execution not started for taskId={}: {}", msg.taskId(), ExceptionLogSummary.of(ex));
+      return;
+    }
+    reportTaskResult(msg, result);
+  }
+
+  /** CLAIM 的权威载荷只在认领成功后解码；业务异常转失败，致命 Error 仍向外传播。 */
+  private SdkTaskResult executeClaimedTask(
+      TaskDispatchMessage msg,
+      SdkTaskHandler handler,
+      TaskDispatcherRetryCoordinator.ClaimResult claimResult,
+      CancellationSignal cancellation,
+      ProgressReporter progress) {
+    SdkTaskResult result;
+    try {
+      String tenantId = msg.tenantId();
+      String jobCode = msg.jobCode();
+      String taskInstanceId = msg.taskInstanceId();
+      Long taskId = msg.taskId();
+      String workerCode = config.getWorkerCode();
+      PlatformHttpClient.TaskClaimResponse payloadResponse = claimResult.response();
+      String claimPayload = payloadResponse.payload();
+      Map<String, Object> effectiveConfig = parseClaimPayload(claimPayload);
+      Map<String, Object> runtimeAttributes = new HashMap<>(
+          EmptyChecks.isNull(msg.runtimeAttributes()) ? Map.of() : msg.runtimeAttributes());
+      // Kafka 中的旧身份只能用于认领请求；执行、开始确认、续租和回报均使用 CLAIM 当前身份。
+      runtimeAttributes.remove("partitionInvocationId");
+      String invocationId = partitionInvocations.get(taskId);
+      if (!EmptyChecks.isBlank(invocationId)) {
+        runtimeAttributes.put("partitionInvocationId", invocationId);
+      }
+      SdkSchedulingContext schedulingContext = msg.schedulingContext();
+      PlatformHttpClient.TaskClaimResponse dependencyResponse = claimResult.response();
+      List<SdkDependencyResultReference> dependencyResultSnapshot =
+          dependencyResponse.dependencyResultSnapshot();
+      SdkTaskContext ctx = new SdkTaskContext(
+          tenantId,
+          jobCode,
+          taskInstanceId,
+          taskId,
+          workerCode,
+          effectiveConfig,
+          runtimeAttributes,
+          schedulingContext,
+          cancellation,
+          progress,
+          null,
+          dependencyResultSnapshot);
       result = handler.execute(ctx);
       if (result == null) {
         log.warn(
@@ -390,6 +511,8 @@ public class TaskDispatcher {
             handler.getClass().getName());
         result = SdkTaskResult.fail("handler returned null");
       }
+    } catch (ExecutionStartNotConfirmedException ex) {
+      throw ex;
     } catch (Throwable t) {
       // 业务异常转失败回写；Error 不应被伪装成业务失败，否则会掩盖 JVM/线程级故障。
       rethrowFatal(t);
@@ -398,10 +521,17 @@ public class TaskDispatcher {
       result = SdkTaskResult.fail(t);
     }
 
+    return result;
+  }
+
+  /** 回报重试结束后才移除续租与取消上下文，保留原有 lease 超时恢复边界。 */
+  private void reportTaskResult(TaskDispatchMessage msg, SdkTaskResult result) {
     // REPORT — body 对齐 TaskExecutionReportDto(taskId/tenantId/workerId/success/message/outputs/...)
     String idemReport = BatchPlatformClient.newIdempotencyKey();
     try {
-      retryCoordinator.reportWithRetry(msg.taskId(), idemReport, successReportBody(msg, result));
+      Long reportTaskId = msg.taskId();
+      Map<String, Object> reportBody = successReportBody(msg, result);
+      retryCoordinator.reportWithRetry(reportTaskId, idemReport, reportBody);
       retryCoordinator.resetClientErrorStreak();
     } catch (PlatformHttpException httpEx) {
       // REPORT 失败:orchestrator 会因 lease 超时自动 retry 派单。非鉴权 4xx 计入连续错误,持续则 fail-fast(P7-2)。
@@ -421,12 +551,19 @@ public class TaskDispatcher {
           "report failed for taskId={}, orchestrator will retry on lease timeout",
           msg.taskId(),
           reportEx);
-    } finally {
-      inFlight.remove(msg.taskId());
-      cancellations.remove(msg.taskId());
-      progressReporters.remove(msg.taskId());
-      partitionInvocations.remove(msg.taskId());
     }
+  }
+
+  /** 解析数据库中的 CLAIM 载荷；非空载荷格式错误时，任务必须安全失败。 */
+  private Map<String, Object> parseClaimPayload(String payload) throws IOException {
+    if (EmptyChecks.isNull(payload) || EmptyChecks.isBlank(payload)) {
+      return Map.of();
+    }
+    Map<String, Object> parsed = CLAIM_PAYLOAD_MAPPER.readValue(payload, CLAIM_PAYLOAD_TYPE);
+    if (EmptyChecks.isNull(parsed)) {
+      throw new IllegalArgumentException("claimed task payload must be a JSON object");
+    }
+    return parsed;
   }
 
   /**
@@ -501,7 +638,9 @@ public class TaskDispatcher {
       // result_summary 是 JSONB:发 {code,message} 对象(普通文本 → invalid input syntax for type json →
       // 500)。
       // 原异常类名保留在 resultSummary.message 里维持可诊断性(平台读 resultSummary;errorMessage 字段是红线,禁发)。
-      body.put("resultSummary", resultSummaryJson(code, diagnosticMessage(message, error)));
+      String diagnostic = diagnosticMessage(message, error);
+      String resultSummary = resultSummaryJson(code, diagnostic);
+      body.put("resultSummary", resultSummary);
       retryCoordinator.reportWithRetry(msg.taskId(), idem, body);
     } catch (Exception ex) {
       log.error("reportFailure failed for taskId={}", msg.taskId(), ex);
@@ -527,9 +666,9 @@ public class TaskDispatcher {
       body.put(KEY_ERROR_CODE, code);
     }
     // 原异常类名保留在 resultSummary.message(平台读 resultSummary,不是 errorMessage —— 后者是红线字段禁发)。
-    body.put(
-        "resultSummary",
-        resultSummaryJson(code, diagnosticMessage(result.message(), result.error())));
+    String diagnostic = diagnosticMessage(result.message(), result.error());
+    String resultSummary = resultSummaryJson(code, diagnostic);
+    body.put("resultSummary", resultSummary);
     return body;
   }
 

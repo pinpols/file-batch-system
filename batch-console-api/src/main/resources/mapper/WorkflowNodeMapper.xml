@@ -9,7 +9,6 @@
         <result column="node_name" property="nodeName"/>
         <result column="node_type" property="nodeType"/>
         <result column="related_job_code" property="relatedJobCode"/>
-        <result column="related_pipeline_code" property="relatedPipelineCode"/>
         <result column="worker_group" property="workerGroup"/>
         <result column="window_code" property="windowCode"/>
         <result column="node_order" property="nodeOrder"/>
@@ -99,7 +98,6 @@
             node_name,
             node_type,
             related_job_code,
-            related_pipeline_code,
             worker_group,
             window_code,
             node_order,
@@ -117,7 +115,6 @@
             #{nodeName},
             #{nodeType},
             #{relatedJobCode},
-            #{relatedPipelineCode},
             #{workerGroup},
             #{windowCode},
             <choose><when test="nodeOrder != null">#{nodeOrder}</when><otherwise>0</otherwise></choose>,
@@ -133,7 +130,6 @@
         set node_name = excluded.node_name,
             node_type = excluded.node_type,
             related_job_code = excluded.related_job_code,
-            related_pipeline_code = excluded.related_pipeline_code,
             worker_group = excluded.worker_group,
             window_code = excluded.window_code,
             node_order = excluded.node_order,

@@ -10,6 +10,7 @@ import javax.sql.DataSource;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
+import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
@@ -39,16 +40,20 @@ class DispatchSecretBindingMapperIntegrationTest {
     postgresDataSource.setPassword(POSTGRES.getPassword());
     dataSource = postgresDataSource;
     jdbcTemplate = new JdbcTemplate(dataSource);
-    jdbcTemplate.execute("create schema batch");
-    jdbcTemplate.execute("""
+    String createBatchSchemaSql = """
+        create schema batch
+    """;
+    jdbcTemplate.execute(createBatchSchemaSql);
+    String createFileChannelConfigTableSql = """
         create table batch.file_channel_config (
           tenant_id varchar(64) not null,
           channel_code varchar(64) not null,
           config_json jsonb not null,
           is_deleted boolean not null default false
         )
-        """);
-    jdbcTemplate.execute("""
+        """;
+    jdbcTemplate.execute(createFileChannelConfigTableSql);
+    String createSecretVersionTableSql = """
         create table batch.secret_version (
           id bigint primary key,
           tenant_id varchar(64) not null,
@@ -60,14 +65,16 @@ class DispatchSecretBindingMapperIntegrationTest {
           effective_to_at timestamptz,
           revoked_at timestamptz
         )
-        """);
-    jdbcTemplate.update("""
+        """;
+    jdbcTemplate.execute(createSecretVersionTableSql);
+    String insertFileChannelConfigsSql = """
         insert into batch.file_channel_config (tenant_id, channel_code, config_json) values
           ('tenant-a', 'CH_CURRENT', '{"secret_ref":"dispatch/current"}'),
           ('tenant-a', 'CH_UNAVAILABLE', '{"secret_ref":"dispatch/unavailable"}'),
           ('tenant-b', 'CH_CURRENT', '{"secret_ref":"dispatch/current"}')
-        """);
-    jdbcTemplate.update("""
+        """;
+    jdbcTemplate.update(insertFileChannelConfigsSql);
+    String insertSecretVersionsSql = """
         insert into batch.secret_version (
           id, tenant_id, secret_ref, version_no, secret_status, current_version,
           effective_from_at, effective_to_at, revoked_at
@@ -77,11 +84,11 @@ class DispatchSecretBindingMapperIntegrationTest {
           (103, 'tenant-a', 'dispatch/unavailable', 1, 'PUBLISHED', true, null,
              current_timestamp - interval '1 second', null),
           (201, 'tenant-b', 'dispatch/current', 1, 'PUBLISHED', true, null, null, null)
-        """);
+        """;
+    jdbcTemplate.update(insertSecretVersionsSql);
 
-    org.apache.ibatis.session.Configuration configuration =
-        new org.apache.ibatis.session.Configuration(new Environment(
-            "dispatch-secret-binding-it", new JdbcTransactionFactory(), dataSource));
+    Configuration configuration = new Configuration(
+        new Environment("dispatch-secret-binding-it", new JdbcTransactionFactory(), dataSource));
     String mapperPath = "mapper/DispatchSecretBindingMapper.xml";
     try (var mapperXml = Resources.getResourceAsStream(mapperPath)) {
       new XMLMapperBuilder(mapperXml, configuration, mapperPath, configuration.getSqlFragments())

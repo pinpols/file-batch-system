@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
+import io.github.pinpols.batch.console.domain.workflow.application.command.WorkflowVersionSnapshotCommand;
 import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.common.enums.PipelineType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
@@ -18,26 +18,43 @@ import io.github.pinpols.batch.console.application.contract.request.config.Tenan
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileTemplateSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.InitMode;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.JobDefinitionSpec;
-import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.PipelineDefinitionSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.ResourceQueueSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.TenantQuotaPolicySpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.ItemStats;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.ItemStatsAccumulator;
 import io.github.pinpols.batch.console.config.JobMonitoringDefaultsProperties;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDependencyRuleRequest;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
 import io.github.pinpols.batch.console.domain.job.param.JobMonitoringPolicyUpsertParam;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
+import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionUpsertParam;
+import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionVersionUpdateParam;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowEdgeUpsertParam;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowNodeUpsertParam;
+import io.github.pinpols.batch.console.domain.workflow.query.WorkflowDefinitionQuery;
+import io.github.pinpols.batch.console.domain.workflow.query.WorkflowNodeQuery;
+import io.github.pinpols.batch.console.infrastructure.workflow.DefaultSingleJobWorkflowProvisioner;
+import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionDagInspector;
+import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionWriteSupport;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.PriorityQueue;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -60,24 +77,56 @@ public class TenantConfigInitApplyHandlers {
 
   private static final String KEY_ENABLED = "enabled";
   private static final String KEY_ID = "id";
+  private static final String INVALID_ARGUMENT_KEY = "error.common.invalid_argument";
+  private static final Set<String> JOB_DEPENDENCY_BIZ_DATE_ALIGNMENTS =
+      Set.of("SAME_DAY", "PREVIOUS_BIZ_DAY");
 
   private final TenantDefinitionConfigMappers definitionMappers;
   private final PlatformTransactionManager transactionManager;
   private final TenantFileConfigApplySupport fileConfigSupport;
   private final TenantOperationalConfigApplySupport operationalConfigSupport;
   private final JobMonitoringDefaultsProperties monitoringDefaults;
+  private final WorkflowDefinitionWriteSupport workflowWriteSupport;
+  private final DefaultSingleJobWorkflowProvisioner singleJobWorkflowProvisioner;
+  private final WorkflowDefinitionDagInspector workflowDagInspector;
 
   public TenantConfigInitApplyHandlers(
       TenantDefinitionConfigMappers definitionMappers,
       PlatformTransactionManager transactionManager,
       TenantFileConfigApplySupport fileConfigSupport,
       TenantOperationalConfigApplySupport operationalConfigSupport,
-      JobMonitoringDefaultsProperties monitoringDefaults) {
+      JobMonitoringDefaultsProperties monitoringDefaults,
+      WorkflowDefinitionWriteSupport workflowWriteSupport,
+      DefaultSingleJobWorkflowProvisioner singleJobWorkflowProvisioner,
+      WorkflowDefinitionDagInspector workflowDagInspector) {
     this.definitionMappers = definitionMappers;
     this.transactionManager = transactionManager;
     this.fileConfigSupport = fileConfigSupport;
     this.operationalConfigSupport = operationalConfigSupport;
     this.monitoringDefaults = monitoringDefaults;
+    this.workflowWriteSupport = workflowWriteSupport;
+    this.singleJobWorkflowProvisioner = singleJobWorkflowProvisioner;
+    this.workflowDagInspector = workflowDagInspector;
+  }
+
+  void bindTenantContext(String tenantId) {
+    definitionMappers.jobDefinition.setTenantContext(tenantId);
+  }
+
+  void ensureManagedSingleJobWorkflows(List<JobDefinitionSpec> jobSpecs, String tenantId) {
+    if (EmptyChecks.isNull(jobSpecs)) {
+      return;
+    }
+    for (JobDefinitionSpec spec : jobSpecs) {
+      if (!Texts.hasText(spec.getJobCode())) {
+        continue;
+      }
+      JobDefinitionEntity job =
+          definitionMappers.jobDefinition.selectByUniqueKey(tenantId, spec.getJobCode());
+      if (EmptyChecks.isNotNull(job)) {
+        singleJobWorkflowProvisioner.provision(job);
+      }
+    }
   }
 
   /** 上下文：一次 apply 调用所需的四个不变量，避免在 10 个 apply* 方法中重复传参。 */
@@ -195,13 +244,17 @@ public class TenantConfigInitApplyHandlers {
           }
         });
       } catch (Exception ex) {
+        String handlerTypeForLog = handler.typeName();
+        String codeForLog = LogSanitizer.value(code);
+        String tenantIdForLog = LogSanitizer.value(ctx.tenantId());
+        String exceptionSummaryForLog = SwallowedExceptionLogger.summary(ex);
         log.warn(
             "[TenantConfigBatchInit] {} code={} tenant={} failed: {}",
-            handler.typeName(),
-            LogSanitizer.value(code),
-            LogSanitizer.value(ctx.tenantId()),
-            SwallowedExceptionLogger.summary(ex));
-        acc.recordFailed(code, ex.getMessage());
+            handlerTypeForLog,
+            codeForLog,
+            tenantIdForLog,
+            exceptionSummaryForLog);
+        acc.recordFailed(code, TenantConfigFailureMessages.forFailure(ex));
       }
     }
     return acc.toItemStats();
@@ -210,8 +263,9 @@ public class TenantConfigInitApplyHandlers {
   // ── 10 个 spec apply 入口 (package-private,被主 service 直接调用) ────────────
 
   ItemStats applyJobDefinitions(List<JobDefinitionSpec> specs, ApplyContext ctx) {
+    List<JobDefinitionSpec> orderedSpecs = orderJobDefinitionsByDependencies(specs);
     return applySpecs(
-        specs,
+        orderedSpecs,
         ctx,
         SpecHandler.of(
             "jobDef",
@@ -222,39 +276,119 @@ public class TenantConfigInitApplyHandlers {
             (c, s, existing) -> updateJobDefinition(existing, s, c.operator())));
   }
 
+  private static List<JobDefinitionSpec> orderJobDefinitionsByDependencies(
+      List<JobDefinitionSpec> specs) {
+    if (EmptyChecks.isNull(specs) || specs.size() < 2) {
+      return specs;
+    }
+
+    Map<String, JobDefinitionSpec> jobsByCode = new LinkedHashMap<>();
+    Map<String, Integer> inputOrder = new HashMap<>();
+    for (int index = 0; index < specs.size(); index++) {
+      JobDefinitionSpec spec = specs.get(index);
+      String jobCode = spec.getJobCode();
+      boolean jobCodeIsMissingOrDuplicated =
+          !Texts.hasText(jobCode) || EmptyChecks.isNotNull(jobsByCode.putIfAbsent(jobCode, spec));
+      if (jobCodeIsMissingOrDuplicated) {
+        // 保持普通依赖写入使用的 graph → configuration-revision 锁顺序。
+        return specs;
+      }
+      inputOrder.put(jobCode, index);
+    }
+
+    Map<String, List<String>> dependentsByUpstream = new HashMap<>();
+    Map<String, Integer> dependencyCountByJob = new HashMap<>();
+    for (String jobCode : jobsByCode.keySet()) {
+      dependencyCountByJob.put(jobCode, 0);
+    }
+    for (JobDefinitionSpec spec : specs) {
+      Set<String> uniqueUpstreams = new LinkedHashSet<>();
+      for (String upstreamJobCode : dependencyCodesForOrdering(spec)) {
+        boolean upstreamDependencyIsIneligible = EmptyChecks.isNull(upstreamJobCode)
+            || !jobsByCode.containsKey(upstreamJobCode)
+            || !uniqueUpstreams.add(upstreamJobCode);
+        if (upstreamDependencyIsIneligible) {
+          continue;
+        }
+        dependentsByUpstream
+            .computeIfAbsent(upstreamJobCode, ignored -> new ArrayList<>())
+            .add(spec.getJobCode());
+        dependencyCountByJob.compute(spec.getJobCode(), (ignored, count) -> count + 1);
+      }
+    }
+
+    PriorityQueue<String> readyJobs = new PriorityQueue<>(Comparator.comparingInt(inputOrder::get));
+    dependencyCountByJob.forEach((jobCode, count) -> {
+      if (count == 0) {
+        readyJobs.add(jobCode);
+      }
+    });
+
+    List<JobDefinitionSpec> ordered = new ArrayList<>(specs.size());
+    while (!EmptyChecks.isEmpty(Objects.requireNonNull(readyJobs))) {
+      String upstreamJobCode = readyJobs.remove();
+      ordered.add(jobsByCode.get(upstreamJobCode));
+      for (String downstreamJobCode :
+          dependentsByUpstream.getOrDefault(upstreamJobCode, List.of())) {
+        int remainingDependencies =
+            dependencyCountByJob.compute(downstreamJobCode, (ignored, count) -> count - 1);
+        if (remainingDependencies == 0) {
+          readyJobs.add(downstreamJobCode);
+        }
+      }
+    }
+
+    // 重复或无效的标识仍按既定的请求项顺序处理。
+    // 循环依赖包继续沿用逐项失败行为；数据库约束仍会
+    return ordered.size() == specs.size() ? ordered : specs;
+  }
+
+  private static List<String> dependencyCodesForOrdering(JobDefinitionSpec spec) {
+    List<JobDependencyRuleRequest> rules = spec.getDependencyRules();
+    if (EmptyChecks.isNotNull(rules)) {
+      return rules.stream()
+          .filter(EmptyChecks::isNotNull)
+          .map(JobDependencyRuleRequest::upstreamJobCode)
+          .map(CodeNormalizer::trimToNull)
+          .filter(EmptyChecks::isNotNull)
+          .toList();
+    }
+    String upstreamJobCode = CodeNormalizer.trimToNull(spec.getDependsOnJobCode());
+    return EmptyChecks.isNull(upstreamJobCode) ? List.of() : List.of(upstreamJobCode);
+  }
+
   private void insertJobDefinition(String tenantId, JobDefinitionSpec spec, String operator) {
+    List<JobDependencyRuleRequest> dependencyRules = resolveJobDependencyRules(spec, null);
+    validateJobDependencyRules(tenantId, spec.getJobCode(), dependencyRules);
+    String dependsOnJobCode = firstUpstreamCode(dependencyRules);
     JobDefinitionEntity entity = new JobDefinitionEntity();
     entity.setTenantId(tenantId);
     entity.setJobCode(spec.getJobCode());
-    entity.setDependsOnJobCode(CodeNormalizer.trimToNull(spec.getDependsOnJobCode()));
+    entity.setDependsOnJobCode(dependsOnJobCode);
     entity.setJobName(spec.getJobName());
     entity.setJobType(spec.getJobType());
     entity.setBizType(spec.getBizType());
-    entity.setScheduleType(spec.getScheduleType());
-    entity.setScheduleExpr(spec.getScheduleExpr());
-    entity.setTimezone(Nullables.coalesce(spec.getTimezone(), CommonConstants.DEFAULT_TIMEZONE_ID));
-    entity.setTriggerMode(Nullables.coalesce(spec.getTriggerMode(), "SCHEDULED"));
-    entity.setWorkerGroup(CodeNormalizer.toUpperOrNull(spec.getWorkerGroup()));
-    entity.setQueueCode(CodeNormalizer.toConfigFormOrNull(spec.getQueueCode()));
-    entity.setCalendarCode(CodeNormalizer.toConfigFormOrNull(spec.getCalendarCode()));
-    entity.setWindowCode(CodeNormalizer.toConfigFormOrNull(spec.getWindowCode()));
+    applyJobScheduleAndRouting(entity, spec);
     entity.setDagEnabled(spec.getDagEnabled() != null && spec.getDagEnabled());
     entity.setShardStrategy(Nullables.coalesce(spec.getShardStrategy(), "NONE"));
     entity.setRetryPolicy(Nullables.coalesce(spec.getRetryPolicy(), "NONE"));
     entity.setRetryMaxCount(spec.getRetryMaxCount());
     entity.setTimeoutSeconds(spec.getTimeoutSeconds());
-    entity.setSoftRuntimeSeconds(resolveSoftRuntime(spec.getSoftRuntimeSeconds()));
+    int softRuntimeSeconds = resolveSoftRuntime(spec.getSoftRuntimeSeconds());
+    entity.setSoftRuntimeSeconds(softRuntimeSeconds);
     entity.setSoftRuntimeSeverity(severityOrWarn(spec.getSoftRuntimeSeverity()));
-    entity.setStartGraceSeconds(resolveStartGrace(
-        spec.getScheduleType(), spec.getDependsOnJobCode(), spec.getStartGraceSeconds()));
+    int startGraceSeconds =
+        resolveStartGrace(spec.getScheduleType(), dependsOnJobCode, spec.getStartGraceSeconds());
+    entity.setStartGraceSeconds(startGraceSeconds);
     entity.setStartGraceSeverity(severityOrWarn(spec.getStartGraceSeverity()));
     entity.setCompletionDeadlineLocalTime(spec.getCompletionDeadlineLocalTime());
     entity.setDependencyCompletionWindowSeconds(
         valueOrZero(spec.getDependencyCompletionWindowSeconds()));
-    entity.setCompletionDeadlineDayOffset(
+    int completionDeadlineDayOffset =
         EmptyChecks.isNull(spec.getCompletionDeadlineLocalTime())
             ? 0
-            : valueOrZero(spec.getCompletionDeadlineDayOffset()));
+            : valueOrZero(spec.getCompletionDeadlineDayOffset());
+    entity.setCompletionDeadlineDayOffset(completionDeadlineDayOffset);
     entity.setCompletionDeadlineSeverity(severityOrWarn(spec.getCompletionDeadlineSeverity()));
     entity.setExecutionHandler(spec.getExecutionHandler());
     entity.setParamSchema(spec.getParamSchema());
@@ -263,8 +397,10 @@ public class TenantConfigInitApplyHandlers {
     entity.setEnabled(spec.getEnabled() != null && spec.getEnabled());
     entity.setDescription(spec.getDescription());
     String executionMode = Nullables.coalesce(spec.getExecutionMode(), "FULL");
-    if ("INCREMENTAL".equals(executionMode)
-        && (spec.getWatermarkField() == null || spec.getWatermarkField().isBlank())) {
+    boolean incrementalModeIsMissingWatermarkField =
+        "INCREMENTAL".equals(executionMode)
+            && (EmptyChecks.isNull(spec.getWatermarkField()) || EmptyChecks.isBlank(Objects.requireNonNull(spec.getWatermarkField())));
+    if (incrementalModeIsMissingWatermarkField) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
           ResultCode.INVALID_ARGUMENT.detailKey(),
@@ -275,13 +411,16 @@ public class TenantConfigInitApplyHandlers {
     entity.setCreatedBy(operator);
     entity.setUpdatedBy(operator);
     definitionMappers.jobDefinition.insert(entity);
+    replaceJobDependencyRules(tenantId, spec.getJobCode(), dependencyRules);
     saveMonitoringPolicy(tenantId, entity, operator);
   }
 
   private void updateJobDefinition(
       JobDefinitionEntity existing, JobDefinitionSpec spec, String operator) {
-    String dependsOnJobCode = Nullables.coalesce(
-        CodeNormalizer.trimToNull(spec.getDependsOnJobCode()), existing.getDependsOnJobCode());
+    List<JobDependencyRuleRequest> dependencyRules = resolveJobDependencyRules(spec, existing);
+    validateJobDependencyRules(existing.getTenantId(), existing.getJobCode(), dependencyRules);
+    String dependsOnJobCode = firstUpstreamCode(dependencyRules);
+    boolean hasDependencies = EmptyChecks.isNotEmpty(dependencyRules);
     LocalTime completionDeadlineLocalTime =
         EmptyChecks.isNull(spec.getCompletionDeadlineLocalTime())
             ? existing.getCompletionDeadlineLocalTime()
@@ -291,7 +430,7 @@ public class TenantConfigInitApplyHandlers {
         existing.getDependencyCompletionWindowSeconds());
     validateScheduledMonitoring(
         existing.getScheduleType(),
-        dependsOnJobCode,
+        hasDependencies ? dependsOnJobCode : null,
         spec.getStartGraceSeconds(),
         completionDeadlineLocalTime,
         dependencyCompletionWindowSeconds);
@@ -299,18 +438,23 @@ public class TenantConfigInitApplyHandlers {
     param.setTenantId(existing.getTenantId());
     param.setJobCode(existing.getJobCode());
     param.setDependsOnJobCode(dependsOnJobCode);
+    param.setTriggerMode(Nullables.coalesce(spec.getTriggerMode(), existing.getTriggerMode()));
     param.setDependencyCompletionWindowSeconds(
-        Texts.hasText(dependsOnJobCode) ? dependencyCompletionWindowSeconds : 0);
+        hasDependencies ? dependencyCompletionWindowSeconds : 0);
     param.setJobName(Nullables.coalesce(spec.getJobName(), existing.getJobName()));
-    param.setQueueCode(Nullables.coalesce(
-        CodeNormalizer.toConfigFormOrNull(spec.getQueueCode()), existing.getQueueCode()));
-    param.setWorkerGroup(Nullables.coalesce(
-        CodeNormalizer.toUpperOrNull(spec.getWorkerGroup()), existing.getWorkerGroup()));
+    String requestedQueueCode = CodeNormalizer.toConfigFormOrNull(spec.getQueueCode());
+    String existingQueueCode = existing.getQueueCode();
+    param.setQueueCode(Nullables.coalesce(requestedQueueCode, existingQueueCode));
+    String requestedWorkerGroup = CodeNormalizer.toUpperOrNull(spec.getWorkerGroup());
+    String existingWorkerGroup = existing.getWorkerGroup();
+    param.setWorkerGroup(Nullables.coalesce(requestedWorkerGroup, existingWorkerGroup));
     param.setScheduleExpr(Nullables.coalesce(spec.getScheduleExpr(), existing.getScheduleExpr()));
-    param.setCalendarCode(Nullables.coalesce(
-        CodeNormalizer.toConfigFormOrNull(spec.getCalendarCode()), existing.getCalendarCode()));
-    param.setWindowCode(Nullables.coalesce(
-        CodeNormalizer.toConfigFormOrNull(spec.getWindowCode()), existing.getWindowCode()));
+    String requestedCalendarCode = CodeNormalizer.toConfigFormOrNull(spec.getCalendarCode());
+    String existingCalendarCode = existing.getCalendarCode();
+    param.setCalendarCode(Nullables.coalesce(requestedCalendarCode, existingCalendarCode));
+    String requestedWindowCode = CodeNormalizer.toConfigFormOrNull(spec.getWindowCode());
+    String existingWindowCode = existing.getWindowCode();
+    param.setWindowCode(Nullables.coalesce(requestedWindowCode, existingWindowCode));
     param.setRetryPolicy(Nullables.coalesce(spec.getRetryPolicy(), existing.getRetryPolicy()));
     param.setRetryMaxCount(
         Nullables.coalesce(spec.getRetryMaxCount(), existing.getRetryMaxCount()));
@@ -324,30 +468,115 @@ public class TenantConfigInitApplyHandlers {
         Nullables.coalesce(spec.getExecutionMode(), existing.getExecutionMode()));
     param.setWatermarkField(
         Nullables.coalesce(spec.getWatermarkField(), existing.getWatermarkField()));
+    param.setExecutionHandler(
+        Nullables.coalesce(spec.getExecutionHandler(), existing.getExecutionHandler()));
+    param.setParamSchema(Nullables.coalesce(spec.getParamSchema(), existing.getParamSchema()));
+    param.setPriority(Nullables.coalesce(spec.getPriority(), existing.getPriority()));
+    if (EmptyChecks.isNotNull(spec.getDefaultParams())) {
+      param.setDefaultParams(spec.getDefaultParams());
+      param.setDefaultParamsSpecified(true);
+    }
     param.setUpdatedBy(operator);
     definitionMappers.jobDefinition.updateJobDefinitionMaintenance(param);
-    definitionMappers.jobDefinition.upsertJobMonitoringPolicy(
-        JobMonitoringPolicyUpsertParam.builder()
-            .tenantId(existing.getTenantId())
-            .jobDefinitionId(existing.getId())
-            .softRuntimeSeconds(resolveMonitoringValue(
-                spec.getSoftRuntimeSeconds(), existing.getSoftRuntimeSeconds()))
-            .softRuntimeSeverity(resolveMonitoringSeverity(
-                spec.getSoftRuntimeSeverity(), existing.getSoftRuntimeSeverity()))
-            .startGraceSeconds(resolveMonitoringValue(
-                spec.getStartGraceSeconds(), existing.getStartGraceSeconds()))
-            .startGraceSeverity(resolveMonitoringSeverity(
-                spec.getStartGraceSeverity(), existing.getStartGraceSeverity()))
-            .completionDeadlineLocalTime(completionDeadlineLocalTime)
-            .completionDeadlineDayOffset(resolveCompletionDeadlineDayOffset(
-                completionDeadlineLocalTime,
-                spec.getCompletionDeadlineDayOffset(),
-                existing.getCompletionDeadlineDayOffset()))
-            .dependencyCompletionWindowSeconds(param.getDependencyCompletionWindowSeconds())
-            .completionDeadlineSeverity(resolveMonitoringSeverity(
-                spec.getCompletionDeadlineSeverity(), existing.getCompletionDeadlineSeverity()))
-            .updatedBy(operator)
-            .build());
+    replaceJobDependencyRules(existing.getTenantId(), existing.getJobCode(), dependencyRules);
+    updateJobMonitoringPolicy(existing, spec, param, completionDeadlineLocalTime, operator);
+  }
+
+  /** 导入时调度默认值与路由归一化在同一阶段完成，后续校验仍使用原始 spec。 */
+  private void applyJobScheduleAndRouting(JobDefinitionEntity entity, JobDefinitionSpec spec) {
+    String jobScheduleType = Nullables.coalesce(spec.getScheduleType(), "MANUAL");
+    entity.setScheduleType(jobScheduleType);
+    entity.setScheduleExpr(spec.getScheduleExpr());
+    entity.setTimezone(Nullables.coalesce(spec.getTimezone(), CommonConstants.DEFAULT_TIMEZONE_ID));
+    String requestedTriggerMode = spec.getTriggerMode();
+    String defaultTriggerMode =
+        switch (jobScheduleType) {
+          case "CRON", "FIXED_RATE" -> "SCHEDULED";
+          case "EVENT" -> "EVENT";
+          default -> "MANUAL";
+        };
+    String triggerMode = Nullables.coalesce(requestedTriggerMode, defaultTriggerMode);
+    entity.setTriggerMode(triggerMode);
+    String normalizedWorkerGroup = CodeNormalizer.toUpperOrNull(spec.getWorkerGroup());
+    entity.setWorkerGroup(normalizedWorkerGroup);
+    String normalizedQueueCode = CodeNormalizer.toConfigFormOrNull(spec.getQueueCode());
+    entity.setQueueCode(normalizedQueueCode);
+    String normalizedCalendarCode = CodeNormalizer.toConfigFormOrNull(spec.getCalendarCode());
+    entity.setCalendarCode(normalizedCalendarCode);
+    String normalizedWindowCode = CodeNormalizer.toConfigFormOrNull(spec.getWindowCode());
+    entity.setWindowCode(normalizedWindowCode);
+  }
+
+  private void updateJobMonitoringPolicy(
+      JobDefinitionEntity existing,
+      JobDefinitionSpec spec,
+      JobDefinitionMaintenanceUpdateParam param,
+      LocalTime completionDeadlineLocalTime,
+      String operator) {
+    JobMonitoringPolicyUpsertParam.JobMonitoringPolicyUpsertParamBuilder monitoringPolicyBuilder =
+        JobMonitoringPolicyUpsertParam.builder();
+    String policyTenantId = existing.getTenantId();
+    monitoringPolicyBuilder.tenantId(policyTenantId);
+    Long policyJobDefinitionId = existing.getId();
+    monitoringPolicyBuilder.jobDefinitionId(policyJobDefinitionId);
+    Integer requestedSoftRuntimeSeconds = spec.getSoftRuntimeSeconds();
+    Integer existingSoftRuntimeSeconds = existing.getSoftRuntimeSeconds();
+    Integer softRuntimeSeconds =
+        resolveMonitoringValue(requestedSoftRuntimeSeconds, existingSoftRuntimeSeconds);
+    monitoringPolicyBuilder.softRuntimeSeconds(softRuntimeSeconds);
+    String requestedSoftRuntimeSeverity = spec.getSoftRuntimeSeverity();
+    String existingSoftRuntimeSeverity = existing.getSoftRuntimeSeverity();
+    String softRuntimeSeverity =
+        resolveMonitoringSeverity(requestedSoftRuntimeSeverity, existingSoftRuntimeSeverity);
+    monitoringPolicyBuilder.softRuntimeSeverity(softRuntimeSeverity);
+    Integer requestedStartGraceSeconds = spec.getStartGraceSeconds();
+    Integer existingStartGraceSeconds = existing.getStartGraceSeconds();
+    Integer startGraceSeconds =
+        resolveMonitoringValue(requestedStartGraceSeconds, existingStartGraceSeconds);
+    monitoringPolicyBuilder.startGraceSeconds(startGraceSeconds);
+    String requestedStartGraceSeverity = spec.getStartGraceSeverity();
+    String existingStartGraceSeverity = existing.getStartGraceSeverity();
+    String startGraceSeverity =
+        resolveMonitoringSeverity(requestedStartGraceSeverity, existingStartGraceSeverity);
+    monitoringPolicyBuilder.startGraceSeverity(startGraceSeverity);
+    monitoringPolicyBuilder.completionDeadlineLocalTime(completionDeadlineLocalTime);
+    Integer requestedCompletionDeadlineDayOffset = spec.getCompletionDeadlineDayOffset();
+    Integer existingCompletionDeadlineDayOffset = existing.getCompletionDeadlineDayOffset();
+    Integer completionDeadlineDayOffset = resolveCompletionDeadlineDayOffset(
+        completionDeadlineLocalTime,
+        requestedCompletionDeadlineDayOffset,
+        existingCompletionDeadlineDayOffset);
+    monitoringPolicyBuilder.completionDeadlineDayOffset(completionDeadlineDayOffset);
+    monitoringPolicyBuilder.dependencyCompletionWindowSeconds(
+        param.getDependencyCompletionWindowSeconds());
+    String requestedCompletionDeadlineSeverity = spec.getCompletionDeadlineSeverity();
+    String existingCompletionDeadlineSeverity = existing.getCompletionDeadlineSeverity();
+    String completionDeadlineSeverity = resolveMonitoringSeverity(
+        requestedCompletionDeadlineSeverity, existingCompletionDeadlineSeverity);
+    monitoringPolicyBuilder.completionDeadlineSeverity(completionDeadlineSeverity);
+    monitoringPolicyBuilder.updatedBy(operator);
+    JobMonitoringPolicyUpsertParam monitoringPolicy = monitoringPolicyBuilder.build();
+    definitionMappers.jobDefinition.upsertJobMonitoringPolicy(monitoringPolicy);
+  }
+
+  private WorkflowDefinitionSaveRequest buildWorkflowVersionSnapshot(
+      String tenantId,
+      WorkflowDefinitionSpec spec,
+      WorkflowDefinitionUpsertParam param,
+      String scheduleType) {
+    WorkflowDefinitionSaveRequest snapshot = new WorkflowDefinitionSaveRequest();
+    snapshot.setTenantId(tenantId);
+    snapshot.setWorkflowCode(spec.getWorkflowCode());
+    snapshot.setWorkflowName(spec.getWorkflowName());
+    snapshot.setWorkflowType(Nullables.coalesce(spec.getWorkflowType(), "DAG"));
+    snapshot.setEnabled(Nullables.coalesce(spec.getEnabled(), true));
+    snapshot.setScheduleType(scheduleType);
+    snapshot.setScheduleExpr(spec.getScheduleExpr());
+    snapshot.setTimezone(param.getTimezone());
+    snapshot.setTriggerMode(param.getTriggerMode());
+    snapshot.setCalendarCode(spec.getCalendarCode());
+    snapshot.setDependsOnJobCode(spec.getDependsOnJobCode());
+    return snapshot;
   }
 
   private void saveMonitoringPolicy(String tenantId, JobDefinitionEntity entity, String operator) {
@@ -357,21 +586,146 @@ public class TenantConfigInitApplyHandlers {
         entity.getStartGraceSeconds(),
         entity.getCompletionDeadlineLocalTime(),
         entity.getDependencyCompletionWindowSeconds());
-    definitionMappers.jobDefinition.upsertJobMonitoringPolicy(
-        JobMonitoringPolicyUpsertParam.builder()
-            .tenantId(tenantId)
-            .jobDefinitionId(entity.getId())
-            .softRuntimeSeconds(valueOrZero(entity.getSoftRuntimeSeconds()))
-            .softRuntimeSeverity(severityOrWarn(entity.getSoftRuntimeSeverity()))
-            .startGraceSeconds(valueOrZero(entity.getStartGraceSeconds()))
-            .startGraceSeverity(severityOrWarn(entity.getStartGraceSeverity()))
-            .completionDeadlineLocalTime(entity.getCompletionDeadlineLocalTime())
-            .completionDeadlineDayOffset(valueOrZero(entity.getCompletionDeadlineDayOffset()))
-            .dependencyCompletionWindowSeconds(
-                valueOrZero(entity.getDependencyCompletionWindowSeconds()))
-            .completionDeadlineSeverity(severityOrWarn(entity.getCompletionDeadlineSeverity()))
-            .updatedBy(operator)
-            .build());
+    JobMonitoringPolicyUpsertParam.JobMonitoringPolicyUpsertParamBuilder monitoringPolicyBuilder =
+        JobMonitoringPolicyUpsertParam.builder();
+    monitoringPolicyBuilder.tenantId(tenantId);
+    monitoringPolicyBuilder.jobDefinitionId(entity.getId());
+    Integer softRuntimeSeconds = valueOrZero(entity.getSoftRuntimeSeconds());
+    monitoringPolicyBuilder.softRuntimeSeconds(softRuntimeSeconds);
+    String softRuntimeSeverity = severityOrWarn(entity.getSoftRuntimeSeverity());
+    monitoringPolicyBuilder.softRuntimeSeverity(softRuntimeSeverity);
+    Integer startGraceSeconds = valueOrZero(entity.getStartGraceSeconds());
+    monitoringPolicyBuilder.startGraceSeconds(startGraceSeconds);
+    String startGraceSeverity = severityOrWarn(entity.getStartGraceSeverity());
+    monitoringPolicyBuilder.startGraceSeverity(startGraceSeverity);
+    monitoringPolicyBuilder.completionDeadlineLocalTime(entity.getCompletionDeadlineLocalTime());
+    Integer completionDeadlineDayOffset = valueOrZero(entity.getCompletionDeadlineDayOffset());
+    monitoringPolicyBuilder.completionDeadlineDayOffset(completionDeadlineDayOffset);
+    Integer dependencyCompletionWindowSeconds =
+        valueOrZero(entity.getDependencyCompletionWindowSeconds());
+    monitoringPolicyBuilder.dependencyCompletionWindowSeconds(dependencyCompletionWindowSeconds);
+    String completionDeadlineSeverity = severityOrWarn(entity.getCompletionDeadlineSeverity());
+    monitoringPolicyBuilder.completionDeadlineSeverity(completionDeadlineSeverity);
+    monitoringPolicyBuilder.updatedBy(operator);
+    JobMonitoringPolicyUpsertParam monitoringPolicy = monitoringPolicyBuilder.build();
+    definitionMappers.jobDefinition.upsertJobMonitoringPolicy(monitoringPolicy);
+  }
+
+  private List<JobDependencyRuleRequest> resolveJobDependencyRules(
+      JobDefinitionSpec spec, JobDefinitionEntity existing) {
+    List<JobDependencyRuleRequest> requestedRules = spec.getDependencyRules();
+    if (EmptyChecks.isNotNull(requestedRules)) {
+      List<JobDependencyRuleRequest> normalized = normalizeJobDependencyRules(requestedRules);
+      String legacyUpstream = CodeNormalizer.trimToNull(spec.getDependsOnJobCode());
+      boolean legacyUpstreamDoesNotMatchDependencies = Texts.hasText(legacyUpstream)
+          && (EmptyChecks.isEmpty(Objects.requireNonNull(normalized))
+              || !legacyUpstream.equals(normalized.getFirst().upstreamJobCode()));
+      if (legacyUpstreamDoesNotMatchDependencies) {
+        throw invalidJobDependency();
+      }
+      return normalized;
+    }
+
+    String legacyUpstream = CodeNormalizer.trimToNull(spec.getDependsOnJobCode());
+    if (Texts.hasText(legacyUpstream)) {
+      return List.of(new JobDependencyRuleRequest(legacyUpstream, "SAME_DAY"));
+    }
+    if (EmptyChecks.isNull(existing) || EmptyChecks.isNull(existing.getJobDependencyRules())) {
+      return List.of();
+    }
+    return existing.getJobDependencyRules().stream()
+        .map(rule -> new JobDependencyRuleRequest(rule.upstreamJobCode(), rule.bizDateAlignment()))
+        .toList();
+  }
+
+  private static List<JobDependencyRuleRequest> normalizeJobDependencyRules(
+      List<JobDependencyRuleRequest> rules) {
+    if (rules.size() > 32) {
+      throw invalidJobDependency();
+    }
+    Set<String> upstreamCodes = new LinkedHashSet<>();
+    List<JobDependencyRuleRequest> normalized = new ArrayList<>(rules.size());
+    for (JobDependencyRuleRequest rule : rules) {
+      if (EmptyChecks.isNull(rule)) {
+        throw invalidJobDependency();
+      }
+      String upstreamCode = CodeNormalizer.trimToNull(rule.upstreamJobCode());
+      String alignment = null;
+      if (EmptyChecks.isNotNull(rule.bizDateAlignment())) {
+        String trimmedAlignment = rule.bizDateAlignment().trim();
+        alignment = trimmedAlignment.toUpperCase(Locale.ROOT);
+      }
+      boolean dependencyRuleIsInvalid =
+          !Texts.hasText(upstreamCode)
+          || !upstreamCode.matches("^[a-zA-Z][a-zA-Z0-9_-]{0,63}$")
+          || !Texts.hasText(alignment)
+          || !JOB_DEPENDENCY_BIZ_DATE_ALIGNMENTS.contains(alignment)
+          || !upstreamCodes.add(upstreamCode);
+      if (dependencyRuleIsInvalid) {
+        throw invalidJobDependency();
+      }
+      normalized.add(new JobDependencyRuleRequest(upstreamCode, alignment));
+    }
+    return List.copyOf(normalized);
+  }
+
+  private void validateJobDependencyRules(
+      String tenantId, String downstreamJobCode, List<JobDependencyRuleRequest> rules) {
+    if (EmptyChecks.isEmpty(Objects.requireNonNull(rules))) {
+      return;
+    }
+
+    JobDefinitionMapper jobMapper = definitionMappers.jobDefinition;
+    jobMapper.lockDependencyGraph(tenantId);
+    Map<String, Set<String>> graph = new HashMap<>();
+    for (JobDefinitionMapper.JobDependencyEdge edge : jobMapper.selectAllDependencies(tenantId)) {
+      if (!downstreamJobCode.equals(edge.downstreamJobCode())) {
+        graph
+            .computeIfAbsent(edge.downstreamJobCode(), ignored -> new LinkedHashSet<>())
+            .add(edge.upstreamJobCode());
+      }
+    }
+    for (JobDependencyRuleRequest rule : rules) {
+      String upstreamJobCode = rule.upstreamJobCode();
+      boolean dependencyWouldBeInvalid = downstreamJobCode.equals(upstreamJobCode)
+          || EmptyChecks.isNull(jobMapper.selectByUniqueKey(tenantId, upstreamJobCode))
+          || reachesDependency(graph, upstreamJobCode, downstreamJobCode, new HashSet<>());
+      if (dependencyWouldBeInvalid) {
+        throw invalidJobDependency();
+      }
+    }
+  }
+
+  private void replaceJobDependencyRules(
+      String tenantId, String downstreamJobCode, List<JobDependencyRuleRequest> rules) {
+    definitionMappers.jobDefinition.deleteDependencies(tenantId, downstreamJobCode);
+    if (EmptyChecks.isNotEmpty(rules)) {
+      definitionMappers.jobDefinition.insertDependencyRules(tenantId, downstreamJobCode, rules);
+    }
+  }
+
+  private static String firstUpstreamCode(List<JobDependencyRuleRequest> rules) {
+    return EmptyChecks.isEmpty(rules) ? null : rules.getFirst().upstreamJobCode();
+  }
+
+  private static BizException invalidJobDependency() {
+    return BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_ARGUMENT_KEY);
+  }
+
+  private static boolean reachesDependency(
+      Map<String, Set<String>> graph, String current, String target, Set<String> visited) {
+    if (current.equals(target)) {
+      return true;
+    }
+    if (!visited.add(current)) {
+      return false;
+    }
+    for (String upstream : graph.getOrDefault(current, Set.of())) {
+      if (reachesDependency(graph, upstream, target, visited)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private int resolveStartGrace(String scheduleType, String dependsOnJobCode, Integer requested) {
@@ -409,7 +763,11 @@ public class TenantConfigInitApplyHandlers {
             || valueOrZero(dependencyCompletionWindowSeconds) > 0 && !dependency
             || EmptyChecks.isNotNull(completionDeadlineLocalTime)
                 && valueOrZero(dependencyCompletionWindowSeconds) > 0;
-    if ((!startGraceSupported && valueOrZero(startGraceSeconds) > 0) || invalidCompletionDeadline) {
+    boolean positiveStartGraceIsUnsupported =
+        !startGraceSupported && valueOrZero(startGraceSeconds) > 0;
+    boolean scheduledMonitoringConfigurationIsInvalid =
+        positiveStartGraceIsUnsupported || invalidCompletionDeadline;
+    if (scheduledMonitoringConfigurationIsInvalid) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
     }
   }
@@ -437,35 +795,155 @@ public class TenantConfigInitApplyHandlers {
         SpecHandler.of(
             "workflow",
             WorkflowDefinitionSpec::getWorkflowCode,
-            (tid, s) -> Optional.ofNullable(definitionMappers.workflowDefinition.selectByUniqueKey(
-                tid, s.getWorkflowCode(), 1)),
+            (tid, s) -> Optional.ofNullable(findWorkflowForImport(tid, s)),
             (c, s) -> upsertWorkflowDefinition(c.tenantId(), null, s, c.operator()),
             (c, s, existing) ->
                 upsertWorkflowDefinition(c.tenantId(), existing.getId(), s, c.operator())));
   }
 
+  private WorkflowDefinitionEntity findWorkflowForImport(
+      String tenantId, WorkflowDefinitionSpec spec) {
+    if (Texts.hasText(spec.getSingleJobCode())) {
+      JobDefinitionEntity job = definitionMappers.jobDefinition.selectByUniqueKey(
+          tenantId, spec.getSingleJobCode().trim());
+      if (EmptyChecks.isNotNull(job)) {
+        WorkflowDefinitionEntity managed =
+            definitionMappers.workflowDefinition.selectBySingleJobDefinitionId(
+                tenantId, job.getId());
+        if (EmptyChecks.isNotNull(managed)) {
+          return managed;
+        }
+      }
+    }
+    WorkflowDefinitionQuery workflowQuery = WorkflowDefinitionQuery.builder()
+        .tenantId(tenantId)
+        .workflowCode(spec.getWorkflowCode())
+        .pageRequest(new PageRequest(1, 1))
+        .build();
+    return definitionMappers.workflowDefinition.selectByQuery(workflowQuery).stream()
+        .findFirst()
+        .orElse(null);
+  }
+
   private void upsertWorkflowDefinition(
       String tenantId, Long existingId, WorkflowDefinitionSpec spec, String operator) {
+    Long singleJobDefinitionId = null;
+    if (Texts.hasText(spec.getSingleJobCode())) {
+      JobDefinitionEntity singleJob = definitionMappers.jobDefinition.selectByUniqueKey(
+          tenantId, spec.getSingleJobCode().trim());
+      if (EmptyChecks.isNull(singleJob)) {
+        throw BizException.of(
+            ResultCode.NOT_FOUND,
+            ResultCode.NOT_FOUND.detailKey(),
+            "Managed Workflow Job not found: " + spec.getSingleJobCode());
+      }
+      singleJobDefinitionId = singleJob.getId();
+    }
     WorkflowDefinitionUpsertParam param = new WorkflowDefinitionUpsertParam();
     param.setTenantId(tenantId);
     param.setWorkflowCode(spec.getWorkflowCode());
     param.setWorkflowName(spec.getWorkflowName());
     param.setWorkflowType(spec.getWorkflowType());
-    param.setVersion(1);
+    WorkflowDefinitionEntity current = EmptyChecks.isNull(existingId)
+        ? null
+        : definitionMappers.workflowDefinition.selectById(tenantId, existingId);
+    if (EmptyChecks.isNull(current) && EmptyChecks.isNotNull(singleJobDefinitionId)) {
+      current = definitionMappers.workflowDefinition.selectBySingleJobDefinitionId(
+          tenantId, singleJobDefinitionId);
+    }
+    String workflowCode =
+        EmptyChecks.isNull(current) ? spec.getWorkflowCode() : current.getWorkflowCode();
+    param.setWorkflowCode(workflowCode);
+    param.setVersion(EmptyChecks.isNull(current) ? 1 : current.getVersion());
     param.setEnabled(spec.getEnabled() != null && spec.getEnabled());
+    param.setSingleJobDefinitionId(singleJobDefinitionId);
+    param.setScheduleEnabled(
+        EmptyChecks.isNotNull(spec.getScheduleEnabled()) && spec.getScheduleEnabled());
+    String scheduleType = Nullables.coalesce(spec.getScheduleType(), "MANUAL");
+    param.setScheduleType(scheduleType);
+    param.setScheduleExpr(spec.getScheduleExpr());
+    param.setTimezone(Nullables.coalesce(spec.getTimezone(), CommonConstants.DEFAULT_TIMEZONE_ID));
+    String requestedTriggerMode = spec.getTriggerMode();
+    String defaultTriggerMode = switch (scheduleType) {
+      case "CRON", "FIXED_RATE" -> "SCHEDULED";
+      case "EVENT" -> "EVENT";
+      default -> "MANUAL";
+    };
+    String resolvedTriggerMode = Nullables.coalesce(requestedTriggerMode, defaultTriggerMode);
+    param.setTriggerMode(resolvedTriggerMode);
+    param.setCalendarCode(spec.getCalendarCode());
+    param.setDependsOnJobCode(spec.getDependsOnJobCode());
     param.setCreatedBy(operator);
     param.setUpdatedBy(operator);
     definitionMappers.workflowDefinition.upsertWorkflowDefinition(param);
 
-    WorkflowDefinitionEntity saved =
-        definitionMappers.workflowDefinition.selectByUniqueKey(tenantId, spec.getWorkflowCode(), 1);
+    WorkflowDefinitionEntity saved = EmptyChecks.isNull(current)
+        ? definitionMappers.workflowDefinition.selectByUniqueKey(
+            tenantId, workflowCode, param.getVersion())
+        : current;
     if (saved == null) {
       return;
     }
     Long defId = saved.getId();
 
-    if (spec.getNodes() != null) {
-      if (existingId != null) {
+    upsertWorkflowGraph(tenantId, defId, spec, EmptyChecks.isNotNull(existingId));
+
+    boolean effectiveEnabled = EmptyChecks.isNull(current)
+        ? Boolean.TRUE.equals(param.getEnabled())
+        : Boolean.TRUE.equals(Nullables.coalesce(spec.getEnabled(), current.getEnabled()));
+    if (effectiveEnabled || Boolean.TRUE.equals(param.getScheduleEnabled())) {
+      WorkflowNodeQuery workflowNodeQuery = WorkflowNodeQuery.ofDefinition(tenantId, defId, null);
+      List<WorkflowNodeEntity> workflowNodes =
+          definitionMappers.workflowNode.selectByQuery(workflowNodeQuery);
+      workflowDagInspector.requireExecutableJobReferences(tenantId, workflowNodes);
+    }
+
+    int nextVersion = EmptyChecks.isNull(current) ? 1 : current.getVersion() + 1;
+    if (EmptyChecks.isNotNull(current)) {
+      WorkflowDefinitionVersionUpdateParam versionedUpdate =
+          WorkflowDefinitionVersionUpdateParam.builder()
+              .tenantId(tenantId)
+              .id(defId)
+              .expectedVersion(current.getVersion())
+              .workflowName(Nullables.coalesce(spec.getWorkflowName(), current.getWorkflowName()))
+              .workflowType(Nullables.coalesce(spec.getWorkflowType(), current.getWorkflowType()))
+              .enabled(Nullables.coalesce(spec.getEnabled(), current.getEnabled()))
+              .scheduleEnabled(param.getScheduleEnabled())
+              .scheduleType(scheduleType)
+              .scheduleExpr(spec.getScheduleExpr())
+              .timezone(param.getTimezone())
+              .triggerMode(param.getTriggerMode())
+              .calendarCode(spec.getCalendarCode())
+              .dependsOnJobCode(spec.getDependsOnJobCode())
+              .build();
+      int rows = definitionMappers.workflowDefinition.updateAndBumpVersion(versionedUpdate);
+      if (rows == 0) {
+        throw BizException.of(
+            ResultCode.CONFLICT,
+            "error.workflow_full_update.version_conflict",
+            current.getVersion(),
+            current.getVersion());
+      }
+    }
+    WorkflowDefinitionSaveRequest snapshot =
+        buildWorkflowVersionSnapshot(tenantId, spec, param, scheduleType);
+    WorkflowVersionSnapshotCommand snapshotCommand = WorkflowVersionSnapshotCommand.builder()
+        .tenantId(tenantId)
+        .definitionId(defId)
+        .workflowCode(workflowCode)
+        .version(nextVersion)
+        .body(snapshot)
+        .scheduleEnabled(param.getScheduleEnabled())
+        .savedBy(operator)
+        .build();
+    workflowWriteSupport.appendVersionSnapshot(snapshotCommand);
+  }
+
+  /** 图的替换与节点/边写入保持在调用方同一事务中，随后仍由定义 CAS 决定整体提交。 */
+  private void upsertWorkflowGraph(
+      String tenantId, Long defId, WorkflowDefinitionSpec spec, boolean replaceExistingGraph) {
+    if (EmptyChecks.isNotNull(spec.getNodes())) {
+      if (replaceExistingGraph) {
         definitionMappers.workflowNode.deleteByWorkflowDefinitionId(defId);
         definitionMappers.workflowEdge.deleteByWorkflowDefinitionId(defId);
       }
@@ -477,7 +955,6 @@ public class TenantConfigInitApplyHandlers {
         nodeParam.setNodeName(nodeSpec.getNodeName());
         nodeParam.setNodeType(nodeSpec.getNodeType());
         nodeParam.setRelatedJobCode(nodeSpec.getRelatedJobCode());
-        nodeParam.setRelatedPipelineCode(nodeSpec.getRelatedPipelineCode());
         nodeParam.setWorkerGroup(nodeSpec.getWorkerGroup());
         nodeParam.setWindowCode(nodeSpec.getWindowCode());
         nodeParam.setNodeOrder(nodeSpec.getNodeOrder());
@@ -488,7 +965,7 @@ public class TenantConfigInitApplyHandlers {
         nodeParam.setEnabled(Nullables.coalesce(nodeSpec.getEnabled(), true));
         definitionMappers.workflowNode.upsertWorkflowNode(nodeParam);
       }
-      if (spec.getEdges() != null) {
+      if (EmptyChecks.isNotNull(spec.getEdges())) {
         for (WorkflowDefinitionSpec.EdgeSpec edgeSpec : spec.getEdges()) {
           WorkflowEdgeUpsertParam edgeParam = new WorkflowEdgeUpsertParam();
           edgeParam.setTenantId(tenantId);
@@ -500,119 +977,6 @@ public class TenantConfigInitApplyHandlers {
           edgeParam.setEnabled(Nullables.coalesce(edgeSpec.getEnabled(), true));
           definitionMappers.workflowEdge.upsertWorkflowEdge(edgeParam);
         }
-      }
-    }
-  }
-
-  ItemStats applyPipelineDefinitions(List<PipelineDefinitionSpec> specs, ApplyContext ctx) {
-    return applySpecs(
-        specs,
-        ctx,
-        SpecHandler.<PipelineDefinitionSpec, Map<String, Object>>of(
-            "pipeline",
-            s -> s.getJobCode() + ":" + s.getPipelineType(),
-            (tid, s) -> {
-              List<Map<String, Object>> rows = definitionMappers.pipelineDefinition.selectByQuery(
-                  tid, s.getJobCode(), s.getPipelineType(), null, new PageRequest(1, 1));
-              return rows.isEmpty() ? Optional.empty() : Optional.of(rows.getFirst());
-            },
-            (c, s) -> insertPipelineDefinition(c.tenantId(), s),
-            (c, s, existing) -> updatePipelineDefinition(
-                c.tenantId(), ((Number) existing.get(KEY_ID)).longValue(), s, existing)));
-  }
-
-  private void insertPipelineDefinition(String tenantId, PipelineDefinitionSpec spec) {
-    validatePipelineSteps(spec.getPipelineType(), spec.getSteps());
-    Map<String, Object> params = new HashMap<>();
-    params.put("tenant_id", tenantId);
-    params.put("job_code", spec.getJobCode());
-    params.put("pipeline_name", spec.getPipelineName());
-    params.put("pipeline_type", spec.getPipelineType());
-    params.put("biz_type", spec.getBizType());
-    params.put("worker_group", spec.getWorkerGroup());
-    params.put("version", 1);
-    params.put(KEY_ENABLED, spec.getEnabled() != null && spec.getEnabled());
-    params.put("description", spec.getDescription());
-    definitionMappers.pipelineDefinition.insert(params);
-    Long defId = ((Number) params.get(KEY_ID)).longValue();
-    insertPipelineSteps(defId, spec.getSteps());
-  }
-
-  private void updatePipelineDefinition(
-      String tenantId, Long id, PipelineDefinitionSpec spec, Map<String, Object> existing) {
-    if (!EmptyChecks.isNull(spec.getSteps())) {
-      String existingPipelineType = String.valueOf(existing.get("pipeline_type"));
-      String pipelineType = Nullables.coalesce(spec.getPipelineType(), existingPipelineType);
-      validatePipelineSteps(pipelineType, spec.getSteps());
-    }
-    Map<String, Object> params = new HashMap<>();
-    params.put("tenant_id", tenantId);
-    params.put(KEY_ID, id);
-    params.put(
-        "pipeline_name", Nullables.coalesce(spec.getPipelineName(), existing.get("pipeline_name")));
-    params.put(
-        "pipeline_type", Nullables.coalesce(spec.getPipelineType(), existing.get("pipeline_type")));
-    params.put("biz_type", Nullables.coalesce(spec.getBizType(), existing.get("biz_type")));
-    params.put(
-        "worker_group", Nullables.coalesce(spec.getWorkerGroup(), existing.get("worker_group")));
-    params.put(KEY_ENABLED, Nullables.coalesce(spec.getEnabled(), existing.get(KEY_ENABLED)));
-    params.put(
-        "description", Nullables.coalesce(spec.getDescription(), existing.get("description")));
-    definitionMappers.pipelineDefinition.update(params);
-    if (!EmptyChecks.isNull(spec.getSteps())) {
-      definitionMappers.pipelineStepDefinition.deleteByPipelineDefinitionId(id);
-      insertPipelineSteps(id, spec.getSteps());
-    }
-  }
-
-  private void insertPipelineSteps(
-      Long pipelineDefinitionId, List<PipelineDefinitionSpec.StepSpec> steps) {
-    if (EmptyChecks.isNull(steps) || steps.isEmpty()) {
-      return;
-    }
-    // 批量插入: 把 N 次单行往返折成 1 次,租户初始化场景下减少 ~10x DB round trip + 事务时长。
-    List<Map<String, Object>> rows = new ArrayList<>(steps.size());
-    for (int index = 0; index < steps.size(); index++) {
-      PipelineDefinitionSpec.StepSpec step = steps.get(index);
-      Map<String, Object> stepParams = new HashMap<>();
-      stepParams.put("pipeline_definition_id", pipelineDefinitionId);
-      stepParams.put("step_code", step.getStepCode());
-      stepParams.put("step_name", step.getStepName());
-      stepParams.put("stage_code", step.getStageCode());
-      stepParams.put("step_order", Nullables.coalesce(step.getStepOrder(), index));
-      stepParams.put("impl_code", step.getImplCode());
-      stepParams.put("step_params", step.getStepParams());
-      stepParams.put("timeout_seconds", Nullables.coalesce(step.getTimeoutSeconds(), 0));
-      stepParams.put("retry_policy", Nullables.coalesce(step.getRetryPolicy(), "NONE"));
-      stepParams.put("retry_max_count", Nullables.coalesce(step.getRetryMaxCount(), 0));
-      stepParams.put(KEY_ENABLED, Nullables.coalesce(step.getEnabled(), true));
-      rows.add(stepParams);
-    }
-    definitionMappers.pipelineStepDefinition.insertBatch(rows);
-  }
-
-  private static void validatePipelineSteps(
-      String pipelineType, List<PipelineDefinitionSpec.StepSpec> steps) {
-    List<String> expectedStages = PipelineType.stages(pipelineType);
-    if (EmptyChecks.isNull(steps)
-        || !steps.stream()
-            .map(PipelineDefinitionSpec.StepSpec::getStageCode)
-            .toList()
-            .equals(expectedStages)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.pipeline.stages_must_match_type", pipelineType);
-    }
-    for (int index = 0; index < steps.size(); index++) {
-      Integer configuredOrder = steps.get(index).getStepOrder();
-      if (!EmptyChecks.isNull(configuredOrder) && configuredOrder != index) {
-        throw BizException.of(
-            ResultCode.INVALID_ARGUMENT, "error.pipeline.step_order_must_match_stage", index + 1);
-      }
-      if (Boolean.FALSE.equals(steps.get(index).getEnabled())) {
-        throw BizException.of(
-            ResultCode.INVALID_ARGUMENT,
-            "error.pipeline.fixed_stage_cannot_be_disabled",
-            steps.get(index).getStageCode());
       }
     }
   }

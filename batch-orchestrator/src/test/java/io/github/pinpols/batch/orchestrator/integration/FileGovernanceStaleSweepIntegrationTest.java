@@ -34,14 +34,11 @@ class FileGovernanceStaleSweepIntegrationTest extends AbstractIntegrationTest {
   @DisplayName("只把清理批次选中的那条陈旧运行中流水线与其步骤置为失败, 其余运行中与已失败流水线保持原状")
   void shouldFailOnlySelectedStalePipelinesAndSteps_whenSweepExecuted() {
     String tenantId = "stale-sweep-" + Long.toUnsignedString(System.nanoTime());
-    long definitionId = insertPipelineDefinition(tenantId);
     Instant now = Instant.now();
-    long selected =
-        insertPipelineInstance(tenantId, definitionId, "RUNNING", now.minusSeconds(10800), null);
-    long outsideBatch =
-        insertPipelineInstance(tenantId, definitionId, "RUNNING", now.minusSeconds(7200), null);
+    long selected = insertPipelineInstance(tenantId, "RUNNING", now.minusSeconds(10800), null);
+    long outsideBatch = insertPipelineInstance(tenantId, "RUNNING", now.minusSeconds(7200), null);
     long failedByAnotherPath =
-        insertPipelineInstance(tenantId, definitionId, "FAILED", now.minusSeconds(7200), now);
+        insertPipelineInstance(tenantId, "FAILED", now.minusSeconds(7200), now);
     insertRunningStep(selected, "selected");
     insertRunningStep(outsideBatch, "outside-batch");
     insertRunningStep(failedByAnotherPath, "other-failure");
@@ -58,56 +55,50 @@ class FileGovernanceStaleSweepIntegrationTest extends AbstractIntegrationTest {
     assertThat(stepStatus(failedByAnotherPath)).isEqualTo("RUNNING");
   }
 
-  private long insertPipelineDefinition(String tenantId) {
-    Long id = jdbcTemplate.queryForObject(
-        """
-        insert into batch.pipeline_definition (
-            tenant_id, job_code, pipeline_name, pipeline_type
-        ) values (?, ?, ?, 'IMPORT')
-        returning id
-        """, Long.class, tenantId, "job-" + tenantId, "pipeline-" + tenantId);
-    return id.longValue();
-  }
-
   private long insertPipelineInstance(
-      String tenantId, long definitionId, String status, Instant startedAt, Instant finishedAt) {
+      String tenantId, String status, Instant startedAt, Instant finishedAt) {
+    final String insertPipelineInstanceSql = """
+    insert into batch.pipeline_instance (
+    tenant_id, job_code, pipeline_type,
+    system_pipeline_code, system_pipeline_version,
+    run_status, started_at, finished_at, updated_at
+    ) values (?, ?, 'IMPORT', 'IMPORT', 1, ?, ?, ?, current_timestamp)
+    returning id
+    """;
+    String jobCode = "job-" + tenantId;
+    Timestamp persistedStartedAt = Timestamp.from(startedAt);
+    Timestamp persistedFinishedAt = finishedAt == null ? null : Timestamp.from(finishedAt);
     Long id = jdbcTemplate.queryForObject(
-        """
-        insert into batch.pipeline_instance (
-            tenant_id, pipeline_definition_id, job_code, pipeline_type,
-            run_status, started_at, finished_at, updated_at
-        ) values (?, ?, ?, 'IMPORT', ?, ?, ?, current_timestamp)
-        returning id
-        """,
+        insertPipelineInstanceSql,
         Long.class,
         tenantId,
-        definitionId,
-        "job-" + tenantId,
+        jobCode,
         status,
-        Timestamp.from(startedAt),
-        finishedAt == null ? null : Timestamp.from(finishedAt));
+        persistedStartedAt,
+        persistedFinishedAt);
     return id.longValue();
   }
 
   private void insertRunningStep(long pipelineInstanceId, String stepCode) {
-    jdbcTemplate.update("""
+    String insertRunningPipelineStepSql = """
         insert into batch.pipeline_step_run (
             pipeline_instance_id, step_code, stage_code, step_status, started_at
         ) values (?, ?, 'LOAD', 'RUNNING', current_timestamp)
-        """, pipelineInstanceId, stepCode);
+        """;
+    jdbcTemplate.update(insertRunningPipelineStepSql, pipelineInstanceId, stepCode);
   }
 
   private String pipelineStatus(long pipelineInstanceId) {
-    return jdbcTemplate.queryForObject(
-        "select run_status from batch.pipeline_instance where id = ?",
-        String.class,
-        pipelineInstanceId);
+    String pipelineStatusSql = """
+        select run_status from batch.pipeline_instance where id = ?
+    """;
+    return jdbcTemplate.queryForObject(pipelineStatusSql, String.class, pipelineInstanceId);
   }
 
   private String stepStatus(long pipelineInstanceId) {
-    return jdbcTemplate.queryForObject(
-        "select step_status from batch.pipeline_step_run where pipeline_instance_id = ?",
-        String.class,
-        pipelineInstanceId);
+    String pipelineStepStatusSql = """
+        select step_status from batch.pipeline_step_run where pipeline_instance_id = ?
+    """;
+    return jdbcTemplate.queryForObject(pipelineStepStatusSql, String.class, pipelineInstanceId);
   }
 }

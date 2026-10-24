@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
+# 用途：执行五语言 SDK 真实传输层契约门禁。
+# 用法：bash scripts/ci/run-sdk-live-transport-gate.sh；按下方要求准备各语言工具链。
 set -euo pipefail
 
 # 多语言 SDK live transport gate。
 # 预期外部已经启动 Kafka(CI 用 apache/kafka KRaft 单节点),并通过 BATCH_SDK_KAFKA_BOOTSTRAP
 # 暴露 PLAINTEXT broker。
 # 覆盖:
-#   Java       EmbeddedKafka + HTTP fake testkit
-#   Python     live Kafka + aiohttp FakeBatchPlatform
-#   TypeScript live kafkajs adapter
-#   Go         live segmentio/kafka-go adapter
-#   Rust       live rdkafka adapter(feature=gated)
+# Java 使用 EmbeddedKafka 与 HTTP 测试替身。
+# Python 使用真实 Kafka 与 aiohttp FakeBatchPlatform。
+# TypeScript 验证真实 kafkajs 适配器。
+# Go 验证真实 segmentio/kafka-go 适配器。
+# Rust 验证启用 gated feature 的真实 rdkafka 适配器。
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/env-common.sh

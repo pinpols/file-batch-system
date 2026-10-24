@@ -89,18 +89,16 @@ final class TaskConsumerBackpressureController {
         }
       }
     } catch (Exception ex) {
-      log.warn(
-          "failed to pause container: listenerId={}, error={}",
-          containerId,
-          SwallowedExceptionLogger.summary(ex),
-          ex);
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
+      log.warn("failed to pause container: listenerId={}, error={}", containerId, causeSummary, ex);
     }
   }
 
   void resumeIfPaused(String containerId) {
     Semaphore current = semaphore.get();
-    if (platformDraining.get()
-        || (EmptyChecks.isNotNull(current) && current.availablePermits() <= 0)) {
+    boolean taskConsumptionIsBackpressured = platformDraining.get()
+        || (EmptyChecks.isNotNull(current) && current.availablePermits() <= 0);
+    if (taskConsumptionIsBackpressured) {
       return;
     }
     MessageListenerContainer container = listenerRegistry.getListenerContainer(containerId);
@@ -116,11 +114,9 @@ final class TaskConsumerBackpressureController {
         }
       }
     } catch (Exception ex) {
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
       log.warn(
-          "failed to resume container: listenerId={}, error={}",
-          containerId,
-          SwallowedExceptionLogger.summary(ex),
-          ex);
+          "failed to resume container: listenerId={}, error={}", containerId, causeSummary, ex);
     }
   }
 

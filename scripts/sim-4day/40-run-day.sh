@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：ADR-sim 4day · P4 单日驱动:对 10 租户按 archetype 跑 IMPORT→EXPORT→DISPATCH→WORKFLOW。
+# 用法：在仓库根目录执行 bash scripts/sim-4day/40-run-day.sh；参数与前置环境见下方说明及所属 README。
 # ADR-sim 4day · P4 单日驱动:对 10 租户按 archetype 跑 IMPORT→EXPORT→DISPATCH→WORKFLOW。
 # IMPORT 走「内联 content + templateCode」(已验证的真加载路径);行 key 带 bizDate => 每天新增=增量。
 # 用法: bash 40-run-day.sh <bizDate YYYY-MM-DD> [ROWS] [tenant...]
@@ -29,28 +31,27 @@ SQL_DIR="$ROOT/scripts/sim-4day/sql"
 arche() { case "$1" in ta|t04|t07|t10) echo retail;; tb|t05|t08) echo bank;; tc|t06|t09) echo risk;; *) echo retail;; esac; }
 
 launch() { # 参数:tenant job bizDate paramsJson
-  local t="$1" job="$2" bd="$3" params="$4" rid
+  local t="$1" job="$2" bd="$3" params="$4" rid workflow_id
   rid="${SIM4DAY_RUN_ID:-sim}-${BDC}-${t}-${job}-$(date +%s%N|tail -c 7)"
   LAST_REQUEST_ID="$rid"
-  local body; body=$("$PYTHON_BIN" -c "import json,sys;print(json.dumps({'tenantId':sys.argv[1],'jobCode':sys.argv[2],'triggerType':'API','bizDate':sys.argv[3],'requestId':sys.argv[4],'params':json.loads(sys.argv[5])}))" "$t" "$job" "$bd" "$rid" "$params")
+  workflow_id=$(SIM_ROOT="$ROOT" PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" \
+    "$PYTHON_BIN" "$ROOT/scripts/sim/launch_contract.py" "$t" "$job") || return 1
+  local body; body=$("$PYTHON_BIN" -c "import json,sys;print(json.dumps({'tenantId':sys.argv[1],'workflowDefinitionId':int(sys.argv[2]),'triggerType':'API','bizDate':sys.argv[3],'requestId':sys.argv[4],'params':json.loads(sys.argv[5])}))" "$t" "$workflow_id" "$bd" "$rid" "$params")
   local resp; resp=$(curl -sf --max-time 40 -X POST "$TRG/api/triggers/launch" \
     -H "Content-Type: application/json" -H "X-Tenant-Id: $t" -H "X-Internal-Secret: $SECRET" \
     -H "Idempotency-Key: $rid" -H "X-Request-Id: $rid" -d "$body" 2>&1)
   if echo "$resp" | grep -qE '"code"\s*:\s*"(SUCCESS|OK)"'; then printf '.'; return 0; else printf 'x'; return 1; fi
 }
 
-wait_request_success() {
-  local tenant_id="$1" request_id="$2" deadline status instance_status task_failed task_non_success
+wait_managed_workflow_success() {
+  local tenant_id="$1" request_id="$2" deadline status
   deadline=$(( $(date +%s) + DEPENDENCY_WAIT ))
   while true; do
     status=$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
       -tA -v ON_ERROR_STOP=1 -v tenant_id="$tenant_id" -v request_id="$request_id" \
-      -f /dev/stdin < "$SQL_DIR/select-request-execution-status.sql" 2>/dev/null || true)
-    IFS='|' read -r instance_status task_failed task_non_success <<<"$status"
-    if [[ "$instance_status" == "SUCCESS" && "$task_non_success" == "0" ]]; then
-      return 0
-    fi
-    if [[ "$instance_status" =~ ^(FAILED|PARTIAL_FAILED|CANCELLED|TERMINATED)$ || "$task_failed" =~ ^[1-9] ]]; then
+      -f /dev/stdin < "$SQL_DIR/select-workflow-run-status.sql" 2>/dev/null || true)
+    if [[ "$status" == "SUCCESS" ]]; then return 0; fi
+    if [[ "$status" =~ ^(FAILED|PARTIAL_FAILED|CANCELLED|TERMINATED)$ ]]; then
       printf 'x'
       return 1
     fi
@@ -64,7 +65,42 @@ wait_request_success() {
 
 launch_and_wait() {
   launch "$@" || return 1
-  wait_request_success "$1" "$LAST_REQUEST_ID"
+  wait_managed_workflow_success "$1" "$LAST_REQUEST_ID"
+}
+
+launch_workflow() { # 参数:tenant workflowCode bizDate paramsJson
+  local t="$1" code="$2" bd="$3" params="$4" rid workflow_id body resp
+  rid="${SIM_WORKFLOW_RUN_ID:-sim}-${BDC}-${t}-${code}-$(date +%s%N|tail -c 7)"
+  LAST_REQUEST_ID="$rid"
+  workflow_id=$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
+    -tA -v ON_ERROR_STOP=1 -v tenant_id="$t" -v workflow_code="$code" \
+    -f /dev/stdin < "$SQL_DIR/select-workflow-definition-id.sql" 2>/dev/null) || return 1
+  [[ "$workflow_id" =~ ^[0-9]+$ ]] || { printf 'x'; return 1; }
+  body=$("$PYTHON_BIN" -c "import json,sys;print(json.dumps({'tenantId':sys.argv[1],'workflowDefinitionId':int(sys.argv[2]),'triggerType':'API','bizDate':sys.argv[3],'requestId':sys.argv[4],'params':json.loads(sys.argv[5])}))" "$t" "$workflow_id" "$bd" "$rid" "$params")
+  resp=$(curl -sf --max-time 40 -X POST "$TRG/api/triggers/launch" \
+    -H "Content-Type: application/json" -H "X-Tenant-Id: $t" -H "X-Internal-Secret: $SECRET" \
+    -H "Idempotency-Key: $rid" -H "X-Request-Id: $rid" -d "$body" 2>&1) || { printf 'x'; return 1; }
+  if echo "$resp" | grep -qE '"code"\s*:\s*"(SUCCESS|OK)"'; then printf '.'; return 0; fi
+  printf 'x'; return 1
+}
+
+wait_workflow_success() {
+  local tenant_id="$1" request_id="$2" deadline status
+  deadline=$(( $(date +%s) + DEPENDENCY_WAIT ))
+  while true; do
+    status=$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
+      -tA -v ON_ERROR_STOP=1 -v tenant_id="$tenant_id" -v request_id="$request_id" \
+      -f /dev/stdin < "$SQL_DIR/select-workflow-run-status.sql" 2>/dev/null || true)
+    [[ "$status" == "SUCCESS" ]] && return 0
+    [[ "$status" =~ ^(FAILED|PARTIAL_FAILED|CANCELLED|TERMINATED)$ ]] && { printf 'x'; return 1; }
+    if (( $(date +%s) >= deadline )); then printf 'x'; return 1; fi
+    sleep 2
+  done
+}
+
+launch_workflow_and_wait() {
+  launch_workflow "$@" || return 1
+  wait_workflow_success "$1" "$LAST_REQUEST_ID"
 }
 
 import_content() { # 参数:tenant tpl header rowgen
@@ -101,7 +137,7 @@ for t in "${TENANTS[@]}"; do
         'for i in $(seq 1 '"$ROWS"'); do printf "%s-C-%s-%06d,企业%s号-%s,ENTERPRISE,9100%09d,139%08d,c%s%s@ex.com,ACTIVE\n" "'"$t"'" "'"$BDC"'" $i "$i" "'"$BDC"'" $i $i "'"$t"'" $i; done' && ok=$((ok+1))
       total=$((total+1)); launch_and_wait "$t" TA_EXPORT_REPORT "$BD" "{\"templateCode\":\"TA_EXPORT_REPORT_TPL\",\"batchNo\":\"SIM-$BDC\"}" && ok=$((ok+1))
       total=$((total+1)); dispatch_latest "$t" TA_DISPATCH_ORDER "$BD" ta_local_archive && ok=$((ok+1))
-      total=$((total+1)); launch_and_wait "$t" TA_WF_SETTLEMENT "$BD" "{\"batchNo\":\"SIM-WF-$BDC\"}" && ok=$((ok+1)) ;;
+      total=$((total+1)); launch_workflow_and_wait "$t" TA_WF_SETTLEMENT "$BD" "{\"batchNo\":\"SIM-WF-$BDC\"}" && ok=$((ok+1)) ;;
     bank)
       IMPORT_JOB=TB_IMPORT_TRANSACTION
       total=$((total+1)); import_content "$t" TB_IMPORT_TRANSACTION_TPL \
@@ -109,7 +145,7 @@ for t in "${TENANTS[@]}"; do
         'for i in $(seq 1 '"$ROWS"'); do printf "%s-T-%s-%08d,ACC%010d,DEPOSIT,%d.00,CNY,%s,auto-%s-%d\n" "'"$t"'" "'"$BDC"'" $i $i $((100+i)) "'"$BD"'" "'"$BDC"'" $i; done' && ok=$((ok+1))
       total=$((total+1)); launch_and_wait "$t" TB_EXPORT_STATEMENT "$BD" "{\"templateCode\":\"TB_EXPORT_STATEMENT_TPL\",\"batchNo\":\"SIM-$BDC\"}" && ok=$((ok+1))
       total=$((total+1)); dispatch_latest "$t" TB_DISPATCH_SETTLE "$BD" tb_api_push && ok=$((ok+1))
-      total=$((total+1)); launch_and_wait "$t" TB_WF_RECONCILE "$BD" "{\"batchNo\":\"SIM-WF-$BDC\"}" && ok=$((ok+1)) ;;
+      total=$((total+1)); launch_workflow_and_wait "$t" TB_WF_RECONCILE "$BD" "{\"batchNo\":\"SIM-WF-$BDC\"}" && ok=$((ok+1)) ;;
     risk)
       IMPORT_JOB=TC_IMPORT_RISK_SCORE
       total=$((total+1)); import_content "$t" TC_IMPORT_RISK_SCORE_TPL \
@@ -117,7 +153,7 @@ for t in "${TENANTS[@]}"; do
         'for i in $(seq 1 '"$ROWS"'); do b=$(( i%3==0 ? 1 : 0 )); printf "%s-E-%s-%06d,CUSTOMER,%d,%s,%s\n" "'"$t"'" "'"$BDC"'" $i $((i%100)) "$([ $b -eq 1 ] && echo HIGH || echo LOW)" "'"$BD"'"; done' && ok=$((ok+1))
       total=$((total+1)); launch_and_wait "$t" TC_EXPORT_RISK_ALERT "$BD" "{\"templateCode\":\"TC_EXPORT_RISK_ALERT_TPL\",\"batchNo\":\"SIM-$BDC\"}" && ok=$((ok+1))
       total=$((total+1)); dispatch_latest "$t" TC_DISPATCH_REVIEW "$BD" tc_api_risk_push && ok=$((ok+1))
-      total=$((total+1)); launch_and_wait "$t" TC_WF_RISK_PIPELINE "$BD" "{\"batchNo\":\"SIM-WF-$BDC\"}" && ok=$((ok+1)) ;;
+      total=$((total+1)); launch_workflow_and_wait "$t" TC_WF_RISK_PIPELINE "$BD" "{\"batchNo\":\"SIM-WF-$BDC\"}" && ok=$((ok+1)) ;;
   esac
   echo
 done

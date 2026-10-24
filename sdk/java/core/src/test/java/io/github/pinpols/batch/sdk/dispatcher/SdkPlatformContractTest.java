@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -186,6 +188,9 @@ class SdkPlatformContractTest {
   /** 跑 dispatcher 一遍,捕获 report 调用的 body 列表(claim 总是返回 ok)。 */
   private List<Map<String, Object>> captureReports(SdkTaskResult result) throws IOException {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
+    PlatformHttpClient.TaskClaimResponse claim =
+        new PlatformHttpClient.TaskClaimResponse("inv-42");
+    when(http.claim(eq(42L), anyString(), any())).thenReturn(claim);
     List<Map<String, Object>> reports = new ArrayList<>();
     doAnswer((InvocationOnMock inv) -> {
           reports.add(inv.getArgument(2));
@@ -197,6 +202,11 @@ class SdkPlatformContractTest {
       @Override
       public String taskType() {
         return "tt";
+      }
+
+      @Override
+      public boolean isSafeToReplay(SdkTaskContext ctx) {
+        return true;
       }
 
       @Override

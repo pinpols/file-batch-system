@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -16,6 +17,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TaskStatus;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.orchestrator.config.PartitionLeaseProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -23,6 +25,7 @@ import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulS
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import java.time.Instant;
 import java.util.List;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -82,6 +85,27 @@ class PartitionLeaseReclaimSchedulerTest {
 
     verify(reclaimUnit).reclaim(p1);
     verify(reclaimUnit).reclaim(p2);
+  }
+
+  @Test
+  @DisplayName("跨租户过期分区各自在所属租户上下文中回收并清理上下文")
+  void shouldReclaimEachPartitionUnderItsTenantContext() {
+    JobPartitionEntity p1 = expiredPartition("t1", 1L);
+    JobPartitionEntity p2 = expiredPartition("t2", 2L);
+    when(jobPartitionMapper.selectExpiredLeasesGlobal(
+            PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), 500))
+        .thenReturn(List.of(p1, p2));
+    doAnswer(invocation -> {
+          JobPartitionEntity partition = invocation.getArgument(0);
+          Assertions.assertThat(RlsTenantContextHolder.get()).isEqualTo(partition.getTenantId());
+          return null;
+        })
+        .when(reclaimUnit)
+        .reclaim(any());
+
+    scheduler.reclaimExpiredPartitions();
+
+    Assertions.assertThat(RlsTenantContextHolder.get()).isNull();
   }
 
   @Test

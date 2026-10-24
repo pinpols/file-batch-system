@@ -52,9 +52,13 @@ func canonicalString(method, path, timestamp, nonce string, body []byte) string 
 // signRequest computes the lowercase-hex HMAC-SHA256 of the canonical string
 // keyed by apiKey. This is the value sent in the X-Batch-Signature header.
 func signRequest(apiKey, method, path, timestamp, nonce string, body []byte) string {
-	mac := hmac.New(sha256.New, []byte(apiKey))
-	mac.Write([]byte(canonicalString(method, path, timestamp, nonce, body)))
-	return hex.EncodeToString(mac.Sum(nil))
+	apiKeyBytes := []byte(apiKey)
+	mac := hmac.New(sha256.New, apiKeyBytes)
+	canonical := canonicalString(method, path, timestamp, nonce, body)
+	canonicalBytes := []byte(canonical)
+	mac.Write(canonicalBytes)
+	signatureDigest := mac.Sum(nil)
+	return hex.EncodeToString(signatureDigest)
 }
 
 // isWriteMethod reports whether the HTTP method is a mutating (write) request

@@ -47,6 +47,12 @@ public class ProductionRuntimeConfigurationGuard implements SmartInitializingSin
     }
 
     REQUIRED_ENDPOINTS.forEach(this::requireRemoteEndpoint);
+
+    if (EmptyChecks.isBlank(environment.getProperty("batch.kafka.namespace"))) {
+      throw new IllegalStateException(
+          "FATAL: production Kafka topic namespace must be explicitly configured: batch.kafka.namespace");
+    }
+
     OPTIONAL_ENDPOINTS.stream()
         .filter(environment::containsProperty)
         .forEach(this::requireRemoteEndpoint);
@@ -54,7 +60,8 @@ public class ProductionRuntimeConfigurationGuard implements SmartInitializingSin
     if ("s3".equalsIgnoreCase(storageProperties.getBackend())) {
       requireRemoteEndpoint("batch.storage.s3.endpoint");
     }
-    if (ApplicationNameProvider.resolve(environment, "").startsWith("batch-worker-")) {
+    String applicationName = ApplicationNameProvider.resolve(environment, "");
+    if (applicationName.startsWith("batch-worker-")) {
       requireRemoteEndpoint("batch.datasource.business.url");
     }
     if (readReplicaProperties.isEnabled()) {
@@ -77,7 +84,8 @@ public class ProductionRuntimeConfigurationGuard implements SmartInitializingSin
     if (value == null || EmptyChecks.isBlank(value)) {
       throw new IllegalStateException("FATAL: production endpoint is not configured: " + key);
     }
-    String normalized = value.trim().toLowerCase(Locale.ROOT);
+    String trimmedValue = value.trim();
+    String normalized = trimmedValue.toLowerCase(Locale.ROOT);
     if (LOOPBACK_ENDPOINT.matcher(normalized).find()) {
       throw new IllegalStateException(
           "FATAL: production endpoint still uses a loopback development address: " + key);

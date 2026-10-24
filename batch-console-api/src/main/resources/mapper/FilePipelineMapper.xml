@@ -1,12 +1,31 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.file.mapper.FilePipelineMapper">
-    <select id="selectByQuery" resultType="map">
+    <resultMap id="FilePipelineQueryViewResultMap"
+               type="io.github.pinpols.batch.console.domain.file.view.FilePipelineQueryView">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="job_code" javaType="java.lang.String"/>
+            <arg column="pipeline_type" javaType="java.lang.String"/>
+            <arg column="file_id" javaType="java.lang.Long"/>
+            <arg column="related_job_instance_id" javaType="java.lang.Long"/>
+            <arg column="current_stage" javaType="java.lang.String"/>
+            <arg column="last_success_stage" javaType="java.lang.String"/>
+            <arg column="run_status" javaType="java.lang.String"/>
+            <arg column="trace_id" javaType="java.lang.String"/>
+            <arg column="started_at" javaType="java.time.Instant"/>
+            <arg column="finished_at" javaType="java.time.Instant"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="FilePipelineQueryViewResultMap">
         select
             id,
             tenant_id,
-            pipeline_definition_id,
-            job_code,
+                        job_code,
             pipeline_type,
             file_id,
             related_job_instance_id,

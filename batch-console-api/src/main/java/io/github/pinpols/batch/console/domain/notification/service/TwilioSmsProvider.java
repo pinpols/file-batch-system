@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
@@ -90,7 +91,9 @@ public class TwilioSmsProvider implements SmsProvider {
     String body = buildBody(message);
 
     try {
-      if (EmptyChecks.isNull(URI.create(apiBase).getHost())) {
+      URI apiBaseUri = URI.create(apiBase);
+      String apiBaseHost = apiBaseUri.getHost();
+      if (EmptyChecks.isNull(apiBaseHost)) {
         return WebhookDeliveryResult.failure(null, "invalid twilio apiBase");
       }
     } catch (RuntimeException e) {
@@ -101,33 +104,42 @@ public class TwilioSmsProvider implements SmsProvider {
       if (phone == null || phone.isBlank()) {
         continue;
       }
+      String encodedPhone = urlEncode(phone);
+      String encodedFromNumber = urlEncode(fromNumber);
+      String encodedBody = urlEncode(body);
       String formBody =
-          "To=" + urlEncode(phone) + "&From=" + urlEncode(fromNumber) + "&Body=" + urlEncode(body);
+          "To=" + encodedPhone + "&From=" + encodedFromNumber + "&Body=" + encodedBody;
       try {
         TwilioResponse response = postForm(url, authHeader, formBody);
         int status = response.status();
         if (status / 100 != 2) {
+          String sanitizedTenantId = LogSanitizer.value(message.tenantId());
+          String sanitizedChannelCode = LogSanitizer.value(message.channelCode());
           log.warn(
               "[twilio] delivery rejected tenant={} channel={} recipients={} status={}",
-              LogSanitizer.value(message.tenantId()),
-              LogSanitizer.value(message.channelCode()),
+              sanitizedTenantId,
+              sanitizedChannelCode,
               phoneNumbers.size(),
               status);
           return WebhookDeliveryResult.failure(status, "twilio http status=" + status);
         }
       } catch (InterruptedException ie) {
         Thread.currentThread().interrupt();
+        String sanitizedTenantId = LogSanitizer.value(message.tenantId());
+        String sanitizedChannelCode = LogSanitizer.value(message.channelCode());
         log.warn(
             "[twilio] delivery interrupted tenant={} channel={} recipients={}",
-            LogSanitizer.value(message.tenantId()),
-            LogSanitizer.value(message.channelCode()),
+            sanitizedTenantId,
+            sanitizedChannelCode,
             phoneNumbers.size());
         return WebhookDeliveryResult.failure(null, ie.getClass().getSimpleName());
       } catch (Exception e) {
+        String sanitizedTenantId = LogSanitizer.value(message.tenantId());
+        String sanitizedChannelCode = LogSanitizer.value(message.channelCode());
         log.warn(
             "[twilio] delivery failed tenant={} channel={} recipients={} ex={}",
-            LogSanitizer.value(message.tenantId()),
-            LogSanitizer.value(message.channelCode()),
+            sanitizedTenantId,
+            sanitizedChannelCode,
             phoneNumbers.size(),
             e.getClass().getSimpleName());
         return WebhookDeliveryResult.failure(null, e.getClass().getSimpleName());
@@ -151,7 +163,10 @@ public class TwilioSmsProvider implements SmsProvider {
   /** HTTP Basic：{@code Basic base64(AccountSid:AuthToken)}。 */
   private static String basicAuthHeader(String accountSid, String authToken) {
     String raw = accountSid + ":" + authToken;
-    return "Basic " + Base64.getEncoder().encodeToString(raw.getBytes(StandardCharsets.UTF_8));
+    Base64.Encoder encoder = Base64.getEncoder();
+    byte[] credentialBytes = raw.getBytes(StandardCharsets.UTF_8);
+    String encodedCredentials = encoder.encodeToString(credentialBytes);
+    return "Basic " + encodedCredentials;
   }
 
   /** 由 eventType + payloadJson 拼成截断后的简洁文案。 */
@@ -174,14 +189,15 @@ public class TwilioSmsProvider implements SmsProvider {
   /** 抽出便于单测覆盖：以 {@code application/x-www-form-urlencoded} POST 表单到 url，带 Basic 鉴权头，返回状态码 + 响应体。 */
   protected TwilioResponse postForm(String url, String authHeader, String body)
       throws IOException, InterruptedException {
-    OutboundHttpResponse response = httpTransport.execute(OutboundHttpRequest.post(
+    OutboundHttpContent httpContent = new OutboundHttpContent(body, "application/x-www-form-urlencoded; charset=utf-8");
+    OutboundHttpRequest request = OutboundHttpRequest.post(
         url,
         Map.of("Authorization", authHeader),
-        body,
-        "application/x-www-form-urlencoded; charset=utf-8",
+        httpContent,
         CONNECT_TIMEOUT,
         REQUEST_TIMEOUT,
-        OutboundAddressPolicy.GUARDED));
+        OutboundAddressPolicy.GUARDED);
+    OutboundHttpResponse response = httpTransport.execute(request);
     return new TwilioResponse(response.statusCode(), response.body());
   }
 }

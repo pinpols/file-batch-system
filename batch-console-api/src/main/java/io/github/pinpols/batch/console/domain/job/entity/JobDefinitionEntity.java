@@ -1,16 +1,43 @@
 package io.github.pinpols.batch.console.domain.job.entity;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.JobDependencyRuleResponse;
 import java.time.Instant;
 import java.time.LocalTime;
+import java.util.Arrays;
+import java.util.List;
 import lombok.Data;
 
 @Data
 public class JobDefinitionEntity {
 
+  private static final String DEPENDENCY_CODE_DELIMITER = String.valueOf((char) 31);
+
   private Long id;
   private String tenantId;
   private String jobCode;
   private String dependsOnJobCode;
+  private List<String> dependsOnJobCodes;
+  private String dependsOnJobCodesCsv;
+  private List<JobDependencyRuleResponse> jobDependencyRules = List.of();
+
+  public void setDependencyRulesJson(String value) {
+    jobDependencyRules = EmptyChecks.isNull(value) || EmptyChecks.isBlank(value)
+        ? List.of()
+        : JsonUtils.fromJson(value, new TypeReference<List<JobDependencyRuleResponse>>() {});
+  }
+
+  public void setDependsOnJobCodesCsv(String value) {
+    dependsOnJobCodes = EmptyChecks.isNull(value) || EmptyChecks.isBlank(value)
+        ? List.of()
+        : Arrays.stream(value.split(DEPENDENCY_CODE_DELIMITER))
+            .map(String::trim)
+            .filter(code -> EmptyChecks.isNotEmpty(code))
+            .toList();
+  }
+
   private String jobName;
   private String jobType;
   private String bizType;
@@ -48,6 +75,7 @@ public class JobDefinitionEntity {
   private String defaultParams;
   private Integer priority;
   private Long version;
+  private Long defaultWorkflowDefinitionId;
   private String description;
   private Boolean enabled;
   private String createdBy;

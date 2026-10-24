@@ -92,10 +92,10 @@ P2 本地容量画像已补跑：process kill / PG 断链恢复可恢复；10w s
 
 - 脚本：`scripts/sim/24-trigger-stage6d.sh`
 - SQL fixture：
-  - `docs/test-data/sim-stage6d-trigger-fixtures.sql`
-  - `docs/test-data/sim-stage6d-trigger-pause.sql`
-  - `docs/test-data/sim-stage6d-trigger-resume.sql`
-  - `docs/test-data/sim-stage6d-trigger-outbox-retry.sql`
+  - `test-data/sim/sim-stage6d-trigger-fixtures.sql`
+  - `test-data/sim/sim-stage6d-trigger-pause.sql`
+  - `test-data/sim/sim-stage6d-trigger-resume.sql`
+  - `test-data/sim/sim-stage6d-trigger-outbox-retry.sql`
 - 成功批次：`sim-trigger-stage6d-20260608141724`
 - 日志：`load-tests/target/trigger-stage6d-20260608141724/trigger-stage6d.log`
 - 断言摘要：

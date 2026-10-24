@@ -27,7 +27,7 @@
 - 症状:状态变了但下游/通知没收到,事件积压。
 - 排查:`pendingEvents` 大量堆积或 `stalePublishingEvents>0` → Kafka 不可用或投递卡住;看 deliveryStats 分布。
 - 建议:经 `ConsoleOrchestratorPort` 的默认实现 `application.ops.infrastructure.DefaultConsoleOrchestratorProxyService` → orchestrator `/internal/outbox/*` 做受控 republish;
-  **console-api 不能直接 UPDATE/DELETE outbox_event**;运维脚本 `scripts/ops/heal-stuck-outbox.sh`。
+  **console-api/运维脚本不能直接 UPDATE/DELETE outbox_event**;`scripts/ops/heal-stuck-outbox.sh` 只读统计，状态处置经 Orchestrator。
 
 ## 终态遗留活跃子项(terminalChildren)
 - 字段:`terminalInstancesWithActiveChildren`、`healthy`。

@@ -66,9 +66,11 @@ public class MaintenanceModeFilter extends OncePerRequestFilter {
       throws ServletException, IOException {
     MaintenanceState state = stateHolder.current();
     String path = request.getRequestURI();
-    if (!state.sharedStateAvailable()
-        && WRITE_METHODS.contains(request.getMethod())
-        && !isAllowedPath(path)) {
+    boolean writeBlockedByUnavailableState =
+        !state.sharedStateAvailable()
+            && WRITE_METHODS.contains(request.getMethod())
+            && !isAllowedPath(path);
+    if (writeBlockedByUnavailableState) {
       metrics.recordRequest("shared_state_unavailable");
       writeMaintenanceResponse(response, state, "maintenance state unavailable; writes blocked");
       return;
@@ -81,14 +83,16 @@ public class MaintenanceModeFilter extends OncePerRequestFilter {
       chain.doFilter(request, response);
       return;
     }
-    if (isAdmin() && !WRITE_METHODS.contains(request.getMethod())) {
+    boolean adminReadRequest = isAdmin() && !WRITE_METHODS.contains(request.getMethod());
+    if (adminReadRequest) {
       // 管理员仅保留读取诊断能力；普通写操作必须继续受维护冻结约束。
       metrics.recordRequest("admin_bypass");
       response.setHeader("X-Maintenance", "admin-bypass");
       chain.doFilter(request, response);
       return;
     }
-    if (state.readOnly() && !WRITE_METHODS.contains(request.getMethod())) {
+    boolean readOnlyRequest = state.readOnly() && !WRITE_METHODS.contains(request.getMethod());
+    if (readOnlyRequest) {
       // 只读模式下 GET/HEAD/OPTIONS 放行;响应头标记维护中以便前端禁写按钮。
       metrics.recordRequest("read_only");
       response.setHeader("X-Maintenance", "read-only");
@@ -163,7 +167,9 @@ public class MaintenanceModeFilter extends OncePerRequestFilter {
     if (eta == null) {
       return 60L;
     }
-    long secs = eta.getEpochSecond() - Instant.now().getEpochSecond();
-    return Math.max(secs, 30L);
+    long etaEpochSecond = eta.getEpochSecond();
+    long currentEpochSecond = Instant.now().getEpochSecond();
+    long secondsUntilEta = etaEpochSecond - currentEpochSecond;
+    return Math.max(secondsUntilEta, 30L);
   }
 }

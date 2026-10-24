@@ -11,7 +11,7 @@ import io.github.pinpols.batch.e2e.support.E2eOutboxPublishSupport;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
 import io.github.pinpols.batch.e2e.support.E2eTestSql;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -62,7 +62,7 @@ class FullChainTenantPropagationE2eIT extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
 
   @Autowired
-  private LaunchService launchService;
+  private WorkflowRunLaunchService launchService;
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
@@ -73,6 +73,14 @@ class FullChainTenantPropagationE2eIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("导入全链路到达任务成功终态后,逐表核对每一行租户标识严格一致;链路未写入的表跳过核对")
   void shouldNotDriftTenantId_whenFullChainImportWritesEveryPath() {
+    final String selectTaskStatusSql = """
+        select t.task_status from batch.job_task t join batch.job_instance ji on ji.id = t.job_instance_id\s\
+        where ji.tenant_id = ? and ji.dedup_key = ?\
+        """;
+    final String selectIdSql = """
+        select id from batch.job_instance where tenant_id = ? and dedup_key = ?
+    """;
+
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
 
@@ -94,7 +102,7 @@ class FullChainTenantPropagationE2eIT extends AbstractIntegrationTest {
 
     launchService.launch(new LaunchRequest(
         TENANT,
-        seed.jobCode(),
+        seed.workflowDefinitionId(),
         LocalDate.of(2026, 1, 15),
         TriggerType.API,
         seed.requestId(),
@@ -108,9 +116,7 @@ class FullChainTenantPropagationE2eIT extends AbstractIntegrationTest {
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
           String status = jdbcTemplate.queryForObject(
-              "select t.task_status from batch.job_task t"
-                  + " join batch.job_instance ji on ji.id = t.job_instance_id"
-                  + " where ji.tenant_id = ? and ji.dedup_key = ?",
+              selectTaskStatusSql,
               String.class,
               TENANT,
               seed.dedupKey());
@@ -118,7 +124,7 @@ class FullChainTenantPropagationE2eIT extends AbstractIntegrationTest {
         });
 
     Long jobInstanceId = jdbcTemplate.queryForObject(
-        "select id from batch.job_instance where tenant_id = ? and dedup_key = ?",
+        selectIdSql,
         Long.class,
         TENANT,
         seed.dedupKey());
@@ -176,8 +182,11 @@ class FullChainTenantPropagationE2eIT extends AbstractIntegrationTest {
    */
   private void assertSingleTenantOnlyOrEmpty(
       String table, String where, Object[] params, String label) {
+    final String selectTenantIdSql = """
+        select tenant_id from %s where %s\
+        """.formatted(table, where);
     List<String> tenants = jdbcTemplate.queryForList(
-        "select tenant_id from " + table + " where " + where, String.class, params);
+        selectTenantIdSql, String.class, params);
     if (tenants.isEmpty()) {
       // 该表本次链路未写入,跳过(可能因路径短路 / 业务规则未触发)
       return;

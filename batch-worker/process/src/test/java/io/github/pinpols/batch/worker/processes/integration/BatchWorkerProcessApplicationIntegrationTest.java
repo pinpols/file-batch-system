@@ -6,9 +6,12 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
 import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
 import io.github.pinpols.batch.worker.processes.BatchWorkerProcessApplication;
+import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocationFenceMapper;
+import io.github.pinpols.batch.worker.processes.stage.ProcessInvocationFence;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -57,6 +60,9 @@ class BatchWorkerProcessApplicationIntegrationTest extends AbstractIntegrationTe
   @DisplayName("应用上下文成功启动,容器实例可注入")
   void shouldLoadApplicationContext_whenStarted() {
     assertThat(applicationContext).isNotNull();
+    assertThat(applicationContext.getBean(ProcessInvocationFenceMapper.class)).isNotNull();
+    ProcessInvocationFence fence = applicationContext.getBean(ProcessInvocationFence.class);
+    assertThat(AopUtils.isAopProxy(fence)).isTrue();
   }
 
   @Test
@@ -65,12 +71,21 @@ class BatchWorkerProcessApplicationIntegrationTest extends AbstractIntegrationTe
     JdbcTemplate platform = new JdbcTemplate(platformDataSource);
     JdbcTemplate business = new JdbcTemplate(businessDataSource);
 
-    String platformDatabase = platform.queryForObject("select current_database()", String.class);
-    String businessDatabase = business.queryForObject("select current_database()", String.class);
+    final String selectSql = """
+        select current_database()
+    """;
+    String platformDatabase = platform.queryForObject(selectSql, String.class);
+    final String selectSqlValue1 = """
+        select current_database()
+    """;
+    String businessDatabase = business.queryForObject(selectSqlValue1, String.class);
 
     assertThat(platformDatabase).isNotBlank();
     assertThat(businessDatabase).isNotBlank().isNotEqualTo(platformDatabase);
-    assertThat(business.queryForObject("select to_regclass('batch.process_staging')", String.class))
+    final String selectSqlValue2 = """
+        select to_regclass('batch.process_staging')
+    """;
+    assertThat(business.queryForObject(selectSqlValue2, String.class))
         .isEqualTo("batch.process_staging");
   }
 }

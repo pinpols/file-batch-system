@@ -130,6 +130,18 @@
            and status = #{status}
     </select>
 
+    <select id="selectReplayCapabilitiesByTenantAndWorkerGroup" resultType="java.lang.String">
+        select coalesce(replay_capabilities, '[]'::jsonb)::text
+          from batch.worker_registry
+         where tenant_id = #{tenantId}
+           and lower(worker_group) = lower(#{workerGroup})
+           and status in
+        <foreach collection="statuses" item="status" open="(" separator="," close=")">
+            #{status}
+        </foreach>
+         order by worker_code
+    </select>
+
     <select id="selectByStatus" resultMap="workerRegistryMap">
         select <include refid="workerRegistrySelectColumns"/>
           from batch.worker_registry
@@ -240,6 +252,14 @@
          where tenant_id = #{tenantId}
            and worker_code = #{workerCode}
            and is_self_hosted = false
+    </update>
+
+    <update id="updateReplayCapabilities">
+        update batch.worker_registry
+           set replay_capabilities = cast(#{replayCapabilitiesJson} as jsonb),
+               updated_at = current_timestamp
+         where tenant_id = #{tenantId}
+           and worker_code = #{workerCode}
     </update>
 
     <!-- 重注册允许沿用既有转移语义，但必须以读取到的状态为 CAS 前态，不能覆盖并发排空或下线。 -->

@@ -32,11 +32,12 @@
 |-----------|---------|------|
 | `job_definition` | **软删除** | `job_instance.job_definition_id` FK 引用 |
 | `workflow_definition` | **软删除** | `workflow_run.workflow_definition_id` FK 引用 |
-| `pipeline_definition` | **软删除** | `pipeline_instance.pipeline_definition_id` FK 引用 |
 | `file_channel_config` | **软删除** | 运行时文件记录持有 channelCode |
 | `file_template_config` | **软删除** | 运行时文件记录持有 templateCode |
 | `file_record` | **物理删除** | 叶子节点，无运行时实体以其为主键外键引用 |
 | `user_account` | **软删除（disable）** | 审计日志、权限记录持有 userId |
+
+> 旧租户 `pipeline_definition` / `pipeline_step_definition` 及运行表中的定义ID已在 V347 退役，不适用在线软删除策略；当前系统阶段来自代码目录，Job 保存业务参数。
 
 > 新增实体时，先检查 DDL 中是否有其他表 `REFERENCES` 该表的主键，再决定删除策略。
 

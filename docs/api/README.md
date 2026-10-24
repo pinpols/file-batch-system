@@ -20,7 +20,7 @@
 - **基础设施**：权限 / JWT 登录 / tenant 解析 / 幂等键 / 分页 / 错误码 / 版本兼容
 - **安全**：浏览器响应头、文本安全规则、前端渲染约束
 - **统一规范**：响应封装 / 分页模型 / common headers
-- **Excel 配置维护**（10 类）：file template / file channel / workflow / job definition / alert routing / batch window / business calendar / pipeline definition / resource queue / tenant quota policy
+- **配置维护**：文件模板、通道、Workflow、Job 与各治理对象按各自 API；租户完整业务配置包为 10 个数据 sheet（含监控策略、不含租户 Pipeline 编辑），不等于 10 类独立 CRUD/Excel 入口
 - **Excel 模板约束**：主 sheet 冻结表头 / 必填高亮 / 枚举下拉 / 示例值 / 说明页 / `preview workbook` 的 `VALIDATION` 明细 / 单元格批注反馈
 - **只导出报表**：config release / config change log / secret version / audit log / scheduler snapshot+history / worker registry / outbox retry+delivery
 
@@ -45,7 +45,7 @@ python3 scripts/ci/check-console-openapi-paths.py
 这个脚本校验 Controller 路径与 OpenAPI path 是否一致。前端的 `npm run gen:api:check` 只能确认生成类型与当前 OpenAPI YAML 同步，不能发现 Controller 已新增但 YAML 漏写的问题。
 
 当前契约以本目录 OpenAPI 和协议文档为准；2026-05-19 的一次性整理记录已归档到
-[`../archive/analysis/frontend-backend-contract-cleanup-2026-05-19.md`](../archive/analysis/frontend-backend-contract-cleanup-2026-05-19.md)。
+[`frontend-backend-contract-cleanup-2026-05-19.md`](../archive/verifications/frontend-backend-contract-cleanup-2026-05-19.md)。
 
 ## 相关入口
 
@@ -53,4 +53,4 @@ python3 scripts/ci/check-console-openapi-paths.py
 |---|---|
 | 控制台菜单树 + 角色可见性 | [`../design/console-sidebar-menu-tree.md`](../design/console-sidebar-menu-tree.md) |
 | Console-API 读写分离 | [`../runbook/read-replica.md`](../runbook/read-replica.md) |
-| Console-API 历史 gap 快照 | [`../design/api-gap-analysis.md`](../design/api-gap-analysis.md)；当前契约以本目录 OpenAPI 为准 |
+| Console-API 历史 gap 快照 | [`api-gap-analysis-2026-04-10.md`](../archive/audit/api-gap-analysis-2026-04-10.md)；当前契约以本目录 OpenAPI 为准 |

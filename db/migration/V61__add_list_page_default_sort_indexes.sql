@@ -9,6 +9,7 @@
 -- =========================================================
 
 -- ---- 默认按 id DESC（7 张定义/配置表） ----
+
 CREATE INDEX IF NOT EXISTS idx_job_definition_tenant_id_desc
     ON batch.job_definition (tenant_id, id DESC);
 
@@ -32,9 +33,11 @@ CREATE INDEX IF NOT EXISTS idx_tenant_quota_tenant_id_desc
 
 -- ---- 自定义排序列的两张表 ----
 -- workflow_definition：按 workflow_code、version 降序、id 降序排列
+
 CREATE INDEX IF NOT EXISTS idx_workflow_definition_tenant_code_version
     ON batch.workflow_definition (tenant_id, workflow_code, version DESC, id DESC);
 
 -- file_template_config：按 template_code 升序、version 降序排列
+
 CREATE INDEX IF NOT EXISTS idx_file_template_tenant_code_version
     ON batch.file_template_config (tenant_id, template_code, version DESC);

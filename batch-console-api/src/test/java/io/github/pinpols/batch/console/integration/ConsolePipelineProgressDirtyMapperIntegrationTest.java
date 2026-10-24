@@ -38,8 +38,10 @@ class ConsolePipelineProgressDirtyMapperIntegrationTest extends AbstractIntegrat
   void shouldSelectLatestProgressPerInstance_whenJoiningAcrossTenants() {
     String tenantA = unique("tenant-a");
     String tenantB = unique("tenant-b");
-    Long relatedJobInstanceId =
-        jdbcTemplate.queryForObject("select nextval('batch.job_instance_id_seq')", Long.class);
+    String nextJobInstanceIdSql = """
+        select nextval('batch.job_instance_id_seq')
+    """;
+    Long relatedJobInstanceId = jdbcTemplate.queryForObject(nextJobInstanceIdSql, Long.class);
     long pipelineA = insertPipelineInstance(tenantA, relatedJobInstanceId);
     long pipelineB = insertPipelineInstance(tenantB, null);
     Instant since = Instant.now().minus(1, ChronoUnit.HOURS);
@@ -69,29 +71,27 @@ class ConsolePipelineProgressDirtyMapperIntegrationTest extends AbstractIntegrat
 
   private long insertPipelineInstance(String tenantId, Long relatedJobInstanceId) {
     String jobCode = unique("job");
-    Long definitionId = jdbcTemplate.queryForObject("""
-            insert into batch.pipeline_definition(
-              tenant_id, job_code, pipeline_name, pipeline_type
-            ) values (?, ?, 'Dirty Progress Test', 'IMPORT')
-            returning id
-            """, Long.class, tenantId, jobCode);
-    return jdbcTemplate.queryForObject(
-        """
+    String insertPipelineInstanceSql = """
         insert into batch.pipeline_instance(
-          tenant_id, pipeline_definition_id, job_code, pipeline_type,
+          tenant_id, system_pipeline_code, system_pipeline_version, job_code, pipeline_type,
           related_job_instance_id, run_status
-        ) values (?, ?, ?, 'IMPORT', ?, 'RUNNING')
+        ) values (?, 'IMPORT', 1, ?, 'IMPORT', ?, 'RUNNING')
         returning id
-        """, Long.class, tenantId, definitionId, jobCode, relatedJobInstanceId);
+        """;
+    return jdbcTemplate.queryForObject(
+        insertPipelineInstanceSql, Long.class, tenantId, jobCode, relatedJobInstanceId);
   }
 
   private void insertProgress(
       String tenantId, long pipelineInstanceId, String stage, Instant updatedAt) {
-    jdbcTemplate.update("""
-        insert into batch.pipeline_progress(
-          tenant_id, pipeline_instance_id, stage, processed_count, updated_at
-        ) values (?, ?, ?, 1, ?)
-        """, tenantId, pipelineInstanceId, stage, Timestamp.from(updatedAt));
+    final String insertPipelineProgressSql = """
+    insert into batch.pipeline_progress(
+    tenant_id, pipeline_instance_id, stage, processed_count, updated_at
+    ) values (?, ?, ?, 1, ?)
+    """;
+    Timestamp persistedUpdatedAt = Timestamp.from(updatedAt);
+    jdbcTemplate.update(
+        insertPipelineProgressSql, tenantId, pipelineInstanceId, stage, persistedUpdatedAt);
   }
 
   private static String unique(String prefix) {

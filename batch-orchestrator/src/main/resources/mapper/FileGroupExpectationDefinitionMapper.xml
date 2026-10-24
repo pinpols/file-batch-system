@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.FileGroupExpectationDefinitionMapper">
+    <resultMap id="DefinitionResultMap" type="io.github.pinpols.batch.orchestrator.domain.query.FileGroupExpectationDefinition">
+        <constructor>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="calendar_code" javaType="java.lang.String"/>
+            <arg column="workflow_definition_id" javaType="java.lang.Long"/>
+            <arg column="file_group_code" javaType="java.lang.String"/>
+            <arg column="expected_local_time" javaType="java.time.LocalTime"/>
+            <arg column="due_local_time" javaType="java.time.LocalTime"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="upsert">
+        insert into batch.file_group_expectation_definition
+            (tenant_id, calendar_code, workflow_definition_id, file_group_code,
+             expected_local_time, due_local_time, enabled)
+        values
+            (#{tenantId}, #{calendarCode}, #{workflowDefinitionId}, #{fileGroupCode},
+             #{expectedLocalTime}, #{dueLocalTime}, #{enabled})
+        on conflict (tenant_id, calendar_code, workflow_definition_id, file_group_code)
+        do update set workflow_definition_id = excluded.workflow_definition_id,
+                      expected_local_time = excluded.expected_local_time,
+                      due_local_time = excluded.due_local_time,
+                      enabled = excluded.enabled,
+                      updated_at = CURRENT_TIMESTAMP
+    </insert>
+
+    <delete id="delete">
+        delete from batch.file_group_expectation_definition
+         where tenant_id = #{tenantId}
+           and calendar_code = #{calendarCode}
+           and workflow_definition_id = #{workflowDefinitionId}
+           and file_group_code = #{fileGroupCode}
+    </delete>
+
+    <select id="selectEnabledByCalendar" resultMap="DefinitionResultMap">
+        select expectation.tenant_id, expectation.calendar_code,
+               expectation.workflow_definition_id, expectation.file_group_code,
+               expectation.expected_local_time, expectation.due_local_time
+          from batch.file_group_expectation_definition expectation
+          join batch.workflow_definition workflow
+            on workflow.tenant_id = expectation.tenant_id
+           and workflow.id = expectation.workflow_definition_id
+         where expectation.tenant_id = #{tenantId}
+           and expectation.calendar_code = #{calendarCode}
+           and expectation.enabled = true
+           and workflow.enabled = true
+         order by expectation.file_group_code, expectation.workflow_definition_id
+    </select>
+</mapper>

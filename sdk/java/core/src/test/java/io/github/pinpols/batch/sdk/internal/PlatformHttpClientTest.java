@@ -24,6 +24,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -172,6 +173,53 @@ class PlatformHttpClientTest {
     newClient().claim(42L, "idem-xyz", Map.of("workerCode", "w-1"));
 
     assertThat(seenIdem.get()).isEqualTo("idem-xyz");
+  }
+
+  @Test
+  @DisplayName("CLAIM 回包解析依赖版本引用的日期时间字段")
+  void shouldDeserializeDependencyResultSnapshotFromClaimResponse() throws Exception {
+    server.createContext("/internal/tasks/42/claim", ex -> {
+      byte[] body = """
+          {"partitionInvocationId":"inv-4",
+           "payload":"{\\"crossDay\\":{\\"prior_day\\":{\\"resultVersionId\\":9876}}}",
+           "dependencyResultSnapshot":[{
+            "upstreamJobCode":"UPSTREAM_JOB","bizDateAlignment":"PREVIOUS_BIZ_DAY",
+            "upstreamBizDate":"2026-04-30","businessKey":"job:UPSTREAM_JOB:2026-04-30",
+            "versionNo":4,"resultVersionId":9001,"sourceJobInstanceId":8001,
+            "effectiveAt":"2026-05-01T00:00:00Z"}]}
+          """.getBytes(StandardCharsets.UTF_8);
+      ex.sendResponseHeaders(200, body.length);
+      ex.getResponseBody().write(body);
+      ex.close();
+    });
+
+    PlatformHttpClient.TaskClaimResponse response =
+        newClient().claim(42L, "idem-claim", Map.of("workerId", "w-1"));
+
+    assertThat(response.partitionInvocationId()).isEqualTo("inv-4");
+    assertThat(response.payload())
+        .isEqualTo("{\"crossDay\":{\"prior_day\":{\"resultVersionId\":9876}}}");
+    assertThat(response.dependencyResultSnapshot()).hasSize(1);
+    assertThat(response.dependencyResultSnapshot().getFirst().upstreamBizDate())
+        .isEqualTo(LocalDate.parse("2026-04-30"));
+    assertThat(response.dependencyResultSnapshot().getFirst().effectiveAt())
+        .isEqualTo(Instant.parse("2026-05-01T00:00:00Z"));
+  }
+
+  @Test
+  @DisplayName("旧平台未返回依赖结果字段时使用空列表")
+  void shouldDefaultDependencyResultSnapshotWhenClaimResponseIsLegacy() throws Exception {
+    server.createContext("/internal/tasks/42/claim", ex -> {
+      byte[] body = "{\"partitionInvocationId\":\"inv-old\"}".getBytes(StandardCharsets.UTF_8);
+      ex.sendResponseHeaders(200, body.length);
+      ex.getResponseBody().write(body);
+      ex.close();
+    });
+
+    PlatformHttpClient.TaskClaimResponse response =
+        newClient().claim(42L, "idem-legacy", Map.of("workerId", "w-1"));
+
+    assertThat(response.dependencyResultSnapshot()).isEmpty();
   }
 
   @Test

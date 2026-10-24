@@ -1,11 +1,13 @@
 # 运维 Runbook 索引
 
 - [Compose CD → Kubernetes GitOps 路线](./compose-cd-roadmap.md)：前后端统一 release set、immutable digest、staging 自动部署、production 审批、失败回滚与 GitOps 验收边界。
+- [GitOps 接入手册](gitops-onboarding.md)：外部 ops 仓、Argo CD 与集群接入步骤及验收边界。
+- [上线审计检查清单](../standards/go-live-audit-checklist.md)：审核方法与判据；实际结果以带日期审计报告记录。
 - [GitOps ops 仓模板](../../deploy/gitops/ops-repo-template/README.md)：外部 ops 仓结构、Argo CD staging Application 与 digest values promotion。
 
 部署、监控、灰度、应急、巡检五类 SOP。每份都按线上事件可直接执行的标准维护。
 
-> **应急入口**:发生线上故障时,先看 [04 incident-response.md](./incident-response.md) → [05 troubleshooting-decision-tree.md](./troubleshooting-decision-tree.md)。
+> **应急入口**:发生线上故障时,先看 [incident-response.md](./incident-response.md) → [troubleshooting-decision-tree.md](./troubleshooting-decision-tree.md)。
 
 ## 文件清单（编号按"用得最频繁→最少见"排序）
 
@@ -37,7 +39,7 @@
 | 11 | [ha-elastic-scaling.md](./ha-elastic-scaling.md) | 水平 HA + 弹性缩容兼容性手册（必看部署前 checklist）|
 | 12 | [pg-table-partitioning.md](./pg-table-partitioning.md) | PG 表分区运维（job_instance / outbox 等大表） |
 | 13 | [read-replica.md](./read-replica.md) | Console-API 读写分离（PG streaming replication） |
-| 14 | [minio-lifecycle-policy.md](./minio-lifecycle-policy.md) | MinIO 桶生命周期策略（自动清理） |
+| 14 | [object-storage-lifecycle-policy.md](object-storage-lifecycle-policy.md) | MinIO 桶生命周期策略（自动清理） |
 | 15 | [backup-and-pitr.md](./backup-and-pitr.md) | **PG 备份 / PITR / 容量护栏**（上线前必做:base+WAL+逻辑导出、恢复演练、磁盘告警） |
 | 15a | [dedup-ledger-retention.md](./dedup-ledger-retention.md) | 幂等 dedup ledger 留存治理（outbox/instance 双台账无自动清理,季度归档 SOP + 清理 SQL） |
 | 15b | [production-capacity-governance.md](./production-capacity-governance.md) | 生产容量与存储增长治理（PG 热表 / Kafka retention / 对象存储 lifecycle / 文件通道 / 状态后端 / Quartz / 观测 / 压测边界） |
@@ -64,7 +66,7 @@
 | 18 | [observability-stack.md](./observability-stack.md) | 一站式观测部署 + 排障 SOP（Prometheus / Loki / Tempo / OTel）|
 | 18a | [slo-sli-catalog.md](./slo-sli-catalog.md) | 批量调度 SLO / SLI 与可用性、事件、批量作业三类告警覆盖矩阵 |
 | 19 | [quartz-capacity-baseline.md](./quartz-capacity-baseline.md) | Quartz 容量基线压测（识别容量拐点）|
-| 20 | [worker-stage-coverage.md](./worker-stage-coverage.md) | 三类 Worker 全 Stage 真实覆盖端到端验证 |
+| 20 | [backend-sim-reliability.md](../testing/backend-sim-reliability.md) | 后端 Sim 可靠性场景组、运行入口与验证分层 |
 | 21 | [security-scan.md](./security-scan.md) | 本地扫描与 GitHub 告警分类、修复、误报和合并后收尾 |
 | 22 | [ci.md](./ci.md) | CI 流水线说明（pr-gate / full-ci-gate + 触发时机 + 超时）|
 | 23 | [console-login-encryption.md](./console-login-encryption.md) | Console 登录请求体 RSA+AES 加密 + 密钥轮换 SOP |
@@ -86,12 +88,14 @@
 | 多租户与数据 | [RLS](./multi-tenant-rls.md)、[RLS 严格灰度](./multi-tenant-rls-strict-rollout.md)、[biz 路由](./biz-tenant-routing.md)、[PG session](./pg-session-tuning.md)、[分区运维](./pg-table-partitioning.md) |
 | Worker 与恢复 | [重任务容量与资源池](./heavy-workload-operations.md)、[Atomic 隔离](./atomic-worker-production-isolation.md)、[Worker 扩缩容边界](./k8s-worker-scaling-boundary.md)、[checkpoint](./platform-worker-checkpoint-howto.md)、[Dispatch 模板](./dispatch-adapter-template.md) |
 | 文件与对象存储 | [Filesystem](./object-storage-filesystem.md)、[S3 后端](./object-storage-s3-backends.md)、[文件完整性与恢复](../design/file-integrity-recovery.md)、[控制总数对账](./control-total-reconciliation-howto.md) |
-| 安全与权限 | [密码安全](./password-security-backlog.md)、[角色治理](./role-redesign-config-admin-audit.md)、[租户 Worker 接入](./per-tenant-worker-onboarding.md) |
-| 观测与韧性 | [SLO / SLI 目录](./slo-sli-catalog.md)、[分布式追踪](./distributed-tracing.md)、[锁检查](./distributed-locking-checklist.md)、[维护模式](./maintenance-mode.md)、[降级](./downstream-degradation.md)、[告警升级](./alert-escalation.md)、[OpenLineage](./openlineage-lineage.md)、[本地日志](./local-log-layout.md) |
-| 测试与 CI | [BE 验收](./be-acceptance.md)、[E2E 分层](./e2e-tier-strategy.md)、[后端 Sim 可靠性场景组](../testing/backend-sim-reliability.md)、[种子校验](./seed-validation.md)、[CI 加速](./ci-speedup-2026-06-02.md)、[取证回放](./forensic-replay-howto.md) |
+| 安全与权限 | [密码安全](../archive/plans/password-security-backlog-2026-05-23.md)、[角色治理](./role-redesign-config-admin-audit.md)、[租户 Worker 接入](./per-tenant-worker-onboarding.md) |
+| 观测与韧性 | [SLO / SLI 目录](./slo-sli-catalog.md)、[分布式追踪](./distributed-tracing.md)、[锁检查](./distributed-locking-checklist.md)、[维护模式](./maintenance-mode.md)、[降级](./downstream-degradation.md)、[告警升级](./alert-escalation.md)、[Job 与 Workflow 终态通知](workflow-terminal-notifications.md)、[OpenLineage](./openlineage-lineage.md)、[本地日志](./local-log-layout.md) |
+| 测试与 CI | [BE 验收](./be-acceptance.md)、[E2E 分层](./e2e-tier-strategy.md)、[后端 Sim 可靠性场景组](../testing/backend-sim-reliability.md)、[种子校验](./seed-validation.md)、[CI 门禁耗时分析](../verifications/ci-gate-runtime-optimization-2026-10-07.md)、[取证回放](./forensic-replay-howto.md) |
 | SDK 发布 | [双轨灰度](./sdk-dual-rollout.md)、[SDK 发布](./sdk-release.md)、[Python 发布](./sdk-python-release.md) |
 | 故障剧本 | [Playbooks 索引](./playbooks/README.md) |
 | CI 专项 | [CI Runbook 索引](./ci/README.md)；[前后端 CI 定时治理](./ci-schedule-governance.md) |
+
+已废止的异步 launch 灰度流程仅保留[迁移提示](trigger-async-launch-rollout.md)和[历史存档](../archive/runbook/trigger-async-launch-rollout-2026-05-02.md)，不得作为当前操作依据。
 
 ## 补充与历史专题
 
@@ -99,7 +103,7 @@
 |---|---|
 | 环境接入 | [首租户配置](./first-tenant-config-quickstart.md)、[移动端隧道](./mobile-frontend-tunnel.md)、[跨主机 SSH 隧道](./ssh-tunnel-cross-host.md)、[IPv6 兼容](./ipv6-runtime-compatibility.md) |
 | 运行控制 | [维护模式](./maintenance-mode.md)、[实例暂停恢复](./instance-pause-resume.md) |
-| 历史治理记录 | [索引治理](./archive/index-consolidation-2026-05.md)、[分区 cutover](./archive/partition-cutover-2026-05.md)、[SQL 审计](./sql-audit-2026-05-20.md)、[E2E/IT 优化](./e2e-it-optimization-2026-05-22.md)、[TIA POC](./tia-poc-2026-05-22.md)、[CI/CD 后续（历史）](./ci-cd-followup-2026-05-22.md)、[GitOps 接入](./gitops-onboarding-2026-05-22.md)、[上线真实性审计](./go-live-realism-audit-2026-06-21.md) |
+| 历史治理记录 | [索引治理](../archive/runbook/index-consolidation-2026-05-21.md)、[分区 cutover](../archive/runbook/partition-cutover-2026-05-21.md)、[SQL 审计](../archive/audit/sql-audit-2026-05-20.md)、[E2E/IT 优化](../archive/verifications/e2e-it-optimization-2026-05-22.md)、[TIA POC](../archive/verifications/tia-poc-2026-05-22.md)、[CI/CD 后续](../archive/plans/ci-cd-followup-2026-05-22.md)、[上线真实性审计报告](../audit/go-live-realism-audit-2026-06-21.md) |
 
 ## 角色路径
 
@@ -109,7 +113,7 @@
 | 上 staging | 05 → 06 → 11 → 18 |
 | 上 prod | 25（凭据矩阵:逐行核对必配 + prod fail-fast 项）→ 11（部署前 checklist） → 10 → 18 → 02 |
 | 故障处理（长期停滞 / 数据异常） | 02 → 03 → 04 |
-| 容量评估 / 上量 | [`../architecture/scalability-assessment.md`](../architecture/scalability-assessment.md) → 11 → 12 → 13 → 15b |
+| 容量评估 / 上量 | [生产容量治理](production-capacity-governance.md) → 11 → 12 → 13 → 15b |
 
 ## 与其他子目录的分工
 
@@ -118,5 +122,11 @@
 | `runbook/`（本目录） | 运维向 / 可执行 SOP |
 | [`../architecture/`](../architecture/README.md) | 工程向 / 设计原理 |
 | [`../testing/release-gate.md`](../testing/release-gate.md) | release 前的 CI 门禁清单（与上线 SOP 互补）|
-| [`../analysis/`](../analysis/README.md) | 问题分析 / 硬化 backlog |
+| [`../analysis/`](../plans/README.md) | 问题分析 / 硬化 backlog |
 - [CI 变更范围契约](change-scope-contract.md)：按变更域复用 CI 探测结果，避免各 workflow 重复维护路径规则。
+
+## 脚本运行环境
+
+| 文档 | 职责 |
+|---|---|
+| [script-runtime-compatibility-matrix.md](script-runtime-compatibility-matrix.md) | 测试与运维脚本运行环境兼容矩阵 |

@@ -51,8 +51,9 @@ public class JobInstanceTerminalChildStateReconciler {
       return null;
     }
     return switch (st) {
-      case SUCCESS -> new Targets(PartitionStatus.SUCCESS.code(), TaskStatus.SUCCESS.code());
-      case FAILED, PARTIAL_FAILED ->
+      case SUCCESS, SUCCESS_DRY_RUN ->
+        new Targets(PartitionStatus.SUCCESS.code(), TaskStatus.SUCCESS.code());
+      case FAILED, FAILED_DRY_RUN, PARTIAL_FAILED ->
         new Targets(PartitionStatus.FAILED.code(), TaskStatus.FAILED.code());
       case CANCELLED -> new Targets(PartitionStatus.CANCELLED.code(), TaskStatus.CANCELLED.code());
       case TERMINATED ->

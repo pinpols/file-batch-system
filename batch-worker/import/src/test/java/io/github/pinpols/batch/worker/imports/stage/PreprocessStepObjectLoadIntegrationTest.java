@@ -14,12 +14,14 @@ import io.github.pinpols.batch.testing.MinioObjectStoreContainer;
 import io.github.pinpols.batch.testing.TestObjectStoreContainers;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileTemplateRepository;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HashMap;
 import java.util.HexFormat;
@@ -90,8 +92,7 @@ class PreprocessStepObjectLoadIntegrationTest {
     BatchSecurityProperties security = new BatchSecurityProperties();
     security.setBypassMode(bypassMode); // 默认跳过解密；摘要场景启用正式校验路径
     PlatformFileRecordRepository runtimeRepo = mock(PlatformFileRecordRepository.class);
-    PlatformPipelineDefinitionRepository pipelineDefinitions =
-        mock(PlatformPipelineDefinitionRepository.class);
+    PlatformFileTemplateRepository pipelineDefinitions = mock(PlatformFileTemplateRepository.class);
     when(pipelineDefinitions.loadLatestTemplateConfig(any(), any(), any())).thenReturn(Map.of());
     BatchObjectCryptoService cryptoService = mock(BatchObjectCryptoService.class);
     when(cryptoService.decrypt(any(byte[].class)))
@@ -283,11 +284,11 @@ class PreprocessStepObjectLoadIntegrationTest {
     assertThat(context.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD))
         .as("PREPROCESS should NOT materialize normalizedPayload for large object")
         .isNull();
-    java.nio.file.Path spool = java.nio.file.Path.of(spoolPath.toString());
-    assertThat(java.nio.file.Files.size(spool))
+    Path spool = Path.of(spoolPath.toString());
+    assertThat(Files.size(spool))
         .as("spool file should hold the streamed object bytes")
         .isEqualTo(sb.toString().getBytes(StandardCharsets.UTF_8).length);
     assertThat(context.getAttributes()).doesNotContainKey(PipelineRuntimeKeys.PARTITION_PRESLICED);
-    java.nio.file.Files.deleteIfExists(spool);
+    Files.deleteIfExists(spool);
   }
 }

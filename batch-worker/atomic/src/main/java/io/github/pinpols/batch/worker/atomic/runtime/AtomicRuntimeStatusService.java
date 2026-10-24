@@ -40,13 +40,14 @@ public class AtomicRuntimeStatusService {
   private final ObjectProvider<DataSource> dataSourceProvider;
 
   public AtomicRuntimeStatus snapshot() {
+    String workerCode = workerConfiguration.workerCode();
+    String workerType = workerConfiguration.workerType();
+    ShellStatus shellStatus = shellStatus();
+    SqlStatus sqlStatus = sqlStatus();
+    HttpStatus httpStatus = httpStatus();
+    StoredProcStatus storedProcStatus = storedProcStatus();
     return new AtomicRuntimeStatus(
-        workerConfiguration.workerCode(),
-        workerConfiguration.workerType(),
-        shellStatus(),
-        sqlStatus(),
-        httpStatus(),
-        storedProcStatus());
+        workerCode, workerType, shellStatus, sqlStatus, httpStatus, storedProcStatus);
   }
 
   private ShellStatus shellStatus() {
@@ -54,13 +55,15 @@ public class AtomicRuntimeStatusService {
     if (p == null) {
       return new ShellStatus(false, 0);
     }
-    return new ShellStatus(p.isEnabled(), safeSize(p.getCommandWhitelist()));
+    int commandWhitelistSize = safeSize(p.getCommandWhitelist());
+    return new ShellStatus(p.isEnabled(), commandWhitelistSize);
   }
 
   private SqlStatus sqlStatus() {
     SqlExecutorProperties p = sqlProps.getIfAvailable();
     boolean enabled = p != null && p.isEnabled();
-    return new SqlStatus(enabled, enabled ? detectDialect() : "n/a");
+    String dialect = enabled ? detectDialect() : "n/a";
+    return new SqlStatus(enabled, dialect);
   }
 
   private HttpStatus httpStatus() {
@@ -77,8 +80,8 @@ public class AtomicRuntimeStatusService {
     } else {
       source = "dev-default";
     }
-    return new HttpStatus(
-        p.isEnabled(), p.isEnforceAllowlist(), source, safeSize(p.getAllowedHostPatterns()));
+    int allowedHostPatternCount = safeSize(p.getAllowedHostPatterns());
+    return new HttpStatus(p.isEnabled(), p.isEnforceAllowlist(), source, allowedHostPatternCount);
   }
 
   private StoredProcStatus storedProcStatus() {
@@ -86,7 +89,8 @@ public class AtomicRuntimeStatusService {
     if (p == null) {
       return new StoredProcStatus(false, 0);
     }
-    return new StoredProcStatus(p.isEnabled(), safeSize(p.getAllowedSchemas()));
+    int allowedSchemaCount = safeSize(p.getAllowedSchemas());
+    return new StoredProcStatus(p.isEnabled(), allowedSchemaCount);
   }
 
   private String detectDialect() {

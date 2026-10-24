@@ -176,7 +176,7 @@ GET /api/console/config/tenant-package/excel/scenario-template?scenarios=IMPORT&
 ## 5. 跑起来
 
 - **再查一次就绪**:`GET /api/console/tenants/acme/readiness`,`ready:true` 即可跑。
-- **触发导入**:把文件放进对象存储的 **`ingress/<tenantId>/` 前缀**(如 `ingress/acme/customer-20260601.csv`),导入扫描器自动登记并触发 pipeline(IMPORT→PARSE→VALIDATE→LOAD)。无需手工调接口。
+- **触发导入**:把文件放进对象存储的 **`ingress/<tenantId>/` 前缀**(如 `ingress/acme/customer-20260601.csv`),启用扫描器并满足稳定性/完成标记条件后，扫描器只登记 `file_record`；还需配置匹配的 Workflow 触发或到达入口，由 Trigger/Orchestrator 调度 IMPORT Job。其固定阶段为 RECEIVE→PREPROCESS→PARSE→VALIDATE→LOAD→FEEDBACK。
 - **触发导出 / Job**:经触发器 / 调度跑(详见 `docs/runbook/` 触发相关 + `system-flow-overview.md`)。
 
 ---

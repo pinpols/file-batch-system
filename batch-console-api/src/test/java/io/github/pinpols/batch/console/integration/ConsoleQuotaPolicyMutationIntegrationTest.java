@@ -49,15 +49,19 @@ class ConsoleQuotaPolicyMutationIntegrationTest extends AbstractMutationIntegrat
         .expectStatus()
         .isOk();
 
-    var row = jdbcTemplate.queryForMap(
-        "SELECT tenant_id, policy_code, max_running_jobs_per_tenant"
-            + " FROM batch.tenant_quota_policy WHERE policy_code = ?",
-        code);
+    String quotaPolicySnapshotSql = """
+        select tenant_id, policy_code, max_running_jobs_per_tenant
+        from batch.tenant_quota_policy where policy_code = ?
+        """;
+    var row = jdbcTemplate.queryForMap(quotaPolicySnapshotSql, code);
     assertThat(row).containsEntry("tenant_id", "int-qp-ta");
     assertThat(row).containsEntry("policy_code", code);
     assertThat(((Number) row.get("max_running_jobs_per_tenant")).intValue()).isEqualTo(10);
 
-    jdbcTemplate.update("DELETE FROM batch.tenant_quota_policy WHERE policy_code = ?", code);
+    String deleteQuotaPolicySql = """
+        delete from batch.tenant_quota_policy where policy_code = ?
+    """;
+    jdbcTemplate.update(deleteQuotaPolicySql, code);
   }
 
   @Test
@@ -129,6 +133,9 @@ class ConsoleQuotaPolicyMutationIntegrationTest extends AbstractMutationIntegrat
         .expectStatus()
         .value(s -> assertThat(s).isIn(400, 409, 500));
 
-    jdbcTemplate.update("DELETE FROM batch.tenant_quota_policy WHERE policy_code = ?", code);
+    String deleteQuotaPolicySql = """
+        delete from batch.tenant_quota_policy where policy_code = ?
+    """;
+    jdbcTemplate.update(deleteQuotaPolicySql, code);
   }
 }

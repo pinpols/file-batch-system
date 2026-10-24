@@ -5,8 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
+import io.github.pinpols.batch.worker.core.support.FrozenFileTemplateResolver;
 import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import java.util.LinkedHashMap;
@@ -30,7 +30,7 @@ class ReceiveStepBundleEnrichTest {
   private PlatformFileRecordRepository runtimeRepository;
 
   @Mock
-  private PlatformPipelineDefinitionRepository pipelineDefinitions;
+  private FrozenFileTemplateResolver templateResolver;
 
   @Mock
   private PlatformPipelineRunRepository pipelineRuns;
@@ -44,7 +44,7 @@ class ReceiveStepBundleEnrichTest {
   void setUp() {
     receiveStep = new ReceiveStep(
         runtimeRepository,
-        pipelineDefinitions,
+        templateResolver,
         pipelineRuns,
         batchSecurityProperties,
         new ObjectMapper(),

@@ -1,22 +1,27 @@
 package io.github.pinpols.batch.orchestrator.application.archive;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.archive.SuccessInstanceArchiveService.ArchiveBatchResult;
 import io.github.pinpols.batch.orchestrator.config.SuccessInstanceArchiveProperties;
+import io.github.pinpols.batch.orchestrator.domain.view.ArchiveIntegrityCandidateSummary;
 import io.github.pinpols.batch.orchestrator.mapper.SuccessInstanceArchiveMapper;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
 
@@ -25,13 +30,16 @@ class SuccessInstanceArchiveServiceTest {
 
   private SuccessInstanceArchiveMapper mapper;
   private SuccessInstanceArchiveProperties props;
+  private ArchiveIntegrityAlertService integrityAlertService;
   private SuccessInstanceArchiveService service;
 
   @BeforeEach
   void setUp() {
     mapper = mock(SuccessInstanceArchiveMapper.class);
     props = new SuccessInstanceArchiveProperties();
-    service = new SuccessInstanceArchiveService(mapper, props);
+    integrityAlertService = mock(ArchiveIntegrityAlertService.class);
+    when(mapper.selectInvalidArchiveReferenceSummaries(any(Instant.class))).thenReturn(List.of());
+    service = new SuccessInstanceArchiveService(mapper, props, integrityAlertService);
   }
 
   @Test
@@ -59,12 +67,44 @@ class SuccessInstanceArchiveServiceTest {
   }
 
   @Test
+  @DisplayName("检测到运行树引用归属错误时写入持久告警")
+  void shouldPersistAlertWhenInvalidArchiveReferenceExists() {
+    props.setEnabled(true);
+    List<ArchiveIntegrityCandidateSummary> issues =
+        List.of(new ArchiveIntegrityCandidateSummary("tenant-a", 2L, 42L));
+    when(mapper.selectInvalidArchiveReferenceSummaries(any(Instant.class))).thenReturn(issues);
+    when(mapper.selectArchivableInstanceIds(any(Instant.class), anyInt())).thenReturn(List.of());
+
+    service.archiveOnce();
+
+    verify(mapper).selectInvalidArchiveReferenceSummaries(any(Instant.class));
+    verify(integrityAlertService).emitSuccessInstanceArchiveIssues(any(Instant.class), eq(issues));
+    verify(mapper, never()).deleteJobInstancesByIds(any());
+  }
+
+  @Test
+  @DisplayName("调度轮引用诊断只运行一次,后续有界批次不重复扫描积压")
+  void shouldRunIntegrityDiagnosticOnceForMultipleArchiveBatches() {
+    props.setEnabled(true);
+    when(mapper.selectArchivableInstanceIds(any(Instant.class), anyInt())).thenReturn(List.of());
+
+    service.reportIntegrityIssues();
+    service.archiveNextBatch();
+    service.archiveNextBatch();
+
+    verify(mapper, times(1)).selectInvalidArchiveReferenceSummaries(any(Instant.class));
+    verify(mapper, times(2)).selectArchivableInstanceIds(any(Instant.class), anyInt());
+  }
+
+  @Test
   @DisplayName("有候选实例时先归档各冷表, 再按外键依赖顺序级联删除")
   void shouldArchiveColdTablesBeforeCascadeDelete_whenCandidatesExist() {
     props.setEnabled(true);
     props.setBatchSize(100);
     List<Long> ids = List.of(1L, 2L, 3L);
     when(mapper.selectArchivableInstanceIds(any(Instant.class), anyInt())).thenReturn(ids);
+    List<Long> pipelineIds = List.of(11L, 22L);
+    when(mapper.selectPipelineInstanceIdsForUpdate(ids)).thenReturn(pipelineIds);
     when(mapper.archiveJobInstancesByIds(ids)).thenReturn(3);
     when(mapper.deleteJobInstancesByIds(ids)).thenReturn(3);
 
@@ -74,11 +114,15 @@ class SuccessInstanceArchiveServiceTest {
     assertThat(result.instancesDeleted()).isEqualTo(3);
 
     InOrder order = Mockito.inOrder(mapper);
+    order.verify(mapper).selectPipelineInstanceIdsForUpdate(ids);
     order.verify(mapper).archiveJobInstancesByIds(ids);
     order.verify(mapper).archiveJobPartitionsByInstanceIds(ids);
     order.verify(mapper).archiveJobTasksByInstanceIds(ids);
     order.verify(mapper).archiveJobStepInstancesByInstanceIds(ids);
     order.verify(mapper).archivePipelineInstancesByInstanceIds(ids);
+    order.verify(mapper).selectPipelineProgressIdsForUpdate(pipelineIds);
+    order.verify(mapper).archivePipelineProgressByPipelineIds(pipelineIds);
+    order.verify(mapper).countPipelineCheckpointArchiveMismatches(pipelineIds);
     order.verify(mapper).archivePipelineStepRunsByInstanceIds(ids);
     order.verify(mapper).archiveFileRecordsByInstanceIds(ids);
     order.verify(mapper).archiveFileDispatchRecordsByInstanceIds(ids);
@@ -89,6 +133,7 @@ class SuccessInstanceArchiveServiceTest {
     // FK 依赖顺序：先孙节点（job_step_instance / pipeline_step_run），中间表，最后根（job_instance）
     order.verify(mapper).deleteJobStepInstancesByInstanceIds(ids);
     order.verify(mapper).deleteJobTasksByInstanceIds(ids);
+    order.verify(mapper).deletePipelineProgressByPipelineIds(pipelineIds);
     order.verify(mapper).deletePipelineStepRunsByInstanceIds(ids);
     order.verify(mapper).nullifyPipelineInstanceFileIdByInstanceIds(ids);
     order.verify(mapper).deleteFileDispatchRecordsByInstanceIds(ids);
@@ -101,6 +146,22 @@ class SuccessInstanceArchiveServiceTest {
     order.verify(mapper).deleteCompensationCommandsByInstanceIds(ids);
     order.verify(mapper).nullifyParentInstanceIdByParentIds(ids);
     order.verify(mapper).deleteJobInstancesByIds(ids);
+  }
+
+  @Test
+  @DisplayName("位点冷副本冲突时不删除热位点或父运行树")
+  void shouldRetainHotTreeWhenCheckpointCopyMismatches() {
+    List<Long> ids = List.of(1L);
+    List<Long> pipelineIds = List.of(11L);
+    when(mapper.selectArchivableInstanceIds(any(Instant.class), anyInt())).thenReturn(ids);
+    when(mapper.selectPipelineInstanceIdsForUpdate(ids)).thenReturn(pipelineIds);
+    when(mapper.countPipelineCheckpointArchiveMismatches(pipelineIds)).thenReturn(1L);
+
+    assertThatThrownBy(service::archiveOnce)
+        .hasMessageContaining("Pipeline checkpoint archive copy verification failed");
+    verify(mapper, never()).deletePipelineProgressByPipelineIds(any());
+    verify(mapper, never()).deletePipelineInstancesByInstanceIds(any());
+    verify(mapper, never()).deleteJobInstancesByIds(any());
   }
 
   @Test
@@ -125,8 +186,7 @@ class SuccessInstanceArchiveServiceTest {
 
     service.archiveOnce();
 
-    org.mockito.ArgumentCaptor<Instant> cutoffCaptor =
-        org.mockito.ArgumentCaptor.forClass(Instant.class);
+    ArgumentCaptor<Instant> cutoffCaptor = ArgumentCaptor.forClass(Instant.class);
     verify(mapper).selectArchivableInstanceIds(cutoffCaptor.capture(), anyInt());
     Instant cutoff = cutoffCaptor.getValue();
     Instant now = BatchDateTimeSupport.utcNow();

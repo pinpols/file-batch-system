@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.console.domain.ops.web;
 
+import java.util.Objects;
+import io.github.pinpols.batch.console.application.ops.command.ForensicExportCommand;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -25,6 +27,7 @@ import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleForensicExportResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.io.OutputStream;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,7 +55,7 @@ class ConsoleForensicControllerTest {
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     when(requestMetadataResolver.current())
-        .thenReturn(new io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata(
+        .thenReturn(new ConsoleRequestMetadata(
             "req-1", "trace-1", "t1", "authenticated-admin", "k1", "127.0.0.1"));
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
@@ -83,7 +86,7 @@ class ConsoleForensicControllerTest {
   @Test
   @DisplayName("导出透传:租户与请求参数提交编排层, 且请求人取自认证上下文")
   void shouldPassThroughToProxy_whenRequestingExport() throws Exception {
-    when(proxy.requestForensicExport(anyString(), any(), any(), any(), anyString(), anyString()))
+    when(proxy.requestForensicExport(org.mockito.ArgumentMatchers.argThat(command -> command != null && command.tenantId() != null && command.exportFormat() != null && command.requestedBy() != null)))
         .thenReturn(new ConsoleForensicExportResponse("fx-001", "READY", null, null, null, null));
     mockMvc
         .perform(post("/api/console/forensic/export")
@@ -96,8 +99,7 @@ class ConsoleForensicControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.exportId").value("fx-001"));
     verify(proxy)
-        .requestForensicExport(
-            eq("t1"), any(), any(), any(), eq("BUNDLE"), eq("authenticated-admin"));
+        .requestForensicExport(org.mockito.ArgumentMatchers.argThat(command -> command != null && Objects.equals(command.tenantId(), "t1") && Objects.equals(command.exportFormat(), "BUNDLE") && Objects.equals(command.requestedBy(), "authenticated-admin")));
   }
 
   @Test

@@ -12,11 +12,15 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelSchema.COL_START_GRACE_SEVERITY;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.config.JobMonitoringDefaultsProperties;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
@@ -29,13 +33,20 @@ import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
 import io.github.pinpols.batch.console.domain.job.param.JobMonitoringPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
-import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
-import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineStepDefinitionMapper;
+import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
+import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionVersionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
+import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionUpsertParam;
+import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionVersionInsertParam;
+import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionVersionUpdateParam;
+import io.github.pinpols.batch.console.domain.workflow.query.WorkflowEdgeQuery;
+import io.github.pinpols.batch.console.domain.workflow.query.WorkflowNodeQuery;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.PackageValidationResult;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.SheetResult;
+import io.github.pinpols.batch.console.infrastructure.workflow.DefaultSingleJobWorkflowProvisioner;
+import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionWriteSupport;
 import java.time.LocalTime;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -57,16 +68,24 @@ class TenantConfigPackageExcelMonitoringPolicyApplyTest {
   private final FileTemplateConfigMapper fileTemplateConfigMapper =
       mock(FileTemplateConfigMapper.class);
   private final JobDefinitionMapper jobDefinitionMapper = mock(JobDefinitionMapper.class);
-  private final PipelineDefinitionMapper pipelineDefinitionMapper =
-      mock(PipelineDefinitionMapper.class);
-  private final PipelineStepDefinitionMapper pipelineStepDefinitionMapper =
-      mock(PipelineStepDefinitionMapper.class);
   private final WorkflowDefinitionMapper workflowDefinitionMapper =
       mock(WorkflowDefinitionMapper.class);
   private final WorkflowNodeMapper workflowNodeMapper = mock(WorkflowNodeMapper.class);
   private final WorkflowEdgeMapper workflowEdgeMapper = mock(WorkflowEdgeMapper.class);
+  private final WorkflowDefinitionVersionMapper workflowVersionMapper =
+      mock(WorkflowDefinitionVersionMapper.class);
+  private final WorkflowDefinitionWriteSupport workflowWriteSupport =
+      new WorkflowDefinitionWriteSupport(
+          workflowNodeMapper,
+          workflowEdgeMapper,
+          workflowVersionMapper,
+          JsonUtils.newDefaultMapper());
+  private final DefaultSingleJobWorkflowProvisioner singleJobWorkflowProvisioner =
+      mock(DefaultSingleJobWorkflowProvisioner.class);
   private final JobMonitoringDefaultsProperties monitoringDefaults =
       new JobMonitoringDefaultsProperties();
+  private final ConsoleConfigCacheInvalidationService cacheInvalidationService =
+      mock(ConsoleConfigCacheInvalidationService.class);
 
   private TenantConfigPackageExcelApplyService service;
 
@@ -82,12 +101,13 @@ class TenantConfigPackageExcelMonitoringPolicyApplyTest {
         fileChannelConfigMapper,
         fileTemplateConfigMapper,
         jobDefinitionMapper,
+        singleJobWorkflowProvisioner,
         monitoringDefaults,
-        pipelineDefinitionMapper,
-        pipelineStepDefinitionMapper,
         workflowDefinitionMapper,
         workflowNodeMapper,
-        workflowEdgeMapper);
+        workflowEdgeMapper,
+        workflowWriteSupport,
+        cacheInvalidationService);
   }
 
   @Test
@@ -113,6 +133,173 @@ class TenantConfigPackageExcelMonitoringPolicyApplyTest {
     assertThat(policy.getCompletionDeadlineLocalTime()).isEqualTo(LocalTime.of(23, 45));
     assertThat(policy.getCompletionDeadlineDayOffset()).isEqualTo(1);
     assertThat(policy.getCompletionDeadlineSeverity()).isEqualTo("WARN");
+  }
+
+  @Test
+  @DisplayName("工作流 Excel 导入按目标租户作业编码恢复关联并迁移调度配置")
+  void shouldImportWorkflowAssociationAndSchedule() {
+    when(workflowNodeMapper.selectByQuery(any(WorkflowNodeQuery.class))).thenReturn(List.of());
+    when(workflowEdgeMapper.selectByQuery(any(WorkflowEdgeQuery.class))).thenReturn(List.of());
+    JobDefinitionEntity job = new JobDefinitionEntity();
+    job.setId(81L);
+    job.setJobCode("JOB_DAILY");
+    when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_DAILY")).thenReturn(job);
+    WorkflowDefinitionEntity created = new WorkflowDefinitionEntity();
+    created.setId(92L);
+    created.setWorkflowCode("WF_JOB_DAILY");
+    created.setVersion(1);
+    when(workflowDefinitionMapper.selectByUniqueKey("tenant-a", "WF_JOB_DAILY", 1))
+        .thenReturn(null, created);
+    Map<String, String> workflowRow = Map.ofEntries(
+        Map.entry("workflow_code", "WF_JOB_DAILY"),
+        Map.entry("workflow_name", "Daily workflow"),
+        Map.entry("workflow_type", "DAG"),
+        Map.entry("version", "1"),
+        Map.entry("single_job_code", "JOB_DAILY"),
+        Map.entry("schedule_enabled", "true"),
+        Map.entry("schedule_type", "CRON"),
+        Map.entry("schedule_expr", "0 0 2 * * ?"),
+        Map.entry("timezone", "Asia/Shanghai"),
+        Map.entry("trigger_mode", "SCHEDULED"),
+        Map.entry("calendar_code", "CN_WORKDAY"),
+        Map.entry("depends_on_job_code", "JOB_PREVIOUS"));
+    SheetResult empty = new SheetResult("empty", 0, List.of(), List.of());
+    SheetResult workflows =
+        new SheetResult("workflow_definition", 1, List.of(workflowRow), List.of());
+    service.applyAll(
+        new PackageValidationResult(
+            empty, empty, empty, empty, empty, empty, empty, empty, empty, workflows, empty, empty,
+            List.of()),
+        context());
+
+    ArgumentCaptor<WorkflowDefinitionUpsertParam> captor =
+        ArgumentCaptor.forClass(WorkflowDefinitionUpsertParam.class);
+    verify(workflowDefinitionMapper).upsertWorkflowDefinition(captor.capture());
+    var saved = captor.getValue();
+    assertThat(saved.getSingleJobDefinitionId()).isEqualTo(81L);
+    assertThat(saved.getScheduleEnabled()).isTrue();
+    assertThat(saved.getScheduleType()).isEqualTo("CRON");
+    assertThat(saved.getScheduleExpr()).isEqualTo("0 0 2 * * ?");
+    assertThat(saved.getTimezone()).isEqualTo("Asia/Shanghai");
+    assertThat(saved.getTriggerMode()).isEqualTo("SCHEDULED");
+    assertThat(saved.getCalendarCode()).isEqualTo("cn_workday");
+    assertThat(saved.getDependsOnJobCode()).isEqualTo("JOB_PREVIOUS");
+    ArgumentCaptor<WorkflowDefinitionVersionInsertParam> versionCaptor =
+        ArgumentCaptor.forClass(WorkflowDefinitionVersionInsertParam.class);
+    verify(workflowVersionMapper).insertVersionSnapshot(versionCaptor.capture());
+    assertThat(versionCaptor.getValue().getScheduleEnabled()).isTrue();
+  }
+
+  @Test
+  @DisplayName("跨租户导入受管单作业 Workflow 时复用目标关联并递增版本")
+  void shouldReuseTargetManagedWorkflowWhenImportingPortablePackage() {
+    when(workflowNodeMapper.selectByQuery(any(WorkflowNodeQuery.class))).thenReturn(List.of());
+    when(workflowEdgeMapper.selectByQuery(any(WorkflowEdgeQuery.class))).thenReturn(List.of());
+    JobDefinitionEntity job = new JobDefinitionEntity();
+    job.setId(81L);
+    job.setJobCode("JOB_DAILY");
+    when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_DAILY")).thenReturn(job);
+    WorkflowDefinitionEntity existing = new WorkflowDefinitionEntity();
+    existing.setId(91L);
+    existing.setTenantId("tenant-a");
+    existing.setWorkflowCode("TENANT_DEFAULT_FLOW");
+    existing.setWorkflowName("Existing default flow");
+    existing.setWorkflowType("DAG");
+    existing.setVersion(4);
+    existing.setEnabled(true);
+    existing.setSingleJobDefinitionId(81L);
+    when(workflowDefinitionMapper.selectBySingleJobDefinitionId("tenant-a", 81L))
+        .thenReturn(existing);
+    when(workflowDefinitionMapper.updateAndBumpVersion(new WorkflowDefinitionVersionUpdateParam(
+            "tenant-a",
+            91L,
+            4,
+            "Daily workflow",
+            "DAG",
+            true,
+            true,
+            "CRON",
+            "0 0 2 * * ?",
+            "Asia/Shanghai",
+            "SCHEDULED",
+            "cn_workday",
+            "JOB_PREVIOUS")))
+        .thenReturn(1);
+    Map<String, String> workflowRow = Map.ofEntries(
+        Map.entry("workflow_code", "SOURCE_DEFAULT_FLOW"),
+        Map.entry("workflow_name", "Daily workflow"),
+        Map.entry("workflow_type", "DAG"),
+        Map.entry("version", "2"),
+        Map.entry("single_job_code", "JOB_DAILY"),
+        Map.entry("schedule_enabled", "true"),
+        Map.entry("schedule_type", "CRON"),
+        Map.entry("schedule_expr", "0 0 2 * * ?"),
+        Map.entry("timezone", "Asia/Shanghai"),
+        Map.entry("trigger_mode", "SCHEDULED"),
+        Map.entry("calendar_code", "CN_WORKDAY"),
+        Map.entry("depends_on_job_code", "JOB_PREVIOUS"));
+    SheetResult empty = new SheetResult("empty", 0, List.of(), List.of());
+    SheetResult workflows =
+        new SheetResult("workflow_definition", 1, List.of(workflowRow), List.of());
+
+    service.applyAll(
+        new PackageValidationResult(
+            empty, empty, empty, empty, empty, empty, empty, empty, empty, workflows, empty, empty,
+            List.of()),
+        context());
+
+    verify(workflowDefinitionMapper, never()).upsertWorkflowDefinition(any());
+    ArgumentCaptor<WorkflowDefinitionVersionInsertParam> versionCaptor =
+        ArgumentCaptor.forClass(WorkflowDefinitionVersionInsertParam.class);
+    verify(workflowVersionMapper).insertVersionSnapshot(versionCaptor.capture());
+    assertThat(versionCaptor.getValue().getWorkflowDefinitionId()).isEqualTo(91L);
+    assertThat(versionCaptor.getValue().getWorkflowCode()).isEqualTo("TENANT_DEFAULT_FLOW");
+    assertThat(versionCaptor.getValue().getVersion()).isEqualTo(5);
+    assertThat(versionCaptor.getValue().getScheduleEnabled()).isTrue();
+  }
+
+  @Test
+  @DisplayName("配置包更新Workflow日历前拒绝已有周期预期定义")
+  void shouldRejectWorkflowCalendarChange_whenPackageHasRecurringExpectations() {
+    var existing = new WorkflowDefinitionEntity();
+    existing.setId(91L);
+    existing.setTenantId("tenant-a");
+    existing.setWorkflowCode("WF_DAILY");
+    existing.setWorkflowName("Daily workflow");
+    existing.setWorkflowType("DAG");
+    existing.setVersion(1);
+    existing.setEnabled(true);
+    existing.setCalendarCode("OLD_CALENDAR");
+    when(workflowDefinitionMapper.selectByUniqueKey("tenant-a", "WF_DAILY", 1))
+        .thenReturn(existing);
+    when(workflowDefinitionMapper.hasCalendarScopedExpectations("tenant-a", 91L))
+        .thenReturn(true);
+    Map<String, String> workflowRow = Map.ofEntries(
+        Map.entry("workflow_code", "WF_DAILY"),
+        Map.entry("workflow_name", "Daily workflow"),
+        Map.entry("workflow_type", "DAG"),
+        Map.entry("version", "1"),
+        Map.entry("schedule_enabled", "true"),
+        Map.entry("schedule_type", "CRON"),
+        Map.entry("schedule_expr", "0 0 2 * * ?"),
+        Map.entry("timezone", "Asia/Shanghai"),
+        Map.entry("trigger_mode", "SCHEDULED"),
+        Map.entry("calendar_code", "CN_WORKDAY"));
+    SheetResult empty = new SheetResult("empty", 0, List.of(), List.of());
+    SheetResult workflows =
+        new SheetResult("workflow_definition", 1, List.of(workflowRow), List.of());
+
+    assertThatThrownBy(() -> service.applyAll(
+            new PackageValidationResult(
+                empty, empty, empty, empty, empty, empty, empty, empty, empty, workflows, empty,
+                empty, List.of()),
+            context()))
+        .isInstanceOf(BizException.class)
+        .extracting(exception -> ((BizException) exception).getMessageKey())
+        .isEqualTo("error.workflow.calendar_has_expectations");
+
+    verify(workflowDefinitionMapper, never()).updateAndBumpVersion(any());
+    verify(workflowDefinitionMapper, never()).upsertWorkflowDefinition(any());
   }
 
   @Test
@@ -309,61 +496,6 @@ class TenantConfigPackageExcelMonitoringPolicyApplyTest {
                 empty, List.of()),
             context()))
         .isInstanceOf(BizException.class);
-  }
-
-  @Test
-  @DisplayName("流水线步骤合并按步骤编码更新，不删除未出现在本次文件中的步骤")
-  @SuppressWarnings("unchecked")
-  void shouldMergePipelineStepsWithoutReplacingTheCollection() {
-    when(pipelineDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_IMPORT", 1))
-        .thenReturn(Map.of("id", 501L, "pipeline_name", "Current pipeline"));
-    when(pipelineStepDefinitionMapper.selectByPipelineDefinitionId(501L))
-        .thenReturn(List.of(Map.of(
-            "step_code", "LOAD",
-            "step_name", "Existing load",
-            "stage_code", "LOAD",
-            "step_order", 4,
-            "impl_code", "load-db",
-            "step_params", "{\"target\":\"account\"}",
-            "timeout_seconds", 90,
-            "retry_policy", "FIXED",
-            "retry_max_count", 3,
-            "enabled", true)));
-    Map<String, String> pipeline = Map.of(
-        "job_code", "JOB_IMPORT", "pipeline_name", "", "pipeline_type", "IMPORT", "version", "1");
-    Map<String, String> step = Map.ofEntries(
-        Map.entry("job_code", "JOB_IMPORT"),
-        Map.entry("version", "1"),
-        Map.entry("step_code", "LOAD"),
-        Map.entry("step_name", ""),
-        Map.entry("stage_code", "LOAD"),
-        Map.entry("step_order", ""),
-        Map.entry("impl_code", ""),
-        Map.entry("step_params", ""),
-        Map.entry("timeout_seconds", ""),
-        Map.entry("retry_policy", ""),
-        Map.entry("retry_max_count", ""),
-        Map.entry("enabled", ""));
-    SheetResult empty = new SheetResult("empty", 0, List.of(), List.of());
-    SheetResult pipelines = new SheetResult("pipeline_definition", 1, List.of(pipeline), List.of());
-    SheetResult steps = new SheetResult("pipeline_step_definition", 1, List.of(step), List.of());
-
-    service.applyAll(
-        new PackageValidationResult(
-            empty, empty, empty, empty, empty, empty, empty, pipelines, steps, empty, empty, empty,
-            List.of()),
-        context());
-
-    org.mockito.ArgumentCaptor<List<Map<String, Object>>> captor =
-        org.mockito.ArgumentCaptor.forClass(List.class);
-    verify(pipelineStepDefinitionMapper).upsertBatch(captor.capture());
-    verify(pipelineStepDefinitionMapper, org.mockito.Mockito.never())
-        .deleteByPipelineDefinitionId(501L);
-    Map<String, Object> saved = captor.getValue().getFirst();
-    assertThat(saved.get("step_name")).isEqualTo("Existing load");
-    assertThat(saved.get("step_params")).isEqualTo("{\"target\":\"account\"}");
-    assertThat(saved.get("timeout_seconds")).isEqualTo(90);
-    assertThat(saved.get("retry_policy")).isEqualTo("FIXED");
   }
 
   private static TenantConfigPackageExcelApplyService.ApplyContext context() {

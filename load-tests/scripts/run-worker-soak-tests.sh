@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
+# 用途：24h+ 持续 soak/longevity 压测。
+# 用法：在仓库根目录执行 bash load-tests/scripts/run-worker-soak-tests.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # run-worker-soak-tests.sh — 24h+ 持续 soak/longevity 压测
 #
-# Plan: docs/plans/r3-3-soak-tests.md
+# 对应方案：docs/plans/r3-3-soak-tests-2026-05-29.md
 #
 # 与 run-worker-stress-tests.sh 区别:
 #   - stress = 几分钟 burst,验吞吐 / 延迟
@@ -78,7 +80,7 @@ precheck() {
     echo "    ERROR: 磁盘不足 30 GB,24h soak 会写满 logs/soak/;短跑请显式设 SOAK_HOURS<12" >&2
     return 1
   fi
-  # RAM
+  # 内存参数。
   local ram_gb
   if [[ "$(uname)" == "Darwin" ]]; then
     ram_gb=$(( $(sysctl -n hw.memsize) / 1024 / 1024 / 1024 ))
@@ -136,6 +138,10 @@ JOB_IMPORT="${JOB_IMPORT:-import_customer_job}"
 JOB_EXPORT="${JOB_EXPORT:-export_settlement_job}"
 JOB_DISPATCH="${JOB_DISPATCH:-lt_dispatch_local_job}"
 JOB_WORKFLOW="${JOB_WORKFLOW:-lt_process_sql_job}"
+WF_IMPORT_ID="$(resolve_single_job_workflow_id "$LOAD_TEST_TENANT_ID" "$JOB_IMPORT")"
+WF_EXPORT_ID="$(resolve_single_job_workflow_id "$LOAD_TEST_TENANT_ID" "$JOB_EXPORT")"
+WF_DISPATCH_ID="$(resolve_single_job_workflow_id "$LOAD_TEST_TENANT_ID" "$JOB_DISPATCH")"
+WF_WORKFLOW_ID="$(resolve_single_job_workflow_id "$LOAD_TEST_TENANT_ID" "$JOB_WORKFLOW")"
 
 pick_job() {
   local r=$(( RANDOM % 100 ))
@@ -185,12 +191,22 @@ while (( $(date +%s) < END_TS )); do
   fi
 
   job="$(pick_job)"
-  # 用 curl 异步触发 trigger(失败不退出,只计数)
+  case "$job" in
+    "$JOB_IMPORT") workflow_id="$WF_IMPORT_ID" ;;
+    "$JOB_EXPORT") workflow_id="$WF_EXPORT_ID" ;;
+    "$JOB_DISPATCH") workflow_id="$WF_DISPATCH_ID" ;;
+    "$JOB_WORKFLOW") workflow_id="$WF_WORKFLOW_ID" ;;
+    *) echo "unknown soak job: $job" >&2; ERRORS=$((ERRORS + 1)); continue ;;
+  esac
+  request_id="${SOAK_RUN_ID}-${COUNT}-$(date +%s%N)"
+  # Soak 只通过 Workflow-root Trigger API 进入，与生产运行入口保持一致。
   if ! curl -fsS -o /dev/null -m 5 \
-      -X POST "$TRIGGER_BASE_URL/internal/trigger/fire" \
+      -X POST "$TRIGGER_BASE_URL/api/triggers/launch" \
       -H "Content-Type: application/json" \
       -H "X-Internal-Secret: $INTERNAL_SECRET" \
-      -d "{\"tenantId\":\"$LOAD_TEST_TENANT_ID\",\"jobCode\":\"$job\",\"bizDate\":\"$BIZ_DATE\",\"params\":{\"soakRunId\":\"$SOAK_RUN_ID\"}}" \
+      -H "Idempotency-Key: $request_id" \
+      -H "X-Request-Id: $request_id" \
+      -d "{\"tenantId\":\"$LOAD_TEST_TENANT_ID\",\"workflowDefinitionId\":$workflow_id,\"bizDate\":\"$BIZ_DATE\",\"triggerType\":\"API\",\"requestId\":\"$request_id\",\"params\":{\"soakRunId\":\"$SOAK_RUN_ID\"}}" \
       2>>"$TRAFFIC_LOG"; then
     ERRORS=$(( ERRORS + 1 ))
   fi

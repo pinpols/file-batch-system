@@ -8,11 +8,12 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.spec.KeySpec;
 import java.util.Base64;
 import java.util.HexFormat;
+import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 
 /**
- * API key 哈希工具——P1-1(docs/archive/analysis/2026-06-03-deep-scan-be-security.md)。
+ * API key 哈希工具——P1-1(docs/archive/audit/deep-scan-be-security-2026-06-03.md)。
  *
  * <p>历史:V47 起 api_key.key_hash 是裸 SHA-256(无盐,无 KDF),DB 备份泄露后存在弱 key rainbow-table 暴力枚举风险。V166 起新增
  * {@code salt} + {@code key_hash_algo} 列,新 key 用 PBKDF2-HMAC-SHA256(600k iter) 算 + per-key 16B
@@ -57,7 +58,8 @@ public final class ApiKeyHasher {
   public static String legacySha256Hex(String input) {
     try {
       MessageDigest md = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-      byte[] digest = md.digest(input.getBytes(StandardCharsets.UTF_8));
+      byte[] encodedInput = input.getBytes(StandardCharsets.UTF_8);
+      byte[] digest = md.digest(encodedInput);
       return HexFormat.of().formatHex(digest);
     } catch (NoSuchAlgorithmException e) {
       throw new IllegalStateException("SHA-256 not available", e);
@@ -90,8 +92,9 @@ public final class ApiKeyHasher {
     } else {
       return false;
     }
-    return MessageDigest.isEqual(
-        computed.getBytes(StandardCharsets.UTF_8), storedHash.getBytes(StandardCharsets.UTF_8));
+    byte[] computedHashBytes = computed.getBytes(StandardCharsets.UTF_8);
+    byte[] storedHashBytes = storedHash.getBytes(StandardCharsets.UTF_8);
+    return MessageDigest.isEqual(computedHashBytes, storedHashBytes);
   }
 
   private static String pbkdf2(String raw, String saltBase64) {
@@ -99,8 +102,9 @@ public final class ApiKeyHasher {
       byte[] salt = Base64.getDecoder().decode(saltBase64);
       KeySpec spec = new PBEKeySpec(raw.toCharArray(), salt, PBKDF2_ITERATIONS, KEY_BYTES * 8);
       SecretKeyFactory factory = SecretKeyFactory.getInstance(PBKDF2_ALGO);
-      byte[] out = factory.generateSecret(spec).getEncoded();
-      return Base64.getEncoder().encodeToString(out);
+      SecretKey derivedKey = factory.generateSecret(spec);
+      byte[] encodedKey = derivedKey.getEncoded();
+      return Base64.getEncoder().encodeToString(encodedKey);
     } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
       throw new IllegalStateException("PBKDF2 derivation failed", e);
     }

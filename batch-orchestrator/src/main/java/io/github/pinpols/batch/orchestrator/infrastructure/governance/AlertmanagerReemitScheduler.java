@@ -34,10 +34,12 @@ public class AlertmanagerReemitScheduler {
   @Scheduled(fixedDelayString = "#{${batch.alert.am-emit.resend-interval-seconds:60} * 1000}")
   @SchedulerLock(name = "am_alert_reemit", lockAtMostFor = "PT2M", lockAtLeastFor = "PT5S")
   public void reemit() {
-    if (!publisher.isEnabled()
-        || !properties.isEnabled()
-        || properties.getResendIntervalSeconds() <= 0
-        || gracefulShutdown.isDraining()) {
+    boolean reemitMustBeSkipped =
+        !publisher.isEnabled()
+            || !properties.isEnabled()
+            || properties.getResendIntervalSeconds() <= 0
+            || gracefulShutdown.isDraining();
+    if (reemitMustBeSkipped) {
       return;
     }
     List<AlertEventEntity> open =

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：多租户并发峰值流量 — 单机控制面吞吐天花板压测。
+# 用法：在仓库根目录执行 python3 load-tests/scripts/peak_ceiling.py；参数与前置环境见下方说明及所属 README。
 """多租户并发峰值流量 — 单机控制面吞吐天花板压测。
 
 对 ta/tb/tc 等比并发 launch 轻量 atomic_sql_demo(纯控制面:orchestrator+DB+Kafka+worker,
@@ -38,7 +40,6 @@ TENANTS = os.environ.get("TENANTS", "ta,tb,tc").split(",")
 LEVELS = os.environ.get("LEVELS", "32:600,64:600,128:600,256:600")
 DRAIN_TIMEOUT = int(os.environ.get("DRAIN_TIMEOUT", "600"))
 SAMPLE_SEC = int(os.environ.get("SAMPLE_SEC", "3"))
-COLOCATED = os.environ.get("COLOCATED", "0") == "1"  # Citus:join 补 tenant_id 共置
 
 
 def psql(sql):
@@ -61,9 +62,42 @@ def psql(sql):
     return subprocess.check_output(cmd, text=True).strip()
 
 
-def launch_one(tenant, rid):
+def sql_literal(value):
+    return "'" + value.replace("'", "''") + "'"
+
+
+def workflow_ids():
+    tenants_sql = ",".join(sql_literal(tenant) for tenant in TENANTS)
+    job_sql = sql_literal(JOB_CODE)
+    rows = psql(f"""
+        select jd.tenant_id || '|' || wd.id
+        from batch.job_definition jd
+        join batch.workflow_definition wd
+          on wd.tenant_id = jd.tenant_id
+         and wd.single_job_definition_id = jd.id
+         and wd.enabled
+        where jd.tenant_id in ({tenants_sql})
+          and jd.job_code = {job_sql}
+          and jd.enabled
+        order by jd.tenant_id, wd.id
+    """)
+    resolved = {}
+    for row in rows.splitlines():
+        tenant, workflow_id = row.split("|", 1)
+        if tenant in resolved:
+            raise RuntimeError(f"multiple enabled single-job Workflows for tenant={tenant}, jobCode={JOB_CODE}")
+        resolved[tenant] = int(workflow_id)
+    missing = sorted(set(TENANTS) - set(resolved))
+    if missing:
+        raise RuntimeError(
+            f"no enabled explicit single-job Workflow for jobCode={JOB_CODE}, tenants={','.join(missing)}"
+        )
+    return resolved
+
+
+def launch_one(tenant, rid, workflow_definition_id):
     body = {
-        "tenantId": tenant, "jobCode": JOB_CODE, "triggerType": "API",
+        "tenantId": tenant, "workflowDefinitionId": workflow_definition_id, "triggerType": "API",
         "bizDate": BIZ_DATE, "requestId": rid,
         "params": {"metadata": {"runId": rid}},
     }
@@ -83,17 +117,19 @@ def launch_one(tenant, rid):
 
 
 def counts(run_id):
-    join = ("join batch.job_instance ji on ji.id=tr.related_job_instance_id and ji.tenant_id=tr.tenant_id"
-            if COLOCATED else
-            "left join batch.job_instance ji on ji.id=tr.related_job_instance_id")
-    tenant_filter = "tr.tenant_id in (" + ",".join(f"'{t}'" for t in TENANTS) + ")"
+    tenant_filter = "tr.tenant_id in (" + ",".join(sql_literal(t) for t in TENANTS) + ")"
     sql = f"""
     select count(*),
-      count(*) filter (where ji.instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED','REJECTED')),
-      count(*) filter (where ji.instance_status='SUCCESS'),
+      count(*) filter (where wr.run_status in ('SUCCESS','FAILED','TERMINATED')),
+      count(*) filter (where wr.run_status='SUCCESS'),
       count(*) filter (where tr.request_status='REJECTED')
-    from batch.trigger_request tr {join}
-    where {tenant_filter} and tr.request_id like '{run_id}%'
+    from batch.trigger_request tr
+    left join batch.workflow_run wr
+      on wr.tenant_id = tr.tenant_id
+     and wr.trigger_request_id = tr.id
+    where {tenant_filter}
+      and tr.workflow_definition_id is not null
+      and tr.request_id like {sql_literal(run_id + '%')}
     """
     a, b, c, d = psql(sql).split("|")
     return int(a), int(b), int(c), int(d)
@@ -101,12 +137,13 @@ def counts(run_id):
 
 def run_level(level_idx, concurrency, total):
     run_id = f"pk{int(time.time())}-L{level_idx}"
+    resolved_workflows = workflow_ids()
     plan = [(TENANTS[i % len(TENANTS)], f"{run_id}-{i}") for i in range(total)]
     print(f"\n=== L{level_idx} concurrency={concurrency} total={total} run_id={run_id} ===", flush=True)
     t_start = time.monotonic()
     statuses = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as pool:
-        futs = [pool.submit(launch_one, t, rid) for t, rid in plan]
+        futs = [pool.submit(launch_one, t, rid, resolved_workflows[t]) for t, rid in plan]
         for f in concurrent.futures.as_completed(futs):
             statuses.append(f.result())
     t_launch = time.monotonic()
@@ -147,6 +184,8 @@ def run_level(level_idx, concurrency, total):
 
 
 def main():
+    if not TENANTS or any(not tenant for tenant in TENANTS):
+        raise ValueError("TENANTS must contain non-empty tenant IDs")
     results = []
     for idx, spec in enumerate(LEVELS.split(","), 1):
         c, t = spec.split(":")

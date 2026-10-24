@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.exports.runtime;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerIdentityProperties;
@@ -9,6 +10,8 @@ import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
 import io.github.pinpols.batch.worker.core.support.HeartbeatService;
 import io.github.pinpols.batch.worker.core.support.WorkerLifecycleManager;
 import io.github.pinpols.batch.worker.exports.config.ExportWorkerConfiguration;
+import io.github.pinpols.batch.worker.exports.plugin.ExportDataPluginRegistry;
+import java.util.List;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +20,7 @@ import org.springframework.stereotype.Service;
 public class ExportWorkerLoop extends AbstractWorkerLoop {
 
   private final ExportWorkerConfiguration configuration;
+  private final ExportDataPluginRegistry pluginRegistry;
 
   public ExportWorkerLoop(
       WorkerLifecycleManager workerLifecycleManager,
@@ -25,7 +29,8 @@ public class ExportWorkerLoop extends AbstractWorkerLoop {
       ExportWorkerConfiguration configuration,
       WorkerIdentityProperties identityProperties,
       WorkerRegistryStartupProperties workerRegistryStartupProperties,
-      WorkerConcurrencyProperties concurrencyProperties) {
+      WorkerConcurrencyProperties concurrencyProperties,
+      ExportDataPluginRegistry pluginRegistry) {
     super(
         workerLifecycleManager,
         heartbeatService,
@@ -34,6 +39,7 @@ public class ExportWorkerLoop extends AbstractWorkerLoop {
         identityProperties,
         workerRegistryStartupProperties);
     this.configuration = configuration;
+    this.pluginRegistry = pluginRegistry;
   }
 
   @Override
@@ -44,6 +50,11 @@ public class ExportWorkerLoop extends AbstractWorkerLoop {
   @Override
   protected String workerGroup() {
     return "export";
+  }
+
+  @Override
+  protected List<ReplayCapabilityDeclaration> replayCapabilities() {
+    return pluginRegistry.replayCapabilityCatalog();
   }
 
   /** 定时心跳方法，按配置间隔向平台上报 Worker 存活。 */

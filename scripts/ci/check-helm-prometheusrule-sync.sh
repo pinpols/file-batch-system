@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：Helm 告警规则同步。
+# 用法：在仓库根目录执行 bash scripts/ci/check-helm-prometheusrule-sync.sh；参数与前置环境见下方说明及所属 README。
 # 防漂移守卫:helm chart 里的告警规则副本必须与 canonical 字节一致。
 #
 # 背景:k8s 部署经 templates/prometheusrule.yaml 下发告警规则,内容来自 chart-local

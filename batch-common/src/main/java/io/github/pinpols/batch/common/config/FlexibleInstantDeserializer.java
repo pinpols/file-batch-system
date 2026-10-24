@@ -50,9 +50,11 @@ public class FlexibleInstantDeserializer extends StdScalarDeserializer<Instant> 
     }
     String text = raw.trim();
     // 1) 数字字符串 → epoch ms
-    if (text.chars().allMatch(Character::isDigit)) {
+    boolean containsOnlyDigits = text.chars().allMatch(Character::isDigit);
+    if (containsOnlyDigits) {
       try {
-        return Instant.ofEpochMilli(Long.parseLong(text));
+        long epochMillis = Long.parseLong(text);
+        return Instant.ofEpochMilli(epochMillis);
       } catch (NumberFormatException ignored) {
         // 继续尝试下一种解析方式
       }
@@ -64,20 +66,26 @@ public class FlexibleInstantDeserializer extends StdScalarDeserializer<Instant> 
       // 继续尝试下一种解析方式
     }
     try {
-      return OffsetDateTime.parse(text).toInstant();
+      OffsetDateTime parsedOffsetDateTime = OffsetDateTime.parse(text);
+      Instant offsetInstant = parsedOffsetDateTime.toInstant();
+      return offsetInstant;
     } catch (DateTimeParseException ignored) {
       // 继续尝试下一种解析方式
     }
     // 3) naive LocalDateTime + 默认时区
     ZoneId zone = timezoneProvider.defaultZone();
     try {
-      return LocalDateTime.parse(text).atZone(zone).toInstant();
+      LocalDateTime localDateTime = LocalDateTime.parse(text);
+      Instant resolvedInstant = localDateTime.atZone(zone).toInstant();
+      return resolvedInstant;
     } catch (DateTimeParseException ignored) {
       // 继续尝试下一种解析方式
     }
     // 4) 仅日期 (YYYY-MM-DD)
     try {
-      return LocalDate.parse(text).atStartOfDay(zone).toInstant();
+      LocalDate localDate = LocalDate.parse(text);
+      Instant startOfDayInstant = localDate.atStartOfDay(zone).toInstant();
+      return startOfDayInstant;
     } catch (DateTimeParseException ignored) {
       // 继续尝试下一种解析方式
     }

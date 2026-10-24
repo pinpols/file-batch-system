@@ -45,10 +45,13 @@ public class SlidingWindowRateLimiter {
   /** 使用自定义窗口消费令牌，日预算与分钟限流共用同一原子 Redis 实现。 */
   public boolean tryAcquire(String key, int limit, Duration window) {
     long now = dateTimeSupport.currentEpochMillis();
-    long windowMillis = Math.max(1L, window.toMillis());
+    long configuredWindowMillis = window.toMillis();
+    long windowMillis = Math.max(1L, configuredWindowMillis);
     long windowStart = now - windowMillis;
-    long ttlSeconds = Math.max(1L, (windowMillis / 1000) + 1);
-    String member = UUID.randomUUID().toString();
+    long ttlCandidateSeconds = (windowMillis / 1000) + 1;
+    long ttlSeconds = Math.max(1L, ttlCandidateSeconds);
+    UUID memberId = UUID.randomUUID();
+    String member = memberId.toString();
 
     return rateLimitStore.tryAcquire(
         "rate_limit:" + key, now, windowStart, limit, member, ttlSeconds);

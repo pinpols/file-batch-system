@@ -12,8 +12,8 @@ file-batch-system/
 ├── batch-orchestrator/                     状态主机:CLAIM/EXECUTE/REPORT 闭环 + workflow 编排
 ├── batch-worker/                           worker 聚合器(aggregator + 各 worker parent;artifactId 不变)
 │   ├── core/                               Worker SPI 基础(pipeline stages 抽象;artifactId 仍为 batch-worker-core)
-│   ├── import/                             IMPORT pipeline(Preprocess→Validate→Load,5 stages)
-│   ├── export/                             EXPORT pipeline(Query→Render→Sink,6 stages)
+│   ├── import/                             IMPORT：RECEIVE→PREPROCESS→PARSE→VALIDATE→LOAD→FEEDBACK
+│   ├── export/                             EXPORT：PREPARE→GENERATE→STORE→REGISTER→COMPLETE
 │   ├── process/                            PROCESS pipeline(纯业务计算)
 │   ├── dispatch/                           DISPATCH pipeline(下游分发)
 │   └── atomic/                             专用 Task SPI(shell/sql/stored-proc/http 隔离,ADR-029)
@@ -29,15 +29,16 @@ file-batch-system/
 ├── security-scan/                          安全扫描编排工具(独立模块,不入根 reactor)
 ├── examples/                               自托管 SDK / Task SPI 插件示例(长期示例资产)
 │
-├── db/migration/                           Flyway PostgreSQL migrations(V1 起,当前到 V219)
+├── config/                                质量规则 / 日志策略 / 运维治理 profile（见 config/README.md）
+├── db/migration/                           Flyway PostgreSQL migrations（以 db/migration 实际版本为准）
 ├── docs/                                   全文档体系(见下)
-├── scripts/                                工程脚本(ci/db/dev/docker/local/ops/tools)
+├── scripts/                                工程脚本（分类与入口见 scripts/README.md）
 ├── helm/batch-platform/                    Helm Chart(prod 部署)
 ├── docker-compose.yml                      本地基础依赖 Compose 入口
 ├── docker-compose.kafka-ha.yml             本地 Kafka HA 可选叠加层
 ├── docker-compose.redis-sentinel-ha.yml     本地 Valkey Sentinel 可选演练叠加层
 ├── docker-compose.minio-ha.yml              本地 MinIO 分布式纠删码隔离演练栈
-├── deploy/docker/                          Dockerfile + 应用 / 测试 / 观测 Compose
+├── deploy/                                 Docker / GitOps / HA / release 部署资源（见 deploy/README.md）
 ├── .agents/skills/                         本仓专用 Codex 工程技能(只登记 SKILL.md)
 ├── .github/workflows/                      CI(pr-gate / strict-verify / sdk-publish 等)
 ├── .githooks/                              本地 pre-commit / pre-push 守护
@@ -47,6 +48,8 @@ file-batch-system/
 ```
 
 不作为结构事实来源的目录：`target/`、`build/`、`logs/`、`reports/`、`.venv/`、`.idea/`、`.vscode/`、`.ruff_cache/` 等属于构建、运行、本地工具或 IDE 产物。文档、脚本和 CI 不应依赖这些目录作为长期源码结构。
+
+质量规则源码统一维护在 [config/quality/](../../config/quality/README.md)，根 Maven 和参数规则回归引用同一份文件；`build/` 不再保留受版本控制的规则文件。工程配置与部署资源的职责入口分别为 [config/README.md](../../config/README.md)、[deploy/README.md](../../deploy/README.md)。
 
 ## 模块结构图
 
@@ -156,8 +159,8 @@ batch-e2e-tests
 | `batch-trigger` | `trigger/{quartz,calendar,outbox}` | Quartz 调度 → `trigger_outbox_event`（orchestrator 消费后启动 instance） |
 | `batch-orchestrator` | `orchestrator/{application,domain,infrastructure,controller}` | **状态主机**:CLAIM / EXECUTE / REPORT 状态流转;workflow DAG 编排;outbox 投递 |
 | `batch-worker/core`(artifactId `batch-worker-core`) | `worker/core/{support,infrastructure,mapper,route}` | Worker 执行骨架、阶段上下文、步骤登记、路由统一契约 |
-| `batch-worker/import`(artifactId `batch-worker-import`) | `worker/imports/{stage,domain,infrastructure}` | 文件 IMPORT 5 stages(Preprocess/Validate/Load/...);预处理策略由固定阶段调用 |
-| `batch-worker/export`(artifactId `batch-worker-export`) | `worker/exports/{stage,renderer,sink}` | 文件 EXPORT 6 stages(Query/Render/Sink/...);导出格式策略由固定阶段调用 |
+| `batch-worker/import`(artifactId `batch-worker-import`) | `worker/imports/{stage,domain,infrastructure}` | 文件 IMPORT 6 stages(RECEIVE/PREPROCESS/PARSE/VALIDATE/LOAD/FEEDBACK);预处理策略由固定阶段调用 |
+| `batch-worker/export`(artifactId `batch-worker-export`) | `worker/exports/{stage,renderer,sink}` | 文件 EXPORT 5 stages(PREPARE/GENERATE/STORE/REGISTER/COMPLETE);导出格式策略由固定阶段调用 |
 | `batch-worker/process`(artifactId `batch-worker-process`) | `worker/processes/{stage,...}` | 纯业务计算(无文件 IO) |
 | `batch-worker/dispatch`(artifactId `batch-worker-dispatch`) | `worker/dispatch/{stage,target,...}` | 下游分发(向外部系统投递);渠道适配器由固定阶段路由 |
 | `batch-worker/atomic`(artifactId `batch-worker-atomic`) | `worker/atomic/{shell,sql,stored-proc,http}` | **专用 Task SPI**:特权执行器隔离(RCE 风险面收敛);插件能力替换原子执行实现 |
@@ -314,7 +317,7 @@ Entity，必须通过 Response DTO 投影。Webhook secret 等敏感字段必须
 | `sdk/rust` | Rust | 与 Java SDK 对齐的 Rust 实现 |
 | `sdk/typescript` | TypeScript | 与 Java SDK 对齐的 TypeScript 实现 |
 
-## 关键架构约束(详 [`../../docs/agent-baseline.md`](../../docs/agent-baseline.md))
+## 关键架构约束(详 [`../../docs/agent-baseline.md`](../agent-baseline.md))
 
 - **主链**:`DB → Outbox → Kafka → CLAIM → EXECUTE → REPORT`
 - **orchestrator 是唯一状态主机**:worker 不能直写 `job_instance` / `workflow_run`
@@ -326,51 +329,50 @@ Entity，必须通过 Response DTO 投影。Webhook secret 等敏感字段必须
 
 ## docs/ 体系
 
-```
+```text
 docs/
-├── README.md                文档总入口(新人从这里)
-├── changelog.md             架构约束 / docs/agent-baseline.md 变更日志(日期倒序)
-├── coding-conventions.md    Java 编码细则 + 反例表(docs/agent-baseline.md §Java 红线展开)
-├── agent-baseline.md        Agent / 自动化协作基线
-│
-├── analysis/                深扫报告(2026-06-03 全方位 11 lane / P2 评估等)
-├── api/                     console-api OpenAPI yaml + protocol changelog
-├── architecture/            架构图 + 项目结构(本文件)
-├── archive/                 历史归档(老分析 / 失效 ADR)
-├── audit/                   安全审计 / 合规 audit
-├── backlog/                 待办 / roadmap
-├── compliance/              合规清单
-├── design/                  设计文档(pipeline-vs-workflow / sensor / sdk 等)
-├── dict/                    业务字典 / enum 表
-├── plans/                   阶段计划(Phase / R3 等)
-├── review/                  评审结论
-├── runbook/                 运维手册(release / rollback / sdk-publish / feature-switches)
-├── sdk/                     SDK 使用说明(Java / Python)
-├── spike/                   Spike 实验记录
-├── stats/                   代码统计(LoC / 覆盖率)
-├── test-data/               测试数据规约
-├── testing/                 测试约定(单测 / IT / Testcontainers)
-└── verifications/           验证记录(CD / e2e)
+├── README.md / agent-baseline.md / coding-conventions.md / changelog.md
+├── architecture/   架构、模型、原语、边界、运行主链与 ADR
+├── design/         业务与能力设计、数据库逻辑模型
+├── api/            OpenAPI、协议与 API 黄金样本
+├── sdk/            五语言 SDK 接入、通信与发布契约
+├── dict/           错误码、配置键生成参考与统一术语
+├── standards/      工程规范、文档与协作流程
+├── governance/     可机器读取的治理契约与清单
+├── plans/          总方案、阶段计划、TODO与持续台账
+├── audit/          日期化审计、扫描与调查记录
+├── review/         日期化评审结论
+├── testing/        长期验证方法、用例说明与覆盖策略
+├── verifications/  日期化执行结果与验收证据
+├── runbook/        开发部署、运维、恢复与排障手册
+├── compliance/     合规与第三方许可证资料
+├── stats/          代码量等统计快照
+└── archive/        按上述职责分类的历史资料
 ```
+
+长期资产原位更新，不带文件名日期；阶段/审计/执行记录按文档路由保留日期。没有 analysis/backlog/spike 或 docs/test-data 目录；可执行共享测试数据在根 `test-data/`，API黄金样本仍属于协议资产。每个目录README负责文件用途与跳转。
 
 ## scripts/ 体系
 
-```
+```text
 scripts/
-├── ci/        CI 辅助(workflow-lint / strict-verify 等)
-├── codegen/   代码生成(OpenAPI / fixture)
-├── data/      测试 / seed 数据生成
-├── db/        DB 工具(migration check / schema dump)
-├── dev/       本地开发(start-stack / reset)
-├── docker/    Docker compose 辅助
-├── ha/        高可用 / DR 演练脚本
-├── lib/       脚本共享函数库
-├── local/     本地特定(pre-push-sdk-checks.sh / be-acceptance.sh / sdk-handler-tests.sh)
-├── ops/       运维(prod 巡检 / 一次性脚本)
-├── sim/       场景模拟脚本
-├── sim-4day/  四日链路模拟脚本
-└── tools/     杂项工具
+├── ci/        质量与CI守卫（基线在ci/baselines）
+├── codegen/   代码/契约生成
+├── data/      场景数据与初始化工具
+├── db/        数据库工具与独立SQL；Flyway在根db/migration
+├── deploy/    交付部署工具
+├── dev/       开发工具与诊断
+├── docker/    镜像/Compose辅助
+├── ha/        HA/DR演练
+├── lib/       共享脚本能力
+├── local/     本地启动与验收
+├── minio/     对象存储本地辅助
+├── ops/       运维、观测与环境诊断
+├── sim/       场景模拟
+└── sim-4day/  四日链路模拟
 ```
+
+脚本/SQL的逐项用途和调用入口以 [scripts/README.md](../../scripts/README.md) 及各子目录索引为准。`__pycache__` 等本地产物不是脚本分类；不恢复已合并到dev/ops的tools、observability或staging目录。
 
 ## 运行系统边界
 

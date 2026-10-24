@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
@@ -65,6 +66,23 @@ class ImportStageSupportTest {
         .when(repository)
         .updateFileStatus(eq(99L), eq(FileStatus.PARSING.code()), any());
     when(repository.currentFileStatus(99L)).thenReturn(FileStatus.PARSED.code());
+
+    ImportStageSupport.updateFileStatusRecoverAware(
+        repository, context, FileStatus.PARSING.code(), Map.of());
+
+    verify(repository).currentFileStatus(99L);
+  }
+
+  @Test
+  @DisplayName("RERUN 已完成文件时跳过向前状态冲突,不回退文件状态")
+  void shouldIgnoreStatusConflict_whenRerunningCompletedFile() {
+    PlatformFileRecordRepository repository = mock(PlatformFileRecordRepository.class);
+    ImportJobContext context = context(99L);
+    context.getAttributes().put(PipelineRuntimeKeys.RUN_MODE, RunMode.RERUN.code());
+    doThrow(stateConflict())
+        .when(repository)
+        .updateFileStatus(eq(99L), eq(FileStatus.PARSING.code()), any());
+    when(repository.currentFileStatus(99L)).thenReturn(FileStatus.LOADED.code());
 
     ImportStageSupport.updateFileStatusRecoverAware(
         repository, context, FileStatus.PARSING.code(), Map.of());

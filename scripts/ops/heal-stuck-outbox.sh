@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
+# 用途：只读诊断卡住的 Outbox 投递。
+# 用法：在仓库根目录执行 bash scripts/ops/heal-stuck-outbox.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
-# heal-stuck-outbox.sh - 自愈：解除卡住的 Outbox 投递
+# heal-stuck-outbox.sh - 只读诊断卡住的 Outbox 投递
 # 说明：
 # 1) 定位长期未投递的 outbox_event。
-# 2) 重置状态并发送 NOTIFY 唤醒 OutboxPollScheduler。
+# 2) 只报告候选，不直接修改 outbox_event；状态回收由 Orchestrator 管理。
 # =========================================================
 #
 # Outbox 卡住的常见原因：
@@ -11,12 +13,12 @@
 #   - OutboxPollScheduler 因异常停止轮询（重启服务即可恢复）
 #
 # 使用方法：
-#   # dry-run（默认）
+#   # 只读诊断（默认，也可显式传 --dry-run）
 #   bash scripts/ops/heal-stuck-outbox.sh
+#   bash scripts/ops/heal-stuck-outbox.sh --dry-run
 #
-#   # 实际重置（需 DB 写权限）
-#   BATCH_HEAL_DRY_RUN=false PGHOST=localhost PGUSER=batch PGPASSWORD=secret \
-#     bash scripts/ops/heal-stuck-outbox.sh
+# stale PUBLISHING 由 OutboxPollScheduler 自动回收；FAILED/GIVE_UP 使用
+# Orchestrator 的受审计 /internal/outbox/republish 接口处理。
 
 set -euo pipefail
 
@@ -31,6 +33,33 @@ OUTBOX_STUCK_SECONDS="${BATCH_HEAL_OUTBOX_STUCK_SECONDS:-300}"
 
 # ── 辅助函数 ───────────────────────────────────────────────────────────────────
 log() { printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*"; }
+
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --dry-run) ;;
+    --help|-h)
+      sed -n '2,20p' "$0"
+      exit 0
+      ;;
+    *)
+      log "ERROR: unsupported option: $1 (diagnostic mode is read-only)"
+      exit 2
+      ;;
+  esac
+  shift
+done
+
+case "$BATCH_HEAL_DRY_RUN" in
+  true) ;;
+  false)
+    log "ERROR: BATCH_HEAL_DRY_RUN=false is unsupported; outbox writes must go through Orchestrator"
+    exit 2
+    ;;
+  *)
+    log "ERROR: BATCH_HEAL_DRY_RUN must be 'true' (read-only diagnostic)"
+    exit 2
+    ;;
+esac
 
 psql_file() {
   psql -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" -d "${PGDATABASE}" \
@@ -75,32 +104,6 @@ psql_file -f "$OPS_SQL_DIR/heal-stuck-outbox-breakdown.sql" 2>/dev/null \
     log "  event_type=${etype} count=${cnt} oldest=${oldest} max_attempt=${max_attempt}"
   done
 
-if [[ "${BATCH_HEAL_DRY_RUN}" == "true" ]]; then
-  log "DRY-RUN: Would reset ${stuck_count} stuck outbox event(s):"
-  log "  UPDATE ${BATCH_SCHEMA}.outbox_event"
-  log "     SET publish_status = 'FAILED',"
-  log "         next_publish_at = NOW(),"
-  log "         updated_at = NOW()"
-  log "   WHERE publish_status = 'PUBLISHING'"
-  log "     AND updated_at < NOW() - INTERVAL '${OUTBOX_STUCK_SECONDS} seconds'"
-  log ""
-  log "Set BATCH_HEAL_DRY_RUN=false to execute."
-  log "Note: After reset the OutboxPollScheduler will pick up events on its next poll cycle."
-  log "      If the scheduler appears frozen, restart the batch-orchestrator service."
-  exit 0
-fi
-
-# 执行重置
-updated="$(psql_file -f "$OPS_SQL_DIR/heal-stuck-outbox-reset.sql" 2>/dev/null | grep -c '^[0-9]')" || updated=0
-
-log "Reset ${updated} outbox event(s) — OutboxPollScheduler will retry on next poll."
-
-# 尝试发 DB NOTIFY 立即唤醒轮询器
-if psql_file -f "$OPS_SQL_DIR/heal-stuck-outbox-notify.sql" >/dev/null 2>&1; then
-  log "Sent NOTIFY outbox_publisher to wake up poll scheduler."
-else
-  log "Note: NOTIFY failed or not supported — outbox will be retried on next scheduled poll."
-  log "      If polling appears frozen, restart batch-orchestrator."
-fi
-
-log "heal-stuck-outbox complete: ${updated} event(s) reset"
+log "DRY-RUN: found ${stuck_count} stale PUBLISHING event(s); no database writes were made."
+log "OutboxPollScheduler owns stale PUBLISHING recovery; inspect its health and follow the outbox Runbook."
+log "FAILED/GIVE_UP events require the audited Orchestrator republish operation."

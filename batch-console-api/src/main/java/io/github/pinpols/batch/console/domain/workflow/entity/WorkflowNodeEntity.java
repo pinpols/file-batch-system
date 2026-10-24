@@ -13,7 +13,6 @@ public class WorkflowNodeEntity {
   private String nodeName;
   private String nodeType;
   private String relatedJobCode;
-  private String relatedPipelineCode;
   private String workerGroup;
   private String windowCode;
   private Integer nodeOrder;

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：清理所选 Worker 压测运行产生的隔离数据。
+# 用法：在仓库根目录执行 bash load-tests/scripts/cleanup-worker-load-data.sh；参数与前置环境见下方说明及所属 README。
 set -euo pipefail
 
 RUN_ID="${RUN_ID:?RUN_ID is required, for example RUN_ID=ltw-20260505093000}"
@@ -6,6 +8,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LOAD_DIR="$ROOT_DIR/load-tests"
 # shellcheck source=env.sh
 source "$LOAD_DIR/scripts/env.sh"
+validate_load_test_run_id "$RUN_ID"
 SQL_DIR="$ROOT_DIR/load-tests/sql"
 
 psql_platform() {

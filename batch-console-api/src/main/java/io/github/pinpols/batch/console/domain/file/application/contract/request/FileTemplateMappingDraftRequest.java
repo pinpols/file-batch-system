@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.file.application.contract.request;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
 import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftCommand;
 import jakarta.validation.Valid;
@@ -35,6 +36,8 @@ public class FileTemplateMappingDraftRequest {
   private List<@Valid Field> fields = new ArrayList<>();
 
   public FileTemplateMappingDraftCommand toCommand() {
+    List<FileTemplateMappingDraftCommand.Field> commandFields =
+        EmptyChecks.isNull(fields) ? List.of() : fields.stream().map(Field::toCommandOrNull).toList();
     return new FileTemplateMappingDraftCommand(
         tenantId,
         direction,
@@ -44,7 +47,7 @@ public class FileTemplateMappingDraftRequest {
         conflictColumns,
         standardAuditBindings,
         defaultQuerySql,
-        fields == null ? List.of() : fields.stream().map(Field::toCommandOrNull).toList());
+        commandFields);
   }
 
   @Data

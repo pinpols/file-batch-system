@@ -8,6 +8,8 @@ import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingl
 import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.requireText;
 import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.resolveTenantField;
 
+import lombok.Builder;
+
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.QueuePriorityPolicy;
 import io.github.pinpols.batch.common.enums.ResourceQueueType;
@@ -17,8 +19,6 @@ import io.github.pinpols.batch.console.domain.param.ResourceQueueUpsertParam;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import lombok.Builder;
-
 /** Shared parser/upsert helper for resource_queue Excel rows. */
 public final class ResourceQueueExcelRowParser {
 
@@ -32,24 +32,36 @@ public final class ResourceQueueExcelRowParser {
   public static QueueRow parseRow(
       String tenantId, int rowNo, Map<String, String> values, List<String> issues) {
     String effectiveTenant = resolveTenantField(values, tenantId, issues);
-    return QueueRow.builder()
-        .rowNo(rowNo)
-        .tenantId(effectiveTenant)
-        .queueCode(
-            CodeNormalizer.toConfigFormOrNull(requireText(values, "queue_code", 128, issues)))
-        .queueName(requireText(values, "queue_name", 256, issues))
-        .queueType(requireEnum(values, "queue_type", QUEUE_TYPES, 32, issues))
-        .maxRunningJobs(requireInteger(values, "max_running_jobs", 0, issues))
-        .maxRunningPartitions(requireInteger(values, "max_running_partitions", 0, issues))
-        .maxQps(requireInteger(values, "max_qps", 0, issues))
-        .workerGroup(optionalText(values, "worker_group", 128, issues))
-        .resourceTag(optionalText(values, "resource_tag", 64, issues))
-        .priorityPolicy(
-            optionalEnum(values, "priority_policy", PRIORITY_POLICIES, 32, "FIFO", issues))
-        .fairShareWeight(requireInteger(values, "fair_share_weight", 1, issues))
-        .enabled(optionalBoolean(values, "enabled", true, issues))
-        .description(optionalText(values, "description", 512, issues))
-        .build();
+    QueueRow.QueueRowBuilder rowBuilder = QueueRow.builder();
+    rowBuilder.rowNo(rowNo);
+    rowBuilder.tenantId(effectiveTenant);
+    String queueCodeText = requireText(values, "queue_code", 128, issues);
+    String queueCode = CodeNormalizer.toConfigFormOrNull(queueCodeText);
+    rowBuilder.queueCode(queueCode);
+    String queueName = requireText(values, "queue_name", 256, issues);
+    rowBuilder.queueName(queueName);
+    String queueType = requireEnum(values, "queue_type", QUEUE_TYPES, 32, issues);
+    rowBuilder.queueType(queueType);
+    Integer maxRunningJobs = requireInteger(values, "max_running_jobs", 0, issues);
+    rowBuilder.maxRunningJobs(maxRunningJobs);
+    Integer maxRunningPartitions = requireInteger(values, "max_running_partitions", 0, issues);
+    rowBuilder.maxRunningPartitions(maxRunningPartitions);
+    Integer maxQps = requireInteger(values, "max_qps", 0, issues);
+    rowBuilder.maxQps(maxQps);
+    String workerGroup = optionalText(values, "worker_group", 128, issues);
+    rowBuilder.workerGroup(workerGroup);
+    String resourceTag = optionalText(values, "resource_tag", 64, issues);
+    rowBuilder.resourceTag(resourceTag);
+    String priorityPolicy =
+        optionalEnum(values, "priority_policy", PRIORITY_POLICIES, 32, "FIFO", issues);
+    rowBuilder.priorityPolicy(priorityPolicy);
+    Integer fairShareWeight = requireInteger(values, "fair_share_weight", 1, issues);
+    rowBuilder.fairShareWeight(fairShareWeight);
+    Boolean enabled = optionalBoolean(values, "enabled", true, issues);
+    rowBuilder.enabled(enabled);
+    String description = optionalText(values, "description", 512, issues);
+    rowBuilder.description(description);
+    return rowBuilder.build();
   }
 
   public static ResourceQueueUpsertParam toUpsertParam(QueueRow row, String operatorId) {

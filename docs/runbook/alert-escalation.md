@@ -5,6 +5,9 @@
 ## 背景
 
 `batch.alert_event` 表用 `dedup_fingerprint` 去重写入数据库 orchestrator 各子系统(SLA / 熔断 / drain / 对账等)的告警。
+可选 AM emit/bridge 链路使用同一指纹作为 `fingerprint` label，区分同租户、同类型的不同资源。
+通知 `group_by` 保持类别/租户等分组，不包含指纹；单条静默和 critical 对 warning 的抑制均须限定该实体指纹。
+单条关闭用与 firing 完全相同的 labels 发送 resolved。修改 AM 模板后须重新加载配置；应用 labels/bridge 修改须重启对应服务。
 此前一条告警 emit 后若无人处理,状态停在 `OPEN` 也只是静静躺着——没有任何机制随时间放大它的存在感。
 升级阶梯补上这一环:OPEN 告警超过 ack-SLA 仍未被确认(状态未转 `ACKED`)时,周期性 sweep 会逐级抬升其
 `escalation_tier`,每升一级打一条 ERROR 日志 + `batch.alert.escalations` 计数,供日志告警 / 指标看板侧的
@@ -27,7 +30,7 @@
 升级用 `expectedTier` 乐观守护,被并发 ack 或其它节点抢先升级时跳过(不重复计数)。
 
 **为什么 notifier 在 console-api 而非 orchestrator**:升级在 orchestrator 抬 tier 写共享表 `alert_event`;真正的通知渠道配置 / webhook 投递 /
-`ConsoleRealtimeDomainEvent` → 分发器全在 console-api,且 console-api **无 Kafka consumer**。让 console-api 轮询共享表上「刚升级未通知」的行,复用它本就有的「定时轮询 + ShedLock + webhook 投递」范式(同 `WebhookDeliveryRelay`),
+`ConsoleRealtimeDomainEvent` → 分发器全在 console-api。告警升级仍由 console-api 轮询共享表上「刚升级未通知」的行,复用「定时轮询 + ShedLock + webhook 投递」范式(同 `WebhookDeliveryRelay`)；Workflow 终态另由专属 Kafka 消费者持久化通知意图，见[终态通知运维](workflow-terminal-notifications.md)。
 只新增本地通知 outbox,不新增 Kafka / policy 表 / 跨模块依赖。投递事件 `alerts/ALERT_ESCALATED` 与告警 ack 的 `alert-updated` 走同一条流,订阅 `alerts` 流的 webhook 自动收到。
 
 **至少一次 + 不重复入队**:notifier 先用 `markEscalationNotified` 的 CAS(`escalation_notified_tier = expected AND status='OPEN'`)抢占通知所有权,
@@ -53,7 +56,7 @@
 
 | 键 | 默认 | 说明 |
 |---|---|---|
-| `enabled` | `true` | 整体开关;`false` 时 notifier 不创建(退化回纯日志/指标放大) |
+| `enabled` | `false` | Alertmanager 迁移后默认关闭；仅在显式启用回滚路径时创建 notifier |
 | `poll-interval-millis` | `60000` | notifier 轮询周期,与 orchestrator 升级 sweep 对齐 |
 | `batch-size` | `100` | 单轮最多处理多少条待通知升级告警 |
 

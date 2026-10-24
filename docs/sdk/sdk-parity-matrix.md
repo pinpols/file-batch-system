@@ -1,5 +1,9 @@
 # 五语言 SDK 对齐矩阵(亲核版)
 
+> **本次 Workflow 改造的适用范围**：下表保留 2026-06-17 的基础协议核查证据，旧行号/通过记录不是当前版本实测。当前源码五语言 SDK 未声明/消费 `replayCapabilities` 和 `replayExecutionGuard`；平台 DTO 支持不等于 SDK 支持。普通 claim/report 与冻结依赖快照、分区参数、Replay 副作用能力应分别核对，不得以基础 conformance 推导“本次改造五语言全部对齐”。
+>
+> Replay 能力缺失保持 UNKNOWN/失败关闭。后续若开放通用 SDK Replay，先落实声明上报、执行前匹配、非幂等开始证据及结果未知恢复，再补充跨语言 fixture 与真实平台验证；本次仅修正文档，不修改 SDK 代码。
+
 > **用途**:回答"五语言 SDK 哪些对齐 / 哪些没对齐"。每格都附 `文件:行号` 证据,可复核。
 > **配套**:[`byo-sdk-guide.md`](byo-sdk-guide.md)(设计与定位)、[`byo-conformance-contract.md`](byo-conformance-contract.md)(契约用例)。
 > **核查日期**:2026-06-17(基于当时 `main`)。改动 SDK 协议/能力后请同步本表。
@@ -60,7 +64,7 @@
 
 ## 4.5 Kafka offset-commit 契约
 
-每条派单消息的处置决定一个 disposition,consumer 据此决定是否提交 offset。**权威源**:[`wire-protocol.md`](wire-protocol.md) §A、契约 fixture [`16/17/18-kafka-schema-version-*`](../api/sdk-contract-fixtures/) + [`28-kafka-paused-task-type-drop`](../api/sdk-contract-fixtures/)。命名:Java `DispatchDecision` / Go `MessageDisposition` / Python `DispatchDisposition` / Rust `MessageOutcome` / TS `PipelineOutcome`。
+每条派单消息的处置决定一个 disposition,consumer 据此决定是否提交 offset。**权威源**:[`wire-protocol.md`](wire-protocol.md) §A、契约 fixture [`16/17/18-kafka-schema-version-*`](../api/sdk-contract-fixtures) + [`28-kafka-paused-task-type-drop`](../api/sdk-contract-fixtures)。命名:Java `DispatchDecision` / Go `MessageDisposition` / Python `DispatchDisposition` / Rust `MessageOutcome` / TS `PipelineOutcome`。
 
 **契约固化的 4 行 —— 五语言已一致**(2026-06-17 亲核 + Rust/TS 有断言测试):
 
@@ -77,7 +81,7 @@
 
 **decode / parse-error —— 已固化为 commit-skip(fixture 30,五语言对齐)**
 
-损坏 / 非 JSON / 无法反序列化的 poison 记录:**跳过并提交 offset(commit-skip)**,让分区前移过这条损坏数据——否则一条 corrupt 消息会永久 head-of-line 阻塞分区(重读→重败→永不前移)。§A 只约束 schemaVersion 不覆盖 decode,故此前 Java/Python(提交跳过)与 Go/TS(withhold)分歧;已加 [`30-kafka-decode-error-commit-skip`](../api/sdk-contract-fixtures/) fixture 固化 + schema 加 `kafka:"commit-skip"` 枚举值,并把 Go/TS 对齐:
+损坏 / 非 JSON / 无法反序列化的 poison 记录:**跳过并提交 offset(commit-skip)**,让分区前移过这条损坏数据——否则一条 corrupt 消息会永久 head-of-line 阻塞分区(重读→重败→永不前移)。§A 只约束 schemaVersion 不覆盖 decode,故此前 Java/Python(提交跳过)与 Go/TS(withhold)分歧;已加 [`30-kafka-decode-error-commit-skip`](../api/sdk-contract-fixtures) fixture 固化 + schema 加 `kafka:"commit-skip"` 枚举值,并把 Go/TS 对齐:
 
 | SDK | decode/parse-error | 验证 |
 |---|---|---|
@@ -91,7 +95,7 @@
 
 **历史教训(2026-06-17)**:Java 曾对未知大版本返回 `DROP_TERMINAL`(提交,**违反 fixture 18** 静默丢 v3 任务);Python 早期无差别 commit 整批;decode 行 Go/TS 与 Java/Python 分歧。已在 PR #545/#546(disposition+schema)/ #550(诚实记录)/ 本 PR(decode 固化)闭环。**核查此类问题必须逐 SDK 实际读 consumer 的 disposition 分支 + 比对 fixture,不能只看 happy-path 或假设"一致"**——decode 分歧正是逐语言通读 Rust/TS 实现才暴露的,需对全部五语言逐一核对后再下"五语言一致"结论。
 
-## 5. 真正"没对齐"的——是工程尾巴 / 有意边界,不是代码缺口
+## 5. 历史基础协议差异与发布边界
 
 | 项 | 现状 | 性质 |
 |---|---|---|
@@ -101,6 +105,6 @@
 
 ## 6. 结论
 
-**该对齐的维度(协议引擎 / ADR-037 / 幂等 / 富档 batteries / Kafka offset-commit 契约)五语言已对齐,无需改代码的缺口。** 差异项要么是两档定位的有意设计(薄档无 typed/atomic/builtin、可观测 BYO),要么是发布动作(尚未 publish)。
+2026-06-17 的证据覆盖基础协议引擎、既有幂等/模板与offset决策。薄档/富档定位和发布动作继续各自维护。**当前新增Replay合同不在该历史对齐范围内，五语言通用SDK不能据此被认定已支持安全重放**；是否开放该能力及需要的实现/验证见本文开头和当前总方案。
 
-> offset-commit 契约**五行全部固化、五语言对齐**(见 §4.5):4 行 schema/paused/tenant 由 fixture 16/17/18/28 + PR #545/#546 闭环;decode/parse-error 行由 fixture 30 钉成 commit-skip,Go/TS 已对齐。
+> 历史offset-commit核查记录：五行决策曾完成五语言对齐(见 §4.5):4 行 schema/paused/tenant 由 fixture 16/17/18/28 + PR #545/#546 闭环;decode/parse-error 行由 fixture 30 钉成 commit-skip,Go/TS 已对齐。

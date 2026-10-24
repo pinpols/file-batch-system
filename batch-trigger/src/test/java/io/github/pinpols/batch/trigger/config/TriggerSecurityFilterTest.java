@@ -5,11 +5,15 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.trigger.auth.TriggerApiKeyPrincipal;
+import io.github.pinpols.batch.trigger.auth.TriggerApiKeyVerifier;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletResponse;
+import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -40,13 +44,16 @@ class TriggerSecurityFilterTest {
 
   private BatchSecurityProperties securityProperties;
   private TriggerSecurityConfiguration.InternalSecretFilter filter;
+  private TriggerApiKeyVerifier apiKeyVerifier;
 
   @BeforeEach
   void setUp() {
     securityProperties = new BatchSecurityProperties();
     securityProperties.setInternalSecret(SECRET);
     securityProperties.setBypassMode(false);
-    filter = new TriggerSecurityConfiguration.InternalSecretFilter(securityProperties);
+    apiKeyVerifier = mock(TriggerApiKeyVerifier.class);
+    filter =
+        new TriggerSecurityConfiguration.InternalSecretFilter(securityProperties, apiKeyVerifier);
     SecurityContextHolder.clearContext();
   }
 
@@ -137,6 +144,52 @@ class TriggerSecurityFilterTest {
   }
 
   @Test
+  @DisplayName("租户 API Key 仅可认证事件启动/状态路由并写入来源 principal")
+  void tenantApiKey_authenticatesOnlyEventRoutes() throws Exception {
+    TriggerApiKeyPrincipal principal =
+        new TriggerApiKeyPrincipal(7L, "tenant-a", "billing", "trigger.event", null);
+    when(apiKeyVerifier.authenticate("source-key", "tenant-a")).thenReturn(Optional.of(principal));
+    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/triggers/launch");
+    request.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "source-key");
+    request.addHeader(CommonConstants.BATCH_TENANT_ID_HEADER, "tenant-a");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    FilterChain chain = mock(FilterChain.class);
+
+    filter.doFilter(request, response, chain);
+
+    verify(chain).doFilter(request, response);
+    assertThat(SecurityContextHolder.getContext().getAuthentication().getPrincipal())
+        .isEqualTo(principal);
+    assertThat(SecurityContextHolder.getContext().getAuthentication().getAuthorities())
+        .extracting(Object::toString)
+        .contains("ROLE_EXTERNAL_EVENT_SOURCE");
+  }
+
+  @Test
+  @DisplayName("API Key 不得访问 catch-up 或通过错误 key 回退共享密钥")
+  void tenantApiKey_isRestrictedAndDoesNotFallback() throws Exception {
+    MockHttpServletRequest forbiddenPath =
+        new MockHttpServletRequest("POST", "/api/triggers/catch-up/approve");
+    forbiddenPath.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "source-key");
+    forbiddenPath.addHeader(CommonConstants.BATCH_TENANT_ID_HEADER, "tenant-a");
+    MockHttpServletResponse forbiddenResponse = new MockHttpServletResponse();
+    FilterChain forbiddenChain = mock(FilterChain.class);
+    filter.doFilter(forbiddenPath, forbiddenResponse, forbiddenChain);
+    assertThat(forbiddenResponse.getStatus()).isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
+    verify(forbiddenChain, never()).doFilter(any(), any());
+
+    MockHttpServletRequest invalidKey = new MockHttpServletRequest("POST", "/api/triggers/launch");
+    invalidKey.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "invalid-key");
+    invalidKey.addHeader(CommonConstants.BATCH_TENANT_ID_HEADER, "tenant-a");
+    invalidKey.addHeader(HEADER, SECRET);
+    MockHttpServletResponse invalidResponse = new MockHttpServletResponse();
+    FilterChain invalidChain = mock(FilterChain.class);
+    filter.doFilter(invalidKey, invalidResponse, invalidChain);
+    assertThat(invalidResponse.getStatus()).isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
+    verify(invalidChain, never()).doFilter(any(), any());
+  }
+
+  @Test
   @DisplayName("CSRF 仅忽略带正确内部密钥的请求,缺失或错误密钥仍受保护")
   void csrfMatcher_ignoresOnlyAuthenticatedInternalRequests() {
     TriggerSecurityConfiguration.InternalSecretRequestMatcher matcher =
@@ -156,5 +209,33 @@ class TriggerSecurityFilterTest {
     securityProperties.setBypassMode(true);
     assertThat(matcher.matches(new MockHttpServletRequest("POST", "/api/triggers/launch")))
         .isTrue();
+  }
+
+  @Test
+  @DisplayName("外部来源 API Key 只在事件接纳与状态路由忽略 CSRF")
+  void eventApiKeyCsrfMatcher_isRestrictedToEventRoutes() {
+    TriggerSecurityConfiguration.EventApiKeyRequestMatcher matcher =
+        new TriggerSecurityConfiguration.EventApiKeyRequestMatcher();
+    MockHttpServletRequest launch = new MockHttpServletRequest("POST", "/api/triggers/launch");
+    launch.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "source-key");
+    MockHttpServletRequest status =
+        new MockHttpServletRequest("GET", "/api/triggers/launch/status");
+    status.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "source-key");
+    MockHttpServletRequest catchUp =
+        new MockHttpServletRequest("POST", "/api/triggers/catch-up/approve");
+    catchUp.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "source-key");
+    MockHttpServletRequest event = new MockHttpServletRequest("POST", "/api/triggers/events");
+    event.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "source-key");
+    MockHttpServletRequest eventStatus =
+        new MockHttpServletRequest("GET", "/api/triggers/events/status");
+    eventStatus.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "source-key");
+
+    assertThat(matcher.matches(launch)).isTrue();
+    assertThat(matcher.matches(status)).isTrue();
+    assertThat(matcher.matches(event)).isTrue();
+    assertThat(matcher.matches(eventStatus)).isTrue();
+    assertThat(matcher.matches(catchUp)).isFalse();
+    assertThat(matcher.matches(new MockHttpServletRequest("POST", "/api/triggers/launch")))
+        .isFalse();
   }
 }

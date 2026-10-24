@@ -12,6 +12,8 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 @DisplayName("OIDC 登录审计")
 class ConsoleOidcLoginAuditTest {
@@ -31,7 +33,7 @@ class ConsoleOidcLoginAuditTest {
 
     ArgumentCaptor<OperationAuditEvent> eventCaptor =
         ArgumentCaptor.forClass(OperationAuditEvent.class);
-    verify(mapper, org.mockito.Mockito.times(2)).insert(eventCaptor.capture());
+    verify(mapper, Mockito.times(2)).insert(eventCaptor.capture());
     assertThat(eventCaptor.getAllValues())
         .satisfiesExactly(
             success -> {
@@ -59,11 +61,11 @@ class ConsoleOidcLoginAuditTest {
             "request-1", "trace-1", "tenant-a", null, null, "127.0.0.1"));
     doThrow(new IllegalStateException("database unavailable"))
         .when(mapper)
-        .insert(org.mockito.ArgumentMatchers.any(OperationAuditEvent.class));
+        .insert(ArgumentMatchers.any(OperationAuditEvent.class));
     ConsoleOidcLoginAudit audit = new ConsoleOidcLoginAudit(mapper, resolver);
 
     audit.failed("tenant-a", "OIDC_AUTHENTICATION_FAILED");
 
-    verify(mapper).insert(org.mockito.ArgumentMatchers.any(OperationAuditEvent.class));
+    verify(mapper).insert(ArgumentMatchers.any(OperationAuditEvent.class));
   }
 }

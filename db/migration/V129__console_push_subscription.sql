@@ -18,21 +18,28 @@ CREATE TABLE IF NOT EXISTS batch.console_push_subscription (
     tenant_id       VARCHAR(64)  NOT NULL,
     username        VARCHAR(128) NOT NULL,
     endpoint        TEXT         NOT NULL,
-    p256dh_key      TEXT         NOT NULL,   -- 浏览器加密公钥(base64-url)
-    auth_secret     TEXT         NOT NULL,   -- 认证密钥(base64-url)
-    user_agent      VARCHAR(512),            -- 创建时的 UA 便于排障
+    -- 浏览器加密公钥(base64-url)
+    p256dh_key      TEXT         NOT NULL,
+    -- 认证密钥(base64-url)
+    auth_secret     TEXT         NOT NULL,
+    -- 创建时的 UA 便于排障
+    user_agent      VARCHAR(512),
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    last_pushed_at  TIMESTAMPTZ,             -- 最近一次实际推送时间
-    last_seen_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),  -- 用户最近一次主动登录/订阅刷新
+    -- 最近一次实际推送时间
+    last_pushed_at  TIMESTAMPTZ,
+    -- 用户最近一次主动登录/订阅刷新
+    last_seen_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
 
     CONSTRAINT uq_console_push_subscription UNIQUE (tenant_id, username, endpoint)
 );
 
 -- 推送侧批量查
+
 CREATE INDEX IF NOT EXISTS idx_console_push_sub_tenant_user
     ON batch.console_push_subscription (tenant_id, username);
 
 -- unsubscribe / 410 失效清理
+
 CREATE INDEX IF NOT EXISTS idx_console_push_sub_endpoint
     ON batch.console_push_subscription (endpoint);
 

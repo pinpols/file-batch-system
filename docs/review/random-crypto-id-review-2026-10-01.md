@@ -264,4 +264,4 @@ Go SDK 使用 `crypto/rand.Read` 生成 UUID-shaped 随机值，但忽略返回�
 
 ## 待办状态
 
-本轮登记到 [`../analysis/todo-master.md`](../analysis/todo-master.md) 的 `G8. 随机数 / 加密 / ID 治理` 已完成。后续若引入 Snowflake、ULID、外部 KMS 或新的 SDK 传输实现，应重新执行本类审查。
+本轮登记到 [`../analysis/todo-master.md`](../plans/todo-master.md) 的 `G8. 随机数 / 加密 / ID 治理` 已完成。后续若引入 Snowflake、ULID、外部 KMS 或新的 SDK 传输实现，应重新执行本类审查。

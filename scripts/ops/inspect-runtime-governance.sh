@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：运行时治理 profile 只读检查。仅校验配置边界，不连接外部系统、不清理数据。
+# 用法：在仓库根目录执行 bash scripts/ops/inspect-runtime-governance.sh；参数与前置环境见下方说明及所属 README。
 # 运行时治理 profile 只读检查。仅校验配置边界，不连接外部系统、不清理数据。
 set -euo pipefail
 

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：汇总 Surefire 与 Failsafe 报告中的不稳定测试。
+# 用法：在仓库根目录执行 python3 scripts/ci/collect-flaky.py；参数与前置环境见下方说明及所属 README。
 """collect-flaky.py — 扫所有模块 surefire / failsafe XML,汇总 flaky 用例。
 
 背景:必需门禁不重跑失败测试；只有带治理元数据的 `@FlakyTest` 会在

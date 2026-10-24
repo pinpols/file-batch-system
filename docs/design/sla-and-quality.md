@@ -1,5 +1,7 @@
 # 运行质量与 SLA 设计
 
+> **Workflow 新根的监控边界**：Job 告警在实例生成后保留，并关联根 WorkflowRun/节点；尚未物化的 JOB 不能靠扫描 JobInstance 判断漏跑，计划机会、输入预期与缺失义务需按 occurrence/expected-work 链判断。根失败、输入缺失和 Job 耗时告警不能互相替代。下方 Job 监控专用 SQL 仍有自身 schedule/timezone 策略口径，不据“日程归 Workflow”就假定其所有历史列消费者已消失；告警继承与新根行为须看对应专项证据。
+
 > 拆自 mega 设计文档 ch.11，对照当前实现做了**实际状态标注**（哪些已落地、哪些只是设计）。
 
 ## 1. 任务执行 SLA
@@ -150,7 +152,7 @@ phone REGEX ^1[3-9]\d{9}$
 
 ## 5. SLA 升级与告警分级
 
-> 该子能力当前**部分实现**——告警通道齐全，但 SLA 升级矩阵仍在路线图上（详见 [`../analysis/hardening-backlog.md`](../analysis/hardening-backlog.md)）。
+> 该子能力当前**部分实现**——告警通道齐全，但 SLA 升级矩阵仍在路线图上（详见 [`../analysis/hardening-backlog.md`](../plans/hardening-backlog.md)）。
 
 设计目标：
 
@@ -166,4 +168,4 @@ phone REGEX ^1[3-9]\d{9}$
 - [file-pipeline-design.md](./file-pipeline-design.md) — 文件链路与质量校验落点
 - [`../architecture/workflow-dependency-guide.md`](../architecture/workflow-dependency-guide.md) — 节点依赖（join_mode）影响等待策略
 - [`../runbook/incident-response.md`](../runbook/incident-response.md) — SLA 告警出现后的应急 SOP
-- [`../analysis/hardening-backlog.md`](../analysis/hardening-backlog.md) — 待落地：SLA 升级矩阵 / 自动降级
+- [`../analysis/hardening-backlog.md`](../plans/hardening-backlog.md) — 待落地：SLA 升级矩阵 / 自动降级

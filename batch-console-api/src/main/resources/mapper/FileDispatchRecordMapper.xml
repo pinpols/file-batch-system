@@ -1,7 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.file.mapper.FileDispatchRecordMapper">
-    <select id="selectByQuery" resultType="map">
+    <resultMap id="FileDispatchRecordQueryViewResultMap"
+               type="io.github.pinpols.batch.console.domain.file.view.FileDispatchRecordQueryView">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="file_id" javaType="java.lang.Long"/>
+            <arg column="pipeline_instance_id" javaType="java.lang.Long"/>
+            <arg column="channel_code" javaType="java.lang.String"/>
+            <arg column="dispatch_target" javaType="java.lang.String"/>
+            <arg column="dispatch_status" javaType="java.lang.String"/>
+            <arg column="dispatch_attempt" javaType="java.lang.Integer"/>
+            <arg column="receipt_code" javaType="java.lang.String"/>
+            <arg column="receipt_status" javaType="java.lang.String"/>
+            <arg column="external_request_id" javaType="java.lang.String"/>
+            <arg column="error_code" javaType="java.lang.String"/>
+            <arg column="error_message" javaType="java.lang.String"/>
+            <arg column="error_key" javaType="java.lang.String"/>
+            <arg column="error_args" javaType="java.lang.Object"/>
+            <arg column="dispatched_at" javaType="java.time.Instant"/>
+            <arg column="ack_at" javaType="java.time.Instant"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="FileDispatchRecordQueryViewResultMap">
         select
             id,
             tenant_id,

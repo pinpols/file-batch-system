@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
+import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,7 +21,7 @@ import org.springframework.mock.env.MockEnvironment;
 class ConsoleDefaultPasswordGuardTest {
 
   @Mock
-  private io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper mapper;
+  private ConsoleUserAccountMapper mapper;
 
   @Mock
   private ConsolePasswordHasher passwordHasher;

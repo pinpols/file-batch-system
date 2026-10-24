@@ -50,6 +50,7 @@
 
 - **路由**：`DispatchChannelGateway`（熔断 + 健康短路 + Micrometer）按 **`channel_type`**：`API` / `API_PUSH` → HTTP；`LOCAL` → 本地目录；**`NAS`** → 共享目录写入；**`OSS`** → MinIO / S3 兼容对象存储；**`SFTP`** → JSch；**`EMAIL`** → SMTP。
 - **渠道配置**：表字段 + **`config_json`** 合并（**`ChannelConfigMerge`**），密钥与 `sftp_*` / `smtp_*` / `receipt_poll_url` 等放在 **`config_json`**；`channel_type` / `channel_code` 等治理保留键不允许被 JSON 覆盖。
+- **HTTP 自动重试**：`API` / `API_PUSH` 只有在 `config_json.receiver_idempotency_supported=true` 明确声明且接收端按请求 `Idempotency-Key` 去重时，才把发送后的 HTTP/传输失败作为可自动重试的已知失败；缺省或 `false` 时按 `EXTERNAL_OUTCOME_UNKNOWN` 处理并停止自动重试。仅发送幂等键不代表接收端兑现了该契约。
 - **NAS / OSS 配置**：`nas_remote_directory` / `nas_remote_file_name` 用于共享目录落盘；`oss_bucket` / `oss_object_prefix` 用于对象存储落盘，兼容 `batch.storage.s3` 默认连接信息。
 - **异步回执**：**`DispatchReceiptPollScheduler`** GET **`receipt_poll_url?externalRequestId=`**（`SENT`+`PENDING` 行）。
 - **健康治理**：`DispatchChannelHealthService` 维护 `batch.file_channel_health`，对 NAS/OSS 做主动探测和失败退避，网关在 dispatch 前会做健康短路。

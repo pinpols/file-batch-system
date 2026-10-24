@@ -35,24 +35,14 @@ public class ControlPlaneMixedPressureSimulation extends Simulation {
   private static final String MODULES =
       System.getProperty("control.modules", "process,dispatch,atomic,trigger");
 
-  private static final String PROCESS_JOB_CODE =
-      System.getProperty("control.process.jobCode", "lt_process_sql_job");
-
-  private static final String DISPATCH_JOB_CODE =
-      System.getProperty("control.dispatch.jobCode", "lt_dispatch_local_job");
-
-  private static final String ATOMIC_JOB_CODE =
-      System.getProperty("control.atomic.jobCode", "atomic_sql_demo");
-
-  private static final String TRIGGER_JOB_CODE =
-      System.getProperty("control.trigger.jobCode", "atomic_sql_demo");
-
   /**
-   * 结果业务键基数。默认 1 保留“同 job + 同 bizDate 并发重跑”的热点键画像；大于 1 时按请求序号轮换
-   * bizDate，用于测量不受单一 result_version 版本链串行锁限制的通用控制面吞吐。
+   * 业务日基数。默认 1 检查同 Workflow/date 去重；大于 1 时跨模块按全局请求序号轮换日期，
+   * 避免 Atomic 与 Trigger 引用同一 Workflow 时复用根运行。独立执行容量验收须配置足够基数。
    */
   private static final int BIZ_DATE_CARDINALITY =
       positiveIntProperty("control.bizDate.cardinality", 1);
+
+  private static final AtomicLong BUSINESS_DATE_SEQUENCE = new AtomicLong();
 
   private static final double PROCESS_RPS =
       Double.parseDouble(System.getProperty("control.process.rps", "1.0"));
@@ -99,12 +89,17 @@ public class ControlPlaneMixedPressureSimulation extends Simulation {
   {
     List<PopulationBuilder> populations = new ArrayList<>();
     addLaunchPopulation(
-        populations, "process", PROCESS_JOB_CODE, PROCESS_PARAMS, PROCESS_RPS);
+        populations, "process", "control.process.workflowDefinitionId", PROCESS_PARAMS, PROCESS_RPS);
     addLaunchPopulation(
-        populations, "dispatch", DISPATCH_JOB_CODE, DISPATCH_PARAMS, DISPATCH_RPS);
-    addLaunchPopulation(populations, "atomic", ATOMIC_JOB_CODE, ATOMIC_PARAMS, ATOMIC_RPS);
+        populations, "dispatch", "control.dispatch.workflowDefinitionId", DISPATCH_PARAMS, DISPATCH_RPS);
     addLaunchPopulation(
-        populations, "trigger", TRIGGER_JOB_CODE, TRIGGER_PARAMS, GatlingConfig.SCHEDULING_LAUNCH_RPS);
+        populations, "atomic", "control.atomic.workflowDefinitionId", ATOMIC_PARAMS, ATOMIC_RPS);
+    addLaunchPopulation(
+        populations,
+        "trigger",
+        "control.trigger.workflowDefinitionId",
+        TRIGGER_PARAMS,
+        GatlingConfig.SCHEDULING_LAUNCH_RPS);
 
     if (enabled("trigger") && GatlingConfig.SCHEDULING_READ_RPS > 0) {
       ScenarioBuilder reads = scenario("mixed trigger scheduler reads").exec(schedulerReads);
@@ -128,31 +123,33 @@ public class ControlPlaneMixedPressureSimulation extends Simulation {
   private static void addLaunchPopulation(
       List<PopulationBuilder> populations,
       String module,
-      String jobCode,
+      String workflowDefinitionIdProperty,
       String paramsJson,
       double requestsPerSecond) {
     if (!enabled(module) || requestsPerSecond <= 0) {
       return;
     }
+    String workflowDefinitionId =
+        GatlingConfig.requiredWorkflowDefinitionId(workflowDefinitionIdProperty);
     ScenarioBuilder scenario =
-        scenario("mixed " + module + " launch").exec(launch(module, jobCode, paramsJson));
+        scenario("mixed " + module + " launch").exec(launch(module, workflowDefinitionId, paramsJson));
     populations.add(
         scenario.injectOpen(
             constantUsersPerSec(requestsPerSecond).during(GatlingConfig.DURATION_SECONDS)));
   }
 
-  private static ChainBuilder launch(String module, String jobCode, String paramsJson) {
+  private static ChainBuilder launch(String module, String workflowDefinitionId, String paramsJson) {
     String launchBody =
         """
             {
               "tenantId": "%s",
-              "jobCode": "%s",
+              "workflowDefinitionId": %s,
               "bizDate": "#{bizDate}",
               "triggerType": "API",
               "params": %s
             }
             """
-            .formatted(GatlingConfig.TENANT_ID, jobCode, paramsJson);
+            .formatted(GatlingConfig.TENANT_ID, workflowDefinitionId, paramsJson);
 
     return feed(feeder(module))
         .exec(
@@ -173,7 +170,8 @@ public class ControlPlaneMixedPressureSimulation extends Simulation {
             () -> {
               long requestIndex = sequence.getAndIncrement();
               LocalDate bizDate =
-                  firstBizDate.plusDays(Math.floorMod(requestIndex, BIZ_DATE_CARDINALITY));
+                  firstBizDate.plusDays(
+                      Math.floorMod(BUSINESS_DATE_SEQUENCE.getAndIncrement(), BIZ_DATE_CARDINALITY));
               Map<String, Object> values = new HashMap<>();
               values.put("idempotencyKey", UUID.randomUUID().toString());
               values.put(

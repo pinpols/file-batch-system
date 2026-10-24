@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.console.domain.rbac.service;
 
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleUserAccountInsertParam;
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleUserAccountInsertProvisionedParam;
+
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
@@ -84,17 +88,22 @@ public class ConsoleUserAccountService {
     String normalizedAuthorities = normalizeAuthorities(authoritiesCsv);
     enforceGrantableAuthorities(normalizedAuthorities);
     enforceRoleTenantBinding(effectiveTenantId, normalizedAuthorities);
-    if (EmptyChecks.isNotNull(userAccountMapper.selectByUsername(username))) {
+    Map<String, Object> existingAccount = userAccountMapper.selectByUsername(username);
+    if (EmptyChecks.isNotNull(existingAccount)) {
       throw BizException.of(ResultCode.CONFLICT, "error.username.already_exists", username);
     }
+    ConsoleUserAccountInsertParam consoleUserAccountInsertParam = ConsoleUserAccountInsertParam.builder()
+        .tenantId(effectiveTenantId)
+        .username(username)
+        .displayName(displayName)
+        .passwordHash(passwordHasher.encode(password))
+        .authoritiesCsv(normalizedAuthorities)
+        .createdBy(null)
+        .build();
     userAccountMapper.insert(
-        effectiveTenantId,
-        username,
-        displayName,
-        passwordHasher.encode(password),
-        normalizedAuthorities,
-        null);
-    return toResponse(userAccountMapper.selectByUsername(username));
+        consoleUserAccountInsertParam);
+    Map<String, Object> createdAccount = userAccountMapper.selectByUsername(username);
+    return toResponse(createdAccount);
   }
 
   /** 批量开户沿用单账号的租户与角色守卫，初始密码只存哈希并标记改密提醒。 */
@@ -105,12 +114,21 @@ public class ConsoleUserAccountService {
     String normalizedRole = normalizeAuthorities(role);
     enforceGrantableAuthorities(normalizedRole);
     enforceRoleTenantBinding(effectiveTenantId, normalizedRole);
-    if (EmptyChecks.isNotNull(userAccountMapper.selectByUsername(username))) {
+    Map<String, Object> existingAccount = userAccountMapper.selectByUsername(username);
+    if (EmptyChecks.isNotNull(existingAccount)) {
       throw BizException.of(ResultCode.CONFLICT, "error.username.already_exists", username);
     }
+    ConsoleUserAccountInsertProvisionedParam consoleUserAccountInsertProvisionedParam = ConsoleUserAccountInsertProvisionedParam.builder()
+        .tenantId(effectiveTenantId)
+        .username(username)
+        .displayName(displayName)
+        .passwordHash(passwordHasher.encode(password))
+        .authoritiesCsv(normalizedRole)
+        .build();
     userAccountMapper.insertProvisioned(
-        effectiveTenantId, username, displayName, passwordHasher.encode(password), normalizedRole);
-    return toResponse(userAccountMapper.selectByUsername(username));
+        consoleUserAccountInsertProvisionedParam);
+    Map<String, Object> createdAccount = userAccountMapper.selectByUsername(username);
+    return toResponse(createdAccount);
   }
 
   public ConsoleUserAccountResponse update(long id, String displayName, String authoritiesCsv) {
@@ -119,7 +137,8 @@ public class ConsoleUserAccountService {
     String normalizedAuthorities = normalizeAuthorities(authoritiesCsv);
     enforceGrantableAuthorities(normalizedAuthorities);
     userAccountMapper.updateProfile(id, displayName, normalizedAuthorities);
-    return toResponse(userAccountMapper.selectById(id));
+    Map<String, Object> updatedAccount = userAccountMapper.selectById(id);
+    return toResponse(updatedAccount);
   }
 
   /** 管理员重置他人密码:置 must_change_password=true,提醒被重置者尽快改密;并踢掉其现有会话。 */
@@ -162,7 +181,8 @@ public class ConsoleUserAccountService {
     Map<String, Object> row = assertExists(id);
     assertSameTenantOrGlobal(str(row, COL_TENANT_ID));
     userAccountMapper.updateEnabled(id, true);
-    return toResponse(userAccountMapper.selectById(id));
+    Map<String, Object> enabledAccount = userAccountMapper.selectById(id);
+    return toResponse(enabledAccount);
   }
 
   public ConsoleUserAccountResponse disable(long id) {
@@ -170,11 +190,13 @@ public class ConsoleUserAccountService {
     assertSameTenantOrGlobal(str(account, COL_TENANT_ID));
     userAccountMapper.updateEnabled(id, false);
     sessionRegistry.invalidateSession(str(account, COL_USERNAME), str(account, COL_TENANT_ID));
-    return toResponse(userAccountMapper.selectById(id));
+    Map<String, Object> disabledAccount = userAccountMapper.selectById(id);
+    return toResponse(disabledAccount);
   }
 
   private Map<String, Object> assertExists(long id) {
-    return Guard.requireFound(userAccountMapper.selectById(id), "user account not found: " + id);
+    Map<String, Object> account = userAccountMapper.selectById(id);
+    return Guard.requireFound(account, "user account not found: " + id);
   }
 
   /**
@@ -277,22 +299,26 @@ public class ConsoleUserAccountService {
   }
 
   private ConsoleUserAccountResponse toResponse(Map<String, Object> row) {
+    Object rawId = row.get("id");
+    Long id = rawId instanceof Number number ? number.longValue() : null;
+    String tenantId = str(row, COL_TENANT_ID);
+    String username = str(row, COL_USERNAME);
+    String displayName = str(row, "display_name");
+    String authoritiesCsv = str(row, "authorities_csv");
+    boolean enabled = Boolean.TRUE.equals(row.get("enabled"));
+    String createdAt = str(row, "created_at");
+    String updatedAt = str(row, "updated_at");
     return new ConsoleUserAccountResponse(
-        row.get("id") instanceof Number n ? n.longValue() : null,
-        str(row, COL_TENANT_ID),
-        str(row, COL_USERNAME),
-        str(row, "display_name"),
-        str(row, "authorities_csv"),
-        Boolean.TRUE.equals(row.get("enabled")),
-        str(row, "created_at"),
-        str(row, "updated_at"));
+        id, tenantId, username, displayName, authoritiesCsv, enabled, createdAt, updatedAt);
   }
 
   private String normalizeAuthorities(String raw) {
     if (raw == null || raw.isBlank()) {
       return ConsoleRoles.TENANT_USER;
     }
-    return raw.trim().toUpperCase();
+    String trimmedAuthorities = raw.trim();
+    String normalizedAuthorities = trimmedAuthorities.toUpperCase();
+    return normalizedAuthorities;
   }
 
   private static String str(Map<String, Object> row, String key) {

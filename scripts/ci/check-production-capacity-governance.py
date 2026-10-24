@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：生产容量治理自动化。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-production-capacity-governance.py；参数与前置环境见下方说明及所属 README。
 """校验生产容量治理自动化入口、只读 SQL 和 runbook 索引一致。"""
 
 from __future__ import annotations

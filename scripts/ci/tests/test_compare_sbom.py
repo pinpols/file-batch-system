@@ -1,3 +1,5 @@
+# 用途：验证SBOM 语义比较与不稳定展示字段排除。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_compare_sbom.py。
 from __future__ import annotations
 
 import importlib.util

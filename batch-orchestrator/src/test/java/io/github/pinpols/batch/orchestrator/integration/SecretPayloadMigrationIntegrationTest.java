@@ -42,24 +42,33 @@ class SecretPayloadMigrationIntegrationTest {
   @Test
   @DisplayName("逐级升级过程中历史明文载荷被加密,最终约束生效后明文与字段缺失的写入均被拒绝")
   void shouldEncryptLegacyPayloadAndValidateConstraint_whenUpgradingMigrations() {
+    final String insertSecretVersionSql = """
+        insert into batch.secret_version(
+          tenant_id, secret_ref, secret_name, version_no, secret_status,
+          current_version, secret_payload
+        ) values (?, ?, ?, 1, 'DRAFT', false, ?::jsonb)
+        """;
+    final String insertSecretVersionSql2 = """
+            insert into batch.secret_version(
+              tenant_id, secret_ref, secret_name, version_no, secret_status,
+              current_version, secret_payload
+            ) values ('tenant-a', 'plain-ref', 'Plain Secret', 1, 'DRAFT', false, ?::jsonb)
+            """;
+    final String insertSecretVersionSql3 = """
+            insert into batch.secret_version(
+              tenant_id, secret_ref, secret_name, version_no, secret_status,
+              current_version, secret_payload
+            ) values ('tenant-a', 'missing-fields-ref', 'Missing Fields', 1, 'DRAFT', false, ?::jsonb)
+            """;
+
     SecretPayloadFlywayCallback callback =
         new SecretPayloadFlywayCallback(secretPayloadProtector());
     flyway(callback).target("209").load().migrate();
     JdbcTemplate jdbc = jdbcTemplate();
-    jdbc.update("""
-        insert into batch.secret_version(
-          tenant_id, secret_ref, secret_name, version_no, secret_status,
-          current_version, secret_payload
-        ) values (?, ?, ?, 1, 'DRAFT', false, ?::jsonb)
-        """, "tenant-a", "legacy-ref", "Legacy Secret", LEGACY_PAYLOAD);
+    jdbc.update(insertSecretVersionSql, "tenant-a", "legacy-ref", "Legacy Secret", LEGACY_PAYLOAD);
 
     flyway(callback).target("210").load().migrate();
-    jdbc.update("""
-        insert into batch.secret_version(
-          tenant_id, secret_ref, secret_name, version_no, secret_status,
-          current_version, secret_payload
-        ) values (?, ?, ?, 1, 'DRAFT', false, ?::jsonb)
-        """, "tenant-a", "v210-ref", "V210 Legacy Secret", V210_NULL_CHECK_PAYLOAD);
+    jdbc.update(insertSecretVersionSql, "tenant-a", "v210-ref", "V210 Legacy Secret", V210_NULL_CHECK_PAYLOAD);
 
     flyway(callback).load().migrate();
 
@@ -72,19 +81,9 @@ class SecretPayloadMigrationIntegrationTest {
         .contains(SecretPayloadProtector.FORMAT)
         .doesNotContain("v210-null-check-plain-token");
     assertThat(constraintValidated(jdbc)).isTrue();
-    assertThatThrownBy(() -> jdbc.update("""
-            insert into batch.secret_version(
-              tenant_id, secret_ref, secret_name, version_no, secret_status,
-              current_version, secret_payload
-            ) values ('tenant-a', 'plain-ref', 'Plain Secret', 1, 'DRAFT', false, ?::jsonb)
-            """, LEGACY_PAYLOAD))
+    assertThatThrownBy(() -> jdbc.update(insertSecretVersionSql2, LEGACY_PAYLOAD))
         .hasMessageContaining("ck_secret_version_payload_protected");
-    assertThatThrownBy(() -> jdbc.update("""
-            insert into batch.secret_version(
-              tenant_id, secret_ref, secret_name, version_no, secret_status,
-              current_version, secret_payload
-            ) values ('tenant-a', 'missing-fields-ref', 'Missing Fields', 1, 'DRAFT', false, ?::jsonb)
-            """, V210_NULL_CHECK_PAYLOAD))
+    assertThatThrownBy(() -> jdbc.update(insertSecretVersionSql3, V210_NULL_CHECK_PAYLOAD))
         .hasMessageContaining("ck_secret_version_payload_protected");
   }
 
@@ -118,18 +117,24 @@ class SecretPayloadMigrationIntegrationTest {
   }
 
   private static String secretPayload(JdbcTemplate jdbc, String secretRef) {
+    final String selectSecretPayloadSql = """
+        select secret_payload::text from batch.secret_version where secret_ref = ?
+    """;
+
     return jdbc.queryForObject(
-        "select secret_payload::text from batch.secret_version where secret_ref = ?",
+        selectSecretPayloadSql,
         String.class,
         secretRef);
   }
 
   private static boolean constraintValidated(JdbcTemplate jdbc) {
-    return Boolean.TRUE.equals(jdbc.queryForObject("""
+    final String selectConvalidatedSql = """
         select convalidated
           from pg_constraint
          where conname = 'ck_secret_version_payload_protected'
            and conrelid = 'batch.secret_version'::regclass
-        """, Boolean.class));
+        """;
+
+    return Boolean.TRUE.equals(jdbc.queryForObject(selectConvalidatedSql, Boolean.class));
   }
 }

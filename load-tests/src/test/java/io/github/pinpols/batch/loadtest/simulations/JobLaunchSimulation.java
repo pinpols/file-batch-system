@@ -29,7 +29,7 @@ import static io.gatling.javaapi.http.HttpDsl.*;
  * <p>Run:
  * <pre>
  *   mvn gatling:test -Dsimulation=JobLaunchSimulation \
- *       -DjobCode=E2E_IMPORT_LOAD -DtenantId=t1 \
+ *       -DworkflowDefinitionId=123 -DtenantId=t1 \
  *       -Dusers.peak=50 -Dduration.seconds=180
  * </pre>
  */
@@ -58,13 +58,13 @@ public class JobLaunchSimulation extends Simulation {
     private final String requestBody = """
             {
               "tenantId": "%s",
-              "jobCode": "%s",
+              "workflowDefinitionId": %s,
               "bizDate": "%s",
               "triggerType": "API",
               "params": {}
             }
             """
-                .formatted(GatlingConfig.TENANT_ID, GatlingConfig.JOB_CODE, GatlingConfig.BIZ_DATE);
+                .formatted(GatlingConfig.TENANT_ID, GatlingConfig.requiredWorkflowDefinitionId(), GatlingConfig.BIZ_DATE);
 
     // ── Scenario ───────────────────────────────────────────────────────────────
 

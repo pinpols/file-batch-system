@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.asset;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -10,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
@@ -64,6 +66,27 @@ class AssetFreshnessPolicyServiceTest {
     assertThat(captor.getValue().alertType()).isEqualTo("ASSET_FRESHNESS_MISSING");
     assertThat(captor.getValue().severity()).isEqualTo("WARN");
     assertThat(captor.getValue().resourceKey()).isEqualTo("t1:JOB_A:2026-06-30");
+  }
+
+  @Test
+  @DisplayName("资产告警事务在策略所属租户上下文中写入并清理上下文")
+  void shouldEmitAlertUnderPolicyTenantContext() {
+    AssetFreshnessPolicyEntity policy = policy("09:00", 14_400, 1, "Asia/Shanghai", "WARN");
+    when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
+    when(assetPartitionService.isJobPartitionReady(
+            "t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
+        .thenReturn(false);
+    doAnswer(invocation -> {
+          AlertEmitRequest request = invocation.getArgument(0);
+          assertThat(RlsTenantContextHolder.get()).isEqualTo(request.tenantId());
+          return null;
+        })
+        .when(alertEventService)
+        .emit(any());
+
+    assertThat(service.scanDuePolicies(10)).isEqualTo(1);
+
+    assertThat(RlsTenantContextHolder.get()).isNull();
   }
 
   @Test

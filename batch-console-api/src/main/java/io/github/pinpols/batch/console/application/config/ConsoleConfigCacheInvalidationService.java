@@ -96,8 +96,30 @@ public class ConsoleConfigCacheInvalidationService {
   }
 
   public void evictAllJobDefinitions(String tenantId) {
+    String sanitizedTenantId = safe(tenantId);
+    String jobDefinitionPattern = "config:%s:job-definition:*".formatted(sanitizedTenantId);
+    evictByPatternAfterCommit(tenantId, "job-definition", "*", jobDefinitionPattern);
+  }
+
+  public void evictAllWorkflowDefinitions(String tenantId) {
+    String sanitizedTenantId = safe(tenantId);
+    String workflowDefinitionPattern =
+        "config:%s:workflow-definition:*".formatted(sanitizedTenantId);
     evictByPatternAfterCommit(
-        tenantId, "job-definition", "*", "config:%s:job-definition:*".formatted(safe(tenantId)));
+        tenantId, "workflow-definition", "*", workflowDefinitionPattern);
+  }
+
+  public void evictAllBusinessCalendars(String tenantId) {
+    String sanitizedTenantId = safe(tenantId);
+    String businessCalendarPattern =
+        "config:%s:business-calendar:*".formatted(sanitizedTenantId);
+    evictByPatternAfterCommit(tenantId, "business-calendar", "*", businessCalendarPattern);
+  }
+
+  public void evictAllBatchWindows(String tenantId) {
+    String sanitizedTenantId = safe(tenantId);
+    String batchWindowPattern = "config:%s:batch-window:*".formatted(sanitizedTenantId);
+    evictByPatternAfterCommit(tenantId, "batch-window", "*", batchWindowPattern);
   }
 
   public void evictWorkflowDefinition(String tenantId, String workflowCode) {
@@ -172,10 +194,12 @@ public class ConsoleConfigCacheInvalidationService {
       return true;
     } catch (RuntimeException exception) {
       increment(publishFailureCounter);
+      String sanitizedPattern = LogSanitizer.value(pattern);
+      String reasonSummary = SwallowedExceptionLogger.summary(exception);
       log.warn(
           "config cache redis pattern delete failed: pattern={}, reason={}",
-          LogSanitizer.value(pattern),
-          SwallowedExceptionLogger.summary(exception));
+          sanitizedPattern,
+          reasonSummary);
       log.debug(
           "config cache redis pattern delete failure: pattern={}",
           LogSanitizer.value(pattern),
@@ -206,10 +230,9 @@ public class ConsoleConfigCacheInvalidationService {
       invalidationStore.delete(key);
     } catch (RuntimeException exception) {
       increment(publishFailureCounter);
-      log.warn(
-          "config cache redis delete failed: key={}, reason={}",
-          LogSanitizer.value(key),
-          SwallowedExceptionLogger.summary(exception));
+      String sanitizedKey = LogSanitizer.value(key);
+      String reasonSummary = SwallowedExceptionLogger.summary(exception);
+      log.warn("config cache redis delete failed: key={}, reason={}", sanitizedKey, reasonSummary);
       log.debug("config cache redis delete failure: key={}", LogSanitizer.value(key), exception);
       return;
     }
@@ -220,24 +243,29 @@ public class ConsoleConfigCacheInvalidationService {
     try {
       Long revision = invalidationStore.nextGlobalRevision();
       Long keyRevision = invalidationStore.nextKeyRevision(tenantId, type, code);
+      String safeTenantId = safe(tenantId);
+      String safeType = safe(type);
+      String safeCode = safe(code);
+      long eventRevision = EmptyChecks.isNull(revision) ? 0L : revision;
+      long eventKeyRevision = EmptyChecks.isNull(keyRevision) ? 0L : keyRevision;
+      Instant occurredAt = Instant.now();
       ConfigCacheInvalidationEvent event = new ConfigCacheInvalidationEvent(
-          safe(tenantId),
-          safe(type),
-          safe(code),
-          EmptyChecks.isNull(revision) ? 0L : revision,
-          EmptyChecks.isNull(keyRevision) ? 0L : keyRevision,
-          Instant.now());
+          safeTenantId, safeType, safeCode, eventRevision, eventKeyRevision, occurredAt);
       invalidationStore.publish(event);
       publishedRevision.set(event.revision());
       increment(publishSuccessCounter);
     } catch (RuntimeException exception) {
       increment(publishFailureCounter);
+      String sanitizedTenantId = LogSanitizer.value(tenantId);
+      String sanitizedType = LogSanitizer.value(type);
+      String sanitizedCode = LogSanitizer.value(code);
+      String reasonSummary = SwallowedExceptionLogger.summary(exception);
       log.warn(
           "config cache invalidation publish failed: tenantId={}, type={}, code={}, reason={}",
-          LogSanitizer.value(tenantId),
-          LogSanitizer.value(type),
-          LogSanitizer.value(code),
-          SwallowedExceptionLogger.summary(exception));
+          sanitizedTenantId,
+          sanitizedType,
+          sanitizedCode,
+          reasonSummary);
       log.debug(
           "config cache invalidation publish failure: tenantId={}, type={}, code={}",
           LogSanitizer.value(tenantId),
@@ -254,7 +282,10 @@ public class ConsoleConfigCacheInvalidationService {
   }
 
   private String configKey(String tenantId, String type, String code) {
-    return "config:%s:%s:%s".formatted(safe(tenantId), safe(type), safe(code));
+    String safeTenantId = safe(tenantId);
+    String safeType = safe(type);
+    String safeCode = safe(code);
+    return "config:%s:%s:%s".formatted(safeTenantId, safeType, safeCode);
   }
 
   private String safe(String value) {

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：load-tests 公共变量。只能被 source。
+# 用法：由调用脚本 source load-tests/scripts/env.sh 后使用公共变量或函数。
 # load-tests 公共变量。只能被 source。
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
@@ -29,10 +31,40 @@ validate_load_test_run_id() {
     echo "$label must not be empty" >&2
     return 2
   fi
+  if [[ ! "$run_id" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]]; then
+    echo "$label must start with a letter/digit and contain only letters, digits, dots or hyphens; SQL wildcards and path separators are not allowed" >&2
+    return 2
+  fi
   if (( ${#run_id} > LOAD_TEST_RUN_ID_MAX_LENGTH )); then
     echo "$label is too long: ${#run_id} characters; maximum is ${LOAD_TEST_RUN_ID_MAX_LENGTH} because load-test fixtures append -SETTLEMENT into varchar(64)" >&2
     return 2
   fi
+}
+
+resolve_single_job_workflow_id() {
+  local tenant_id="${1:-}"
+  local job_code="${2:-}"
+  local workflow_id
+  if [[ -z "$tenant_id" || -z "$job_code" ]]; then
+    echo "tenant_id and job_code are required to resolve a managed single-job Workflow" >&2
+    return 2
+  fi
+  workflow_id="$(
+    psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PLATFORM_DB" \
+      -v ON_ERROR_STOP=1 -At \
+      -v tenant_id="$tenant_id" -v job_code="$job_code" \
+      -f "$ROOT_DIR/scripts/sim/sql/select-single-job-workflow-id.sql"
+  )" || return
+  if [[ "$workflow_id" == *$'\n'* ]]; then
+    echo "multiple enabled managed single-job Workflows for tenant=${tenant_id}, jobCode=${job_code}" >&2
+    return 1
+  fi
+  workflow_id="$(printf '%s' "$workflow_id" | tr -d '[:space:]')"
+  if [[ ! "$workflow_id" =~ ^[1-9][0-9]*$ ]]; then
+    echo "expected exactly one enabled managed single-job Workflow for tenant=${tenant_id}, jobCode=${job_code}; got=${workflow_id:-none}" >&2
+    return 1
+  fi
+  printf '%s\n' "$workflow_id"
 }
 
 load_test_available_kib() {

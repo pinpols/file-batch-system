@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.console.domain.audit.mapper;
 
+import io.github.pinpols.batch.console.domain.audit.query.OperationAuditCountQuery;
+import io.github.pinpols.batch.console.domain.audit.query.OperationAuditQuery;
+
+
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.console.domain.audit.support.OperationAuditEvent;
 import java.time.Instant;
@@ -11,6 +15,9 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 public interface OperationAuditMapper {
 
+  /** 在当前事务中绑定已授权租户，供热冷历史查询共用。 */
+  String bindTenant(@Param("tenantId") String tenantId);
+
   /** 同事务 INSERT(Aspect 调用)。失败抛异常,Aspect 自己决定是否吃掉(默认吃掉避免污染业务事务)。 */
   int insert(@Param("e") OperationAuditEvent event);
 
@@ -21,35 +28,15 @@ public interface OperationAuditMapper {
    * <p>**注意**:offset 大时性能差;UI 默认 pageSize=15,且 console_operation_audit 量级不会超 千万,常规分页够用。后续真有热查询场景再加
    * (action, created_at DESC) 复合索引并改 keyset pagination。
    */
-  // mapper 多条件分页查询参数列表必要,@Param 一一对应 mybatis xml #{xxx},不可包装成 Param 对象。
-  @SuppressWarnings("PMD.ExcessiveParameterList")
+
   List<AuditRow> query(
-      @Param("tenantId") String tenantId,
-      @Param("aggregateType") String aggregateType,
-      @Param("aggregateId") String aggregateId,
-      @Param("action") String action,
-      @Param("operatorId") String operatorId,
-      @Param("result") String result,
-      @Param("traceId") String traceId,
-      @Param("startTime") Instant startTime,
-      @Param("endTime") Instant endTime,
-      @Param("cursorId") Long cursorId,
-      @Param("pageRequest") PageRequest pageRequest);
+      OperationAuditQuery parameters);
 
   /** 跟 query 同条件,只数总数。给 UI 算总页数用。 */
   // 同 query 的参数集（共 9 个),用同一组 @Param 实现 count 查询,不可包装。
-  @SuppressWarnings("PMD.ExcessiveParameterList")
+
   long count(
-      @Param("tenantId") String tenantId,
-      @Param("aggregateType") String aggregateType,
-      @Param("aggregateId") String aggregateId,
-      @Param("action") String action,
-      @Param("operatorId") String operatorId,
-      @Param("result") String result,
-      @Param("traceId") String traceId,
-      @Param("startTime") Instant startTime,
-      @Param("endTime") Instant endTime,
-      @Param("cursorId") Long cursorId);
+      OperationAuditCountQuery parameters);
 
   /**
    * 查询行,DTO 直接对应表结构。这里**不**复用 OperationAuditEvent,因为:

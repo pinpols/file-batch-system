@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.trigger.mapper;
 
+import io.github.pinpols.batch.trigger.domain.param.BatchDayInstanceMarkCutoffParam;
+import io.github.pinpols.batch.trigger.domain.param.BatchDayInstanceTransitionToCutoffParam;
+
+
 import io.github.pinpols.batch.trigger.support.BatchDayCutoffCandidate;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -21,23 +25,26 @@ public interface BatchDayInstanceMapper {
       @Param("dayStatus") String dayStatus);
 
   default int markCutoff(
-      Long id, String tenantId, String calendarCode, LocalDate bizDate, Instant cutoffAt) {
+      BatchDayInstanceMarkCutoffParam parameters) {
+    Long id = parameters.id();
+    String tenantId = parameters.tenantId();
+    String calendarCode = parameters.calendarCode();
+    LocalDate bizDate = parameters.bizDate();
+    Instant cutoffAt = parameters.cutoffAt();
+
+    BatchDayInstanceTransitionToCutoffParam batchDayInstanceTransitionToCutoffParam = BatchDayInstanceTransitionToCutoffParam.builder()
+        .id(id)
+        .tenantId(tenantId)
+        .calendarCode(calendarCode)
+        .bizDate(bizDate)
+        .cutoffAt(cutoffAt)
+        .expectedStatus(DayStatus.OPEN.name())
+        .targetStatus(DayStatus.CUTOFF.name())
+        .build();
     return transitionToCutoff(
-        id,
-        tenantId,
-        calendarCode,
-        bizDate,
-        cutoffAt,
-        DayStatus.OPEN.name(),
-        DayStatus.CUTOFF.name());
+        batchDayInstanceTransitionToCutoffParam);
   }
 
   int transitionToCutoff(
-      @Param("id") Long id,
-      @Param("tenantId") String tenantId,
-      @Param("calendarCode") String calendarCode,
-      @Param("bizDate") LocalDate bizDate,
-      @Param("cutoffAt") Instant cutoffAt,
-      @Param("expectedStatus") String expectedStatus,
-      @Param("targetStatus") String targetStatus);
+      BatchDayInstanceTransitionToCutoffParam parameters);
 }

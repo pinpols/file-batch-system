@@ -13,10 +13,9 @@ on:
     # 注意:db/migration/** / helm/** / scripts/** / pom.xml / .github/workflows/** 都不 ignore。
     paths-ignore:
       - 'docs/runbook/**'
-      - 'docs/analysis/**'
+      - 'docs/plans/**'
       - 'docs/architecture/**'
       - 'docs/design/**'
-      - 'docs/backlog/**'
       - 'docs/review/**'
       - 'docs/changelog.md'
       - '*.md'
@@ -125,6 +124,7 @@ jobs:
           source scripts/lib/gate-result.sh
           gate_run FULL_SCRIPT_GOVERNANCE "脚本治理" python3 scripts/ci/check-script-governance.py
           gate_run FULL_DESTRUCTIVE_OPS_GOVERNANCE "高风险操作清单" python3 scripts/ci/check-destructive-ops-governance.py
+          gate_run FULL_SIM_RUNTIME_CLEANUP_TEST "Sim/容量/恢复脚本契约" python3 -m unittest scripts/ci/tests/test_sim_runtime_cleanup.py scripts/ci/tests/test_control_plane_benchmark_cleanup.py scripts/ci/tests/test_control_plane_mixed_pressure.py scripts/ci/tests/test_dr_drill_rls_rebuild.py
           gate_run FULL_SHELL_SCRIPTS "Shell 语法与 ShellCheck" bash scripts/ci/check-shell-scripts.sh
           gate_run FULL_SHELL_LINUX_PORTABILITY "Shell Linux 兼容性" python3 scripts/ci/check-shell-linux-portability.py
           gate_run FULL_TESTCONTAINERS_REUSE_LABEL "Testcontainers 复用标签判定" python3 scripts/ci/check-testcontainers-reuse-label.py
@@ -146,10 +146,21 @@ jobs:
           gate_run FULL_SOFT_GATES "软门禁治理" python3 scripts/ci/check-soft-gate-governance.py
           gate_run FULL_FLAKY_QUARANTINE "flaky 测试隔离治理" python3 scripts/ci/check-flaky-test-governance.py
           gate_run FULL_CI_QUALITY_GUARD_TESTS "CI 质量治理门禁测试" python3 -m unittest \
+            scripts/ci/tests/test_check_script_governance.py \
+            scripts/ci/tests/test_check_docs_structure.py \
+            scripts/ci/tests/test_document_naming_policy.py \
+            scripts/ci/tests/test_sql_config_boundaries.py \
+            scripts/ci/tests/test_detect_change_scope.py \
             scripts/ci/tests/test_check_flaky_test_governance.py \
             scripts/ci/tests/test_check_soft_gate_governance.py \
             scripts/ci/tests/test_check_diff_coverage.py \
             scripts/ci/tests/test_check_java_governance_test_coverage.py \
+            scripts/ci/tests/test_java_worktree_source_inventory.py \
+            scripts/ci/tests/test_sim_sftp_known_hosts.py \
+            scripts/ci/tests/test_sim_fault_channel_cleanup.py \
+            scripts/ci/tests/test_sim_worker_readiness.py \
+            scripts/ci/tests/test_runtime_warning_audit.py \
+            scripts/ci/tests/test_sim_profile_ownership.py \
             scripts/ci/tests/test_daily_validation_workflow.py \
             scripts/ci/tests/test_console_api_readiness.py \
             scripts/ci/tests/test_pre_push_module_selection.py \
@@ -317,7 +328,7 @@ jobs:
 
       - name: Verify Java readability inventory
         shell: bash
-        run: bash scripts/ci/run-gate.sh FULL_JAVA_READABILITY_INVENTORY "Java 可读性快照" -- python3 scripts/ci/report-java-readability-inventory.py --check docs/analysis/java-readability-inventory-2026-08-12.md
+        run: bash scripts/ci/run-gate.sh FULL_JAVA_READABILITY_INVENTORY "Java 可读性快照" -- python3 scripts/ci/report-java-readability-inventory.py --check docs/stats/java-readability-inventory.md
 
       - name: Enforce centralized empty checks
         shell: bash
@@ -775,7 +786,7 @@ jobs:
   # Job 3: e2e shard matrix。28 个 *E2eIT 按 2026-10-07 实测 LPT 均衡分成 6 组。
   # 单 shard 测试体约 148-179s；加依赖安装和 Testcontainers 后目标 wall-clock 4-5min。
   #
-  # 分组证据见 docs/analysis/ci-gate-runtime-optimization-2026-10-07.md。
+  # 分组证据见 docs/verifications/ci-gate-runtime-optimization-2026-10-07.md。
   # ===========================================================================
   e2e-shard:
     runs-on: ubuntu-latest

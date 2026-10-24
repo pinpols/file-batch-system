@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -22,7 +23,7 @@ class AbstractBatchTaskExecutorTest {
   @Test
   @DisplayName("执行成功时应依次经过校验, 前置, 执行, 后置与清理五个阶段")
   void shouldRunAllHooksInOrder_whenExecutionSucceeds() {
-    List<String> log = new java.util.ArrayList<>();
+    List<String> log = new ArrayList<>();
     AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
       @Override
       public String taskType() {

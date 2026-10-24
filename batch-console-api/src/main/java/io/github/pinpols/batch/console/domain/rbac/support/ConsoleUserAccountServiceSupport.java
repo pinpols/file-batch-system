@@ -26,14 +26,16 @@ public class ConsoleUserAccountServiceSupport {
   }
 
   private ConsoleUserAccount toAccount(ConsoleUserAccountEntity entity) {
+    String tenantId = entity.getTenantId();
+    String username = entity.getUsername();
+    String displayName = entity.getDisplayName();
+    String passwordHash = entity.getPasswordHash();
+    String rawAuthorities = entity.getAuthoritiesCsv();
+    Set<String> authorities = parseAuthorities(rawAuthorities);
+    boolean enabled = entity.isEnabled();
+    boolean mustChangePassword = entity.isMustChangePassword();
     return new ConsoleUserAccount(
-        entity.getTenantId(),
-        entity.getUsername(),
-        entity.getDisplayName(),
-        entity.getPasswordHash(),
-        parseAuthorities(entity.getAuthoritiesCsv()),
-        entity.isEnabled(),
-        entity.isMustChangePassword());
+        tenantId, username, displayName, passwordHash, authorities, enabled, mustChangePassword);
   }
 
   private Set<String> parseAuthorities(String raw) {

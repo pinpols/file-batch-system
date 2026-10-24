@@ -17,8 +17,9 @@ public final class ServletRequestPaths {
 
     String requestUri = Objects.toString(request.getRequestURI(), "");
     String contextPath = Objects.toString(request.getContextPath(), "");
-    if (EmptyChecks.isNotEmpty(contextPath)
-        && (requestUri.equals(contextPath) || requestUri.startsWith(contextPath + "/"))) {
+    boolean requestUriIncludesContextPath = EmptyChecks.isNotEmpty(contextPath)
+        && (requestUri.equals(contextPath) || requestUri.startsWith(contextPath + "/"));
+    if (requestUriIncludesContextPath) {
       return requestUri.substring(contextPath.length());
     }
     return requestUri;

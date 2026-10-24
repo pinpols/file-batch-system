@@ -101,6 +101,22 @@ let resp = transport.register("worker-1", r#"{"workerCode":"worker-1","tenantId"
 // feed `resp` to the engine (lifecycle/scheduler) — it classifies status → action.
 ```
 
+### 新 Orchestrator 的 CLAIM 参数
+
+CLAIM 成功后，先按 HTTP 状态分类，再用 `decode_claim_response(&resp)` 解码成功回包；409 表示任务已被认领，不能继续执行。handler 上下文通过 `TaskContext::with_claim_response(&claim)` 接收 CLAIM 的 `payload`、`traceId` 和 `partitionInvocationId`。载荷解析要求 JSON 对象；格式无效时返回错误并应将任务报告为失败。嵌套的 `crossDay` 依赖快照会保留为 `JsonValue`，不会被压平。该解码 API 需要 `serde` feature，启用 `http` 或 `kafka` 时会自动带入。
+
+```rust
+use batch_worker_sdk::client::{decode_claim_response, TaskContext, TransportOutcome};
+
+let claim_response = transport.claim("task-7", r#"{"tenantId":"tenant-42","workerId":"worker-1"}"#);
+if matches!(batch_worker_sdk::client::classify_response(&claim_response, 0), TransportOutcome::Success) {
+    let claim = decode_claim_response(&claim_response)?;
+    let context = TaskContext::new("task-7", "tenant-42", "PROCESS")
+        .with_claim_response(&claim)?;
+    handler.execute(&context);
+}
+```
+
 ## Conformance contract
 
 This SDK must satisfy `docs/sdk/byo-conformance-contract.md`: consume

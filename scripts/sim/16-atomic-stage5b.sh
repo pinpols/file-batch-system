@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：atomic-stage5b.sh:Atomic shell/sql/stored-proc 成功态验证。
+# 用法：在仓库根目录执行 bash scripts/sim/16-atomic-stage5b.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # 16-atomic-stage5b.sh:Atomic shell/sql/stored-proc 成功态验证
 #
@@ -22,6 +24,7 @@ batch_require_python
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/atomic-stage5b.log"
 import json, os, subprocess, sys, time, urllib.request
+from scripts.sim.launch_contract import workflow_id_for_fixture
 
 BASE = os.environ["TRIGGER_BASE"]
 SECRET = os.environ["INTERNAL_SECRET"]
@@ -39,7 +42,7 @@ def launch(job):
     request_ids[job] = rid
     body = {
         "tenantId": TENANT,
-        "jobCode": job,
+        "workflowDefinitionId": workflow_id_for_fixture(TENANT, job),
         "triggerType": "API",
         "bizDate": BIZ,
         "requestId": rid,

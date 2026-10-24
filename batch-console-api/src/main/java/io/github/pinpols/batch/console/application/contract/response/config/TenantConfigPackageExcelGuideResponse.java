@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.application.contract.response.config;
 
 import java.util.List;
 
-/** 租户配置包 11-Sheet 填写说明，用于 Console 页面直接展示模板字段口径。 */
+/** 租户配置包 10-Sheet 填写说明，用于 Console 页面直接展示模板字段口径。 */
 public record TenantConfigPackageExcelGuideResponse(List<SheetGuide> sheets) {
 
   /** 单个 Sheet 的字段说明。 */

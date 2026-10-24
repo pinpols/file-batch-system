@@ -26,7 +26,8 @@ public final class RunModeSupport {
   }
 
   public static RunMode resolve(Map<String, Object> attributes) {
-    return RunMode.fromCode(resolveCode(attributes)).orElse(null);
+    String runModeCode = resolveCode(attributes);
+    return RunMode.fromCode(runModeCode).orElse(null);
   }
 
   public static String resolveCode(Map<String, Object> attributes) {
@@ -37,7 +38,8 @@ public final class RunModeSupport {
     if (normalized != null) {
       return normalized;
     }
-    return normalize(attributes.get(LEGACY_RUN_MODE));
+    Object legacyRunMode = attributes.get(LEGACY_RUN_MODE);
+    return normalize(legacyRunMode);
   }
 
   public static void putCanonical(Map<String, Object> target, RunMode runMode) {
@@ -52,6 +54,7 @@ public final class RunModeSupport {
     if (value == null) {
       return null;
     }
-    return RunMode.fromCode(String.valueOf(value)).map(RunMode::code).orElse(null);
+    String runModeCode = String.valueOf(value);
+    return RunMode.fromCode(runModeCode).map(RunMode::code).orElse(null);
   }
 }

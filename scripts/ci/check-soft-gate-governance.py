@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：软门禁治理。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-soft-gate-governance.py；参数与前置环境见下方说明及所属 README。
 """校验软门禁均登记责任人、基线与升级期限。"""
 
 from __future__ import annotations

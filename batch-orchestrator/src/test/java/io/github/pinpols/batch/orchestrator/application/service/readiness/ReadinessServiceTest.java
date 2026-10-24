@@ -48,7 +48,8 @@ class ReadinessServiceTest {
         Instant.parse("2026-06-20T04:15:00Z"),
         "INLINE_JSON",
         "{\"rows\":10}",
-        "s3://bucket/key");
+        "s3://bucket/key",
+        901L);
     when(assetPartitionService.findEffectiveJobPartition("t1", "UP_JOB", BIZ_DATE))
         .thenReturn(Optional.of(partition));
 

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：Dev mode 工具:console-api 启动后,若 orchestrator/trigger 未起(本地常态),。
+# 用法：在仓库根目录执行 bash scripts/local/apply-pending-flyway-migrations.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # apply-pending-flyway-migrations.sh
 #

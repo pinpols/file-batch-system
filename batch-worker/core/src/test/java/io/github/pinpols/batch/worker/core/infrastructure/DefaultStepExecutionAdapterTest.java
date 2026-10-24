@@ -1,7 +1,13 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.TaskErrorCodes;
+import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutorRegistry;
 import io.github.pinpols.batch.common.spi.task.ResourceKind;
@@ -10,8 +16,15 @@ import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
+import io.github.pinpols.batch.worker.core.support.TaskExecutionClient;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -108,6 +121,57 @@ class DefaultStepExecutionAdapterTest {
   }
 
   @Test
+  @DisplayName("重放能力按实际原子任务子类型和冻结载荷参数解析")
+  void shouldResolveReplayCapabilityFromSelectedExecutorAndPayload() {
+    AtomicReference<Map<String, Object>> resolvedConfig = new AtomicReference<>();
+    ReplayCapabilityDeclaration capability = new ReplayCapabilityDeclaration(
+        "sql",
+        "1.2.3",
+        List.of("DATABASE_WRITE"),
+        IdempotencyCapability.IDEMPOTENT_BY_PLUGIN_LOGIC,
+        "business-key",
+        "transactional-upsert",
+        ReplayCapabilityDeclaration.CURRENT_CONTRACT_VERSION);
+    BatchTaskExecutor sql = new BatchTaskExecutor() {
+      @Override
+      public String taskType() {
+        return "sql";
+      }
+
+      @Override
+      public TaskCapability capability() {
+        return TaskCapability.of(ResourceKind.CPU);
+      }
+
+      @Override
+      public ReplayCapabilityDeclaration replayCapability(Map<String, Object> frozenConfig) {
+        resolvedConfig.set(frozenConfig);
+        return capability;
+      }
+
+      @Override
+      public TaskResult execute(TaskContext context) {
+        return TaskResult.ok();
+      }
+    };
+    DefaultStepExecutionAdapter adapter =
+        new DefaultStepExecutionAdapter(new BatchTaskExecutorRegistry(List.of(sql)));
+    StepExecutionRequest request = new StepExecutionRequest(
+        "t1",
+        "job-1",
+        "ATOMIC",
+        "w-1",
+        Map.of("payload", "{\"taskType\":\"sql\",\"statement\":\"UPDATE t SET c=1\"}"));
+
+    ReplayCapabilityDeclaration actual = adapter.resolveReplayCapability(request);
+
+    assertThat(actual).isEqualTo(capability);
+    assertThat(resolvedConfig.get())
+        .containsEntry("taskType", "sql")
+        .containsEntry("statement", "UPDATE t SET c=1");
+  }
+
+  @Test
   @DisplayName("载荷缺少子类型时回退按步骤编码路由, 仍返回成功")
   void shouldFallBackToStepCodeWhenPayloadHasNoTaskType() {
     BatchTaskExecutor shell = stub("shell", ctx -> TaskResult.ok());
@@ -120,10 +184,56 @@ class DefaultStepExecutionAdapterTest {
     assertThat(resp.success()).isTrue();
   }
 
+  @Test
+  @DisplayName("非幂等执行前先持久化当前租约标记,标记未确认时拒绝执行器")
+  void shouldRequireDurableFenceBeforeNonReplayableExecutorRuns() {
+    AtomicInteger executionCount = new AtomicInteger();
+    BatchTaskExecutor executor = nonReplayable("sql", ctx -> {
+      executionCount.incrementAndGet();
+      return TaskResult.ok();
+    });
+    TaskExecutionClient taskExecutionClient = mock(TaskExecutionClient.class);
+    when(taskExecutionClient.markNonIdempotentExecutionStarted("t1", 41L, "w-1", "inv-41"))
+        .thenReturn(false);
+    DefaultStepExecutionAdapter adapter = new DefaultStepExecutionAdapter(
+        new BatchTaskExecutorRegistry(List.of(executor)), taskExecutionClient);
+
+    StepExecutionResponse response = adapter.execute(new StepExecutionRequest(
+        "t1", "job-1", "sql", "w-1", Map.of("taskId", 41L, "partitionInvocationId", "inv-41")));
+
+    assertThat(response.success()).isFalse();
+    assertThat(response.code()).isEqualTo(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN);
+    assertThat(executionCount).hasValue(0);
+    verify(taskExecutionClient).markNonIdempotentExecutionStarted("t1", 41L, "w-1", "inv-41");
+  }
+
+  @Test
+  @DisplayName("非幂等执行器只在持久化租约标记确认后运行")
+  void shouldRunNonReplayableExecutorAfterDurableFence() {
+    AtomicBoolean fenceConfirmed = new AtomicBoolean();
+    BatchTaskExecutor executor = nonReplayable("shell", ctx -> {
+      assertThat(fenceConfirmed).isTrue();
+      return TaskResult.ok();
+    });
+    TaskExecutionClient taskExecutionClient = mock(TaskExecutionClient.class);
+    when(taskExecutionClient.markNonIdempotentExecutionStarted("t1", 42L, "w-2", "inv-42"))
+        .thenAnswer(invocation -> {
+          fenceConfirmed.set(true);
+          return true;
+        });
+    DefaultStepExecutionAdapter adapter = new DefaultStepExecutionAdapter(
+        new BatchTaskExecutorRegistry(List.of(executor)), taskExecutionClient);
+
+    StepExecutionResponse response = adapter.execute(new StepExecutionRequest(
+        "t1", "job-1", "shell", "w-2", Map.of("taskId", 42L, "partitionInvocationId", "inv-42")));
+
+    assertThat(response.success()).isTrue();
+    verify(taskExecutionClient).markNonIdempotentExecutionStarted("t1", 42L, "w-2", "inv-42");
+  }
+
   // ─── helpers ─────────────────────────────────────────────────────────────────
 
-  private static BatchTaskExecutor stub(
-      String type, java.util.function.Function<TaskContext, TaskResult> fn) {
+  private static BatchTaskExecutor stub(String type, Function<TaskContext, TaskResult> fn) {
     return new BatchTaskExecutor() {
       @Override
       public String taskType() {
@@ -133,6 +243,26 @@ class DefaultStepExecutionAdapterTest {
       @Override
       public TaskCapability capability() {
         return TaskCapability.of(ResourceKind.CPU);
+      }
+
+      @Override
+      public TaskResult execute(TaskContext ctx) {
+        return fn.apply(ctx);
+      }
+    };
+  }
+
+  private static BatchTaskExecutor nonReplayable(
+      String type, Function<TaskContext, TaskResult> fn) {
+    return new BatchTaskExecutor() {
+      @Override
+      public String taskType() {
+        return type;
+      }
+
+      @Override
+      public TaskCapability capability() {
+        return new TaskCapability(Set.of(ResourceKind.CPU), false, true, Duration.ofMinutes(5));
       }
 
       @Override

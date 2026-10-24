@@ -9,7 +9,7 @@ import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
 import io.github.pinpols.batch.e2e.support.E2eTestSql;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
 import java.util.List;
@@ -28,16 +28,16 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
- * 端到端测试：dedup_key 幂等护栏（防重复创建 job_instance）。
+ * 端到端测试：Workflow 根请求的幂等护栏（防同一业务日创建多个活跃 WorkflowRun）。
  *
- * <p>测试意图：验证“应用层去重查询 + DB 唯一约束”这两道闸门能共同保证： 对于同一个 {@code (tenant_id, dedup_key)}，系统最终只会存在一条 {@code
- * job_instance}。 这能抵御“上游重放/网络重试/并发重复请求”等真实生产场景。
+ * <p>测试意图：验证 Workflow 根请求在业务日维度收敛到一个活跃 WorkflowRun，并把同日重复请求终结为
+ * DUPLICATE，抵御上游重放、网络重试和并发重复请求。
  *
  * <p>覆盖场景：
  *
  * <ol>
- *   <li><b>串行重复</b>：第二次 launch 使用不同 request_id 但相同 dedup_key，必须被识别为 DUPLICATE。
- *   <li><b>并发重复</b>：两个线程在 {@link CountDownLatch} 栅栏后同时 launch，相同 dedup_key 下最终只落一条 instance。
+ *   <li><b>串行重复</b>：第二次 launch 使用不同 request_id 触发同一个 Workflow，必须被识别为 DUPLICATE。
+ *   <li><b>并发重复</b>：两个线程在 {@link CountDownLatch} 栅栏后同时 launch 同一个 Workflow，最终只创建一个活跃 run。
  * </ol>
  */
 @E2eSpringBootTest(
@@ -50,13 +50,13 @@ import org.springframework.test.context.jdbc.Sql;
       E2eTestSql.IMPORT_TEMPLATE_SEED,
     })
 @Tag("critical")
-@DisplayName("端到端测试: 同一去重键在串行重放与并发抢占两种情形下的触发受理链路, 验证应用层去重判定与数据库唯一约束共同保证只落一条作业实例")
+@DisplayName("端到端测试: 同一 Workflow 同一业务日的串行重放与并发触发只创建一个活跃 WorkflowRun")
 class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
 
   @Autowired
-  private LaunchService launchService;
+  private WorkflowRunLaunchService launchService;
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
@@ -66,8 +66,20 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
    * dedup_key. The second call must be treated as a duplicate — no second job_instance created.
    */
   @Test
-  @DisplayName("同一去重键用不同请求标识串行重复发起触发请求时, 第二次不再新增作业实例, 落库仅保留一条作业实例")
+  @DisplayName("同一 Workflow 用不同请求标识串行重复触发时, 第二个请求终结为重复且只保留一个活跃 run")
   void shouldKeepSingleInstance_whenSameDedupKeyLaunchedTwice() {
+    final String insertTriggerRequestSql = """
+        insert into batch.trigger_request (
+            tenant_id, request_id, trigger_type, workflow_definition_id, biz_date, dedup_key,
+            request_status, trace_id
+        ) values (?, ?, ?, ?, date '2026-01-15', ?, 'ACCEPTED', 'e2e-trace-dedup2')
+        """;
+    final String selectCountSql = """
+        select count(*) from batch.workflow_run
+        where tenant_id = ? and workflow_definition_id = ? and biz_date = date '2026-01-15'
+          and run_status in ('CREATED', 'RUNNING') and dry_run = false
+        """;
+
     // Seed: job_definition + workflow_definition + first trigger_request
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
@@ -76,61 +88,77 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
     // request_id
     String requestId2 = "e2e-req2-" + Long.toUnsignedString(System.nanoTime());
     jdbcTemplate.update(
-        """
-        insert into batch.trigger_request (
-            tenant_id, request_id, trigger_type, job_code, biz_date, dedup_key,
-            request_status, trace_id
-        ) values (?, ?, ?, ?, date '2026-01-15', ?, 'ACCEPTED', 'e2e-trace-dedup2')
-        """, TENANT, requestId2, TriggerType.API.code(), seed.jobCode(), seed.dedupKey());
+        insertTriggerRequestSql,
+        TENANT,
+        requestId2,
+        TriggerType.API.code(),
+        seed.workflowDefinitionId(),
+        seed.dedupKey());
 
-    // First launch — creates the job_instance
+    // 只让重试时间到期；状态和完成结果仍由生产投递服务提供。
     launchService.launch(new LaunchRequest(
         TENANT,
-        seed.jobCode(),
+        seed.workflowDefinitionId(),
         LocalDate.of(2026, 1, 15),
         TriggerType.API,
         seed.requestId(),
         "e2e-tr-dedup-seq-1",
         Map.of()));
 
-    // Second launch with same dedup_key (different request_id) — must be treated as duplicate
+    // 首次启动会创建根 WorkflowRun。
     launchService.launch(new LaunchRequest(
         TENANT,
-        seed.jobCode(),
+        seed.workflowDefinitionId(),
         LocalDate.of(2026, 1, 15),
         TriggerType.API,
         requestId2,
         "e2e-tr-dedup-seq-2",
         Map.of()));
 
-    Long instanceCount = jdbcTemplate.queryForObject(
-        "select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?",
-        Long.class,
-        TENANT,
-        seed.dedupKey());
-    assertThat(instanceCount).isEqualTo(1L);
+    Long activeRunCount =
+    jdbcTemplate.queryForObject(selectCountSql, Long.class, TENANT, seed.workflowDefinitionId());
+    assertThat(activeRunCount).isEqualTo(1L);
+    assertThat(requestStatus(seed.workflowDefinitionId(), seed.dedupKey()))
+        .containsExactlyInAnyOrder("DUPLICATE", "LAUNCHED");
   }
 
   /**
    * Concurrent duplicate: two threads race to launch the same job (same dedup_key) behind a
    * CountDownLatch barrier. Regardless of which thread wins the insert, exactly one {@code
-   * job_instance} row must exist.
+   * 同一 Workflow 业务日的第二次启动必须识别为重复请求。
    */
   @Test
   @DisplayName("两个线程在栅栏后并发发起同一去重键的触发请求时, 两次调用均有结果且落库仅一条作业实例, 两条触发请求分别收敛为已发起与重复两种终态")
   void shouldReturnSingleWinner_whenSameDedupKeyLaunchedConcurrently() throws Exception {
+    final String insertTriggerRequestSql = """
+        insert into batch.trigger_request (
+            tenant_id, request_id, trigger_type, workflow_definition_id, biz_date, dedup_key,
+            request_status, trace_id
+        ) values (?, ?, ?, ?, date '2026-01-15', ?, 'ACCEPTED', 'e2e-trace-dedup-c2')
+        """;
+    final String selectCountSql = """
+        select count(*) from batch.workflow_run
+        where tenant_id = ? and workflow_definition_id = ? and biz_date = date '2026-01-15'
+          and run_status in ('CREATED', 'RUNNING') and dry_run = false
+        """;
+    final String selectRequestStatusSql = """
+            select request_status from batch.trigger_request
+            where tenant_id = ? and workflow_definition_id = ? and dedup_key = ?
+            order by request_status
+            """;
+
     // Seed: job_definition + workflow_definition + two trigger_requests sharing the same dedup_key
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
 
     String requestId2 = "e2e-req2-" + Long.toUnsignedString(System.nanoTime());
     jdbcTemplate.update(
-        """
-        insert into batch.trigger_request (
-            tenant_id, request_id, trigger_type, job_code, biz_date, dedup_key,
-            request_status, trace_id
-        ) values (?, ?, ?, ?, date '2026-01-15', ?, 'ACCEPTED', 'e2e-trace-dedup-c2')
-        """, TENANT, requestId2, TriggerType.API.code(), seed.jobCode(), seed.dedupKey());
+        insertTriggerRequestSql,
+        TENANT,
+        requestId2,
+        TriggerType.API.code(),
+        seed.workflowDefinitionId(),
+        seed.dedupKey());
 
     CountDownLatch barrier = new CountDownLatch(2);
     ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -149,7 +177,7 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
         try {
           launchService.launch(new LaunchRequest(
               TENANT,
-              seed.jobCode(),
+              seed.workflowDefinitionId(),
               LocalDate.of(2026, 1, 15),
               TriggerType.API,
               seed.requestId(),
@@ -172,7 +200,7 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
         try {
           launchService.launch(new LaunchRequest(
               TENANT,
-              seed.jobCode(),
+              seed.workflowDefinitionId(),
               LocalDate.of(2026, 1, 15),
               TriggerType.API,
               requestId2,
@@ -193,21 +221,23 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
     // One launch must succeed; the other is either a duplicate return or a constraint exception
     assertThat(successCount.get() + errorCount.get()).isEqualTo(2);
 
-    // Exactly one job_instance must exist under this dedup_key
-    Long instanceCount = jdbcTemplate.queryForObject(
-        "select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?",
-        Long.class,
-        TENANT,
-        seed.dedupKey());
-    assertThat(instanceCount).isEqualTo(1L);
+    // 必须存在活跃的 WorkflowRun 记录。
+    Long activeRunCount =
+    jdbcTemplate.queryForObject(selectCountSql, Long.class, TENANT, seed.workflowDefinitionId());
+    assertThat(activeRunCount).isEqualTo(1L);
 
     // Verify both trigger_requests were updated (one LAUNCHED, one DUPLICATE)
-    List<String> statuses =
-        jdbcTemplate.queryForList("""
-            select request_status from batch.trigger_request
-            where tenant_id = ? and job_code = ? and dedup_key = ?
-            order by request_status
-            """, String.class, TENANT, seed.jobCode(), seed.dedupKey());
+    List<String> statuses = jdbcTemplate.queryForList(
+        selectRequestStatusSql, String.class, TENANT, seed.workflowDefinitionId(), seed.dedupKey());
     assertThat(statuses).containsExactlyInAnyOrder("DUPLICATE", "LAUNCHED");
+  }
+
+  private List<String> requestStatus(Long workflowDefinitionId, String dedupKey) {
+    final String selectRequestStatusSql = """
+        select request_status from batch.trigger_request
+        where tenant_id = ? and workflow_definition_id = ? and dedup_key = ?
+        """;
+
+    return jdbcTemplate.queryForList(selectRequestStatusSql, String.class, TENANT, workflowDefinitionId, dedupKey);
   }
 }

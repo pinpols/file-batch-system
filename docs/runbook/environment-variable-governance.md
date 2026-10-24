@@ -36,6 +36,9 @@
 |---|---|---|
 | 环境身份 | `SPRING_PROFILES_ACTIVE`、`DEPLOYMENT_ENVIRONMENT`、`COMPOSE_PROJECT_NAME` | 决定安全守护和观测标签；生产必须 `prod` / `production` |
 | 时区与编码 | `BATCH_TIMEZONE_DEFAULT_ZONE`、`BATCH_LOCALE`、`TZ`、`LANG`、`LC_ALL` | 全栈唯一源；默认 `Asia/Shanghai` + `C.UTF-8` |
+| 批量日依赖 | `BATCH_BATCH_DAY_DEPENDENCY_WAIT_TIMEOUT_SECONDS` | 跨日历依赖等待超时告警阈值，默认 86400 秒；设为 0 关闭告警，不会取消等待或自动跳过 |
+| 作业依赖 | `BATCH_JOB_DEPENDENCY_WAIT_TIMEOUT_SECONDS` | 作业上游结果等待超时告警阈值，默认 86400 秒；设为 0 关闭告警；告警不会取消或绕过等待 |
+| 日切恢复 | `BATCH_BATCH_DAY_CATCHUP_DAYS_PER_SCAN` | 单轮最多补建的历史业务日数量，默认 14；超过上限的停机缺口由后续扫描继续按日期推进 |
 | 数据库 | `BATCH_PLATFORM_DB_*`、`BATCH_BUSINESS_DB_*`、`POSTGRES_*` | 平台库和业务库职责分离；业务库应使用受 RLS 约束的 writer 账号 |
 | Redis / ShedLock | `BATCH_REDIS_HOST`、`BATCH_REDIS_PORT`、`BATCH_SHEDLOCK_PROVIDER` | ShedLock provider 是 L0 开关；切换必须全停后统一调整 |
 | Kafka | `SPRING_KAFKA_BOOTSTRAP_SERVERS`、`BATCH_KAFKA_BOOTSTRAP_SERVERS`、`BATCH_MQ_ROUTING_MODE`、`BATCH_WORKER_KAFKA_SUBSCRIBE_MODE` | topic 路由和 worker 订阅必须成对灰度，避免 producer/consumer 不匹配 |

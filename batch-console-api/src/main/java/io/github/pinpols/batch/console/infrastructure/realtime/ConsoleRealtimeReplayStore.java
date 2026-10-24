@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.console.infrastructure.realtime;
 
+import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.config.ConsoleRealtimeProperties;
 import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeMetrics;
@@ -23,18 +25,21 @@ public class ConsoleRealtimeReplayStore implements RealtimeReplayStore {
   private static final String KEY_PREFIX = "batch:console:realtime:buffer:";
 
   private final StringRedisTemplate redisTemplate;
+  private final BatchRedisNamespace redisNamespace;
   private final ConsoleRealtimeProperties realtimeProperties;
   private final ConsoleRealtimeMetrics realtimeMetrics;
 
   @Override
   public void append(ConsoleRealtimeStreamEnvelope envelope) {
-    if (envelope == null
+    boolean envelopeIsIncomplete =
+        EmptyChecks.isNull(envelope)
         || envelope.tenantId() == null
         || envelope.stream() == null
-        || envelope.cursor() == null) {
+        || EmptyChecks.isNull(envelope.cursor());
+    if (envelopeIsIncomplete) {
       return;
     }
-    String key = bufferKey(envelope.tenantId(), envelope.stream());
+    String key = redisNamespace.key(bufferKey(envelope.tenantId(), envelope.stream()));
     String payload = JsonUtils.toJson(envelope);
     long maxEntries = realtimeProperties.getReplayMaxEntries();
     long ttlSeconds = realtimeProperties.getReplayTtl() != null
@@ -58,12 +63,14 @@ public class ConsoleRealtimeReplayStore implements RealtimeReplayStore {
 
   @Override
   public ReplayBatch replay(String tenantId, String stream, String afterCursor, String eventType) {
-    if (tenantId == null
+    boolean replayRequestIsIncomplete =
+        EmptyChecks.isNull(tenantId)
         || tenantId.isBlank()
         || stream == null
         || stream.isBlank()
         || afterCursor == null
-        || afterCursor.isBlank()) {
+        || EmptyChecks.isBlank(afterCursor);
+    if (replayRequestIsIncomplete) {
       return new ReplayBatch(List.of(), true);
     }
     // P1(2026-05-23 audit):读端按写端 replayMaxEntries 上限截断,避免配置漂移或被旁路写入造成
@@ -107,7 +114,9 @@ public class ConsoleRealtimeReplayStore implements RealtimeReplayStore {
     int startIndex = cursorIndex >= 0 ? cursorIndex + 1 : 0;
     for (int index = startIndex; index < envelopes.size(); index++) {
       ConsoleRealtimeStreamEnvelope envelope = envelopes.get(index);
-      if (eventType != null && !eventType.isBlank() && !eventType.equals(envelope.eventType())) {
+      boolean eventTypeDoesNotMatchFilter =
+          eventType != null && !eventType.isBlank() && !eventType.equals(envelope.eventType());
+      if (eventTypeDoesNotMatchFilter) {
         continue;
       }
       result.add(envelope);

@@ -73,6 +73,13 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
   }
 
   @Override
+  public boolean markNonIdempotentExecutionStarted(
+      String tenantId, Long taskId, String workerCode, String partitionInvocationId) {
+    return taskAssignmentService.markNonIdempotentExecutionStarted(
+        tenantId, taskId, workerCode, partitionInvocationId);
+  }
+
+  @Override
   public TaskAssignmentService.TaskHeartbeatResult recordHeartbeat(
       String tenantId,
       Long taskId,

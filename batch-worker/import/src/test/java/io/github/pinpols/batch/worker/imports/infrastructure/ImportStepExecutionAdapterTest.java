@@ -1,15 +1,17 @@
 package io.github.pinpols.batch.worker.imports.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
@@ -23,7 +25,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 
@@ -38,9 +43,6 @@ class ImportStepExecutionAdapterTest {
   private PlatformFileRecordRepository runtimeRepository;
 
   @Mock
-  private PlatformPipelineDefinitionRepository pipelineDefinitions;
-
-  @Mock
   private PlatformPipelineRunRepository pipelineRuns;
 
   private ImportStepExecutionAdapter adapter;
@@ -48,12 +50,7 @@ class ImportStepExecutionAdapterTest {
   @BeforeEach
   void setUp() {
     adapter = new ImportStepExecutionAdapter(
-        stageExecutor,
-        pipelineDefinitions,
-        pipelineRuns,
-        runtimeRepository,
-        emptyProvider(),
-        emptyProvider());
+        stageExecutor, pipelineRuns, runtimeRepository, emptyProvider(), emptyProvider());
   }
 
   @Test
@@ -81,6 +78,34 @@ class ImportStepExecutionAdapterTest {
   }
 
   @Test
+  @DisplayName("回放能力预检把带固定系统版本的原始请求交给 IMPORT 阶段解析器")
+  void shouldResolveReplayCapabilityFromPinnedImportRequest() {
+    when(stageExecutor.defaultStepDefinitions()).thenReturn(importStageTemplates());
+    ReplayCapabilityDeclaration expected = ReplayCapabilityDeclaration.unknown("import-load");
+    when(stageExecutor.resolveReplayCapability(any())).thenReturn(expected);
+    Map<String, Object> attributes = Map.of(
+        PipelineRuntimeKeys.PAYLOAD,
+        "{\"systemPipelineCode\":\"IMPORT\",\"systemPipelineVersion\":1,"
+            + "\"templateCode\":\"TPL_A\",\"operationType\":\"WORKFLOW_RUN\","
+            + "\"frozenFileTemplateProtected\":\"protected-template\"}",
+        PipelineRuntimeKeys.BIZ_DATE,
+        "2026-10-23");
+    StepExecutionRequest request =
+        new StepExecutionRequest("tenant-a", "job-import", "IMPORT", "worker-1", attributes);
+
+    ReplayCapabilityDeclaration actual = adapter.resolveReplayCapability(request);
+
+    assertThat(actual).isEqualTo(expected);
+    ArgumentCaptor<ImportJobContext> contextCaptor =
+        ArgumentCaptor.forClass(ImportJobContext.class);
+    verify(stageExecutor).resolveReplayCapability(contextCaptor.capture());
+    assertThat(contextCaptor.getValue().getTenantId()).isEqualTo("tenant-a");
+    assertThat(contextCaptor.getValue().getBizDate()).isEqualTo("2026-10-23");
+    assertThat(contextCaptor.getValue().getRawPayload())
+        .contains("protected-template", "WORKFLOW_RUN");
+  }
+
+  @Test
   @DisplayName("执行阶段时原样委派给阶段执行器,并返回其结果")
   void shouldDelegateStages_whenExecuting() {
     ImportJobContext context = new ImportJobContext();
@@ -102,6 +127,24 @@ class ImportStepExecutionAdapterTest {
     assertThat(adapter.resultStage(result)).isEqualTo("VALIDATE");
     assertThat(adapter.resultCode(result)).isEqualTo("INVALID_ROW");
     assertThat(adapter.resultMessage(result)).isEqualTo("invalid row");
+  }
+
+  @Test
+  @DisplayName("拒绝携带不匹配系统 Pipeline 版本的任务,且不创建运行实例")
+  void shouldRejectMismatchedPinnedSystemPipelineBeforeCreatingRun() {
+    when(stageExecutor.defaultStepDefinitions()).thenReturn(importStageTemplates());
+    Map<String, Object> attributes = Map.of(
+        PipelineRuntimeKeys.PAYLOAD,
+        "{\"systemPipelineCode\":\"IMPORT\",\"systemPipelineVersion\":2}");
+    StepExecutionRequest request =
+        new StepExecutionRequest("tenant-a", "job-import", "IMPORT", "worker-1", attributes);
+
+    StepExecutionResponse response = adapter.execute(request);
+
+    assertThat(response.success()).isFalse();
+    assertThat(response.code()).isEqualTo("INVALID_ARGUMENT");
+    verify(pipelineRuns, Mockito.never()).createPipelineInstance(ArgumentMatchers.any());
+    verify(stageExecutor, Mockito.never()).execute(ArgumentMatchers.any());
   }
 
   @Test
@@ -131,6 +174,19 @@ class ImportStepExecutionAdapterTest {
   private static StepExecutionRequest request(Map<String, Object> attributes) {
     return new StepExecutionRequest(
         "tenant-a", "job-import", "IMPORT_RECEIVE", "worker-1", attributes);
+  }
+
+  private static List<PipelineStepTemplate> importStageTemplates() {
+    return List.of("RECEIVE", "PREPROCESS", "PARSE", "VALIDATE", "LOAD", "FEEDBACK").stream()
+        .map(stage -> PipelineStepTemplate.builder()
+            .stageCode(stage)
+            .stepCode(stage)
+            .stepName(stage)
+            .stepOrder(1)
+            .implCode(stage)
+            .enabled(true)
+            .build())
+        .toList();
   }
 
   @SuppressWarnings("unchecked")

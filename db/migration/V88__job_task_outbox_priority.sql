@@ -29,10 +29,12 @@ ALTER TABLE batch.outbox_event
     ADD CONSTRAINT ck_outbox_event_priority CHECK (priority >= 0 AND priority <= 10);
 
 -- selector/scheduler 走 (tenant, status, priority desc) 索引
+
 CREATE INDEX IF NOT EXISTS idx_job_task_priority
     ON batch.job_task (tenant_id, task_status, priority DESC, id ASC);
 
 -- relay poll 走 (status, next_publish_at, priority desc) 索引
+
 CREATE INDEX IF NOT EXISTS idx_outbox_event_priority_pending
     ON batch.outbox_event (publish_status, next_publish_at NULLS FIRST, priority DESC, id ASC)
     WHERE publish_status IN ('NEW', 'FAILED');

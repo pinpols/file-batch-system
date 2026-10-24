@@ -3,6 +3,9 @@ package io.github.pinpols.batch.console.application.rbac;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
+import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigReadinessView;
+import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigReadinessView;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionQueueRefView;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.TenantReadinessResponse;
@@ -54,7 +57,8 @@ public class ConsoleTenantReadinessService {
     // SEC(跨租户越权修复):非全局角色只能对自身租户跑就绪自检,tenantId 与 JWT 不符 → FORBIDDEN;
     // 全局角色(ADMIN / AUDITOR)及内部 provision 编排(ADMIN 上下文)可查任意租户。
     tenantGuard.assertTenantAllowed(tenantId);
-    Guard.requireFound(tenantMapper.selectByTenantId(tenantId), "tenant not found: " + tenantId);
+    Map<String, Object> tenant = tenantMapper.selectByTenantId(tenantId);
+    Guard.requireFound(tenant, "tenant not found: " + tenantId);
 
     List<ReadinessItem> blocking = new ArrayList<>();
     List<ReadinessItem> warnings = new ArrayList<>();
@@ -69,15 +73,18 @@ public class ConsoleTenantReadinessService {
 
   private void checkTemplates(
       String tenantId, List<ReadinessItem> blocking, List<ReadinessItem> warnings) {
-    for (Map<String, Object> row : templateMapper.selectReadinessRows(tenantId)) {
-      String code = str(row, "template_code");
-      String type = str(row, "template_type");
-      boolean enabled = bool(row, "enabled");
-      boolean missingQuery = isBlank(str(row, "default_query_sql"));
-      boolean missingMappings = isBlankJson(str(row, "field_mappings"));
+    for (FileTemplateConfigReadinessView row : templateMapper.selectReadinessRows(tenantId)) {
+      String code = row.templateCode();
+      String type = row.templateType();
+      boolean enabled = Boolean.TRUE.equals(row.enabled());
+      boolean missingQuery = isBlank(row.defaultQuerySql());
+      Object fieldMappings = row.fieldMappings();
+      String fieldMappingsText = fieldMappings == null ? null : String.valueOf(fieldMappings);
+      boolean missingMappings = isBlankJson(fieldMappingsText);
       // IMPORT/EXPORT 模板必须有取数 SQL + 字段映射才能真正跑;SHARED 仅片段,不强制。
       boolean queryRelevant = "IMPORT".equals(type) || "EXPORT".equals(type);
-      if (queryRelevant && (missingQuery || missingMappings)) {
+      boolean queryConfigurationIsIncomplete = queryRelevant && (missingQuery || missingMappings);
+      if (queryConfigurationIsIncomplete) {
         String reason = "template missing "
             + (missingQuery ? "default_query_sql " : "")
             + (missingMappings ? "field_mappings" : "");
@@ -100,11 +107,11 @@ public class ConsoleTenantReadinessService {
 
   private void checkChannels(
       String tenantId, List<ReadinessItem> blocking, List<ReadinessItem> warnings) {
-    for (Map<String, Object> row : channelMapper.selectReadinessRows(tenantId)) {
-      String code = str(row, "channel_code");
-      String authType = str(row, "auth_type");
-      boolean enabled = bool(row, "enabled");
-      boolean noConfig = isBlankJson(str(row, "config_json"));
+    for (FileChannelConfigReadinessView row : channelMapper.selectReadinessRows(tenantId)) {
+      String code = row.channelCode();
+      String authType = row.authType();
+      boolean enabled = Boolean.TRUE.equals(row.enabled());
+      boolean noConfig = isBlankJson(row.configJson());
       boolean needsCredential = authType != null && !"NONE".equals(authType);
       if (needsCredential && noConfig) {
         String reason = "channel auth_type=" + authType + " but config_json (credential) is empty";
@@ -125,9 +132,9 @@ public class ConsoleTenantReadinessService {
   private void checkJobQueues(String tenantId, List<ReadinessItem> blocking) {
     List<String> queueCodes = resourceQueueMapper.selectQueueCodes(tenantId);
     Set<String> existing = Set.copyOf(queueCodes);
-    for (Map<String, Object> row : jobDefinitionMapper.selectEnabledJobQueueRefs(tenantId)) {
-      String queueCode = str(row, "queue_code");
-      String jobCode = str(row, "job_code");
+    for (JobDefinitionQueueRefView row : jobDefinitionMapper.selectEnabledJobQueueRefs(tenantId)) {
+      String queueCode = row.queueCode();
+      String jobCode = row.jobCode();
       if (!isBlank(queueCode) && !existing.contains(queueCode)) {
         String hint = "作业 '"
             + jobCode
@@ -151,12 +158,4 @@ public class ConsoleTenantReadinessService {
     return v == null || EMPTY_JSON_PLACEHOLDERS.contains(v.trim());
   }
 
-  private static boolean bool(Map<String, Object> row, String key) {
-    return Boolean.TRUE.equals(row.get(key));
-  }
-
-  private static String str(Map<String, Object> row, String key) {
-    Object v = row.get(key);
-    return v == null ? null : String.valueOf(v);
-  }
 }

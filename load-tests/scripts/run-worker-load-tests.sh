@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：调用 Gatling 执行 Worker 负载测试。
+# 用法：在仓库根目录执行 bash load-tests/scripts/run-worker-load-tests.sh；参数与前置环境见下方说明及所属 README。
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -110,6 +112,8 @@ run_one() {
   local params_file="$3"
   local log_file="$LOG_DIR/${label}.log"
   local file_ids_csv="${4:-}"
+  local workflow_id
+  workflow_id="$(resolve_single_job_workflow_id "$LOAD_TEST_TENANT_ID" "$job_code")"
   local -a extra_args=()
   if [[ -n "$file_ids_csv" ]]; then
     extra_args+=("-Dlaunch.fileIdsCsv=${file_ids_csv}")
@@ -125,7 +129,7 @@ run_one() {
       -Dorchestrator.baseUrl="$ORCHESTRATOR_BASE_URL" \
       -Dinternal.secret="$INTERNAL_SECRET" \
       -DtenantId="$LOAD_TEST_TENANT_ID" \
-      -DjobCode="$job_code" \
+      -DworkflowDefinitionId="$workflow_id" \
       -DbizDate="$BIZ_DATE" \
       -Dlaunch.paramsJsonFile="$params_file" \
       -Dpipeline.completion.users="$USERS_PER_WORKER" \

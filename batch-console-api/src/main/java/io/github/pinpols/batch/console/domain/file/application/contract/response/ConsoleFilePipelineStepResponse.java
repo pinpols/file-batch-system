@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.console.domain.file.application.contract.response;
 
-import java.time.Instant;
+import lombok.Builder;
 
+import java.time.Instant;
+@Builder
 public record ConsoleFilePipelineStepResponse(
     Long id,
     Long pipelineInstanceId,

@@ -57,7 +57,8 @@ mvn -Pstaging gatling:test -Dsimulation=JobLaunchSimulation
 ### 测试数据
 
 - `-DtenantId=t1`
-- `-DjobCode=E2E_IMPORT_LOAD`
+- `-DworkflowDefinitionId=<enabled Workflow ID>` (required for launch simulations; resolve a managed single-Job Workflow through its explicit `single_job_definition_id` relation)
+- `ControlPlaneMixedPressureSimulation` requires one Workflow ID per enabled launch population: `control.process.workflowDefinitionId`, `control.dispatch.workflowDefinitionId`, `control.atomic.workflowDefinitionId`, and `control.trigger.workflowDefinitionId`.
 - `-DbizDate=2026-01-15`
 
 ### 压测参数
@@ -184,15 +185,55 @@ STRICT=1 STEPS_CSV=1,2,4,8,16 IMPORT_PROFILE=medium \
 未显式设置 `MAX_ERROR_PCT` 时默认使用 `0.0`，并通过失败请求数断言准确表达零失败。非严格模式
 仍会在报告中记录每个场景的 `PASS/FAIL` 和总结果，但保留零退出码供容量探索连续执行。
 
+压测夹具准备会调用 Console 缓存失效 API。运行前必须从同一管理员登录会话提供 `BATCH_CONSOLE_TOKEN` 和 `BATCH_CONSOLE_CSRF_TOKEN`（HttpOnly JWT cookie 与 CSRF cookie 的值），脚本发送匹配 cookie/header；不依赖关闭鉴权。缺失凭据在写入夹具前失败，HTTP 或业务响应失败立即中止。只在进程环境传入，不写入日志或提交文件。
+
+所有复用该夹具的 `run-worker-load-tests.sh`、`run-worker-stress-tests.sh` 和控制面混合画像都需要上述会话变量；先准备会话，再启动入口。读接口的 `CONSOLE_ACCESS_TOKEN` 不能替代写接口的 CSRF 会话。准备入口在缺失会话时不会先写业务夹具。
+
+根运行计量可在同一套本地测试库内定向核对（独有 schema，结束后精确删除；不新建数据库）：
+
+```bash
+source scripts/lib/env-common.sh
+"$PYTHON_BIN" load-tests/scripts/test-control-plane-metrics.py
+```
+
+该验证覆盖继承相同 runId 的子 JOB 请求、未终结根、失败根及错租户/定义。继承 metadata 的子请求不计入根接纳数量，根尚未创建的合法请求仍应阻止“全部完成”。
+
+
 `prepare-worker-load-data.sh` 生成的 IMPORT / EXPORT / PROCESS payload 内置 `#{traceId}` 占位符，Gatling 会为每个虚拟用户替换成唯一值，避免并发下重复文件名、重复 customerNo、重复 process batchKey 影响结论。
 Dispatch 压测会按虚拟用户数创建独立文件记录，并为每档压力分配不重叠的 `fileId`，避免共享文件状态竞争污染吞吐和失败率。
-每轮 Worker 压测的本地夹具位于 `target/worker-load-data/<RUN_ID>`；多个入口并行执行时不会覆盖对方的 payload 或 `run.env`。共享模板和序列的准备事务使用数据库 advisory lock，仅串行化造数阶段，避免并发 `setval` 回拨序列；压测流量仍可并行执行。
+每轮 Worker 压测的本地夹具位于 `target/worker-load-data/<RUN_ID>`，不同运行的 payload 和 `run.env` 独立。共享模板和序列的准备事务使用数据库 advisory lock，避免并发 `setval` 回拨序列；该锁仅保护造数，不能隔离 Job/Workflow 定义修改。同一数据库的多个画像串行执行；单次画像内模块可用 `parallel` 模式并发发压。
 控制面混合压测会根据各模块速率和持续时间计算期望 launch 数，根据 Dispatch 请求数预建唯一文件记录，并自包含准备只读 Atomic SQL 作业。每个 trigger request 都必须关联实例，且所有实例最终为 `SUCCESS`；仅有部分实例进入终态不再视为通过。
 Process 故障画像重启本地 Worker 时会通过公共环境转换函数使用宿主机 PostgreSQL/Redis 地址，避免把 Compose 服务名传给本地 JVM。
 
 `RUN_ID` 最长 53 个字符；夹具会追加最长的 `-SETTLEMENT` 后缀并写入 `varchar(64)`。所有造数入口会在写文件或数据库前校验，P2 容量画像还会校验追加 `-10w` 后的派生标识。
 
 ### Process / Dispatch / Atomic / Trigger 控制面压测
+
+#### Workflow 身份与验收口径
+
+混合入口按启用模块解析受管单作业 Workflow ID；目标缺失或不唯一时在采样和发压前失败。运行标识同时传入 Gatling，用于请求、运行查询和清理。
+
+`BIZ_DATE_CARDINALITY=1` 是同 Workflow/date 的去重画像。要验证独立执行吞吐，业务日基数应覆盖本轮启动数；日期跨模块分配，避免 Atomic 与 Trigger 共享 Workflow 时互相去重。分发文件序号仍按模块独立计算。parallel 入口按该日期范围准备 Process 输入（`PROCESS_BIZ_DATE_CARDINALITY`），混合 Process 载荷使用当次根业务日；sequential 夹具默认仍只有一天。
+
+历史本地 30 秒负载在新模型中的入口为：
+
+```bash
+RUN_ID=ctlw-workflow-mixed-unique \
+  CONTROL_PLANE_MODE=parallel MODULES_CSV=process,dispatch,atomic,trigger \
+  TRIGGER_DURATION_SECONDS=30 BIZ_DATE_CARDINALITY=180 \
+  PROCESS_LAUNCH_RPS=1 DISPATCH_LAUNCH_RPS=1 ATOMIC_LAUNCH_RPS=1 \
+  TRIGGER_LAUNCH_RPS=3 TRIGGER_READ_RPS=1 MAX_ERROR_PCT=0 \
+  WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS=180 \
+  bash load-tests/scripts/run-control-plane-worker-benchmark.sh
+```
+
+该画像要求 180 个请求、180 个正确关联的 WorkflowRun 及 180 个 JOB 节点/子 Job，并且根、节点、Job 都成功。终态等待按 WorkflowRun 计数，业务成功沿 request→WorkflowRun→JOB→JobInstance 核对；子集成功、缺节点、跨租户/定义引用及根失败均不能通过。它沿用历史请求速率和每次 Process 的输入规模；新模型的日期分布和数据集总量不同，不能直接把新旧延迟差当作性能收益。默认每日期 5,000 条 Process 输入，180 日期共 900,000 条，执行前应核对该造数规模和磁盘预算。
+
+指标 SQL 的最小 fixture 为 `sql/test-control-plane-metrics-fixture.sql`，用 `metrics_case` 选择 `success`、`root-running`、`child-running`、`missing-job`、`missing-node`、`foreign-root`、`wrong-definition`、`foreign-job`、`root-failed` 或 `node-failed`。每个场景必须使用独立空库，已有 `batch` schema 会使初始化失败；准备后对 `control-run-terminal-counts.sql` / `control-run-instance-success-counts.sql` 分别传入 tenant/run/date 变量查询。`test-process-load-fixture.sql` / `test-process-load-counts.sql` 则用于隔离验证日期输入覆盖与 event ID 唯一性。这些是 SQL 行为验证，不是业务链路或容量通过证据。
+
+清理后可用 `control-run-cleanup-residue-counts.sql` 回查本轮 request、冻结请求标识对应的根运行、Job 参数对应的子实例及孤立节点。查询应在移除隔离基础设施前执行；销毁数据库不能替代本轮清理断言。
+
+平台清理会先删除本 runId 已选 Pipeline 的 `pipeline_progress`，再删父实例，满足 V292 的租户复合 FK；另一轮运行的位点不属于目标。这是隔离压测数据销毁，不提供业务冷归档，正式运行历史应交由 Orchestrator 归档服务。相同数据库中的不同压测 profile 应串行：独立 runId 不能隔离共享 Job/Workflow 定义的修改；`parallel` 仅表示单次画像内模块并发，多个画像并发须使用独立环境。
 
 导入/导出收敛后，其他 worker 默认用独立脚本跑，避免每轮夹带 IMPORT/EXPORT：
 
@@ -209,6 +250,7 @@ USERS=4 MODULES_CSV=process,dispatch,atomic,trigger \
 - 通过 `SchedulingBacklogUnderLoadSimulation` 跑 trigger launch 压力，并并行采样 scheduler backlog
 - 输出 `target/control-plane-worker-report-<RUN_ID>.md`
 - 默认自动清理本轮 job/task/outbox/trigger/file/process seed；排查现场可设 `SKIP_AUTO_CLEANUP=1`
+- 自动清理的任一步失败均返回非零；若压测主流程已经失败，保留主流程退出码，并分别报告清理错误。
 - 默认不登录 console；只有 `PIPELINE_MAX_POLLS>0` 或 `SCHEDULING_CONSOLE_READS=true` 时才需要 console token
 
 默认 atomic 只跑 `atomic_sql_demo`。shell 执行器默认关闭；stored-proc/http 需要本地过程或出口 endpoint 就绪，可显式打开：
@@ -441,3 +483,105 @@ select id as taskId, tenant_id as tenantId, 'synthetic-worker-1' as workerId
 
 - `GatlingConfig` 负责读取系统属性并提供统一默认值
 - 仓库根 `pom.xml` 不包含该模块，需要在 `load-tests/` 下单独执行
+
+## 脚本与配套 SQL 索引
+
+本表登记本目录的执行入口、公共模块及配套 SQL；测试代码通过测试命令执行。新增、移动或删除资产时同步跳转和用途，SQL 正文保持独立维护。
+
+| 文件 | 用途 / 调用归属 |
+|---|---|
+| [scripts/analyze-soak.sh](scripts/analyze-soak.sh) | 解析 JFR + jcmd 输出,生成 markdown soak 报告。 |
+| [scripts/cleanup-load-test-environment.sh](scripts/cleanup-load-test-environment.sh) | 按所选范围清理本地压测环境与运行数据。 |
+| [scripts/cleanup-worker-load-data.sh](scripts/cleanup-worker-load-data.sh) | 清理所选 Worker 压测运行产生的隔离数据。 |
+| [scripts/env.sh](scripts/env.sh) | load-tests 公共变量。只能被 source。 |
+| [scripts/monitor-soak.sh](scripts/monitor-soak.sh) | 后台周期 jcmd heap dump + 健康检查 + 退出条件评估。 |
+| [scripts/p2_multitenant_fairness.py](scripts/p2_multitenant_fairness.py) | 分析多租户压测结果的资源公平性。 |
+| [scripts/peak_ceiling.py](scripts/peak_ceiling.py) | 多租户并发峰值流量 — 单机控制面吞吐天花板压测。 |
+| [scripts/prepare-worker-load-data.sh](scripts/prepare-worker-load-data.sh) | 准备 Worker 压测场景需要的业务数据。 |
+| [scripts/run-control-plane-worker-benchmark.sh](scripts/run-control-plane-worker-benchmark.sh) | 对 Worker 与调度控制面执行联动压力基准。 |
+| [scripts/run-p2-capacity-profile.sh](scripts/run-p2-capacity-profile.sh) | 执行 P2 容量画像并采集吞吐与资源证据。 |
+| [scripts/run-p2-process-failure-profile.sh](scripts/run-p2-process-failure-profile.sh) | 运行 Process Worker 故障恢复容量画像。 |
+| [scripts/run-process-worker-benchmark.sh](scripts/run-process-worker-benchmark.sh) | 执行 Process Worker 吞吐与处理结果基准。 |
+| [scripts/run-worker-business-scenario-matrix.sh](scripts/run-worker-business-scenario-matrix.sh) | 本地真实上下游 worker 业务场景矩阵统一入口。 |
+| [scripts/run-worker-load-tests.sh](scripts/run-worker-load-tests.sh) | 调用 Gatling 执行 Worker 负载测试。 |
+| [scripts/run-worker-soak-tests.sh](scripts/run-worker-soak-tests.sh) | 24h+ 持续 soak/longevity 压测。 |
+| [scripts/run-worker-stress-tests.sh](scripts/run-worker-stress-tests.sh) | 执行 Worker 阶梯压力测试并采集容量结果。 |
+| [scripts/sample-scheduler-backlog.sh](scripts/sample-scheduler-backlog.sh) | 在 Gatling 运行期间采样 scheduler / dispatch / worker 的积压情况。 |
+| [scripts/start-soak.sh](scripts/start-soak.sh) | 启动 console-api + 4 worker(JFR + clock offset)。 |
+| [scripts/test-control-plane-metrics.py](scripts/test-control-plane-metrics.py) | 在目标测试库的隔离 schema 中验证控制面根运行与子作业指标。 |
+| [sql/analyze-soak-batch-days.sql](sql/analyze-soak-batch-days.sql) | 供 [analyze-soak.sh](scripts/analyze-soak.sh) 使用的配套 SQL。 |
+| [sql/analyze-soak-job-latency.sql](sql/analyze-soak-job-latency.sql) | 供 [analyze-soak.sh](scripts/analyze-soak.sh) 使用的配套 SQL。 |
+| [sql/capture-pg-capacity-settings.sql](sql/capture-pg-capacity-settings.sql) | 记录容量压测报告中的 PostgreSQL 运行参数。 |
+| [sql/checkpoint.sql](sql/checkpoint.sql) | 供 [25-import-stage2e-checkpoint-crash.sh](../scripts/sim/25-import-stage2e-checkpoint-crash.sh) 使用的配套 SQL。 |
+| [sql/cleanup-control-plane-worker.sql](sql/cleanup-control-plane-worker.sql) | DANGER: 删除本轮压测控制面数据，仅限专用隔离压测库。 |
+| [sql/cleanup-p2-capacity-policy.sql](sql/cleanup-p2-capacity-policy.sql) | DANGER: 删除 P2 capacity 压测策略夹具。仅限专用本地压测库；不得连接生产或共享验收库。 |
+| [sql/cleanup-p2-multitenant-fairness-policy.sql](sql/cleanup-p2-multitenant-fairness-policy.sql) | DANGER: 删除 P2 多租户公平性压测策略夹具。仅限专用本地压测库；不得连接生产或共享验收库。 |
+| [sql/cleanup-worker-load-business.sql](sql/cleanup-worker-load-business.sql) | DANGER: 删除压测业务数据。仅限专用本地压测库；先核对业务库连接和 RUN_ID/业务日期筛选条件。 |
+| [sql/cleanup-worker-load-platform.sql](sql/cleanup-worker-load-platform.sql) | DANGER: 删除压测平台运行数据。仅限专用本地压测库；先核对平台库连接和 RUN_ID 筛选条件。 |
+| [sql/control-dispatch-counters.sql](sql/control-dispatch-counters.sql) | 供 [run-control-plane-worker-benchmark.sh](scripts/run-control-plane-worker-benchmark.sh) 使用的配套 SQL。 |
+| [sql/control-instance-completion.sql](sql/control-instance-completion.sql) | 供 [run-control-plane-worker-benchmark.sh](scripts/run-control-plane-worker-benchmark.sh) 使用的配套 SQL。 |
+| [sql/control-pg-pressure-sample.sql](sql/control-pg-pressure-sample.sql) | 供 [run-control-plane-worker-benchmark.sh](scripts/run-control-plane-worker-benchmark.sh) 使用的配套 SQL。 |
+| [sql/control-pg-pressure-snapshot.sql](sql/control-pg-pressure-snapshot.sql) | 供 [run-control-plane-worker-benchmark.sh](scripts/run-control-plane-worker-benchmark.sh) 使用的配套 SQL。 |
+| [sql/control-pg-statement-profile.sql](sql/control-pg-statement-profile.sql) | 仅展示当前平台库的业务 SQL；截断并压平 SQL 文本，保证报告可读。 |
+| [sql/control-process-staging.sql](sql/control-process-staging.sql) | 供 [run-control-plane-worker-benchmark.sh](scripts/run-control-plane-worker-benchmark.sh) 使用的配套 SQL。 |
+| [sql/control-run-cleanup-residue-counts.sql](sql/control-run-cleanup-residue-counts.sql) | 使用清理前保存的根 ID 清单独立核对；不能在请求已删除后靠请求号前缀猜测归属。 |
+| [sql/control-run-instance-success-counts.sql](sql/control-run-instance-success-counts.sql) | 本画像使用每个请求一个 JOB 的受管 Workflow；必须同时核对根、节点和真实 Job 实例。 |
+| [sql/control-run-terminal-counts.sql](sql/control-run-terminal-counts.sql) | 入口接纳/终态以 WorkflowRun 为准；子 Job 的执行结果另由 success-counts 查询对账。 |
+| [sql/control-selected-job-timeout-min.sql](sql/control-selected-job-timeout-min.sql) | 供 [run-control-plane-worker-benchmark.sh](scripts/run-control-plane-worker-benchmark.sh) 使用的配套 SQL。 |
+| [sql/control-stage-duration.sql](sql/control-stage-duration.sql) | 供 [run-control-plane-worker-benchmark.sh](scripts/run-control-plane-worker-benchmark.sh) 使用的配套 SQL。 |
+| [sql/control-task-latency.sql](sql/control-task-latency.sql) | 供 [run-control-plane-worker-benchmark.sh](scripts/run-control-plane-worker-benchmark.sh) 使用的配套 SQL。 |
+| [sql/control-worker-load.sql](sql/control-worker-load.sql) | 供 [run-control-plane-worker-benchmark.sh](scripts/run-control-plane-worker-benchmark.sh) 使用的配套 SQL。 |
+| [sql/diagnose-load-test-hot-relations.sql](sql/diagnose-load-test-hot-relations.sql) | 供 [cleanup-load-test-environment.sh](scripts/cleanup-load-test-environment.sh) 使用的配套 SQL。 |
+| [sql/drop-control-plane-metrics-fixture.sql](sql/drop-control-plane-metrics-fixture.sql) | 仅允许传入本次定向指标验证器创建的独有 schema。 |
+| [sql/explain-process-load-source.sql](sql/explain-process-load-source.sql) | 对应目录的运行与验证的配套 SQL；由场景入口或参数化路径选择，执行边界见所属说明。 |
+| [sql/p2-active-process-copy-backend.sql](sql/p2-active-process-copy-backend.sql) | 供 [run-p2-process-failure-profile.sh](scripts/run-p2-process-failure-profile.sh) 使用的配套 SQL。 |
+| [sql/p2-capacity-tenant-runtime-counts.sql](sql/p2-capacity-tenant-runtime-counts.sql) | 供 [run-p2-capacity-profile.sh](scripts/run-p2-capacity-profile.sh) 使用的配套 SQL。 |
+| [sql/p2-online-worker-capacity.sql](sql/p2-online-worker-capacity.sql) | 供 [run-p2-capacity-profile.sh](scripts/run-p2-capacity-profile.sh) 使用的配套 SQL。 |
+| [sql/p2-process-business-summary.sql](sql/p2-process-business-summary.sql) | 供 [run-p2-process-failure-profile.sh](scripts/run-p2-process-failure-profile.sh) 使用的配套 SQL。 |
+| [sql/p2-process-failure-summary.sql](sql/p2-process-failure-summary.sql) | 供 [run-p2-process-failure-profile.sh](scripts/run-p2-process-failure-profile.sh) 使用的配套 SQL。 |
+| [sql/p2-request-instance-task-status.sql](sql/p2-request-instance-task-status.sql) | 供 [run-p2-process-failure-profile.sh](scripts/run-p2-process-failure-profile.sh) 使用的配套 SQL。 |
+| [sql/p2-run-end-to-end-summary.sql](sql/p2-run-end-to-end-summary.sql) | 供 [run-p2-capacity-profile.sh](scripts/run-p2-capacity-profile.sh) 使用的配套 SQL。 |
+| [sql/p2-run-instance-residue-count.sql](sql/p2-run-instance-residue-count.sql) | 供 [run-p2-capacity-profile.sh](scripts/run-p2-capacity-profile.sh) 使用的配套 SQL。 |
+| [sql/p2-run-instance-summary.sql](sql/p2-run-instance-summary.sql) | 供 [run-p2-capacity-profile.sh](scripts/run-p2-capacity-profile.sh) 使用的配套 SQL。 |
+| [sql/p2-run-task-summary.sql](sql/p2-run-task-summary.sql) | 供 [run-p2-capacity-profile.sh](scripts/run-p2-capacity-profile.sh) 使用的配套 SQL。 |
+| [sql/p2-terminate-backend.sql](sql/p2-terminate-backend.sql) | 供 [run-p2-process-failure-profile.sh](scripts/run-p2-process-failure-profile.sh) 使用的配套 SQL。 |
+| [sql/prepare-p2-capacity-atomic.sql](sql/prepare-p2-capacity-atomic.sql) | 供 [run-p2-capacity-profile.sh](scripts/run-p2-capacity-profile.sh) 使用的配套 SQL。 |
+| [sql/prepare-p2-multitenant-atomic.sql](sql/prepare-p2-multitenant-atomic.sql) | 供 [run-p2-capacity-profile.sh](scripts/run-p2-capacity-profile.sh) 使用的配套 SQL。 |
+| [sql/prepare-worker-load-business.sql](sql/prepare-worker-load-business.sql) | DANGER: 执行前会清理/重建压测业务夹具。仅限专用本地压测库；禁止连接生产或共享验收库。 |
+| [sql/prepare-worker-load-platform.sql](sql/prepare-worker-load-platform.sql) | DANGER: 执行前会清理/重建压测平台夹具。仅限专用本地压测库；禁止连接生产或共享验收库。 |
+| [sql/process-business-rows.sql](sql/process-business-rows.sql) | 供 [run-process-worker-benchmark.sh](scripts/run-process-worker-benchmark.sh) 使用的配套 SQL。 |
+| [sql/process-instance-completion.sql](sql/process-instance-completion.sql) | 供 [run-process-worker-benchmark.sh](scripts/run-process-worker-benchmark.sh) 使用的配套 SQL。 |
+| [sql/process-pg-stat-database.sql](sql/process-pg-stat-database.sql) | 供 [run-process-worker-benchmark.sh](scripts/run-process-worker-benchmark.sh) 使用的配套 SQL。 |
+| [sql/process-pg-stat-wal.sql](sql/process-pg-stat-wal.sql) | 供 [run-process-worker-benchmark.sh](scripts/run-process-worker-benchmark.sh) 使用的配套 SQL。 |
+| [sql/process-relation-sizes.sql](sql/process-relation-sizes.sql) | 供 [run-process-worker-benchmark.sh](scripts/run-process-worker-benchmark.sh) 使用的配套 SQL。 |
+| [sql/process-run-count.sql](sql/process-run-count.sql) | 供 [run-process-worker-benchmark.sh](scripts/run-process-worker-benchmark.sh) 使用的配套 SQL。 |
+| [sql/process-stage-duration.sql](sql/process-stage-duration.sql) | 供 [run-process-worker-benchmark.sh](scripts/run-process-worker-benchmark.sh) 使用的配套 SQL。 |
+| [sql/process-table-stats.sql](sql/process-table-stats.sql) | 供 [run-process-worker-benchmark.sh](scripts/run-process-worker-benchmark.sh) 使用的配套 SQL。 |
+| [sql/process-task-latency.sql](sql/process-task-latency.sql) | 供 [run-process-worker-benchmark.sh](scripts/run-process-worker-benchmark.sh) 使用的配套 SQL。 |
+| [sql/process-throughput.sql](sql/process-throughput.sql) | 供 [run-process-worker-benchmark.sh](scripts/run-process-worker-benchmark.sh) 使用的配套 SQL。 |
+| [sql/reset-control-pg-statement-profile.sql](sql/reset-control-pg-statement-profile.sql) | 容量轮次必须从空统计开始，避免历史 SQL 调用污染本轮热点排序。 |
+| [sql/sample-scheduler-backlog.sql](sql/sample-scheduler-backlog.sql) | 供 [sample-scheduler-backlog.sh](scripts/sample-scheduler-backlog.sh) 使用的配套 SQL。 |
+| [sql/select-control-plane-root-ids.sql](sql/select-control-plane-root-ids.sql) | 供 [run-control-plane-worker-benchmark.sh](scripts/run-control-plane-worker-benchmark.sh) 使用的配套 SQL。 |
+| [sql/select-worker-load-dispatch-file-id.sql](sql/select-worker-load-dispatch-file-id.sql) | 供 [prepare-worker-load-data.sh](scripts/prepare-worker-load-data.sh) 使用的配套 SQL。 |
+| [sql/test-control-plane-cleanup-scope-counts.sql](sql/test-control-plane-cleanup-scope-counts.sql) | 对应目录的运行与验证的配套 SQL；由场景入口或参数化路径选择，执行边界见所属说明。 |
+| [sql/test-control-plane-cleanup-scope-fixture.sql](sql/test-control-plane-cleanup-scope-fixture.sql) | 先准备 metrics fixture。暂存在实际系统中位于业务库；这里放同名诱饵表， |
+| [sql/test-control-plane-metrics-fixture.sql](sql/test-control-plane-metrics-fixture.sql) | 控制面指标查询的最小 PostgreSQL fixture，仅在独立空数据库执行。 |
+| [sql/test-process-cleanup-counts.sql](sql/test-process-cleanup-counts.sql) | 对应目录的运行与验证的配套 SQL；由场景入口或参数化路径选择，执行边界见所属说明。 |
+| [sql/test-process-cleanup-fixture.sql](sql/test-process-cleanup-fixture.sql) | 隔离空库的清理范围反例：同前缀运行、其它租户及旧固定编号均须保留。 |
+| [sql/test-process-load-counts.sql](sql/test-process-load-counts.sql) | 对应目录的运行与验证的配套 SQL；由场景入口或参数化路径选择，执行边界见所属说明。 |
+| [sql/test-process-load-fixture.sql](sql/test-process-load-fixture.sql) | 仅在独立空数据库验证 Process 压测日期夹具，不替代业务库迁移验收。 |
+| [sql/test-process-source-candidate-index.sql](sql/test-process-source-candidate-index.sql) | 仅隔离性能夹具：先保存无索引计划，再比较按 tenant/date 读取的访问路径。 |
+| [sql/vacuum-analyze-table.sql](sql/vacuum-analyze-table.sql) | 供 [cleanup-load-test-environment.sh](scripts/cleanup-load-test-environment.sh) 使用的配套 SQL。 |
+| [sql/vacuum-full-analyze-table.sql](sql/vacuum-full-analyze-table.sql) | 供 [cleanup-load-test-environment.sh](scripts/cleanup-load-test-environment.sh) 使用的配套 SQL。 |
+| [sql/verify-control-pg-statement-profile.sql](sql/verify-control-pg-statement-profile.sql) | 供 [run-p2-capacity-profile.sh](scripts/run-p2-capacity-profile.sh) 使用的配套 SQL。 |
+| [sql/verify-p2-capacity-job.sql](sql/verify-p2-capacity-job.sql) | 供 [run-p2-capacity-profile.sh](scripts/run-p2-capacity-profile.sh) 使用的配套 SQL。 |
+| [sql/verify-p2-fairness-jobs.sql](sql/verify-p2-fairness-jobs.sql) | 供 [run-p2-capacity-profile.sh](scripts/run-p2-capacity-profile.sh) 使用的配套 SQL。 |
+| [sql/verify-pg-capacity-environment.sql](sql/verify-pg-capacity-environment.sql) | 返回容量压测启动前必须匹配的 PostgreSQL 运行参数。 |
+| [sql/worker-business-throughput.sql](sql/worker-business-throughput.sql) | 供 [run-worker-load-tests.sh](scripts/run-worker-load-tests.sh) 使用的配套 SQL。 |
+| [sql/worker-dispatch-counters.sql](sql/worker-dispatch-counters.sql) | 供 [run-worker-load-tests.sh](scripts/run-worker-load-tests.sh) 使用的配套 SQL。 |
+| [sql/worker-instance-completion.sql](sql/worker-instance-completion.sql) | 供 [run-worker-load-tests.sh](scripts/run-worker-load-tests.sh) 使用的配套 SQL。 |
+| [sql/worker-run-terminal-counts.sql](sql/worker-run-terminal-counts.sql) | 供 [run-worker-load-tests.sh](scripts/run-worker-load-tests.sh) 使用的配套 SQL。 |
+| [sql/worker-stress-instance-summary.sql](sql/worker-stress-instance-summary.sql) | 供 [run-worker-stress-tests.sh](scripts/run-worker-stress-tests.sh) 使用的配套 SQL。 |
+| [sql/worker-stress-task-summary.sql](sql/worker-stress-task-summary.sql) | 供 [run-worker-stress-tests.sh](scripts/run-worker-stress-tests.sh) 使用的配套 SQL。 |
+| [sql/worker-stress-terminal-counts.sql](sql/worker-stress-terminal-counts.sql) | 供 [run-worker-stress-tests.sh](scripts/run-worker-stress-tests.sh) 使用的配套 SQL。 |
+| [sql/worker-task-status.sql](sql/worker-task-status.sql) | 供 [run-worker-load-tests.sh](scripts/run-worker-load-tests.sh) 使用的配套 SQL。 |

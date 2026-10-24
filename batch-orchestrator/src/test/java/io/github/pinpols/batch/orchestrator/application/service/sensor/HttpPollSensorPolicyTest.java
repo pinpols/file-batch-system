@@ -97,7 +97,8 @@ class HttpPollSensorPolicyTest {
             "matchExpr",
             "status==2xx"),
         Map.of(),
-        Duration.ofSeconds(30));
+        Duration.ofSeconds(30),
+        null);
 
     SensorProbeResult result = transportPolicy.probe(context);
 
@@ -125,7 +126,8 @@ class HttpPollSensorPolicyTest {
             "matchExpr",
             "status==2xx"),
         Map.of(),
-        Duration.ofSeconds(30));
+        Duration.ofSeconds(30),
+        null);
 
     SensorProbeResult result = transportPolicy.probe(context);
 

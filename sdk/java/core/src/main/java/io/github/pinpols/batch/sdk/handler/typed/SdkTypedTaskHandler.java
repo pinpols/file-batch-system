@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
+import java.util.Map;
 
 /**
  * 类型安全的任务执行基类 — SDK Phase 5 / SDK-P5-1。
@@ -67,7 +68,9 @@ public abstract class SdkTypedTaskHandler<I, O> implements SdkTaskHandler {
           "invalid parameters for taskType=" + taskType() + ": " + ex.getMessage(), ex);
     }
     O output = handle(input, ctx);
-    return SdkTaskResult.ok(successMessage(output), params.toOutputMap(output));
+    String message = successMessage(output);
+    Map<String, Object> outputMap = params.toOutputMap(output);
+    return SdkTaskResult.ok(message, outputMap);
   }
 
   /** 业务实现 —— 拿强类型入参,返业务结果。抛异常即失败(框架回退)。 */

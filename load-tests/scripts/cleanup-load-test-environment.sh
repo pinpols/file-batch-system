@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：按所选范围清理本地压测环境与运行数据。
+# 用法：在仓库根目录执行 bash load-tests/scripts/cleanup-load-test-environment.sh；参数与前置环境见下方说明及所属 README。
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

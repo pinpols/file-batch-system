@@ -1,5 +1,10 @@
 package io.github.pinpols.batch.console.domain.notification.mapper;
 
+import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkFailedParam;
+import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkGiveUpParam;
+import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkPublishingParam;
+
+
 import io.github.pinpols.batch.console.domain.notification.entity.AlertEscalationNotificationOutboxEntity;
 import java.time.Instant;
 import java.util.List;
@@ -21,11 +26,7 @@ public interface AlertEscalationNotificationOutboxMapper {
       @Param("timeoutSeconds") long timeoutSeconds);
 
   int markPublishing(
-      @Param("id") Long id,
-      @Param("tenantId") String tenantId,
-      @Param("publishingStatus") String publishingStatus,
-      @Param("pendingStatus1") String pendingStatus1,
-      @Param("pendingStatus2") String pendingStatus2);
+      AlertEscalationNotificationOutboxMarkPublishingParam parameters);
 
   int markPublished(
       @Param("id") Long id,
@@ -34,19 +35,10 @@ public interface AlertEscalationNotificationOutboxMapper {
       @Param("publishingStatus") String publishingStatus);
 
   int markFailed(
-      @Param("id") Long id,
-      @Param("tenantId") String tenantId,
-      @Param("failedStatus") String failedStatus,
-      @Param("nextPublishAt") Instant nextPublishAt,
-      @Param("lastError") String lastError,
-      @Param("publishingStatus") String publishingStatus);
+      AlertEscalationNotificationOutboxMarkFailedParam parameters);
 
   int markGiveUp(
-      @Param("id") Long id,
-      @Param("tenantId") String tenantId,
-      @Param("giveUpStatus") String giveUpStatus,
-      @Param("lastError") String lastError,
-      @Param("publishingStatus") String publishingStatus);
+      AlertEscalationNotificationOutboxMarkGiveUpParam parameters);
 
   int resetStalePublishing(
       @Param("id") Long id,

@@ -64,6 +64,17 @@ management:
         batch.trigger.launch.consume.duration: true
 
 batch:
+  replay-operation:
+    # Synchronous preview/admission upper bound; tune only with the R25 range-capacity evidence.
+    max-range-days: ${BATCH_REPLAY_OPERATION_MAX_RANGE_DAYS:31}
+  job-dependency-wait:
+    # 告警不会改变 WAITING；0 关闭一次性告警。
+    timeout-alert-seconds: ${BATCH_JOB_DEPENDENCY_WAIT_TIMEOUT_SECONDS:86400}
+  batch-day:
+    # 依赖等待超过该时长后发送一次去重告警，等待本身仍可在上游就绪后自动恢复；0 表示关闭超时告警。
+    dependency-wait-timeout-seconds: ${BATCH_BATCH_DAY_DEPENDENCY_WAIT_TIMEOUT_SECONDS:86400}
+    # 每轮最多补建的历史业务日；停机时间更长时后续扫描继续推进。
+    catchup-days-per-scan: ${BATCH_BATCH_DAY_CATCHUP_DAYS_PER_SCAN:14}
   data-quality:
     # ENFORCE 保持既有阻断语义；SHADOW 执行并留痕但不阻断结果生效；OFF 完全跳过。
     mode: ${BATCH_DATA_QUALITY_MODE:ENFORCE}

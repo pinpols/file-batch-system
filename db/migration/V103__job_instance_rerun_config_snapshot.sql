@@ -11,11 +11,11 @@ ALTER TABLE archive.job_instance_archive
     ADD COLUMN IF NOT EXISTS rerun_policy_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 COMMENT ON COLUMN batch.job_instance.job_definition_version IS
-    'Snapshot of job_definition.version used when this instance was created.';
+    '创建此实例时冻结的 job_definition.version。';
 COMMENT ON COLUMN batch.job_instance.rerun_policy_snapshot IS
-    'Snapshot of rerun semantics: runAttempt, parentInstanceId, triggerType, rerun flags and reason.';
+    '重跑语义快照，包括 runAttempt、parentInstanceId、triggerType、重跑标记和原因。';
 
 COMMENT ON COLUMN archive.job_instance_archive.job_definition_version IS
-    'V103 mirror column: job_definition.version snapshot copied from batch.job_instance.';
+    'V103 镜像字段：从 batch.job_instance 复制的 job_definition.version 快照。';
 COMMENT ON COLUMN archive.job_instance_archive.rerun_policy_snapshot IS
-    'V103 mirror column: rerun policy snapshot copied from batch.job_instance.';
+    'V103 镜像字段：从 batch.job_instance 复制的重跑策略快照。';

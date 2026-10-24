@@ -13,6 +13,7 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchCommand;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.SftpDispatchChannelAdapter;
 import jakarta.mail.Message;
 import jakarta.mail.internet.MimeMultipart;
 import java.io.InputStream;
@@ -29,8 +30,11 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.Container.ExecResult;
@@ -53,6 +57,9 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 @EnabledIf("s3BackendActive")
 @DisplayName("外部渠道真实投递集成:对象存储、SFTP 与邮件三条链路端到端送达并回读校验")
 class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
+
+  @TempDir
+  Path tempDir;
 
   private static final DockerImageName SFTP_IMAGE = DockerImageName.parse("atmoz/sftp:alpine");
   private static final String SFTP_USER = "batch";
@@ -91,6 +98,9 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
   private DispatchChannelGateway gateway;
+
+  @Autowired
+  private SftpDispatchChannelAdapter sftpDispatchChannelAdapter;
 
   @Test
   @DisplayName("投递到真实对象存储后目标对象可读,回执引用指向目标对象且内容与源文件一致")
@@ -140,7 +150,7 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
   void shouldDispatchFileToRealSftpServer() throws Exception {
     String tenantId = "tenant-sftp";
     String channelCode = "sftp-" + UUID.randomUUID();
-    Path localFile = Files.createTempFile("dispatch-sftp-", ".txt");
+    Path localFile = Files.createTempFile(tempDir, "dispatch-sftp-", ".txt");
     byte[] content = ("sftp-payload-" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
     Files.write(localFile, content);
     String remoteFileName = "dispatch-" + UUID.randomUUID() + ".txt";
@@ -172,11 +182,61 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("SFTP 主文件已发布但旁挂清单发布失败时标记外部结果未知且保留主文件")
+  void shouldReportUnknown_whenSftpFileWasPublishedButManifestFailed() throws Exception {
+    String tenantId = "tenant-sftp-unknown";
+    String channelCode = "sftp-" + UUID.randomUUID();
+    Path localFile = Files.createTempFile(tempDir, "dispatch-sftp-unknown-", ".txt");
+    byte[] content = "sftp-published-before-manifest-failure".getBytes(StandardCharsets.UTF_8);
+    Files.write(localFile, content);
+    String remoteFileName = "dispatch-" + UUID.randomUUID() + ".txt";
+    String remotePath = "/home/" + SFTP_USER + "/upload/" + remoteFileName;
+    String remoteManifestPath = remotePath + ".chk";
+    ExecResult prepareManifestConflict = SFTP_SERVER.execInContainer(
+        "sh",
+        "-lc",
+        "mkdir -p " + remoteManifestPath + " && printf occupied > " + remoteManifestPath
+            + "/occupied");
+    assertThat(prepareManifestConflict.getExitCode()).isZero();
+
+    Map<String, Object> channelConfig = Map.ofEntries(
+        Map.entry("tenant_id", tenantId),
+        Map.entry("channel_type", "SFTP"),
+        Map.entry("channel_code", channelCode),
+        Map.entry("sftp_host", SFTP_SERVER.getHost()),
+        Map.entry("sftp_port", SFTP_SERVER.getMappedPort(22)),
+        Map.entry("sftp_user", SFTP_USER),
+        Map.entry("sftp_password", SFTP_PASSWORD),
+        Map.entry("sftp_remote_directory", "/upload/"),
+        Map.entry("sftp_remote_file_name", remoteFileName),
+        Map.entry("sftp_strict_host_key_checking", "no"));
+    Map<String, Object> sourceFile =
+        fileRecord(localFile.toString(), "LOCAL", null, "source.txt", "text/plain");
+    DispatchCommand command = new DispatchCommand(
+        tenantId,
+        "trace-sftp-unknown",
+        sourceFile,
+        channelConfig,
+        payload("file-sftp-unknown", channelCode, "req-sftp-unknown", "rc-sftp-unknown"));
+    DispatchResult result = sftpDispatchChannelAdapter.dispatch(command);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.externalOutcomeUnknown()).isTrue();
+    ExecResult remoteFile = SFTP_SERVER.execInContainer(
+        "sh",
+        "-lc",
+        "test -f " + remotePath + " && cat " + remotePath + " && test -f " + remoteManifestPath
+            + "/occupied");
+    assertThat(remoteFile.getExitCode()).isZero();
+    assertThat(remoteFile.getStdout()).isEqualTo(new String(content, StandardCharsets.UTF_8));
+  }
+
+  @Test
   @DisplayName("投递到真实邮件服务器后收件人收到邮件:主题前缀、发件人、收件人与附件内容均符合预期")
   void shouldDispatchFileToRealSmtpServer() throws Exception {
     String tenantId = "tenant-email";
     String channelCode = "email-" + UUID.randomUUID();
-    Path localFile = Files.createTempFile("dispatch-mail-", ".txt");
+    Path localFile = Files.createTempFile(tempDir, "dispatch-mail-", ".txt");
     byte[] content = ("mail-payload-" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
     Files.write(localFile, content);
 
@@ -271,7 +331,28 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
       Map<String, Object> channelConfig,
       Map<String, Object> fileRecord,
       DispatchPayload payload) {
+    ensureChannelConfig(tenantId, channelConfig);
     return gateway.dispatch(new DispatchCommand(
         tenantId, "trace-" + UUID.randomUUID(), fileRecord, channelConfig, payload));
+  }
+
+  private static void ensureChannelConfig(String tenantId, Map<String, Object> channelConfig) {
+    String channelCode = String.valueOf(channelConfig.get("channel_code"));
+    String channelType = String.valueOf(channelConfig.get("channel_type"));
+    final String insertBatchFileChannelConfigSql = """
+        insert into batch.file_channel_config (
+          tenant_id, channel_code, channel_name, channel_type, target_endpoint, auth_type,
+          config_json, receipt_policy, timeout_seconds, enabled, is_deleted)
+        values (?, ?, 'Dispatch external integration fixture', ?, 'http://localhost', 'NONE',
+          '{}', 'SYNC', 30, true, false)
+        on conflict (tenant_id, channel_code) do nothing
+        """;
+    platformJdbcTemplate().update(insertBatchFileChannelConfigSql, tenantId, channelCode, channelType);
+  }
+
+  private static JdbcTemplate platformJdbcTemplate() {
+    DriverManagerDataSource dataSource = new DriverManagerDataSource(
+        platformJdbcUrl(), platformJdbcUsername(), platformJdbcPassword());
+    return new JdbcTemplate(dataSource);
   }
 }

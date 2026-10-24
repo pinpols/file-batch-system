@@ -76,8 +76,12 @@ public class JobResourceAssignmentGuard {
 
   private static boolean changes(
       String requested, String current, Function<String, String> normalize) {
-    return EmptyChecks.isNotNull(requested)
-        && !Objects.equals(normalize.apply(requested), normalize.apply(current));
+    if (EmptyChecks.isNull(requested)) {
+      return false;
+    }
+    String normalizedRequested = normalize.apply(requested);
+    String normalizedCurrent = normalize.apply(current);
+    return !Objects.equals(normalizedRequested, normalizedCurrent);
   }
 
   private static boolean isPlatformAdmin() {
@@ -89,9 +93,10 @@ public class JobResourceAssignmentGuard {
 
   private static void requireTenantAdmin() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (authentication == null // empty-check: allow - Sonar S2259
+    boolean operatorIsNotTenantAdministrator = authentication == null // empty-check: allow - Sonar S2259
         || !authentication.isAuthenticated()
-        || !hasAuthority(authentication, ConsoleRoles.TENANT_ADMIN)) {
+        || !hasAuthority(authentication, ConsoleRoles.TENANT_ADMIN);
+    if (operatorIsNotTenantAdministrator) {
       throw forbidden();
     }
   }

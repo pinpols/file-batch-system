@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.exports.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -43,8 +44,13 @@ public final class ExportConfigValueSupport {
     if (value instanceof Number number) {
       return Math.max(1, number.intValue());
     }
-    if (value != null && Texts.hasText(String.valueOf(value))) {
-      return Math.max(1, Integer.parseInt(String.valueOf(value)));
+    if (EmptyChecks.isNotNull(value)) {
+      String presenceCheckValue = String.valueOf(value);
+      if (Texts.hasText(presenceCheckValue)) {
+        String numericValue = String.valueOf(value);
+        int parsedValue = Integer.parseInt(numericValue);
+        return Math.max(1, parsedValue);
+      }
     }
     return fallback;
   }

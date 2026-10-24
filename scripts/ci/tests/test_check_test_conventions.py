@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：测试 @DisplayName 约定门禁测试。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_check_test_conventions.py。
 """check-test-conventions.py 的契约规则回归测试。
 
 守护最容易「编译通过、CI 全绿、运行时静默」的几件事：
@@ -16,10 +18,12 @@ from __future__ import annotations
 import contextlib
 import importlib.util
 import io
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / "check-test-conventions.py"
 SPEC = importlib.util.spec_from_file_location("check_test_conventions", SCRIPT)
@@ -50,6 +54,64 @@ def display_findings(findings):
     return [finding for finding in findings if finding.kind in DISPLAY_KINDS]
 
 
+class TestSourceDiscoveryTest(unittest.TestCase):
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.git("init", "-q")
+        root_patch = patch.object(MODULE, "ROOT", self.root)
+        root_patch.start()
+        self.addCleanup(root_patch.stop)
+
+    def git(self, *args: str) -> None:
+        subprocess.run(
+            ["git", *args], cwd=self.root, check=True, capture_output=True
+        )
+
+    def test_includes_tracked_and_new_test_sources_but_not_production(self) -> None:
+        tracked = write(self.root, "module/src/test/java/TrackedTest.java", "class TrackedTest {}")
+        self.git("add", "module")
+        added = write(self.root, "sdk/java/core/src/test/java/NewTest.java", "class NewTest {}")
+        write(self.root, "module/src/main/java/Production.java", "class Production {}")
+        self.assertEqual(set(MODULE.test_java_files()), {tracked, added})
+
+    def test_ignored_backup_is_excluded_and_new_source_violation_still_fails(self) -> None:
+        write(self.root, ".gitignore", "logs/\n**/target/\n")
+        write(self.root, "logs/before/module/src/test/java/OldTest.java", "class OldTest { @Test void old() {} }")
+        write(self.root, "module/target/copy/src/test/java/CopyTest.java", "class CopyTest { @Test void old() {} }")
+        source = write(self.root, "module/src/test/java/NewTest.java", "class NewTest { @Test void shouldReject() {} }")
+        findings = MODULE.scan()
+        self.assertEqual(MODULE.test_java_files(), [source])
+        self.assertEqual({item.path for item in findings}, {"module/src/test/java/NewTest.java"})
+        self.assertEqual(kinds(findings), [MODULE.MISSING_CLASS, MODULE.MISSING_METHOD])
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(MODULE.check_baseline(self.root / "baseline.txt", findings), 1)
+
+    def test_tracked_source_cannot_be_hidden_by_new_ignore_rule(self) -> None:
+        source = write(self.root, "module/src/test/java/TrackedTest.java", "class TrackedTest { @Test void shouldReject() {} }")
+        self.git("add", "module")
+        write(self.root, ".gitignore", "module/\n")
+        self.assertEqual(MODULE.test_java_files(), [source])
+        self.assertEqual(kinds(MODULE.scan()), [MODULE.MISSING_CLASS, MODULE.MISSING_METHOD])
+
+    def test_deleted_tracked_source_is_not_read(self) -> None:
+        source = write(self.root, "module/src/test/java/DeletedTest.java", "class DeletedTest {}")
+        self.git("add", "module")
+        source.unlink()
+        self.assertEqual(MODULE.test_java_files(), [])
+
+    def test_source_path_with_spaces_and_chinese_is_preserved(self) -> None:
+        source = write(self.root, "模块 one/src/test/java/示例Test.java", "class ExampleTest {}")
+        self.assertEqual(MODULE.test_java_files(), [source])
+
+    def test_missing_git_repository_fails_instead_of_reporting_empty_success(self) -> None:
+        with tempfile.TemporaryDirectory() as outside:
+            with patch.object(MODULE, "ROOT", Path(outside)):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    MODULE.test_java_files()
+
+
 class MaskJavaTest(unittest.TestCase):
     def test_text_block_braces_are_masked(self) -> None:
         text = 'class A { void m() { String s = """{ } { }"""; } }'
@@ -71,6 +133,23 @@ class MaskJavaTest(unittest.TestCase):
 
 
 class ScanFileTest(unittest.TestCase):
+    def test_english_display_is_not_masked_by_chinese_in_method_body(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            path = write(
+                Path(raw),
+                "EnglishDisplayTest.java",
+                '''
+@DisplayName("中文类说明")
+class EnglishDisplayTest {
+  @Test
+  @DisplayName("English only")
+  void shouldReject() { String description = "方法正文不能充当注解说明"; }
+}
+''',
+            )
+            findings = MODULE.scan_file(path, "demo/EnglishDisplayTest.java")
+            self.assertEqual(kinds(findings), [MODULE.NON_CHINESE])
+
     def test_fully_annotated_class_has_no_finding(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             tmp = Path(raw)

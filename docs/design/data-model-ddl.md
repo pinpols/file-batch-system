@@ -3,7 +3,7 @@
 
 本章保留项目早期将任务调度、DAG 编排、文件链路、资源调度、补偿与审计模型落成 PostgreSQL 表结构的逻辑基线。它用于理解建模出发点，**不是当前可直接执行的完整 schema**。
 
-> **权威边界**：当前表、列、约束和索引以 [`db/migration/`](../../db/migration/) 的 Flyway 迁移和目标数据库 catalog 为准；当前状态枚举以 [`status-state-machines.md`](./status-state-machines.md) 与 Java enum 为准。不得从本文代码块单独初始化或升级环境。
+> **权威边界**：当前表、列、约束和索引以 [`db/migration/`](../../db/migration) 的 Flyway 迁移和目标数据库 catalog 为准；当前状态枚举以 [`status-state-machines.md`](./status-state-machines.md) 与 Java enum 为准。不得从本文代码块单独初始化或升级环境。
 
 **本章落地原则**：
 
@@ -21,6 +21,10 @@
 
 - `batch`：业务配置、运行态、审计、补偿、文件资产
 - `quartz`：Quartz JDBC JobStore 元数据表
+
+当前逻辑关系首先是 `WorkflowDefinition → WorkflowRun → WorkflowNodeRun → JOB 对应 JobInstance → JobPartition → JobTask`；控制节点无空实现 Job。机会/覆盖/预期由 `scheduled_occurrence`、`scheduled_occurrence_coverage`、`expected_work_occurrence` 表达，ReplayOperation 与各消费回执另有职责。当前关系图与表组见[数据库结构指南](database-schema-guide.md)，当前跨分区幂等见[去重台账设计](partition-idempotency-decision.md)。
+
+下文 DDL 中的 WORKFLOW 类型、Job 调度列与租户 Pipeline 定义属于早期逻辑基线，不能直接用于新部署。旧 `pipeline_definition` / `pipeline_step_definition` 及关联定义ID已在 V347 退役；当前阶段契约由 `SystemPipelineCatalog` 固定，业务参数归属 Job。下方历史 DDL 保留原建模证据，不代表当前表仍存在。
 
 本章历史逻辑基线覆盖以下表：
 
@@ -292,7 +296,6 @@ CREATE TABLE IF NOT EXISTS batch.workflow_node (
     node_name                VARCHAR(256) NOT NULL,
     node_type                VARCHAR(32)  NOT NULL,
     related_job_code         VARCHAR(128),
-    related_pipeline_code    VARCHAR(128),
     worker_group             VARCHAR(128),
     window_code              VARCHAR(128),
     node_order               INTEGER      NOT NULL DEFAULT 0,
@@ -304,14 +307,14 @@ CREATE TABLE IF NOT EXISTS batch.workflow_node (
     created_at               TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at               TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_workflow_node_def_code UNIQUE (workflow_definition_id, node_code),
-    CONSTRAINT ck_workflow_node_type CHECK (node_type IN ('TASK', 'GATEWAY', 'FILE_STEP', 'START', 'END')),
+    CONSTRAINT ck_workflow_node_type CHECK (node_type IN ('TASK', 'GATEWAY', 'START', 'END', 'WAIT', 'JOB')),
     CONSTRAINT ck_workflow_node_retry_policy CHECK (retry_policy IN ('NONE', 'FIXED', 'EXPONENTIAL')),
     CONSTRAINT ck_workflow_node_retry_max_count CHECK (retry_max_count >= 0),
     CONSTRAINT ck_workflow_node_timeout_seconds CHECK (timeout_seconds >= 0),
     CONSTRAINT ck_workflow_node_order CHECK (node_order >= 0)
 );
 
-> `related_pipeline_code` is a node-level linkage field for workflow topology. It is not the same concept as the canonical `job_code` used by pipeline definitions and runtime context.
+> Workflow nodes reference executable jobs through `related_job_code`; Pipeline selection follows Job type.
 
 CREATE INDEX IF NOT EXISTS idx_workflow_node_type_enabled
     ON batch.workflow_node (node_type, enabled);
@@ -503,7 +506,7 @@ CREATE TABLE IF NOT EXISTS batch.workflow_node_run (
     finished_at              TIMESTAMPTZ,
     duration_ms              BIGINT       NOT NULL DEFAULT 0,
     CONSTRAINT uk_workflow_node_run UNIQUE (workflow_run_id, node_code, run_seq),
-    CONSTRAINT ck_workflow_node_run_type CHECK (node_type IN ('TASK', 'GATEWAY', 'FILE_STEP', 'START', 'END')),
+    CONSTRAINT ck_workflow_node_run_type CHECK (node_type IN ('TASK', 'GATEWAY', 'START', 'END', 'WAIT', 'JOB')),
     CONSTRAINT ck_workflow_node_run_status CHECK (node_status IN ('READY', 'RUNNING', 'SUCCESS', 'FAILED', 'SKIPPED')),
     CONSTRAINT ck_workflow_node_run_retry CHECK (retry_count >= 0),
     CONSTRAINT ck_workflow_node_run_duration CHECK (duration_ms >= 0)

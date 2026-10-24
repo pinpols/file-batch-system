@@ -5,9 +5,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import java.text.MessageFormat;
 import java.util.Locale;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.MessageSource;
+import org.springframework.context.support.AbstractMessageSource;
 import org.springframework.context.support.ResourceBundleMessageSource;
 
 /** {@link LocalizedErrorRenderer} 读路径 + {@link BizExceptionUtils} 写路径互转测试。 */
@@ -129,13 +133,12 @@ class LocalizedErrorRendererTest {
   void shouldFallBack_whenMessageSourceThrows() {
     // 守护"render 任何 RuntimeException 都 fallback"的契约：注入一个永远抛 IAE 的 messageSource，
     // 模拟 args 与占位符不匹配 / args 类型异常等渲染失败场景
-    org.springframework.context.MessageSource faulty =
-        new org.springframework.context.support.AbstractMessageSource() {
-          @Override
-          protected java.text.MessageFormat resolveCode(String code, Locale locale) {
-            throw new IllegalArgumentException("simulated MessageFormat failure");
-          }
-        };
+    MessageSource faulty = new AbstractMessageSource() {
+      @Override
+      protected MessageFormat resolveCode(String code, Locale locale) {
+        throw new IllegalArgumentException("simulated MessageFormat failure");
+      }
+    };
     LocalizedErrorRenderer faultyRenderer = new LocalizedErrorRenderer(faulty, objectMapper);
 
     String rendered =
@@ -182,7 +185,7 @@ class LocalizedErrorRendererTest {
   @DisplayName("参数为复杂对象:仍能完成转换与序列化, 不抛异常")
   void shouldSerializeComplexArgsWithoutThrowing() {
     BizException ex = BizException.of(
-        ResultCode.NOT_FOUND, "error.tenant.already_exists", java.util.Map.of("nested", "value"));
+        ResultCode.NOT_FOUND, "error.tenant.already_exists", Map.of("nested", "value"));
 
     LocalizedError error = BizExceptionUtils.toLocalizedError(ex, resolver, objectMapper);
 

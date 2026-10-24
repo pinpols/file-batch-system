@@ -27,7 +27,8 @@ public final class SensorSpecs {
       return n.longValue();
     }
     try {
-      return Long.parseLong(v.toString().trim());
+      String trimmedValue = v.toString().trim();
+      return Long.parseLong(trimmedValue);
     } catch (NumberFormatException e) {
       return null;
     }

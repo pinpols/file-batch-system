@@ -41,23 +41,26 @@ public record ConsoleSlaComplianceResponse(
     if (view == null) {
       return null;
     }
+    Long breached = view.breached();
+    Long onTime = view.onTime();
+    Long totalWithSla = view.totalWithSla();
+    BigDecimal avgDurationSeconds = view.avgDurationSeconds();
+    List<SlaDayEntry> dailyTrend = view.dailyTrend().stream().map(SlaDayEntry::from).toList();
     return new ConsoleSlaComplianceResponse(
-        view.breached(),
-        view.onTime(),
-        view.totalWithSla(),
-        view.avgDurationSeconds(),
-        view.dailyTrend().stream().map(SlaDayEntry::from).toList());
+        breached, onTime, totalWithSla, avgDurationSeconds, dailyTrend);
   }
 
   public static ConsoleSlaComplianceResponse from(Map<String, Object> row) {
     if (row == null) {
       return null;
     }
+    Long breached = longValue(row, "breached");
+    Long onTime = longValue(row, "onTime");
+    Long totalWithSla = longValue(row, "totalWithSla");
+    BigDecimal avgDurationSeconds = bigDecimalValue(row, "avgDurationSeconds");
+    List<Map<String, Object>> dailyTrendRows = mapList(row, "dailyTrend");
+    List<SlaDayEntry> dailyTrend = dailyTrendRows.stream().map(SlaDayEntry::from).toList();
     return new ConsoleSlaComplianceResponse(
-        longValue(row, "breached"),
-        longValue(row, "onTime"),
-        longValue(row, "totalWithSla"),
-        bigDecimalValue(row, "avgDurationSeconds"),
-        mapList(row, "dailyTrend").stream().map(SlaDayEntry::from).toList());
+        breached, onTime, totalWithSla, avgDurationSeconds, dailyTrend);
   }
 }

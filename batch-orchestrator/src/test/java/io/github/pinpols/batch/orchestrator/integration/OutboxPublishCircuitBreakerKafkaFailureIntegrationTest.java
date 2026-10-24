@@ -1,9 +1,12 @@
 package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
+import io.github.pinpols.batch.common.kafka.BatchEventMessage;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.engine.DefaultScheduleForwarder;
 import io.github.pinpols.batch.orchestrator.application.engine.ScheduleForwarderResult;
@@ -14,12 +17,23 @@ import io.github.pinpols.batch.orchestrator.infrastructure.mq.OutboxPublishCircu
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.observation.ObservationRegistry;
+import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.StreamSupport;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
@@ -76,6 +90,9 @@ class OutboxPublishCircuitBreakerKafkaFailureIntegrationTest extends AbstractInt
   @Autowired
   private JdbcTemplate jdbcTemplate;
 
+  @Autowired
+  private BatchOrchestratorGovernanceProperties governance;
+
   @Test
   @Order(2)
   @DisplayName("消息队列不可用时事件发布失败并记为失败状态,连续失败达到阈值后熔断开启,不再放行发布")
@@ -106,24 +123,87 @@ class OutboxPublishCircuitBreakerKafkaFailureIntegrationTest extends AbstractInt
 
   @Test
   @Order(1)
-  @DisplayName("消息队列恢复后此前失败的事件重新发布成功,发布尝试次数继续累加")
-  void shouldPublishFailedEvent_whenKafkaRecovers() {
+  @DisplayName("真实消息队列暂停再恢复后同一事件发布成功,保留失败审计及消息身份,后续扫描不再发布")
+  void shouldPublishFailedEvent_whenKafkaRecovers() throws Exception {
+    String topic = governance.outbox().getDefaultTopic();
+    try (AdminClient admin = AdminClient.create(
+        Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers()))) {
+      if (!admin.listTopics().names().get(15, TimeUnit.SECONDS).contains(topic)) {
+        admin
+            .createTopics(List.of(new NewTopic(topic, 1, (short) 1)))
+            .all()
+            .get(15, TimeUnit.SECONDS);
+      }
+    }
     OutboxEventEntity event = seedOutboxEvent("cb-recover-" + System.nanoTime());
-    jdbcTemplate.update(
-        "update batch.outbox_event set publish_status = 'FAILED', publish_attempt = 1, "
-            + "next_publish_at = now() where id = ?",
-        event.getId());
+    // 将遗漏的 Quartz cron 触发转换为持久化且分别标识的恢复执行。
+    String failedOutboxRetryCountSql = """
+        select count(*) from batch.event_outbox_retry
+        where outbox_event_id = ? and retry_status = 'FAILED'
+        """;
+    KAFKA.getDockerClient().pauseContainerCmd(KAFKA.getContainerId()).exec();
+    try {
+      ScheduleForwarderResult failed = scheduleForwarder.advance(plan());
+      assertThat(failed.totalFailures()).isGreaterThanOrEqualTo(1);
+      assertStatus(event.getId(), OutboxPublishStatus.FAILED.code());
+      Integer failedRetryCount = jdbcTemplate.queryForObject(
+          failedOutboxRetryCountSql, Integer.class, event.getId());
+      assertThat(failedRetryCount).isEqualTo(1);
+    } finally {
+      KAFKA.getDockerClient().unpauseContainerCmd(KAFKA.getContainerId()).exec();
+    }
 
-    ScheduleForwarderResult result = scheduleForwarder.advance(plan());
-    circuitBreaker.onAdvanceResult(result.totalFailures());
+    await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+      ScheduleForwarderResult result = scheduleForwarder.advance(plan());
+      assertThat(result.totalFailures()).isZero();
+      assertStatus(event.getId(), OutboxPublishStatus.PUBLISHED.code());
+    });
 
-    assertThat(result.totalFailures()).isZero();
-    assertStatus(event.getId(), OutboxPublishStatus.PUBLISHED.code());
+    String outboxPublishAttemptSql = """
+        select publish_attempt from batch.outbox_event where id = ?
+    """;
     Integer attempt = jdbcTemplate.queryForObject(
-        "select publish_attempt from batch.outbox_event where id = ?",
-        Integer.class,
-        event.getId());
+        outboxPublishAttemptSql, Integer.class, event.getId());
     assertThat(attempt).isGreaterThanOrEqualTo(2);
+    try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(Map.of(
+        ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
+        kafkaBootstrapServers(),
+        ConsumerConfig.GROUP_ID_CONFIG,
+        event.getEventKey(),
+        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
+        "earliest",
+        ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG,
+        false,
+        ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
+        StringDeserializer.class,
+        ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+        StringDeserializer.class))) {
+      consumer.subscribe(List.of(topic));
+      await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+        var matching = StreamSupport.stream(
+                consumer.poll(Duration.ofMillis(500)).records(topic).spliterator(), false)
+            .filter(record -> event.getEventKey().equals(record.key()))
+            .toList();
+        assertThat(matching).isNotEmpty();
+        for (var record : matching) {
+          BatchEventMessage message = JsonUtils.fromJson(record.value(), BatchEventMessage.class);
+          assertThat(message.tenantId()).isEqualTo(TENANT);
+          assertThat(message.idempotencyKey()).isEqualTo(event.getEventKey());
+          assertThat(message.traceId()).isEqualTo(event.getTraceId());
+          assertThat(message.eventName()).isEqualTo(event.getEventType());
+        }
+      });
+    }
+    scheduleForwarder.advance(plan());
+    Integer publishAttemptAfterRetry = jdbcTemplate.queryForObject(
+        outboxPublishAttemptSql, Integer.class, event.getId());
+    assertThat(publishAttemptAfterRetry).isEqualTo(attempt);
+    String matchingOutboxEventCountSql = """
+        select count(*) from batch.outbox_event where tenant_id = ? and event_key = ?
+        """;
+    Integer matchingOutboxEventCount = jdbcTemplate.queryForObject(
+        matchingOutboxEventCountSql, Integer.class, TENANT, event.getEventKey());
+    assertThat(matchingOutboxEventCount).isEqualTo(1);
   }
 
   private OutboxEventEntity seedOutboxEvent(String key) {
@@ -153,8 +233,10 @@ class OutboxPublishCircuitBreakerKafkaFailureIntegrationTest extends AbstractInt
   }
 
   private void assertStatus(Long eventId, String expected) {
-    String status = jdbcTemplate.queryForObject(
-        "select publish_status from batch.outbox_event where id = ?", String.class, eventId);
+    String outboxPublishStatusSql = """
+        select publish_status from batch.outbox_event where id = ?
+    """;
+    String status = jdbcTemplate.queryForObject(outboxPublishStatusSql, String.class, eventId);
     assertThat(status).isEqualTo(expected);
   }
 
@@ -166,9 +248,7 @@ class OutboxPublishCircuitBreakerKafkaFailureIntegrationTest extends AbstractInt
     OutboxPublishCircuitBreaker testCircuitBreaker(
         BatchOrchestratorGovernanceProperties governance) {
       return new OutboxPublishCircuitBreaker(
-          governance,
-          new InMemoryCircuitRedisSupport(),
-          new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+          governance, new InMemoryCircuitRedisSupport(), new SimpleMeterRegistry());
     }
 
     @Bean
@@ -212,9 +292,10 @@ class OutboxPublishCircuitBreakerKafkaFailureIntegrationTest extends AbstractInt
       if (args.length == 1 && FIELD_OPEN_UNTIL_MS.equals(args[0])) {
         return values.getOrDefault(FIELD_OPEN_UNTIL_MS, 0L);
       }
-      if (args.length == 7
+      boolean scriptArgumentsMatchCircuitSnapshot = args.length == 7
           && FIELD_FAILED_POLLS.equals(args[0])
-          && FIELD_OPEN_UNTIL_MS.equals(args[1])) {
+          && FIELD_OPEN_UNTIL_MS.equals(args[1]);
+      if (scriptArgumentsMatchCircuitSnapshot) {
         long failed = Long.parseLong(args[2]);
         long threshold = Long.parseLong(args[3]);
         long cooldownMillis = Long.parseLong(args[4]);

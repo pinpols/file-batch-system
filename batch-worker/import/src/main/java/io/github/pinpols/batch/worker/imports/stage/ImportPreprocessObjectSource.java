@@ -67,7 +67,9 @@ public final class ImportPreprocessObjectSource {
   }
 
   void assertObjectBelongsToTenant(ImportJobContext context, ImportPayload importPayload) {
-    if (context == null || importPayload == null || !Texts.hasText(importPayload.storagePath())) {
+    boolean hasRequiredObjectOwnershipContext =
+        EmptyChecks.isNotNull(context) && EmptyChecks.isNotNull(importPayload) && Texts.hasText(importPayload.storagePath());
+    if (!hasRequiredObjectOwnershipContext) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_OBJECT_FORBIDDEN",
           "import object path is required before tenant ownership validation");
@@ -93,7 +95,9 @@ public final class ImportPreprocessObjectSource {
   byte[] resolveRawBytes(
       ImportJobContext context, ImportPayload importPayload, Object templateConfigObject) {
     if (importPayload != null && Texts.hasText(importPayload.contentBase64())) {
-      return Base64.getDecoder().decode(importPayload.contentBase64().trim());
+      String encodedPayload = importPayload.contentBase64();
+      String trimmedPayload = encodedPayload.trim();
+      return Base64.getDecoder().decode(trimmedPayload);
     }
     if (importPayload != null && Texts.hasText(importPayload.content())) {
       Charset charset = resolveCharsetForContentBytes(importPayload, templateConfigObject);
@@ -218,12 +222,15 @@ public final class ImportPreprocessObjectSource {
     } catch (Exception ex) {
       deleteQuietly(spool);
       context.getAttributes().remove(PipelineRuntimeKeys.PARTITION_PRESLICED);
+      int partitionNo = slice.partitionNo();
+      int partitionCount = slice.partitionCount();
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
       log.warn(
           "import preprocess range-slice failed, fallback to full stream: object={}, partition={}/{}, err={}",
           object,
-          slice.partitionNo(),
-          slice.partitionCount(),
-          SwallowedExceptionLogger.summary(ex));
+          partitionNo,
+          partitionCount,
+          causeSummary);
       return streamObjectToSpoolAndReturn(
           context, importPayload, templateConfig, templateConfigObject);
     }
@@ -237,10 +244,15 @@ public final class ImportPreprocessObjectSource {
       return false;
     }
     Object pipeline = config.get("preprocess_pipeline");
-    if (pipeline != null
-        && Texts.hasText(String.valueOf(pipeline))
-        && !"[]".equals(String.valueOf(pipeline).trim())) {
-      return false;
+    if (EmptyChecks.isNotNull(pipeline)) {
+      String presenceText = String.valueOf(pipeline);
+      if (Texts.hasText(presenceText)) {
+        String rawPipelineConfig = String.valueOf(pipeline);
+        String pipelineConfig = rawPipelineConfig.trim();
+        if (!"[]".equals(pipelineConfig)) {
+          return false;
+        }
+      }
     }
     return isNoneOrBlank(config.get("compress_type")) && isNoneOrBlank(config.get("encrypt_type"));
   }
@@ -251,7 +263,8 @@ public final class ImportPreprocessObjectSource {
       Integer partitionNo,
       Integer partitionCount,
       Charset charset) {
-    if (partitionNo == null || partitionCount == null || partitionCount <= 1) {
+    boolean inputIsNotPartitioned = partitionNo == null || partitionCount == null || partitionCount <= 1;
+    if (inputIsNotPartitioned) {
       return false;
     }
     if (partitionNo < 1 || partitionNo > partitionCount) {
@@ -271,7 +284,8 @@ public final class ImportPreprocessObjectSource {
     if (!Texts.hasText(formatType)) {
       return false;
     }
-    String normalized = formatType.trim().toUpperCase(Locale.ROOT);
+    String trimmedFormatType = formatType.trim();
+    String normalized = trimmedFormatType.toUpperCase(Locale.ROOT);
     return FileTemplateFormat.EXCEL.code().equals(normalized)
         || FileTemplateFormat.BINARY.code().equals(normalized);
   }
@@ -375,7 +389,8 @@ public final class ImportPreprocessObjectSource {
     if (templateConfigObject instanceof Map<?, ?> templateConfig) {
       Object charset = templateConfig.get("charset");
       if (charset != null && Texts.hasText(String.valueOf(charset))) {
-        return EncodingUtils.resolve(String.valueOf(charset));
+        String configuredCharsetText = String.valueOf(charset);
+        return EncodingUtils.resolve(configuredCharsetText);
       }
     }
     if (importPayload != null && Texts.hasText(importPayload.charset())) {
@@ -388,11 +403,13 @@ public final class ImportPreprocessObjectSource {
     if (templateConfigObject instanceof Map<?, ?> templateConfig) {
       Object targetCharset = templateConfig.get("target_charset");
       if (targetCharset != null && Texts.hasText(String.valueOf(targetCharset))) {
-        return EncodingUtils.resolve(String.valueOf(targetCharset));
+        String configuredTargetCharsetText = String.valueOf(targetCharset);
+        return EncodingUtils.resolve(configuredTargetCharsetText);
       }
       Object charset = templateConfig.get("charset");
       if (charset != null && Texts.hasText(String.valueOf(charset))) {
-        return EncodingUtils.resolve(String.valueOf(charset));
+        String configuredCharsetText = String.valueOf(charset);
+        return EncodingUtils.resolve(configuredCharsetText);
       }
     }
     if (importPayload != null && Texts.hasText(importPayload.targetCharset())) {
@@ -414,16 +431,23 @@ public final class ImportPreprocessObjectSource {
     if (!Texts.hasText(format)) {
       return false;
     }
-    String normalized = format.trim().toUpperCase(Locale.ROOT);
+    String trimmedFormat = format.trim();
+    String normalized = trimmedFormat.toUpperCase(Locale.ROOT);
     if (FileTemplateFormat.FIXED_WIDTH.code().equals(normalized)
         || "FIXEDWIDTH".equals(normalized)) {
       return true;
     }
-    if (FileTemplateFormat.DELIMITED.code().equals(normalized)
+    boolean isDelimitedFileFormat = FileTemplateFormat.DELIMITED.code().equals(normalized)
         || "CSV".equals(normalized)
-        || "TSV".equals(normalized)) {
+        || "TSV".equals(normalized);
+    if (isDelimitedFileFormat) {
       Object optIn = templateConfig == null ? null : templateConfig.get("partition_range_slice");
-      return optIn != null && "true".equalsIgnoreCase(String.valueOf(optIn).trim());
+      if (EmptyChecks.isNull(optIn)) {
+        return false;
+      }
+      String rawOptIn = String.valueOf(optIn);
+      String optInText = rawOptIn.trim();
+      return "true".equalsIgnoreCase(optInText);
     }
     return false;
   }
@@ -438,7 +462,8 @@ public final class ImportPreprocessObjectSource {
     if (value == null) {
       return true;
     }
-    String text = String.valueOf(value).trim();
+    String rawText = String.valueOf(value);
+    String text = rawText.trim();
     return EmptyChecks.isEmpty(text) || "NONE".equalsIgnoreCase(text);
   }
 

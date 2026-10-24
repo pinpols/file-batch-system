@@ -8,6 +8,7 @@ import io.github.bucket4j.distributed.BucketProxy;
 import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.RateLimitProperties;
@@ -22,6 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * 集群级令牌桶限流器：基于 Bucket4j + Redis（Lettuce）分布式后端，是名副其实的 token bucket。
@@ -72,6 +74,7 @@ public class TokenBucketRateLimiter {
   private final MeterRegistry meterRegistry;
   private final RedisRateLimitCircuitBreaker circuitBreaker;
   private final RateLimitProperties properties;
+  private final BatchRedisNamespace redisNamespace;
 
   // 按 maxPerMinute 缓存 BucketConfiguration supplier，避免每次 tryConsume 都新建（阈值集合很小，见
   // RateLimitProperties）。
@@ -85,15 +88,26 @@ public class TokenBucketRateLimiter {
     FAIL_CLOSED
   }
 
+  @Autowired
   public TokenBucketRateLimiter(
       LettuceBasedProxyManager<String> proxyManager,
       MeterRegistry meterRegistry,
       RedisRateLimitCircuitBreaker circuitBreaker,
-      RateLimitProperties properties) {
+      RateLimitProperties properties,
+      BatchRedisNamespace redisNamespace) {
     this.proxyManager = proxyManager;
     this.meterRegistry = meterRegistry;
     this.circuitBreaker = circuitBreaker;
     this.properties = properties;
+    this.redisNamespace = redisNamespace;
+  }
+
+  TokenBucketRateLimiter(
+      LettuceBasedProxyManager<String> proxyManager,
+      MeterRegistry meterRegistry,
+      RedisRateLimitCircuitBreaker circuitBreaker,
+      RateLimitProperties properties) {
+    this(proxyManager, meterRegistry, circuitBreaker, properties, new BatchRedisNamespace(""));
   }
 
   public boolean tryConsume(String tenantId, String action, long maxPerMinute) {
@@ -109,10 +123,12 @@ public class TokenBucketRateLimiter {
    * 内部派发准入的每秒令牌桶。Redis 故障时返回 false，让分区保留 WAITING；不会把后端故障变成无界放行。
    */
   public boolean tryConsumePerSecond(String tenantId, String action, long maxPerSecond) {
+    Duration refillPeriod = Duration.ofSeconds(1);
+    BucketSpec bucketSpec = new BucketSpec(maxPerSecond, refillPeriod);
     return tryConsume(
         tenantId,
         action,
-        new BucketSpec(maxPerSecond, Duration.ofSeconds(1)),
+        bucketSpec,
         BackendFailureMode.FAIL_CLOSED,
         true);
   }
@@ -123,7 +139,9 @@ public class TokenBucketRateLimiter {
       BucketSpec spec,
       BackendFailureMode failureMode,
       boolean dynamicConfiguration) {
-    if (spec.capacity() <= 0 || !Texts.hasText(tenantId) || !Texts.hasText(action)) {
+    boolean rateLimitRequestIsInvalid =
+        spec.capacity() <= 0 || !Texts.hasText(tenantId) || !Texts.hasText(action);
+    if (rateLimitRequestIsInvalid) {
       return true;
     }
     String key = resolveBucketKey(tenantId, action, spec, dynamicConfiguration);
@@ -168,13 +186,15 @@ public class TokenBucketRateLimiter {
   private String resolveBucketKey(
       String tenantId, String action, BucketSpec spec, boolean dynamicConfiguration) {
     if (!dynamicConfiguration) {
-      return BatchRedisKeys.rateLimitBucket(tenantId, action);
+      String bucketKey = BatchRedisKeys.rateLimitBucket(tenantId, action);
+      return redisNamespace.key(bucketKey);
     }
     // 租户/队列 maxQps 来自热更新配置表，不能依赖部署级 bucketConfigurationVersion。
     // 阈值与周期进入 key 后，配置变更立即启用新桶；旧 key 由 Bucket4j 过期策略自然回收。
     String versionedAction = "%s_cap_%d_period_ms_%d"
         .formatted(action, spec.capacity(), spec.refillPeriod().toMillis());
-    return BatchRedisKeys.rateLimitBucket(tenantId, versionedAction);
+    String bucketKey = BatchRedisKeys.rateLimitBucket(tenantId, versionedAction);
+    return redisNamespace.key(bucketKey);
   }
 
   private BucketProxy bucketFor(String key, BucketSpec spec) {

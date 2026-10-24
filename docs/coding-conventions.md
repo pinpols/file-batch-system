@@ -73,9 +73,12 @@ XML、YAML、SQL、Markdown、CSV、PEM、INI、properties、Lua 或 Shell 脚�
 
 | 参数数量 | 要求                                       |
 | ---- | ---------------------------------------- |
-| ≤ 5  | 允许直接传参                                   |
+| ≤ 4  | 允许直接传参                                   |
+| = 5  | 一般方法建议封装；Mapper 公共方法 **必须** 封装     |
 | = 6  | 建议封装；Mapper 公共方法和 Service 公共接口 **必须** 封装 |
 | ≥ 7  | **必须** 封装为参数对象                           |
+
+Mapper 公共方法的 5 个及以上参数应使用一个具名参数对象，不再通过多个 `@Param` 暴露位置性参数。简单 CRUD 也遵循该边界；参数对象应只包含该 SQL 所需字段，不得扩张为通用查询上下文。
 
 
 **封装类型选择：**
@@ -202,6 +205,7 @@ return Optional.ofNullable(value).map(String::trim).orElse("");
 - 可选字段只有“缺失时保留原值”等单一、明确语义时才允许为 null；同一字段在不同调用点代表“保留”“清空”“自动计算”等多种含义时，改用独立 command、显式操作枚举或值对象。
 - 参数对象应只允许领域合法状态。不要为了减少签名参数，把互斥模式和无关字段合并成所有字段都 nullable 的万能对象。
 - 框架 DTO、数据库 nullable 行、外部兼容协议可以保留 nullable 边界；进入应用/领域逻辑时尽早转换为明确类型，不把兼容性空值向内部扩散。
+- 已有具名工厂可以在内部补齐缺省字段；不为清零 null 数量，把清晰的模式入口改成允许任意组合的通用 Builder。不可变行快照的同构更新可沿用 `toBuilder()`，只设置变化字段，并保持原 record 字段、兼容构造器和 Mapper 映射。
 
 ---
 
@@ -333,7 +337,7 @@ SQL 和配置不能随意混进 shell / service 代码。按以下边界执行�
 |---|---|
 | schema / 版本迁移 | `db/migration/*.sql` |
 | 稳定业务 CRUD / 查询 | MyBatis Mapper XML 或 repository |
-| sim / e2e fixture | `docs/test-data/*.sql` / JSON / YAML |
+| sim / e2e fixture | `test-data/sim/` 中的 SQL / JSON / YAML；配置包样本放 `test-data/tenant-config-packages/` |
 | load-test 准备、清理、报表 SQL | `load-tests/sql/*.sql` |
 | local 验证辅助 SQL | `scripts/local/sql/*.sql` |
 | ops inspect / heal SQL | `scripts/ops/sql/*.sql` |
@@ -349,7 +353,7 @@ SQL 和配置不能随意混进 shell / service 代码。按以下边界执行�
 允许例外：
 
 - 动态 SQL 引擎本身需要在 Java 中生成 SQL，但必须集中在 builder / validator / executor，不能散落到业务 service。
-- 历史脚本 SQL 命中基线保存在 `scripts/ci/sql-inline-baseline.tsv`，由 `scripts/ci/check-sql-config-boundaries.sh` 校验。扫描大小写不敏感，并识别 `psql -c/-tAc/-Atc`、SQL heredoc 及嵌入式 Python/Java SQL；基线只允许减少，不允许新增文件或提高计数，迁出内联 SQL 后必须同步下调或删除对应行。
+- 历史脚本 SQL 命中基线保存在 `scripts/ci/baselines/sql-inline-baseline.tsv`，由 `scripts/ci/check-sql-config-boundaries.sh` 校验。扫描大小写不敏感，并识别 `psql -c/-tAc/-Atc`、SQL heredoc 及嵌入式 Python/Java SQL；基线只允许减少，不允许新增文件或提高计数，迁出内联 SQL 后必须同步下调或删除对应行。
 
 ---
 
@@ -708,11 +712,11 @@ nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, def.getId(), p
 - Mapper XML 放在 `classpath:mapper/*.xml`（或模块约定路径）
 - `type-aliases-package` 指向 domain 包
 - Mapper 参数采用“少量简单值直接传、成组业务条件/写入意图使用语义对象”的混合规则，不要求每个方法都包一层对象：
-  - 单个 `id`、实体、集合或已定义的 `XxxQuery` / `XxxParam` 直接传入；少量且语义单一的条件允许多个具名 `@Param`。
-  - Mapper 方法达到 6 个参数时必须封装为一个 `XxxQuery` 或 `XxxParam`；7 个及以上同样必须封装。多个参数表达同一筛选条件、在 `select/count` 等方法间重复，或包含多个可空字段/业务模式时，即使不足 6 个也应优先封装。
+  - 单个 `id`、实体、集合或已定义的 `XxxQuery` / `XxxParam` 直接传入；总数不超过 4 个且语义单一的条件允许多个具名 `@Param`。
+  - Mapper 公共方法达到 5 个参数时必须封装为一个 `XxxQuery` 或 `XxxParam`；6 个参数的 Service 公共接口也必须封装，7 个及以上的任何方法必须封装。多个参数表达同一筛选条件、在 `select/count` 等方法间重复，或包含多个可空字段/业务模式时，即使不足阈值也应优先封装。
   - 列表/分页筛选使用 `domain/query` 下的 `XxxQuery`，多个筛选方法共享同一口径时复用该 Query；查询条件不得用无名 `Map` 表达。
   - 单次 `insert/update/CAS` 的字段组合使用 `domain/param` 下不可变 `XxxParam`，字段贴近该次 SQL 操作。完整行写入可直接接收 `XxxEntity`；不要仅为统一签名再复制一份同构 Param。
-  - XML 需要同时绑定多个简单参数时，每个参数显式标注 `@Param`；单个对象参数通常直接按对象属性映射，若 SQL 需要稳定的命名根节点，可显式使用 `@Param("query")` / `@Param("param")` 并在 XML 同步使用该前缀。
+  - XML 需要同时绑定多个简单参数时，每个参数显式标注 `@Param`，且仅适用于少于 5 个参数；5 个及以上改用单一具名参数对象。单个对象参数通常直接按对象属性映射，若 SQL 需要稳定的命名根节点，可显式使用 `@Param("query")` / `@Param("param")` 并在 XML 同步使用该前缀。
 - 参数对象只收纳一次操作真实需要的字段，不做跨 Mapper 的万能条件包。必填字段在构造边界校验；nullable 字段仅表示 SQL 允许缺省的数据，不用多个 `null` 组合选择业务模式。模式不同用具名 Mapper 方法、受控工厂或明确的判别字段表达。
 - 固定字段契约不得使用 `Map<String, Object>` 作为 Mapper 入参；仅在 JSONB、插件扩展字段或有意透传的动态键值边界保留 Map。Map 出参规则见 §1.2。
 - 状态转换应保留操作语义：业务调用方使用 `approve`、`markGiveUp`、`pause` 等具名方法；具名方法在 Java 侧从权威枚举或领域有限状态类型组装目标状态和允许来源集合，再委托参数化 Mapper 语句执行 CAS。不得把 `targetStatus` / `expectedStatuses` 直接开放给 Controller 或无约束的业务调用方。
@@ -978,7 +982,7 @@ public record ConsoleProperties(
 | 配置去处                             | 适合                                            | 不适合                                      | 现存例子                                                                                                          |
 | -------------------------------- | --------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `@ConfigurationProperties` + yml | 启动期注入的静态参数：超时、池大小、开关、阈值、重试次数、表达式格式约束          | 频繁变更的业务规则、租户级差异化、秘钥                      | `BatchSecurityProperties` / `ReadReplicaProperties` / `MqRoutingProperties`（共 133 个，以 `python3 scripts/ci/check-config-governance.py` 输出为准）                          |
-| PostgreSQL 表 + Redis cache       | 动态业务规则、多租户 / 多 job 维度差异化、需要审计版本、Console UI 可改 | 启动期就需要的基础设施配置（DB url、Kafka bootstrap）、秘钥 | `tenant_config` / `default_params` / `tenant_quota_policy` / `business_calendar` / `pipeline_step_definition` |
+| PostgreSQL 表 + Redis cache       | 动态业务规则、多租户 / 多 job 维度差异化、需要审计版本、Console UI 可改 | 启动期就需要的基础设施配置（DB url、Kafka bootstrap）、秘钥 | `tenant_config` / `default_params` / `tenant_quota_policy` / `business_calendar` / `job_definition.default_params.systemPipelineStepParams` |
 | 环境变量（`${VAR:default}`）           | 跨环境差异化：URL、端口、profile、秘钥、规模参数（pool size）      | 业务逻辑规则、多租户参数                             | `BATCH_CONSOLE_READ_REPLICA_ENABLED` / `BATCH_SECURITY_BYPASS_MODE` / DB 密码                                   |
 
 
@@ -1144,6 +1148,9 @@ assertThatThrownBy(() -> service.doSth()).isInstanceOf(BizException.class);
 - 不把所有状态、角色、租户标识、JSON 字段或测试参数机械集中到全局常量类。只抽取语义稳定、确有多处复用且所有权明确的值；业务策略不同的值保持局部表达，并用专项测试说明口径。
 - fixture/mock 只能证明其模拟边界内的行为。事务、SQL、并发和租户隔离按风险使用真实数据库集成测试；消息传输、调度和浏览器链路按风险选择集成或端到端验证，并区分 mock、容器与真实环境证据。
 - `scripts/ci/check-test-config-sources.py` 校验各模块的 `application-test.yml` 已导入共享配置，且未重复声明共享配置项；它不禁止 Java 测试为验证行为而显式覆盖配置。修改共享测试配置、模块测试 profile 或该门禁时，应运行其自测和全量扫描。
+- E2E 需要建立或核对数据库状态时，使用 `JdbcTemplate` 对真实测试数据库做场景准备与持久化结果回读；主业务动作仍通过被测 API、调度或 Worker 链路执行，不得直接 SQL 改状态来替代业务行为。Mapper SQL 本身应由真实数据库 Mapper 集成测试覆盖。
+- Java 测试中的 `JdbcTemplate` SQL 应先赋给语义明确的局部变量（如 `selectJobInstanceSql`），再传入 `update`、`query`、`execute` 等调用；多行 SQL 使用 Java text block，避免把 SQL 直接嵌在断言/调用参数中或用字符串拼接组装。动态表名、角色名等无法使用绑定参数的片段，应在调用点附近单独构造具名 SQL，并保持原有求值时机。
+- JDBC 查询结果和写入行数也应先用准确类型的具名局部变量承接，再进行断言。`untilAsserted`、事务和异常回调中的查询应保留在原回调内；不得为了提取变量而提前执行查询、缓存轮询结果或改变异常时机。需要固定数据库会话身份、显式事务或锁竞争窗口的故障探针保留其专用连接生命周期，普通场景准备与状态回读仍使用 `JdbcTemplate`。
 
 ---
 
@@ -1218,12 +1225,12 @@ batch-console-api       ← 控制台 BFF（面向前端）
 
 | 字段                                  | 枚举类                   | 允许值                                                              |
 | ----------------------------------- | --------------------- | ---------------------------------------------------------------- |
-| `job_definition.job_type`           | `JobType`             | <!-- enum-sync:JobType:start -->`GENERAL`, `IMPORT`, `EXPORT`, `PROCESS`, `DISPATCH`, `WORKFLOW`, `ATOMIC`, `BUNDLE_IMPORT`, `BUNDLE_EXPORT`, `BUNDLE_DISPATCH`<!-- enum-sync:JobType:end --> |
+| `job_definition.job_type`           | `JobType`             | <!-- enum-sync:JobType:start -->`GENERAL`, `IMPORT`, `EXPORT`, `PROCESS`, `DISPATCH`, `ATOMIC`, `BUNDLE_IMPORT`, `BUNDLE_EXPORT`, `BUNDLE_DISPATCH`<!-- enum-sync:JobType:end --> |
 | `job_definition.schedule_type`      | `ScheduleType`        | <!-- enum-sync:ScheduleType:start -->`CRON`, `FIXED_RATE`, `MANUAL`<!-- enum-sync:ScheduleType:end --> |
 | `job_definition.retry_policy`       | `RetryPolicyType`     | <!-- enum-sync:RetryPolicyType:start -->`NONE`, `FIXED`, `EXPONENTIAL`<!-- enum-sync:RetryPolicyType:end --> |
 | `job_definition.catch_up_policy`    | `CatchUpPolicyType`   | <!-- enum-sync:CatchUpPolicyType:start -->`NONE`, `AUTO`, `MANUAL_APPROVAL`<!-- enum-sync:CatchUpPolicyType:end --> |
 | `workflow_definition.workflow_type` | `WorkflowType`        | <!-- enum-sync:WorkflowType:start -->`DAG`, `PIPELINE`, `MIXED`<!-- enum-sync:WorkflowType:end --> |
-| `workflow_node.node_type`           | `WorkflowNodeType`    | <!-- enum-sync:WorkflowNodeType:start -->`TASK`, `GATEWAY`, `FILE_STEP`, `START`, `END`, `JOB`, `WAIT`<!-- enum-sync:WorkflowNodeType:end --> |
+| `workflow_node.node_type`           | `WorkflowNodeType`    | <!-- enum-sync:WorkflowNodeType:start -->`TASK`, `GATEWAY`, `START`, `END`, `JOB`, `WAIT`<!-- enum-sync:WorkflowNodeType:end --> |
 | `workflow_edge.edge_type`           | `WorkflowEdgeType`    | <!-- enum-sync:WorkflowEdgeType:start -->`SUCCESS`, `FAILURE`, `CONDITION`, `ALWAYS`<!-- enum-sync:WorkflowEdgeType:end --> |
 | `file_channel_config.channel_type`  | `FileChannelType`     | <!-- enum-sync:FileChannelType:start -->`SFTP`, `API`, `API_PUSH`, `EMAIL`, `NAS`, `OSS`, `LOCAL`<!-- enum-sync:FileChannelType:end --> |
 | `file_channel_config.auth_type`     | `FileChannelAuthType` | <!-- enum-sync:FileChannelAuthType:start -->`NONE`, `PASSWORD`, `KEY_PAIR`, `TOKEN`, `OAUTH2`, `CUSTOM`<!-- enum-sync:FileChannelAuthType:end --> |
@@ -1314,7 +1321,9 @@ Shell/Python 使用 `#`，SQL/Flyway 使用 `--`。解释性注释单独成行�
 
 ### 19.5 职责拆分后的代码归属（2026-07-18）
 
-| 模块 | 主类（当前行数） | 承接类（当前行数） | 职责边界 |
+> 下表类名和行数为职责拆分时的快照。2026-10-24 退役租户 Pipeline 定义表后，`PlatformPipelineDefinitionRepository` 已替换为仅查询文件模板的 `PlatformFileTemplateRepository`；系统阶段来自 `SystemPipelineCatalog`，不再有旧定义表回退。当前类规模应重新扫描源码，不沿用快照行数。
+
+| 模块 | 主类（快照行数） | 承接类（快照行数） | 职责边界 |
 | --- | --- | --- | --- |
 | batch-worker-core | `PlatformFileRuntimeRepository`（179） | `PlatformFileRecordRepository`（219）、`PlatformPipelineRunRepository`（252）、`PlatformPipelineDefinitionRepository`（167）、`PlatformFileAuditRepository`（105）、`PlatformRuntimeValues`（82） | 主类只保留兼容门面；记录、运行实例、定义、审计和运行时值分别维护 |
 | batch-orchestrator | `DefaultDryRunPlanService`（375） | `DryRunEndpointProbe`（138）、`DryRunObjectStorageProbe`（97）、`DryRunSqlProbe`（125） | 计划编排与 HTTP、对象存储、SQL 探测分离 |
@@ -1324,6 +1333,32 @@ Shell/Python 使用 `#`，SQL/Flyway 使用 `--`。解释性注释单独成行�
 | batch-console-api | `TenantConfigInitApplyHandlers`（585） | `TenantFileConfigApplySupport`（117）、`TenantOperationalConfigApplySupport`（171） | 初始化编排与文件配置、运行配置写入分离 |
 
 行数用于定位规模变化，不是硬性质量指标。后续继续拆分时必须同时满足：公开契约不变、事务与 ShedLock 边界不外移、状态写入顺序不变，并更新本表。
+
+
+### 19.5 自动化脚本的头注释与说明
+
+Shell 与 Python 自动化脚本必须在第一段可执行代码之前各保留一条完整字段；shebang 保持第一行，Python 编码声明保持解释器要求的位置：
+
+```bash
+#!/usr/bin/env bash
+# 用途：核对部署后 Worker 状态并采集运行证据。
+# 用法：NAMESPACE=<目标命名空间> WORKER_DEPLOYMENTS=<名称列表> bash scripts/ops/verify-worker-rolling-upgrade.sh
+```
+
+```python
+#!/usr/bin/env python3
+# 用途：检查脚本头注释及脚本、CI 索引的一致性。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-script-governance.py。
+```
+
+- 必填字段固定为 `# 用途：`、`# 用法：`；不得留空、使用 TODO 或只写文件名。用途明确目标与职责，用法给出有效命令、必填参数/环境或调用来源。复杂脚本继续在下方说明参数、依赖、产物、退出码与写入边界。
+- 公共 Shell 库写 source 的方式；Python 公共模块写导入方与公共能力；测试辅助脚本写实际测试命令；容器初始化脚本写容器调用来源。不能给无 CLI 的模块编造直接运行方式，不能假设所有脚本都支持 --help。
+- 内部说明性注释及 Python 模块/类/函数文档字符串使用简体中文，重点解释顺序、隔离、并发、失败传播、资源释放与非显然约束。不机械逐行加注释。命令、API/协议字段、状态常量、分析器指令、许可证与可执行示例保持原值。
+- 守卫覆盖仓库 Shell、Git hooks，以及 scripts/、load-tests/ 和各语言 scripts/ 下的 Python 自动化。SDK 的 Python 业务源码不按自动化脚本头处理。测试源也检查头注释；测试代码由测试入口发现，不逐项混入操作脚本索引。
+- `check-script-governance.py` 全量核对格式、脚本说明语言和目录索引；PR、Full CI 与本地 pre-commit 执行同一守卫，并运行其正反例测试。静态检查可发现缺字段、漏索引与部分英文说明，不能证明操作命令在真实环境可用，语义与安全边界仍需审查。
+- SQL/Flyway 保持各自规范，本条不改写其文件头或正文；其现有路径只在所属脚本 README 登记。
+
+---
 
 ## 20. 日期时间、时区与字符编码
 

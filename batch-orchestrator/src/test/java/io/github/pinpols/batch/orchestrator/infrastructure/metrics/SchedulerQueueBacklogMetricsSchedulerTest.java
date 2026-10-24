@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.metrics;
 
+import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionGlobalQueueBacklogSummaryQuery;
+
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
@@ -39,7 +42,13 @@ class SchedulerQueueBacklogMetricsSchedulerTest {
   void shouldRefreshGlobalBacklogGauges_whenSampling() {
     when(gracefulShutdown.isDraining()).thenReturn(false);
     when(jobPartitionMapper.summarizeGlobalQueueBacklog(
-            "CREATED", "WAITING", "READY", "RUNNING", "RETRYING"))
+            JobPartitionGlobalQueueBacklogSummaryQuery.builder()
+                .createdStatus("CREATED")
+                .waitingStatus("WAITING")
+                .readyStatus("READY")
+                .runningStatus("RUNNING")
+                .retryingStatus("RETRYING")
+                .build()))
         .thenReturn(new QueuePartitionBacklogStats("ALL", 1, 2, 3, 4, 5, 120));
 
     scheduler.sample();

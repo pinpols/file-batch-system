@@ -1,41 +1,63 @@
--- DANGER: 删除压测 worker 相关控制面数据。仅限专用本地压测库；执行前核对连接目标和 RUN_ID 范围。
+-- DANGER: 删除本轮压测控制面数据，仅限专用隔离压测库。
 BEGIN;
 
--- 每个压测档案独立生成 run_id，并以此限定清理范围；公平性场景使用 ta/tb/tc，不能限定为默认租户。
--- Trigger 入口将 run_id 写入 trigger_request.request_id，而不是 job_instance.params_snapshot。
--- 同时解析两种记录方式，使清理覆盖 Orchestrator 直连和标准 Trigger API 场景。
-CREATE TEMP TABLE p2_cleanup_job_instance_ids (
-  id bigint PRIMARY KEY
-) ON COMMIT DROP;
+-- 按冻结的完整 runId 标记选择归属；请求号或 trace 的前缀不能证明运行归属。
+CREATE TEMP TABLE p2_cleanup_job_instance_ids (id bigint PRIMARY KEY) ON COMMIT DROP;
+CREATE TEMP TABLE p2_cleanup_pipeline_instance_ids (id bigint PRIMARY KEY) ON COMMIT DROP;
+CREATE TEMP TABLE p2_cleanup_workflow_run_ids (id bigint PRIMARY KEY) ON COMMIT DROP;
+CREATE TEMP TABLE p2_cleanup_trigger_request_ids (id bigint PRIMARY KEY) ON COMMIT DROP;
 
-CREATE TEMP TABLE p2_cleanup_pipeline_instance_ids (
-  id bigint PRIMARY KEY
-) ON COMMIT DROP;
+INSERT INTO p2_cleanup_trigger_request_ids (id)
+SELECT id FROM batch.trigger_request
+WHERE launch_payload #>> '{params,metadata,runId}' = :'run_id';
+
+INSERT INTO p2_cleanup_workflow_run_ids (id)
+SELECT workflow.id
+FROM batch.workflow_run workflow
+JOIN batch.trigger_request request
+  ON request.tenant_id = workflow.tenant_id AND request.id = workflow.trigger_request_id
+WHERE request.launch_payload #>> '{params,metadata,runId}' = :'run_id';
 
 INSERT INTO p2_cleanup_job_instance_ids (id)
-SELECT ji.id
-FROM batch.job_instance ji
-WHERE coalesce(ji.params_snapshot #>> '{requestParams,metadata,runId}', ji.params_snapshot #>> '{effectiveParams,metadata,runId}', ji.params_snapshot #>> '{metadata,runId}', ji.params_snapshot #>> '{runId}') = :'run_id'
+SELECT instance.id FROM batch.job_instance instance
+WHERE coalesce(instance.params_snapshot #>> '{requestParams,metadata,runId}',
+               instance.params_snapshot #>> '{effectiveParams,metadata,runId}',
+               instance.params_snapshot #>> '{metadata,runId}',
+               instance.params_snapshot #>> '{runId}') = :'run_id'
 UNION
-SELECT tr.related_job_instance_id
-FROM batch.trigger_request tr
-WHERE tr.related_job_instance_id IS NOT NULL
-  AND (
-    tr.request_id LIKE (:'run_id' || '%')
-    OR tr.dedup_key LIKE (:'run_id' || '%')
-    OR tr.trace_id LIKE (:'run_id' || '%')
-  )
-UNION
--- launch T1 已落库而 trigger_request.related_job_instance_id 尚未回写时，实例仍通过
--- job_instance.trigger_request_id 反向引用请求。清理必须同时覆盖该窗口，否则最终删
--- trigger_request 会触发 FK 失败并回滚整个清理事务。
-SELECT ji.id
-FROM batch.job_instance ji
-JOIN batch.trigger_request tr
-  ON tr.id = ji.trigger_request_id
-WHERE tr.request_id LIKE (:'run_id' || '%')
-   OR tr.dedup_key LIKE (:'run_id' || '%')
-   OR tr.trace_id LIKE (:'run_id' || '%');
+SELECT node.job_instance_id
+FROM batch.workflow_node_run node
+JOIN batch.workflow_run workflow ON workflow.id = node.workflow_run_id
+JOIN batch.job_instance instance
+  ON instance.id = node.job_instance_id
+ AND instance.tenant_id = workflow.tenant_id AND instance.biz_date = workflow.biz_date
+WHERE workflow.id IN (SELECT id FROM p2_cleanup_workflow_run_ids);
+
+-- 运行中、暂停或等待中的测试工作应先停发并收敛，不能通过删状态行伪装清理成功。
+-- 此安全门不授权跨业务库删除 PROCESS 暂存；其生命周期按专门方案验证。
+DO $cleanup_guard$
+BEGIN
+  IF EXISTS (
+      SELECT 1 FROM batch.trigger_request
+      WHERE id IN (SELECT id FROM p2_cleanup_trigger_request_ids)
+        AND coalesce(request_status, '') NOT IN ('LAUNCHED', 'REJECTED', 'DUPLICATE', 'FORWARD_FAILED', 'GIVE_UP')
+  ) OR EXISTS (
+      SELECT 1 FROM batch.workflow_run
+      WHERE id IN (SELECT id FROM p2_cleanup_workflow_run_ids)
+        AND coalesce(run_status, '') NOT IN ('SUCCESS', 'FAILED', 'TERMINATED', 'SUCCESS_DRY_RUN', 'FAILED_DRY_RUN')
+  ) OR EXISTS (
+      SELECT 1 FROM batch.job_instance
+      WHERE id IN (SELECT id FROM p2_cleanup_job_instance_ids)
+        AND coalesce(instance_status, '') NOT IN ('SUCCESS', 'FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED', 'SUCCESS_DRY_RUN', 'FAILED_DRY_RUN')
+  ) OR EXISTS (
+      SELECT 1 FROM batch.job_task
+      WHERE job_instance_id IN (SELECT id FROM p2_cleanup_job_instance_ids)
+        AND coalesce(task_status, '') NOT IN ('SUCCESS', 'FAILED', 'CANCELLED', 'TERMINATED')
+  ) THEN
+    RAISE EXCEPTION 'load-test cleanup blocked: selected run still has active requests, roots, jobs or tasks';
+  END IF;
+END;
+$cleanup_guard$;
 
 -- 清理压测失败场景时，worker 可能仍在为本轮 pipeline 写 step run。先锁住父行，
 -- 避免删完子表到删父表之间又插入新的 pipeline_step_run，导致 FK 失败回滚。
@@ -143,6 +165,9 @@ WITH ji AS (
 DELETE FROM batch.pipeline_step_run
 WHERE pipeline_instance_id IN (SELECT id FROM ji);
 
+DELETE FROM batch.pipeline_progress
+WHERE pipeline_instance_id IN (SELECT id FROM p2_cleanup_pipeline_instance_ids);
+
 WITH ji AS (
   SELECT id FROM p2_cleanup_pipeline_instance_ids
 )
@@ -154,10 +179,11 @@ WITH ji AS (
 )
 DELETE FROM batch.pipeline_instance WHERE id IN (SELECT id FROM ji);
 
-WITH ji AS (
-  SELECT id FROM p2_cleanup_job_instance_ids
-)
-DELETE FROM batch.workflow_run WHERE related_job_instance_id IN (SELECT id FROM ji);
+DELETE FROM batch.workflow_node_run
+WHERE workflow_run_id IN (SELECT id FROM p2_cleanup_workflow_run_ids);
+
+DELETE FROM batch.workflow_run
+WHERE id IN (SELECT id FROM p2_cleanup_workflow_run_ids);
 
 WITH ji AS (
   SELECT id FROM p2_cleanup_job_instance_ids
@@ -245,15 +271,16 @@ WHERE instance.id IN (SELECT id FROM p2_cleanup_job_instance_ids)
 DELETE FROM batch.job_instance
 WHERE id IN (SELECT id FROM p2_cleanup_job_instance_ids);
 
-DELETE FROM batch.trigger_outbox_event
-WHERE request_id LIKE (:'run_id' || '%');
+DELETE FROM batch.trigger_outbox_event event
+WHERE event.payload #>> '{launchRequest,params,metadata,runId}' = :'run_id'
+   OR EXISTS (
+       SELECT 1 FROM batch.trigger_request request
+       WHERE request.tenant_id = event.tenant_id AND request.request_id = event.request_id
+         AND request.launch_payload #>> '{params,metadata,runId}' = :'run_id'
+   );
 
 DELETE FROM batch.trigger_request
-WHERE (
-    request_id LIKE (:'run_id' || '%')
-    OR dedup_key LIKE (:'run_id' || '%')
-    OR trace_id LIKE (:'run_id' || '%')
-  );
+WHERE launch_payload #>> '{params,metadata,runId}' = :'run_id';
 
 COMMIT;
 -- DANGER: 删除压测 worker 相关控制面数据。仅限专用本地压测库；执行前核对连接目标并保留 RUN_ID 范围。

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
+# 用途：按导入完成顺序驱动多租户 SIM 主链负载。
+# 用法：在仓库根目录执行 bash scripts/sim/05-load.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
-# 05-load.sh:中量触发 ta/tb/tc 的 4 类 job(IMPORT / EXPORT / DISPATCH / WORKFLOW)
+# 05-load.sh:中量触发 ta/tb/tc 的作业及独立 Workflow 根运行
 #
 # 重建说明(2026-06-04):/api/triggers/launch 是「触发」入口,不是文件投递。各 job 类型
 # 需要不同的 params 才能端到端跑通(经实测确认):
@@ -8,7 +10,8 @@
 #               query_param_schema.jdbcMappedImport.columnMappings 的 from 列)→ 解析 → 加载 biz.*
 #   - EXPORT  : params.templateCode(export_data_ref 必须在模板配好)→ 读 biz.* → 写 MinIO outbound
 #   - DISPATCH: params.fileId(派发一个已存在的文件,通常取最近 EXPORT 产物)→ 推到 channel/HTTP
-#   - WORKFLOW: 裸 launch(orchestrator 编排子 JOB)
+#   - IMPORT / EXPORT / DISPATCH: 解析受管单作业 Workflow ID 后作为顶层目标
+#   - WORKFLOW: workflowDefinitionId 根触发
 #
 # 内部鉴权:/api/triggers/launch 需 X-Internal-Secret + Idempotency-Key。
 #   secret 默认 internal-secret,本地若 .env.local 注入 BATCH_INTERNAL_SECRET 则用之。
@@ -38,22 +41,27 @@ if [[ "$SIM_QUIESCE_SCHEDULES" == "true" ]]; then
 fi
 
 "$PYTHON_BIN" - <<'PY'
-import json, os, subprocess, sys, time, urllib.request
+import json, os, re, subprocess, sys, time, urllib.request
+
+sys.path.insert(0, os.path.join(os.environ["SIM_ROOT"], "scripts", "sim"))
+from load_orchestration import launch_exports_after_imports, wait_for_import_terminal
 
 BASE   = os.environ["TRIGGER_BASE"]
 SECRET = os.environ["INTERNAL_SECRET"]
 BIZ    = os.environ["BIZ_DATE"]
 BATCH  = os.environ["BATCH_NO"]
+if not re.fullmatch(r"[A-Za-z0-9._-]{1,48}", BATCH):
+    raise SystemExit("BATCH_NO must contain 1-48 letters, digits, dot, underscore, or hyphen")
 ROWS   = int(os.environ.get("ROWS", "5"))
 ONLY   = os.environ.get("ONLY", "").strip()
 CLEAN  = os.environ.get("CLEAN_SIM_OUTPUTS", "true").lower() == "true"
 BUCKET = os.environ.get("MINIO_BUCKET", "batch-dev")
-SQL_DIR = os.path.join(os.getcwd(), "scripts", "sim", "sql")
+SQL_DIR = os.path.join(os.environ["SIM_ROOT"], "scripts", "sim", "sql")
 
 # ── IMPORT 规格:job -> (template, [列], 行生成器) ────────────────────────────
-def cust_row(i): return f"CUST-{i:06d},客户{i},PERSONAL,ID{i:09d},138{i:08d},u{i}@sim.com,ACTIVE"
-def txn_row(i):  return f"TB-TXN-{i:06d},ACC{i:010d},DEPOSIT,{100+i}.50,CNY,{BIZ},sim-load-{i}"
-def risk_row(i): return f"ENT-{i:06d},ACCOUNT,{500+i%400},{'LOW' if i%2 else 'MEDIUM'},{BIZ}"
+def cust_row(i): return f"CUST-{BATCH}-{i:06d},客户{i},PERSONAL,ID{i:09d},138{i:08d},u{i}@sim.com,ACTIVE"
+def txn_row(i):  return f"TB-TXN-{BATCH}-{i:06d},ACC{i:010d},DEPOSIT,{100+i}.50,CNY,{BIZ},sim-load-{i}"
+def risk_row(i): return f"ENT-{BATCH}-{i:06d},ACCOUNT,{500+i%400},{'LOW' if i%2 else 'MEDIUM'},{BIZ}"
 
 IMPORTS = {
   "ta": [("TA_IMPORT_CUSTOMER", "ta_import_customer_tpl",
@@ -129,11 +137,28 @@ def cleanup_outputs():
         if result.returncode != 0:
             raise RuntimeError(f"MinIO cleanup failed for {biz}: {result.stderr.strip()[:160]}")
 
-def launch(tenant, job, params):
+def launch(tenant, job, params, workflow=False):
     params = dict(params)
     params.setdefault("batchNo", BATCH)
     rid = f"sim-{tenant}-{job}-{int(time.time()*1000)%100000000}"
-    body = {"tenantId": tenant, "jobCode": job, "triggerType": "API",
+    if workflow:
+        workflow_id = sql_value("select-workflow-definition-id.sql", {
+            "tenant_id": tenant, "workflow_code": job,
+        })
+        if not workflow_id.isdigit():
+            return False, f"Workflow {tenant}/{job} not found", rid
+    else:
+        run_sql_file(os.path.join(os.environ["SIM_ROOT"], "scripts", "local", "sql",
+                                  "provision-single-job-workflow.sql"), {
+            "tenant_id": tenant, "job_code": job, "fixture_tag": BATCH,
+        })
+        workflow_id = sql_value("select-single-job-workflow-id.sql", {
+            "tenant_id": tenant, "job_code": job,
+        })
+        if not workflow_id.isdigit():
+            return False, f"managed single-job Workflow for {tenant}/{job} not found", rid
+    target = {"workflowDefinitionId": int(workflow_id)}
+    body = {"tenantId": tenant, **target, "triggerType": "API",
             "bizDate": BIZ, "requestId": rid, "params": params}
     req = urllib.request.Request(f"{BASE}/api/triggers/launch",
         data=json.dumps(body).encode(),
@@ -144,22 +169,34 @@ def launch(tenant, job, params):
         payload = json.loads(r.read().decode("utf-8"))
         code = payload.get("code")
         if r.status == 200 and code == "SUCCESS":
-            return True, ""
-        return False, f"HTTP {r.status}, code={code}, message={payload.get('message', '')}"[:160]
+            return True, "", rid
+        return False, f"HTTP {r.status}, code={code}, message={payload.get('message', '')}"[:160], rid
     except Exception as e:
-        return False, str(e)[:80]
+        return False, str(e)[:80], rid
 
 tot = ok = 0
 errors = []
 def run(label, tenant, job, params):
     global tot, ok
     tot += 1
-    good, err = launch(tenant, job, params)
+    good, err, request_id = launch(tenant, job, params, workflow=label == "WORKFLOW")
     ok += 1 if good else 0
     if not good:
         errors.append(f"{label} {tenant}/{job} launch failed: {err}")
     print(f"  [{label:8s}] {tenant}/{job:24s} {'✓' if good else '✗ '+err}")
-    return good
+    return request_id if good else ""
+
+def read_import_status(tenant, request_id):
+    return sql_value("select-request-instance-status-only.sql", {
+        "tenant_id": tenant,
+        "request_id": request_id,
+    })
+
+def wait_for_import(tenant, job, request_id):
+    return wait_for_import_terminal(
+        tenant, job, request_id, read_import_status,
+        timeout_seconds=180,
+    )
 
 print(f"==> sim load:tenants={TENANTS} rows/import={ROWS} bizDate={BIZ} batchNo={BATCH}")
 if not ONLY:
@@ -167,12 +204,26 @@ if not ONLY:
 if CLEAN:
     print("==> cleanup:清理当前 batchNo outbound 产物/file_record,保证同 batchNo 可重复跑")
     cleanup_outputs()
+imports_by_tenant = {tenant: [] for tenant in TENANTS}
 for t in TENANTS:
     for job, tpl, header, gen in IMPORTS.get(t, []):
         csv = header + "\n" + "\n".join(gen(i) for i in range(1, ROWS+1)) + "\n"
-        run("IMPORT", t, job, {"templateCode": tpl, "content": csv})
-    for job, tpl in EXPORTS.get(t, []):
-        run("EXPORT", t, job, {"templateCode": tpl})
+        request_id = run("IMPORT", t, job, {"templateCode": tpl, "content": csv})
+        if request_id:
+            imports_by_tenant[t].append((job, request_id))
+
+def launch_exports(tenant):
+    for job, tpl in EXPORTS.get(tenant, []):
+        run("EXPORT", tenant, job, {"templateCode": tpl})
+
+import_ok_by_tenant, import_errors = launch_exports_after_imports(
+    tenants=TENANTS,
+    imports_by_tenant=imports_by_tenant,
+    expected_import_counts={tenant: len(IMPORTS.get(tenant, [])) for tenant in TENANTS},
+    wait_import_terminal=wait_for_import,
+    launch_export=launch_exports,
+)
+errors.extend(import_errors)
 
 # DISPATCH 依赖已存在文件:等 EXPORT 写入数据库后,取该租户最近一个 file_record id 当 fileId
 def latest_file_id(tenant):
@@ -205,6 +256,12 @@ def wait_dispatch_done(tenant, file_id, channel, timeout=90):
     return ""
 
 for t in TENANTS:
+    if not import_ok_by_tenant[t]:
+        for job, channel in DISPATCHES.get(t, []):
+            msg = f"DISPATCH {t}/{job} skipped because prerequisite IMPORT did not reach SUCCESS"
+            errors.append(msg)
+            print(f"  [DISPATCH] {t}/{job}: ✗ {msg}")
+        continue
     fid = wait_latest_file_id(t)
     for job, channel in DISPATCHES.get(t, []):
         if fid:

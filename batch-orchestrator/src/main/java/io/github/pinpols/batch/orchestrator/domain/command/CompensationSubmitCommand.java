@@ -35,7 +35,14 @@ public record CompensationSubmitCommand(
     /** SCHEDULE_PLAN replay 固化的启动参数；普通补偿为空。 */
     Map<String, Object> launchParams,
     /** ADR-026：补偿产生的实例是否为无业务副作用演练。 */
-    Boolean dryRun) {
+    Boolean dryRun,
+    /** 失败节点重放时的精确来源 WorkflowRun 身份。 */
+    Long sourceWorkflowRunId,
+    /** 失败节点重放时的精确来源 WorkflowNodeRun 身份。 */
+    Long sourceWorkflowNodeRunId,
+    Boolean externalActionVerifiedNotExecuted,
+    String externalOutcomeEvidenceReference,
+    Long replayOperationId) {
 
   /** 兼容旧测试与历史调用的 14-arg 构造，rerun policy + replay 字段补 null。 */
   public CompensationSubmitCommand(
@@ -74,7 +81,12 @@ public record CompensationSubmitCommand(
         null,
         null,
         null,
-        false);
+        false,
+        null,
+        null,
+        null,
+        null,
+        null);
   }
 
   /** 17 参兼容构造：未带 replay session 标签的旧路径自动补 null。 */
@@ -117,7 +129,12 @@ public record CompensationSubmitCommand(
         null,
         null,
         null,
-        false);
+        false,
+        null,
+        null,
+        null,
+        null,
+        null);
   }
 
   /** 18 参兼容构造：已有批量日重放路径默认正式执行。 */
@@ -162,6 +179,11 @@ public record CompensationSubmitCommand(
         replaySessionId,
         null,
         null,
-        false);
+        false,
+        null,
+        null,
+        null,
+        null,
+        null);
   }
 }

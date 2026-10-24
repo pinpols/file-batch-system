@@ -131,7 +131,7 @@ class KafkaTriggerEventPublisherTest {
   private static LaunchEnvelope sampleEnvelope(String tenantId, String requestId) {
     LaunchRequest request = new LaunchRequest(
         tenantId,
-        "test-job",
+        101L,
         LocalDate.parse("2026-04-30"),
         TriggerType.MANUAL,
         requestId,

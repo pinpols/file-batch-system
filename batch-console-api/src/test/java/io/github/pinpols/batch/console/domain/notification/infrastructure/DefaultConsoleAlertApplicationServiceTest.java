@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.console.domain.notification.infrastructure;
 
+import io.github.pinpols.batch.console.domain.notification.query.AlertEventActiveAlertsInAmGroupCountQuery;
+
+
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -14,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -51,12 +55,18 @@ class DefaultConsoleAlertApplicationServiceTest {
   @Test
   void shouldKeepAmGroupOpenWhenAnotherMatchingAlertIsOpen() {
     when(alertEventMapper.countActiveAlertsInAmGroup(
-            TENANT_ID, "batch-orchestrator", "JOB_RUNNING_TOO_LONG", "WARN", ALERT_ID))
+            AlertEventActiveAlertsInAmGroupCountQuery.builder()
+                .tenantId(TENANT_ID)
+                .serviceName("batch-orchestrator")
+                .alertType("JOB_RUNNING_TOO_LONG")
+                .severity("WARN")
+                .excludingId(ALERT_ID)
+                .build()))
         .thenReturn(1L);
 
     service.close(ALERT_ID, request(), "close-1");
 
-    verify(alertmanagerSilenceBridge, never()).resolve(org.mockito.ArgumentMatchers.any());
+    verify(alertmanagerSilenceBridge, never()).resolve(ArgumentMatchers.any());
   }
 
   @DisplayName("同组最后一条 OPEN 告警关闭后发送解除")
@@ -64,7 +74,13 @@ class DefaultConsoleAlertApplicationServiceTest {
   void shouldResolveAmGroupWhenNoMatchingAlertRemainsOpen() {
     AlertEventEntity alert = activeAlert();
     when(alertEventMapper.countActiveAlertsInAmGroup(
-            TENANT_ID, "batch-orchestrator", "JOB_RUNNING_TOO_LONG", "WARN", ALERT_ID))
+            AlertEventActiveAlertsInAmGroupCountQuery.builder()
+                .tenantId(TENANT_ID)
+                .serviceName("batch-orchestrator")
+                .alertType("JOB_RUNNING_TOO_LONG")
+                .severity("WARN")
+                .excludingId(ALERT_ID)
+                .build()))
         .thenReturn(0L);
 
     service.close(ALERT_ID, request(), "close-2");

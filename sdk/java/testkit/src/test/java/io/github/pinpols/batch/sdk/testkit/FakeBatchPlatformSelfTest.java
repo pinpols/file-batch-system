@@ -1,13 +1,19 @@
 package io.github.pinpols.batch.sdk.testkit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import io.github.pinpols.batch.sdk.client.BatchPlatformClient;
+import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
+import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.time.Duration;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -25,6 +31,8 @@ class FakeBatchPlatformSelfTest {
   @Test
   @DisplayName("handler 成功执行,5s 内收到成功 report")
   void handlerSucceeds_endToEnd(FakeBatchPlatform platform) {
+    AtomicBoolean startedBeforeExecution = new AtomicBoolean();
+    AtomicReference<String> seenInvocation = new AtomicReference<>();
     SdkTaskHandler handler = new SdkTaskHandler() {
       @Override
       public String taskType() {
@@ -33,6 +41,8 @@ class FakeBatchPlatformSelfTest {
 
       @Override
       public SdkTaskResult execute(SdkTaskContext ctx) {
+        startedBeforeExecution.set(platform.nonIdempotentStarts().containsKey(ctx.taskId()));
+        seenInvocation.set((String) ctx.runtimeAttributes().get("partitionInvocationId"));
         int rows = ((Number) ctx.parameters().getOrDefault("rows", 0)).intValue();
         return SdkTaskResult.ok("imported " + rows, Map.of("rows", rows));
       }
@@ -47,6 +57,7 @@ class FakeBatchPlatformSelfTest {
       platform.dispatch(TaskDispatchMessageBuilder.dispatch("testkit_demo")
           .tenantId("tenant-a")
           .taskId(101L)
+          .runtimeAttribute("partitionInvocationId", "inv-stale-dispatch")
           .param("rows", 3)
           .build());
 
@@ -56,6 +67,11 @@ class FakeBatchPlatformSelfTest {
       assertThat(report.outputs()).containsEntry("rows", 3);
       assertThat(platform.claims()).contains(101L);
       assertThat(platform.registrations()).isNotEmpty();
+      assertThat(startedBeforeExecution.get()).isTrue();
+      String invocationId = seenInvocation.get();
+      assertThat(invocationId).isNotBlank().isNotEqualTo("inv-stale-dispatch");
+      assertThat(platform.nonIdempotentStarts()).containsEntry(101L, invocationId);
+      verifyStartRejectsForeignIdentity(platform, invocationId);
     } finally {
       client.stop();
     }
@@ -65,6 +81,7 @@ class FakeBatchPlatformSelfTest {
   @Test
   @DisplayName("handler 抛异常,report 标记失败并带 errorCode")
   void handlerThrows_reportsFailure(FakeBatchPlatform platform) {
+    AtomicBoolean startedBeforeExecution = new AtomicBoolean();
     SdkTaskHandler handler = new SdkTaskHandler() {
       @Override
       public String taskType() {
@@ -73,6 +90,7 @@ class FakeBatchPlatformSelfTest {
 
       @Override
       public SdkTaskResult execute(SdkTaskContext ctx) {
+        startedBeforeExecution.set(platform.nonIdempotentStarts().containsKey(ctx.taskId()));
         throw new IllegalStateException("kaboom");
       }
     };
@@ -94,8 +112,38 @@ class FakeBatchPlatformSelfTest {
       // 原异常类名折进 message 保留可诊断性。
       assertThat(report.errorCode()).isEqualTo("EXECUTION_FAILED");
       assertThat(report.message()).contains("kaboom");
+      assertThat(startedBeforeExecution.get()).isTrue();
+      assertThat(platform.nonIdempotentStarts()).containsKey(202L);
     } finally {
       client.stop();
     }
   }
+
+  private void verifyStartRejectsForeignIdentity(FakeBatchPlatform platform, String invocationId) {
+    BatchPlatformClientConfig clientConfig = platform.configFor("tenant-a", "worker-a");
+    PlatformHttpClient client = new PlatformHttpClient(clientConfig);
+    try {
+      Map<String, Object> foreignWorker = Map.of(
+          "tenantId", "tenant-a", "workerId", "other-worker", "partitionInvocationId", invocationId);
+      Map<String, Object> foreignTenant = Map.of(
+          "tenantId", "other-tenant", "workerId", "worker-a", "partitionInvocationId", invocationId);
+      Map<String, Object> staleInvocation = Map.of(
+          "tenantId", "tenant-a", "workerId", "worker-a", "partitionInvocationId", "inv-stale-dispatch");
+      assertStartRejected(client, foreignWorker);
+      assertStartRejected(client, foreignTenant);
+      assertStartRejected(client, staleInvocation);
+      assertThat(platform.nonIdempotentStarts()).containsEntry(101L, invocationId);
+    } finally {
+      client.evictIdleConnections();
+    }
+  }
+
+  private void assertStartRejected(PlatformHttpClient client, Map<String, Object> body) {
+    Throwable failure = catchThrowable(() -> client.markNonIdempotentExecutionStarted(101L, body));
+    assertThat(failure).isInstanceOf(PlatformHttpException.class);
+    PlatformHttpException httpFailure = (PlatformHttpException) failure;
+    int status = httpFailure.statusCode();
+    assertThat(status).isEqualTo(409);
+  }
+
 }

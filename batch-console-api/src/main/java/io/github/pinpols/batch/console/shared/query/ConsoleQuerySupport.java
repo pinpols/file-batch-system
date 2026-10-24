@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.page.CursorCodec;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -14,10 +15,12 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.ToLongFunction;
 import javax.annotation.Nullable;
@@ -29,19 +32,21 @@ public final class ConsoleQuerySupport {
 
   public static <S, T> PageResponse<T> page(
       PageRequest pageRequest, long total, List<S> rows, Function<S, T> mapper) {
-    return new PageResponse<>(
-        total,
-        pageRequest.pageNo(),
-        pageRequest.pageSize(),
-        rows.stream().map(mapper).toList());
+    int pageNo = pageRequest.pageNo();
+    int pageSize = pageRequest.pageSize();
+    List<T> items = rows.stream().map(mapper).toList();
+    return new PageResponse<>(total, pageNo, pageSize, items);
   }
 
   public static <S, T> PageResponse<T> cursorPage(
       PageRequest pageRequest, List<S> rows, Function<S, T> mapper, ToLongFunction<S> idExtractor) {
     List<T> items = rows.stream().map(mapper).toList();
-    String nextCursor = rows.size() < pageRequest.pageSize() || rows.isEmpty()
-        ? null
-        : CursorCodec.encode(Map.of("id", idExtractor.applyAsLong(rows.get(rows.size() - 1))));
+    String nextCursor = null;
+    if (rows.size() >= pageRequest.pageSize() && !EmptyChecks.isEmpty(Objects.requireNonNull(rows))) {
+      S lastRow = rows.get(rows.size() - 1);
+      long lastRowId = idExtractor.applyAsLong(lastRow);
+      nextCursor = CursorCodec.encode(Map.of("id", lastRowId));
+    }
     return PageResponse.cursor(items, pageRequest.pageSize(), nextCursor);
   }
 
@@ -106,18 +111,25 @@ public final class ConsoleQuerySupport {
     String trimmed = value.trim();
     if (trimmed.length() == 10 && trimmed.charAt(4) == '-' && trimmed.charAt(7) == '-') {
       try {
-        return LocalDate.parse(trimmed).atStartOfDay(zone).toInstant();
+        LocalDate parsedDate = LocalDate.parse(trimmed);
+        ZonedDateTime dateStartInZone = parsedDate.atStartOfDay(zone);
+        return dateStartInZone.toInstant();
       } catch (DateTimeParseException ignored) {
       }
     }
-    if (trimmed.endsWith("Z") || trimmed.contains("+") || trimmed.lastIndexOf('-') > 9) {
+    boolean hasExplicitTimezoneOffset =
+        trimmed.endsWith("Z") || trimmed.contains("+") || trimmed.lastIndexOf('-') > 9;
+    if (hasExplicitTimezoneOffset) {
       try {
         return Instant.parse(trimmed);
       } catch (DateTimeParseException ignored) {
       }
     }
     try {
-      return LocalDateTime.parse(trimmed.replace(' ', 'T')).atZone(zone).toInstant();
+      String normalizedDateTime = trimmed.replace(' ', 'T');
+      LocalDateTime localDateTime = LocalDateTime.parse(normalizedDateTime);
+      ZonedDateTime zonedDateTime = localDateTime.atZone(zone);
+      return zonedDateTime.toInstant();
     } catch (DateTimeParseException ignored) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
@@ -137,7 +149,11 @@ public final class ConsoleQuerySupport {
     if (trimmed.length() == 10 && trimmed.charAt(4) == '-' && trimmed.charAt(7) == '-') {
       try {
         LocalDate date = LocalDate.parse(trimmed);
-        return date.plusDays(1).atStartOfDay(zone).toInstant().minusNanos(1_000);
+        LocalDate nextDate = date.plusDays(1);
+        ZonedDateTime nextDateStartInZone = nextDate.atStartOfDay(zone);
+        Instant nextDateStart = nextDateStartInZone.toInstant();
+        Instant inclusiveEndOfDay = nextDateStart.minusNanos(1_000);
+        return inclusiveEndOfDay;
       } catch (DateTimeParseException ignored) {
         SwallowedExceptionLogger.info(
             ConsoleQuerySupport.class, "catch:DateTimeParseException", ignored);
@@ -177,7 +193,11 @@ public final class ConsoleQuerySupport {
 
   public static String stringValue(Map<String, Object> row, String key) {
     Object value = row == null ? null : row.get(key);
-    return value == null ? null : ConsoleTextSanitizer.safeDisplay(String.valueOf(value));
+    if (EmptyChecks.isNull(value)) {
+      return null;
+    }
+    String rawText = String.valueOf(value);
+    return ConsoleTextSanitizer.safeDisplay(rawText);
   }
 
   public static String display(String value) {
@@ -193,8 +213,8 @@ public final class ConsoleQuerySupport {
       return localDate;
     }
     // 显式类型转换,不依赖 toString() 的隐式格式(coding-conventions §20.1:禁止依赖隐式格式化)。
-    if (value instanceof java.sql.Date sqlDate) {
-      return sqlDate.toLocalDate();
+    if (ConsoleSqlDateSupport.isSqlDate(value)) {
+      return ConsoleSqlDateSupport.toLocalDate(value);
     }
     return LocalDate.parse(String.valueOf(value));
   }

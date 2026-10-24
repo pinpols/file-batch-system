@@ -3,12 +3,15 @@ package io.github.pinpols.batch.orchestrator.application.engine;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.event.DomainEvent;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.ReplayOperationWorkflowOutcomeParam;
+import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -35,10 +38,12 @@ class WorkflowTerminalOutboxServiceTest {
   private DomainEventPublisher domainEventPublisher;
 
   private WorkflowTerminalOutboxService service;
+  private ReplayOperationMapper replayOperationMapper;
 
   @BeforeEach
   void setUp() {
-    service = new WorkflowTerminalOutboxService(domainEventPublisher);
+    replayOperationMapper = mock(ReplayOperationMapper.class);
+    service = new WorkflowTerminalOutboxService(domainEventPublisher, replayOperationMapper);
   }
 
   // ===== isTerminal =====
@@ -83,6 +88,7 @@ class WorkflowTerminalOutboxServiceTest {
   void shouldSkip_whenStatusNotTerminal() {
     service.writeTerminalEvent(workflowRun(), WorkflowRunStatus.RUNNING.code(), Instant.now());
     verify(domainEventPublisher, never()).publish(any());
+    verify(replayOperationMapper, never()).updateWorkflowTargetOutcome(any());
   }
 
   @Test
@@ -105,6 +111,15 @@ class WorkflowTerminalOutboxServiceTest {
         .containsEntry("runStatus", "SUCCESS")
         .containsEntry("workflowRunId", 100L)
         .containsEntry("finishedAt", "2026-05-20T10:00:00Z");
+    ArgumentCaptor<ReplayOperationWorkflowOutcomeParam> outcomeCaptor =
+        ArgumentCaptor.forClass(ReplayOperationWorkflowOutcomeParam.class);
+    verify(replayOperationMapper).updateWorkflowTargetOutcome(outcomeCaptor.capture());
+    ReplayOperationWorkflowOutcomeParam outcome = outcomeCaptor.getValue();
+    assertThat(outcome.workflowRunId()).isEqualTo(100L);
+    assertThat(outcome.status()).isEqualTo("SUCCEEDED");
+    assertThat(outcome.succeededCount()).isEqualTo(1);
+    assertThat(outcome.failedCount()).isZero();
+    assertThat(outcome.inFlightCount()).isZero();
   }
 
   @Test

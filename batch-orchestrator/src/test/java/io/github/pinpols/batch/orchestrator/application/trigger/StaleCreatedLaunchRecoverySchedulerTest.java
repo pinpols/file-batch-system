@@ -2,28 +2,52 @@ package io.github.pinpols.batch.orchestrator.application.trigger;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionDispatchService;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.service.LaunchValidationService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
+@ExtendWith(MockitoExtension.class)
 @DisplayName("滞留创建态启动恢复调度: 结构空实例与历史重复实例的恢复口径")
 class StaleCreatedLaunchRecoverySchedulerTest {
+
+  @Mock private LaunchValidationService launchValidationService;
+
+  @BeforeEach
+  void setUpFrozenDefinition() {
+    when(launchValidationService.load(any())).thenAnswer(invocation -> {
+      LaunchRequest request = invocation.getArgument(0);
+      JobDefinitionEntity definition = JobDefinitionEntity.builder()
+          .id(1L).tenantId(request.tenantId()).jobCode(request.jobCode()).version(1).build();
+      return new LaunchValidationService.LaunchLoadResult(null, definition, null, null);
+    });
+  }
 
   @Test
   @DisplayName("请求已标记启动而实例结构为空时触发恢复派发")
@@ -38,12 +62,15 @@ class StaleCreatedLaunchRecoverySchedulerTest {
         triggerRequestMapper,
         partitionDispatchService,
         launchService,
+        launchValidationService,
         gracefulShutdown,
         new SimpleMeterRegistry(),
         new StaleCreatedLaunchRecoveryProperties());
 
     JobInstanceEntity instance = new JobInstanceEntity();
     instance.setId(101L);
+    instance.setJobDefinitionId(1L);
+    instance.setJobDefinitionVersion(1);
     instance.setTenantId("tenant-a");
     instance.setTriggerRequestId(202L);
     instance.setJobCode("atomic_sql_demo");
@@ -57,11 +84,21 @@ class StaleCreatedLaunchRecoverySchedulerTest {
 
     when(jobInstanceMapper.selectStaleCreatedLaunchCandidates(any(), anyInt()))
         .thenReturn(List.of(instance));
-    when(triggerRequestMapper.selectById("tenant-a", 202L)).thenReturn(request);
+    when(triggerRequestMapper.selectById("tenant-a", 202L)).thenAnswer(invocation -> {
+      Assertions.assertThat(RlsTenantContextHolder.get()).isEqualTo("tenant-a");
+      return request;
+    });
+    doAnswer(invocation -> {
+          Assertions.assertThat(RlsTenantContextHolder.get()).isEqualTo("tenant-a");
+          return null;
+        })
+        .when(partitionDispatchService)
+        .dispatch(any());
 
     scheduler.recover();
 
     verify(partitionDispatchService).dispatch(any());
+    Assertions.assertThat(RlsTenantContextHolder.get()).isNull();
   }
 
   @Test
@@ -77,12 +114,15 @@ class StaleCreatedLaunchRecoverySchedulerTest {
         triggerRequestMapper,
         partitionDispatchService,
         launchService,
+        launchValidationService,
         gracefulShutdown,
         new SimpleMeterRegistry(),
         new StaleCreatedLaunchRecoveryProperties());
 
     JobInstanceEntity instance = new JobInstanceEntity();
     instance.setId(101L);
+    instance.setJobDefinitionId(1L);
+    instance.setJobDefinitionVersion(1);
     instance.setTenantId("tenant-a");
     instance.setTriggerRequestId(202L);
     instance.setJobCode("atomic_sql_demo");
@@ -117,12 +157,15 @@ class StaleCreatedLaunchRecoverySchedulerTest {
         triggerRequestMapper,
         partitionDispatchService,
         launchService,
+        launchValidationService,
         gracefulShutdown,
         new SimpleMeterRegistry(),
         new StaleCreatedLaunchRecoveryProperties());
 
     JobInstanceEntity instance = new JobInstanceEntity();
     instance.setId(101L);
+    instance.setJobDefinitionId(1L);
+    instance.setJobDefinitionVersion(1);
     instance.setTenantId("tenant-a");
     instance.setTriggerRequestId(202L);
     instance.setJobCode("bundle-dispatch");
@@ -146,7 +189,6 @@ class StaleCreatedLaunchRecoverySchedulerTest {
 
     scheduler.recover();
 
-    verify(launchService)
-        .finalizeDispatchFailure(any(), org.mockito.ArgumentMatchers.same(instance), any());
+    verify(launchService).finalizeDispatchFailure(any(), ArgumentMatchers.same(instance), any());
   }
 }

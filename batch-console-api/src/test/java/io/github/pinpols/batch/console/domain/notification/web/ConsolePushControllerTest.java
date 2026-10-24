@@ -20,6 +20,7 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -64,11 +65,9 @@ class ConsolePushControllerTest {
       var valid = new ConsolePushSubscribeRequest(
           "https://push.invalid", null, new ConsolePushSubscribeRequest.Keys("p256", "auth"));
       var request = new MockHttpServletRequest();
-      org.assertj.core.api.Assertions.assertThatThrownBy(
-              () -> controller.subscribe("ta", valid, request))
+      Assertions.assertThatThrownBy(() -> controller.subscribe("ta", valid, request))
           .isInstanceOf(AuthenticationCredentialsNotFoundException.class);
-      org.assertj.core.api.Assertions.assertThatThrownBy(
-              () -> controller.subscribe("ta", null, request))
+      Assertions.assertThatThrownBy(() -> controller.subscribe("ta", null, request))
           .isInstanceOf(AuthenticationCredentialsNotFoundException.class);
       verifyNoInteractions(subscriptionService);
     } finally {

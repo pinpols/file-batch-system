@@ -38,13 +38,27 @@ public final class GatlingConfig {
     public static final String TENANT_ID =
             System.getProperty("tenantId", "t1");
 
-    /**
-     * Pre-existing job code (must be seeded in the target DB before running).
-     * Align with {@code docs/sql/load-test/load-test-seed.sql} or
-     * {@code batch-e2e-tests/src/test/resources/db/testdata/import-template-config-seed.sql} job codes.
-     */
-    public static final String JOB_CODE =
-            System.getProperty("jobCode", "E2E_IMPORT_LOAD");
+    /** 启动模拟必须显式提供顶层 Workflow 目标。 */
+    public static String requiredWorkflowDefinitionId() {
+        return requiredWorkflowDefinitionId("workflowDefinitionId");
+    }
+
+    /** 显式 Workflow 目标；延迟解析，因此只读模拟无需提供 ID。 */
+    public static String requiredWorkflowDefinitionId(String propertyName) {
+        String value = System.getProperty(propertyName);
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("-D" + propertyName + " is required for launch simulations");
+        }
+        try {
+            long id = Long.parseLong(value);
+            if (id <= 0) {
+                throw new IllegalArgumentException("-D" + propertyName + " must be positive");
+            }
+            return Long.toString(id);
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException("-D" + propertyName + " must be a positive integer", exception);
+        }
+    }
 
     /** Business date for job launch requests (ISO-8601). */
     public static final String BIZ_DATE =

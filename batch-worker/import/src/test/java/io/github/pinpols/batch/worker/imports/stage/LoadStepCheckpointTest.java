@@ -14,10 +14,12 @@ import io.github.pinpols.batch.common.plugin.ImportLoadPlugin;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressRegistry;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPosition;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingStage;
+import io.github.pinpols.batch.worker.core.support.TaskExecutionClient;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration.FileProcessing;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
@@ -35,7 +37,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
@@ -59,6 +63,9 @@ class LoadStepCheckpointTest {
   @Mock
   private ProcessingPositionStore positionStore;
 
+  @Mock
+  private TaskExecutionClient taskExecutionClient;
+
   private ImportLoadPluginRegistry registry;
   private ImportWorkerConfiguration workerConfig;
   private ObjectMapper objectMapper;
@@ -72,7 +79,7 @@ class LoadStepCheckpointTest {
     when(plugin.id()).thenReturn(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
     // ADR-038 R3-3:续跑开关开时 LoadStep 会校验 plugin 幂等能力;mock 默认返回 null,需显式 stub。
     // disabled 路径不会触发(不调 idempotencyCapability),用 lenient 避免 UnnecessaryStubbing。
-    org.mockito.Mockito.lenient()
+    Mockito.lenient()
         .when(plugin.idempotencyCapability())
         .thenReturn(IdempotencyCapability.IDEMPOTENT_BY_UNIQUE_CONSTRAINT);
     registry = new ImportLoadPluginRegistry(List.of(plugin));
@@ -89,7 +96,14 @@ class LoadStepCheckpointTest {
     objectMapper = new ObjectMapper();
     checkpointProps = new WorkerCheckpointProperties();
     loadStep = new LoadStep(
-        registry, runtimeRepository, workerConfig, objectMapper, checkpointProps, positionStore);
+        registry,
+        runtimeRepository,
+        workerConfig,
+        objectMapper,
+        checkpointProps,
+        positionStore,
+        new PipelineStageProgressRegistry(),
+        taskExecutionClient);
   }
 
   @AfterEach
@@ -236,7 +250,7 @@ class LoadStepCheckpointTest {
   // ─── helpers (与 LoadStepTest 同款) ─────────────────────────────────────────
 
   private static long anyLong() {
-    return org.mockito.ArgumentMatchers.anyLong();
+    return ArgumentMatchers.anyLong();
   }
 
   private static Long toLong(Object v) {

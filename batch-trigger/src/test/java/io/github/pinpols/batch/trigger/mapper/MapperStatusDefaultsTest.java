@@ -1,5 +1,10 @@
 package io.github.pinpols.batch.trigger.mapper;
 
+import io.github.pinpols.batch.trigger.domain.param.BatchDayInstanceMarkCutoffParam;
+import io.github.pinpols.batch.trigger.domain.param.BatchDayInstanceTransitionToCutoffParam;
+import io.github.pinpols.batch.trigger.domain.param.TriggerMisfirePendingUpdateApprovalStatusParam;
+
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.doReturn;
@@ -27,10 +32,24 @@ class MapperStatusDefaultsTest {
     doReturn(candidates).when(mapper).selectCutoffCandidatesByStatus("OPEN");
     doReturn(1)
         .when(mapper)
-        .transitionToCutoff(7L, "tenant-a", "calendar-a", bizDate, cutoffAt, "OPEN", "CUTOFF");
+        .transitionToCutoff(BatchDayInstanceTransitionToCutoffParam.builder()
+            .id(7L)
+            .tenantId("tenant-a")
+            .calendarCode("calendar-a")
+            .bizDate(bizDate)
+            .cutoffAt(cutoffAt)
+            .expectedStatus("OPEN")
+            .targetStatus("CUTOFF")
+            .build());
 
     assertThat(mapper.selectOpenCutoffCandidates()).isSameAs(candidates);
-    assertThat(mapper.markCutoff(7L, "tenant-a", "calendar-a", bizDate, cutoffAt))
+    assertThat(mapper.markCutoff(BatchDayInstanceMarkCutoffParam.builder()
+        .id(7L)
+        .tenantId("tenant-a")
+        .calendarCode("calendar-a")
+        .bizDate(bizDate)
+        .cutoffAt(cutoffAt)
+        .build()))
         .isEqualTo(1);
   }
 
@@ -45,10 +64,24 @@ class MapperStatusDefaultsTest {
     doReturn(List.of()).when(mapper).selectByTenantAndStatus("tenant-a", "PENDING", 15);
     doReturn(1)
         .when(mapper)
-        .updateApprovalStatus(3L, "reviewer", null, false, "APPROVED", "PENDING");
+        .updateApprovalStatus(TriggerMisfirePendingUpdateApprovalStatusParam.builder()
+            .id(3L)
+            .approvedBy("reviewer")
+            .rejectionReason(null)
+            .writeRejectionReason(false)
+            .targetStatus("APPROVED")
+            .expectedStatus("PENDING")
+            .build());
     doReturn(1)
         .when(mapper)
-        .updateApprovalStatus(3L, "reviewer", "invalid", true, "REJECTED", "PENDING");
+        .updateApprovalStatus(TriggerMisfirePendingUpdateApprovalStatusParam.builder()
+            .id(3L)
+            .approvedBy("reviewer")
+            .rejectionReason("invalid")
+            .writeRejectionReason(true)
+            .targetStatus("REJECTED")
+            .expectedStatus("PENDING")
+            .build());
     doReturn(1).when(mapper).expireBefore(now, "EXPIRED", "PENDING");
 
     assertThat(mapper.insertPending(entity)).isEqualTo(1);

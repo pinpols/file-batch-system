@@ -2,7 +2,9 @@ package io.github.pinpols.batch.console.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.contract.response.ResourceTagResponse;
+import io.github.pinpols.batch.console.domain.rbac.entity.ResourceTagEntity;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleResourceTagService;
+import io.github.pinpols.batch.console.domain.rbac.service.ResourceTagUpsertInput;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -41,10 +43,10 @@ public class ConsoleResourceTagController {
       @RequestParam("tenantId") String tenantId,
       @RequestParam("resourceType") @NotBlank String resourceType,
       @RequestParam("resourceCode") @NotBlank String resourceCode) {
-    return responseFactory.success(
-        tagService.listByResource(tenantId, resourceType, resourceCode).stream()
-            .map(ResourceTagResponse::from)
-            .toList());
+    List<ResourceTagEntity> resourceTags = tagService.listByResource(tenantId, resourceType, resourceCode);
+    List<ResourceTagResponse> responses =
+        resourceTags.stream().map(ResourceTagResponse::from).toList();
+    return responseFactory.success(responses);
   }
 
   /** 按标签键（可选值）反查资源。 */
@@ -53,9 +55,10 @@ public class ConsoleResourceTagController {
       @RequestParam("tenantId") String tenantId,
       @RequestParam("tagKey") @NotBlank String tagKey,
       @RequestParam(value = "tagValue", required = false) String tagValue) {
-    return responseFactory.success(tagService.listByTagKey(tenantId, tagKey, tagValue).stream()
-        .map(ResourceTagResponse::from)
-        .toList());
+    List<ResourceTagEntity> resourceTags = tagService.listByTagKey(tenantId, tagKey, tagValue);
+    List<ResourceTagResponse> responses =
+        resourceTags.stream().map(ResourceTagResponse::from).toList();
+    return responseFactory.success(responses);
   }
 
   /** 列出租户下所有已使用的标签键。 */
@@ -69,13 +72,15 @@ public class ConsoleResourceTagController {
   public CommonResponse<Void> upsert(
       @RequestParam("tenantId") String tenantId, @Valid @RequestBody UpsertTagRequest request) {
     String operator = requestMetadataResolver.current().operatorId();
-    tagService.upsert(
-        tenantId,
-        request.resourceType(),
-        request.resourceCode(),
-        request.tagKey(),
-        request.tagValue(),
-        operator);
+    ResourceTagUpsertInput tagInput = ResourceTagUpsertInput.builder()
+        .tenantId(tenantId)
+        .resourceType(request.resourceType())
+        .resourceCode(request.resourceCode())
+        .tagKey(request.tagKey())
+        .tagValue(request.tagValue())
+        .operator(operator)
+        .build();
+    tagService.upsert(tagInput);
     return responseFactory.success(null);
   }
 

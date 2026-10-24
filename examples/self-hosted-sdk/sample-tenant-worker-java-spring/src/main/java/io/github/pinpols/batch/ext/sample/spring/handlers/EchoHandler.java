@@ -18,6 +18,12 @@ public class EchoHandler implements SdkTaskHandler {
 
   private static final Logger log = LoggerFactory.getLogger(EchoHandler.class);
 
+  /** 示例仅计算、等待或记录日志；接入真实写入或推送后必须重新评估此声明。 */
+  @Override
+  public boolean isSafeToReplay(SdkTaskContext ctx) {
+    return true;
+  }
+
   @Override
   public String taskType() {
     return "echo";
@@ -26,6 +32,8 @@ public class EchoHandler implements SdkTaskHandler {
   @Override
   public SdkTaskResult execute(SdkTaskContext ctx) {
     log.info("echo handler taskId={} parameterCount={}", ctx.taskId(), ctx.parameters().size());
-    return SdkTaskResult.ok("echoed", Map.copyOf(ctx.parameters()));
+    Map<String, Object> parameters = ctx.parameters();
+    Map<String, Object> parameterSnapshot = Map.copyOf(parameters);
+    return SdkTaskResult.ok("echoed", parameterSnapshot);
   }
 }

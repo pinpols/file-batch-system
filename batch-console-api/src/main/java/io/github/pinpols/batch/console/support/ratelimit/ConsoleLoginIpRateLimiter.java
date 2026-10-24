@@ -41,10 +41,12 @@ public class ConsoleLoginIpRateLimiter {
       return allowed;
     } catch (DataAccessException exception) {
       redisCircuitBreaker.recordFailure();
+      String sanitizedClientIp = LogSanitizer.value(clientIp);
+      String causeSummary = SwallowedExceptionLogger.summary(exception);
       log.warn(
           "login rate limiter Redis unavailable; fail-open: ip={}, cause={}",
-          LogSanitizer.value(clientIp),
-          SwallowedExceptionLogger.summary(exception));
+          sanitizedClientIp,
+          causeSummary);
       return true;
     }
   }
@@ -54,7 +56,8 @@ public class ConsoleLoginIpRateLimiter {
       String forwardedFor = request.getHeader("X-Forwarded-For");
       if (Texts.hasText(forwardedFor)) {
         int comma = forwardedFor.indexOf(',');
-        return (comma > 0 ? forwardedFor.substring(0, comma) : forwardedFor).trim();
+        String forwardedClientIp = comma > 0 ? forwardedFor.substring(0, comma) : forwardedFor;
+        return forwardedClientIp.trim();
       }
       String realIp = request.getHeader("X-Real-IP");
       if (Texts.hasText(realIp)) {

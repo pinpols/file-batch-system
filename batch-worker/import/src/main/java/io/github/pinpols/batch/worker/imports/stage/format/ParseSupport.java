@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.worker.imports.stage.format;
 
+import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService.BadRecordCommand;
+
+
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -109,7 +112,8 @@ public class ParseSupport {
         return number.intValue();
       }
       if (value != null && Texts.hasText(String.valueOf(value))) {
-        return Integer.parseInt(String.valueOf(value));
+        String text = String.valueOf(value);
+        return Integer.parseInt(text);
       }
     }
     return defaultValue;
@@ -163,12 +167,13 @@ public class ParseSupport {
     // 单 schema 路径由 jdbc_mapped_import 的 columnMappings 接管字段投影。
     writeNdjsonValue(param.writer(), param.row());
     param.writer().newLine();
+    Object rawParsedCount = param.context().getAttributes().get(KEY_PARSED_COUNT);
+    long parsedCount = numberValue(rawParsedCount);
+    long nextParsedCount = parsedCount + 1;
     param
         .context()
         .getAttributes()
-        .put(
-            KEY_PARSED_COUNT,
-            numberValue(param.context().getAttributes().get(KEY_PARSED_COUNT)) + 1);
+        .put(KEY_PARSED_COUNT, nextParsedCount);
   }
 
   @Builder
@@ -205,8 +210,14 @@ public class ParseSupport {
       Object rawRecord,
       ImportRecordGovernanceService.SourceLocator locator) {
     ImportRecordGovernanceService.BadRecordCommand command =
-        ImportRecordGovernanceService.BadRecordCommand.of(
-            ImportStage.PARSE, recordNo, errorCode, message, rawRecord, locator);
+        BadRecordCommand.builder()
+            .stage(ImportStage.PARSE)
+            .recordNo(recordNo)
+            .errorCode(errorCode)
+            .errorMessage(message)
+            .rawRecord(rawRecord)
+            .locator(locator)
+            .build();
     if (!recordGovernanceService.isSkippable(errorCode)) {
       recordGovernanceService.recordFailedRecord(context, command);
       throw new IllegalStateException(message);
@@ -278,7 +289,10 @@ public class ParseSupport {
           .map(Map.class::cast)
           .map(mapping -> mapping.get("name"))
           .filter(name -> name != null && Texts.hasText(String.valueOf(name)))
-          .map(name -> String.valueOf(name).trim())
+          .map(name -> {
+            String rawName = String.valueOf(name);
+            return rawName.trim();
+          })
           .toList();
       if (!names.isEmpty()) {
         return names;

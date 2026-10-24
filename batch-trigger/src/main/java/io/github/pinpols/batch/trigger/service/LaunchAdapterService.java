@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.support.CalendarBizDateDefinition;
+import java.time.LocalDate;
 
 /**
  * 发射请求适配服务接口，负责将不同来源的触发命令（API 请求或调度触发）统一转换为 Orchestrator 可识别的 {@link
@@ -18,6 +19,8 @@ public interface LaunchAdapterService {
 
   LaunchRequest fromScheduledTrigger(
       ScheduledTriggerCommand command, CalendarBizDateDefinition calendar);
+
+  LaunchRequest fromObservedScheduledTrigger(ScheduledTriggerCommand command, LocalDate bizDate);
 
   TriggerType resolveTriggerType(TriggerLaunchCommand command);
 }

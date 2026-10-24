@@ -18,6 +18,7 @@ import java.io.InputStream;
 import java.net.InetAddress;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -62,7 +63,9 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
 
     @Override
     public Thread newThread(Runnable r) {
-      Thread t = new Thread(r, "sftp-disconnect-" + counter.incrementAndGet());
+      int threadNumber = counter.incrementAndGet();
+      String threadName = "sftp-disconnect-" + threadNumber;
+      Thread t = new Thread(r, threadName);
       t.setDaemon(true);
       return t;
     }
@@ -153,10 +156,9 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
     if (connConfig == null) {
       String host = stringProp(channelConfig, "sftp_host");
       if (!Texts.hasText(host)) {
-        return new DispatchResult(false, null, null, false, false, "sftp_host missing", null);
+        return DispatchResult.failureWithoutReceipt("sftp_host missing");
       }
-      return new DispatchResult(
-          false, null, null, false, false, "sftp_user/sftp_password missing", null);
+      return DispatchResult.failureWithoutReceipt("sftp_user/sftp_password missing");
     }
 
     RemoteTarget remoteTarget = resolveRemoteTarget(channelConfig, command.fileRecord());
@@ -203,9 +205,9 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
     }
     String remoteName = stringProp(channelConfig, "sftp_remote_file_name");
     if (!Texts.hasText(remoteName)) {
-      remoteName = firstNonBlank(
-          String.valueOf(fileRecord.getOrDefault("original_file_name", "")),
-          String.valueOf(fileRecord.getOrDefault("file_name", "file.bin")));
+      String originalFileName = String.valueOf(fileRecord.getOrDefault("original_file_name", ""));
+      String fileName = String.valueOf(fileRecord.getOrDefault("file_name", "file.bin"));
+      remoteName = firstNonBlank(originalFileName, fileName);
     }
     remoteName = sanitizeFileName(remoteName);
     return new RemoteTarget(remoteDir, remoteName);
@@ -216,6 +218,8 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
       ChannelSftp sftp = connection.sftp();
       String tempRemotePath = null;
       String manifestTempRemotePath = null;
+      boolean publicationAttempted = false;
+      boolean publicationConfirmed = false;
       try {
         String remotePath = ctx.remoteTarget().remotePath();
         tempRemotePath = remotePath + ".tmp-" + UUID.randomUUID();
@@ -226,7 +230,9 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
           sftp.put(digesting, tempRemotePath, ChannelSftp.OVERWRITE);
           payloadDigest = digesting.finish();
         }
+        publicationAttempted = true;
         publishRemoteFile(sftp, tempRemotePath, remotePath);
+        publicationConfirmed = true;
         tempRemotePath = null;
         String evidence = "sftp://" + ctx.connConfig().host() + remotePath;
         DispatchManifestSupport.ManifestPayload manifest = null;
@@ -235,18 +241,17 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
               remotePath + DispatchManifestSupport.suffix(ctx.channelConfig());
           manifestTempRemotePath = manifestRemotePath + ".tmp-" + UUID.randomUUID();
           String manifestRef = "sftp://" + ctx.connConfig().host() + manifestRemotePath;
+          DispatchManifestSupport.ManifestTarget manifestTarget =
+              new DispatchManifestSupport.ManifestTarget(evidence, ctx.remoteTarget().remoteName(), manifestRef);
           manifest = DispatchManifestSupport.manifestPayload(
               ctx.command(),
-              evidence,
-              ctx.remoteTarget().remoteName(),
+              manifestTarget,
               ctx.externalRequestId(),
               ctx.receiptCode(),
-              payloadDigest,
-              manifestRef);
-          sftp.put(
-              new ByteArrayInputStream(manifest.bytes()),
-              manifestTempRemotePath,
-              ChannelSftp.OVERWRITE);
+              payloadDigest);
+          byte[] manifestBytes = manifest.bytes();
+          ByteArrayInputStream manifestStream = new ByteArrayInputStream(manifestBytes);
+          sftp.put(manifestStream, manifestTempRemotePath, ChannelSftp.OVERWRITE);
           publishRemoteFile(sftp, manifestTempRemotePath, manifestRemotePath);
           manifestTempRemotePath = null;
         }
@@ -274,6 +279,15 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
         cleanupRemoteTemp(sftp, tempRemotePath);
         SwallowedExceptionLogger.warn(SftpDispatchChannelAdapter.class, "catch:Exception", ex);
 
+        boolean unknownExternalOutcome =
+            publicationConfirmed || (publicationAttempted && isAmbiguousPublicationFailure(ex));
+        if (unknownExternalOutcome) {
+          return DispatchResult.externalOutcomeUnknown(
+              ctx.externalRequestId(),
+              ctx.receiptCode(),
+              "EXTERNAL_OUTCOME_UNKNOWN: remote file publication may have completed: "
+                  + ex.getMessage());
+        }
         return new DispatchResult(
             false, ctx.externalRequestId(), ctx.receiptCode(), false, false, ex.getMessage(), null);
       }
@@ -282,6 +296,14 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
       return new DispatchResult(
           false, ctx.externalRequestId(), ctx.receiptCode(), false, false, ex.getMessage(), null);
     }
+  }
+
+  static boolean isAmbiguousPublicationFailure(Exception failure) {
+    if (!(failure instanceof SftpException sftpFailure)) {
+      return true;
+    }
+    return sftpFailure.id == ChannelSftp.SSH_FX_NO_CONNECTION
+        || sftpFailure.id == ChannelSftp.SSH_FX_CONNECTION_LOST;
   }
 
   private SftpConnection openSftpConnection(SftpUploadContext ctx) throws Exception {
@@ -342,7 +364,12 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
     try {
       sftp.rename(tempRemotePath, remotePath);
     } catch (SftpException firstFailure) {
-      if (!remoteExists(sftp, tempRemotePath) || !remoteExists(sftp, remotePath)) {
+      boolean temporaryFileExists = remoteExists(sftp, tempRemotePath);
+      if (!temporaryFileExists) {
+        throw firstFailure;
+      }
+      boolean destinationFileExists = remoteExists(sftp, remotePath);
+      if (!destinationFileExists) {
         throw firstFailure;
       }
       removeRemoteIfExists(sftp, remotePath);
@@ -426,7 +453,9 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
   }
 
   private static String sanitizeFileName(String name) {
-    String n = name.replace("..", "_").replace('/', '_').replace('\\', '_');
-    return n.isBlank() ? "file.bin" : n;
+    String withoutParentTraversal = name.replace("..", "_");
+    String withoutForwardSlashes = withoutParentTraversal.replace('/', '_');
+    String sanitizedName = withoutForwardSlashes.replace('\\', '_');
+    return EmptyChecks.isBlank(Objects.requireNonNull(sanitizedName)) ? "file.bin" : sanitizedName;
   }
 }

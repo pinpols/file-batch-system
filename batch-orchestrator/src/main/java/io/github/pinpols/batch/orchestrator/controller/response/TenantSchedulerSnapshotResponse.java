@@ -3,8 +3,10 @@ package io.github.pinpols.batch.orchestrator.controller.response;
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantSchedulerSnapshotEntity;
 import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
 import java.time.Instant;
+import lombok.Builder;
 
 /** 已持久化调度历史的稳定 HTTP 投影。 */
+@Builder
 public record TenantSchedulerSnapshotResponse(
     Long id,
     String tenantId,
@@ -23,21 +25,22 @@ public record TenantSchedulerSnapshotResponse(
     JsonbString detailJson) {
 
   public static TenantSchedulerSnapshotResponse from(TenantSchedulerSnapshotEntity entity) {
-    return new TenantSchedulerSnapshotResponse(
-        entity.id(),
-        entity.tenantId(),
-        entity.snapshotAt(),
-        entity.fairShareGroup(),
-        entity.policyCode(),
-        entity.activeJobs(),
-        entity.activePartitions(),
-        entity.maxJobsBase(),
-        entity.burstLimit(),
-        entity.effectiveJobCap(),
-        entity.groupActiveJobs(),
-        entity.groupMaxJobs(),
-        entity.quotaResetPolicy(),
-        entity.onlineWorkers(),
-        entity.detailJson());
+    return TenantSchedulerSnapshotResponse.builder()
+        .id(entity.id())
+        .tenantId(entity.tenantId())
+        .snapshotAt(entity.snapshotAt())
+        .fairShareGroup(entity.fairShareGroup())
+        .policyCode(entity.policyCode())
+        .activeJobs(entity.activeJobs())
+        .activePartitions(entity.activePartitions())
+        .maxJobsBase(entity.maxJobsBase())
+        .burstLimit(entity.burstLimit())
+        .effectiveJobCap(entity.effectiveJobCap())
+        .groupActiveJobs(entity.groupActiveJobs())
+        .groupMaxJobs(entity.groupMaxJobs())
+        .quotaResetPolicy(entity.quotaResetPolicy())
+        .onlineWorkers(entity.onlineWorkers())
+        .detailJson(entity.detailJson())
+        .build();
   }
 }

@@ -170,18 +170,24 @@ class HttpDispatchHandler:
             await asyncio.gather(*(_one(t) for t in targets), return_exceptions=False)
 
             if self._config.fail_fast and counts.failed() > 0:
+                success_count = counts.success()
+                failed_count = counts.failed()
+                failure_message = (
+                    f"dispatched {success_count} ok, {failed_count} failed (fail-fast)"
+                )
                 return SdkTaskResult.fail(
                     "DISPATCH_FAILED",
-                    f"dispatched {counts.success()} ok, {counts.failed()} failed (fail-fast)",
+                    failure_message,
                 )
         finally:
             if self._owns_client:
                 await client.aclose()
 
-        return SdkTaskResult.success_with(
-            output=counts.to_output(),
-            message=f"dispatched {counts.success()} ok, {counts.failed()} failed",
-        )
+        output = counts.to_output()
+        success_count = counts.success()
+        failed_count = counts.failed()
+        message = f"dispatched {success_count} ok, {failed_count} failed"
+        return SdkTaskResult.success_with(output=output, message=message)
 
     # -- 租户可覆盖钩子(对齐 Java SdkAbstractDispatchHandler) ------------------
 
@@ -233,7 +239,8 @@ class HttpDispatchHandler:
         # 足够。我们只在 host 是字面 IP 且落在私网空间时拦截;基于 DNS 的拦截
         # 需要异步解析,对于 SSRF 回退场景而言延迟不划算(对齐 Java 中
         # ``InetAddress.getByName`` 的等价路径)。
-        host = urlparse(self._resolve_url(url)).hostname
+        resolved_url = self._resolve_url(url)
+        host = urlparse(resolved_url).hostname
         if not host:
             raise ValueError(f"invalid endpoint, no host: {url}")
         try:

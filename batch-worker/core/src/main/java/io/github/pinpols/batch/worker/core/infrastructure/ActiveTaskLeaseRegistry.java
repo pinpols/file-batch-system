@@ -1,28 +1,33 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
+import java.util.function.LongSupplier;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
- * 当前 worker 进程内 in-flight 任务的租约注册表。
+ * 当前 Worker 进程内已认领、待执行或正在执行任务的租约注册表。
  *
  * <p><b>两个用途</b>：
  *
  * <ul>
- *   <li>{@link WorkerTaskLeaseRenewer} 定时从 {@link #snapshot()} 取出所有活跃租约并向 Orchestrator 续期，防止因
- *       pipeline 执行时间较长被误判为失活而重新派发。
+ *   <li>{@link WorkerTaskLeaseRenewer} 定时从 {@link #snapshot()} 取出所有租约并向 Orchestrator 续期，防止批量 CLAIM
+ *       中排队的任务或运行时间较长的 pipeline 被误判为失活并重新派发。
  *   <li>优雅停机时 {@link #awaitDrain} 等待所有任务自然完成后再退出进程，保证不留中间状态。
  * </ul>
  *
@@ -58,23 +63,35 @@ public class ActiveTaskLeaseRegistry {
   // （1000+ 活跃任务时 sleep(500) 会让实际等待时间远超 timeout）
   private final Object drainMonitor = new Object();
 
+  private final LongSupplier nanoTime;
+
+  public ActiveTaskLeaseRegistry() {
+    this(System::nanoTime);
+  }
+
+  ActiveTaskLeaseRegistry(LongSupplier nanoTime) {
+    this.nanoTime = nanoTime;
+  }
+
   // P1: remove(taskId) 时通知订阅者，让外围 per-taskId 累加 map（例如 WorkerTaskLeaseRenewer
   // 的 consecutiveFailures）能同步释放条目，避免任务自然结束后 AtomicInteger 永驻进程。
   // CopyOnWriteArrayList 适合 register 一次、read-mostly 的监听语义；listener 在 remove
   // 写锁释放后 fan-out 调用，single-task remove 的 listener 异常不影响其它 listener。
   private final List<Consumer<String>> removalListeners = new CopyOnWriteArrayList<>();
+  private final List<Consumer<ActiveTaskLease>> leaseRemovalListeners =
+      new CopyOnWriteArrayList<>();
 
-  /**
-   * 注册 lease 移除监听器，{@link #remove(String)} 完成后按注册顺序回调（同步，调用线程内执行）。
-   *
-   * <p>典型用法：{@code WorkerTaskLeaseRenewer} 注册回调以清理 {@code consecutiveFailures}，
-   * 防止任务自然完成后的失败计数器永驻进程。
-   *
-   * <p>listener 应保持轻量且不抛异常；异常会被捕获并抑制并记 warn，避免破坏其它订阅者的回调链。
-   */
+  /** 注册兼容 taskId 级别的移除监听器；并发状态应优先使用带 lease 身份的监听器。 */
   public void registerRemovalListener(Consumer<String> listener) {
     if (listener != null) {
       removalListeners.add(listener);
+    }
+  }
+
+  /** 注册带具体租约身份的移除监听器，避免旧租约清理新 invocation 的状态。 */
+  public void registerLeaseRemovalListener(Consumer<ActiveTaskLease> listener) {
+    if (EmptyChecks.isNotNull(listener)) {
+      leaseRemovalListeners.add(listener);
     }
   }
 
@@ -101,20 +118,142 @@ public class ActiveTaskLeaseRegistry {
     }
   }
 
+  /**
+   * 登记批量 CLAIM 已成功、尚在当前 poll 等待执行的任务。重复登记相同租约不重置续租/取消/丢失状态；
+   * 同 taskId 对应不同 invocation 或已开始执行时拒绝，避免新 claim 覆盖进程内现有所有权。
+   */
+  public boolean registerClaimed(
+      String taskId, String tenantId, String workerId, String partitionInvocationId) {
+    return registerClaimedAt(
+        taskId, tenantId, workerId, partitionInvocationId, nanoTime.getAsLong());
+  }
+
+  /** 登记 CLAIM 请求开始时采集的单调时钟，令远程调用和返回后暂停都计入租约年龄。 */
+  boolean registerClaimedAt(
+      String taskId,
+      String tenantId,
+      String workerId,
+      String partitionInvocationId,
+      long claimedAtNanos) {
+    if (EmptyChecks.isNull(taskId)
+        || EmptyChecks.isNull(tenantId)
+        || EmptyChecks.isNull(workerId)) {
+      return false;
+    }
+    shutdownLock.writeLock().lock();
+    try {
+      ActiveTaskLease existing = activeTaskLeases.get(taskId);
+      if (EmptyChecks.isNotNull(existing)) {
+        return sameOwner(existing, tenantId, workerId, partitionInvocationId)
+            && !existing.isExecutionStarted();
+      }
+      activeTaskLeases.put(
+          taskId,
+          new ActiveTaskLease(
+              taskId, tenantId, workerId, partitionInvocationId, false, claimedAtNanos));
+      completingLeases.remove(taskId);
+      lostLeases.remove(taskId);
+      requestedCancellations.remove(taskId);
+      cancellationCallbacks.remove(taskId);
+      return true;
+    } finally {
+      shutdownLock.writeLock().unlock();
+    }
+  }
+
+  /** 单调时钟入口供 CLAIM 调用方在网络往返前记录租约年龄起点。 */
+  long currentNanos() {
+    return nanoTime.getAsLong();
+  }
+
+  /**
+   * 将已登记 claim 转为执行中；单条 CLAIM 则在此首次登记。相同 taskId 只能有一个执行调用取得启动权。
+   */
+  public boolean beginExecution(
+      String taskId, String tenantId, String workerId, String partitionInvocationId) {
+    if (EmptyChecks.isNull(taskId)
+        || EmptyChecks.isNull(tenantId)
+        || EmptyChecks.isNull(workerId)) {
+      return false;
+    }
+    shutdownLock.writeLock().lock();
+    try {
+      ActiveTaskLease existing = activeTaskLeases.get(taskId);
+      if (EmptyChecks.isNull(existing)) {
+        long executionStartedNanos = nanoTime.getAsLong();
+        ActiveTaskLease newLease = new ActiveTaskLease(
+            taskId, tenantId, workerId, partitionInvocationId, true, executionStartedNanos);
+        activeTaskLeases.put(taskId, newLease);
+        completingLeases.remove(taskId);
+        lostLeases.remove(taskId);
+        requestedCancellations.remove(taskId);
+        cancellationCallbacks.remove(taskId);
+        return true;
+      }
+      return sameOwner(existing, tenantId, workerId, partitionInvocationId)
+          && existing.startExecution();
+    } finally {
+      shutdownLock.writeLock().unlock();
+    }
+  }
+
+  /** 续租成功后更新时间戳，供任务排队后在启动前判断是否需要同步确认所有权。 */
+  public void markRenewed(String taskId) {
+    ActiveTaskLease lease = EmptyChecks.isNull(taskId) ? null : activeTaskLeases.get(taskId);
+    if (EmptyChecks.isNotNull(lease)) {
+      lease.markRenewed(nanoTime.getAsLong());
+    }
+  }
+
+  /** 只刷新发起续租请求时的租约实例，忽略已被替换的旧快照响应。 */
+  public boolean markRenewedIfCurrent(ActiveTaskLease lease) {
+    if (EmptyChecks.isNull(lease)) {
+      return false;
+    }
+    String taskId = lease.getTaskId();
+    boolean leaseIsNoLongerCurrent = activeTaskLeases.get(taskId) != lease;
+    if (leaseIsNoLongerCurrent) {
+      return false;
+    }
+    lease.markRenewed(nanoTime.getAsLong());
+    return true;
+  }
+
+  /** 没有在给定窗口内得到 CLAIM/续租确认时返回 true。 */
+  public boolean isRenewalDue(String taskId, long maxAgeMillis) {
+    ActiveTaskLease lease = EmptyChecks.isNull(taskId) ? null : activeTaskLeases.get(taskId);
+    if (EmptyChecks.isNull(lease)) {
+      return true;
+    }
+    long normalizedMaxAgeMillis = Math.max(0L, maxAgeMillis);
+    long maxAgeNanos = normalizedMaxAgeMillis > Long.MAX_VALUE / 1_000_000L
+        ? Long.MAX_VALUE
+        : normalizedMaxAgeMillis * 1_000_000L;
+    return nanoTime.getAsLong() - lease.lastConfirmedNanosValue() > maxAgeNanos;
+  }
+
+  private static boolean sameOwner(
+      ActiveTaskLease lease, String tenantId, String workerId, String partitionInvocationId) {
+    return tenantId.equals(lease.getTenantId())
+        && workerId.equals(lease.getWorkerId())
+        && Objects.equals(partitionInvocationId, lease.getPartitionInvocationId());
+  }
+
   public void remove(String taskId) {
     if (taskId == null) {
       return;
     }
+    ActiveTaskLease removedLease;
     shutdownLock.writeLock().lock();
     try {
-      activeTaskLeases.remove(taskId);
+      removedLease = activeTaskLeases.remove(taskId);
+      completingLeases.remove(taskId);
+      lostLeases.remove(taskId);
+      requestedCancellations.remove(taskId);
+      cancellationCallbacks.remove(taskId);
     } finally {
       shutdownLock.writeLock().unlock();
     }
-    completingLeases.remove(taskId);
-    lostLeases.remove(taskId);
-    requestedCancellations.remove(taskId);
-    cancellationCallbacks.remove(taskId);
     // P1: 同步派发 listener，让外围 per-taskId 累加结构（如 consecutiveFailures）立即清理；
     // 任一 listener 异常不影响其它订阅者与 drain 通知逻辑。
     for (Consumer<String> listener : removalListeners) {
@@ -125,6 +264,18 @@ public class ActiveTaskLeaseRegistry {
             "lease removal listener threw, taskId={}: {}",
             taskId,
             SwallowedExceptionLogger.summary(ex));
+      }
+    }
+    if (EmptyChecks.isNotNull(removedLease)) {
+      for (Consumer<ActiveTaskLease> listener : leaseRemovalListeners) {
+        try {
+          listener.accept(removedLease);
+        } catch (RuntimeException ex) {
+          log.warn(
+              "lease removal listener threw, taskId={}: {}",
+              taskId,
+              SwallowedExceptionLogger.summary(ex));
+        }
       }
     }
     // R-4.5 + R3-P2-2: 每次 remove 都 notifyAll（不再仅在 isEmpty 时通知）。
@@ -158,11 +309,26 @@ public class ActiveTaskLeaseRegistry {
     if (taskId == null) {
       return false;
     }
-    if (!activeTaskLeases.containsKey(taskId)) {
+    return requestCancellationIfCurrent(activeTaskLeases.get(taskId));
+  }
+
+  /** 只把续租快照中的取消要求应用到仍持有该租约实例的 invocation。 */
+  public boolean requestCancellationIfCurrent(ActiveTaskLease lease) {
+    if (EmptyChecks.isNull(lease)) {
       return false;
     }
-    requestedCancellations.add(taskId);
-    Runnable callback = cancellationCallbacks.get(taskId);
+    String taskId = lease.getTaskId();
+    Runnable callback;
+    shutdownLock.writeLock().lock();
+    try {
+      if (activeTaskLeases.get(taskId) != lease) {
+        return false;
+      }
+      requestedCancellations.add(taskId);
+      callback = cancellationCallbacks.get(taskId);
+    } finally {
+      shutdownLock.writeLock().unlock();
+    }
     if (callback != null) {
       invokeCancellation(taskId, callback);
     }
@@ -195,11 +361,22 @@ public class ActiveTaskLeaseRegistry {
     if (taskId == null) {
       return;
     }
+    markLostIfCurrent(activeTaskLeases.get(taskId));
+  }
+
+  /** 只将仍为当前项的续租快照标记为 lost，避免旧响应污染同 taskId 的新 invocation。 */
+  public boolean markLostIfCurrent(ActiveTaskLease lease) {
+    if (EmptyChecks.isNull(lease)) {
+      return false;
+    }
+    String taskId = lease.getTaskId();
     shutdownLock.writeLock().lock();
     try {
-      if (activeTaskLeases.containsKey(taskId) && !completingLeases.contains(taskId)) {
-        lostLeases.add(taskId);
+      if (activeTaskLeases.get(taskId) != lease || completingLeases.contains(taskId)) {
+        return false;
       }
+      lostLeases.add(taskId);
+      return true;
     } finally {
       shutdownLock.writeLock().unlock();
     }
@@ -312,12 +489,44 @@ public class ActiveTaskLeaseRegistry {
     private final String workerId;
     private final String partitionInvocationId;
 
+    private final AtomicBoolean executionStarted;
+
+    private final AtomicLong lastConfirmedNanos;
+
     public ActiveTaskLease(
         String taskId, String tenantId, String workerId, String partitionInvocationId) {
+      this(taskId, tenantId, workerId, partitionInvocationId, true, System.nanoTime());
+    }
+
+    private ActiveTaskLease(
+        String taskId,
+        String tenantId,
+        String workerId,
+        String partitionInvocationId,
+        boolean executionStarted,
+        long lastConfirmedNanos) {
       this.taskId = taskId;
       this.tenantId = tenantId;
       this.workerId = workerId;
       this.partitionInvocationId = partitionInvocationId;
+      this.executionStarted = new AtomicBoolean(executionStarted);
+      this.lastConfirmedNanos = new AtomicLong(lastConfirmedNanos);
+    }
+
+    private boolean isExecutionStarted() {
+      return executionStarted.get();
+    }
+
+    private boolean startExecution() {
+      return executionStarted.compareAndSet(false, true);
+    }
+
+    private long lastConfirmedNanosValue() {
+      return lastConfirmedNanos.get();
+    }
+
+    private void markRenewed(long nowNanos) {
+      lastConfirmedNanos.set(nowNanos);
     }
   }
 }

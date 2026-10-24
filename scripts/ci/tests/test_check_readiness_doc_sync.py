@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Tests for readiness documentation drift classification."""
+# 用途：Readiness 文档同步门禁测试。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_check_readiness_doc_sync.py。
+"""验证 readiness 文档漂移的变更分类。"""
 
 from __future__ import annotations
 

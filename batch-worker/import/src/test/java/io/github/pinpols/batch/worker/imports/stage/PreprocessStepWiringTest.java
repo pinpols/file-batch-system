@@ -10,7 +10,7 @@ import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileTemplateRepository;
 import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,8 +30,7 @@ class PreprocessStepWiringTest {
         .withBean(
             PlatformFileRecordRepository.class, () -> mock(PlatformFileRecordRepository.class))
         .withBean(
-            PlatformPipelineDefinitionRepository.class,
-            () -> mock(PlatformPipelineDefinitionRepository.class))
+            PlatformFileTemplateRepository.class, () -> mock(PlatformFileTemplateRepository.class))
         .withBean(BatchSecurityProperties.class, BatchSecurityProperties::new)
         .withBean(BatchObjectCryptoService.class, () -> mock(BatchObjectCryptoService.class))
         .withBean(WorkerImportPayloadProperties.class, () -> properties)

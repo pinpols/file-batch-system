@@ -114,9 +114,6 @@ public interface ConsoleQueryApplicationService {
   /** 查询 ACTIVE 作业定义下拉。 */
   List<CodeNameOption> jobDefinitionCodes(String tenantId);
 
-  /** 查询 ACTIVE 文件流水线定义下拉。 */
-  List<CodeNameOption> pipelineDefinitionCodes(String tenantId);
-
   /** 查询 Outbox 重试日志。 */
   PageResponse<ConsoleOutboxRetryLogResponse> outboxRetries(OutboxRetryLogQueryRequest request);
 

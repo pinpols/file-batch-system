@@ -8,6 +8,7 @@ import java.util.Map;
  *
  * @param tenantId 当前 workflow_node_run 的租户
  * @param workflowNodeRunId 当前 WAIT 节点运行 id（用于幂等 / 日志 trace）
+ * @param workflowDefinitionId 当前根 Workflow 定义，用于将文件束 sensor 绑定到目标
  * @param sensorSpec node_params.sensor_spec JSONB 反序列化结果
  * @param workflowRunVars workflow_run 级共享字段（bizDate / traceId 等），用于 sensor_spec 占位符替换
  * @param timeRemaining = timeout_seconds - elapsed，&lt;= 0 时 scheduler 先于 probe 标 TIMEOUT
@@ -17,4 +18,5 @@ public record SensorContext(
     Long workflowNodeRunId,
     Map<String, Object> sensorSpec,
     Map<String, Object> workflowRunVars,
-    Duration timeRemaining) {}
+    Duration timeRemaining,
+    Long workflowDefinitionId) {}

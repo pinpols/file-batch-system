@@ -1,4 +1,6 @@
 #!/bin/sh
+# 用途：初始化 S3 兼容对象存储 bucket。
+# 用法：在仓库根目录执行 bash scripts/data/init-minio.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # init-minio.sh - 初始化 S3 兼容对象存储 bucket
 # 说明：
@@ -6,8 +8,8 @@
 # 2) 生产 / 测试 / 托管对象存储必须显式传入 endpoint、凭据和 bucket；
 #    未传时才回退到仓库本地 Compose 默认值。
 # =========================================================
-#   - local fallback endpoint: http://minio:9000
-#   - local fallback bucket: batch-dev
+# 本地回退端点：http://minio:9000。
+# 本地回退 bucket：batch-dev。
 #
 # 使用方法（显式连接外部或本地端口）：
 #   MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin123 \

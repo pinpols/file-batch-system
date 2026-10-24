@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
+# 用途：外部伙伴 HTTP 测试服务，用于本地联调 API / API_PUSH dispatch 渠道。
+# 用法：在仓库根目录执行 python3 scripts/local/mock-partner.py；参数与前置环境见下方说明及所属 README。
 # =====================================================================
 # mock-partner.py
-# 极简外部伙伴 HTTP 服务 mock，用于本地联调 API / API_PUSH dispatch 渠道。
+# 外部伙伴 HTTP 测试服务，用于本地联调 API / API_PUSH dispatch 渠道。
 # - 对任意 POST 返回 200 + {"accepted":true,"ts":...,"path":...}
 # - 对任意 GET 返回 200 + {"ok":true,"path":...}
 #
-# 用法：python3 scripts/local/mock-partner.py 1080
+# 调用示例：python3 scripts/local/mock-partner.py 1080
 # 然后把 file_channel_config（api_dispatch / api_push_dispatch）的
 # target_endpoint 临时指向 http://localhost:1080/api/receive 或 /api/push。
 # =====================================================================
@@ -23,7 +25,7 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(body_bytes)
     def do_POST(self):
         length = int(self.headers.get("Content-Length","0"))
-        self.rfile.read(length)  # drain
+        self.rfile.read(length)  # 排空未完成请求。
         receipt = {"accepted": True, "ts": int(time.time()*1000), "path": self.path}
         self._ok(receipt)
     def do_GET(self):

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：基础设施 UTF-8 配置。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-infrastructure-utf8.py；参数与前置环境见下方说明及所属 README。
 """检查应用、基础服务及测试容器的 UTF-8 locale 与数据库编码配置。"""
 
 from __future__ import annotations

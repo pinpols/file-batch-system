@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.ExpectedWorkOccurrenceMapper">
+    <select id="setTenantContext" resultType="string">
+        select set_config('app.tenant_id', #{tenantId}, true)
+    </select>
+
+    <select id="selectBlockingByCalendarBizDateForUpdate"
+            resultType="io.github.pinpols.batch.orchestrator.domain.query.ExpectedWorkOccurrenceOverride">
+        select id, generation, workflow_definition_id, source_type, source_key, biz_date,
+               occurrence_status, expected_at, due_at, trigger_request_id
+          from batch.expected_work_occurrence
+         where tenant_id = #{tenantId}
+           and calendar_code = #{calendarCode}
+           and biz_date = #{bizDate}
+           and occurrence_status in ('EXPECTED', 'ARRIVED')
+         order by id
+           for update
+    </select>
+
+    <insert id="insertIfAbsent">
+        insert into batch.expected_work_occurrence
+            (tenant_id, calendar_code, biz_date, workflow_definition_id, source_type, source_key, expected_at, due_at, generation)
+        values
+            (#{tenantId}, #{calendarCode}, #{bizDate}, #{workflowDefinitionId}, #{sourceType}, #{sourceKey}, #{expectedAt}, #{dueAt}, 1)
+        on conflict (tenant_id, calendar_code, workflow_definition_id, source_type, source_key, biz_date, generation) do nothing
+    </insert>
+
+    <insert id="insertNextGenerationForCancelledByCalendarBizDate">
+        insert into batch.expected_work_occurrence
+            (tenant_id, calendar_code, biz_date, workflow_definition_id, source_type, source_key,
+             expected_at, due_at, occurrence_status, generation)
+        select current.tenant_id, current.calendar_code, current.biz_date,
+               current.workflow_definition_id, current.source_type, current.source_key,
+               current.expected_at, current.due_at, 'EXPECTED', current.generation + 1
+          from batch.expected_work_occurrence current
+         where current.tenant_id = #{tenantId}
+           and current.calendar_code = #{calendarCode}
+           and current.biz_date = #{bizDate}
+           and current.occurrence_status = 'CANCELLED'
+           and current.generation = (
+               select max(latest.generation)
+                 from batch.expected_work_occurrence latest
+                where latest.tenant_id = current.tenant_id
+                  and latest.calendar_code = current.calendar_code
+                  and latest.biz_date = current.biz_date
+                  and latest.workflow_definition_id = current.workflow_definition_id
+                  and latest.source_type = current.source_type
+                  and latest.source_key = current.source_key)
+        on conflict (tenant_id, calendar_code, workflow_definition_id, source_type, source_key, biz_date, generation) do nothing
+    </insert>
+
+    <update id="transitionStatus">
+        update batch.expected_work_occurrence
+           set occurrence_status = #{newStatus},
+               trigger_request_id = coalesce(#{triggerRequestId}, trigger_request_id),
+               updated_at = CURRENT_TIMESTAMP
+         where tenant_id = #{tenantId}
+           and calendar_code = #{calendarCode}
+           and workflow_definition_id = #{workflowDefinitionId}
+           and source_type = #{sourceType}
+           and source_key = #{sourceKey}
+           and biz_date = #{bizDate}
+           and generation = coalesce(
+               #{generation},
+               (select max(latest.generation)
+                  from batch.expected_work_occurrence latest
+                 where latest.tenant_id = #{tenantId}
+                   and latest.calendar_code = #{calendarCode}
+                   and latest.workflow_definition_id = #{workflowDefinitionId}
+                   and latest.source_type = #{sourceType}
+                   and latest.source_key = #{sourceKey}
+                   and latest.biz_date = #{bizDate}))
+           and occurrence_status = #{expectedStatus}
+    </update>
+
+    <select id="countBlockingByCalendarBizDate" resultType="int">
+        select count(*)
+          from batch.expected_work_occurrence
+         where tenant_id = #{tenantId}
+           and calendar_code = #{calendarCode}
+           and biz_date = #{bizDate}
+           and occurrence_status in ('EXPECTED', 'ARRIVED')
+    </select>
+
+    <select id="selectDueExpectedWithoutMissingAlert"
+            resultType="io.github.pinpols.batch.orchestrator.domain.query.ExpectedWorkOccurrenceOverride">
+        select id, generation, workflow_definition_id, source_type, source_key, biz_date,
+               occurrence_status, expected_at, due_at, trigger_request_id
+          from batch.expected_work_occurrence
+         where tenant_id = #{tenantId}
+           and calendar_code = #{calendarCode}
+           and biz_date = #{bizDate}
+           and occurrence_status = 'EXPECTED'
+           and due_at is not null
+           and due_at &lt;= #{now}
+           and missing_input_alerted_at is null
+         order by due_at, id
+         limit #{limit}
+           for update skip locked
+    </select>
+
+    <update id="claimMissingInputAlert">
+        update batch.expected_work_occurrence
+           set missing_input_alerted_at = #{alertedAt},
+               updated_at = CURRENT_TIMESTAMP
+         where tenant_id = #{tenantId}
+           and id = #{id}
+           and occurrence_status = 'EXPECTED'
+           and missing_input_alerted_at is null
+    </update>
+</mapper>

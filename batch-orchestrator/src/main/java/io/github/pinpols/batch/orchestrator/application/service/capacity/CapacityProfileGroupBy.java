@@ -14,7 +14,9 @@ public enum CapacityProfileGroupBy {
       return TENANT;
     }
     try {
-      return CapacityProfileGroupBy.valueOf(raw.trim().toUpperCase());
+      String trimmedGroupBy = raw.trim();
+      String normalizedGroupBy = trimmedGroupBy.toUpperCase();
+      return CapacityProfileGroupBy.valueOf(normalizedGroupBy);
     } catch (IllegalArgumentException ex) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,

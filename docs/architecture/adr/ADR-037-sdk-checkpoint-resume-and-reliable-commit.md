@@ -1,5 +1,7 @@
 # ADR-037 · batch-worker-sdk 分片级断点续跑与可靠提交协议(checkpoint / commit / 协作 cancel / 流式分片模板)
 
+> **当前适用性（2026-10-24）**：checkpoint/可靠提交继续适用，但不能推导外部副作用可以安全重放。ADR-049 的声明、执行前匹配、幂等键域和未知结果恢复另有合同；五语言通用SDK未消费新增Replay字段的事实见SDK支持矩阵。 原决策与历史阶段记录保留。
+
 - **Status**: Accepted(2026-06-01)— 全量 P1~P5,折入 roadmap Phase 5 支柱 A 之后(接口冻结再上 parallel-stream)
 - **Date**: 2026-06-01
 - **Related**: ADR-035 租户自托管 Worker SDK / ADR-036 SDK 五大业务模板 / ADR-020 batch-day-replay / ADR-038(平台侧同类能力,2026-06-02 改判 Accepted)

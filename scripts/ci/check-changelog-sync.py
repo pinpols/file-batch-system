@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：Changelog 同步。
+# 用法：python3 scripts/ci/check-changelog-sync.py --base <基线引用>。
 """对发布影响和架构规范变更执行 changelog 同步检查。"""
 
 from __future__ import annotations

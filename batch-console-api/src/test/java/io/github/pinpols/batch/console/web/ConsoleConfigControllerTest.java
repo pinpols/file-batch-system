@@ -25,6 +25,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -61,28 +62,27 @@ class ConsoleConfigControllerTest {
   @DisplayName("查询配置发布单列表时, 响应返回配置键")
   void shouldReturnConfigReleaseListAsDtos() throws Exception {
     when(configApplicationService.configReleases(any()))
-        .thenReturn(List.of(new ConsoleConfigReleaseResponse(
-            1L,
-            "t1",
-            "FILE",
-            "KEY",
-            "Name",
-            "DRAFT",
-            1,
-            "DYNAMIC_DB",
-            "IMMEDIATE_AFTER_CONFIRMATION",
-            false,
-            "NOT_RELEASED",
-            "{}",
-            "{\"a\":1}",
-            Instant.EPOCH,
-            Instant.EPOCH,
-            null,
-            null,
-            "u1",
-            "u2",
-            Instant.EPOCH,
-            Instant.EPOCH)));
+        .thenReturn(List.of(ConsoleConfigReleaseResponse.builder()
+            .id(1L)
+            .tenantId("t1")
+            .configType("FILE")
+            .configKey("KEY")
+            .configName("Name")
+            .configStatus("DRAFT")
+            .versionNo(1)
+            .configSource("DYNAMIC_DB")
+            .activationMode("IMMEDIATE_AFTER_CONFIRMATION")
+            .restartRequired(false)
+            .applyConfirmationStatus("NOT_RELEASED")
+            .grayScopeJson("{}")
+            .configPayloadJson("{\"a\":1}")
+            .effectiveFromAt(Instant.EPOCH)
+            .effectiveToAt(Instant.EPOCH)
+            .createdBy("u1")
+            .updatedBy("u2")
+            .createdAt(Instant.EPOCH)
+            .updatedAt(Instant.EPOCH)
+            .build()));
 
     mockMvc
         .perform(get("/api/console/config/releases").param("tenantId", "t1"))
@@ -108,41 +108,39 @@ class ConsoleConfigControllerTest {
   @DisplayName("查询密钥版本与变更日志时, 响应分别返回密钥引用与变更动作")
   void shouldReturnSecretVersionAndChangeLogDtos() throws Exception {
     when(configApplicationService.secretVersions(any()))
-        .thenReturn(List.of(new ConsoleSecretVersionResponse(
-            1L,
-            "t1",
-            "REF",
-            "Secret",
-            2,
-            "ACTIVE",
-            true,
-            Instant.EPOCH,
-            Instant.EPOCH,
-            Instant.EPOCH,
-            Instant.EPOCH,
-            null,
-            "reason",
-            null,
-            null,
-            null,
-            "u1",
-            "u2",
-            Instant.EPOCH,
-            Instant.EPOCH)));
+        .thenReturn(List.of(ConsoleSecretVersionResponse.builder()
+            .id(1L)
+            .tenantId("t1")
+            .secretRef("REF")
+            .secretName("Secret")
+            .versionNo(2)
+            .secretStatus("ACTIVE")
+            .currentVersion(true)
+            .rotationWindowStartAt(Instant.EPOCH)
+            .rotationWindowEndAt(Instant.EPOCH)
+            .effectiveFromAt(Instant.EPOCH)
+            .effectiveToAt(Instant.EPOCH)
+            .rotationReason("reason")
+            .createdBy("u1")
+            .updatedBy("u2")
+            .createdAt(Instant.EPOCH)
+            .updatedAt(Instant.EPOCH)
+            .build()));
     when(configApplicationService.configChangeLogs(any()))
-        .thenReturn(List.of(new ConsoleConfigChangeLogResponse(
-            2L,
-            "t1",
-            "FILE",
-            "KEY",
-            1,
-            "CREATE",
-            "SUCCESS",
-            "API",
-            "u1",
-            "trace-1",
-            "{}",
-            Instant.EPOCH)));
+        .thenReturn(List.of(ConsoleConfigChangeLogResponse.builder()
+            .id(2L)
+            .tenantId("t1")
+            .configType("FILE")
+            .configKey("KEY")
+            .versionNo(1)
+            .changeAction("CREATE")
+            .changeResult("SUCCESS")
+            .operatorType("API")
+            .operatorId("u1")
+            .traceId("trace-1")
+            .changeSummaryJson("{}")
+            .createdAt(Instant.EPOCH)
+            .build()));
 
     mockMvc
         .perform(get("/api/console/config/secrets").param("tenantId", "t1"))
@@ -168,7 +166,6 @@ class ConsoleConfigControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-    verify(configApplicationService)
-        .revokeSecretVersion(org.mockito.ArgumentMatchers.eq(42L), any());
+    verify(configApplicationService).revokeSecretVersion(ArgumentMatchers.eq(42L), any());
   }
 }

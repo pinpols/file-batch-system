@@ -7,11 +7,11 @@
 | 术语 | 定义 | 详见 |
 |---|---|---|
 | **job** | 一个可被触发执行的业务任务定义。配置在 `job_definition` 表。 | [`../design/database-schema-guide.md`](../design/database-schema-guide.md) |
-| **job_instance** | job 的一次执行根记录；普通作业和工作流作业都先创建它。状态值以 `JobInstanceStatus` 为准，包含暂停态和 dry-run 终态。 | [`../architecture/core-model.md`](../architecture/core-model.md) |
+| **job_instance** | JOB 节点实际派发时创建的作业执行记录；顶层运行是 WorkflowRun，开日不预建全部 JobInstance。状态值以 `JobInstanceStatus` 为准，包含暂停态和 dry-run 终态。 | [`../architecture/core-model.md`](../architecture/core-model.md) |
 | **partition** | job_instance 的分片单元。一个 job_instance 切成 N 个 partition 并行执行。 | [`../architecture/adr/ADR-005-partition-count-resolver-chain.md`](../architecture/adr/ADR-005-partition-count-resolver-chain.md) |
 | **task** | Worker 实际领取、执行和回报的工作项。task 必属于 job_instance，通常关联 partition；补偿、重放等特殊任务允许不关联 partition。 | [`../architecture/core-model.md`](../architecture/core-model.md) |
 | **step_instance** | 面向步骤状态、审计和控制台展示的运行镜像；它引用 task，可选引用 partition，不是 Worker 内部 stage 的持久化副本。 | [`../architecture/core-model.md`](../architecture/core-model.md) §3.7 |
-| **schedule_type** | job_definition 的调度表达方式，由 `ScheduleType` 定义：<!-- enum-sync:ScheduleType:start -->`CRON`, `FIXED_RATE`, `MANUAL`<!-- enum-sync:ScheduleType:end -->。它不表示一次请求从哪里发起。 | [`ScheduleType.java`](../../batch-common/src/main/java/io/github/pinpols/batch/common/enums/ScheduleType.java) |
+| **schedule_type** | workflow_definition 的顶层日程表达方式，由 `ScheduleType` 定义：<!-- enum-sync:ScheduleType:start -->`CRON`, `FIXED_RATE`, `MANUAL`<!-- enum-sync:ScheduleType:end -->。它不表示一次请求从哪里发起。 | [`ScheduleType.java`](../../batch-common/src/main/java/io/github/pinpols/batch/common/enums/ScheduleType.java) |
 | **trigger_mode** | 作业定义声明的触发入口分类，由 `TriggerMode` 定义：<!-- enum-sync:TriggerMode:start -->`SCHEDULED`, `API`, `MANUAL`, `EVENT`, `MIXED`<!-- enum-sync:TriggerMode:end -->。它是定义级配置；具体运行实例的来源看 `trigger_type`。 | [`TriggerMode.java`](../../batch-common/src/main/java/io/github/pinpols/batch/common/enums/TriggerMode.java) |
 | **trigger_type** | 一次 trigger_request / job_instance 的触发来源，由 `TriggerType` 定义：<!-- enum-sync:TriggerType:start -->`API`, `MANUAL`, `EVENT`, `CATCH_UP`, `SCHEDULED`, `RERUN`<!-- enum-sync:TriggerType:end -->。它与 schedule_type 是两个维度。 | [`TriggerType.java`](../../batch-common/src/main/java/io/github/pinpols/batch/common/enums/TriggerType.java) |
 | **job dependency** | 当前作业定义只支持一个 `dependsOnJobCode`，表示同一 `bizDate` 上游就绪门槛；没有 SUCCESS/FAILURE/ALWAYS 依赖条件枚举，也不等同于 workflow edge。 | [`../architecture/adr/ADR-043-dependency-aware-fire.md`](../architecture/adr/ADR-043-dependency-aware-fire.md) |
@@ -25,12 +25,21 @@
 | 术语 | 定义 | 详见 |
 |---|---|---|
 | **workflow** | 可包含任务、文件步骤、等待和子作业节点的 DAG。配置在 `workflow_definition` + `workflow_node` + `workflow_edge`。 | [`../architecture/workflow-dependency-guide.md`](../architecture/workflow-dependency-guide.md) |
-| **workflow_run** | workflow 的一次执行视图，关联触发它的根 job_instance；其直接子记录是 workflow_node_run，不是 partition。 | [`../architecture/core-model.md`](../architecture/core-model.md) |
+| **workflow_run** | 顶层运行事实，保存目标 Workflow、业务日、区间与冻结图；JOB 节点按需创建 JobInstance，不使用旧根 Job 包装。 | [`../architecture/core-model.md`](../architecture/core-model.md) |
 | **workflow_node_run** | 某个 DAG 节点在 workflow_run 内的一次运行记录，按 `(workflow_run_id, node_code, run_seq)` 区分重试序列。 | 同上 |
-| **node** | DAG 节点类型由 `WorkflowNodeType` 定义：<!-- enum-sync:WorkflowNodeType:start -->`TASK`, `GATEWAY`, `FILE_STEP`, `START`, `END`, `JOB`, `WAIT`<!-- enum-sync:WorkflowNodeType:end -->。`JOB` 节点会拉起独立子 job_instance，`WAIT` 节点等待外部条件。 | 同上 |
+| **node** | DAG 节点类型由 `WorkflowNodeType` 定义：<!-- enum-sync:WorkflowNodeType:start -->`TASK`, `GATEWAY`, `START`, `END`, `JOB`, `WAIT`<!-- enum-sync:WorkflowNodeType:end -->。`JOB` 节点会拉起独立子 job_instance，`WAIT` 节点等待外部条件。 | 同上 |
 | **edge** | DAG 边类型由 `WorkflowEdgeType` 定义：<!-- enum-sync:WorkflowEdgeType:start -->`SUCCESS`, `FAILURE`, `CONDITION`, `ALWAYS`<!-- enum-sync:WorkflowEdgeType:end -->。 | 同上 |
 | **GATEWAY** | 网关节点，按 join_mode 汇聚多个前驱，不直接执行 Worker 任务。 | 同上 |
 | **join_mode** | 网关汇聚策略，由 `WorkflowJoinMode` 定义：<!-- enum-sync:WorkflowJoinMode:start -->`ALL`, `ANY`, `N_OF`<!-- enum-sync:WorkflowJoinMode:end -->；N_OF 的阈值由节点参数提供。 | 同上 |
+
+## 系统原语与资产
+
+| 术语 | 定义 | 详见 |
+|---|---|---|
+| **scheduled occurrence** | 某Workflow的一次原计划触发机会；与覆盖进度、请求及实际运行分别记账。 | [ADR-047](../architecture/adr/ADR-047-workflow-scheduling-and-daily-obligations.md) |
+| **expected work occurrence** | 指定租户/Workflow/业务日应出现的文件或外部事件义务；输入已到不等于业务运行成功。 | 同上 |
+| **system pipeline** | 根据Job类型选择的固定阶段与版本，定义来自平台目录，租户配置不编辑阶段顺序。 | [边界](../architecture/pipeline-vs-workflow-boundary.md) |
+| **replay operation** | 记录重放范围、来源快照、申请/审批和目标运行的持久化治理对象；与运行状态分开。 | [ADR-049](../architecture/adr/ADR-049-replay-operation-scopes.md) |
 
 ## 文件链路
 
@@ -48,7 +57,7 @@
 | 术语 | 定义 | 详见 |
 |---|---|---|
 | **outbox** | 事务性 Outbox 模式。业务状态和 outbox 行在同一数据库事务落库，relay 再异步投递 Kafka；依靠幂等键和重试实现至少一次交付，不把数据库事务扩展到 Kafka。 | [`../architecture/adr/ADR-002-transactional-outbox.md`](../architecture/adr/ADR-002-transactional-outbox.md) |
-| **DLQ** | Dead Letter Queue。Kafka 消费失败超过阈值的消息进 DLQ topic + `dead_letter_task` 表，等人工 / AI 重放。 | [`../architecture/system-flow-overview.md`](../architecture/system-flow-overview.md) §1.8 |
+| **DLQ** | Dead Letter Queue。Kafka 消费失败超过阈值的消息进 DLQ topic + `dead_letter_task` 表，按权限和审批受控重放；AI仅提供只读分析。 | [`../architecture/system-flow-overview.md`](../architecture/system-flow-overview.md) §1.8 |
 | **run_mode** | 一次执行的意图，由 `RunMode` 定义：<!-- enum-sync:RunMode:start -->`NORMAL`, `RETRY`, `RERUN`, `RECOVER`, `COMPENSATE`<!-- enum-sync:RunMode:end -->。它属于运行上下文，不是生命周期状态。 | [`../architecture/core-model.md`](../architecture/core-model.md) §5 |
 | **retry** | 系统对同一执行单元、同一业务意图做技术性重试，通常由 retry policy 自动驱动。 | [`../architecture/core-model.md`](../architecture/core-model.md) §6 |
 | **rerun** | 运营人员或控制台明确要求重新执行某个业务范围，通常创建新的执行尝试或结果版本。 | 同上 |
@@ -60,7 +69,7 @@
 | **shedlock** | 调度任务的跨实例互斥锁。provider 可为 Redis 或 JDBC：Orchestrator 默认 Redis，Trigger 的辅助调度锁使用 JDBC；同一锁域的所有实例必须使用同一 provider。 | [`../runbook/ha-elastic-scaling.md`](../runbook/ha-elastic-scaling.md) |
 | **bypass_mode** | 全链路安全旁路总开关（`batch.security.bypass-mode`）。仅本地 / 联调；prod 禁用。 | [`../coding-conventions.md`](../coding-conventions.md) §21 |
 | **idempotency_key** | 幂等键。客户端在写接口的 `Idempotency-Key` header，相同值 N 次调用 = 1 次执行。 | [`../api/console-api-protocol.md`](../api/console-api-protocol.md) |
-| **result_version** | 结果版本主模型。同一 `(tenant, business_key)` 多次重跑产生的产物各自一行，状态 PENDING/EFFECTIVE/SUPERSEDED/ARCHIVED；EFFECTIVE 唯一，下游 SQL 统一查它。 | [`../architecture/adr/ADR-017-result-version-model.md`](../architecture/adr/ADR-017-result-version-model.md) |
+| **result_version** | 结果版本主模型。同一 `(tenant, business_key)` 多次重跑产生的产物各自一行，状态 PENDING/EFFECTIVE/SUPERSEDED/ARCHIVED；EFFECTIVE 按契约生效；受控消费者按已选版本读取，任意外部 SQL 不自动具有冻结消费保证。 | [`../architecture/adr/ADR-017-result-version-model.md`](../architecture/adr/ADR-017-result-version-model.md) |
 | **cross_day_dependency** | 跨批量日 DAG 依赖。`workflow_node.cross_day_dependencies` JSONB 声明上游 (jobCode, bizDateOffset/Range)；启动前由 resolver 查 `result_version` EFFECTIVE 解析；缺则 `WAITING_DEPENDENCY` 等。 | [`../architecture/adr/ADR-018-cross-batch-day-dag-dependency.md`](../architecture/adr/ADR-018-cross-batch-day-dag-dependency.md) |
 | **business_domain** | 业务域。同租户内多业务（交易/风控/合规）的可选额外配额维度，启用后参与限流决策链；支持父子借调。当前 Accepted 但实施 gated。 | [`../architecture/adr/ADR-019-cross-domain-rate-limit.md`](../architecture/adr/ADR-019-cross-domain-rate-limit.md) |
 | **batch_day_replay_session** | 批量日维度重放聚合。同 (tenant, calendar, bizDate) 至多 1 个 active session；scope ∈ ALL/ALL_FAILED/SUBSET_JOB_CODES/OUTPUTS_ONLY；接审批 + 重跑透传 result_policy。 | [`../architecture/adr/ADR-020-batch-day-replay.md`](../architecture/adr/ADR-020-batch-day-replay.md) |

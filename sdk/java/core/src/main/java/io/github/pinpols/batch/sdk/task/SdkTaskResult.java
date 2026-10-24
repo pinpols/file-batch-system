@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.sdk.task;
 
+import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import java.util.Map;
 import java.util.Objects;
 
@@ -37,9 +38,12 @@ public record SdkTaskResult(
 
   public static SdkTaskResult fail(Throwable error) {
     Objects.requireNonNull(error, "error");
+    String exceptionMessage = error.getMessage();
+    String failureMessage =
+        EmptyChecks.isNull(exceptionMessage) ? error.getClass().getSimpleName() : error.getMessage();
     return new SdkTaskResult(
         false,
-        error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage(),
+        failureMessage,
         Map.of(),
         error);
   }

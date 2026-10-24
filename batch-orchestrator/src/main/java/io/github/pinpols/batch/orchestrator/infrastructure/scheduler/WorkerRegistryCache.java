@@ -61,26 +61,29 @@ public class WorkerRegistryCache {
         }
       }
     } catch (Exception ex) {
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
       log.warn(
           "worker cache read failed; falling back to DB: tenant={}, group={}, cause={}",
           tenantId,
           workerGroup,
-          SwallowedExceptionLogger.summary(ex));
+          causeSummary);
     }
     List<WorkerRegistryEntity> fresh = loader.get();
     try {
       if (!fresh.isEmpty()) {
-        String json = objectMapper.writeValueAsString(toEntries(fresh));
+        List<Entry> entries = toEntries(fresh);
+        String json = objectMapper.writeValueAsString(entries);
         redis.setStringCache(key, json, Duration.ofMillis(properties.getTtlMillis()));
       } else {
         redis.evictCache(key);
       }
     } catch (Exception ex) {
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
       log.debug(
           "worker cache write/delete failed: tenant={}, group={}: {}",
           tenantId,
           workerGroup,
-          SwallowedExceptionLogger.summary(ex));
+          causeSummary);
     }
     return fresh;
   }
@@ -97,16 +100,19 @@ public class WorkerRegistryCache {
     try {
       redis.evictCache(key(tenantId, workerGroup));
     } catch (Exception ex) {
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
       log.debug(
           "worker cache evict failed: tenant={}, group={}, cause={}",
           tenantId,
           workerGroup,
-          SwallowedExceptionLogger.summary(ex));
+          causeSummary);
     }
   }
 
   private static String key(String tenantId, String workerGroup) {
-    return "worker:reg:%s:%s".formatted(safe(tenantId), safe(workerGroup));
+    String safeTenantId = safe(tenantId);
+    String safeWorkerGroup = safe(workerGroup);
+    return "worker:reg:%s:%s".formatted(safeTenantId, safeWorkerGroup);
   }
 
   private static String safe(String value) {
@@ -142,30 +148,26 @@ public class WorkerRegistryCache {
   private static List<WorkerRegistryEntity> toRecords(List<Entry> entries) {
     List<WorkerRegistryEntity> records = new ArrayList<>(entries.size());
     for (Entry e : entries) {
-      WorkerRegistryEntity record = new WorkerRegistryEntity(
-          e.id,
-          e.tenantId,
-          e.workerCode,
-          e.workerGroup,
-          e.capabilityTagsJson == null ? null : new JsonbString(e.capabilityTagsJson),
-          e.resourceTag,
-          e.status,
-          e.heartbeatMillis == null ? null : Instant.ofEpochMilli(e.heartbeatMillis),
-          e.currentLoad,
-          e.maxConcurrent,
-          e.drainStartedMillis == null ? null : Instant.ofEpochMilli(e.drainStartedMillis),
-          EmptyChecks.isNull(e.drainDeadlineMillis)
-              ? null
-              : Instant.ofEpochMilli(e.drainDeadlineMillis),
-          // 运行指纹（hostName/hostIp/processId/port/buildId/sdkVersion）不进缓存快照：selector 路由不需要，
-          // console 展示走 DB 直读。故这里全部置 null，缺失不代表数据丢失。
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          e.workerPoolCode);
+      // 缓存快照不包含运行指纹及任务能力；未缓存字段保持 null，展示仍由数据库直读。
+      WorkerRegistryEntity record = WorkerRegistryEntity.builder()
+          .id(e.id)
+          .tenantId(e.tenantId)
+          .workerCode(e.workerCode)
+          .workerGroup(e.workerGroup)
+          .capabilityTags(e.capabilityTagsJson == null ? null : new JsonbString(e.capabilityTagsJson))
+          .resourceTag(e.resourceTag)
+          .status(e.status)
+          .heartbeatAt(e.heartbeatMillis == null ? null : Instant.ofEpochMilli(e.heartbeatMillis))
+          .currentLoad(e.currentLoad)
+          .maxConcurrent(e.maxConcurrent)
+          .drainStartedAt(
+              e.drainStartedMillis == null ? null : Instant.ofEpochMilli(e.drainStartedMillis))
+          .drainDeadlineAt(
+              EmptyChecks.isNull(e.drainDeadlineMillis)
+                  ? null
+                  : Instant.ofEpochMilli(e.drainDeadlineMillis))
+          .workerPoolCode(e.workerPoolCode)
+          .build();
       records.add(record);
     }
     return records;

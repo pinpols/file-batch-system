@@ -126,7 +126,9 @@ public class OrchestratorRedisSupport {
         args.add(e.getKey());
         args.add(e.getValue() == null ? "" : e.getValue());
       }
-      args.add(String.valueOf(ttl.toMillis()));
+      long ttlMillis = ttl.toMillis();
+      String ttlArgument = String.valueOf(ttlMillis);
+      args.add(ttlArgument);
       redisTemplate.execute(
           new DefaultRedisScript<>(LUA_HSET_EXPIRE, Long.class), List.of(key), args.toArray());
     });

@@ -18,6 +18,12 @@ public class SleepHandler implements SdkTaskHandler {
 
   private static final Logger log = LoggerFactory.getLogger(SleepHandler.class);
 
+  /** 示例仅计算、等待或记录日志；接入真实写入或推送后必须重新评估此声明。 */
+  @Override
+  public boolean isSafeToReplay(SdkTaskContext ctx) {
+    return true;
+  }
+
   @Override
   public String taskType() {
     return "sleep";

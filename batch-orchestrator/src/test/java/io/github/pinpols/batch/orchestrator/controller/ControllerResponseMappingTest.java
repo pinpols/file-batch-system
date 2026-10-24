@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.github.pinpols.batch.orchestrator.controller.request.DataQualityRuleRequest;
 import io.github.pinpols.batch.orchestrator.controller.response.BatchDayReplayEntryResponse;
@@ -62,7 +63,15 @@ class ControllerResponseMappingTest {
     task.setTenantId("tenant");
     task.setTaskStatus("CLAIMED");
     task.setErrorKey("task.failed");
-    assertSameJson(task, JobTaskResponse.from(task));
+    JsonNode taskEntityJson = objectMapper.valueToTree(task);
+    ((ObjectNode) taskEntityJson).remove("jobInstanceBizDate");
+    ((ObjectNode) taskEntityJson).remove("nonIdempotentStartedAt");
+    ((ObjectNode) taskEntityJson).remove("externalOutcomeResolutionVersion");
+    JsonNode taskResponseJson = objectMapper.valueToTree(JobTaskResponse.from(task));
+    assertThat(taskResponseJson).isEqualTo(taskEntityJson);
+    assertThat(taskResponseJson.has("nonIdempotentStartedAt")).isFalse();
+    assertThat(taskResponseJson.has("externalOutcomeResolutionVersion")).isFalse();
+    assertThat(taskResponseJson.has("jobInstanceBizDate")).isFalse();
   }
 
   @Test

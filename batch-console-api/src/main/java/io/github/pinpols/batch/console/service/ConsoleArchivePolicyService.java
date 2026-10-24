@@ -25,13 +25,15 @@ public class ConsoleArchivePolicyService {
       "audit_log",
       "outbox_event",
       "event_delivery_log",
-      "webhook_delivery_log");
+      "webhook_delivery_log",
+      "console_operation_audit");
 
   private final ConsoleArchivePolicyMapper repository;
   private final ConsoleTenantGuard tenantGuard;
 
   public List<ArchivePolicyEntity> list(String tenantId) {
-    return repository.findAllByTenant(tenantGuard.resolveTenant(tenantId));
+    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+    return repository.findAllByTenant(resolvedTenantId);
   }
 
   @Transactional
@@ -47,13 +49,15 @@ public class ConsoleArchivePolicyService {
     if (param.retentionDays() < 1) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.retention_days_min");
     }
-    ArchivePolicyUpsertParam upsertParam = ArchivePolicyUpsertParam.builder()
+    ArchivePolicyUpsertParam.ArchivePolicyUpsertParamBuilder upsertParamBuilder = ArchivePolicyUpsertParam.builder()
         .tenantId(resolved)
         .targetTable(normalized)
         .retentionDays(param.retentionDays())
         .archiveEnabled(param.archiveEnabled())
-        .cleanupEnabled(param.cleanupEnabled())
-        .batchSize(Math.max(param.batchSize(), 100))
+        .cleanupEnabled(param.cleanupEnabled());
+    int effectiveBatchSize = Math.max(param.batchSize(), 100);
+    ArchivePolicyUpsertParam upsertParam = upsertParamBuilder
+        .batchSize(effectiveBatchSize)
         .description(param.description())
         .operator(param.operator())
         .build();
