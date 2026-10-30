@@ -997,6 +997,10 @@ jobs:
             -DskipITs=true -Djacoco.append=true \
             -Dspotless.check.skip=true -Dpmd.skip=true -fae -B
 
+      - name: Run selected Console integration scenarios for coverage
+        shell: bash
+        run: bash scripts/ci/run-pr-coverage-integration.sh b2-console
+
       - name: Verify changed-line coverage
         shell: bash
         run: |

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 用途：按 PR 并行分片运行已验证的业务集成测试并追加覆盖数据。
-# 用法：bash scripts/ci/run-pr-coverage-integration.sh <a|b1|b2-workers> [--list]。
+# 用法：bash scripts/ci/run-pr-coverage-integration.sh <a|b1|b2-workers|b2-console> [--list]。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -42,6 +42,13 @@ case "$shard" in
     run_group batch-worker/import 'ImportIngressScannerIntegrationTest,JdbcMappedImportCopyIntegrationTest,JdbcMappedImportCompensatorIntegrationTest,ImportDryRunBadRecordIntegrationTest,PreprocessStepObjectLoadIntegrationTest,LoadStepCheckpointCrashResumeIntegrationTest'
     run_group batch-worker/export 'ExportPartitionMixedFallbackIntegrationTest,GenerateDryRunSqlIntegrationTest'
     run_group batch-worker/export 'ExportKeysetRangeIT,ExportPartitionSliceIT'
+    ;;
+  b2-console)
+    run_group batch-console-api 'ConsoleBatchDayCatchUpHttpIntegrationTest,BatchDayCatchUpOperationSchemaIntegrationTest,ConsolePendingCatchUpQueryIntegrationTest,PendingCatchUpApprovalPagingIntegrationTest,ApprovalCommandQueryIntegrationTest'
+    run_group batch-console-api 'JobPushDeliveryIntegrationTest,JobPushIntakeIntegrationTest,TerminalNotificationRecoveryIntegrationTest,WorkflowTerminalNotificationIntegrationTest,JobWorkflowSlaAlertDeliveryIntegrationTest,TerminalNotificationArchiveIntegrationTest'
+    run_group batch-console-api 'ConsoleFileRecordDetailSecurityIntegrationTest,FileJobAssociationQueryIntegrationTest,JobInstanceQueryIntegrationTest,ConsoleRetryScheduleQueryIntegrationTest,DeadLetterQueryIntegrationTest,FileBusinessDateQueryIntegrationTest,OpsCursorOrderIntegrationTest'
+    run_group batch-console-api 'AuditLogEndToEndIntegrationTest,OperationAuditCursorHttpIntegrationTest,ConfigSyncAuditRecoveryIntegrationTest,ConsoleAiAuditServiceIntegrationTest,WorkflowConfigApprovalHttpIntegrationTest,ConsoleRealtimeReplayStoreIntegrationTest,WorkflowSensorErrorReadIntegrationTest,NotificationDeliveryTypedMapperIntegrationTest'
+    run_group batch-console-api 'OutboxDeliveryTopicFilterIntegrationTest,OutboxRetryEventTypeIntegrationTest,OutboxDeliveryErrorRedactionIntegrationTest,AlertEventActionIntegrationTest,AlertEventIntegrationTest,BatchDayMapperIntegrationTest,DailyProgressMapperIntegrationTest,ExecutionCursorOrderIntegrationTest,ConsoleAtomicTaskConfigMutationIntegrationTest'
     ;;
   *)
     echo "未知的覆盖率分片: $shard" >&2

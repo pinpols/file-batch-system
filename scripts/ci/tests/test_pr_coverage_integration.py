@@ -20,6 +20,7 @@ class PrCoverageIntegrationTest(unittest.TestCase):
             "a": {"batch-orchestrator"},
             "b1": {"batch-trigger", "batch-worker/process", "batch-worker/dispatch"},
             "b2-workers": {"batch-worker/import", "batch-worker/export"},
+            "b2-console": {"batch-console-api"},
         }
         for shard, expected in expected_modules.items():
             result = subprocess.run(
