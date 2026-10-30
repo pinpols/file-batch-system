@@ -84,11 +84,9 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
   @MockitoSpyBean
   private TriggerRequestMapper concurrentTriggerRequestMapper;
 
-  @Autowired
-  private DataSource dataSource;
+  private final DataSource dataSource;
 
-  @Autowired
-  private SqlSessionTemplate sqlSessionTemplate;
+  private final SqlSessionTemplate sqlSessionTemplate;
 
   private final JdbcTemplate jdbcTemplate;
   private final TransactionTemplate transactionTemplate;
@@ -120,7 +118,9 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
       BatchDaySettleScheduler batchDaySettleScheduler,
       WorkflowNodeTerminalFinalizer workflowNodeTerminalFinalizer,
       BatchDayOperationService batchDayOperationService,
-      PlatformTransactionManager transactionManager) {
+      PlatformTransactionManager transactionManager,
+      DataSource dataSource,
+      SqlSessionTemplate sqlSessionTemplate) {
     this.jdbcTemplate = jdbcTemplate;
     this.transactionTemplate = new TransactionTemplate(transactionManager);
     this.mapper = mapper;
@@ -135,6 +135,8 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     this.batchDaySettleScheduler = batchDaySettleScheduler;
     this.workflowNodeTerminalFinalizer = workflowNodeTerminalFinalizer;
     this.batchDayOperationService = batchDayOperationService;
+    this.dataSource = dataSource;
+    this.sqlSessionTemplate = sqlSessionTemplate;
   }
 
   @Test

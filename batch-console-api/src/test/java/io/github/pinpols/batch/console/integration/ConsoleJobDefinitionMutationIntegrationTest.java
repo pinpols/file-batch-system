@@ -44,8 +44,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 @DisplayName("作业定义写路径: 编码校验,落库租户强一致,更新与依赖作业字段")
 class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
+  private final PlatformTransactionManager transactionManager;
+
   @Autowired
-  private PlatformTransactionManager transactionManager;
+  ConsoleJobDefinitionMutationIntegrationTest(PlatformTransactionManager transactionManager) {
+    this.transactionManager = transactionManager;
+  }
 
   @BeforeEach
   void ensureTenantCalendarFixture() {

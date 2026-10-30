@@ -27,11 +27,16 @@ import org.springframework.transaction.annotation.Transactional;
 @DisplayName("Dashboard SLA 报表:终态缺失完成时间不能被计为按时")
 class ConsoleDashboardSlaMapperIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private final JdbcTemplate jdbcTemplate;
+
+  private final ConsoleDashboardQueryMapper mapper;
 
   @Autowired
-  private ConsoleDashboardQueryMapper mapper;
+  ConsoleDashboardSlaMapperIntegrationTest(
+      JdbcTemplate jdbcTemplate, ConsoleDashboardQueryMapper mapper) {
+    this.jdbcTemplate = jdbcTemplate;
+    this.mapper = mapper;
+  }
 
   @Test
   @Transactional

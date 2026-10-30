@@ -50,23 +50,17 @@ class WorkflowRunResumeRecoveryIntegrationTest extends AbstractIntegrationTest {
   private static final String SUCCESS_WAIT = "SUCCESS_WAIT";
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JANUARY, 15);
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
 
-  @Autowired
-  private WorkflowRunLaunchService launchService;
+  private final WorkflowRunLaunchService launchService;
 
-  @Autowired
-  private WorkflowRunManagementApplicationService workflowRunManagement;
+  private final WorkflowRunManagementApplicationService workflowRunManagement;
 
-  @Autowired
-  private TaskOutcomeService taskOutcomeService;
+  private final TaskOutcomeService taskOutcomeService;
 
-  @Autowired
-  private SecretPayloadProtector secretPayloadProtector;
+  private final SecretPayloadProtector secretPayloadProtector;
 
-  @Autowired
-  private ExternalEventExpectationService externalEventExpectationService;
+  private final ExternalEventExpectationService externalEventExpectationService;
 
   @MockitoSpyBean
   private WorkflowNodeDispatchService nodeDispatchService;
@@ -77,6 +71,22 @@ class WorkflowRunResumeRecoveryIntegrationTest extends AbstractIntegrationTest {
   private String tenantId;
   private WorkflowLaunchSeed workflow;
   private Long workflowRunId;
+
+  @Autowired
+  WorkflowRunResumeRecoveryIntegrationTest(
+      JdbcTemplate jdbc,
+      WorkflowRunLaunchService launchService,
+      WorkflowRunManagementApplicationService workflowRunManagement,
+      TaskOutcomeService taskOutcomeService,
+      SecretPayloadProtector secretPayloadProtector,
+      ExternalEventExpectationService externalEventExpectationService) {
+    this.jdbc = jdbc;
+    this.launchService = launchService;
+    this.workflowRunManagement = workflowRunManagement;
+    this.taskOutcomeService = taskOutcomeService;
+    this.secretPayloadProtector = secretPayloadProtector;
+    this.externalEventExpectationService = externalEventExpectationService;
+  }
 
   @Test
   @DisplayName("暂停期间失败回报后恢复两类后继，故障回滚与重复恢复均不重复派发")

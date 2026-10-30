@@ -49,14 +49,11 @@ class WorkflowReplayApprovalDecisionIntegrationTest extends AbstractIntegrationT
   private static final String APPROVER = "b192-persisted-approver";
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 10, 20);
 
-  @Autowired
-  private WorkflowRunReplayPreviewService replayService;
+  private final WorkflowRunReplayPreviewService replayService;
 
-  @Autowired
-  private ApprovalWorkflowService approvalService;
+  private final ApprovalWorkflowService approvalService;
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
 
   @MockitoBean
   private WorkflowRunReplaySnapshotResolver snapshotResolver;
@@ -65,6 +62,16 @@ class WorkflowReplayApprovalDecisionIntegrationTest extends AbstractIntegrationT
   private OutboxDomainEventPublisher publisher;
 
   private final List<ReplayApprovalFixture> fixtures = new ArrayList<>();
+
+  @Autowired
+  WorkflowReplayApprovalDecisionIntegrationTest(
+      WorkflowRunReplayPreviewService replayService,
+      ApprovalWorkflowService approvalService,
+      JdbcTemplate jdbc) {
+    this.replayService = replayService;
+    this.approvalService = approvalService;
+    this.jdbc = jdbc;
+  }
 
   @ParameterizedTest
   @CsvSource({"REJECTED,approve", "APPROVED,reject"})

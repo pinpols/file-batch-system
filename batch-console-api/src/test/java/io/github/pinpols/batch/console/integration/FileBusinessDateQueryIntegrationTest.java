@@ -18,8 +18,12 @@ import org.springframework.boot.test.context.SpringBootTest;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("文件列表业务日期:真实 HTTP 与 PostgreSQL 查询")
 class FileBusinessDateQueryIntegrationTest extends AbstractMutationIntegrationTest {
+  private final BatchTimezoneProvider timezoneProvider;
+
   @Autowired
-  private BatchTimezoneProvider timezoneProvider;
+  FileBusinessDateQueryIntegrationTest(BatchTimezoneProvider timezoneProvider) {
+    this.timezoneProvider = timezoneProvider;
+  }
 
   @Test
   @DisplayName("业务日期范围按 biz_date 含边界筛选, 与文件创建时间无关")

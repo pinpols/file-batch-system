@@ -22,14 +22,17 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 @DisplayName("租户业务日进度五层统计与计划覆盖水位")
 class DailyProgressMapperIntegrationTest extends AbstractIntegrationTest {
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
+  private final DailyProgressMapper mapper;
+  private final SqlSessionTemplate session;
 
   @Autowired
-  private DailyProgressMapper mapper;
-
-  @Autowired
-  private SqlSessionTemplate session;
+  DailyProgressMapperIntegrationTest(
+      JdbcTemplate jdbc, DailyProgressMapper mapper, SqlSessionTemplate session) {
+    this.jdbc = jdbc;
+    this.mapper = mapper;
+    this.session = session;
+  }
 
   @Test
   @DisplayName("计划与实际运行不混算，排除演练和替代计划，并按租户业务日隔离")

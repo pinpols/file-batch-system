@@ -75,68 +75,93 @@ import org.springframework.transaction.support.TransactionTemplate;
 class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
   private static final LocalDate DAY = LocalDate.of(2026, 10, 16);
 
-  @Autowired
-  private BatchDayReplayDispatcher dispatcher;
+  private final BatchDayReplayDispatcher dispatcher;
+
+  private final BatchDayReplayRangeOperationService rangeReplay;
+
+  private final BatchDayReplayService dayReplay;
+
+  private final BatchDayReplayDispatchProperties replayProperties;
+
+  private final OrchestratorConfigCacheService cache;
+
+  private final WorkerRegistryCache workerCache;
+
+  private final JdbcTemplate jdbc;
+
+  private final TriggerLaunchConsumer consumer;
+
+  private final WorkflowRunLaunchService launch;
+
+  private final CompensationService compensation;
+
+  private final WorkflowNodeReplayOperationService workflowNodeReplayOperationService;
+
+  private final ApprovalWorkflowService approvalWorkflowService;
+
+  private final TaskExecutionService execution;
+
+  private final ResultVersionPromoteService resultVersionPromoteService;
+
+  private final JobTaskMapper tasks;
+
+  private final JobInstanceMapper jobs;
+
+  private final JobPartitionMapper partitions;
+
+  private final BatchDayReplayTerminalReconciler reconciler;
+
+  private final BatchDayReplayEntryMapper entries;
+
+  private final BatchDayReplaySessionMapper replaySessions;
+
+  private final PlatformTransactionManager manager;
 
   @Autowired
-  private BatchDayReplayRangeOperationService rangeReplay;
-
-  @Autowired
-  private BatchDayReplayService dayReplay;
-
-  @Autowired
-  private BatchDayReplayDispatchProperties replayProperties;
-
-  @Autowired
-  private OrchestratorConfigCacheService cache;
-
-  @Autowired
-  private WorkerRegistryCache workerCache;
-
-  @Autowired
-  private JdbcTemplate jdbc;
-
-  @Autowired
-  private TriggerLaunchConsumer consumer;
-
-  @Autowired
-  private WorkflowRunLaunchService launch;
-
-  @Autowired
-  private CompensationService compensation;
-
-  @Autowired
-  private WorkflowNodeReplayOperationService workflowNodeReplayOperationService;
-
-  @Autowired
-  private ApprovalWorkflowService approvalWorkflowService;
-
-  @Autowired
-  private TaskExecutionService execution;
-
-  @Autowired
-  private ResultVersionPromoteService resultVersionPromoteService;
-
-  @Autowired
-  private JobTaskMapper tasks;
-
-  @Autowired
-  private JobInstanceMapper jobs;
-
-  @Autowired
-  private JobPartitionMapper partitions;
-
-  @Autowired
-  private BatchDayReplayTerminalReconciler reconciler;
-
-  @Autowired
-  private BatchDayReplayEntryMapper entries;
-
-  @Autowired
-  private BatchDayReplaySessionMapper replaySessions;
-
-  @Autowired
-  private PlatformTransactionManager manager;
+  ReplayExecutionIdentityIntegrationTest(
+      BatchDayReplayDispatcher dispatcher,
+      BatchDayReplayRangeOperationService rangeReplay,
+      BatchDayReplayService dayReplay,
+      BatchDayReplayDispatchProperties replayProperties,
+      OrchestratorConfigCacheService cache,
+      WorkerRegistryCache workerCache,
+      JdbcTemplate jdbc,
+      TriggerLaunchConsumer consumer,
+      WorkflowRunLaunchService launch,
+      CompensationService compensation,
+      WorkflowNodeReplayOperationService workflowNodeReplayOperationService,
+      ApprovalWorkflowService approvalWorkflowService,
+      TaskExecutionService execution,
+      ResultVersionPromoteService resultVersionPromoteService,
+      JobTaskMapper tasks,
+      JobInstanceMapper jobs,
+      JobPartitionMapper partitions,
+      BatchDayReplayTerminalReconciler reconciler,
+      BatchDayReplayEntryMapper entries,
+      BatchDayReplaySessionMapper replaySessions,
+      PlatformTransactionManager manager) {
+    this.dispatcher = dispatcher;
+    this.rangeReplay = rangeReplay;
+    this.dayReplay = dayReplay;
+    this.replayProperties = replayProperties;
+    this.cache = cache;
+    this.workerCache = workerCache;
+    this.jdbc = jdbc;
+    this.consumer = consumer;
+    this.launch = launch;
+    this.compensation = compensation;
+    this.workflowNodeReplayOperationService = workflowNodeReplayOperationService;
+    this.approvalWorkflowService = approvalWorkflowService;
+    this.execution = execution;
+    this.resultVersionPromoteService = resultVersionPromoteService;
+    this.tasks = tasks;
+    this.jobs = jobs;
+    this.partitions = partitions;
+    this.reconciler = reconciler;
+    this.entries = entries;
+    this.replaySessions = replaySessions;
+    this.manager = manager;
+  }
 
   private record Accepted(
       Source source, long session, long entry, String command, String requestId, String envelope) {}

@@ -125,33 +125,25 @@ import org.springframework.web.server.ResponseStatusException;
 @DisplayName("Workflow Job 节点集成验证: 独立 JobInstance 与根运行状态推进")
 class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private WorkflowLaunchWaitReconciler launchWaitReconciler;
+  private final WorkflowLaunchWaitReconciler launchWaitReconciler;
 
-  @Autowired
-  private BatchDayWaitingReleaseScheduler batchDayWaitingReleaseScheduler;
+  private final BatchDayWaitingReleaseScheduler batchDayWaitingReleaseScheduler;
 
-  @Autowired
   @MockitoSpyBean
   private WorkflowLaunchWaitService waitingLaunchService;
 
-  @Autowired
-  private PlatformTransactionManager platformTransactionManager;
+  private final PlatformTransactionManager platformTransactionManager;
 
   private final String testTenantId =
       "t-job-node-" + UUID.randomUUID().toString().replace("-", "");
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.MARCH, 1);
 
-  @Autowired
-  private TaskOutcomeService taskOutcomeService;
+  private final TaskOutcomeService taskOutcomeService;
 
-  @Autowired
-  private TaskControllerApplicationService taskControllerApplicationService;
+  private final TaskControllerApplicationService taskControllerApplicationService;
 
-  @Autowired
-  private WorkflowNodeDispatchService workflowNodeDispatchService;
+  private final WorkflowNodeDispatchService workflowNodeDispatchService;
 
-  @Autowired
   @MockitoSpyBean
   private WorkflowRunMapper workflowRunMapper;
 
@@ -161,7 +153,6 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
   @MockitoSpyBean
   private JobDependencyWaitingLaunchService jobDependencyWaitingLaunchService;
 
-  @Autowired
   @MockitoSpyBean
   private TriggerRequestMapper triggerRequestMapper;
 
@@ -171,14 +162,11 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
   @MockitoSpyBean
   private WorkflowRunReplaySnapshotResolver replaySnapshotResolver;
 
-  @Autowired
-  private TriggerLaunchRecoveryService triggerLaunchRecoveryService;
+  private final TriggerLaunchRecoveryService triggerLaunchRecoveryService;
 
-  @Autowired
-  private SqlSessionTemplate sqlSessionTemplate;
+  private final SqlSessionTemplate sqlSessionTemplate;
 
-  @Autowired
-  private SecretPayloadProtector secretPayloadProtector;
+  private final SecretPayloadProtector secretPayloadProtector;
 
   @ParameterizedTest
   @ValueSource(strings = {"FAILED", "RUNNING"})
@@ -760,46 +748,76 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     assertThat(attempts).hasValue(2);
   }
 
-  @Autowired
-  private WorkflowRunLaunchService workflowRunLaunchService;
+  private final WorkflowRunLaunchService workflowRunLaunchService;
 
-  @Autowired
-  private LaunchService launchService;
+  private final LaunchService launchService;
 
   @MockitoSpyBean
   private LaunchApplicationService launchApplicationService;
 
-  @Autowired
   @MockitoSpyBean
   private OrchestratorConfigCacheService configCacheService;
 
-  @Autowired
   @MockitoSpyBean
   private ResourceScheduler resourceScheduler;
 
-  @Autowired
-  private TenantSchedulerSnapshotService tenantSchedulerSnapshotService;
+  private final TenantSchedulerSnapshotService tenantSchedulerSnapshotService;
+
+  private final MeterRegistry meterRegistry;
+
+  private final LockProvider lockProvider;
+
+  private final JobPartitionMapper jobPartitionMapper;
+
+  private final JdbcTemplate jdbcTemplate;
+
+  private final BatchDaySettleScheduler batchDaySettleScheduler;
+
+  private final BatchDayInstanceMapper batchDayInstanceMapper;
+
+  private final WorkflowRunManagementApplicationService workflowRunManagementApplicationService;
 
   @Autowired
-  private MeterRegistry meterRegistry;
-
-  @Autowired
-  private LockProvider lockProvider;
-
-  @Autowired
-  private JobPartitionMapper jobPartitionMapper;
-
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
-
-  @Autowired
-  private BatchDaySettleScheduler batchDaySettleScheduler;
-
-  @Autowired
-  private BatchDayInstanceMapper batchDayInstanceMapper;
-
-  @Autowired
-  private WorkflowRunManagementApplicationService workflowRunManagementApplicationService;
+  JobNodeDispatchIntegrationTest(
+      WorkflowLaunchWaitReconciler launchWaitReconciler,
+      BatchDayWaitingReleaseScheduler batchDayWaitingReleaseScheduler,
+      PlatformTransactionManager platformTransactionManager,
+      TaskOutcomeService taskOutcomeService,
+      TaskControllerApplicationService taskControllerApplicationService,
+      WorkflowNodeDispatchService workflowNodeDispatchService,
+      TriggerLaunchRecoveryService triggerLaunchRecoveryService,
+      SqlSessionTemplate sqlSessionTemplate,
+      SecretPayloadProtector secretPayloadProtector,
+      WorkflowRunLaunchService workflowRunLaunchService,
+      LaunchService launchService,
+      TenantSchedulerSnapshotService tenantSchedulerSnapshotService,
+      MeterRegistry meterRegistry,
+      LockProvider lockProvider,
+      JobPartitionMapper jobPartitionMapper,
+      JdbcTemplate jdbcTemplate,
+      BatchDaySettleScheduler batchDaySettleScheduler,
+      BatchDayInstanceMapper batchDayInstanceMapper,
+      WorkflowRunManagementApplicationService workflowRunManagementApplicationService) {
+    this.launchWaitReconciler = launchWaitReconciler;
+    this.batchDayWaitingReleaseScheduler = batchDayWaitingReleaseScheduler;
+    this.platformTransactionManager = platformTransactionManager;
+    this.taskOutcomeService = taskOutcomeService;
+    this.taskControllerApplicationService = taskControllerApplicationService;
+    this.workflowNodeDispatchService = workflowNodeDispatchService;
+    this.triggerLaunchRecoveryService = triggerLaunchRecoveryService;
+    this.sqlSessionTemplate = sqlSessionTemplate;
+    this.secretPayloadProtector = secretPayloadProtector;
+    this.workflowRunLaunchService = workflowRunLaunchService;
+    this.launchService = launchService;
+    this.tenantSchedulerSnapshotService = tenantSchedulerSnapshotService;
+    this.meterRegistry = meterRegistry;
+    this.lockProvider = lockProvider;
+    this.jobPartitionMapper = jobPartitionMapper;
+    this.jdbcTemplate = jdbcTemplate;
+    this.batchDaySettleScheduler = batchDaySettleScheduler;
+    this.batchDayInstanceMapper = batchDayInstanceMapper;
+    this.workflowRunManagementApplicationService = workflowRunManagementApplicationService;
+  }
 
   @Test
   @DisplayName("补跑启动中断后两个恢复器复用原请求且只创建一个子 Job")

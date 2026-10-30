@@ -45,27 +45,37 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @DisplayName("复现: readiness 恢复的冻结版本与终态 occurrence 边界")
 class ReadinessRecoveryReproTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private final JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  private TriggerDefinitionLoader triggerDefinitionLoader;
+  private final TriggerDefinitionLoader triggerDefinitionLoader;
 
-  @Autowired
-  private TriggerService triggerService;
+  private final TriggerService triggerService;
 
-  @Autowired
-  private ScheduledOccurrenceMapper scheduledOccurrenceMapper;
+  private final ScheduledOccurrenceMapper scheduledOccurrenceMapper;
 
-  @Autowired
-  private TriggerGracefulShutdown triggerGracefulShutdown;
+  private final TriggerGracefulShutdown triggerGracefulShutdown;
 
-  @Autowired
-  private MeterRegistry meterRegistry;
+  private final MeterRegistry meterRegistry;
 
   private String tenantId;
   private String workflowCode;
   private Long workflowDefinitionId;
+
+  @Autowired
+  ReadinessRecoveryReproTest(
+      JdbcTemplate jdbcTemplate,
+      TriggerDefinitionLoader triggerDefinitionLoader,
+      TriggerService triggerService,
+      ScheduledOccurrenceMapper scheduledOccurrenceMapper,
+      TriggerGracefulShutdown triggerGracefulShutdown,
+      MeterRegistry meterRegistry) {
+    this.jdbcTemplate = jdbcTemplate;
+    this.triggerDefinitionLoader = triggerDefinitionLoader;
+    this.triggerService = triggerService;
+    this.scheduledOccurrenceMapper = scheduledOccurrenceMapper;
+    this.triggerGracefulShutdown = triggerGracefulShutdown;
+    this.meterRegistry = meterRegistry;
+  }
 
   @BeforeEach
   void seedWorkflow() {

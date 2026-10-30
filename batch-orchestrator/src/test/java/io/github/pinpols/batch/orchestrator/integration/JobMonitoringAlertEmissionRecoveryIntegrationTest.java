@@ -59,23 +59,27 @@ class JobMonitoringAlertEmissionRecoveryIntegrationTest extends AbstractIntegrat
   private final JdbcTemplate jdbcTemplate;
   private final JobMonitoringAlertEmissionService emissionService;
 
-  @Autowired
-  private JobMonitoringMapper jobMonitoringMapper;
+  private final JobMonitoringMapper jobMonitoringMapper;
 
   @MockitoSpyBean
   private AlertEventService alertEventService;
 
-  @Autowired
-  private JobInstanceMapper jobInstanceMapper;
+  private final JobInstanceMapper jobInstanceMapper;
 
-  @Autowired
-  private PlatformTransactionManager transactionManager;
+  private final PlatformTransactionManager transactionManager;
 
   @Autowired
   JobMonitoringAlertEmissionRecoveryIntegrationTest(
-      JdbcTemplate jdbcTemplate, JobMonitoringAlertEmissionService emissionService) {
+      JdbcTemplate jdbcTemplate,
+      JobMonitoringAlertEmissionService emissionService,
+      JobMonitoringMapper jobMonitoringMapper,
+      JobInstanceMapper jobInstanceMapper,
+      PlatformTransactionManager transactionManager) {
     this.jdbcTemplate = jdbcTemplate;
     this.emissionService = emissionService;
+    this.jobMonitoringMapper = jobMonitoringMapper;
+    this.jobInstanceMapper = jobInstanceMapper;
+    this.transactionManager = transactionManager;
   }
 
   @Test

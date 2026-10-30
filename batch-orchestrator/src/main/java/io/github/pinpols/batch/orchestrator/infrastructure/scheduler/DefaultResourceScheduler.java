@@ -223,8 +223,9 @@ public class DefaultResourceScheduler implements ResourceScheduler {
   }
 
   private boolean isWithinWindow(BatchWindowEntity window) {
-    boolean batchWindowIsIncomplete =
-        window == null || window.startTime() == null || window.endTime() == null;
+    boolean batchWindowIsIncomplete = EmptyChecks.isNull(window)
+        || EmptyChecks.isNull(window.startTime())
+        || EmptyChecks.isNull(window.endTime());
     if (batchWindowIsIncomplete) {
       return true;
     }

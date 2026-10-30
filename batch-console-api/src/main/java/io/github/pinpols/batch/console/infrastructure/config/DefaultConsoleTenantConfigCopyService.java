@@ -656,7 +656,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
       s.setChannelType(e.channelType());
       s.setTargetEndpoint(e.targetEndpoint());
       s.setAuthType(e.authType());
-      s.setConfigJson(e.configJson() == null ? null : e.configJson().toString());
+      s.setConfigJson(EmptyChecks.isNull(e.configJson()) ? null : e.configJson().toString());
       s.setReceiptPolicy(e.receiptPolicy());
       s.setTimeoutSeconds(e.timeoutSeconds());
       s.setEnabled(e.enabled());
@@ -844,7 +844,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
   }
 
   private static String str(Object value) {
-    return value == null ? null : value.toString();
+    return EmptyChecks.isNull(value) ? null : value.toString();
   }
 
   private ConfigSyncBundlePayload filterBundle(

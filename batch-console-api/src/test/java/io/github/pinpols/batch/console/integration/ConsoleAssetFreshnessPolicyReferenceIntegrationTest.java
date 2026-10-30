@@ -25,14 +25,19 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @DisplayName("资产新鲜度策略的 Job 引用与租户完整性")
 class ConsoleAssetFreshnessPolicyReferenceIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private ConsoleAssetFreshnessPolicyMapper mapper;
+  private final ConsoleAssetFreshnessPolicyMapper mapper;
+  private final JdbcTemplate jdbc;
+  private final ConsoleAssetFreshnessPolicyService service;
 
   @Autowired
-  private JdbcTemplate jdbc;
-
-  @Autowired
-  private ConsoleAssetFreshnessPolicyService service;
+  ConsoleAssetFreshnessPolicyReferenceIntegrationTest(
+      ConsoleAssetFreshnessPolicyMapper mapper,
+      JdbcTemplate jdbc,
+      ConsoleAssetFreshnessPolicyService service) {
+    this.mapper = mapper;
+    this.jdbc = jdbc;
+    this.service = service;
+  }
 
   @Test
   @DisplayName("策略不能引用同租户中不存在的 Job")

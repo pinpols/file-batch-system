@@ -105,7 +105,7 @@ public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
     }
     try {
       TaskResult result = executor.execute(ctx);
-      if (result.success() && !result.output().isEmpty()) {
+      if (result.success() && !EmptyChecks.isEmpty(result.output())) {
         request.context().put(PipelineRuntimeKeys.NODE_OUTPUTS, result.output());
       }
       return toResponse(result);

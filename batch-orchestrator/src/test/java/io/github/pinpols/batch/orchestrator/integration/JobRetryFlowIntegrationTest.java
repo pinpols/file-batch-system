@@ -82,8 +82,7 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   private TaskExecutionService taskExecutionService;
 
-  @Autowired
-  private TaskControllerApplicationService taskControllerApplicationService;
+  private final TaskControllerApplicationService taskControllerApplicationService;
 
   @Autowired
   private RetryGovernanceService retryGovernanceService;
@@ -100,17 +99,26 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   private RetryScheduleMapper retryScheduleMapper;
 
-  @Autowired
-  private WorkflowRunMapper workflowRunMapper;
+  private final WorkflowRunMapper workflowRunMapper;
 
-  @Autowired
-  private BatchDaySettleScheduler batchDaySettleScheduler;
+  private final BatchDaySettleScheduler batchDaySettleScheduler;
 
-  @Autowired
-  private BatchDayInstanceMapper batchDayInstanceMapper;
+  private final BatchDayInstanceMapper batchDayInstanceMapper;
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
+
+  @Autowired
+  JobRetryFlowIntegrationTest(
+      TaskControllerApplicationService taskControllerApplicationService,
+      WorkflowRunMapper workflowRunMapper,
+      BatchDaySettleScheduler batchDaySettleScheduler,
+      BatchDayInstanceMapper batchDayInstanceMapper) {
+    this.taskControllerApplicationService = taskControllerApplicationService;
+    this.workflowRunMapper = workflowRunMapper;
+    this.batchDaySettleScheduler = batchDaySettleScheduler;
+    this.batchDayInstanceMapper = batchDayInstanceMapper;
+  }
 
   @Test
   @DisplayName("作业策略更新后任务仍按实例快照重试,到期重投递使分区重新入队")

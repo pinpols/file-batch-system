@@ -85,12 +85,15 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
   @Autowired
   private JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  @Qualifier("importBusinessDataSource")
-  private DataSource businessDataSource;
+  private final DataSource businessDataSource;
 
   @MockitoSpyBean
   private TaskControllerApplicationService taskControllerApplicationService;
+
+  @Autowired
+  OutboxForwarderE2eIT(@Qualifier("importBusinessDataSource") DataSource businessDataSource) {
+    this.businessDataSource = businessDataSource;
+  }
 
   private enum LaunchCommitFaultPoint {
     ROOT,

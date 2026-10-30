@@ -74,21 +74,28 @@ import org.springframework.transaction.support.TransactionTemplate;
 @DisplayName("预期 Quartz occurrence 台账：唯一身份、周期对账和旧计划替代")
 class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
   @MockitoSpyBean
   private ScheduledOccurrenceMapper mapper;
 
-  @Autowired
-  private TriggerScheduledOccurrencePlanner planner;
+  private final TriggerScheduledOccurrencePlanner planner;
+
+  private final JdbcTemplate jdbcTemplate;
+
+  private final TransactionTemplate transactionTemplate;
+
+  private final SqlSessionTemplate sqlSessionTemplate;
 
   @Autowired
-  private JdbcTemplate jdbcTemplate;
-
-  @Autowired
-  private TransactionTemplate transactionTemplate;
-
-  @Autowired
-  private SqlSessionTemplate sqlSessionTemplate;
+  ScheduledOccurrenceMapperIntegrationTest(
+      TriggerScheduledOccurrencePlanner planner,
+      JdbcTemplate jdbcTemplate,
+      TransactionTemplate transactionTemplate,
+      SqlSessionTemplate sqlSessionTemplate) {
+    this.planner = planner;
+    this.jdbcTemplate = jdbcTemplate;
+    this.transactionTemplate = transactionTemplate;
+    this.sqlSessionTemplate = sqlSessionTemplate;
+  }
 
   private String tenantId;
   private Long workflowDefinitionId;

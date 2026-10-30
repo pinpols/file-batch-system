@@ -22,14 +22,19 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 @DisplayName("进度源认领围栏的真实PG查询：租户、失租、重领、终态与dry-run")
 class PipelineProgressClaimMapperIntegrationTest extends AbstractIntegrationTest {
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
+
+  private final PipelineProgressReadService progress;
+
+  private final PipelineStageProgressCache cache;
 
   @Autowired
-  private PipelineProgressReadService progress;
-
-  @Autowired
-  private PipelineStageProgressCache cache;
+  PipelineProgressClaimMapperIntegrationTest(
+      JdbcTemplate jdbc, PipelineProgressReadService progress, PipelineStageProgressCache cache) {
+    this.jdbc = jdbc;
+    this.progress = progress;
+    this.cache = cache;
+  }
 
   @Test
   @DisplayName("仅当前有效任务认领及运行阶段可见，失租与终态立即停止缓存投影")

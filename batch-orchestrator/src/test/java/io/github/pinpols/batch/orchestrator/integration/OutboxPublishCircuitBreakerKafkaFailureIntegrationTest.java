@@ -90,8 +90,13 @@ class OutboxPublishCircuitBreakerKafkaFailureIntegrationTest extends AbstractInt
   @Autowired
   private JdbcTemplate jdbcTemplate;
 
+  private final BatchOrchestratorGovernanceProperties governance;
+
   @Autowired
-  private BatchOrchestratorGovernanceProperties governance;
+  OutboxPublishCircuitBreakerKafkaFailureIntegrationTest(
+      BatchOrchestratorGovernanceProperties governance) {
+    this.governance = governance;
+  }
 
   @Test
   @Order(2)

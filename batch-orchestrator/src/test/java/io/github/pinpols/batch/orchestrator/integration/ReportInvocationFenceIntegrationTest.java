@@ -80,11 +80,15 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   private JobTaskMapper jobTaskMapper;
 
-  @Autowired
-  private PartitionReclaimUnit partitionReclaimUnit;
+  private final PartitionReclaimUnit partitionReclaimUnit;
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
+
+  @Autowired
+  ReportInvocationFenceIntegrationTest(PartitionReclaimUnit partitionReclaimUnit) {
+    this.partitionReclaimUnit = partitionReclaimUnit;
+  }
 
   @BeforeEach
   void refreshWorkersForClaim() {

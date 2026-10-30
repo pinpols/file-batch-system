@@ -41,13 +41,17 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
   @Autowired
   private JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  private TriggerMisfirePendingReconciler reconciler;
+  private final TriggerMisfirePendingReconciler reconciler;
 
   private String tenantId;
   private String jobCode;
   private Long workflowDefinitionId;
   private String workflowCode;
+
+  @Autowired
+  TriggerMisfirePendingMapperIntegrationTest(TriggerMisfirePendingReconciler reconciler) {
+    this.reconciler = reconciler;
+  }
 
   @BeforeEach
   void seed() {

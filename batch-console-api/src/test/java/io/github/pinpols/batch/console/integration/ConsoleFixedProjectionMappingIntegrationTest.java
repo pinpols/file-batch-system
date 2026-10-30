@@ -60,44 +60,61 @@ import org.springframework.transaction.annotation.Transactional;
 @DisplayName("Console固定投影：真实数据库字段类型、空值和租户边界")
 class ConsoleFixedProjectionMappingIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
+
+  private final SqlSessionTemplate sqlSession;
+
+  private final FileChannelConfigMapper channels;
+
+  private final FileTemplateConfigMapper templates;
+
+  private final FilePipelineMapper pipelines;
+
+  private final FilePipelineStepRunMapper steps;
+
+  private final FileRecordMapper files;
+
+  private final FileDispatchRecordMapper dispatches;
+
+  private final JobDefinitionMapper jobs;
+
+  private final JobExecutionMapper jobExecution;
+
+  private final StepRegistryQueryMapper registry;
+
+  private final ConsoleClusterDiagnosticMapper diagnostics;
+
+  private final ConfigChangeLogMapper changeLogs;
 
   @Autowired
-  private SqlSessionTemplate sqlSession;
-
-  @Autowired
-  private FileChannelConfigMapper channels;
-
-  @Autowired
-  private FileTemplateConfigMapper templates;
-
-  @Autowired
-  private FilePipelineMapper pipelines;
-
-  @Autowired
-  private FilePipelineStepRunMapper steps;
-
-  @Autowired
-  private FileRecordMapper files;
-
-  @Autowired
-  private FileDispatchRecordMapper dispatches;
-
-  @Autowired
-  private JobDefinitionMapper jobs;
-
-  @Autowired
-  private JobExecutionMapper jobExecution;
-
-  @Autowired
-  private StepRegistryQueryMapper registry;
-
-  @Autowired
-  private ConsoleClusterDiagnosticMapper diagnostics;
-
-  @Autowired
-  private ConfigChangeLogMapper changeLogs;
+  ConsoleFixedProjectionMappingIntegrationTest(
+      JdbcTemplate jdbc,
+      SqlSessionTemplate sqlSession,
+      FileChannelConfigMapper channels,
+      FileTemplateConfigMapper templates,
+      FilePipelineMapper pipelines,
+      FilePipelineStepRunMapper steps,
+      FileRecordMapper files,
+      FileDispatchRecordMapper dispatches,
+      JobDefinitionMapper jobs,
+      JobExecutionMapper jobExecution,
+      StepRegistryQueryMapper registry,
+      ConsoleClusterDiagnosticMapper diagnostics,
+      ConfigChangeLogMapper changeLogs) {
+    this.jdbc = jdbc;
+    this.sqlSession = sqlSession;
+    this.channels = channels;
+    this.templates = templates;
+    this.pipelines = pipelines;
+    this.steps = steps;
+    this.files = files;
+    this.dispatches = dispatches;
+    this.jobs = jobs;
+    this.jobExecution = jobExecution;
+    this.registry = registry;
+    this.diagnostics = diagnostics;
+    this.changeLogs = changeLogs;
+  }
 
   @Test
   @DisplayName("渠道及模板固定投影保留JSONB、安全标记和就绪查询字段")

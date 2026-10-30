@@ -61,8 +61,12 @@ class OutboxEventToKafkaDispatchIntegrationTest extends AbstractIntegrationTest 
   @Autowired
   private JdbcTemplate jdbcTemplate;
 
+  private final OutboxOpsApplicationService outboxOps;
+
   @Autowired
-  private OutboxOpsApplicationService outboxOps;
+  OutboxEventToKafkaDispatchIntegrationTest(OutboxOpsApplicationService outboxOps) {
+    this.outboxOps = outboxOps;
+  }
 
   @Test
   @DisplayName("重试日志 ID 与事件 ID 不同时，错误身份会重置另一条事件")

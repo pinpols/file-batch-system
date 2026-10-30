@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -45,7 +46,7 @@ public final class AtomicConnectionManager {
    */
   public static String resolveDataSourceBeanName(
       String configuredBeanName, String paramBeanName, Set<String> allowedBeans) {
-    boolean usesConfiguredDataSourceBean = paramBeanName == null
+    boolean usesConfiguredDataSourceBean = EmptyChecks.isNull(paramBeanName)
         || paramBeanName.isBlank()
         || paramBeanName.equals(configuredBeanName);
     if (usesConfiguredDataSourceBean) {

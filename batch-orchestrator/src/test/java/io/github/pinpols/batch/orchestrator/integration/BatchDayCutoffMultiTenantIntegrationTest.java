@@ -22,11 +22,16 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @DisplayName("批日 cutoff 全局扫描的租户隔离")
 class BatchDayCutoffMultiTenantIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private BatchDayCutoffScheduler scheduler;
+  private final BatchDayCutoffScheduler scheduler;
+
+  private final JdbcTemplate jdbcTemplate;
 
   @Autowired
-  private JdbcTemplate jdbcTemplate;
+  BatchDayCutoffMultiTenantIntegrationTest(
+      BatchDayCutoffScheduler scheduler, JdbcTemplate jdbcTemplate) {
+    this.scheduler = scheduler;
+    this.jdbcTemplate = jdbcTemplate;
+  }
 
   @Test
   @DisplayName("全局 OPEN 扫描逐租户推进状态并写入本租户审计")

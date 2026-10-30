@@ -22,14 +22,19 @@ import org.springframework.transaction.annotation.Transactional;
 @DisplayName("Trigger 请求应按业务日获取结算 fence")
 class TriggerRequestSettlementFenceMapperIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private TriggerRequestMapper mapper;
+  private final TriggerRequestMapper mapper;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private final JdbcTemplate jdbcTemplate;
 
   private String tenantId;
   private Long workflowDefinitionId;
+
+  @Autowired
+  TriggerRequestSettlementFenceMapperIntegrationTest(
+      TriggerRequestMapper mapper, JdbcTemplate jdbcTemplate) {
+    this.mapper = mapper;
+    this.jdbcTemplate = jdbcTemplate;
+  }
 
   @BeforeEach
   void setUp() {

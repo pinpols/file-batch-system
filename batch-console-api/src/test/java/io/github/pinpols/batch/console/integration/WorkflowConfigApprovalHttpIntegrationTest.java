@@ -71,22 +71,30 @@ class WorkflowConfigApprovalHttpIntegrationTest extends AbstractIntegrationTest 
   @LocalServerPort
   private int port;
 
-  @Autowired
-  private ConsoleJwtService jwtService;
+  private final ConsoleJwtService jwtService;
 
-  @Autowired
-  private BatchSecurityProperties security;
+  private final BatchSecurityProperties security;
 
-  @Autowired
-  private ObjectMapper objectMapper;
+  private final ObjectMapper objectMapper;
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
 
   private WebTestClient client;
   private Credentials maker;
   private Credentials checker;
   private Credentials auditor;
+
+  @Autowired
+  WorkflowConfigApprovalHttpIntegrationTest(
+      ConsoleJwtService jwtService,
+      BatchSecurityProperties security,
+      ObjectMapper objectMapper,
+      JdbcTemplate jdbc) {
+    this.jwtService = jwtService;
+    this.security = security;
+    this.objectMapper = objectMapper;
+    this.jdbc = jdbc;
+  }
 
   @BeforeEach
   void authenticateActors() {

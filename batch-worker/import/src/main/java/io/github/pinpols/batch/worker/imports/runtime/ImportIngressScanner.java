@@ -159,7 +159,7 @@ public class ImportIngressScanner {
         continue;
       }
       BatchManifest manifest = readBatchManifest(entry.getKey());
-      boolean manifestCannotLaunchFileGroup = manifest == null
+      boolean manifestCannotLaunchFileGroup = EmptyChecks.isNull(manifest)
           || !manifest.isManifestOnlyExport()
           || !Texts.hasText(manifest.fileGroupCode());
       if (manifestCannotLaunchFileGroup) {
@@ -472,7 +472,7 @@ public class ImportIngressScanner {
     // P2：用 ConcurrentHashMap.compute 原子化 check-and-update，即便 ShedLock
     // 异常过期时也不会有 get+put 之间的 TOCTOU；返回更新后的 state，稳定性判断在外部做
     ObservedObjectState state = observedObjects.compute(snapshot.objectName(), (k, existing) -> {
-      boolean objectSnapshotHasChanged = existing == null
+      boolean objectSnapshotHasChanged = EmptyChecks.isNull(existing)
           || existing.size() != snapshot.size()
           || !Objects.equals(existing.etag(), snapshot.etag());
       if (objectSnapshotHasChanged) {
@@ -862,7 +862,7 @@ public class ImportIngressScanner {
   private BatchManifest matchBatchManifest(
       List<BatchManifest> manifests, String tenantId, String fileName) {
     for (BatchManifest m : manifests) {
-      boolean manifestFileGroupIsIncomplete = m.requiredFiles() == null
+      boolean manifestFileGroupIsIncomplete = EmptyChecks.isNull(m.requiredFiles())
           || m.requiredFiles().isEmpty()
           || !Texts.hasText(m.fileGroupCode());
       if (manifestFileGroupIsIncomplete) {

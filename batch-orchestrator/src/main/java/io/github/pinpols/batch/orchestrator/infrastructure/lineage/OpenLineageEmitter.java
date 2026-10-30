@@ -219,8 +219,9 @@ public class OpenLineageEmitter {
     List<Map<String, Object>> result = new ArrayList<>();
     LinkedHashSet<Long> seen = new LinkedHashSet<>();
     for (OpenLineageDatasetRow row : rows) {
-      boolean fileLineageReferenceIsMissingOrDuplicate =
-          row == null || row.fileId() == null || seen.contains(row.fileId());
+      boolean fileLineageReferenceIsMissingOrDuplicate = EmptyChecks.isNull(row)
+          || EmptyChecks.isNull(row.fileId())
+          || seen.contains(row.fileId());
       if (fileLineageReferenceIsMissingOrDuplicate) {
         continue;
       }

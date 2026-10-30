@@ -29,14 +29,19 @@ import org.springframework.boot.test.context.SpringBootTest;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("文件详情响应的凭据脱敏和租户隔离")
 class ConsoleFileRecordDetailSecurityIntegrationTest extends AbstractMutationIntegrationTest {
-  @Autowired
-  private FileRecordMapper fileRecordMapper;
+  private final FileRecordMapper fileRecordMapper;
+  private final ConsoleFileQueryMappers fileQueryMappers;
+  private final LocalizedErrorRenderer localizedErrorRenderer;
 
   @Autowired
-  private ConsoleFileQueryMappers fileQueryMappers;
-
-  @Autowired
-  private LocalizedErrorRenderer localizedErrorRenderer;
+  ConsoleFileRecordDetailSecurityIntegrationTest(
+      FileRecordMapper fileRecordMapper,
+      ConsoleFileQueryMappers fileQueryMappers,
+      LocalizedErrorRenderer localizedErrorRenderer) {
+    this.fileRecordMapper = fileRecordMapper;
+    this.fileQueryMappers = fileQueryMappers;
+    this.localizedErrorRenderer = localizedErrorRenderer;
+  }
 
   @Test
   @DisplayName("跨文件错误列表使用真实数据库中的各自模板脱敏策略")

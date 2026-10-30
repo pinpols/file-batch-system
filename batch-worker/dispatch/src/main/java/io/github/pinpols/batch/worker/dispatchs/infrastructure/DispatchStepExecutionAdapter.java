@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -20,6 +21,7 @@ import io.github.pinpols.batch.worker.dispatchs.stage.DispatchStageExecutor;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
@@ -81,9 +83,9 @@ public class DispatchStepExecutionAdapter
     String dispatchId = String.valueOf(taskIdValue);
     context.setDispatchId(dispatchId);
     Object dispatchPayload = contextMap.get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
-    boolean rawDispatchPayloadNeedsDecoding = dispatchPayload == null
-        && context.getRawPayload() != null
-        && !context.getRawPayload().isBlank();
+    boolean rawDispatchPayloadNeedsDecoding = EmptyChecks.isNull(dispatchPayload)
+        && EmptyChecks.isNotNull(context.getRawPayload())
+        && !EmptyChecks.isBlank(Objects.requireNonNull(context.getRawPayload()));
     if (rawDispatchPayloadNeedsDecoding) {
       dispatchPayload = objectMapper.readValue(context.getRawPayload(), DispatchPayload.class);
       context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_PAYLOAD, dispatchPayload);

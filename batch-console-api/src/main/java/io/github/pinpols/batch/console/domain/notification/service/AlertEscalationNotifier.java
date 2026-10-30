@@ -214,7 +214,7 @@ public class AlertEscalationNotifier {
     Throwable current = throwable;
     while (current != null) {
       String message = current.getMessage();
-      boolean isConnectionShutdownMessage = message != null
+      boolean isConnectionShutdownMessage = EmptyChecks.isNotNull(message)
           && (message.contains("LettuceConnectionFactory is STOPPING")
               || message.contains("has been closed")
               || message.contains("Connection pool shut down"));

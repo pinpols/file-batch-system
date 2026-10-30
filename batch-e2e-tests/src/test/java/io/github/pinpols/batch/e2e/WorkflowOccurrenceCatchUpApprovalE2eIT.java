@@ -165,42 +165,56 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     registry.add("batch.security.internal-secret", () -> E2E_INTERNAL_SECRET);
   }
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private final JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  private ObjectMapper objectMapper;
+  private final ObjectMapper objectMapper;
 
-  @Autowired
-  private ConsoleJwtService consoleJwtService;
+  private final ConsoleJwtService consoleJwtService;
 
-  @Autowired
-  private ForensicExportProperties forensicExportProperties;
+  private final ForensicExportProperties forensicExportProperties;
 
-  @Autowired
-  private BatchDaySettleScheduler batchDaySettleScheduler;
+  private final BatchDaySettleScheduler batchDaySettleScheduler;
 
-  @Autowired
-  private BatchDayOpenScheduler batchDayOpenScheduler;
+  private final BatchDayOpenScheduler batchDayOpenScheduler;
 
-  @Autowired
-  private ResultVersionRetentionScheduler resultVersionRetentionScheduler;
+  private final ResultVersionRetentionScheduler resultVersionRetentionScheduler;
 
-  @Autowired
-  private PartitionReclaimUnit partitionReclaimUnit;
+  private final PartitionReclaimUnit partitionReclaimUnit;
 
-  @Autowired
-  private JobPartitionMapper jobPartitionMapper;
+  private final JobPartitionMapper jobPartitionMapper;
 
-  @Autowired
-  private ResultVersionPromoteService resultVersionPromoteService;
+  private final ResultVersionPromoteService resultVersionPromoteService;
 
-  @Autowired
-  @Qualifier("importBusinessDataSource")
-  private DataSource businessDataSource;
+  private final DataSource businessDataSource;
 
   @Value("${local.server.port}")
   private int consolePort;
+
+  @Autowired
+  WorkflowOccurrenceCatchUpApprovalE2eIT(
+      JdbcTemplate jdbcTemplate,
+      ObjectMapper objectMapper,
+      ConsoleJwtService consoleJwtService,
+      ForensicExportProperties forensicExportProperties,
+      BatchDaySettleScheduler batchDaySettleScheduler,
+      BatchDayOpenScheduler batchDayOpenScheduler,
+      ResultVersionRetentionScheduler resultVersionRetentionScheduler,
+      PartitionReclaimUnit partitionReclaimUnit,
+      JobPartitionMapper jobPartitionMapper,
+      ResultVersionPromoteService resultVersionPromoteService,
+      @Qualifier("importBusinessDataSource") DataSource businessDataSource) {
+    this.jdbcTemplate = jdbcTemplate;
+    this.objectMapper = objectMapper;
+    this.consoleJwtService = consoleJwtService;
+    this.forensicExportProperties = forensicExportProperties;
+    this.batchDaySettleScheduler = batchDaySettleScheduler;
+    this.batchDayOpenScheduler = batchDayOpenScheduler;
+    this.resultVersionRetentionScheduler = resultVersionRetentionScheduler;
+    this.partitionReclaimUnit = partitionReclaimUnit;
+    this.jobPartitionMapper = jobPartitionMapper;
+    this.resultVersionPromoteService = resultVersionPromoteService;
+    this.businessDataSource = businessDataSource;
+  }
 
   @AfterAll
   static void stopTriggerContext() {

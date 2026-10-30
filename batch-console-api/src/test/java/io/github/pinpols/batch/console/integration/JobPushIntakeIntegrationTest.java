@@ -38,26 +38,35 @@ import org.springframework.transaction.support.TransactionTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @DisplayName("推送接纳事务、幂等与租户隔离")
 class JobPushIntakeIntegrationTest extends AbstractIntegrationTest {
-  @Autowired
-  private WorkflowTerminalNotificationService terminal;
+  private final WorkflowTerminalNotificationService terminal;
 
-  @Autowired
-  private JobPushIntakeService push;
+  private final JobPushIntakeService push;
 
-  @Autowired
-  private ConsolePushSubscriptionMapper subscriptions;
+  private final ConsolePushSubscriptionMapper subscriptions;
 
-  @Autowired
-  private ConsolePushProperties properties;
+  private final ConsolePushProperties properties;
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
 
-  @Autowired
-  @Qualifier("transactionManager")
-  private PlatformTransactionManager transactions;
+  private final PlatformTransactionManager transactions;
 
   private final List<String> tenants = new ArrayList<>();
+
+  @Autowired
+  JobPushIntakeIntegrationTest(
+      WorkflowTerminalNotificationService terminal,
+      JobPushIntakeService push,
+      ConsolePushSubscriptionMapper subscriptions,
+      ConsolePushProperties properties,
+      JdbcTemplate jdbc,
+      @Qualifier("transactionManager") PlatformTransactionManager transactions) {
+    this.terminal = terminal;
+    this.push = push;
+    this.subscriptions = subscriptions;
+    this.properties = properties;
+    this.jdbc = jdbc;
+    this.transactions = transactions;
+  }
 
   @BeforeEach
   void enableIntake() {

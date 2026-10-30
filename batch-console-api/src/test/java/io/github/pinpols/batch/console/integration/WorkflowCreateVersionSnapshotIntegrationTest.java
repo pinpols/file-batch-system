@@ -60,30 +60,41 @@ class WorkflowCreateVersionSnapshotIntegrationTest extends AbstractMutationInteg
 
   private static final String TENANT = "t1";
 
-  @Autowired
-  private WorkflowDefinitionMapper definitionMapper;
+  private final WorkflowDefinitionMapper definitionMapper;
 
-  @Autowired
-  private WorkflowDefinitionVersionMapper versionMapper;
+  private final WorkflowDefinitionVersionMapper versionMapper;
 
-  @Autowired
-  private WorkflowNodeMapper nodeMapper;
+  private final WorkflowNodeMapper nodeMapper;
 
-  @Autowired
-  private WorkflowEdgeMapper edgeMapper;
+  private final WorkflowEdgeMapper edgeMapper;
 
-  @Autowired
-  private ObjectMapper objectMapper;
+  private final ObjectMapper objectMapper;
 
-  @Autowired
-  private VersionInsertFault insertFault;
+  private final VersionInsertFault insertFault;
 
-  @Autowired
-  private SqlSessionFactory sessions;
+  private final SqlSessionFactory sessions;
 
   private final Set<Long> ownedDefinitionIds = ConcurrentHashMap.newKeySet();
   private String workflowCode;
   private String calendarCode;
+
+  @Autowired
+  WorkflowCreateVersionSnapshotIntegrationTest(
+      WorkflowDefinitionMapper definitionMapper,
+      WorkflowDefinitionVersionMapper versionMapper,
+      WorkflowNodeMapper nodeMapper,
+      WorkflowEdgeMapper edgeMapper,
+      ObjectMapper objectMapper,
+      VersionInsertFault insertFault,
+      SqlSessionFactory sessions) {
+    this.definitionMapper = definitionMapper;
+    this.versionMapper = versionMapper;
+    this.nodeMapper = nodeMapper;
+    this.edgeMapper = edgeMapper;
+    this.objectMapper = objectMapper;
+    this.insertFault = insertFault;
+    this.sessions = sessions;
+  }
 
   @BeforeEach
   void seedOwnedCalendar() {

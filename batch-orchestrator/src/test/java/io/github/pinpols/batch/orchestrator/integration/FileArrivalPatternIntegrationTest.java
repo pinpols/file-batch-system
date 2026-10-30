@@ -22,11 +22,15 @@ import org.springframework.jdbc.core.JdbcTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @DisplayName("文件到达传感器匹配规则与数据库语义")
 class FileArrivalPatternIntegrationTest extends AbstractIntegrationTest {
-  @Autowired
-  private FileArrivalSensorPolicy policy;
+  private final FileArrivalSensorPolicy policy;
+
+  private final JdbcTemplate jdbc;
 
   @Autowired
-  private JdbcTemplate jdbc;
+  FileArrivalPatternIntegrationTest(FileArrivalSensorPolicy policy, JdbcTemplate jdbc) {
+    this.policy = policy;
+    this.jdbc = jdbc;
+  }
 
   @ParameterizedTest
   @CsvSource({

@@ -148,7 +148,7 @@ public class DispatchChannelHealthService {
 
   public boolean allowDispatch(Map<String, Object> channelConfig) {
     boolean channelHealthCheckIsUnavailable =
-        !properties.isEnabled() || channelConfig == null || channelConfig.isEmpty();
+        !properties.isEnabled() || EmptyChecks.isEmpty(channelConfig);
     if (channelHealthCheckIsUnavailable) {
       return true;
     }
@@ -193,7 +193,7 @@ public class DispatchChannelHealthService {
   public void recordDispatchOutcome(
       Map<String, Object> channelConfig, boolean success, String message, String evidence) {
     boolean channelFailureTrackingIsUnavailable =
-        !properties.isEnabled() || channelConfig == null || channelConfig.isEmpty();
+        !properties.isEnabled() || EmptyChecks.isEmpty(channelConfig);
     if (channelFailureTrackingIsUnavailable) {
       return;
     }
@@ -413,7 +413,7 @@ public class DispatchChannelHealthService {
     }
     DispatchChannelHealthSnapshot snapshot =
         repository.findHealth(channel.tenantId(), channel.channelCode());
-    boolean channelProbeIsNotDue = snapshot != null
+    boolean channelProbeIsNotDue = EmptyChecks.isNotNull(snapshot)
         && snapshot.nextProbeAt() != null
         && BatchDateTimeSupport.utcNow().isBefore(snapshot.nextProbeAt());
     if (channelProbeIsNotDue) {

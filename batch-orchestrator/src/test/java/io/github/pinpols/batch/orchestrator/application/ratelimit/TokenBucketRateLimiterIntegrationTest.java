@@ -64,8 +64,12 @@ class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   private TokenBucketRateLimiter limiter;
 
+  private final RedisConnectionFactory redisConnectionFactory;
+
   @Autowired
-  private RedisConnectionFactory redisConnectionFactory;
+  TokenBucketRateLimiterIntegrationTest(RedisConnectionFactory redisConnectionFactory) {
+    this.redisConnectionFactory = redisConnectionFactory;
+  }
 
   private static String uniqueTenant() {
     return "t-tb-" + System.nanoTime();

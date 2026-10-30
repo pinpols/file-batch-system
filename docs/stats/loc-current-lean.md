@@ -1,19 +1,19 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `ab4ccf042`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `31a5e0d1a`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 6,081 | 783,143 | 408,774 | 52.2% |
+| 6,081 | 784,040 | 409,006 | 52.2% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| test | 1,783 | 382,550 | 204,584 | 53.5% |
-| prod | 3,405 | 318,461 | 151,863 | 47.7% |
+| test | 1,783 | 383,400 | 204,797 | 53.4% |
+| prod | 3,405 | 318,508 | 151,882 | 47.7% |
 | script | 715 | 63,347 | 39,975 | 63.1% |
 | config | 68 | 10,242 | 7,656 | 74.8% |
 | infra-config | 34 | 6,107 | 4,465 | 73.1% |
@@ -23,7 +23,7 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 4,568 | 610,604 | 321,801 | 52.7% |
+| Java | 4,568 | 611,501 | 322,033 | 52.7% |
 | Shell | 215 | 35,690 | 28,210 | 79.0% |
 | Python | 321 | 47,692 | 25,547 | 53.6% |
 | YAML | 109 | 14,929 | 11,576 | 77.5% |
@@ -39,24 +39,24 @@
 
 | File | Group | Language | Physical LOC | Lean logical LOC |
 |---|---|---|---:|---:|
-| `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/WorkflowOccurrenceCatchUpApprovalE2eIT.java` | test | Java | 7,717 | 3,242 |
-| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/JobNodeDispatchIntegrationTest.java` | test | Java | 6,022 | 2,606 |
-| `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/WorkerReportLostAfterBusinessCommitE2eIT.java` | test | Java | 4,859 | 2,566 |
-| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/BatchDayMetricsMapperIntegrationTest.java` | test | Java | 3,687 | 1,764 |
-| `batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/TriggerServiceIntegrationTest.java` | test | Java | 2,771 | 1,458 |
-| `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/SelfServiceJobCompensationHttpE2eIT.java` | test | Java | 2,900 | 1,386 |
+| `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/WorkflowOccurrenceCatchUpApprovalE2eIT.java` | test | Java | 7,731 | 3,243 |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/JobNodeDispatchIntegrationTest.java` | test | Java | 6,040 | 2,603 |
+| `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/WorkerReportLostAfterBusinessCommitE2eIT.java` | test | Java | 4,870 | 2,567 |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/BatchDayMetricsMapperIntegrationTest.java` | test | Java | 3,689 | 1,764 |
+| `batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/TriggerServiceIntegrationTest.java` | test | Java | 2,772 | 1,457 |
+| `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/SelfServiceJobCompensationHttpE2eIT.java` | test | Java | 2,914 | 1,388 |
 | `deploy/docker/observability/prometheus-batch-rules.yml` | config | YAML | 1,635 | 1,373 |
 | `helm/batch-platform/files/prometheus-batch-rules.yml` | infra-config | YAML | 1,635 | 1,373 |
 | `batch-common/src/main/resources/messages.properties` | prod | Properties | 1,576 | 1,316 |
 | `batch-common/src/main/resources/messages_zh_CN.properties` | prod | Properties | 1,574 | 1,316 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ConsoleTenantConfigPackageExcelUploadIntegrationTest.java` | test | Java | 2,929 | 1,303 |
 | `load-tests/scripts/run-p2-capacity-profile.sh` | script | Shell | 1,409 | 1,293 |
-| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/RetryExecutionClosureIntegrationTest.java` | test | Java | 2,134 | 1,123 |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/RetryExecutionClosureIntegrationTest.java` | test | Java | 2,152 | 1,125 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/sensor/WorkflowSensorApplicationContextRestartIntegrationTest.java` | test | Java | 2,399 | 1,034 |
-| `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/StaleWorkerReportFenceE2eIT.java` | test | Java | 2,027 | 1,011 |
-| `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/TenantConfigBatchInitStrictAtomicityIntegrationTest.java` | test | Java | 1,561 | 949 |
+| `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/StaleWorkerReportFenceE2eIT.java` | test | Java | 2,039 | 1,013 |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/TenantConfigBatchInitStrictAtomicityIntegrationTest.java` | test | Java | 1,570 | 951 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/TenantConfigDependencyRlsIntegrationTest.java` | test | Java | 1,854 | 929 |
-| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/ArchiveColdStorageIntegrationTest.java` | test | Java | 1,883 | 917 |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/ArchiveColdStorageIntegrationTest.java` | test | Java | 1,887 | 917 |
 | `scripts/local/sim-harness.sh` | script | Shell | 1,092 | 908 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/BatchDayCatchUpOperationSchemaIntegrationTest.java` | test | Java | 1,577 | 896 |
 

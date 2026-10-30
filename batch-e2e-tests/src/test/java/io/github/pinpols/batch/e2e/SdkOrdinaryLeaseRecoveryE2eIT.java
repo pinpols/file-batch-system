@@ -113,32 +113,43 @@ class SdkOrdinaryLeaseRecoveryE2eIT extends AbstractIntegrationTest {
       select count(*) from batch.retry_schedule where tenant_id = ?
       """;
 
-  @Autowired
-  private JdbcTemplate platformJdbc;
+  private final JdbcTemplate platformJdbc;
 
-  @Autowired
-  private WorkflowRunLaunchService launchService;
+  private final WorkflowRunLaunchService launchService;
 
-  @Autowired
-  private E2eOutboxPublishSupport outboxPublishSupport;
+  private final E2eOutboxPublishSupport outboxPublishSupport;
 
-  @Autowired
-  private JobPartitionMapper partitionMapper;
+  private final JobPartitionMapper partitionMapper;
 
-  @Autowired
-  private PartitionReclaimUnit reclaimUnit;
+  private final PartitionReclaimUnit reclaimUnit;
 
-  @Autowired
-  private AdminTestDataCleanupService cleanupService;
+  private final AdminTestDataCleanupService cleanupService;
 
-  @Autowired
-  private KafkaTemplate<String, String> kafkaTemplate;
+  private final KafkaTemplate<String, String> kafkaTemplate;
 
   @MockitoSpyBean
   private TaskControllerApplicationService taskController;
 
   @LocalServerPort
   private int serverPort;
+
+  @Autowired
+  SdkOrdinaryLeaseRecoveryE2eIT(
+      JdbcTemplate platformJdbc,
+      WorkflowRunLaunchService launchService,
+      E2eOutboxPublishSupport outboxPublishSupport,
+      JobPartitionMapper partitionMapper,
+      PartitionReclaimUnit reclaimUnit,
+      AdminTestDataCleanupService cleanupService,
+      KafkaTemplate<String, String> kafkaTemplate) {
+    this.platformJdbc = platformJdbc;
+    this.launchService = launchService;
+    this.outboxPublishSupport = outboxPublishSupport;
+    this.partitionMapper = partitionMapper;
+    this.reclaimUnit = reclaimUnit;
+    this.cleanupService = cleanupService;
+    this.kafkaTemplate = kafkaTemplate;
+  }
 
   @Test
   @DisplayName("独立 SDK 业务提交后强杀进程，租约回收为 UNKNOWN 且原消息不能重复动作")

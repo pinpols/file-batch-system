@@ -27,14 +27,19 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 @SpringBootTest(classes = BatchConsoleApiApplication.class)
 @DisplayName("实时订阅规则：真实数据库候选与模拟网络投递")
 class SubscriptionRuleRealtimeSelectionIntegrationTest extends AbstractIntegrationTest {
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
 
-  @Autowired
-  private SubscriptionRuleWebhookDispatcher dispatcher;
+  private final SubscriptionRuleWebhookDispatcher dispatcher;
 
   @MockitoBean
   private WebhookDispatcher webhookDispatcher;
+
+  @Autowired
+  SubscriptionRuleRealtimeSelectionIntegrationTest(
+      JdbcTemplate jdbc, SubscriptionRuleWebhookDispatcher dispatcher) {
+    this.jdbc = jdbc;
+    this.dispatcher = dispatcher;
+  }
 
   @Test
   @DisplayName("Unicode 大小写扩展后的自定义事件从数据库规则匹配到投递")

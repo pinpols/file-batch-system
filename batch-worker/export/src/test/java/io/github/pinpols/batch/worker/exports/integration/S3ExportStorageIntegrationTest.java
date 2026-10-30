@@ -49,17 +49,25 @@ class S3ExportStorageIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   private S3ExportStorage storage;
 
-  @Autowired
-  private StoreStep storeStep;
+  private final StoreStep storeStep;
+
+  private final S3StorageProperties storageProperties;
+
+  private final JdbcTemplate jdbcTemplate;
+
+  private final BatchObjectStore objectStore;
 
   @Autowired
-  private S3StorageProperties storageProperties;
-
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
-
-  @Autowired
-  private BatchObjectStore objectStore;
+  S3ExportStorageIntegrationTest(
+      StoreStep storeStep,
+      S3StorageProperties storageProperties,
+      JdbcTemplate jdbcTemplate,
+      BatchObjectStore objectStore) {
+    this.storeStep = storeStep;
+    this.storageProperties = storageProperties;
+    this.jdbcTemplate = jdbcTemplate;
+    this.objectStore = objectStore;
+  }
 
   @Test
   @DisplayName("已登记加密产物重派后真实对象与 PostgreSQL 摘要及安全元数据保持不变")

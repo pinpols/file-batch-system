@@ -488,7 +488,7 @@ final class ConfigPackageExcelRowValidators {
     }
     FileTemplateSecurityFlagsView found =
         fileTemplateConfigMapper.selectSecurityFlagsByTemplateCode(tenantId, ref.templateCode());
-    return found != null;
+    return EmptyChecks.isNotNull(found);
   }
 
   static String templateKey(String templateCode, Integer version) {

@@ -46,21 +46,24 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
   private final JdbcTemplate jdbcTemplate;
   private final JobSlaViolationProcessor violationProcessor;
 
-  @Autowired
-  private JobMonitoringMapper monitoring;
+  private final JobMonitoringMapper monitoring;
 
-  @Autowired
-  private JobInstanceTerminalStatusApplicationService terminals;
+  private final JobInstanceTerminalStatusApplicationService terminals;
 
-  @Autowired
-  @Qualifier("transactionManager")
-  private PlatformTransactionManager transactions;
+  private final PlatformTransactionManager transactions;
 
   @Autowired
   JobSlaSchedulerRecoveryIntegrationTest(
-      JdbcTemplate jdbcTemplate, JobSlaViolationProcessor violationProcessor) {
+      JdbcTemplate jdbcTemplate,
+      JobSlaViolationProcessor violationProcessor,
+      JobMonitoringMapper monitoring,
+      JobInstanceTerminalStatusApplicationService terminals,
+      @Qualifier("transactionManager") PlatformTransactionManager transactions) {
     this.jdbcTemplate = jdbcTemplate;
     this.violationProcessor = violationProcessor;
+    this.monitoring = monitoring;
+    this.terminals = terminals;
+    this.transactions = transactions;
   }
 
   @Test

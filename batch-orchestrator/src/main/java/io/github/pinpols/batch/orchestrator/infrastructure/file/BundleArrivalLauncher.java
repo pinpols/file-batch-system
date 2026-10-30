@@ -144,7 +144,9 @@ public class BundleArrivalLauncher {
           mergeWorkflowCode(tenantId, fileGroupCode, bundleWorkflowCode, workflowCode);
       bizDate = mergeBizDate(tenantId, fileGroupCode, bizDate, toLocalDate(file.bizDate()));
       boolean workflowIsMissingForExportTargets = EmptyChecks.isNull(workflowCode)
-          && (!exportTemplates.isEmpty() || templateCode != null || targetRef != null);
+          && (!EmptyChecks.isEmpty(exportTemplates)
+              || EmptyChecks.isNotNull(templateCode)
+              || EmptyChecks.isNotNull(targetRef));
       if (workflowIsMissingForExportTargets) {
         bindingWithoutWorkflowCode = true;
       }

@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.storage.MeteredObjectStore;
 import io.github.pinpols.batch.common.storage.NamespacedObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectStorageBackendGuard;
 import io.github.pinpols.batch.common.storage.S3ObjectStore;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.micrometer.core.instrument.MeterRegistry;
 import javax.sql.DataSource;
@@ -131,7 +132,7 @@ public class BatchObjectStoreAutoConfiguration {
     BatchObjectStore store;
     boolean objectStoreEncryptionIsUnavailable = !encryptionProperties.isDecoratorEnabled()
         || securityProperties.isBypassMode()
-        || crypto == null;
+        || EmptyChecks.isNull(crypto);
     if (objectStoreEncryptionIsUnavailable) {
       store = raw;
     } else {

@@ -82,53 +82,71 @@ import org.springframework.transaction.support.TransactionTemplate;
 class RetryExecutionClosureIntegrationTest extends AbstractIntegrationTest {
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 10, 16);
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
 
-  @Autowired
-  private WorkflowRunLaunchService launchService;
+  private final WorkflowRunLaunchService launchService;
 
-  @Autowired
-  private TaskExecutionService execution;
+  private final TaskExecutionService execution;
 
-  @Autowired
-  private RetryGovernanceService retries;
+  private final RetryGovernanceService retries;
 
-  @Autowired
-  private RetryGovernanceProperties retryProperties;
+  private final RetryGovernanceProperties retryProperties;
 
-  @Autowired
-  private RetryScheduleMapper retrySchedules;
+  private final RetryScheduleMapper retrySchedules;
 
-  @Autowired
-  private CompensationService compensation;
+  private final CompensationService compensation;
 
-  @Autowired
-  private FileGovernanceService fileGovernanceService;
+  private final FileGovernanceService fileGovernanceService;
 
-  @Autowired
-  private JobTaskMapper tasks;
+  private final JobTaskMapper tasks;
 
-  @Autowired
-  private JobPartitionMapper partitions;
+  private final JobPartitionMapper partitions;
 
-  @Autowired
-  private JobInstanceMapper instances;
+  private final JobInstanceMapper instances;
 
-  @Autowired
-  private WorkflowRunMapper workflows;
+  private final WorkflowRunMapper workflows;
 
-  @Autowired
-  private DeadLetterTaskMapper deadLetters;
+  private final DeadLetterTaskMapper deadLetters;
 
-  @Autowired
-  private PlatformTransactionManager transactionManager;
+  private final PlatformTransactionManager transactionManager;
 
   @MockitoSpyBean
   private TaskDispatchOutboxService dispatch;
 
   @MockitoSpyBean
   private CompensationCommandMapper compensationCommands;
+
+  @Autowired
+  RetryExecutionClosureIntegrationTest(
+      JdbcTemplate jdbc,
+      WorkflowRunLaunchService launchService,
+      TaskExecutionService execution,
+      RetryGovernanceService retries,
+      RetryGovernanceProperties retryProperties,
+      RetryScheduleMapper retrySchedules,
+      CompensationService compensation,
+      FileGovernanceService fileGovernanceService,
+      JobTaskMapper tasks,
+      JobPartitionMapper partitions,
+      JobInstanceMapper instances,
+      WorkflowRunMapper workflows,
+      DeadLetterTaskMapper deadLetters,
+      PlatformTransactionManager transactionManager) {
+    this.jdbc = jdbc;
+    this.launchService = launchService;
+    this.execution = execution;
+    this.retries = retries;
+    this.retryProperties = retryProperties;
+    this.retrySchedules = retrySchedules;
+    this.compensation = compensation;
+    this.fileGovernanceService = fileGovernanceService;
+    this.tasks = tasks;
+    this.partitions = partitions;
+    this.instances = instances;
+    this.workflows = workflows;
+    this.deadLetters = deadLetters;
+    this.transactionManager = transactionManager;
+  }
 
   @ParameterizedTest
   @ValueSource(strings = {"SQL_NULL", "null", "[]", "\"text\"", "{}", "{\"dryRun\": false}"})

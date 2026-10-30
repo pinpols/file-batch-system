@@ -214,7 +214,7 @@ public class DefaultConsoleFileDownloadApplicationService
 
   private boolean requiresDownloadApproval(FileTemplateSecurityFlagsView security) {
     boolean downloadApprovalIsNotRequired =
-        batchSecurityProperties.isBypassMode() || security == null;
+        batchSecurityProperties.isBypassMode() || EmptyChecks.isNull(security);
     if (downloadApprovalIsNotRequired) {
       return false;
     }

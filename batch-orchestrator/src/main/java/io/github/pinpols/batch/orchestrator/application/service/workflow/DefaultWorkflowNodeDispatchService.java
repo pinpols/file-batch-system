@@ -726,7 +726,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
       SchedulePlan plan, WorkflowNodeEntity workflowNode, JobInstanceEntity jobInstance) {
     plan.setDryRun(Boolean.TRUE.equals(jobInstance.getDryRun()));
     plan.setWindowCode(
-        workflowNode.getWindowCode() == null || workflowNode.getWindowCode().isBlank()
+        EmptyChecks.isNull(workflowNode.getWindowCode())
+                || EmptyChecks.isBlank(Objects.requireNonNull(workflowNode.getWindowCode()))
             ? plan.getWindowCode()
             : workflowNode.getWindowCode());
     boolean hasNonBlankWorkerGroupOverride = EmptyChecks.isNotNull(workflowNode.getWorkerGroup())
@@ -759,10 +760,11 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
           + node.nodeCode()
           + ":"
           + partitionPlan.getPartitionNo());
-      partitionPlan.setBusinessKey(
-          (partitionPlan.getBusinessKey() == null ? targetJobCode : partitionPlan.getBusinessKey())
-              + ":"
-              + node.nodeCode());
+      partitionPlan.setBusinessKey((EmptyChecks.isNull(partitionPlan.getBusinessKey())
+              ? targetJobCode
+              : partitionPlan.getBusinessKey())
+          + ":"
+          + node.nodeCode());
     }
   }
 
@@ -946,9 +948,9 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
   }
 
   private String resolveSelectedWorkerId(SchedulePlan plan, JobPartitionEntity partition) {
-    boolean partitionHasAssignedWorker = partition != null
-        && partition.getWorkerCode() != null
-        && !partition.getWorkerCode().isBlank();
+    boolean partitionHasAssignedWorker = EmptyChecks.isNotNull(partition)
+        && EmptyChecks.isNotNull(partition.getWorkerCode())
+        && !EmptyChecks.isBlank(Objects.requireNonNull(partition.getWorkerCode()));
     if (partitionHasAssignedWorker) {
       return partition.getWorkerCode();
     }

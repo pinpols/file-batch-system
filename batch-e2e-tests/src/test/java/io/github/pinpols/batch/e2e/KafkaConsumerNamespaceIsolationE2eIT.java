@@ -59,26 +59,37 @@ class KafkaConsumerNamespaceIsolationE2eIT extends AbstractIntegrationTest {
   private static final int TOPIC_PARTITIONS = 1;
   private static final short TOPIC_REPLICATION_FACTOR = 1;
 
-  @Autowired
-  private BatchKafkaTopicNamespace topicNamespace;
+  private final BatchKafkaTopicNamespace topicNamespace;
+
+  private final TriggerLaunchConsumer triggerLaunchConsumer;
+
+  private final WorkflowTerminalLineageConsumer workflowTerminalLineageConsumer;
+
+  private final WorkflowTerminalNotificationConsumer workflowTerminalNotificationConsumer;
+
+  private final JobTerminalNotificationConsumer jobTerminalNotificationConsumer;
+
+  private final ImportTaskConsumer importTaskConsumer;
+
+  private final KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
 
   @Autowired
-  private TriggerLaunchConsumer triggerLaunchConsumer;
-
-  @Autowired
-  private WorkflowTerminalLineageConsumer workflowTerminalLineageConsumer;
-
-  @Autowired
-  private WorkflowTerminalNotificationConsumer workflowTerminalNotificationConsumer;
-
-  @Autowired
-  private JobTerminalNotificationConsumer jobTerminalNotificationConsumer;
-
-  @Autowired
-  private ImportTaskConsumer importTaskConsumer;
-
-  @Autowired
-  private KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
+  KafkaConsumerNamespaceIsolationE2eIT(
+      BatchKafkaTopicNamespace topicNamespace,
+      TriggerLaunchConsumer triggerLaunchConsumer,
+      WorkflowTerminalLineageConsumer workflowTerminalLineageConsumer,
+      WorkflowTerminalNotificationConsumer workflowTerminalNotificationConsumer,
+      JobTerminalNotificationConsumer jobTerminalNotificationConsumer,
+      ImportTaskConsumer importTaskConsumer,
+      KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry) {
+    this.topicNamespace = topicNamespace;
+    this.triggerLaunchConsumer = triggerLaunchConsumer;
+    this.workflowTerminalLineageConsumer = workflowTerminalLineageConsumer;
+    this.workflowTerminalNotificationConsumer = workflowTerminalNotificationConsumer;
+    this.jobTerminalNotificationConsumer = jobTerminalNotificationConsumer;
+    this.importTaskConsumer = importTaskConsumer;
+    this.kafkaListenerEndpointRegistry = kafkaListenerEndpointRegistry;
+  }
 
   @DynamicPropertySource
   static void registerDeploymentNamespace(DynamicPropertyRegistry registry) {

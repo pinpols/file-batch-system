@@ -48,14 +48,11 @@ class BatchDayReplayRangeOperationServiceIntegrationTest extends AbstractIntegra
   private static final LocalDate FROM_DATE = LocalDate.of(2026, 10, 19);
   private static final LocalDate THROUGH_DATE = LocalDate.of(2026, 10, 20);
 
-  @Autowired
-  private BatchDayReplayRangeOperationService rangeOperationService;
+  private final BatchDayReplayRangeOperationService rangeOperationService;
 
-  @Autowired
-  private BatchDayReplaySessionMapper sessionMapper;
+  private final BatchDayReplaySessionMapper sessionMapper;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private final JdbcTemplate jdbcTemplate;
 
   @MockitoBean
   private BatchDayReplayService singleDayReplayService;
@@ -284,4 +281,14 @@ class BatchDayReplayRangeOperationServiceIntegrationTest extends AbstractIntegra
       where wait_event_type = 'Lock'
         and query ilike '%replay_operation_preview_token%'
       """;
+
+  @Autowired
+  BatchDayReplayRangeOperationServiceIntegrationTest(
+      BatchDayReplayRangeOperationService rangeOperationService,
+      BatchDayReplaySessionMapper sessionMapper,
+      JdbcTemplate jdbcTemplate) {
+    this.rangeOperationService = rangeOperationService;
+    this.sessionMapper = sessionMapper;
+    this.jdbcTemplate = jdbcTemplate;
+  }
 }

@@ -40,21 +40,29 @@ import org.springframework.test.context.jdbc.Sql;
 class ExportPartitionContentE2eIT extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
 
-  @Autowired
-  private WorkflowRunLaunchService launchService;
+  private final WorkflowRunLaunchService launchService;
+
+  private final JdbcTemplate jdbcTemplate;
+
+  private final E2eOutboxPublishSupport outbox;
+
+  private final ObjectMapper objectMapper;
+
+  private final DataSource businessDataSource;
 
   @Autowired
-  private JdbcTemplate jdbcTemplate;
-
-  @Autowired
-  private E2eOutboxPublishSupport outbox;
-
-  @Autowired
-  private ObjectMapper objectMapper;
-
-  @Autowired
-  @Qualifier("exportBusinessDataSource")
-  private DataSource businessDataSource;
+  ExportPartitionContentE2eIT(
+      WorkflowRunLaunchService launchService,
+      JdbcTemplate jdbcTemplate,
+      E2eOutboxPublishSupport outbox,
+      ObjectMapper objectMapper,
+      @Qualifier("exportBusinessDataSource") DataSource businessDataSource) {
+    this.launchService = launchService;
+    this.jdbcTemplate = jdbcTemplate;
+    this.outbox = outbox;
+    this.objectMapper = objectMapper;
+    this.businessDataSource = businessDataSource;
+  }
 
   @Test
   @DisplayName("旧范围配置下四分片导出所有业务记录且不重复")

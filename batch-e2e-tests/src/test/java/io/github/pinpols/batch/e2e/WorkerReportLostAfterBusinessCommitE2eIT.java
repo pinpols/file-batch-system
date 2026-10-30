@@ -136,30 +136,21 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
   private static final long WORKER_BUILD_TIMEOUT_MINUTES = 10L;
   private static final HttpClient REPORT_HTTP_CLIENT = HttpClient.newHttpClient();
 
-  @Autowired
-  private WorkflowRunLaunchService launchService;
+  private final WorkflowRunLaunchService launchService;
 
-  @Autowired
-  private E2eOutboxPublishSupport outboxPublishSupport;
+  private final E2eOutboxPublishSupport outboxPublishSupport;
 
-  @Autowired
-  private JdbcTemplate platformJdbc;
+  private final JdbcTemplate platformJdbc;
 
-  @Autowired
-  private KafkaTemplate<String, String> kafkaTemplate;
+  private final KafkaTemplate<String, String> kafkaTemplate;
 
-  @Autowired
-  private JobPartitionMapper jobPartitionMapper;
+  private final JobPartitionMapper jobPartitionMapper;
 
-  @Autowired
-  private PartitionReclaimUnit partitionReclaimUnit;
+  private final PartitionReclaimUnit partitionReclaimUnit;
 
-  @Autowired
-  private ObjectMapper objectMapper;
+  private final ObjectMapper objectMapper;
 
-  @Autowired
-  @Qualifier("e2eBusinessDataSource")
-  private DataSource businessDataSource;
+  private final DataSource businessDataSource;
 
   @Value("${batch.security.internal-secret}")
   private String internalSecret;
@@ -182,6 +173,26 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
 
   @MockitoSpyBean
   private TaskControllerApplicationService taskControllerApplicationService;
+
+  @Autowired
+  WorkerReportLostAfterBusinessCommitE2eIT(
+      WorkflowRunLaunchService launchService,
+      E2eOutboxPublishSupport outboxPublishSupport,
+      JdbcTemplate platformJdbc,
+      KafkaTemplate<String, String> kafkaTemplate,
+      JobPartitionMapper jobPartitionMapper,
+      PartitionReclaimUnit partitionReclaimUnit,
+      ObjectMapper objectMapper,
+      @Qualifier("e2eBusinessDataSource") DataSource businessDataSource) {
+    this.launchService = launchService;
+    this.outboxPublishSupport = outboxPublishSupport;
+    this.platformJdbc = platformJdbc;
+    this.kafkaTemplate = kafkaTemplate;
+    this.jobPartitionMapper = jobPartitionMapper;
+    this.partitionReclaimUnit = partitionReclaimUnit;
+    this.objectMapper = objectMapper;
+    this.businessDataSource = businessDataSource;
+  }
 
   @Test
   @DisplayName("已提交 REPORT 的并发重复与确认丢失在 Worker 重启后收敛且业务记录唯一")

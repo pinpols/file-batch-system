@@ -51,11 +51,15 @@ class ApprovalSourceLookupHttpIntegrationTest extends AbstractIntegrationTest {
     }
   }
 
-  @Autowired
-  private ApprovalWorkflowService approvals;
+  private final ApprovalWorkflowService approvals;
 
   @LocalServerPort
   private int port;
+
+  @Autowired
+  ApprovalSourceLookupHttpIntegrationTest(ApprovalWorkflowService approvals) {
+    this.approvals = approvals;
+  }
 
   @Test
   @DisplayName("审批决定后按原键回查返回原提交原因和决定原因")

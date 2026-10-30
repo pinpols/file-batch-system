@@ -95,29 +95,41 @@ import org.springframework.test.util.AopTestUtils;
 @DisplayName("Quartz JDBC misfire 恢复:真实过期 Workflow Cron trigger 最终写入 CATCH_UP request 与 outbox")
 class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
   private Scheduler scheduler;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private final JdbcTemplate jdbcTemplate;
+
+  private final ScheduledOccurrenceRecorder occurrenceRecorder;
+
+  private final QuartzMisfireRecoveryListener misfireRecoveryListener;
+
+  private final TriggerReconciler triggerReconciler;
+
+  private final TaskScheduler taskScheduler;
+
+  private final DataSource dataSource;
+
+  private final AutowireCapableBeanFactory beanFactory;
 
   @Autowired
-  private ScheduledOccurrenceRecorder occurrenceRecorder;
-
-  @Autowired
-  private QuartzMisfireRecoveryListener misfireRecoveryListener;
-
-  @Autowired
-  private TriggerReconciler triggerReconciler;
-
-  @Autowired
-  private TaskScheduler taskScheduler;
-
-  @Autowired
-  private DataSource dataSource;
-
-  @Autowired
-  private AutowireCapableBeanFactory beanFactory;
+  QuartzMisfireRecoveryIntegrationTest(
+      Scheduler scheduler,
+      JdbcTemplate jdbcTemplate,
+      ScheduledOccurrenceRecorder occurrenceRecorder,
+      QuartzMisfireRecoveryListener misfireRecoveryListener,
+      TriggerReconciler triggerReconciler,
+      TaskScheduler taskScheduler,
+      DataSource dataSource,
+      AutowireCapableBeanFactory beanFactory) {
+    this.scheduler = scheduler;
+    this.jdbcTemplate = jdbcTemplate;
+    this.occurrenceRecorder = occurrenceRecorder;
+    this.misfireRecoveryListener = misfireRecoveryListener;
+    this.triggerReconciler = triggerReconciler;
+    this.taskScheduler = taskScheduler;
+    this.dataSource = dataSource;
+    this.beanFactory = beanFactory;
+  }
 
   private String tenantId;
   private String workflowCode;

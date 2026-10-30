@@ -51,14 +51,19 @@ import org.springframework.kafka.test.utils.ContainerTestUtils;
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @DisplayName("启动恢复锚点与真实 Kafka offset")
 class TriggerRecoveryKafkaOffsetIntegrationTest extends AbstractIntegrationTest {
-  @Autowired
-  private TriggerLaunchRecoveryService service;
+  private final TriggerLaunchRecoveryService service;
+
+  private final ApplicationContext context;
+
+  private final JdbcTemplate jdbc;
 
   @Autowired
-  private ApplicationContext context;
-
-  @Autowired
-  private JdbcTemplate jdbc;
+  TriggerRecoveryKafkaOffsetIntegrationTest(
+      TriggerLaunchRecoveryService service, ApplicationContext context, JdbcTemplate jdbc) {
+    this.service = service;
+    this.context = context;
+    this.jdbc = jdbc;
+  }
 
   @Test
   @DisplayName("锚点登记成功可提交，冲突载荷不得提交或覆盖")

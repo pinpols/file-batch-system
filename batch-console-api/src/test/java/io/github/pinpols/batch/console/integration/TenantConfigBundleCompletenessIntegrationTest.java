@@ -31,16 +31,23 @@ import org.springframework.jdbc.core.JdbcTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class TenantConfigBundleCompletenessIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private ConsoleTenantConfigCopyService copyService;
+  private final ConsoleTenantConfigCopyService copyService;
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
 
-  @Autowired
-  private WorkflowDagValidator graphValidator;
+  private final WorkflowDagValidator graphValidator;
 
   private String tenant;
+
+  @Autowired
+  TenantConfigBundleCompletenessIntegrationTest(
+      ConsoleTenantConfigCopyService copyService,
+      JdbcTemplate jdbc,
+      WorkflowDagValidator graphValidator) {
+    this.copyService = copyService;
+    this.jdbc = jdbc;
+    this.graphValidator = graphValidator;
+  }
 
   @BeforeEach
   void createTenant() {

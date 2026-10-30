@@ -18,11 +18,15 @@ import org.springframework.jdbc.core.JdbcTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @DisplayName("Workflow 血缘数据集查询的空值和租户边界")
 class OpenLineageDatasetNullBindingIntegrationTest extends AbstractIntegrationTest {
-  @Autowired
-  private OpenLineageDatasetMapper mapper;
+  private final OpenLineageDatasetMapper mapper;
+
+  private final JdbcTemplate jdbc;
 
   @Autowired
-  private JdbcTemplate jdbc;
+  OpenLineageDatasetNullBindingIntegrationTest(OpenLineageDatasetMapper mapper, JdbcTemplate jdbc) {
+    this.mapper = mapper;
+    this.jdbc = jdbc;
+  }
 
   @Test
   @DisplayName("无作业实例时只查询指定租户和追踪的血缘数据集")

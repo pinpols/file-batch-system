@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -169,7 +170,8 @@ public class BizDateArithmetic {
   }
 
   private List<LocalDate> inclusiveRange(LocalDate start, LocalDate end) {
-    boolean businessDateRangeIsInvalid = start == null || end == null || start.isAfter(end);
+    boolean businessDateRangeIsInvalid =
+        EmptyChecks.isNull(start) || EmptyChecks.isNull(end) || start.isAfter(end);
     if (businessDateRangeIsInvalid) {
       return Collections.emptyList();
     }

@@ -57,32 +57,43 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   private WorkflowRunLaunchService workflowRunLaunchService;
 
-  @Autowired
-  private WorkflowRunManagementApplicationService workflowRunManagementApplicationService;
+  private final WorkflowRunManagementApplicationService workflowRunManagementApplicationService;
 
   @Autowired
   private JobInstanceMapper jobInstanceMapper;
 
-  @Autowired
-  private JobTaskMapper jobTaskMapper;
+  private final JobTaskMapper jobTaskMapper;
 
-  @Autowired
-  private WorkflowNodeRunMapper workflowNodeRunMapper;
+  private final WorkflowNodeRunMapper workflowNodeRunMapper;
 
-  @Autowired
-  private BatchOrchestratorGovernanceProperties governance;
+  private final BatchOrchestratorGovernanceProperties governance;
 
-  @Autowired
-  private JobInstanceTimeoutEnforcer jobInstanceTimeoutEnforcer;
+  private final JobInstanceTimeoutEnforcer jobInstanceTimeoutEnforcer;
 
-  @Autowired
-  private JobInstanceTerminalStatusApplicationService terminalStatusService;
+  private final JobInstanceTerminalStatusApplicationService terminalStatusService;
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
 
+  private final TaskTimeoutEnforcer taskTimeoutEnforcer;
+
   @Autowired
-  private TaskTimeoutEnforcer taskTimeoutEnforcer;
+  MultiTenantIsolationIntegrationTest(
+      WorkflowRunManagementApplicationService workflowRunManagementApplicationService,
+      JobTaskMapper jobTaskMapper,
+      WorkflowNodeRunMapper workflowNodeRunMapper,
+      BatchOrchestratorGovernanceProperties governance,
+      JobInstanceTimeoutEnforcer jobInstanceTimeoutEnforcer,
+      JobInstanceTerminalStatusApplicationService terminalStatusService,
+      TaskTimeoutEnforcer taskTimeoutEnforcer) {
+    this.workflowRunManagementApplicationService = workflowRunManagementApplicationService;
+    this.jobTaskMapper = jobTaskMapper;
+    this.workflowNodeRunMapper = workflowNodeRunMapper;
+    this.governance = governance;
+    this.jobInstanceTimeoutEnforcer = jobInstanceTimeoutEnforcer;
+    this.terminalStatusService = terminalStatusService;
+    this.taskTimeoutEnforcer = taskTimeoutEnforcer;
+  }
 
   @Test
   @DisplayName("冻结的硬超时到期后，定义禁用超时不影响在途实例")

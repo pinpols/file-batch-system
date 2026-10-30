@@ -16,16 +16,17 @@ import java.lang.reflect.Field;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestConstructor;
 
 /** P0 Phase 3 等价性 IT — SPI 路径 ≡ @Primary 路径(export)。详见 {@code ImportSpiEquivalenceIT} 同名 doc。 */
 @SpringBootTest(
     classes = BatchWorkerExportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("导出 SPI 等价性集成测试:注册类型,执行器装配与委托实例同一性")
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class ExportSpiEquivalenceIT extends AbstractIntegrationTest {
 
   @DynamicPropertySource
@@ -33,14 +34,20 @@ class ExportSpiEquivalenceIT extends AbstractIntegrationTest {
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
 
-  @Autowired
-  ExportStepExecutionAdapter primaryAdapter;
+  private final ExportStepExecutionAdapter primaryAdapter;
 
-  @Autowired
-  BatchTaskExecutorRegistry registry;
+  private final BatchTaskExecutorRegistry registry;
 
-  @Autowired
-  ExportDataPluginRegistry exportDataPluginRegistry;
+  private final ExportDataPluginRegistry exportDataPluginRegistry;
+
+  ExportSpiEquivalenceIT(
+      ExportStepExecutionAdapter primaryAdapter,
+      BatchTaskExecutorRegistry registry,
+      ExportDataPluginRegistry exportDataPluginRegistry) {
+    this.primaryAdapter = primaryAdapter;
+    this.registry = registry;
+    this.exportDataPluginRegistry = exportDataPluginRegistry;
+  }
 
   @Test
   @DisplayName("上下文加载后,任务执行器注册表包含导出类型")

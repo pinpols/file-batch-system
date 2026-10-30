@@ -64,15 +64,21 @@ import org.springframework.test.context.jdbc.Sql;
 @DisplayName("请求接纳与 Kafka 消费确认窗口的独立进程强杀恢复")
 class LaunchProcessCrashRecoveryE2eIT extends AbstractIntegrationTest {
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
+
+  private final KafkaListenerEndpointRegistry listeners;
+
+  private final DataSource businessDataSource;
 
   @Autowired
-  private KafkaListenerEndpointRegistry listeners;
-
-  @Autowired
-  @Qualifier("importBusinessDataSource")
-  private DataSource businessDataSource;
+  LaunchProcessCrashRecoveryE2eIT(
+      JdbcTemplate jdbc,
+      KafkaListenerEndpointRegistry listeners,
+      @Qualifier("importBusinessDataSource") DataSource businessDataSource) {
+    this.jdbc = jdbc;
+    this.listeners = listeners;
+    this.businessDataSource = businessDataSource;
+  }
 
   private enum CrashWindow {
     PUBLISHER_AFTER_ACCEPTANCE,

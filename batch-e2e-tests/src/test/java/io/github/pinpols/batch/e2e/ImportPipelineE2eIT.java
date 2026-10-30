@@ -110,20 +110,15 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
   @Autowired
   private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
-  @Autowired
-  private FileGovernanceScheduler fileGovernanceScheduler;
+  private final FileGovernanceScheduler fileGovernanceScheduler;
 
-  @Autowired
-  private BatchDaySettleScheduler batchDaySettleScheduler;
+  private final BatchDaySettleScheduler batchDaySettleScheduler;
 
-  @Autowired
-  private TaskExecutionService taskExecutionService;
+  private final TaskExecutionService taskExecutionService;
 
-  @Autowired
-  private RetryGovernanceService retryGovernanceService;
+  private final RetryGovernanceService retryGovernanceService;
 
-  @Autowired
-  private KafkaTemplate<String, String> kafkaTemplate;
+  private final KafkaTemplate<String, String> kafkaTemplate;
 
   @MockitoSpyBean
   private TaskControllerApplicationService taskControllerApplicationService;
@@ -132,14 +127,29 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
   @Qualifier("importBusinessDataSource")
   private DataSource businessDataSource;
 
-  @Autowired
-  private WorkerCheckpointProperties checkpointProperties;
+  private final WorkerCheckpointProperties checkpointProperties;
 
   @MockitoSpyBean
   private GenericJdbcMappedImportLoadPlugin genericImportLoadPlugin;
 
   @MockitoSpyBean
   private ValidateStep validateStep;
+
+  @Autowired
+  ImportPipelineE2eIT(
+      FileGovernanceScheduler fileGovernanceScheduler,
+      BatchDaySettleScheduler batchDaySettleScheduler,
+      TaskExecutionService taskExecutionService,
+      RetryGovernanceService retryGovernanceService,
+      KafkaTemplate<String, String> kafkaTemplate,
+      WorkerCheckpointProperties checkpointProperties) {
+    this.fileGovernanceScheduler = fileGovernanceScheduler;
+    this.batchDaySettleScheduler = batchDaySettleScheduler;
+    this.taskExecutionService = taskExecutionService;
+    this.retryGovernanceService = retryGovernanceService;
+    this.kafkaTemplate = kafkaTemplate;
+    this.checkpointProperties = checkpointProperties;
+  }
 
   @Test
   @DisplayName("导入任务经派发与认领执行后回报成功,任务终态为成功,且业务表中存在对应客户记录")

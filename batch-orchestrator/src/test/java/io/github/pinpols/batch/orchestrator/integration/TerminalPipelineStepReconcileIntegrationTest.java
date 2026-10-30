@@ -25,11 +25,15 @@ import org.springframework.transaction.annotation.Transactional;
 @DisplayName("作业终态收尾中断Pipeline尝试并保留最新成功记录")
 class TerminalPipelineStepReconcileIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
+
+  private final JobInstanceMapper mapper;
 
   @Autowired
-  private JobInstanceMapper mapper;
+  TerminalPipelineStepReconcileIntegrationTest(JdbcTemplate jdbc, JobInstanceMapper mapper) {
+    this.jdbc = jdbc;
+    this.mapper = mapper;
+  }
 
   @Test
   @DisplayName("只关闭同租户已终态Job的活跃尝试，重复调用、活跃父作业和终态步骤均不改写")

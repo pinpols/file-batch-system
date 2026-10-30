@@ -109,8 +109,7 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
   private final WorkflowArchiveService workflowArchiveService;
   private final ProcessStagingGenerationCleanupFence stagingGenerationCleanupFence;
 
-  @Autowired
-  private KafkaTemplate<String, String> kafkaTemplate;
+  private final KafkaTemplate<String, String> kafkaTemplate;
 
   @MockitoSpyBean
   private TaskControllerApplicationService taskControllerApplicationService;
@@ -127,7 +126,8 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
       WorkflowRunManagementApplicationService workflowRunManagementApplicationService,
       SuccessInstanceArchiveService successInstanceArchiveService,
       WorkflowArchiveService workflowArchiveService,
-      ProcessStagingGenerationCleanupFence stagingGenerationCleanupFence) {
+      ProcessStagingGenerationCleanupFence stagingGenerationCleanupFence,
+      KafkaTemplate<String, String> kafkaTemplate) {
     this.launchService = launchService;
     this.jdbcTemplate = jdbcTemplate;
     this.businessDataSource = businessDataSource;
@@ -139,6 +139,7 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
     this.successInstanceArchiveService = successInstanceArchiveService;
     this.workflowArchiveService = workflowArchiveService;
     this.stagingGenerationCleanupFence = stagingGenerationCleanupFence;
+    this.kafkaTemplate = kafkaTemplate;
   }
 
   @Test

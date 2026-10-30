@@ -944,7 +944,7 @@ public class BatchDayReplayService {
       String calendarCode,
       LocalDate bizDate,
       List<String> requestedCodes) {
-    boolean replayDefinitionCalendarDoesNotMatch = definition == null
+    boolean replayDefinitionCalendarDoesNotMatch = EmptyChecks.isNull(definition)
         || !Texts.hasText(definition.jobCode())
         || !calendarCode.equals(definition.calendarCode());
     if (replayDefinitionCalendarDoesNotMatch) {

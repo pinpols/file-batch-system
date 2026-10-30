@@ -17,6 +17,7 @@ import static io.github.pinpols.batch.worker.imports.infrastructure.quality.Vali
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.stringList;
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.stringValue;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 import java.math.BigDecimal;
@@ -153,15 +154,17 @@ public class RecordRuleEvaluator {
     }
     BigDecimal numberValue = decimalValue(value);
     BigDecimal minValue = decimalValue(rule.get(KEY_MIN));
-    boolean numberIsBelowMinimum =
-        minValue != null && numberValue != null && numberValue.compareTo(minValue) < 0;
+    boolean numberIsBelowMinimum = EmptyChecks.isNotNull(minValue)
+        && EmptyChecks.isNotNull(numberValue)
+        && numberValue.compareTo(minValue) < 0;
     if (numberIsBelowMinimum) {
       String message = defaultText(explicitMessage, field + " must be >= " + minValue);
       return new ValidationIssue(recordNo, errorCode, message, row);
     }
     BigDecimal maxValue = decimalValue(rule.get(KEY_MAX));
-    boolean numberExceedsMaximum =
-        maxValue != null && numberValue != null && numberValue.compareTo(maxValue) > 0;
+    boolean numberExceedsMaximum = EmptyChecks.isNotNull(maxValue)
+        && EmptyChecks.isNotNull(numberValue)
+        && numberValue.compareTo(maxValue) > 0;
     if (numberExceedsMaximum) {
       String message = defaultText(explicitMessage, field + " must be <= " + maxValue);
       return new ValidationIssue(recordNo, errorCode, message, row);

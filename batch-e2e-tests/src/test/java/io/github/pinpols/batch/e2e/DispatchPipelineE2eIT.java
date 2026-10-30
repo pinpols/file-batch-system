@@ -136,26 +136,35 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
   @Autowired
   private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
-  @Autowired
-  private KafkaTemplate<String, String> kafkaTemplate;
+  private final KafkaTemplate<String, String> kafkaTemplate;
 
-  @Autowired
-  private RetryGovernanceService retryGovernanceService;
+  private final RetryGovernanceService retryGovernanceService;
 
-  @Autowired
-  private FileGovernanceService fileGovernanceService;
+  private final FileGovernanceService fileGovernanceService;
 
-  @Autowired
-  private DispatchChannelSnapshotService dispatchChannelSnapshots;
+  private final DispatchChannelSnapshotService dispatchChannelSnapshots;
 
-  @Autowired
-  private FrozenDispatchChannelResolver frozenDispatchChannels;
+  private final FrozenDispatchChannelResolver frozenDispatchChannels;
 
   @MockitoSpyBean
   private TaskControllerApplicationService taskControllerApplicationService;
 
   @MockitoSpyBean
   private BatchObjectStore objectStore;
+
+  @Autowired
+  DispatchPipelineE2eIT(
+      KafkaTemplate<String, String> kafkaTemplate,
+      RetryGovernanceService retryGovernanceService,
+      FileGovernanceService fileGovernanceService,
+      DispatchChannelSnapshotService dispatchChannelSnapshots,
+      FrozenDispatchChannelResolver frozenDispatchChannels) {
+    this.kafkaTemplate = kafkaTemplate;
+    this.retryGovernanceService = retryGovernanceService;
+    this.fileGovernanceService = fileGovernanceService;
+    this.dispatchChannelSnapshots = dispatchChannelSnapshots;
+    this.frozenDispatchChannels = frozenDispatchChannels;
+  }
 
   @Test
   @DisplayName("整图重放审批快照跨 Orchestrator 与 Worker 保留选定渠道配置")

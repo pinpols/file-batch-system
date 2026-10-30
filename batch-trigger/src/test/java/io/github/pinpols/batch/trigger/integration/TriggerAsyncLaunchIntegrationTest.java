@@ -84,14 +84,18 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   private TriggerOutboxEventMapper outboxMapper;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private final JdbcTemplate jdbcTemplate;
 
   @Value("${" + TriggerKafkaProducerConfiguration.BOOTSTRAP_SERVERS_KEY + "}")
   private String bootstrapServers;
 
   private Consumer<String, String> kafkaConsumer;
   private String tenantId;
+
+  @Autowired
+  TriggerAsyncLaunchIntegrationTest(JdbcTemplate jdbcTemplate) {
+    this.jdbcTemplate = jdbcTemplate;
+  }
 
   @BeforeEach
   void setUp() {

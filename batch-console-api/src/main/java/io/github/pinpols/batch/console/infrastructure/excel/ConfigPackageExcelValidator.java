@@ -919,7 +919,7 @@ public class ConfigPackageExcelValidator {
       String relatedJob = normalize(row.get(COL_RELATED_JOB_CODE));
       boolean relatedJobIsMissing = hasText(relatedJob)
           && !jobCodesInExcel.contains(relatedJob)
-          && jobDefinitionMapper.selectByUniqueKey(tenantId, relatedJob) == null;
+          && EmptyChecks.isNull(jobDefinitionMapper.selectByUniqueKey(tenantId, relatedJob));
       if (relatedJobIsMissing) {
         issues.add(new WorkbookIssue(
             WF_NODE_SHEET,

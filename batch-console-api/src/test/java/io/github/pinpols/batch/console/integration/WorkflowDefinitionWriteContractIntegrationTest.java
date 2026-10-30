@@ -36,14 +36,19 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @DisplayName("Workflow 定义写入的字段、租户与版本比较 PostgreSQL 契约")
 class WorkflowDefinitionWriteContractIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private WorkflowDefinitionMapper mapper;
+  private final WorkflowDefinitionMapper mapper;
+  private final JdbcTemplate jdbc;
+  private final TenantConfigPackageExcelApplyService excelApply;
 
   @Autowired
-  private JdbcTemplate jdbc;
-
-  @Autowired
-  private TenantConfigPackageExcelApplyService excelApply;
+  WorkflowDefinitionWriteContractIntegrationTest(
+      WorkflowDefinitionMapper mapper,
+      JdbcTemplate jdbc,
+      TenantConfigPackageExcelApplyService excelApply) {
+    this.mapper = mapper;
+    this.jdbc = jdbc;
+    this.excelApply = excelApply;
+  }
 
   private String tenant;
   private Long id;

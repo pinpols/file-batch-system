@@ -17,8 +17,12 @@ import org.springframework.context.MessageSource;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("Workflow 传感器错误的 Console 回读")
 class WorkflowSensorErrorReadIntegrationTest extends AbstractMutationIntegrationTest {
+  private final MessageSource messages;
+
   @Autowired
-  private MessageSource messages;
+  WorkflowSensorErrorReadIntegrationTest(MessageSource messages) {
+    this.messages = messages;
+  }
 
   @Test
   @DisplayName("节点详情按请求语言渲染已净化的错误参数并隔离租户")

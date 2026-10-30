@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.quota;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import io.github.pinpols.batch.orchestrator.domain.entity.QuotaRuntimeStateEntity;
@@ -244,10 +245,10 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
       changed = true;
     }
     if (!effectivePolicy.isRuntimeManaged()) {
-      boolean quotaStateNeedsReset = state.peakBorrowedCount() == null
+      boolean quotaStateNeedsReset = EmptyChecks.isNull(state.peakBorrowedCount())
           || state.peakBorrowedCount() != 0
           || state.windowStartedAt() != null
-          || state.windowExpiresAt() != null;
+          || EmptyChecks.isNotNull(state.windowExpiresAt());
       if (quotaStateNeedsReset) {
         state = state.withoutRuntimeWindow(normalizedPolicy, state.lastResetAt());
         changed = true;
@@ -273,7 +274,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
       }
     } else if (effectivePolicy == QuotaResetPolicy.SLIDING_WINDOW) {
       int normalizedHours = Math.max(1, slidingWindowHours);
-      boolean quotaWindowHasExpiredOrIsMissing = state.windowStartedAt() == null
+      boolean quotaWindowHasExpiredOrIsMissing = EmptyChecks.isNull(state.windowStartedAt())
           || state.windowExpiresAt() == null
           || !now.isBefore(state.windowExpiresAt());
       if (quotaWindowHasExpiredOrIsMissing) {

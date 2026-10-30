@@ -82,26 +82,37 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   private JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  private DataSource dataSource;
+  private final DataSource dataSource;
+
+  private final SensorFileArrivalMapper sensorFileArrivalMapper;
+
+  private final CalendarDependencyWaitMapper calendarDependencyWaitMapper;
+
+  private final CalendarDependencyWaitGovernanceService calendarDependencyWaitGovernanceService;
+
+  private final BatchDayCatchupPreviewService batchDayCatchupPreviewService;
+
+  private final BatchDayCatchupControlService batchDayCatchupControlService;
+
+  private final PlatformTransactionManager transactionManager;
 
   @Autowired
-  private SensorFileArrivalMapper sensorFileArrivalMapper;
-
-  @Autowired
-  private CalendarDependencyWaitMapper calendarDependencyWaitMapper;
-
-  @Autowired
-  private CalendarDependencyWaitGovernanceService calendarDependencyWaitGovernanceService;
-
-  @Autowired
-  private BatchDayCatchupPreviewService batchDayCatchupPreviewService;
-
-  @Autowired
-  private BatchDayCatchupControlService batchDayCatchupControlService;
-
-  @Autowired
-  private PlatformTransactionManager transactionManager;
+  MultiCalendarCoordinationIntegrationTest(
+      DataSource dataSource,
+      SensorFileArrivalMapper sensorFileArrivalMapper,
+      CalendarDependencyWaitMapper calendarDependencyWaitMapper,
+      CalendarDependencyWaitGovernanceService calendarDependencyWaitGovernanceService,
+      BatchDayCatchupPreviewService batchDayCatchupPreviewService,
+      BatchDayCatchupControlService batchDayCatchupControlService,
+      PlatformTransactionManager transactionManager) {
+    this.dataSource = dataSource;
+    this.sensorFileArrivalMapper = sensorFileArrivalMapper;
+    this.calendarDependencyWaitMapper = calendarDependencyWaitMapper;
+    this.calendarDependencyWaitGovernanceService = calendarDependencyWaitGovernanceService;
+    this.batchDayCatchupPreviewService = batchDayCatchupPreviewService;
+    this.batchDayCatchupControlService = batchDayCatchupControlService;
+    this.transactionManager = transactionManager;
+  }
 
   @BeforeEach
   void seedCleanCalendars() {

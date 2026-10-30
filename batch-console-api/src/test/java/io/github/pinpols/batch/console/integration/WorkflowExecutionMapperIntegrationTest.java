@@ -20,11 +20,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 @DisplayName("运行冻结图查询的真实数据库映射与租户隔离")
 class WorkflowExecutionMapperIntegrationTest extends AbstractIntegrationTest {
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
+
+  private final WorkflowExecutionMapper mapper;
 
   @Autowired
-  private WorkflowExecutionMapper mapper;
+  WorkflowExecutionMapperIntegrationTest(JdbcTemplate jdbc, WorkflowExecutionMapper mapper) {
+    this.jdbc = jdbc;
+    this.mapper = mapper;
+  }
 
   @Test
   @DisplayName("重试按序号取最新、等待节点保留，更新当前定义不改变运行冻结图")

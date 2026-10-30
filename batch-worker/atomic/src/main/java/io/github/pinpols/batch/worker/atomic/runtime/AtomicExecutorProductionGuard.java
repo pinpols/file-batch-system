@@ -113,16 +113,18 @@ public class AtomicExecutorProductionGuard {
   List<String> collectViolations() {
     List<String> violations = new ArrayList<>();
     SqlExecutorProperties sql = sqlProps.getIfAvailable();
-    boolean enabledSqlHasNoDataSourceAllowlist =
-        sql != null && sql.isEnabled() && sql.getAllowedDataSourceBeans().isEmpty();
+    boolean enabledSqlHasNoDataSourceAllowlist = EmptyChecks.isNotNull(sql)
+        && sql.isEnabled()
+        && EmptyChecks.isEmpty(Objects.requireNonNull(sql.getAllowedDataSourceBeans()));
     if (enabledSqlHasNoDataSourceAllowlist) {
       violations.add("batch.worker.executors.sql.enabled=true 但 allowedDataSourceBeans 为空"
           + " — prod profile 必须显式配 batch.worker.executors.sql.allowed-data-source-beans"
           + " 列出可用 DataSource bean 名(防业务方借 parameters.dataSourceBean 切到任意高权限连接)");
     }
     StoredProcExecutorProperties sp = storedProcProps.getIfAvailable();
-    boolean enabledStoredProcedureHasNoSchemaAllowlist =
-        sp != null && sp.isEnabled() && sp.getAllowedSchemas().isEmpty();
+    boolean enabledStoredProcedureHasNoSchemaAllowlist = EmptyChecks.isNotNull(sp)
+        && sp.isEnabled()
+        && EmptyChecks.isEmpty(Objects.requireNonNull(sp.getAllowedSchemas()));
     if (enabledStoredProcedureHasNoSchemaAllowlist) {
       violations.add("batch.worker.executors.stored-proc.enabled=true 但 allowedSchemas 为空"
           + " — prod profile 必须配 batch.worker.executors.stored-proc.allowed-schemas"
@@ -141,16 +143,18 @@ public class AtomicExecutorProductionGuard {
           + " fail-closed 拒绝全部");
     }
     ShellExecutorProperties shell = shellProps.getIfAvailable();
-    boolean enabledShellHasNoCommandAllowlist =
-        shell != null && shell.isEnabled() && shell.getCommandWhitelist().isEmpty();
+    boolean enabledShellHasNoCommandAllowlist = EmptyChecks.isNotNull(shell)
+        && shell.isEnabled()
+        && EmptyChecks.isEmpty(Objects.requireNonNull(shell.getCommandWhitelist()));
     if (enabledShellHasNoCommandAllowlist) {
       violations.add("batch.worker.executors.shell.enabled=true 但 commandWhitelist 为空"
           + " — prod profile 必须配 batch.worker.executors.shell.command-whitelist"
           + " 列出允许执行的程序绝对路径(默认空=允许全部 program,任意 RCE 风险)");
     }
     SparkSubmitExecutorProperties spark = sparkProps.getIfAvailable();
-    boolean enabledSparkHasNoResourceAllowlist =
-        spark != null && spark.isEnabled() && spark.getAppResourceAllowlist().isEmpty();
+    boolean enabledSparkHasNoResourceAllowlist = EmptyChecks.isNotNull(spark)
+        && spark.isEnabled()
+        && EmptyChecks.isEmpty(Objects.requireNonNull(spark.getAppResourceAllowlist()));
     if (enabledSparkHasNoResourceAllowlist) {
       violations.add("batch.worker.executors.spark-submit.enabled=true 但 appResourceAllowlist 为空"
           + " — prod profile 必须配 batch.worker.executors.spark-submit.app-resource-allowlist"

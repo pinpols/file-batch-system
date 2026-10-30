@@ -223,8 +223,9 @@ final class FileGovernanceStorageMaintenance {
   }
 
   private void reconcileObject(StorageObjectView object) {
-    boolean objectIsMissingOrCompletionMarker =
-        object == null || object.objectName() == null || object.objectName().endsWith(".done");
+    boolean objectIsMissingOrCompletionMarker = EmptyChecks.isNull(object)
+        || EmptyChecks.isNull(object.objectName())
+        || object.objectName().endsWith(".done");
     if (objectIsMissingOrCompletionMarker) {
       return;
     }

@@ -65,7 +65,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.quartz.Scheduler;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -111,26 +110,28 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
       TriggerDefinitionLoader triggerDefinitionLoader,
       TriggerApiKeyVerifier triggerApiKeyVerifier,
       TriggerRequestMapper triggerRequestMapper,
-      PlatformTransactionManager transactionManager) {
+      PlatformTransactionManager transactionManager,
+      ScheduledOccurrenceRecorder occurrenceRecorder,
+      SqlSessionTemplate sqlSessionTemplate) {
     this.triggerService = triggerService;
     this.jdbcTemplate = jdbcTemplate;
     this.triggerDefinitionLoader = triggerDefinitionLoader;
     this.triggerApiKeyVerifier = triggerApiKeyVerifier;
     this.triggerRequestMapper = triggerRequestMapper;
     this.transactionManager = transactionManager;
+    this.occurrenceRecorder = occurrenceRecorder;
+    this.sqlSessionTemplate = sqlSessionTemplate;
   }
 
   @MockitoBean
   private RestClient orchestratorRestClient;
 
-  @Autowired
-  private ScheduledOccurrenceRecorder occurrenceRecorder;
+  private final ScheduledOccurrenceRecorder occurrenceRecorder;
 
   @MockitoSpyBean
   private ScheduledOccurrenceMapper occurrenceMapper;
 
-  @Autowired
-  private SqlSessionTemplate sqlSessionTemplate;
+  private final SqlSessionTemplate sqlSessionTemplate;
 
   @BeforeEach
   void cleanUp() {

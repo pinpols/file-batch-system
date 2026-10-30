@@ -87,8 +87,7 @@ public class BatchObjectCryptoService {
   }
 
   public byte[] decrypt(byte[] content) {
-    boolean contentDoesNotNeedDecryption =
-        content == null || content.length == 0 || !isEncrypted(content);
+    boolean contentDoesNotNeedDecryption = EmptyChecks.isEmpty(content) || !isEncrypted(content);
     if (contentDoesNotNeedDecryption) {
       return content;
     }

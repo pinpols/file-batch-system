@@ -21,11 +21,16 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @DisplayName("告警升级全局扫描的租户边界")
 class AlertEscalationTenantIsolationIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private AlertEventMapper alertEventMapper;
+  private final AlertEventMapper alertEventMapper;
+
+  private final JdbcTemplate jdbcTemplate;
 
   @Autowired
-  private JdbcTemplate jdbcTemplate;
+  AlertEscalationTenantIsolationIntegrationTest(
+      AlertEventMapper alertEventMapper, JdbcTemplate jdbcTemplate) {
+    this.alertEventMapper = alertEventMapper;
+    this.jdbcTemplate = jdbcTemplate;
+  }
 
   @Test
   @DisplayName("全局扫描读取多个租户告警,逐行升级仍必须匹配所属租户")

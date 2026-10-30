@@ -4,6 +4,7 @@ import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntime
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.toJson;
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.truncate;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
 import io.github.pinpols.batch.worker.core.param.PlatformFileAuditInsertParam;
@@ -52,7 +53,7 @@ public class PlatformFileAuditRepository {
   }
 
   public void appendAudit(FileAuditParam param) {
-    boolean fileAuditParamIsIncomplete = param.getFileId() == null
+    boolean fileAuditParamIsIncomplete = EmptyChecks.isNull(param.getFileId())
         || !Texts.hasText(param.getTenantId())
         || !Texts.hasText(param.getOperationType())
         || !Texts.hasText(param.getOperationResult());

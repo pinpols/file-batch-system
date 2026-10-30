@@ -40,23 +40,33 @@ class JobDependencyWaitMetricsIntegrationTest extends AbstractIntegrationTest {
   private static final String RLS_ROLE = "dependency_wait_metrics_rls_test";
   private final Set<String> ownedTenants = new HashSet<>();
 
-  @Autowired
-  private JobDependencyWaitingLaunchMapper waitingMapper;
+  private final JobDependencyWaitingLaunchMapper waitingMapper;
+
+  private final JdbcTemplate jdbcTemplate;
+
+  private final JobDependencyWaitMetricsScheduler metricsScheduler;
+
+  private final JobDependencyWaitMetricsQuery metricsQuery;
+
+  private final MeterRegistry meterRegistry;
+
+  private final PlatformTransactionManager transactionManager;
 
   @Autowired
-  private JdbcTemplate jdbcTemplate;
-
-  @Autowired
-  private JobDependencyWaitMetricsScheduler metricsScheduler;
-
-  @Autowired
-  private JobDependencyWaitMetricsQuery metricsQuery;
-
-  @Autowired
-  private MeterRegistry meterRegistry;
-
-  @Autowired
-  private PlatformTransactionManager transactionManager;
+  JobDependencyWaitMetricsIntegrationTest(
+      JobDependencyWaitingLaunchMapper waitingMapper,
+      JdbcTemplate jdbcTemplate,
+      JobDependencyWaitMetricsScheduler metricsScheduler,
+      JobDependencyWaitMetricsQuery metricsQuery,
+      MeterRegistry meterRegistry,
+      PlatformTransactionManager transactionManager) {
+    this.waitingMapper = waitingMapper;
+    this.jdbcTemplate = jdbcTemplate;
+    this.metricsScheduler = metricsScheduler;
+    this.metricsQuery = metricsQuery;
+    this.meterRegistry = meterRegistry;
+    this.transactionManager = transactionManager;
+  }
 
   @BeforeAll
   static void createRlsRole(@Autowired JdbcTemplate jdbcTemplate) {

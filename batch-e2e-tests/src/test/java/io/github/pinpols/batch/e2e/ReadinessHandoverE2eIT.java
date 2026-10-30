@@ -56,23 +56,32 @@ class ReadinessHandoverE2eIT extends AbstractIntegrationTest {
     registry.add("batch.security.internal-secret", () -> INTERNAL_SECRET);
   }
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
 
-  @Autowired
-  private ReadinessWaitMapper waits;
+  private final ReadinessWaitMapper waits;
 
-  @Autowired
-  private ReadinessService readiness;
+  private final ReadinessService readiness;
 
-  @Autowired
-  private BatchSecurityProperties security;
+  private final BatchSecurityProperties security;
 
-  @Autowired
-  private MeterRegistry metrics;
+  private final MeterRegistry metrics;
 
   @LocalServerPort
   private int orchestratorPort;
+
+  @Autowired
+  ReadinessHandoverE2eIT(
+      JdbcTemplate jdbc,
+      ReadinessWaitMapper waits,
+      ReadinessService readiness,
+      BatchSecurityProperties security,
+      MeterRegistry metrics) {
+    this.jdbc = jdbc;
+    this.waits = waits;
+    this.readiness = readiness;
+    this.security = security;
+    this.metrics = metrics;
+  }
 
   @Test
   @DisplayName("同一 fire 重试窗口变化时两端仍保留首次截止时间")

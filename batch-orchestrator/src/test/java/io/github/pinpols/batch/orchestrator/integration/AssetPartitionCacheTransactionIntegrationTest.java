@@ -38,20 +38,28 @@ class AssetPartitionCacheTransactionIntegrationTest extends AbstractIntegrationT
   private static final String TENANT = "ta";
   private static final LocalDate FIRST_DATE = LocalDate.of(2026, Month.OCTOBER, 16);
 
-  @Autowired
-  private AssetPartitionMapper mapper;
+  private final AssetPartitionMapper mapper;
 
-  @Autowired
-  private ResultVersionQueryService resultVersionQueryService;
+  private final ResultVersionQueryService resultVersionQueryService;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private final JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  private PlatformTransactionManager transactionManager;
+  private final PlatformTransactionManager transactionManager;
 
   private AssetPartitionService service;
   private TransactionTemplate transactions;
+
+  @Autowired
+  AssetPartitionCacheTransactionIntegrationTest(
+      AssetPartitionMapper mapper,
+      ResultVersionQueryService resultVersionQueryService,
+      JdbcTemplate jdbcTemplate,
+      PlatformTransactionManager transactionManager) {
+    this.mapper = mapper;
+    this.resultVersionQueryService = resultVersionQueryService;
+    this.jdbcTemplate = jdbcTemplate;
+    this.transactionManager = transactionManager;
+  }
 
   @BeforeEach
   void setUp() {

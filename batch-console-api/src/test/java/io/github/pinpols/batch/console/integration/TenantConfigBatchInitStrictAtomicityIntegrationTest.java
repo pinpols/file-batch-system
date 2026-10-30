@@ -53,20 +53,29 @@ class TenantConfigBatchInitStrictAtomicityIntegrationTest extends AbstractIntegr
 
   private static final String TENANT_ID = "strict-config-atomicity-it";
 
-  @Autowired
-  private ConsoleTenantConfigInitApplicationService initService;
+  private final ConsoleTenantConfigInitApplicationService initService;
+
+  private final ConsoleConfigSyncApplicationService configSyncService;
+
+  private final ConsoleTenantConfigCopyService copyService;
+
+  private final JdbcTemplate jdbcTemplate;
+
+  private final StringRedisTemplate redis;
 
   @Autowired
-  private ConsoleConfigSyncApplicationService configSyncService;
-
-  @Autowired
-  private ConsoleTenantConfigCopyService copyService;
-
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
-
-  @Autowired
-  private StringRedisTemplate redis;
+  TenantConfigBatchInitStrictAtomicityIntegrationTest(
+      ConsoleTenantConfigInitApplicationService initService,
+      ConsoleConfigSyncApplicationService configSyncService,
+      ConsoleTenantConfigCopyService copyService,
+      JdbcTemplate jdbcTemplate,
+      StringRedisTemplate redis) {
+    this.initService = initService;
+    this.configSyncService = configSyncService;
+    this.copyService = copyService;
+    this.jdbcTemplate = jdbcTemplate;
+    this.redis = redis;
+  }
 
   @ParameterizedTest
   @ValueSource(strings = {"commit", "rollback", "dry-run"})

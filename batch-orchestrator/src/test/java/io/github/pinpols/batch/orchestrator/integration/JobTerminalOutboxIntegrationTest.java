@@ -44,28 +44,36 @@ import org.springframework.transaction.support.TransactionTemplate;
     })
 @DisplayName("Job 终态事务 Outbox:真实 PostgreSQL 回滚、并发与首次事实快照")
 class JobTerminalOutboxIntegrationTest extends AbstractIntegrationTest {
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
 
-  @Autowired
-  private JobInstanceTerminalStatusApplicationService terminals;
+  private final JobInstanceTerminalStatusApplicationService terminals;
 
-  @Autowired
-  private JobTerminalOutboxService writer;
+  private final JobTerminalOutboxService writer;
 
-  @Autowired
-  private JobInstanceMapper jobs;
+  private final JobInstanceMapper jobs;
 
-  @Autowired
-  @Qualifier("defaultLaunchService")
-  private LaunchService launches;
+  private final LaunchService launches;
 
-  @Autowired
-  @Qualifier("transactionManager")
-  private PlatformTransactionManager transactions;
+  private final PlatformTransactionManager transactions;
 
   private String tenant;
   private long id;
+
+  @Autowired
+  JobTerminalOutboxIntegrationTest(
+      JdbcTemplate jdbc,
+      JobInstanceTerminalStatusApplicationService terminals,
+      JobTerminalOutboxService writer,
+      JobInstanceMapper jobs,
+      @Qualifier("defaultLaunchService") LaunchService launches,
+      @Qualifier("transactionManager") PlatformTransactionManager transactions) {
+    this.jdbc = jdbc;
+    this.terminals = terminals;
+    this.writer = writer;
+    this.jobs = jobs;
+    this.launches = launches;
+    this.transactions = transactions;
+  }
 
   @BeforeEach
   void seed() {

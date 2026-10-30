@@ -73,20 +73,29 @@ class CompensationFailureRecoveryIntegrationTest extends AbstractIntegrationTest
   @MockitoBean
   private RetryGovernanceService retryGovernanceService;
 
-  @Autowired
-  private StaleCompensationCommandReconciler staleCompensationCommandReconciler;
+  private final StaleCompensationCommandReconciler staleCompensationCommandReconciler;
+
+  private final StaleCompensationReconcilerProperties staleProperties;
+
+  private final CompensationCommandMapper compensationCommandMapper;
+
+  private final PlatformTransactionManager transactionManager;
+
+  private final SuccessInstanceArchiveMapper archiveMapper;
 
   @Autowired
-  private StaleCompensationReconcilerProperties staleProperties;
-
-  @Autowired
-  private CompensationCommandMapper compensationCommandMapper;
-
-  @Autowired
-  private PlatformTransactionManager transactionManager;
-
-  @Autowired
-  private SuccessInstanceArchiveMapper archiveMapper;
+  CompensationFailureRecoveryIntegrationTest(
+      StaleCompensationCommandReconciler staleCompensationCommandReconciler,
+      StaleCompensationReconcilerProperties staleProperties,
+      CompensationCommandMapper compensationCommandMapper,
+      PlatformTransactionManager transactionManager,
+      SuccessInstanceArchiveMapper archiveMapper) {
+    this.staleCompensationCommandReconciler = staleCompensationCommandReconciler;
+    this.staleProperties = staleProperties;
+    this.compensationCommandMapper = compensationCommandMapper;
+    this.transactionManager = transactionManager;
+    this.archiveMapper = archiveMapper;
+  }
 
   @Test
   @DisplayName("补偿处理期间作业先归档，失败状态和无热作业关联的审计仍持久化")

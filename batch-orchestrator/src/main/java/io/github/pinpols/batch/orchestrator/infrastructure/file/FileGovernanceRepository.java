@@ -426,7 +426,7 @@ public class FileGovernanceRepository {
   }
 
   public void appendAudit(FileAuditCommand command) {
-    boolean fileAuditCommandIsIncomplete = command == null
+    boolean fileAuditCommandIsIncomplete = EmptyChecks.isNull(command)
         || !Texts.hasText(command.tenantId())
         || command.fileId() == null
         || !Texts.hasText(command.operationType())

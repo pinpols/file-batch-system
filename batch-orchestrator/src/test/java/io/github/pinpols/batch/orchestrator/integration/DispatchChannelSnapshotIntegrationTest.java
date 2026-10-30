@@ -24,17 +24,25 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @DisplayName("普通分发渠道快照在部分识别结果缺失时仍保留原配置")
 class DispatchChannelSnapshotIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private DispatchChannelSnapshotService snapshots;
+  private final DispatchChannelSnapshotService snapshots;
+
+  private final SecretPayloadProtector protector;
+
+  private final DispatchSecretSnapshotResolver secretSnapshots;
+
+  private final JdbcTemplate jdbc;
 
   @Autowired
-  private SecretPayloadProtector protector;
-
-  @Autowired
-  private DispatchSecretSnapshotResolver secretSnapshots;
-
-  @Autowired
-  private JdbcTemplate jdbc;
+  DispatchChannelSnapshotIntegrationTest(
+      DispatchChannelSnapshotService snapshots,
+      SecretPayloadProtector protector,
+      DispatchSecretSnapshotResolver secretSnapshots,
+      JdbcTemplate jdbc) {
+    this.snapshots = snapshots;
+    this.protector = protector;
+    this.secretSnapshots = secretSnapshots;
+    this.jdbc = jdbc;
+  }
 
   @Test
   @DisplayName("无关停用渠道存在于普通启动快照时，两种重放仍保留实际目标")

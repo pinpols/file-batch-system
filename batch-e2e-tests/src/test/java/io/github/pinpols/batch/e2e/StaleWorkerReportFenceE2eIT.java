@@ -80,35 +80,47 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
   @LocalServerPort
   private int localServerPort;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private final JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  private WorkflowRunLaunchService launchService;
+  private final WorkflowRunLaunchService launchService;
 
-  @Autowired
-  private E2eOutboxPublishSupport outboxPublishSupport;
+  private final E2eOutboxPublishSupport outboxPublishSupport;
 
-  @Autowired
-  private TaskExecutionService taskExecutionService;
+  private final TaskExecutionService taskExecutionService;
 
-  @Autowired
-  private JobInstanceMapper jobInstanceMapper;
+  private final JobInstanceMapper jobInstanceMapper;
 
-  @Autowired
-  private JobPartitionMapper jobPartitionMapper;
+  private final JobPartitionMapper jobPartitionMapper;
 
-  @Autowired
-  private JobTaskMapper jobTaskMapper;
+  private final JobTaskMapper jobTaskMapper;
 
-  @Autowired
-  private PartitionReclaimUnit partitionReclaimUnit;
+  private final PartitionReclaimUnit partitionReclaimUnit;
 
   @MockitoSpyBean
   private WorkflowRunResumeProgressor workflowRunResumeProgressor;
 
   @Value("${batch.security.internal-secret}")
   private String internalSecret;
+
+  @Autowired
+  StaleWorkerReportFenceE2eIT(
+      JdbcTemplate jdbcTemplate,
+      WorkflowRunLaunchService launchService,
+      E2eOutboxPublishSupport outboxPublishSupport,
+      TaskExecutionService taskExecutionService,
+      JobInstanceMapper jobInstanceMapper,
+      JobPartitionMapper jobPartitionMapper,
+      JobTaskMapper jobTaskMapper,
+      PartitionReclaimUnit partitionReclaimUnit) {
+    this.jdbcTemplate = jdbcTemplate;
+    this.launchService = launchService;
+    this.outboxPublishSupport = outboxPublishSupport;
+    this.taskExecutionService = taskExecutionService;
+    this.jobInstanceMapper = jobInstanceMapper;
+    this.jobPartitionMapper = jobPartitionMapper;
+    this.jobTaskMapper = jobTaskMapper;
+    this.partitionReclaimUnit = partitionReclaimUnit;
+  }
 
   @Test
   @DisplayName("reclaim 后取消对 READY task 为 no-op,旧 invocation REPORT 冲突且新 attempt 成功")

@@ -204,7 +204,7 @@ public class WebhookDispatcher {
     String payloadJson = JsonUtils.toJson(payload);
     List<PendingWebhookDelivery> pendingDeliveries = new ArrayList<>();
     for (WebhookSubscriptionEntity subscription : subscriptions) {
-      boolean subscriptionCannotReceiveEvent = subscription == null
+      boolean subscriptionCannotReceiveEvent = EmptyChecks.isNull(subscription)
           || subscription.getId() == null
           || !matches(subscription.getEventTypes(), payload.eventType());
       if (subscriptionCannotReceiveEvent) {

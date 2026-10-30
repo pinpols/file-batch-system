@@ -65,7 +65,8 @@ public final class PipelineStepFlowSupport {
         return explicitNext;
       }
     }
-    boolean stepFlowCannotAdvance = !success || current == null || steps == null || steps.isEmpty();
+    boolean stepFlowCannotAdvance =
+        !success || EmptyChecks.isNull(current) || EmptyChecks.isEmpty(steps);
     if (stepFlowCannotAdvance) {
       return null;
     }
@@ -108,7 +109,7 @@ public final class PipelineStepFlowSupport {
       return null;
     }
     for (PipelineStepDefinition step : steps) {
-      boolean selectorMatchesStepOrStage = step != null
+      boolean selectorMatchesStepOrStage = EmptyChecks.isNotNull(step)
           && (selector.equalsIgnoreCase(step.stepCode())
               || selector.equalsIgnoreCase(step.stageCode()));
       if (selectorMatchesStepOrStage) {

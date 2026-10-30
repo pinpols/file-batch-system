@@ -70,26 +70,36 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   private JobInstanceMapper jobInstanceMapper;
 
-  @Autowired
-  private TriggerRequestMapper triggerRequestMapper;
+  private final TriggerRequestMapper triggerRequestMapper;
 
-  @Autowired
-  private WorkflowRunMapper workflowRunMapper;
+  private final WorkflowRunMapper workflowRunMapper;
 
-  @Autowired
-  private JobDependencyWaitingLaunchReconciler dependencyWaitingLaunchReconciler;
+  private final JobDependencyWaitingLaunchReconciler dependencyWaitingLaunchReconciler;
 
-  @Autowired
-  private JobDependencyWaitingLaunchService jobDependencyWaitingLaunchService;
+  private final JobDependencyWaitingLaunchService jobDependencyWaitingLaunchService;
 
-  @Autowired
-  private BatchDaySettleScheduler batchDaySettleScheduler;
+  private final BatchDaySettleScheduler batchDaySettleScheduler;
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
 
+  private final PlatformTransactionManager transactionManager;
+
   @Autowired
-  private PlatformTransactionManager transactionManager;
+  TriggerTypeLaunchIntegrationTest(
+      TriggerRequestMapper triggerRequestMapper,
+      WorkflowRunMapper workflowRunMapper,
+      JobDependencyWaitingLaunchReconciler dependencyWaitingLaunchReconciler,
+      JobDependencyWaitingLaunchService jobDependencyWaitingLaunchService,
+      BatchDaySettleScheduler batchDaySettleScheduler,
+      PlatformTransactionManager transactionManager) {
+    this.triggerRequestMapper = triggerRequestMapper;
+    this.workflowRunMapper = workflowRunMapper;
+    this.dependencyWaitingLaunchReconciler = dependencyWaitingLaunchReconciler;
+    this.jobDependencyWaitingLaunchService = jobDependencyWaitingLaunchService;
+    this.batchDaySettleScheduler = batchDaySettleScheduler;
+    this.transactionManager = transactionManager;
+  }
 
   @Test
   @DisplayName("TriggerRequest 插入拒绝其他租户的 WorkflowDefinition 与父 WorkflowRun 引用")

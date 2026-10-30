@@ -104,7 +104,7 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
           "bundleFiles must contain usable bindings for " + bundleType);
     }
     boolean bundleFileCountDoesNotMatchPartitions =
-        bundleJob && !bundleFiles.isEmpty() && bundleFiles.size() != partitionCount;
+        bundleJob && !EmptyChecks.isEmpty(bundleFiles) && bundleFiles.size() != partitionCount;
     if (bundleFileCountDoesNotMatchPartitions) {
       // 数量须吻合,否则是配置错(束作业须 shardStrategy=DYNAMIC 让 BundlePartitionCountResolver 生效,
       // 且束大小 ≤ maxPartitionCount=256)。fail-fast,绝不静默丢绑定项。

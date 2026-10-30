@@ -59,30 +59,41 @@ class ReplayAdmissionRecoveryE2eIT extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
   private static final LocalDate DAY = LocalDate.of(2026, 1, 15);
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
+
+  private final WorkflowRunLaunchService launch;
+
+  private final BatchDayReplayService replay;
+
+  private final BatchDayReplayDispatcher dispatcher;
+
+  private final KafkaListenerEndpointRegistry listeners;
+
+  private final OrchestratorConfigCacheService cache;
+
+  private final TriggerConsumerProperties consumerProperties;
+
+  private final DataSource business;
 
   @Autowired
-  private WorkflowRunLaunchService launch;
-
-  @Autowired
-  private BatchDayReplayService replay;
-
-  @Autowired
-  private BatchDayReplayDispatcher dispatcher;
-
-  @Autowired
-  private KafkaListenerEndpointRegistry listeners;
-
-  @Autowired
-  private OrchestratorConfigCacheService cache;
-
-  @Autowired
-  private TriggerConsumerProperties consumerProperties;
-
-  @Autowired
-  @Qualifier("importBusinessDataSource")
-  private DataSource business;
+  ReplayAdmissionRecoveryE2eIT(
+      JdbcTemplate jdbc,
+      WorkflowRunLaunchService launch,
+      BatchDayReplayService replay,
+      BatchDayReplayDispatcher dispatcher,
+      KafkaListenerEndpointRegistry listeners,
+      OrchestratorConfigCacheService cache,
+      TriggerConsumerProperties consumerProperties,
+      @Qualifier("importBusinessDataSource") DataSource business) {
+    this.jdbc = jdbc;
+    this.launch = launch;
+    this.replay = replay;
+    this.dispatcher = dispatcher;
+    this.listeners = listeners;
+    this.cache = cache;
+    this.consumerProperties = consumerProperties;
+    this.business = business;
+  }
 
   private record Source(String jobCode, long jobId, long workflow, String customer) {}
 

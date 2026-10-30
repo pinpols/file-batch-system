@@ -33,10 +33,15 @@ class WorkflowJobReferenceAdmissionIntegrationTest extends AbstractMutationInteg
   private static final String TENANT = "int-wf-ta";
   private static final String OTHER_TENANT = "int-wf-tb";
 
-  @Autowired
-  private ConsoleTenantConfigInitApplicationService initService;
+  private final ConsoleTenantConfigInitApplicationService initService;
 
   private String prefix;
+
+  @Autowired
+  WorkflowJobReferenceAdmissionIntegrationTest(
+      ConsoleTenantConfigInitApplicationService initService) {
+    this.initService = initService;
+  }
 
   @BeforeEach
   void seedJobReferences() {

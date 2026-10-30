@@ -52,21 +52,29 @@ class WorkflowTerminalLineageKafkaIntegrationTest extends AbstractIntegrationTes
   private static HttpServer endpoint;
   private static final String GROUP = "r32-lineage-integration";
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
+
+  private final WorkflowTerminalOutboxService terminals;
+
+  private final PlatformTransactionManager transactionManager;
+
+  private final DefaultScheduleForwarder forwarder;
+
+  private final KafkaTemplate<String, String> kafka;
 
   @Autowired
-  private WorkflowTerminalOutboxService terminals;
-
-  @Autowired
-  @Qualifier("transactionManager")
-  private PlatformTransactionManager transactionManager;
-
-  @Autowired
-  private DefaultScheduleForwarder forwarder;
-
-  @Autowired
-  private KafkaTemplate<String, String> kafka;
+  WorkflowTerminalLineageKafkaIntegrationTest(
+      JdbcTemplate jdbc,
+      WorkflowTerminalOutboxService terminals,
+      @Qualifier("transactionManager") PlatformTransactionManager transactionManager,
+      DefaultScheduleForwarder forwarder,
+      KafkaTemplate<String, String> kafka) {
+    this.jdbc = jdbc;
+    this.terminals = terminals;
+    this.transactionManager = transactionManager;
+    this.forwarder = forwarder;
+    this.kafka = kafka;
+  }
 
   @DynamicPropertySource
   static void lineageEndpoint(DynamicPropertyRegistry properties) throws Exception {

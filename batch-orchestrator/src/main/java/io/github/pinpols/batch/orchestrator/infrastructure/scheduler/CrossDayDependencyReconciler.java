@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -115,9 +116,9 @@ public class CrossDayDependencyReconciler {
         ? workflowMappers.workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(
             workflowRun.getWorkflowDefinitionId(), nodeRun.getNodeCode())
         : snapshot.node(nodeRun.getNodeCode());
-    boolean nodeHasNoCrossDayDependencies = workflowNode == null
-        || workflowNode.getCrossDayDependencies() == null
-        || workflowNode.getCrossDayDependencies().isBlank();
+    boolean nodeHasNoCrossDayDependencies = EmptyChecks.isNull(workflowNode)
+        || EmptyChecks.isNull(workflowNode.getCrossDayDependencies())
+        || EmptyChecks.isBlank(Objects.requireNonNull(workflowNode.getCrossDayDependencies()));
     if (nodeHasNoCrossDayDependencies) {
       // 无可用依赖声明时失败关闭，避免无依据地派发。
       markFailed(nodeRun, "CROSS_DAY_DEP_SPEC_MISSING", now);

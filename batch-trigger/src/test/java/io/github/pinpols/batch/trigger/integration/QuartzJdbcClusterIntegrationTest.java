@@ -42,17 +42,22 @@ class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   private TriggerRegistrationService triggerRegistrationService;
 
-  @Autowired
-  private TriggerDefinitionLoader triggerDefinitionLoader;
+  private final TriggerDefinitionLoader triggerDefinitionLoader;
 
-  @Autowired
-  private TriggerService triggerService;
+  private final TriggerService triggerService;
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
 
   @Autowired
   private DataSource dataSource;
+
+  @Autowired
+  QuartzJdbcClusterIntegrationTest(
+      TriggerDefinitionLoader triggerDefinitionLoader, TriggerService triggerService) {
+    this.triggerDefinitionLoader = triggerDefinitionLoader;
+    this.triggerService = triggerService;
+  }
 
   @Test
   @DisplayName("注册的 cron 任务在 QRTZ 表各落一条 JobDetail 与 CronTrigger,且 JobStore 具备持久化与集群能力")

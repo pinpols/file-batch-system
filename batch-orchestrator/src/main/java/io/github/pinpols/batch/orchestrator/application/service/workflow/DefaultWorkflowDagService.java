@@ -317,7 +317,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
       for (WorkflowEdgeEntity edge : outgoing) {
         String to = edge.getToNodeCode();
         boolean successorIsMissingOrTerminal =
-            to == null || to.isBlank() || WorkflowNodeCode.END.code().equalsIgnoreCase(to);
+            EmptyChecks.isBlank(to) || WorkflowNodeCode.END.code().equalsIgnoreCase(to);
         if (successorIsMissingOrTerminal) {
           continue;
         }

@@ -70,7 +70,8 @@ record ExcelStyleOptions(
           helper.integerValue(helper.firstNonNull(map.get("from"), map.get("fromColumn")));
       Integer to = helper.integerValue(helper.firstNonNull(map.get("to"), map.get("toColumn")));
       String title = helper.textValue(helper.firstNonNull(map.get("title"), map.get("label")));
-      boolean excelColumnRangeIsInvalid = from == null || to == null || to < from;
+      boolean excelColumnRangeIsInvalid =
+          EmptyChecks.isNull(from) || EmptyChecks.isNull(to) || to < from;
       if (excelColumnRangeIsInvalid) {
         continue;
       }

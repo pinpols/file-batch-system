@@ -99,8 +99,12 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   private DispatchChannelGateway gateway;
 
+  private final SftpDispatchChannelAdapter sftpDispatchChannelAdapter;
+
   @Autowired
-  private SftpDispatchChannelAdapter sftpDispatchChannelAdapter;
+  DispatchExternalChannelIntegrationTest(SftpDispatchChannelAdapter sftpDispatchChannelAdapter) {
+    this.sftpDispatchChannelAdapter = sftpDispatchChannelAdapter;
+  }
 
   @Test
   @DisplayName("投递到真实对象存储后目标对象可读,回执引用指向目标对象且内容与源文件一致")

@@ -76,18 +76,24 @@ class JobPushProcessRecoveryE2eIT extends AbstractIntegrationTest {
   private static HttpServer endpoint;
   private static KeyPair vapid;
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
 
-  @Autowired
-  private WorkflowRunLaunchService launch;
+  private final WorkflowRunLaunchService launch;
 
-  @Autowired
-  @Qualifier("importBusinessDataSource")
-  private DataSource businessDataSource;
+  private final DataSource businessDataSource;
 
   @LocalServerPort
   private int port;
+
+  @Autowired
+  JobPushProcessRecoveryE2eIT(
+      JdbcTemplate jdbc,
+      WorkflowRunLaunchService launch,
+      @Qualifier("importBusinessDataSource") DataSource businessDataSource) {
+    this.jdbc = jdbc;
+    this.launch = launch;
+    this.businessDataSource = businessDataSource;
+  }
 
   @BeforeAll
   static void startReceiver() throws Exception {

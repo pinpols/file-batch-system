@@ -221,7 +221,7 @@ public abstract class AbstractTaskConsumer
         String tenantId = finalMessage.tenantId();
         WorkerExecutionResult result;
         boolean hasKnownTenantIdentity =
-            tenantId != null && !tenantId.isBlank() && !"unknown".equals(tenantId);
+            EmptyChecks.isNotBlank(tenantId) && !"unknown".equals(tenantId);
         if (hasKnownTenantIdentity) {
           result = RlsTenantContextHolder.runWithTenant(
               tenantId,

@@ -80,17 +80,13 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
   private final DataQualityCheckMapper dataQualityCheckMapper;
   private final PlatformTransactionManager transactionManager;
 
-  @Autowired
-  private SuccessInstanceArchiveMapper archiveMapper;
+  private final SuccessInstanceArchiveMapper archiveMapper;
 
-  @Autowired
-  private CompensationCommandMapper compensationCommandMapper;
+  private final CompensationCommandMapper compensationCommandMapper;
 
-  @Autowired
-  private LineageEvidenceMapper lineageEvidenceMapper;
+  private final LineageEvidenceMapper lineageEvidenceMapper;
 
-  @Autowired
-  private SqlSessionTemplate sqlSessionTemplate;
+  private final SqlSessionTemplate sqlSessionTemplate;
 
   @Autowired
   ArchiveColdStorageIntegrationTest(
@@ -101,7 +97,11 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
       ResultVersionRetentionScheduler resultVersionRetentionScheduler,
       JobExecutionLogMapper jobExecutionLogMapper,
       DataQualityCheckMapper dataQualityCheckMapper,
-      PlatformTransactionManager transactionManager) {
+      PlatformTransactionManager transactionManager,
+      SuccessInstanceArchiveMapper archiveMapper,
+      CompensationCommandMapper compensationCommandMapper,
+      LineageEvidenceMapper lineageEvidenceMapper,
+      SqlSessionTemplate sqlSessionTemplate) {
     this.jdbcTemplate = jdbcTemplate;
     this.outboxArchiveService = outboxArchiveService;
     this.successInstanceArchiveService = successInstanceArchiveService;
@@ -110,6 +110,10 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
     this.jobExecutionLogMapper = jobExecutionLogMapper;
     this.dataQualityCheckMapper = dataQualityCheckMapper;
     this.transactionManager = transactionManager;
+    this.archiveMapper = archiveMapper;
+    this.compensationCommandMapper = compensationCommandMapper;
+    this.lineageEvidenceMapper = lineageEvidenceMapper;
+    this.sqlSessionTemplate = sqlSessionTemplate;
   }
 
   @Test

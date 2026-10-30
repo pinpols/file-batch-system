@@ -600,7 +600,8 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
           if ("json".equalsIgnoreCase(type) || "jsonb".equalsIgnoreCase(type)) {
             String json = rs.getString(i);
             row.put(
-                md.getColumnLabel(i), json == null ? null : JsonUtils.fromJson(json, Object.class));
+                md.getColumnLabel(i),
+                EmptyChecks.isNull(json) ? null : JsonUtils.fromJson(json, Object.class));
           } else {
             Object value = rs.getObject(i);
             if (value instanceof Array sqlArray) {

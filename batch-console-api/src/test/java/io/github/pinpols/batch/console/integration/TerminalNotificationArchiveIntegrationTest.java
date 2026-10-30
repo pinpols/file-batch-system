@@ -65,42 +65,29 @@ class TerminalNotificationArchiveIntegrationTest extends AbstractIntegrationTest
       "webhook_delivery_log",
       "workflow_terminal_notification_receipt");
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
 
-  @Autowired
-  private WorkflowTerminalNotificationService notifications;
+  private final WorkflowTerminalNotificationService notifications;
 
-  @Autowired
-  private TerminalNotificationArchiveService archive;
+  private final TerminalNotificationArchiveService archive;
 
-  @Autowired
-  private ConsoleWebhookDeliveryLogMapper webhookHistory;
+  private final ConsoleWebhookDeliveryLogMapper webhookHistory;
 
-  @Autowired
-  private NotificationDeliveryLogMapper ruleHistory;
+  private final NotificationDeliveryLogMapper ruleHistory;
 
-  @Autowired
-  private ConsolePushSubscriptionMapper subscriptions;
+  private final ConsolePushSubscriptionMapper subscriptions;
 
-  @Autowired
-  private ConsolePushProperties push;
+  private final ConsolePushProperties push;
 
-  @Autowired
-  private ConsoleWebhookService webhookService;
+  private final ConsoleWebhookService webhookService;
 
-  @Autowired
-  private ConsoleNotificationApplicationService notificationService;
+  private final ConsoleNotificationApplicationService notificationService;
 
-  @Autowired
-  private OperationAuditQueryService auditService;
+  private final OperationAuditQueryService auditService;
 
-  @Autowired
-  private SqlSessionFactory sqlSessions;
+  private final SqlSessionFactory sqlSessions;
 
-  @Autowired
-  @Qualifier("transactionManager")
-  private PlatformTransactionManager transactions;
+  private final PlatformTransactionManager transactions;
 
   @LocalServerPort
   private int port;
@@ -109,6 +96,34 @@ class TerminalNotificationArchiveIntegrationTest extends AbstractIntegrationTest
   private String eventKey;
   private String payload;
   private WebTestClient client;
+
+  @Autowired
+  TerminalNotificationArchiveIntegrationTest(
+      JdbcTemplate jdbc,
+      WorkflowTerminalNotificationService notifications,
+      TerminalNotificationArchiveService archive,
+      ConsoleWebhookDeliveryLogMapper webhookHistory,
+      NotificationDeliveryLogMapper ruleHistory,
+      ConsolePushSubscriptionMapper subscriptions,
+      ConsolePushProperties push,
+      ConsoleWebhookService webhookService,
+      ConsoleNotificationApplicationService notificationService,
+      OperationAuditQueryService auditService,
+      SqlSessionFactory sqlSessions,
+      @Qualifier("transactionManager") PlatformTransactionManager transactions) {
+    this.jdbc = jdbc;
+    this.notifications = notifications;
+    this.archive = archive;
+    this.webhookHistory = webhookHistory;
+    this.ruleHistory = ruleHistory;
+    this.subscriptions = subscriptions;
+    this.push = push;
+    this.webhookService = webhookService;
+    this.notificationService = notificationService;
+    this.auditService = auditService;
+    this.sqlSessions = sqlSessions;
+    this.transactions = transactions;
+  }
 
   @BeforeEach
   void prepare() {

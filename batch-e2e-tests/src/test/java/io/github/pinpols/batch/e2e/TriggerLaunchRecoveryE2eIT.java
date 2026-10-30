@@ -44,20 +44,28 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 @DisplayName("Kafka 实际重试耗尽到持久恢复与根运行去重")
 class TriggerLaunchRecoveryE2eIT extends AbstractIntegrationTest {
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
 
-  @Autowired
-  private KafkaTemplate<String, String> kafka;
+  private final KafkaTemplate<String, String> kafka;
 
-  @Autowired
-  private BatchKafkaTopicNamespace namespace;
+  private final BatchKafkaTopicNamespace namespace;
 
-  @Autowired
-  private TriggerLaunchRecoveryService recovery;
+  private final TriggerLaunchRecoveryService recovery;
 
   @MockitoSpyBean
   private LaunchApplicationService launch;
+
+  @Autowired
+  TriggerLaunchRecoveryE2eIT(
+      JdbcTemplate jdbc,
+      KafkaTemplate<String, String> kafka,
+      BatchKafkaTopicNamespace namespace,
+      TriggerLaunchRecoveryService recovery) {
+    this.jdbc = jdbc;
+    this.kafka = kafka;
+    this.namespace = namespace;
+    this.recovery = recovery;
+  }
 
   @Test
   @DisplayName("prepare 前失败耗尽 Kafka 重试，密文落库后原请求恢复且重复消息不增根运行")

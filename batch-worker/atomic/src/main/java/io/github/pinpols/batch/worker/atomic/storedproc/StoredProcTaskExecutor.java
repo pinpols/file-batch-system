@@ -358,7 +358,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
     try {
       return AtomicConnectionManager.withConnection(inv.dataSource, opts, conn -> {
         // 授权与实际执行必须使用同一 schema；自动提交下 SET LOCAL 不跨语句生效。
-        String targetProcName = schemaOf(inv.procName) == null
+        String targetProcName = EmptyChecks.isNull(schemaOf(inv.procName))
             ? props.getDefaultSchema() + "." + inv.procName
             : inv.procName;
         String call = buildCallSql(conn, targetProcName, totalParams);

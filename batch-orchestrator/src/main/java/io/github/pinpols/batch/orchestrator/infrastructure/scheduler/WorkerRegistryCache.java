@@ -160,11 +160,16 @@ public class WorkerRegistryCache {
                   : new JsonbString(e.capabilityTagsJson))
           .resourceTag(e.resourceTag)
           .status(e.status)
-          .heartbeatAt(e.heartbeatMillis == null ? null : Instant.ofEpochMilli(e.heartbeatMillis))
+          .heartbeatAt(
+              EmptyChecks.isNull(e.heartbeatMillis)
+                  ? null
+                  : Instant.ofEpochMilli(e.heartbeatMillis))
           .currentLoad(e.currentLoad)
           .maxConcurrent(e.maxConcurrent)
           .drainStartedAt(
-              e.drainStartedMillis == null ? null : Instant.ofEpochMilli(e.drainStartedMillis))
+              EmptyChecks.isNull(e.drainStartedMillis)
+                  ? null
+                  : Instant.ofEpochMilli(e.drainStartedMillis))
           .drainDeadlineAt(
               EmptyChecks.isNull(e.drainDeadlineMillis)
                   ? null

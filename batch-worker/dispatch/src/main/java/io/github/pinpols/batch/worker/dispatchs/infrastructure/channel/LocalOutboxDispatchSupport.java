@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
 import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
@@ -153,7 +154,7 @@ final class LocalOutboxDispatchSupport {
     envelope.put("payload", command.payload());
     if (transportStub) {
       envelope.put("transportStub", Boolean.TRUE);
-      envelope.put("transportStubDetail", stubDetail == null ? "" : stubDetail);
+      envelope.put("transportStubDetail", EmptyChecks.isNull(stubDetail) ? "" : stubDetail);
     }
     return envelope;
   }

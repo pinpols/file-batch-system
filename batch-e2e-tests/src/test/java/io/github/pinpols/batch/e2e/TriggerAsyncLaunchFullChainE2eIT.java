@@ -155,24 +155,33 @@ class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
   @Autowired
   private KafkaTemplate<String, String> kafkaTemplate;
 
-  @Autowired
-  private MeterRegistry meterRegistry;
+  private final MeterRegistry meterRegistry;
+
+  private final BatchKafkaTopicNamespace topicNamespace;
+
+  private final KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
+
+  private final TaskOutcomeService taskOutcomeService;
+
+  private final TriggerLaunchConsumer triggerLaunchConsumer;
+
+  private final DataSource importBusinessDataSource;
 
   @Autowired
-  private BatchKafkaTopicNamespace topicNamespace;
-
-  @Autowired
-  private KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
-
-  @Autowired
-  private TaskOutcomeService taskOutcomeService;
-
-  @Autowired
-  private TriggerLaunchConsumer triggerLaunchConsumer;
-
-  @Autowired
-  @Qualifier("importBusinessDataSource")
-  private DataSource importBusinessDataSource;
+  TriggerAsyncLaunchFullChainE2eIT(
+      MeterRegistry meterRegistry,
+      BatchKafkaTopicNamespace topicNamespace,
+      KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
+      TaskOutcomeService taskOutcomeService,
+      TriggerLaunchConsumer triggerLaunchConsumer,
+      @Qualifier("importBusinessDataSource") DataSource importBusinessDataSource) {
+    this.meterRegistry = meterRegistry;
+    this.topicNamespace = topicNamespace;
+    this.kafkaListenerEndpointRegistry = kafkaListenerEndpointRegistry;
+    this.taskOutcomeService = taskOutcomeService;
+    this.triggerLaunchConsumer = triggerLaunchConsumer;
+    this.importBusinessDataSource = importBusinessDataSource;
+  }
 
   @Test
   @DisplayName("触发发起后事件真正发布并被消费:作业实例有且仅有一条,发送记录状态推进为已发布")

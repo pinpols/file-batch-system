@@ -64,22 +64,31 @@ class WorkflowTerminalNotificationIntegrationTest extends AbstractIntegrationTes
   private static HttpServer endpoint;
   private static String originalAllowPrivate;
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
 
-  @Autowired
-  private WorkflowTerminalNotificationService service;
+  private final WorkflowTerminalNotificationService service;
 
-  @Autowired
-  private SubscriptionRuleMapper subscriptionRules;
+  private final SubscriptionRuleMapper subscriptionRules;
 
-  @Autowired
-  private WorkflowTerminalNotificationMapper mapper;
+  private final WorkflowTerminalNotificationMapper mapper;
 
-  @Autowired
-  private TerminalNotificationDeliveryService delivery;
+  private final TerminalNotificationDeliveryService delivery;
 
   private final List<String> ownedTenants = new ArrayList<>();
+
+  @Autowired
+  WorkflowTerminalNotificationIntegrationTest(
+      JdbcTemplate jdbc,
+      WorkflowTerminalNotificationService service,
+      SubscriptionRuleMapper subscriptionRules,
+      WorkflowTerminalNotificationMapper mapper,
+      TerminalNotificationDeliveryService delivery) {
+    this.jdbc = jdbc;
+    this.service = service;
+    this.subscriptionRules = subscriptionRules;
+    this.mapper = mapper;
+    this.delivery = delivery;
+  }
 
   @BeforeEach
   void prepareEndpoint() throws Exception {

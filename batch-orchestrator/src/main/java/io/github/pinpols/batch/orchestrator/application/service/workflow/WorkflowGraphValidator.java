@@ -259,8 +259,9 @@ public class WorkflowGraphValidator {
     Set<String> reachableToEnd = new HashSet<>();
     for (String e : endCodes) dfs(e, incoming, reachableToEnd);
     for (String code : allCodes) {
-      boolean nodeCannotReachAnEnd =
-          !endCodes.isEmpty() && !reachableToEnd.contains(code) && !endCodes.contains(code);
+      boolean nodeCannotReachAnEnd = !EmptyChecks.isEmpty(endCodes)
+          && !reachableToEnd.contains(code)
+          && !endCodes.contains(code);
       if (nodeCannotReachAnEnd) {
         errors.add(issue("V3", "node cannot reach END", code));
       }
@@ -476,8 +477,9 @@ public class WorkflowGraphValidator {
       List<WorkflowEdgeEntity> edges, boolean outgoingDirection) {
     Map<String, List<String>> adj = new HashMap<>();
     for (WorkflowEdgeEntity e : edges) {
-      boolean workflowEdgeIdentityIsIncomplete =
-          e == null || !Texts.hasText(e.getFromNodeCode()) || !Texts.hasText(e.getToNodeCode());
+      boolean workflowEdgeIdentityIsIncomplete = EmptyChecks.isNull(e)
+          || !Texts.hasText(e.getFromNodeCode())
+          || !Texts.hasText(e.getToNodeCode());
       if (workflowEdgeIdentityIsIncomplete) continue;
       String key = outgoingDirection ? e.getFromNodeCode() : e.getToNodeCode();
       String value = outgoingDirection ? e.getToNodeCode() : e.getFromNodeCode();

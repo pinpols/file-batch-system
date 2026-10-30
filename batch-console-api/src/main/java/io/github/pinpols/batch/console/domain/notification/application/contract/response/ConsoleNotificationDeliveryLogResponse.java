@@ -62,7 +62,7 @@ public record ConsoleNotificationDeliveryLogResponse(
   }
 
   private static Object maskJsonValue(String json) {
-    return json == null
+    return EmptyChecks.isNull(json)
         ? null
         : SecretMasking.maskSensitiveValue(JsonUtils.fromJson(json, Object.class), Set.of());
   }

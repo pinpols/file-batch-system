@@ -31,11 +31,16 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @DisplayName("RERUN 历史 Job 定义快照：PostgreSQL 精确查询与租户隔离")
 class WorkflowRunRerunSnapshotIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private WorkflowRunMapper workflowRunMapper;
+  private final WorkflowRunMapper workflowRunMapper;
+
+  private final JdbcTemplate jdbcTemplate;
 
   @Autowired
-  private JdbcTemplate jdbcTemplate;
+  WorkflowRunRerunSnapshotIntegrationTest(
+      WorkflowRunMapper workflowRunMapper, JdbcTemplate jdbcTemplate) {
+    this.workflowRunMapper = workflowRunMapper;
+    this.jdbcTemplate = jdbcTemplate;
+  }
 
   @Test
   @DisplayName("同一 Job 多版本快照按版本精确命中最新记录且不能跨租户读取")

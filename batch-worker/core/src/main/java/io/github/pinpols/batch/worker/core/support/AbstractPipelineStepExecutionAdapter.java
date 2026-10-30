@@ -313,10 +313,10 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
       runCompensationIfEnabled(request.tenantId(), pipelineInstanceId, attributes);
       pipelineRuns.markPipelineFailed(
           pipelineInstanceId, successStage, lastSuccessfulStage(attributes));
-      String fatalCode = verifierResult.firstFatalCode() == null
+      String fatalCode = EmptyChecks.isNull(verifierResult.firstFatalCode())
           ? "VERIFIER_FATAL"
           : verifierResult.firstFatalCode();
-      String fatalMessage = verifierResult.firstFatalMessage() == null
+      String fatalMessage = EmptyChecks.isNull(verifierResult.firstFatalMessage())
           ? "ContentVerifier reported fatal failure"
           : verifierResult.firstFatalMessage();
       handlePipelineFailureWithoutDetails(attributes, fatalCode, fatalMessage);

@@ -49,11 +49,9 @@ class JobStepInstanceRelatedPipelineMapperIntegrationTest extends AbstractIntegr
   @Autowired
   private JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  private FilePipelineStepRunMapper pipelineSteps;
+  private final FilePipelineStepRunMapper pipelineSteps;
 
-  @Autowired
-  private ConsoleJobQueryMappers queryMappers;
+  private final ConsoleJobQueryMappers queryMappers;
 
   @Test
   @Transactional
@@ -123,8 +121,7 @@ class JobStepInstanceRelatedPipelineMapperIntegrationTest extends AbstractIntegr
     assertThat(byId.getRelatedPipelineInstanceId()).isEqualTo(pipelineInstanceId);
   }
 
-  @Autowired
-  private JobExecutionMapper execution;
+  private final JobExecutionMapper execution;
 
   @Test
   @Transactional
@@ -199,8 +196,19 @@ class JobStepInstanceRelatedPipelineMapperIntegrationTest extends AbstractIntegr
     assertThat(found.getSystemPipelineVersion()).isEqualTo(1);
   }
 
+  private final WorkflowExecutionMapper workflowExecution;
+
   @Autowired
-  private WorkflowExecutionMapper workflowExecution;
+  JobStepInstanceRelatedPipelineMapperIntegrationTest(
+      FilePipelineStepRunMapper pipelineSteps,
+      ConsoleJobQueryMappers queryMappers,
+      JobExecutionMapper execution,
+      WorkflowExecutionMapper workflowExecution) {
+    this.pipelineSteps = pipelineSteps;
+    this.queryMappers = queryMappers;
+    this.execution = execution;
+    this.workflowExecution = workflowExecution;
+  }
 
   @Test
   @Transactional

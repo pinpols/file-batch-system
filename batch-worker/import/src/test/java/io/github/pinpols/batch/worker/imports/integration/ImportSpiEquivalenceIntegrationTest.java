@@ -15,10 +15,10 @@ import io.github.pinpols.batch.worker.imports.plugin.ImportLoadPluginRegistry;
 import java.lang.reflect.Field;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestConstructor;
 
 /**
  * P0 Phase 3 等价性 IT — SPI 路径 ≡ @Primary 路径(import)。
@@ -39,6 +39,7 @@ import org.springframework.test.context.DynamicPropertySource;
     classes = BatchWorkerImportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("导入 SPI 等价性集成测试:注册类型,执行器装配与委托实例同一性")
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class ImportSpiEquivalenceIT extends AbstractIntegrationTest {
 
   @DynamicPropertySource
@@ -46,14 +47,20 @@ class ImportSpiEquivalenceIT extends AbstractIntegrationTest {
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
 
-  @Autowired
-  ImportStepExecutionAdapter primaryAdapter;
+  private final ImportStepExecutionAdapter primaryAdapter;
 
-  @Autowired
-  BatchTaskExecutorRegistry registry;
+  private final BatchTaskExecutorRegistry registry;
 
-  @Autowired
-  ImportLoadPluginRegistry importLoadPluginRegistry;
+  private final ImportLoadPluginRegistry importLoadPluginRegistry;
+
+  ImportSpiEquivalenceIT(
+      ImportStepExecutionAdapter primaryAdapter,
+      BatchTaskExecutorRegistry registry,
+      ImportLoadPluginRegistry importLoadPluginRegistry) {
+    this.primaryAdapter = primaryAdapter;
+    this.registry = registry;
+    this.importLoadPluginRegistry = importLoadPluginRegistry;
+  }
 
   @Test
   @DisplayName("上下文加载后,任务执行器注册表包含导入类型")

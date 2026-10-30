@@ -318,22 +318,23 @@ public class DefaultConsoleJobDefinitionApplicationService
     entity.setScheduleType(request.getScheduleType());
     entity.setScheduleExpr(request.getScheduleExpr());
     entity.setTimezone(
-        request.getTimezone() == null
+        EmptyChecks.isNull(request.getTimezone())
             ? CommonConstants.DEFAULT_TIMEZONE_ID
             : request.getTimezone());
     entity.setTriggerMode(
-        request.getTriggerMode() == null ? "SCHEDULED" : request.getTriggerMode());
+        EmptyChecks.isNull(request.getTriggerMode()) ? "SCHEDULED" : request.getTriggerMode());
     entity.setWorkerGroup(CodeNormalizer.toUpperOrNull(request.getWorkerGroup()));
     entity.setQueueCode(CodeNormalizer.toConfigFormOrNull(request.getQueueCode()));
     entity.setCalendarCode(CodeNormalizer.toConfigFormOrNull(request.getCalendarCode()));
     entity.setWindowCode(CodeNormalizer.toConfigFormOrNull(request.getWindowCode()));
-    entity.setDagEnabled(request.getDagEnabled() != null && request.getDagEnabled());
+    entity.setDagEnabled(EmptyChecks.isNotNull(request.getDagEnabled()) && request.getDagEnabled());
     entity.setShardStrategy(
-        request.getShardStrategy() == null ? "NONE" : request.getShardStrategy());
+        EmptyChecks.isNull(request.getShardStrategy()) ? "NONE" : request.getShardStrategy());
     entity.setExecutionMode(
-        request.getExecutionMode() == null ? "FULL" : request.getExecutionMode());
+        EmptyChecks.isNull(request.getExecutionMode()) ? "FULL" : request.getExecutionMode());
     entity.setWatermarkField(request.getWatermarkField());
-    entity.setRetryPolicy(request.getRetryPolicy() == null ? "NONE" : request.getRetryPolicy());
+    entity.setRetryPolicy(
+        EmptyChecks.isNull(request.getRetryPolicy()) ? "NONE" : request.getRetryPolicy());
     entity.setRetryMaxCount(request.getRetryMaxCount());
     entity.setTimeoutSeconds(request.getTimeoutSeconds());
   }

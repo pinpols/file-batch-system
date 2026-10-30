@@ -45,20 +45,15 @@ import org.springframework.transaction.support.TransactionTemplate;
 class DeferredJobRejectionIntegrationTest extends AbstractIntegrationTest {
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 10, 18);
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
 
-  @Autowired
-  private WorkflowRunLaunchService launchService;
+  private final WorkflowRunLaunchService launchService;
 
-  @Autowired
-  private JobDependencyWaitingLaunchReconciler reconciler;
+  private final JobDependencyWaitingLaunchReconciler reconciler;
 
-  @Autowired
-  private JobDependencyWaitingLaunchService waitingService;
+  private final JobDependencyWaitingLaunchService waitingService;
 
-  @Autowired
-  private WorkflowRunManagementApplicationService management;
+  private final WorkflowRunManagementApplicationService management;
 
   @MockitoSpyBean
   private WorkflowNodeRunMapper nodeMapper;
@@ -296,11 +291,27 @@ class DeferredJobRejectionIntegrationTest extends AbstractIntegrationTest {
     assertRejectedRoot();
   }
 
-  @Autowired
-  private PlatformTransactionManager transactionManager;
+  private final PlatformTransactionManager transactionManager;
+
+  private final WorkflowNodeDispatchService dispatchService;
 
   @Autowired
-  private WorkflowNodeDispatchService dispatchService;
+  DeferredJobRejectionIntegrationTest(
+      JdbcTemplate jdbc,
+      WorkflowRunLaunchService launchService,
+      JobDependencyWaitingLaunchReconciler reconciler,
+      JobDependencyWaitingLaunchService waitingService,
+      WorkflowRunManagementApplicationService management,
+      PlatformTransactionManager transactionManager,
+      WorkflowNodeDispatchService dispatchService) {
+    this.jdbc = jdbc;
+    this.launchService = launchService;
+    this.reconciler = reconciler;
+    this.waitingService = waitingService;
+    this.management = management;
+    this.transactionManager = transactionManager;
+    this.dispatchService = dispatchService;
+  }
 
   @Test
   @DisplayName("普通非绕过RLS角色完成拒绝传播和终态Outbox事务")

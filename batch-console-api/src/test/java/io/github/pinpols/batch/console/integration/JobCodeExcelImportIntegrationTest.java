@@ -35,17 +35,25 @@ import org.springframework.security.core.context.SecurityContextHolder;
 @DisplayName("配置包作业编码的真实预览与应用")
 class JobCodeExcelImportIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private TenantConfigPackageExcelService excel;
+  private final TenantConfigPackageExcelService excel;
+
+  private final TenantConfigPackageExcelImportStore sessions;
+
+  private final JdbcTemplate jdbc;
+
+  private final ConsoleTenantConfigInitApplicationService init;
 
   @Autowired
-  private TenantConfigPackageExcelImportStore sessions;
-
-  @Autowired
-  private JdbcTemplate jdbc;
-
-  @Autowired
-  private ConsoleTenantConfigInitApplicationService init;
+  JobCodeExcelImportIntegrationTest(
+      TenantConfigPackageExcelService excel,
+      TenantConfigPackageExcelImportStore sessions,
+      JdbcTemplate jdbc,
+      ConsoleTenantConfigInitApplicationService init) {
+    this.excel = excel;
+    this.sessions = sessions;
+    this.jdbc = jdbc;
+    this.init = init;
+  }
 
   @AfterEach
   void clearPrincipal() {

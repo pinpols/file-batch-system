@@ -35,14 +35,21 @@ import org.springframework.transaction.support.TransactionTemplate;
 @DisplayName("连续性核对的真实 PostgreSQL 事务、重复回报和重试身份")
 @ExtendWith(OutputCaptureExtension.class)
 class CountContinuityOutboxIntegrationTest extends AbstractIntegrationTest {
-  @Autowired
-  private CountContinuityOutboxService service;
+  private final CountContinuityOutboxService service;
+
+  private final JdbcTemplate jdbc;
+
+  private final PlatformTransactionManager transactionManager;
 
   @Autowired
-  private JdbcTemplate jdbc;
-
-  @Autowired
-  private PlatformTransactionManager transactionManager;
+  CountContinuityOutboxIntegrationTest(
+      CountContinuityOutboxService service,
+      JdbcTemplate jdbc,
+      PlatformTransactionManager transactionManager) {
+    this.service = service;
+    this.jdbc = jdbc;
+    this.transactionManager = transactionManager;
+  }
 
   @Test
   @DisplayName("同次执行重复核对只写一次，新执行独立记录，定义变更不改冻结核对规则")

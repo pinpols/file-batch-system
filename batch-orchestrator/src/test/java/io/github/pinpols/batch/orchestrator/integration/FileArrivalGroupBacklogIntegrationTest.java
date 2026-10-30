@@ -20,11 +20,16 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @DisplayName("文件到达积压按组计数与等待时长")
 class FileArrivalGroupBacklogIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private FileGovernanceMapper fileGovernanceMapper;
+  private final FileGovernanceMapper fileGovernanceMapper;
+
+  private final JdbcTemplate jdbcTemplate;
 
   @Autowired
-  private JdbcTemplate jdbcTemplate;
+  FileArrivalGroupBacklogIntegrationTest(
+      FileGovernanceMapper fileGovernanceMapper, JdbcTemplate jdbcTemplate) {
+    this.fileGovernanceMapper = fileGovernanceMapper;
+    this.jdbcTemplate = jdbcTemplate;
+  }
 
   @DisplayName("积压按文件组计数并测量最老等待组")
   @Test

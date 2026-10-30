@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.imports.infrastructure.quality;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.utils.ContentMaskingUtils;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.ArrayList;
@@ -62,7 +63,7 @@ public class ValidationIssueMasker {
 
   private Map<Long, ValidationIssue> maskRecordIssues(
       Map<Long, ValidationIssue> issues, boolean mask, String ruleSet) {
-    boolean issueMaskingIsNotApplicable = !mask || issues == null || issues.isEmpty();
+    boolean issueMaskingIsNotApplicable = !mask || EmptyChecks.isEmpty(issues);
     if (issueMaskingIsNotApplicable) {
       return new LinkedHashMap<>(issues == null ? Map.of() : issues);
     }
@@ -76,7 +77,7 @@ public class ValidationIssueMasker {
 
   private List<ValidationIssue> maskDatasetIssues(
       List<ValidationIssue> issues, boolean mask, String ruleSet) {
-    boolean issueMaskingIsNotApplicable = !mask || issues == null || issues.isEmpty();
+    boolean issueMaskingIsNotApplicable = !mask || EmptyChecks.isEmpty(issues);
     if (issueMaskingIsNotApplicable) {
       return new ArrayList<>(issues == null ? List.of() : issues);
     }

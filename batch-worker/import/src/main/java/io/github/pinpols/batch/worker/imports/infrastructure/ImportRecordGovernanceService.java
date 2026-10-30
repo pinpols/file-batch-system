@@ -342,8 +342,8 @@ public class ImportRecordGovernanceService {
     Object rawRecord = brc.rawRecord();
     boolean skipped = brc.skipped();
     SourceLocator locator = brc.locator();
-    Long sourceRowNum = locator == null ? null : locator.rowNum();
-    String sourceColumn = locator == null ? null : locator.column();
+    Long sourceRowNum = EmptyChecks.isNull(locator) ? null : locator.rowNum();
+    String sourceColumn = EmptyChecks.isNull(locator) ? null : locator.column();
     Map<String, Object> attrs = context.getAttributes();
     Object fileIdValue = attrs.get(PipelineRuntimeKeys.FILE_ID);
     Long fileId = PlatformRuntimeValues.toLong(fileIdValue);

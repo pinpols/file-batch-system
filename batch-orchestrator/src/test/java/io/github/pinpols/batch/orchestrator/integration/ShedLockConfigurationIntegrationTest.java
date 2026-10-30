@@ -49,8 +49,12 @@ class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   DataSource dataSource;
 
+  final StringRedisTemplate redisTemplate;
+
   @Autowired
-  StringRedisTemplate redisTemplate;
+  ShedLockConfigurationIntegrationTest(StringRedisTemplate redisTemplate) {
+    this.redisTemplate = redisTemplate;
+  }
 
   @Test
   @DisplayName("数据库迁移后锁表存在,且装配的锁提供者为 Redis 实现并注入数据源")

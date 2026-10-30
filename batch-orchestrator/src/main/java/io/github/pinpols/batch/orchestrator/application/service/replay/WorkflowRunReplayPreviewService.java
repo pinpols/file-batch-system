@@ -378,13 +378,13 @@ public class WorkflowRunReplayPreviewService {
     }
     ApprovalCommandEntity approval = approvalCommandMapper.selectByTenantAndSourceIdempotencyKey(
         operation.tenantId(), operation.operationKey());
-    boolean sameTarget = approval != null
+    boolean sameTarget = EmptyChecks.isNotNull(approval)
         && operation.tenantId().equals(approval.getTenantId())
         && operation.operationKey().equals(approval.getSourceIdempotencyKey())
         && "COMPENSATION".equals(approval.getApprovalType())
         && "WORKFLOW_RUN_REPLAY".equals(approval.getActionType())
         && "WORKFLOW_RUN".equals(approval.getTargetType())
-        && operation.sourceWorkflowRunId() != null
+        && EmptyChecks.isNotNull(operation.sourceWorkflowRunId())
         && String.valueOf(operation.sourceWorkflowRunId()).equals(approval.getTargetId());
     if (!sameTarget) {
       throw invalidApprovalDecision();

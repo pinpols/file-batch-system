@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.notification.support;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsolePushProperties;
 import io.github.pinpols.batch.console.domain.notification.service.JobPushDeliveryService;
 import jakarta.annotation.PostConstruct;
@@ -92,7 +93,7 @@ public class ConsolePushJobNotifier {
     Throwable current = throwable;
     while (current != null) {
       String message = current.getMessage();
-      boolean isConnectionShutdownMessage = message != null
+      boolean isConnectionShutdownMessage = EmptyChecks.isNotNull(message)
           && (message.contains("has been closed")
               || message.contains("Connection pool shut down")
               || message.contains("Interrupted"));

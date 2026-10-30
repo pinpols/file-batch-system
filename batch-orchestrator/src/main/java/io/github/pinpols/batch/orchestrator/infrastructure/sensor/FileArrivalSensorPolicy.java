@@ -65,7 +65,7 @@ public class FileArrivalSensorPolicy implements SensorPolicy {
     boolean requireCompleteGroup = Boolean.TRUE.equals(spec.get("requireCompleteGroup"));
     boolean bindWorkflowBizDate = Boolean.TRUE.equals(spec.get("bindWorkflowBizDate"));
     boolean fileArrivalFreshnessCheckIsUnavailable =
-        !Texts.hasText(pattern) || maxAgeSeconds == null || maxAgeSeconds <= 0;
+        !Texts.hasText(pattern) || EmptyChecks.isNull(maxAgeSeconds) || maxAgeSeconds <= 0;
     if (fileArrivalFreshnessCheckIsUnavailable) {
       return SensorProbeResult.error(
           SENSOR_SPEC_INVALID, List.of(SENSOR_TYPE_CODE, "pattern/maxAgeSeconds required"));

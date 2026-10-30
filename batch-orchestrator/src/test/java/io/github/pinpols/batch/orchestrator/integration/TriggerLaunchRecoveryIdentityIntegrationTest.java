@@ -48,17 +48,25 @@ import org.springframework.web.server.ResponseStatusException;
 class TriggerLaunchRecoveryIdentityIntegrationTest extends AbstractIntegrationTest {
   private final String testTenant = "recovery-identity-" + System.nanoTime();
 
-  @Autowired
-  private TriggerLaunchRecoveryService service;
+  private final TriggerLaunchRecoveryService service;
+
+  private final SecretPayloadProtector protector;
+
+  private final JdbcTemplate jdbc;
+
+  private final TriggerLaunchRecoveryMapper mapper;
 
   @Autowired
-  private SecretPayloadProtector protector;
-
-  @Autowired
-  private JdbcTemplate jdbc;
-
-  @Autowired
-  private TriggerLaunchRecoveryMapper mapper;
+  TriggerLaunchRecoveryIdentityIntegrationTest(
+      TriggerLaunchRecoveryService service,
+      SecretPayloadProtector protector,
+      JdbcTemplate jdbc,
+      TriggerLaunchRecoveryMapper mapper) {
+    this.service = service;
+    this.protector = protector;
+    this.jdbc = jdbc;
+    this.mapper = mapper;
+  }
 
   @AfterEach
   void cleanUp() {

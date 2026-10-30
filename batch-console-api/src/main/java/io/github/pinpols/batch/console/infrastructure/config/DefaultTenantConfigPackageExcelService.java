@@ -688,7 +688,8 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
           parseOptionalSheet(wb, CHANNEL_SHEET, CHANNEL_COLUMNS, tenantId);
       List<Map<String, String>> fileTemplateRows =
           parseOptionalSheet(wb, FILE_TEMPLATE_SHEET, FILE_TEMPLATE_COLUMNS, tenantId);
-      if (wb.getSheet(PIPELINE_SHEET) != null || wb.getSheet(STEP_SHEET) != null) {
+      if (EmptyChecks.isNotNull(wb.getSheet(PIPELINE_SHEET))
+          || EmptyChecks.isNotNull(wb.getSheet(STEP_SHEET))) {
         throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.config.package.retired_sheet");
       }
       List<Map<String, String>> pipelineRows = List.of();

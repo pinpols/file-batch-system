@@ -70,12 +70,16 @@ class ExportPipelineE2eIT extends AbstractIntegrationTest {
   @Autowired
   private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
-  @Autowired
-  private SecretPayloadProtector secretPayloadProtector;
+  private final SecretPayloadProtector secretPayloadProtector;
 
   @Autowired
   @Qualifier("exportBusinessDataSource")
   private DataSource businessDataSource;
+
+  @Autowired
+  ExportPipelineE2eIT(SecretPayloadProtector secretPayloadProtector) {
+    this.secretPayloadProtector = secretPayloadProtector;
+  }
 
   @Test
   @DisplayName("单个导出任务经事件派发与任务领取后收敛为成功终态, 业务侧结算批次的汇总金额可读且非空")

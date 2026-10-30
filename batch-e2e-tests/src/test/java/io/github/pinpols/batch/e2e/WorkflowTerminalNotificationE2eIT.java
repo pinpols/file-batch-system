@@ -70,18 +70,25 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
   private static HttpServer endpoint;
   private static String previousAllowPrivate;
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
+
+  private final WorkflowRunLaunchService launch;
+
+  private final WorkflowRunManagementApplicationService workflowRunManagement;
+
+  private final DataSource businessDataSource;
 
   @Autowired
-  private WorkflowRunLaunchService launch;
-
-  @Autowired
-  private WorkflowRunManagementApplicationService workflowRunManagement;
-
-  @Autowired
-  @Qualifier("importBusinessDataSource")
-  private DataSource businessDataSource;
+  WorkflowTerminalNotificationE2eIT(
+      JdbcTemplate jdbc,
+      WorkflowRunLaunchService launch,
+      WorkflowRunManagementApplicationService workflowRunManagement,
+      @Qualifier("importBusinessDataSource") DataSource businessDataSource) {
+    this.jdbc = jdbc;
+    this.launch = launch;
+    this.workflowRunManagement = workflowRunManagement;
+    this.businessDataSource = businessDataSource;
+  }
 
   @BeforeAll
   static void startReceiver() throws Exception {

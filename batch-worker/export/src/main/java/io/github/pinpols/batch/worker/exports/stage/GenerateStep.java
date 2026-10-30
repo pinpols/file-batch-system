@@ -240,8 +240,9 @@ public class GenerateStep implements ExportStageStep {
   /** 在读取明细和创建生成文件前，先检查批次声明的行数上限。 */
   private ExportStageResult validateExportRowLimit(Map<String, Object> batch) {
     // H-8: 生成前强制检查最大行数限制，防止 OOM
-    long maxRows =
-        workerConfiguration != null ? workerConfiguration.effectiveMaxExportRows() : 500_000L;
+    long maxRows = EmptyChecks.isNotNull(workerConfiguration)
+        ? workerConfiguration.effectiveMaxExportRows()
+        : 500_000L;
     Object totalCountObj = batch.get("total_count");
     Number totalCount = totalCountObj instanceof Number number ? number : null;
     boolean totalCountExceedsMaxRows =
@@ -526,7 +527,7 @@ public class GenerateStep implements ExportStageStep {
    * 不在 P0 做。
    */
   private Long resolveCheckpointInstanceId(ExportJobContext context, String fileFormatType) {
-    boolean exportCheckpointIsUnavailable = checkpointProperties == null
+    boolean exportCheckpointIsUnavailable = EmptyChecks.isNull(checkpointProperties)
         || !checkpointProperties.isEnabled()
         || positionStore == null
         || FileTemplateFormat.EXCEL.code().equalsIgnoreCase(fileFormatType);

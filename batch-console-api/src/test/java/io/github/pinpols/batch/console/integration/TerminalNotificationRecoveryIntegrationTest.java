@@ -48,14 +48,19 @@ import org.springframework.test.web.reactive.server.WebTestClient;
     })
 @DisplayName("Workflow 终态投递人工恢复:真实 HTTP/PG、权限、幂等与强审计")
 class TerminalNotificationRecoveryIntegrationTest extends AbstractIntegrationTest {
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
+  private final WorkflowTerminalNotificationService notifications;
+  private final TerminalNotificationDeliveryService delivery;
 
   @Autowired
-  private WorkflowTerminalNotificationService notifications;
-
-  @Autowired
-  private TerminalNotificationDeliveryService delivery;
+  TerminalNotificationRecoveryIntegrationTest(
+      JdbcTemplate jdbc,
+      WorkflowTerminalNotificationService notifications,
+      TerminalNotificationDeliveryService delivery) {
+    this.jdbc = jdbc;
+    this.notifications = notifications;
+    this.delivery = delivery;
+  }
 
   @MockitoBean
   private NotificationSenderRegistry senders;

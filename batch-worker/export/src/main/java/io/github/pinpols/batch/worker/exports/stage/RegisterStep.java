@@ -231,7 +231,7 @@ public class RegisterStep implements ExportStageStep {
     metadata.put("templateCode", exportPayload.templateCode());
     metadata.put(KEY_OBJECT_NAME, objectName);
     mergeSecurityMetadata(metadata, attrs);
-    if (attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT) != null) {
+    if (EmptyChecks.isNotNull(attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT))) {
       metadata.put(
           PipelineRuntimeKeys.EXPORT_SNAPSHOT, attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT));
     }

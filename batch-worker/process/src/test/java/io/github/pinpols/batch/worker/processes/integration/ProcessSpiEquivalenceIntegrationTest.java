@@ -15,16 +15,17 @@ import io.github.pinpols.batch.worker.processes.stage.DefaultProcessStageExecuto
 import java.lang.reflect.Field;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestConstructor;
 
 /** P0 Phase 3 等价性 IT — SPI 路径 ≡ @Primary 路径(process)。详见 {@code ImportSpiEquivalenceIT} 同名 doc。 */
 @SpringBootTest(
     classes = BatchWorkerProcessApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("处理 SPI 等价性:注册表暴露处理任务类型,查得的执行器与主适配器共用同一实现")
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class ProcessSpiEquivalenceIT extends AbstractIntegrationTest {
 
   @DynamicPropertySource
@@ -32,14 +33,20 @@ class ProcessSpiEquivalenceIT extends AbstractIntegrationTest {
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
 
-  @Autowired
-  ProcessStepExecutionAdapter primaryAdapter;
+  private final ProcessStepExecutionAdapter primaryAdapter;
 
-  @Autowired
-  BatchTaskExecutorRegistry registry;
+  private final BatchTaskExecutorRegistry registry;
 
-  @Autowired
-  DefaultProcessStageExecutor processStageExecutor;
+  private final DefaultProcessStageExecutor processStageExecutor;
+
+  ProcessSpiEquivalenceIT(
+      ProcessStepExecutionAdapter primaryAdapter,
+      BatchTaskExecutorRegistry registry,
+      DefaultProcessStageExecutor processStageExecutor) {
+    this.primaryAdapter = primaryAdapter;
+    this.registry = registry;
+    this.processStageExecutor = processStageExecutor;
+  }
 
   @Test
   @DisplayName("注册表列出的已注册类型包含处理任务类型")

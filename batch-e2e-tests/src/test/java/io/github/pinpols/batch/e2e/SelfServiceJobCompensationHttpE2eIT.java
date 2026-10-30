@@ -477,46 +477,60 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
              (?, ?, 'WAIT_RELEASE', 'END', 'SUCCESS', true)
       """;
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
 
-  @Autowired
-  private BatchObjectStore testObjectStore;
+  private final BatchObjectStore testObjectStore;
 
-  @Autowired
-  private E2eOutboxPublishSupport outboxPublishSupport;
+  private final E2eOutboxPublishSupport outboxPublishSupport;
 
-  @Autowired
-  private WorkflowRunLaunchService launchService;
+  private final WorkflowRunLaunchService launchService;
 
-  @Autowired
-  private ResultVersionPromoteService resultVersionPromoteService;
+  private final ResultVersionPromoteService resultVersionPromoteService;
 
-  @Autowired
-  private OrchestratorConfigCacheService configCacheService;
+  private final OrchestratorConfigCacheService configCacheService;
 
-  @Autowired
-  private BatchDayReplayService batchDayReplayService;
+  private final BatchDayReplayService batchDayReplayService;
 
-  @Autowired
-  private BatchDayReplayDispatcher batchDayReplayDispatcher;
+  private final BatchDayReplayDispatcher batchDayReplayDispatcher;
 
-  @Autowired
-  private WorkerRegistryServerService workerRegistryService;
+  private final WorkerRegistryServerService workerRegistryService;
 
-  @Autowired
-  @Qualifier("importBusinessDataSource")
-  private DataSource businessDataSource;
+  private final DataSource businessDataSource;
 
-  @Autowired
-  @Qualifier("e2eBusinessDataSource")
-  private DataSource e2eBusinessDataSource;
+  private final DataSource e2eBusinessDataSource;
 
-  @Autowired
-  private ObjectMapper objectMapper;
+  private final ObjectMapper objectMapper;
 
   @LocalServerPort
   private int orchestratorPort;
+
+  @Autowired
+  SelfServiceJobCompensationHttpE2eIT(
+      JdbcTemplate jdbc,
+      BatchObjectStore testObjectStore,
+      E2eOutboxPublishSupport outboxPublishSupport,
+      WorkflowRunLaunchService launchService,
+      ResultVersionPromoteService resultVersionPromoteService,
+      OrchestratorConfigCacheService configCacheService,
+      BatchDayReplayService batchDayReplayService,
+      BatchDayReplayDispatcher batchDayReplayDispatcher,
+      WorkerRegistryServerService workerRegistryService,
+      @Qualifier("importBusinessDataSource") DataSource businessDataSource,
+      @Qualifier("e2eBusinessDataSource") DataSource e2eBusinessDataSource,
+      ObjectMapper objectMapper) {
+    this.jdbc = jdbc;
+    this.testObjectStore = testObjectStore;
+    this.outboxPublishSupport = outboxPublishSupport;
+    this.launchService = launchService;
+    this.resultVersionPromoteService = resultVersionPromoteService;
+    this.configCacheService = configCacheService;
+    this.batchDayReplayService = batchDayReplayService;
+    this.batchDayReplayDispatcher = batchDayReplayDispatcher;
+    this.workerRegistryService = workerRegistryService;
+    this.businessDataSource = businessDataSource;
+    this.e2eBusinessDataSource = e2eBusinessDataSource;
+    this.objectMapper = objectMapper;
+  }
 
   @ParameterizedTest(name = "failed source={0}, replay before compensation={1}")
   @MethodSource("selfServiceCompensationScenarios")

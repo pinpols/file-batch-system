@@ -60,19 +60,22 @@ class BatchDayMapperIntegrationTest extends AbstractIntegrationTest {
   private final JdbcTemplate jdbcTemplate;
   private final BatchDayMapper mapper;
 
-  @Autowired
-  private BusinessCalendarMapper businessCalendars;
+  private final BusinessCalendarMapper businessCalendars;
+  private final JobDefinitionMapper jobDefinitions;
+  private final BatchDayCatchUpOperationStore operationStore;
 
   @Autowired
-  private JobDefinitionMapper jobDefinitions;
-
-  @Autowired
-  private BatchDayCatchUpOperationStore operationStore;
-
-  @Autowired
-  BatchDayMapperIntegrationTest(JdbcTemplate jdbcTemplate, BatchDayMapper mapper) {
+  BatchDayMapperIntegrationTest(
+      JdbcTemplate jdbcTemplate,
+      BatchDayMapper mapper,
+      BusinessCalendarMapper businessCalendars,
+      JobDefinitionMapper jobDefinitions,
+      BatchDayCatchUpOperationStore operationStore) {
     this.jdbcTemplate = jdbcTemplate;
     this.mapper = mapper;
+    this.businessCalendars = businessCalendars;
+    this.jobDefinitions = jobDefinitions;
+    this.operationStore = operationStore;
   }
 
   @Test

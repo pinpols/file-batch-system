@@ -38,20 +38,28 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 @DisplayName("Excel Apply 真实事务与缓存失效")
 class ConfigPackageApplyCacheTransactionIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private TenantConfigPackageExcelService service;
+  private final TenantConfigPackageExcelService service;
 
-  @Autowired
-  private TenantConfigPackageExcelImportStore sessions;
+  private final TenantConfigPackageExcelImportStore sessions;
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
 
-  @Autowired
-  private StringRedisTemplate redis;
+  private final StringRedisTemplate redis;
 
   @MockitoSpyBean
   private ConsoleConfigCacheInvalidationService invalidation;
+
+  @Autowired
+  ConfigPackageApplyCacheTransactionIntegrationTest(
+      TenantConfigPackageExcelService service,
+      TenantConfigPackageExcelImportStore sessions,
+      JdbcTemplate jdbc,
+      StringRedisTemplate redis) {
+    this.service = service;
+    this.sessions = sessions;
+    this.jdbc = jdbc;
+    this.redis = redis;
+  }
 
   @ParameterizedTest
   @ValueSource(booleans = {false, true})

@@ -111,9 +111,7 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
   @Autowired
   private JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  @Qualifier("importBusinessDataSource")
-  private DataSource businessDataSource;
+  private final DataSource businessDataSource;
 
   @Autowired
   private E2eOutboxPublishSupport e2eOutboxPublishSupport;
@@ -130,6 +128,12 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
 
   private String consoleJwt;
   private String consoleCsrf;
+
+  @Autowired
+  DeadLetterApprovalReplayE2eIT(
+      @Qualifier("importBusinessDataSource") DataSource businessDataSource) {
+    this.businessDataSource = businessDataSource;
+  }
 
   @BeforeEach
   void authenticateConsoleClient() throws Exception {

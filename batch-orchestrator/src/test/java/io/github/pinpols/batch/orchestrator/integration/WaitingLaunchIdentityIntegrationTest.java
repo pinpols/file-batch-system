@@ -71,29 +71,22 @@ class WaitingLaunchIdentityIntegrationTest extends AbstractIntegrationTest {
 
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 10, 18);
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
 
-  @Autowired
-  private DataSource dataSource;
+  private final DataSource dataSource;
 
-  @Autowired
-  private PlatformTransactionManager transactionManager;
+  private final PlatformTransactionManager transactionManager;
 
-  @Autowired
-  private JobDependencyWaitingLaunchService jobService;
+  private final JobDependencyWaitingLaunchService jobService;
 
-  @Autowired
-  private WorkflowLaunchWaitService workflowService;
+  private final WorkflowLaunchWaitService workflowService;
 
   @MockitoSpyBean
   private JobDependencyWaitingLaunchMapper jobMapper;
 
-  @Autowired
-  private WorkflowLaunchWaitMapper workflowMapper;
+  private final WorkflowLaunchWaitMapper workflowMapper;
 
-  @Autowired
-  private SecretPayloadProtector secretPayloadProtector;
+  private final SecretPayloadProtector secretPayloadProtector;
 
   @MockitoSpyBean
   private TriggerRequestMapper requestMapper;
@@ -101,11 +94,9 @@ class WaitingLaunchIdentityIntegrationTest extends AbstractIntegrationTest {
   @MockitoSpyBean
   private WorkflowRunLaunchService runLaunchService;
 
-  @Autowired
-  private WorkflowLaunchWaitReconciler reconciler;
+  private final WorkflowLaunchWaitReconciler reconciler;
 
-  @Autowired
-  private JobDependencyWaitingLaunchReconciler jobReconciler;
+  private final JobDependencyWaitingLaunchReconciler jobReconciler;
 
   @MockitoSpyBean
   private LaunchService jobLaunchService;
@@ -114,6 +105,28 @@ class WaitingLaunchIdentityIntegrationTest extends AbstractIntegrationTest {
   private String otherTenant;
   private Long workflowId;
   private Long parentRunId;
+
+  @Autowired
+  WaitingLaunchIdentityIntegrationTest(
+      JdbcTemplate jdbc,
+      DataSource dataSource,
+      PlatformTransactionManager transactionManager,
+      JobDependencyWaitingLaunchService jobService,
+      WorkflowLaunchWaitService workflowService,
+      WorkflowLaunchWaitMapper workflowMapper,
+      SecretPayloadProtector secretPayloadProtector,
+      WorkflowLaunchWaitReconciler reconciler,
+      JobDependencyWaitingLaunchReconciler jobReconciler) {
+    this.jdbc = jdbc;
+    this.dataSource = dataSource;
+    this.transactionManager = transactionManager;
+    this.jobService = jobService;
+    this.workflowService = workflowService;
+    this.workflowMapper = workflowMapper;
+    this.secretPayloadProtector = secretPayloadProtector;
+    this.reconciler = reconciler;
+    this.jobReconciler = jobReconciler;
+  }
 
   @BeforeEach
   void seedAcceptedRequests() {

@@ -20,11 +20,16 @@ import org.springframework.jdbc.core.JdbcTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @DisplayName("租户初始化定长映射验证")
 class FixedWidthTenantInitIntegrationTest extends AbstractIntegrationTest {
-  @Autowired
-  private ConsoleTenantConfigInitApplicationService init;
+  private final ConsoleTenantConfigInitApplicationService init;
+
+  private final JdbcTemplate jdbc;
 
   @Autowired
-  private JdbcTemplate jdbc;
+  FixedWidthTenantInitIntegrationTest(
+      ConsoleTenantConfigInitApplicationService init, JdbcTemplate jdbc) {
+    this.init = init;
+    this.jdbc = jdbc;
+  }
 
   @ParameterizedTest
   @ValueSource(booleans = {false, true})

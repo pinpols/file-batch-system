@@ -23,6 +23,7 @@ import io.github.pinpols.batch.worker.exports.stage.ExportStageExecutor;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.locks.ReentrantLock;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Primary;
@@ -86,9 +87,9 @@ public class ExportStepExecutionAdapter
     context.setBizDate(bizDate);
     context.setFileId(fileId == null ? "" : String.valueOf(fileId));
     Object exportPayload = contextMap.get(ExportRuntimeKeys.EXPORT_PAYLOAD);
-    boolean rawExportPayloadNeedsDecoding = exportPayload == null
-        && context.getRawPayload() != null
-        && !context.getRawPayload().isBlank();
+    boolean rawExportPayloadNeedsDecoding = EmptyChecks.isNull(exportPayload)
+        && EmptyChecks.isNotNull(context.getRawPayload())
+        && !EmptyChecks.isBlank(Objects.requireNonNull(context.getRawPayload()));
     if (rawExportPayloadNeedsDecoding) {
       exportPayload = objectMapper.readValue(context.getRawPayload(), ExportPayload.class);
       context.getAttributes().put(ExportRuntimeKeys.EXPORT_PAYLOAD, exportPayload);

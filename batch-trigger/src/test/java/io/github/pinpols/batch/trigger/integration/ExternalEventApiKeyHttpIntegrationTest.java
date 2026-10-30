@@ -76,11 +76,15 @@ class ExternalEventApiKeyHttpIntegrationTest {
     }
   }
 
-  @Autowired
-  private MockMvc mockMvc;
+  private final MockMvc mockMvc;
+
+  private final JdbcTemplate jdbcTemplate;
 
   @Autowired
-  private JdbcTemplate jdbcTemplate;
+  ExternalEventApiKeyHttpIntegrationTest(MockMvc mockMvc, JdbcTemplate jdbcTemplate) {
+    this.mockMvc = mockMvc;
+    this.jdbcTemplate = jdbcTemplate;
+  }
 
   @Test
   @DisplayName("旧 Job 根字段和双目标请求均拒绝且不写请求或 Outbox")

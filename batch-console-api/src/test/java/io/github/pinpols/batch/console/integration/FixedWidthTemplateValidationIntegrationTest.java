@@ -30,11 +30,16 @@ class FixedWidthTemplateValidationIntegrationTest extends AbstractMutationIntegr
   private static final String INVALID = "[{\"target\":\"name\",\"start\":1.5,\"length\":2}]";
   private static final String VALID = "[{\"target\":\"name\",\"start\":1,\"length\":2}]";
 
-  @Autowired
-  private FileTemplateConfigMapper realMapper;
+  private final FileTemplateConfigMapper realMapper;
+
+  private final ObjectMapper objectMapper;
 
   @Autowired
-  private ObjectMapper objectMapper;
+  FixedWidthTemplateValidationIntegrationTest(
+      FileTemplateConfigMapper realMapper, ObjectMapper objectMapper) {
+    this.realMapper = realMapper;
+    this.objectMapper = objectMapper;
+  }
 
   @Test
   @DisplayName("空映射骨架允许启用")

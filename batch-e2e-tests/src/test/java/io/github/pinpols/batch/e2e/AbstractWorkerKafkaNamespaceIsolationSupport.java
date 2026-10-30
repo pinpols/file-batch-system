@@ -27,7 +27,6 @@ import org.apache.kafka.common.errors.TopicExistsException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -44,14 +43,20 @@ abstract class AbstractWorkerKafkaNamespaceIsolationSupport extends AbstractInte
   private static final int TOPIC_PARTITIONS = 1;
   private static final short TOPIC_REPLICATION_FACTOR = 1;
 
-  @Autowired
-  private List<AbstractTaskConsumer> taskConsumers;
+  private final List<AbstractTaskConsumer> taskConsumers;
 
-  @Autowired
-  private BatchKafkaTopicNamespace topicNamespace;
+  private final BatchKafkaTopicNamespace topicNamespace;
 
-  @Autowired
-  private KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
+  private final KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
+
+  protected AbstractWorkerKafkaNamespaceIsolationSupport(
+      List<AbstractTaskConsumer> taskConsumers,
+      BatchKafkaTopicNamespace topicNamespace,
+      KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry) {
+    this.taskConsumers = taskConsumers;
+    this.topicNamespace = topicNamespace;
+    this.kafkaListenerEndpointRegistry = kafkaListenerEndpointRegistry;
+  }
 
   @DynamicPropertySource
   static void registerDeploymentNamespace(DynamicPropertyRegistry registry) {

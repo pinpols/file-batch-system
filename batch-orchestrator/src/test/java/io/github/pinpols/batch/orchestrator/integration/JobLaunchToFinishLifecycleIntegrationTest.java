@@ -65,8 +65,7 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
   @Autowired
   private TaskExecutionService taskExecutionService;
 
-  @Autowired
-  private TaskCreationService taskCreationService;
+  private final TaskCreationService taskCreationService;
 
   @Autowired
   private JobInstanceMapper jobInstanceMapper;
@@ -76,6 +75,11 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
+
+  @Autowired
+  JobLaunchToFinishLifecycleIntegrationTest(TaskCreationService taskCreationService) {
+    this.taskCreationService = taskCreationService;
+  }
 
   @BeforeEach
   void refreshWorkersForClaim() {

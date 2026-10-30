@@ -26,11 +26,16 @@ import org.springframework.transaction.annotation.Transactional;
 @DisplayName("Trigger Outbox 领取轮次围栏:旧投递者不得回写新领取")
 class TriggerOutboxClaimFenceMapperIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private TriggerOutboxEventMapper mapper;
+  private final TriggerOutboxEventMapper mapper;
+
+  private final JdbcTemplate jdbcTemplate;
 
   @Autowired
-  private JdbcTemplate jdbcTemplate;
+  TriggerOutboxClaimFenceMapperIntegrationTest(
+      TriggerOutboxEventMapper mapper, JdbcTemplate jdbcTemplate) {
+    this.mapper = mapper;
+    this.jdbcTemplate = jdbcTemplate;
+  }
 
   @Test
   @Transactional

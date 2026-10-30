@@ -53,11 +53,15 @@ class ApprovalSourceReconciliationE2eIT extends AbstractIntegrationTest {
     }
   }
 
-  @Autowired
-  private ApprovalWorkflowService approvals;
+  private final ApprovalWorkflowService approvals;
 
   @LocalServerPort
   private int port;
+
+  @Autowired
+  ApprovalSourceReconciliationE2eIT(ApprovalWorkflowService approvals) {
+    this.approvals = approvals;
+  }
 
   @Test
   @DisplayName("审批决定后按原身份回查；不同载荷、其他租户或缺失记录不能确认")

@@ -31,8 +31,12 @@ import org.springframework.test.util.ReflectionTestUtils;
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @DisplayName("推送订阅的租户隔离与凭据更新栅栏")
 class ConsolePushSubscriptionMapperIntegrationTest extends AbstractIntegrationTest {
+  private final ConsolePushSubscriptionMapper subscriptions;
+
   @Autowired
-  private ConsolePushSubscriptionMapper subscriptions;
+  ConsolePushSubscriptionMapperIntegrationTest(ConsolePushSubscriptionMapper subscriptions) {
+    this.subscriptions = subscriptions;
+  }
 
   @DisplayName("迟到响应不能修改或删除已轮换的设备凭据")
   @ParameterizedTest

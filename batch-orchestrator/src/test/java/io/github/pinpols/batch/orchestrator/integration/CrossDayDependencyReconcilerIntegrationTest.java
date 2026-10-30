@@ -81,17 +81,25 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
   @Autowired
   private JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  private WorkflowRunLaunchService workflowRunLaunchService;
+  private final WorkflowRunLaunchService workflowRunLaunchService;
+
+  private final CrossDayDependencyReconciler crossDayDependencyReconciler;
+
+  private final ResultVersionPromoteService resultVersionPromoteService;
+
+  private final BatchDaySettleScheduler batchDaySettleScheduler;
 
   @Autowired
-  private CrossDayDependencyReconciler crossDayDependencyReconciler;
-
-  @Autowired
-  private ResultVersionPromoteService resultVersionPromoteService;
-
-  @Autowired
-  private BatchDaySettleScheduler batchDaySettleScheduler;
+  CrossDayDependencyReconcilerIntegrationTest(
+      WorkflowRunLaunchService workflowRunLaunchService,
+      CrossDayDependencyReconciler crossDayDependencyReconciler,
+      ResultVersionPromoteService resultVersionPromoteService,
+      BatchDaySettleScheduler batchDaySettleScheduler) {
+    this.workflowRunLaunchService = workflowRunLaunchService;
+    this.crossDayDependencyReconciler = crossDayDependencyReconciler;
+    this.resultVersionPromoteService = resultVersionPromoteService;
+    this.batchDaySettleScheduler = batchDaySettleScheduler;
+  }
 
   @Test
   @DisplayName("上游存在生效结果版本时依赖解析成功,解析结果包含声明中的别名条目")

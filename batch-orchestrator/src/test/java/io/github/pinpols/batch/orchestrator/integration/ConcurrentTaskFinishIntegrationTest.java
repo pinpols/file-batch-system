@@ -43,8 +43,7 @@ class ConcurrentTaskFinishIntegrationTest extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 12, 19);
 
-  @Autowired
-  private WorkflowRunLaunchService workflowRunLaunchService;
+  private final WorkflowRunLaunchService workflowRunLaunchService;
 
   @Autowired
   private JobTaskMapper jobTaskMapper;
@@ -54,6 +53,11 @@ class ConcurrentTaskFinishIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
   private PlatformTransactionManager transactionManager;
+
+  @Autowired
+  ConcurrentTaskFinishIntegrationTest(WorkflowRunLaunchService workflowRunLaunchService) {
+    this.workflowRunLaunchService = workflowRunLaunchService;
+  }
 
   @Test
   @DisplayName("两个线程并发完成同一运行中任务时只有一个成功,另一个因状态校验未命中而失败")

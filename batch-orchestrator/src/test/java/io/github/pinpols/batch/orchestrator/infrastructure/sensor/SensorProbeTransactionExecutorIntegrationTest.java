@@ -80,62 +80,84 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
 
   private static final String TENANT = "t1";
 
-  @Autowired
-  private SensorProbeTransactionExecutor transactionExecutor;
+  private final SensorProbeTransactionExecutor transactionExecutor;
 
-  @Autowired
-  private WorkflowNodeRunMapper nodeRunMapper;
+  private final WorkflowNodeRunMapper nodeRunMapper;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private final JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  private PlatformTransactionManager transactionManager;
+  private final PlatformTransactionManager transactionManager;
 
-  @Autowired
-  private SensorProperties sensorProperties;
+  private final SensorProperties sensorProperties;
 
-  @Autowired
-  private OrchestratorGracefulShutdown gracefulShutdown;
+  private final OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Autowired
-  private WorkflowRunMapper workflowRunMapper;
+  private final WorkflowRunMapper workflowRunMapper;
 
-  @Autowired
-  private WorkflowNodeTerminalFinalizer workflowNodeTerminalFinalizer;
+  private final WorkflowNodeTerminalFinalizer workflowNodeTerminalFinalizer;
 
-  @Autowired
-  private WorkflowNodeMapper workflowNodeMapper;
+  private final WorkflowNodeMapper workflowNodeMapper;
 
-  @Autowired
-  private TaskOutcomeService taskOutcomeService;
+  private final TaskOutcomeService taskOutcomeService;
 
-  @Autowired
-  private ObjectMapper objectMapper;
+  private final ObjectMapper objectMapper;
 
-  @Autowired
-  private OrchestratorJobMappers jobMappers;
+  private final OrchestratorJobMappers jobMappers;
 
-  @Autowired
-  private OrchestratorWorkflowMappers workflowMappers;
+  private final OrchestratorWorkflowMappers workflowMappers;
 
-  @Autowired
-  private WorkflowDagService workflowDagService;
+  private final WorkflowDagService workflowDagService;
 
-  @Autowired
-  private ObjectProvider<WorkflowNodeDispatchService> dispatchServiceProvider;
+  private final ObjectProvider<WorkflowNodeDispatchService> dispatchServiceProvider;
 
-  @Autowired
-  private SensorPolicyRegistry sensorPolicyRegistry;
+  private final SensorPolicyRegistry sensorPolicyRegistry;
 
-  @Autowired
-  private WorkflowRunLaunchService workflowRunLaunchService;
+  private final WorkflowRunLaunchService workflowRunLaunchService;
 
-  @Autowired
-  private BatchDaySettleScheduler batchDaySettleScheduler;
+  private final BatchDaySettleScheduler batchDaySettleScheduler;
 
   @MockitoBean
   private SensorStateMachine stateMachine;
+
+  @Autowired
+  SensorProbeTransactionExecutorIntegrationTest(
+      SensorProbeTransactionExecutor transactionExecutor,
+      WorkflowNodeRunMapper nodeRunMapper,
+      JdbcTemplate jdbcTemplate,
+      PlatformTransactionManager transactionManager,
+      SensorProperties sensorProperties,
+      OrchestratorGracefulShutdown gracefulShutdown,
+      WorkflowRunMapper workflowRunMapper,
+      WorkflowNodeTerminalFinalizer workflowNodeTerminalFinalizer,
+      WorkflowNodeMapper workflowNodeMapper,
+      TaskOutcomeService taskOutcomeService,
+      ObjectMapper objectMapper,
+      OrchestratorJobMappers jobMappers,
+      OrchestratorWorkflowMappers workflowMappers,
+      WorkflowDagService workflowDagService,
+      ObjectProvider<WorkflowNodeDispatchService> dispatchServiceProvider,
+      SensorPolicyRegistry sensorPolicyRegistry,
+      WorkflowRunLaunchService workflowRunLaunchService,
+      BatchDaySettleScheduler batchDaySettleScheduler) {
+    this.transactionExecutor = transactionExecutor;
+    this.nodeRunMapper = nodeRunMapper;
+    this.jdbcTemplate = jdbcTemplate;
+    this.transactionManager = transactionManager;
+    this.sensorProperties = sensorProperties;
+    this.gracefulShutdown = gracefulShutdown;
+    this.workflowRunMapper = workflowRunMapper;
+    this.workflowNodeTerminalFinalizer = workflowNodeTerminalFinalizer;
+    this.workflowNodeMapper = workflowNodeMapper;
+    this.taskOutcomeService = taskOutcomeService;
+    this.objectMapper = objectMapper;
+    this.jobMappers = jobMappers;
+    this.workflowMappers = workflowMappers;
+    this.workflowDagService = workflowDagService;
+    this.dispatchServiceProvider = dispatchServiceProvider;
+    this.sensorPolicyRegistry = sensorPolicyRegistry;
+    this.workflowRunLaunchService = workflowRunLaunchService;
+    this.batchDaySettleScheduler = batchDaySettleScheduler;
+  }
 
   @Test
   @DisplayName("派发异常回滚后,新轮询器实例从数据库重新探测该 WAIT 节点")

@@ -110,8 +110,7 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
   @Autowired
   private WorkflowRunLaunchService launchService;
 
-  @Autowired
-  private RetryGovernanceService retryGovernanceService;
+  private final RetryGovernanceService retryGovernanceService;
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
@@ -119,17 +118,26 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
   @Autowired
   private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
-  @Autowired
-  private KafkaTemplate<String, String> kafkaTemplate;
+  private final KafkaTemplate<String, String> kafkaTemplate;
 
-  @Autowired
-  private JobInstanceTimeoutEnforcer jobInstanceTimeoutEnforcer;
+  private final JobInstanceTimeoutEnforcer jobInstanceTimeoutEnforcer;
 
-  @Autowired
-  private JobInstanceMapper jobInstanceMapper;
+  private final JobInstanceMapper jobInstanceMapper;
 
   @MockitoSpyBean
   private TaskControllerApplicationService taskControllerApplicationService;
+
+  @Autowired
+  AtomicTaskPipelineE2eIT(
+      RetryGovernanceService retryGovernanceService,
+      KafkaTemplate<String, String> kafkaTemplate,
+      JobInstanceTimeoutEnforcer jobInstanceTimeoutEnforcer,
+      JobInstanceMapper jobInstanceMapper) {
+    this.retryGovernanceService = retryGovernanceService;
+    this.kafkaTemplate = kafkaTemplate;
+    this.jobInstanceTimeoutEnforcer = jobInstanceTimeoutEnforcer;
+    this.jobInstanceMapper = jobInstanceMapper;
+  }
 
   @Test
   @DisplayName("sql 原子任务全链路: 触发后经专属主题派发并路由到对应执行器, 任务终态落库为成功")

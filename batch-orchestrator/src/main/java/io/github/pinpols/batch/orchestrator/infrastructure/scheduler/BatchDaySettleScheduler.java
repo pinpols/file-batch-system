@@ -105,8 +105,9 @@ public class BatchDaySettleScheduler {
     }
     Instant now = dateTimeSupport.nowInstant();
     for (BatchDayInstanceEntity candidate : candidates) {
-      boolean batchDayCannotBeSettled =
-          candidate == null || candidate.id() == null || Boolean.TRUE.equals(candidate.frozen());
+      boolean batchDayCannotBeSettled = EmptyChecks.isNull(candidate)
+          || EmptyChecks.isNull(candidate.id())
+          || Boolean.TRUE.equals(candidate.frozen());
       if (batchDayCannotBeSettled) {
         continue;
       }
@@ -419,7 +420,7 @@ public class BatchDaySettleScheduler {
   private void driveCatchUp(BatchDayInstanceEntity batchDay, Instant now) {
     BusinessCalendarEntity calendar = configCacheService.findEnabledBusinessCalendar(
         batchDay.tenantId(), batchDay.calendarCode());
-    boolean calendarCatchupIsDisabled = calendar == null
+    boolean calendarCatchupIsDisabled = EmptyChecks.isNull(calendar)
         || calendar.catchUpPolicy() == null
         || "NONE".equalsIgnoreCase(calendar.catchUpPolicy());
     if (calendarCatchupIsDisabled) {

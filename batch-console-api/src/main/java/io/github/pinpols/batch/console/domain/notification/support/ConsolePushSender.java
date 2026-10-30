@@ -103,7 +103,7 @@ public class ConsolePushSender {
     }
     boolean pushSigningKeysAreConfigured = properties.isEnabled()
         && properties.getPublicKey() != null
-        && properties.getPrivateKey() != null;
+        && EmptyChecks.isNotNull(properties.getPrivateKey());
     if (pushSigningKeysAreConfigured) {
       try {
         this.pushService.set(new ManagedWebPushClient(

@@ -72,9 +72,13 @@ class FullChainTenantPropagationE2eIT extends AbstractIntegrationTest {
   @Autowired
   private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
+  private final DataSource businessDataSource;
+
   @Autowired
-  @Qualifier("importBusinessDataSource")
-  private DataSource businessDataSource;
+  FullChainTenantPropagationE2eIT(
+      @Qualifier("importBusinessDataSource") DataSource businessDataSource) {
+    this.businessDataSource = businessDataSource;
+  }
 
   @Test
   @DisplayName("导入全链路到达任务成功终态后,逐表核对每一行租户标识严格一致;链路未写入的表跳过核对")
