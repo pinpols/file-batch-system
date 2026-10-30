@@ -46,10 +46,12 @@ class DryRunGuardConventionTest {
 
   /** 副作用（写业务表 / 外部投递 / file_record 注册等）必须用 DryRunGuard 短路的 plugin。 */
   private static final Set<String> SIDE_EFFECTING_GUARDED = Set.of(
-      // batch-worker-import: 写 biz 表 / 完成审计
+      // batch-worker-import: 接收登记文件、写 biz 表 / 完成审计
+      "batch-worker/import/.*/stage/ReceiveStep.java",
       "batch-worker/import/.*/stage/LoadStep.java",
       "batch-worker/import/.*/stage/FeedbackStep.java",
-      // batch-worker-export: 上传对象存储 / 注册 file_record / 完成 / 投递审计
+      // batch-worker-export: SQL 计划探测、上传对象存储 / 注册 file_record / 完成 / 投递审计
+      "batch-worker/export/.*/stage/GenerateStep.java",
       "batch-worker/export/.*/stage/StoreStep.java",
       "batch-worker/export/.*/stage/RegisterStep.java",
       "batch-worker/export/.*/stage/CompleteStep.java",
@@ -77,15 +79,13 @@ class DryRunGuardConventionTest {
    * <p>任意写业务/触发外部 IO 的扩展会让此名单失效 → 该 plugin 必须迁到 {@link #SIDE_EFFECTING_GUARDED}。
    */
   private static final Set<String> READ_ONLY_OR_LOCAL = Set.of(
-      // batch-worker-import: 拉文件 / 解密 / 解析 / 校验都是文件->内存，未触达 biz 表
-      "batch-worker/import/.*/stage/ReceiveStep.java",
+      // batch-worker-import: 解密 / 解析 / 校验都是文件->内存，未触达 biz 表
       "batch-worker/import/.*/stage/PreprocessStep.java",
       "batch-worker/import/.*/stage/ParseStep.java",
       "batch-worker/import/.*/stage/ValidateStep.java",
       "batch-worker/import/.*/stage/ImportStageStep.java",
-      // batch-worker-export: PREPARE 只读 plugin 注册 / GENERATE 写本地 tmp，无对外 IO
+      // batch-worker-export: PREPARE 只读 plugin 注册
       "batch-worker/export/.*/stage/PrepareStep.java",
-      "batch-worker/export/.*/stage/GenerateStep.java",
       "batch-worker/export/.*/stage/ExportStageStep.java",
       // batch-worker-process: PREPARE 只解析配置，不写 staging
       "batch-worker/process/.*/stage/PrepareStep.java",

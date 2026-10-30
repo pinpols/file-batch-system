@@ -127,3 +127,5 @@ SDK 的分发、HTTP/SQL Atomic 和 testkit 命中使用 SDK 自有 `EmptyChecks
 针对上次推送检查发现的新增空值判断及测试字段注入继续核对：按相对 `origin/main` 的当前差异运行空值规则，结果为零；通过 Java 语法树核对新增 `@Autowired` 注解的归属，未发现剩余字段注入。测试替身仍由 Spring 测试框架管理；需要重置上下文的测试按默认逐方法实例生命周期核对，Quartz 测试中会重新赋值的调度器保持可变。空值表达式保留原有短路和异常语义。
 
 `./mvnw -ntp -DskipTests test` 在当前工作树完成，编译了生产和测试源码，未执行测试，日志为 `/tmp/wdi-pr-test-compile-20261030.log`。这不能证明测试运行、远端 CI 或端到端回归通过；性能和容量验证仍按要求留待后续。提交及推送仍须以实际门禁和远端结果为准。
+
+推送门禁随后发现 Java 可读性清单需刷新，以及 dry-run 分类守卫将 `ReceiveStep`、`GenerateStep` 误留在只读分类：前者会登记文件，后者的 SQL 计划探测在 dry-run 下受限。已按实际行为调整守卫分类并刷新清单；仅针对失败项执行 `./mvnw -ntp -pl batch-worker/core -am -Dtest=DryRunGuardConventionTest -Dsurefire.failIfNoSpecifiedTests=false test`，1 项通过（`/tmp/wdi-dryrun-convention-fix.log`）。首次推送门禁日志为 `/tmp/wdi-backend-pr-final-push.log`；历史迁移的归档镜像提示属于待核对警告，不等同已确认缺陷。
