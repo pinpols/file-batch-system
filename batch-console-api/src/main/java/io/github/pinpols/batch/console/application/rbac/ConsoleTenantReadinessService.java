@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.application.rbac;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
@@ -79,7 +80,8 @@ public class ConsoleTenantReadinessService {
       boolean enabled = Boolean.TRUE.equals(row.enabled());
       boolean missingQuery = isBlank(row.defaultQuerySql());
       Object fieldMappings = row.fieldMappings();
-      String fieldMappingsText = fieldMappings == null ? null : String.valueOf(fieldMappings);
+      String fieldMappingsText =
+          EmptyChecks.isNull(fieldMappings) ? null : String.valueOf(fieldMappings);
       boolean missingMappings = isBlankJson(fieldMappingsText);
       // IMPORT/EXPORT 模板必须有取数 SQL + 字段映射才能真正跑;SHARED 仅片段,不强制。
       boolean queryRelevant = "IMPORT".equals(type) || "EXPORT".equals(type);

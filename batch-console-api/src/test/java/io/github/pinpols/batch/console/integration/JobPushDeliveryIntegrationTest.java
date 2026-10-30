@@ -62,30 +62,34 @@ import org.springframework.transaction.support.TransactionTemplate;
     properties = "batch.webhook.relay.poll-interval-millis=600000")
 @DisplayName("持久设备推送的领取、重试、恢复与隔离")
 class JobPushDeliveryIntegrationTest extends AbstractIntegrationTest {
-  @Autowired
-  private WorkflowTerminalNotificationService terminal;
+  private final WorkflowTerminalNotificationService terminal;
+  private final JobPushDeliveryService delivery;
+  private final JobPushDeliveryMapper mapper;
+  private final ConsolePushSubscriptionMapper subscriptions;
+  private final ConsolePushProperties properties;
+  private final WebhookRelayProperties budgets;
+  private final JdbcTemplate jdbc;
+  private final PlatformTransactionManager manager;
 
   @Autowired
-  private JobPushDeliveryService delivery;
-
-  @Autowired
-  private JobPushDeliveryMapper mapper;
-
-  @Autowired
-  private ConsolePushSubscriptionMapper subscriptions;
-
-  @Autowired
-  private ConsolePushProperties properties;
-
-  @Autowired
-  private WebhookRelayProperties budgets;
-
-  @Autowired
-  private JdbcTemplate jdbc;
-
-  @Autowired
-  @Qualifier("transactionManager")
-  private PlatformTransactionManager manager;
+  JobPushDeliveryIntegrationTest(
+      WorkflowTerminalNotificationService terminal,
+      JobPushDeliveryService delivery,
+      JobPushDeliveryMapper mapper,
+      ConsolePushSubscriptionMapper subscriptions,
+      ConsolePushProperties properties,
+      WebhookRelayProperties budgets,
+      JdbcTemplate jdbc,
+      @Qualifier("transactionManager") PlatformTransactionManager manager) {
+    this.terminal = terminal;
+    this.delivery = delivery;
+    this.mapper = mapper;
+    this.subscriptions = subscriptions;
+    this.properties = properties;
+    this.budgets = budgets;
+    this.jdbc = jdbc;
+    this.manager = manager;
+  }
 
   @MockitoBean
   private ConsolePushSender sender;

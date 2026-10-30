@@ -357,7 +357,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
 
   private void requireMatchingDecision(
       String tenantId, String approvalNo, ApprovalRecord expected, ApprovalDecision actual) {
-    boolean sameDecision = actual != null
+    boolean sameDecision = EmptyChecks.isNotNull(actual)
         && tenantId.equals(actual.tenantId())
         && approvalNo.equals(actual.approvalNo())
         && Objects.equals(expected.getActionType(), actual.actionType())

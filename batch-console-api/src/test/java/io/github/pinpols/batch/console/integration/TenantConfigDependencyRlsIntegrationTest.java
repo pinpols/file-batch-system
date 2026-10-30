@@ -79,29 +79,34 @@ class TenantConfigDependencyRlsIntegrationTest extends AbstractIntegrationTest {
   private static final ThreadLocal<Boolean> APPLICATION_ROLE = new ThreadLocal<>();
   private static final ThreadLocal<SourceReadBarrier> SOURCE_READ_BARRIER = new ThreadLocal<>();
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
+  private final PlatformTransactionManager transactions;
+  private final ConsoleTenantConfigInitApplicationService initService;
+  private final ConsoleTenantConfigCopyService copyService;
+  private final ConsoleConfigSyncApplicationService syncService;
+  private final DataSource dataSource;
+  private final ConfigSyncLogMapper syncLogMapper;
+  private final ConsoleResourceTagService resourceTagService;
 
   @Autowired
-  private PlatformTransactionManager transactions;
-
-  @Autowired
-  private ConsoleTenantConfigInitApplicationService initService;
-
-  @Autowired
-  private ConsoleTenantConfigCopyService copyService;
-
-  @Autowired
-  private ConsoleConfigSyncApplicationService syncService;
-
-  @Autowired
-  private DataSource dataSource;
-
-  @Autowired
-  private ConfigSyncLogMapper syncLogMapper;
-
-  @Autowired
-  private ConsoleResourceTagService resourceTagService;
+  TenantConfigDependencyRlsIntegrationTest(
+      JdbcTemplate jdbc,
+      PlatformTransactionManager transactions,
+      ConsoleTenantConfigInitApplicationService initService,
+      ConsoleTenantConfigCopyService copyService,
+      ConsoleConfigSyncApplicationService syncService,
+      DataSource dataSource,
+      ConfigSyncLogMapper syncLogMapper,
+      ConsoleResourceTagService resourceTagService) {
+    this.jdbc = jdbc;
+    this.transactions = transactions;
+    this.initService = initService;
+    this.copyService = copyService;
+    this.syncService = syncService;
+    this.dataSource = dataSource;
+    this.syncLogMapper = syncLogMapper;
+    this.resourceTagService = resourceTagService;
+  }
 
   private String sourceTenant;
   private List<String> targets;

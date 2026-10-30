@@ -345,7 +345,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
     }
     pendingLeases.remove(owner);
     int status = response.getStatus();
-    boolean requestCompletedSuccessfully = status >= 200 && status < 300 && ex == null;
+    boolean requestCompletedSuccessfully = status >= 200 && status < 300 && EmptyChecks.isNull(ex);
     if (requestCompletedSuccessfully) {
       // 成功：升级为 DONE，长 TTL 阻止重复提交
       try {

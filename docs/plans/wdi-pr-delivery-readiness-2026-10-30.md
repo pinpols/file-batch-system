@@ -115,3 +115,9 @@ SDK 的分发、HTTP/SQL Atomic 和 testkit 命中使用 SDK 自有 `EmptyChecks
 `ConfigSyncAuditRecoveryIntegrationTest` 和 `BatchConsoleApiApplicationIntegrationTest` 已按 Spring 上下文改为构造器注入；前者的真实认证调用定向 1 项、后者的真实集成测试 5 项通过。原推送检查中约 497 个字段/方法注入候选来自测试，尚有大量其他测试类未处理；候选须重新计算，不能以注解总数或本批测试外推全部已通过。性能容量未运行。
 
 续修补充：`AlertEscalationNotifyMapperIntegrationTest` 的 2 个字段并入原有 Spring 测试构造器，`BatchDayCatchUpOperationSchemaIntegrationTest` 的 5 个字段改为构造器注入；分别选取告警数据库筛选、批日补跑恢复场景进行真实集成验证，两项均通过。本批共处理 4 个测试类的 15 处字段注入；未对其余测试类批量改写。提交前需以最终差异重新统计其余候选。
+
+继续处理时，AI 输入、批量窗口和作业请求校验、幂等拦截的空值判断按原有语义调整，定向 5 个测试类共 28 项通过。配对前端草稿 PR #345 的远端检查在 head `548db726809d65007756c7298de8b748d34480e2` 上报告：保存键测试预期缺项、干净环境 TypeScript 检查失败；CodeQL 报告 E2E 夹具中 1 条 SSRF 和 4 条命令注入候选，尚未经安全链路核实。文档构建通过；不得将这些候选直接表述为已验证漏洞。
+
+后续将 `JobPushDeliveryIntegrationTest` 的 8 个依赖改为构造器注入，保留事务管理器限定符；并发领取和防重复发送的两项真实集成测试通过。`TenantConfigDependencyRlsIntegrationTest` 的 8 个依赖改为构造器注入，普通数据库角色下的依赖导出测试 1 项通过。用户要求不机械处理，本批仅按两个类的 Spring 和事务上下文逐一修改；剩余候选继续处理。
+
+审批回查、租户就绪、审计和文件投影的空值检查按原返回语义调整，5 个相关测试类共 37 项通过。每次改动只验证受影响范围；后端当前仍未推送，后续需要重新统计完整差异和执行推送门禁。

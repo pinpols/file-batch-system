@@ -34,7 +34,7 @@ public final class ConsoleFileProjectionMapper {
 
   private static String safeMaskedConfigJson(Object value) {
     try {
-      String configJson = value == null ? null : value.toString();
+      String configJson = EmptyChecks.isNull(value) ? null : value.toString();
       return SecretMasking.maskSensitiveJson(configJson);
     } catch (IllegalArgumentException ignored) {
       return null;
@@ -42,7 +42,7 @@ public final class ConsoleFileProjectionMapper {
   }
 
   public static ConsoleFileTemplateResponse templateView(FileTemplateConfigQueryView row) {
-    if (row == null) {
+    if (EmptyChecks.isNull(row)) {
       return null;
     }
     return ConsoleFileTemplateResponse.builder()

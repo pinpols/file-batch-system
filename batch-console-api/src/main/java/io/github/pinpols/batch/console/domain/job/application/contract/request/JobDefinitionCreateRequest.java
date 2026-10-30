@@ -140,7 +140,7 @@ public class JobDefinitionCreateRequest {
   @AssertTrue(message = "scheduleExpr must be a valid cron expression when scheduleType=CRON")
   public boolean isScheduleExprValidForCron() {
     boolean cronValidationIsNotApplicable =
-        !"CRON".equals(scheduleType) || scheduleExpr == null || scheduleExpr.isBlank();
+        !"CRON".equals(scheduleType) || EmptyChecks.isBlank(scheduleExpr);
     if (cronValidationIsNotApplicable) {
       return true;
     }

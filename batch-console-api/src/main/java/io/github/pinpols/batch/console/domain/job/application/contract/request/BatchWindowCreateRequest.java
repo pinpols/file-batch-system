@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.request;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.validation.ValidResourceCode;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
 import jakarta.validation.constraints.AssertTrue;
@@ -59,8 +60,9 @@ public class BatchWindowCreateRequest {
   /** 非跨天窗口 startTime 必须早于 endTime，拒绝 20:00-08:00 或 start==end 的退化区间。 */
   @AssertTrue(message = "startTime must be earlier than endTime when allowCrossDay is false")
   public boolean isWindowRangeValid() {
-    boolean sameDayWindowValidationIsNotApplicable =
-        Boolean.TRUE.equals(allowCrossDay) || startTime == null || endTime == null;
+    boolean sameDayWindowValidationIsNotApplicable = Boolean.TRUE.equals(allowCrossDay)
+        || EmptyChecks.isNull(startTime)
+        || EmptyChecks.isNull(endTime);
     if (sameDayWindowValidationIsNotApplicable) {
       return true;
     }

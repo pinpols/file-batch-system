@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
@@ -175,7 +176,7 @@ public class AuditAspect {
           .action(ann.action())
           .operatorId(op.operatorId())
           .operatorRole(op.operatorRole())
-          .result(errorCode == null ? "SUCCESS" : "FAILED")
+          .result(EmptyChecks.isNull(errorCode) ? "SUCCESS" : "FAILED")
           .errorCode(errorCode)
           .errorMessage(truncate(errorMsg, 1024))
           .paramsJson(paramsJson)
