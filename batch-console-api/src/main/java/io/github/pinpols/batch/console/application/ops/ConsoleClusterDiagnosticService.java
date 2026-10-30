@@ -229,7 +229,8 @@ public class ConsoleClusterDiagnosticService {
     long activeTasks = countStatuses(taskStatusCounts, ACTIVE_CHILD_STATUSES);
     long activeOutboxEvents = countOutboxStatuses(outboxStatusCounts, ACTIVE_OUTBOX_STATUSES);
 
-    String instanceStatus = instance.instanceStatus() == null ? "" : instance.instanceStatus();
+    String currentStatus = instance.instanceStatus();
+    String instanceStatus = EmptyChecks.isNull(currentStatus) ? "" : currentStatus;
     boolean activeInstanceWithoutChildren =
         isActive(instanceStatus) && totalPartitions == 0 && totalTasks == 0;
     if (activeInstanceWithoutChildren) {
@@ -266,7 +267,9 @@ public class ConsoleClusterDiagnosticService {
       List<String> recommendations = List.of(
           "Start or recover a worker in that workerGroup",
           "Adjust job_definition.worker_group if needed");
-      String workerGroupEvidence = instance.workerGroup() == null ? "" : instance.workerGroup();
+      String instanceWorkerGroup = instance.workerGroup();
+      String workerGroupEvidence =
+          EmptyChecks.isNull(instanceWorkerGroup) ? "" : instanceWorkerGroup;
       Map<String, Object> evidence = Map.of("workerGroup", workerGroupEvidence);
       findings.add(finding(
           "WARN",
@@ -288,7 +291,8 @@ public class ConsoleClusterDiagnosticService {
           evidence));
     }
     workerIssues.forEach(issue -> {
-      String reasonCode = issue.reasonCode() == null ? "TASK_WORKER_ISSUE" : issue.reasonCode();
+      String issueReason = issue.reasonCode();
+      String reasonCode = EmptyChecks.isNull(issueReason) ? "TASK_WORKER_ISSUE" : issueReason;
       List<String> recommendations = List.of(
           "Check worker registration status and heartbeats",
           "Retry or cancel partitions after the lease is reclaimed");
@@ -303,7 +307,7 @@ public class ConsoleClusterDiagnosticService {
     return new ConsoleInstanceDiagnosisResponse(
         resolved,
         instance.id(),
-        findings.isEmpty(),
+        EmptyChecks.isEmpty(findings),
         instanceSummary(instance),
         summary(partitionStatusCounts, taskStatusCounts, outboxStatusCounts, onlineWorkersForGroup),
         findings);
@@ -404,7 +408,7 @@ public class ConsoleClusterDiagnosticService {
   }
 
   private static void putWhenPresent(Map<String, Object> target, String key, Object value) {
-    if (value != null) {
+    if (EmptyChecks.isNotNull(value)) {
       target.put(key, value);
     }
   }

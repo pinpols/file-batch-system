@@ -76,20 +76,25 @@ import org.springframework.web.client.RestClient;
 @DisplayName("批量日补跑恢复记录的数据库约束")
 class BatchDayCatchUpOperationSchemaIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
+  private final BatchDayCatchUpOperationMapper operations;
+  private final BatchDayCatchUpOperationStore operationStore;
+  private final PlatformTransactionManager transactionManager;
+  private final BatchDayCatchUpReconciliation reconciliationProxy;
 
   @Autowired
-  private BatchDayCatchUpOperationMapper operations;
-
-  @Autowired
-  private BatchDayCatchUpOperationStore operationStore;
-
-  @Autowired
-  private PlatformTransactionManager transactionManager;
-
-  @Autowired
-  private BatchDayCatchUpReconciliation reconciliationProxy;
+  BatchDayCatchUpOperationSchemaIntegrationTest(
+      JdbcTemplate jdbc,
+      BatchDayCatchUpOperationMapper operations,
+      BatchDayCatchUpOperationStore operationStore,
+      PlatformTransactionManager transactionManager,
+      BatchDayCatchUpReconciliation reconciliationProxy) {
+    this.jdbc = jdbc;
+    this.operations = operations;
+    this.operationStore = operationStore;
+    this.transactionManager = transactionManager;
+    this.reconciliationProxy = reconciliationProxy;
+  }
 
   @Test
   @DisplayName("原批次接续只提交待处理审批并保留原申请人")

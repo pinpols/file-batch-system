@@ -81,7 +81,7 @@ public enum ScanStep {
         root.toString());
     ExternalCommand command = new ExternalCommand(this, "semgrep", arguments, root);
     try (InputStream source = ScanStep.class.getResourceAsStream("/semgrep_report.py")) {
-      if (source == null) {
+      if (source == null) { // empty-check: allow - 独立扫描工具不依赖后端公共模块
         throw new IllegalStateException("Missing Semgrep report checker");
       }
       String checker = new String(source.readAllBytes(), StandardCharsets.UTF_8);
@@ -232,7 +232,8 @@ public enum ScanStep {
     Path reportPath = Path.of(options.zapReport());
     String reportFileName = reportPath.getFileName().toString();
     command.add(reportFileName);
-    if (options.zapAuthHeaderValue() != null && !options.zapAuthHeaderValue().isBlank()) {
+    if (options.zapAuthHeaderValue() != null // empty-check: allow - 独立扫描工具不依赖后端公共模块
+        && !options.zapAuthHeaderValue().isBlank()) { // empty-check: allow - 独立扫描工具不依赖后端公共模块
       command.add("-z");
       command.add("-config replacer.full_list(0).description=batch-console-auth"
           + " -config replacer.full_list(0).enabled=true"
@@ -259,7 +260,7 @@ public enum ScanStep {
   }
 
   private static boolean isLocalSpec(String value) {
-    return value != null
+    return value != null // empty-check: allow - 独立扫描工具不依赖后端公共模块
         && !value.startsWith("http://")
         && !value.startsWith("https://")
         && !value.startsWith("/zap/");

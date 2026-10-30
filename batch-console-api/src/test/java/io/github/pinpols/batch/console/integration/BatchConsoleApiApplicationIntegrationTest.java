@@ -30,20 +30,25 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @DisplayName("控制台 API 集成基座: 上下文可启动,外部 HTTP 通道装配为既定实现")
 class BatchConsoleApiApplicationIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  ApplicationContext applicationContext;
+  private final ApplicationContext applicationContext;
+  private final WorkflowDefinitionMapper workflowDefinitionMapper;
+  private final WorkflowDefinitionVersionMapper workflowDefinitionVersionMapper;
+  private final JdbcTemplate jdbcTemplate;
+  private final DataSource dataSource;
 
   @Autowired
-  WorkflowDefinitionMapper workflowDefinitionMapper;
-
-  @Autowired
-  WorkflowDefinitionVersionMapper workflowDefinitionVersionMapper;
-
-  @Autowired
-  JdbcTemplate jdbcTemplate;
-
-  @Autowired
-  DataSource dataSource;
+  BatchConsoleApiApplicationIntegrationTest(
+      ApplicationContext applicationContext,
+      WorkflowDefinitionMapper workflowDefinitionMapper,
+      WorkflowDefinitionVersionMapper workflowDefinitionVersionMapper,
+      JdbcTemplate jdbcTemplate,
+      DataSource dataSource) {
+    this.applicationContext = applicationContext;
+    this.workflowDefinitionMapper = workflowDefinitionMapper;
+    this.workflowDefinitionVersionMapper = workflowDefinitionVersionMapper;
+    this.jdbcTemplate = jdbcTemplate;
+    this.dataSource = dataSource;
+  }
 
   @Test
   @DisplayName("触发回执查询按租户、Workflow和原键隔离，支持别名及停用后核对")

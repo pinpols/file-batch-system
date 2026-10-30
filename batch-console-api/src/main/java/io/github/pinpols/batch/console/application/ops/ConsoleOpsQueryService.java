@@ -583,8 +583,9 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
 
   private ConsoleBatchDayWindowResponse toBatchDayWindowResponse(
       String tenantId, String calendarCode, LocalDate bizDate, BatchDayView row) {
-    Instant cutoffAt = row == null ? null : row.cutoffAt();
-    Instant slaDeadlineAt = row == null ? null : row.slaDeadlineAt();
+    boolean hasBatchDay = EmptyChecks.isNotNull(row);
+    Instant cutoffAt = hasBatchDay ? row.cutoffAt() : null;
+    Instant slaDeadlineAt = hasBatchDay ? row.slaDeadlineAt() : null;
     Instant now = BatchDateTimeSupport.utcNow();
     Long timeUntilCutoffSeconds =
         cutoffAt == null ? null : ChronoUnit.SECONDS.between(now, cutoffAt);
@@ -601,7 +602,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
             .toList();
     return new ConsoleBatchDayWindowResponse(
         bizDate,
-        row == null ? null : row.dayStatus(),
+        hasBatchDay ? row.dayStatus() : null,
         cutoffAt,
         slaDeadlineAt,
         now,
@@ -655,7 +656,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
   }
 
   private Integer intValue(Number value) {
-    return value == null ? null : value.intValue();
+    return EmptyChecks.isNull(value) ? null : value.intValue();
   }
 
   private int safeInt(Integer value) {

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.rbac.service;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.security.ApiKeyHasher;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.rbac.entity.ApiKeyEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleApiKeyMapper;
 import io.github.pinpols.batch.console.domain.rbac.param.ConsoleApiKeyInsertParam;
@@ -59,7 +60,7 @@ public class ConsoleApiKeyService {
         .keyHash(hashed.hash())
         .salt(hashed.salt())
         .keyHashAlgo(ApiKeyHasher.ALGO_PBKDF2)
-        .scopes(scopes == null || scopes.isBlank() ? "*" : scopes)
+        .scopes(EmptyChecks.isBlank(scopes) ? "*" : scopes)
         .expiresAt(expiresAt)
         .operator(operator)
         .build();

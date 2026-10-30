@@ -135,9 +135,10 @@ public record SecurityScanOptions(
   private static Path defaultRoot() {
     Path current = Paths.get("").toAbsolutePath().normalize();
     Path fileName = current.getFileName();
-    boolean currentDirectoryIsSecurityScanRoot = fileName != null
-        && "security-scan".equals(fileName.toString())
-        && current.getParent() != null;
+    boolean currentDirectoryIsSecurityScanRoot =
+        fileName != null // empty-check: allow - 独立扫描工具不依赖后端公共模块
+            && "security-scan".equals(fileName.toString())
+            && current.getParent() != null; // empty-check: allow - 独立扫描工具不依赖后端公共模块
     if (currentDirectoryIsSecurityScanRoot) {
       return current.getParent();
     }
@@ -167,6 +168,6 @@ public record SecurityScanOptions(
   }
 
   private static boolean isBlank(String value) {
-    return value == null || value.isBlank();
+    return value == null || value.isBlank(); // empty-check: allow - 独立扫描工具不依赖后端公共模块
   }
 }

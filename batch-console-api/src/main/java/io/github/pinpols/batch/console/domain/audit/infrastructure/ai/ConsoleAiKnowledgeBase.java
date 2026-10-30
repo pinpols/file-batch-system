@@ -48,7 +48,7 @@ public class ConsoleAiKnowledgeBase {
   /** 检索与 query 最相关的若干片段(已按相似度降序、过滤低于阈值、截断到 topK)。RAG 关闭或无可用片段时返回空。 */
   public List<Snippet> retrieve(String query) {
     ConsoleAiProperties.Rag rag = properties.getRag();
-    boolean knowledgeRetrievalIsUnavailable = !rag.isEnabled() || query == null || query.isBlank();
+    boolean knowledgeRetrievalIsUnavailable = !rag.isEnabled() || EmptyChecks.isBlank(query);
     if (knowledgeRetrievalIsUnavailable) {
       return List.of();
     }

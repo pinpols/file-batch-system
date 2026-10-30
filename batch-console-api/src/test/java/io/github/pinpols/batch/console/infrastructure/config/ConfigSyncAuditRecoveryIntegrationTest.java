@@ -84,14 +84,17 @@ class ConfigSyncAuditRecoveryIntegrationTest extends AbstractIntegrationTest {
   @LocalServerPort
   private int port;
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
+  private final ConsoleJwtService jwtService;
+  private final ObjectMapper objectMapper;
 
   @Autowired
-  private ConsoleJwtService jwtService;
-
-  @Autowired
-  private ObjectMapper objectMapper;
+  ConfigSyncAuditRecoveryIntegrationTest(
+      JdbcTemplate jdbc, ConsoleJwtService jwtService, ObjectMapper objectMapper) {
+    this.jdbc = jdbc;
+    this.jwtService = jwtService;
+    this.objectMapper = objectMapper;
+  }
 
   @MockitoSpyBean
   private BatchDayCatchUpOperationStore batchDayOperations;

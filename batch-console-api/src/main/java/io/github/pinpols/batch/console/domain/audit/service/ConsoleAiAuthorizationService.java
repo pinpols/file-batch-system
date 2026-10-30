@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.audit.service;
 import io.github.pinpols.batch.common.constants.CommonErrorMessages;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.shared.security.ConsoleCapabilityProvider;
 import java.util.Collection;
@@ -28,7 +29,7 @@ public class ConsoleAiAuthorizationService implements ConsoleCapabilityProvider 
   /** 未配置在白名单则抛出 FORBIDDEN。 */
   public void assertAllowed() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    boolean authenticationIsMissingOrAnonymous = authentication == null
+    boolean authenticationIsMissingOrAnonymous = EmptyChecks.isNull(authentication)
         || !authentication.isAuthenticated()
         || authentication instanceof AnonymousAuthenticationToken;
     if (authenticationIsMissingOrAnonymous) {

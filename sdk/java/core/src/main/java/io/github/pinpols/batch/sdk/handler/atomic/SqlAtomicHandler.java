@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.sdk.handler.atomic;
 
 import io.github.pinpols.batch.sdk.handler.SdkAbstractAtomicHandler;
+import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import java.sql.Connection;
@@ -178,7 +179,7 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
       } else if (current == ';') {
         String rawStatement = buffer.toString();
         String statement = rawStatement.trim();
-        if (!statement.isEmpty()) statements.add(statement);
+        if (!EmptyChecks.isEmpty(statement)) statements.add(statement);
         buffer.setLength(0);
       } else {
         buffer.append(current);
@@ -188,7 +189,7 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
     private List<String> complete() {
       String rawTail = buffer.toString();
       String tail = rawTail.trim();
-      if (!tail.isEmpty()) statements.add(tail);
+      if (!EmptyChecks.isEmpty(tail)) statements.add(tail);
       return statements;
     }
   }

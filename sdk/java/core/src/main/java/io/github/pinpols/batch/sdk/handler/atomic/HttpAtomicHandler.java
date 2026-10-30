@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.sdk.handler.atomic;
 
 import io.github.pinpols.batch.sdk.handler.SdkAbstractAtomicHandler;
+import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import java.net.InetAddress;
@@ -76,7 +77,7 @@ public class HttpAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obje
     return headers.entrySet().stream()
         .anyMatch(entry -> "Idempotency-Key".equalsIgnoreCase(String.valueOf(entry.getKey()))
             && entry.getValue() instanceof String value
-            && !value.isBlank());
+            && EmptyChecks.isNotBlank(value));
   }
 
   @Override

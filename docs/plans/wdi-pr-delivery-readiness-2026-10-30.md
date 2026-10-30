@@ -107,3 +107,11 @@ PR 与 Full CI 的测试组依赖 Flyway、迁移安全、导出内容及选测�
 - 三条状态更新改由业务调用方传入原目标状态；`MapperStatusWriteConventionTest`、`ReadinessWaitSweeperTest`、`TriggerLaunchRecoveryServiceTest` 共 22 项通过。使用 Testcontainers PostgreSQL 的 `ScheduledOccurrenceMapperIntegrationTest#shouldTimeoutStillExpiredReadinessOnlyOnce`、`TriggerLaunchRecoveryIdentityIntegrationTest`、`BatchDayCatchUpOperationSchemaIntegrationTest` 共 47 项通过。
 - 本地 pre-push 全限定类型扫描按提交版完整 Java 源码屏蔽注释和字面量，保留真实代码命中；正反例测试 2 项通过，在当前提交差异复核无实际 FQN 命中。脚本治理与 `shellcheck -S warning` 通过。
 - 空值门禁原始输出为 133 个候选、82 个文件；注入检查的新增差异有 525 个 `@Autowired` 注解，含构造器及测试，不能把注解总数直接当违规数。两项尚须按边界和源码逐项处理，不能机械等同业务缺陷或绕过门禁。
+
+### 2026-10-30 空值与测试注入续修
+
+SDK 的分发、HTTP/SQL Atomic 和 testkit 命中使用 SDK 自有 `EmptyChecks`，定向 61 项测试通过；独立安全扫描模块的原生检查按不依赖后端公共模块逐行保留原因，当前工作树空值检查及独立 Spotless 检查通过。Console 批日查询、诊断、回放过滤、密钥范围和 AI 鉴权/检索的空值判断按原短路和空白语义调整，相关定向测试 39 项通过（其中批日查询 3 项、其他 36 项）。
+
+`ConfigSyncAuditRecoveryIntegrationTest` 和 `BatchConsoleApiApplicationIntegrationTest` 已按 Spring 上下文改为构造器注入；前者的真实认证调用定向 1 项、后者的真实集成测试 5 项通过。原推送检查中约 497 个字段/方法注入候选来自测试，尚有大量其他测试类未处理；候选须重新计算，不能以注解总数或本批测试外推全部已通过。性能容量未运行。
+
+续修补充：`AlertEscalationNotifyMapperIntegrationTest` 的 2 个字段并入原有 Spring 测试构造器，`BatchDayCatchUpOperationSchemaIntegrationTest` 的 5 个字段改为构造器注入；分别选取告警数据库筛选、批日补跑恢复场景进行真实集成验证，两项均通过。本批共处理 4 个测试类的 15 处字段注入；未对其余测试类批量改写。提交前需以最终差异重新统计其余候选。

@@ -41,7 +41,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
@@ -117,23 +116,24 @@ class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest
 
   private final AlertEscalationNotifier notifier;
 
-  @Autowired
-  private SubscriptionRuleMapper subscriptionRuleMapper;
-
-  @Autowired
-  private ApplicationEventPublisher applicationEventPublisher;
+  private final SubscriptionRuleMapper subscriptionRuleMapper;
+  private final ApplicationEventPublisher applicationEventPublisher;
 
   AlertEscalationNotifyMapperIntegrationTest(
       AlertEventMapper alertEventMapper,
       AlertEscalationNotificationOutboxMapper outboxMapper,
       AlertEscalationNotificationOutboxService outboxService,
       JdbcTemplate jdbcTemplate,
-      AlertEscalationNotifier notifier) {
+      AlertEscalationNotifier notifier,
+      SubscriptionRuleMapper subscriptionRuleMapper,
+      ApplicationEventPublisher applicationEventPublisher) {
     this.alertEventMapper = alertEventMapper;
     this.outboxMapper = outboxMapper;
     this.outboxService = outboxService;
     this.jdbcTemplate = jdbcTemplate;
     this.notifier = notifier;
+    this.subscriptionRuleMapper = subscriptionRuleMapper;
+    this.applicationEventPublisher = applicationEventPublisher;
   }
 
   @Test

@@ -113,7 +113,7 @@ public class ConsoleRealtimeReplayStore implements RealtimeReplayStore {
     for (int index = startIndex; index < envelopes.size(); index++) {
       ConsoleRealtimeStreamEnvelope envelope = envelopes.get(index);
       boolean eventTypeDoesNotMatchFilter =
-          eventType != null && !eventType.isBlank() && !eventType.equals(envelope.eventType());
+          EmptyChecks.isNotBlank(eventType) && !eventType.equals(envelope.eventType());
       if (eventTypeDoesNotMatchFilter) {
         continue;
       }

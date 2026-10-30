@@ -28,7 +28,7 @@ public final class ProcessCommandExecutor {
       InputStreamReader utf8Reader = new InputStreamReader(processOutput, StandardCharsets.UTF_8);
       try (BufferedReader reader = new BufferedReader(utf8Reader)) {
         String line;
-        while ((line = reader.readLine()) != null) {
+        while ((line = reader.readLine()) != null) { // empty-check: allow - 独立扫描工具不依赖后端公共模块
           System.out.println("[" + command.step().displayName() + "] " + line);
         }
       }

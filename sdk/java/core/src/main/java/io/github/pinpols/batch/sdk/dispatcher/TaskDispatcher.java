@@ -246,7 +246,7 @@ public class TaskDispatcher {
     public SdkTaskResult execute(SdkTaskContext ctx) {
       if (!isSafeToReplay(ctx)) {
         Object rawInvocation = ctx.runtimeAttributes().get(KEY_PARTITION_INVOCATION_ID);
-        if (!(rawInvocation instanceof String invocationId) || invocationId.isBlank()) {
+        if (!(rawInvocation instanceof String invocationId) || EmptyChecks.isBlank(invocationId)) {
           throw new ExecutionStartNotConfirmedException(
               "claimed non-idempotent execution has no current invocation", null);
         }
@@ -435,7 +435,7 @@ public class TaskDispatcher {
     claimBody.put(
         KEY_WORKER_ID, config.getWorkerCode()); // ADR-035 §9:workerId==workerCode(P4 后 server 分配)
     String dispatchedInvocationId = extractPartitionInvocation(msg);
-    if (dispatchedInvocationId != null) {
+    if (EmptyChecks.isNotNull(dispatchedInvocationId)) {
       claimBody.put(KEY_PARTITION_INVOCATION_ID, dispatchedInvocationId);
     }
     TaskDispatcherRetryCoordinator.ClaimResult claimResult =

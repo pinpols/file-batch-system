@@ -278,7 +278,7 @@ public final class FakeBatchPlatform implements AutoCloseable {
         Long taskId = taskIdFromPath(path);
         Map<String, Object> claimBody = readBody(exchange);
         ClaimedExecution claimed = claimExecution(taskId, claimBody);
-        if (claimed == null) {
+        if (EmptyChecks.isNull(claimed)) {
           respond(exchange, 409);
           return;
         }
@@ -333,7 +333,7 @@ public final class FakeBatchPlatform implements AutoCloseable {
   private boolean hasCurrentClaimOwner(
       String path, Map<String, Object> body, boolean requireRunning) {
     Long taskId = taskIdFromPath(path);
-    if (taskId == null) {
+    if (EmptyChecks.isNull(taskId)) {
       return false;
     }
     ClaimedExecution current = claimedExecutions.get(taskId);
@@ -345,7 +345,7 @@ public final class FakeBatchPlatform implements AutoCloseable {
     String bodyTenantId = asString(body.get("tenantId"));
     String bodyWorkerId = asString(body.get("workerId"));
     String bodyInvocationId = asString(body.get("partitionInvocationId"));
-    return current != null
+    return EmptyChecks.isNotNull(current)
         && (!requireRunning || !current.completed())
         && current.tenantId().equals(bodyTenantId)
         && current.workerId().equals(bodyWorkerId)
