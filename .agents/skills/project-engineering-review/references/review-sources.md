@@ -17,6 +17,8 @@
 | 文档生命周期 | `docs/standards/document-governance.md`、`docs/archive/README.md` | 权威状态、历史材料和归档边界 |
 | Java 测试设计与类规范 | `docs/coding-conventions.md` §14、`docs/testing/README.md` | 测试分层、测试类/方法约定、fixture、真实依赖边界 |
 
+后端工程/规约由本技能的[25工作包及补充项](backend-convention-coverage.md)承接；普通代码 Bug 由 [code-review-and-gates](../../code-review-and-gates/SKILL.md) 的[统一方法](../../code-review-and-gates/references/bug-mechanisms.md)承接；明确攻击/故障组合使用 `adversarial-system-review`，双仓治理使用 `cross-repo-governance-review`。来源分类只负责发现入口，不代表每份历史方法已逐项提炼，也不代表已经证实代码 Bug。
+
 ## 历史审查材料的使用
 
 审查跨多个历史材料时，先阅读 `docs/archive/README.md`、`docs/plans/README.md`、`docs/audit/README.md` 和 `docs/review/README.md`，再依任务主题检索所有相关当前及归档报告，例如：
@@ -26,13 +28,13 @@ rg --files docs/plans docs/audit docs/review docs/archive \
   | rg -i '(audit|review|assessment|deep|scan|governance|security|capacity|architecture)'
 ```
 
-按主题抽取反复出现的故障模式、被修复后复发的问题、误报原因和验证缺口；将这些作为当前代码的检查假设逐项核实。不要把归档材料中的绝对结论、旧版本路径、风险等级或“已修复”状态直接复制成当前判断。`docs/archive/README.md` 规定归档只读，不因技能提炼而批量改写历史原文。
+按主题抽取反复出现的故障模式、被修复后复发的问题、误报原因和验证缺口；将这些作为当前代码的检查假设逐项核实。不要把归档材料中的绝对结论、旧版本路径、风险等级或“已修复”状态直接复制成当前判断。历史原文保留发现、过程与当时结论，允许维护日期/适用性、失效链接和现行入口；不因技能提炼删除原始证据或重写其历史状态。
 
 ## 专项技能路由
 
 | 工作主体 | 技能 |
 |---|---|
-| 单个 PR / diff 正确性 | `code-review-and-gates` |
+| 代码 Bug 专项（模块/diff/全工程）及普通变更审查 | `code-review-and-gates` 的对应模式 |
 | 跨信任边界的系统级攻击与故障审查 | `adversarial-system-review` |
 | Worker、Outbox、Kafka、claim/report、恢复 | `worker-pipeline-review` |
 | DB 迁移、SQL 性能、灾备和验收 | `database-migration-safety`、`sql-query-performance`、`disaster-recovery-validation`、`acceptance-validation` |

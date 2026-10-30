@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
-import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
@@ -189,7 +189,8 @@ public class TwilioSmsProvider implements SmsProvider {
   /** 抽出便于单测覆盖：以 {@code application/x-www-form-urlencoded} POST 表单到 url，带 Basic 鉴权头，返回状态码 + 响应体。 */
   protected TwilioResponse postForm(String url, String authHeader, String body)
       throws IOException, InterruptedException {
-    OutboundHttpContent httpContent = new OutboundHttpContent(body, "application/x-www-form-urlencoded; charset=utf-8");
+    OutboundHttpContent httpContent =
+        new OutboundHttpContent(body, "application/x-www-form-urlencoded; charset=utf-8");
     OutboundHttpRequest request = OutboundHttpRequest.post(
         url,
         Map.of("Authorization", authHeader),

@@ -10,6 +10,7 @@ import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
 import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocationFenceMapper;
+import java.io.IOException;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -18,6 +19,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.sql.DataSource;
+import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSessionFactory;
@@ -29,6 +31,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.mybatis.spring.transaction.SpringManagedTransactionFactory;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -107,13 +110,24 @@ class PlatformProcessInvocationFenceIntegrationTest {
           tenant_id, id, job_instance_id, partition_status, worker_code, current_invocation_id)
         values (?, ?, ?, 'RUNNING', ?, ?)
         """;
-    jdbcTemplate.update(insertBatchJobPartitionSql, TENANT, PARTITION_ID, INSTANCE_ID, WORKER_ID, INVOCATION_ID);
+    jdbcTemplate.update(
+        insertBatchJobPartitionSql, TENANT, PARTITION_ID, INSTANCE_ID, WORKER_ID, INVOCATION_ID);
 
     transactionManager = new DataSourceTransactionManager(dataSource);
     Environment environment = new Environment(
         "process-invocation-fence-it", new SpringManagedTransactionFactory(), dataSource);
     Configuration configuration = new Configuration(environment);
-    configuration.addMapper(ProcessInvocationFenceMapper.class);
+    try (var stream =
+        new ClassPathResource("mapper/ProcessInvocationFenceMapper.xml").getInputStream()) {
+      new XMLMapperBuilder(
+              stream,
+              configuration,
+              "mapper/ProcessInvocationFenceMapper.xml",
+              configuration.getSqlFragments())
+          .parse();
+    } catch (IOException exception) {
+      throw new IllegalStateException("无法加载 PROCESS 平台库 Mapper XML", exception);
+    }
     SqlSessionFactory sessionFactory = new SqlSessionFactoryBuilder().build(configuration);
     ProcessInvocationFenceMapper mapper =
         new SqlSessionTemplate(sessionFactory).getMapper(ProcessInvocationFenceMapper.class);
@@ -142,11 +156,7 @@ class PlatformProcessInvocationFenceIntegrationTest {
     final String updateBatchJobPartitionSql = """
         update batch.job_partition set current_invocation_id = ? where tenant_id = ? and id = ?
     """;
-    jdbcTemplate.update(
-        updateBatchJobPartitionSql,
-        "invocation-b",
-        TENANT,
-        PARTITION_ID);
+    jdbcTemplate.update(updateBatchJobPartitionSql, "invocation-b", TENANT, PARTITION_ID);
     executed.set(false);
     assertThatThrownBy(() ->
             transaction.execute(status -> fence.execute(context, ProcessStage.PREPARE, () -> {
@@ -202,11 +212,7 @@ class PlatformProcessInvocationFenceIntegrationTest {
     final String updateBatchJobPartitionSqlValue2 = """
         update batch.job_partition set current_invocation_id = ? where tenant_id = ? and id = ?
     """;
-    jdbcTemplate.update(
-        updateBatchJobPartitionSqlValue2,
-        "invocation-b",
-        TENANT,
-        PARTITION_ID);
+    jdbcTemplate.update(updateBatchJobPartitionSqlValue2, "invocation-b", TENANT, PARTITION_ID);
 
     ProcessJobContext restartedAttempt = claimedContext();
     restartedAttempt
@@ -223,14 +229,9 @@ class PlatformProcessInvocationFenceIntegrationTest {
     final String selectBatchJobTaskSqlValue3 = """
         select process_staging_generation_id from batch.job_task where tenant_id = ? and id = ?
     """;
-    assertThat(jdbcTemplate
-            .queryForObject(
-                selectBatchJobTaskSqlValue3,
-                UUID.class,
-                TENANT,
-                TASK_ID)
-            .toString())
-        .isEqualTo(restartedGeneration);
+    UUID selectedBatchJobTask =
+        jdbcTemplate.queryForObject(selectBatchJobTaskSqlValue3, UUID.class, TENANT, TASK_ID);
+    assertThat(selectedBatchJobTask.toString()).isEqualTo(restartedGeneration);
 
     ProcessJobContext checkpointResume = claimedContext();
     checkpointResume
@@ -325,9 +326,7 @@ class PlatformProcessInvocationFenceIntegrationTest {
       final String selectPgLocksSql = """
           select count(*) from pg_locks where locktype = 'advisory' and not granted
       """;
-      Integer waiting = jdbcTemplate.queryForObject(
-          selectPgLocksSql,
-          Integer.class);
+      Integer waiting = jdbcTemplate.queryForObject(selectPgLocksSql, Integer.class);
       if (waiting != null && waiting > 0) {
         return true;
       }

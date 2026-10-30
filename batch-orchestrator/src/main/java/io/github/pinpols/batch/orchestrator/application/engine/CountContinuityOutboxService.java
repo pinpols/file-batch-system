@@ -96,10 +96,10 @@ public class CountContinuityOutboxService {
     WorkflowNodeEntity upstreamDefinition = snapshot.node(declaration.upstreamNodeCode());
     boolean upstreamDefinitionIsUnavailableOrDisconnected =
         !Boolean.TRUE.equals(definition.getEnabled())
-        || EmptyChecks.isNull(upstreamDefinition)
-        || !Boolean.TRUE.equals(upstreamDefinition.getEnabled())
-        || snapshot.incoming(nodeCode).stream()
-            .noneMatch(edge -> declaration.upstreamNodeCode().equals(edge.getFromNodeCode()));
+            || EmptyChecks.isNull(upstreamDefinition)
+            || !Boolean.TRUE.equals(upstreamDefinition.getEnabled())
+            || snapshot.incoming(nodeCode).stream()
+                .noneMatch(edge -> declaration.upstreamNodeCode().equals(edge.getFromNodeCode()));
     if (upstreamDefinitionIsUnavailableOrDisconnected) {
       writeResult(inspection, Decision.unverified("DATA_EDGE_MISSING"));
       return;
@@ -190,10 +190,9 @@ public class CountContinuityOutboxService {
       return new Decision(
           Status.UNVERIFIED, "UNIT_MISMATCH", outputCount, inputCount, outputContext, inputContext);
     }
-    boolean hasMissingDeltaEvidence =
-        declaration.expectedDelta() > 0
-            && (EmptyChecks.isNull(inputContext.excludedCount())
-                || EmptyChecks.isBlank(inputContext.exclusionEvidenceRef()));
+    boolean hasMissingDeltaEvidence = declaration.expectedDelta() > 0
+        && (EmptyChecks.isNull(inputContext.excludedCount())
+            || EmptyChecks.isBlank(inputContext.exclusionEvidenceRef()));
     if (hasMissingDeltaEvidence) {
       return new Decision(
           Status.UNVERIFIED,

@@ -188,8 +188,7 @@ class SdkPlatformContractTest {
   /** 跑 dispatcher 一遍,捕获 report 调用的 body 列表(claim 总是返回 ok)。 */
   private List<Map<String, Object>> captureReports(SdkTaskResult result) throws IOException {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
-    PlatformHttpClient.TaskClaimResponse claim =
-        new PlatformHttpClient.TaskClaimResponse("inv-42");
+    PlatformHttpClient.TaskClaimResponse claim = new PlatformHttpClient.TaskClaimResponse("inv-42");
     when(http.claim(eq(42L), anyString(), any())).thenReturn(claim);
     List<Map<String, Object>> reports = new ArrayList<>();
     doAnswer((InvocationOnMock inv) -> {

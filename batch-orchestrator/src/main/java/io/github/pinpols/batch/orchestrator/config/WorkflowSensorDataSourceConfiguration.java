@@ -97,8 +97,7 @@ public class WorkflowSensorDataSourceConfiguration {
   @Bean(name = "workflowSensorBusinessTransactionTemplate")
   public TransactionTemplate workflowSensorBusinessTransactionTemplate(
       @Qualifier("orchestratorBusinessDataSource") DataSource dataSource) {
-    DataSourceTransactionManager transactionManager =
-        new DataSourceTransactionManager(dataSource);
+    DataSourceTransactionManager transactionManager = new DataSourceTransactionManager(dataSource);
     TransactionTemplate template = new TransactionTemplate(transactionManager);
     template.setReadOnly(true);
     template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);

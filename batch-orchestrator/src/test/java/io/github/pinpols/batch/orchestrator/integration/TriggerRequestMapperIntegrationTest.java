@@ -87,8 +87,7 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
     jdbcTemplate.update(deleteJobDefinitionSql, tenantId);
     jdbcTemplate.update(deleteJobDefinitionSql, foreignTenantId);
     jdbcTemplate.update(deleteWorkflowDefinitionSql, tenantId);
-    jdbcTemplate.update(
-        deleteWorkflowDefinitionSql, foreignTenantId);
+    jdbcTemplate.update(deleteWorkflowDefinitionSql, foreignTenantId);
   }
 
   @Test
@@ -102,7 +101,8 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
           """;
 
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, "CAL_NULL_LINK");
-    jdbcTemplate.update(insertTriggerRequestSql, tenantId, requestId, workflowDefinitionId, "dedup-" + requestId);
+    jdbcTemplate.update(
+        insertTriggerRequestSql, tenantId, requestId, workflowDefinitionId, "dedup-" + requestId);
 
     int updated = triggerRequestMapper.updateAcceptance(
         tenantId, requestId, TriggerRequestStatus.REJECTED.code(), null);
@@ -133,10 +133,8 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
         """;
 
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, "CAL_TENANT_GUARD");
-    Long foreignJobDefinitionId = jdbcTemplate.queryForObject(
-        insertJobDefinitionSql,
-        Long.class,
-        foreignTenantId);
+    Long foreignJobDefinitionId =
+        jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, foreignTenantId);
     Long foreignJobInstanceId = jdbcTemplate.queryForObject(
         insertJobInstanceSql,
         Long.class,
@@ -194,17 +192,12 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
         """;
 
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, "CAL_REFERENCE_RACE");
-    Long jobDefinitionId = jdbcTemplate.queryForObject(
-        insertJobDefinitionSql,
-        Long.class,
-        tenantId);
+    Long jobDefinitionId =
+        jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, tenantId);
     String raceRequestId = requestId + "-reference-race";
     insertAcceptedWorkflowRequest(workflowDefinitionId, raceRequestId);
-    Long triggerRequestRowId = jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class,
-        tenantId,
-        raceRequestId);
+    Long triggerRequestRowId =
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, tenantId, raceRequestId);
     Long jobInstanceId = insertJobInstance(
         jobDefinitionId,
         triggerRequestRowId,
@@ -238,19 +231,16 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
       assertThat(linkStarted.await(5, TimeUnit.SECONDS)).isTrue();
       Awaitility.await()
           .atMost(Duration.ofSeconds(5))
-          .until(() -> jdbcTemplate.queryForObject(
-                  selectCountSql,
-                  Integer.class,
-                  linkPid.get())
-              == 1);
+          .until(
+              () -> jdbcTemplate.queryForObject(selectCountSql, Integer.class, linkPid.get()) == 1);
 
       allowParentCommit.countDown();
       delete.get(10, TimeUnit.SECONDS);
       Future<?> attachFuture = attach;
       assertThatThrownBy(() -> attachFuture.get(10, TimeUnit.SECONDS))
           .hasCauseInstanceOf(DataIntegrityViolationException.class);
-      String selectedRequestStatus =
-          jdbcTemplate.queryForObject(selectRequestStatusSql, String.class, tenantId, raceRequestId);
+      String selectedRequestStatus = jdbcTemplate.queryForObject(
+          selectRequestStatusSql, String.class, tenantId, raceRequestId);
       assertThat(selectedRequestStatus).isEqualTo(TriggerRequestStatus.ACCEPTED.code());
       Long selectedRelatedJobInstanceId = jdbcTemplate.queryForObject(
           selectRelatedJobInstanceIdSql, Long.class, tenantId, raceRequestId);
@@ -292,10 +282,7 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
 
     assertReferenceConstraintViolation(
         () -> jdbcTemplate.update(
-            updateTriggerRequestSql,
-            foreignJobInstanceId,
-            tenantId,
-            localTriggerRequestId),
+            updateTriggerRequestSql, foreignJobInstanceId, tenantId, localTriggerRequestId),
         "fk_trigger_request_related_job_instance_reference");
     Long selectedRelatedJobInstanceId = jdbcTemplate.queryForObject(
         selectRelatedJobInstanceIdSql, Long.class, tenantId, localTriggerRequestId);
@@ -305,19 +292,19 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("TriggerRequest 对父 WorkflowRun 的历史引用阻止父身份改写,但允许归档删除")
   void shouldProtectTriggerRequestParentWorkflowRunIdentityAndKeepWeakDeleteSemantics() {
-  final String updateWorkflowRunSql = """
+    final String updateWorkflowRunSql = """
       update batch.workflow_run set id = id + 1000000000 where id = ?
   """;
-  final String updateWorkflowRunSql2 = """
+    final String updateWorkflowRunSql2 = """
       update batch.workflow_run set tenant_id = ? where id = ?
   """;
-  final String updateWorkflowRunSql3 = """
+    final String updateWorkflowRunSql3 = """
       update batch.workflow_run set biz_date = biz_date + 1 where id = ?
   """;
-  final String updateTriggerRequestSql = """
+    final String updateTriggerRequestSql = """
       update batch.trigger_request set parent_workflow_run_id = ? where id = ?
   """;
-  final String updateTriggerRequestSql2 = """
+    final String updateTriggerRequestSql2 = """
       update batch.trigger_request set parent_node_code = 'OTHER_NODE' where id = ?
   """;
     final String deleteWorkflowRunSql = """
@@ -337,34 +324,23 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
         insertChildWorkflowRequest(tenantId, childRequestId, parentWorkflowRunId, bizDate);
 
     assertDatabaseConstraintViolation(
-        () -> jdbcTemplate.update(
-            updateWorkflowRunSql, parentWorkflowRunId),
+        () -> jdbcTemplate.update(updateWorkflowRunSql, parentWorkflowRunId),
         "23503",
         "fk_trigger_request_parent_workflow_run_reference");
     assertDatabaseConstraintViolation(
-        () -> jdbcTemplate.update(
-            updateWorkflowRunSql2,
-            foreignTenantId,
-            parentWorkflowRunId),
+        () -> jdbcTemplate.update(updateWorkflowRunSql2, foreignTenantId, parentWorkflowRunId),
         "23503",
         "fk_trigger_request_parent_workflow_run_reference");
     assertDatabaseConstraintViolation(
-        () -> jdbcTemplate.update(
-            updateWorkflowRunSql3,
-            parentWorkflowRunId),
+        () -> jdbcTemplate.update(updateWorkflowRunSql3, parentWorkflowRunId),
         "23503",
         "fk_trigger_request_parent_workflow_run_reference");
     assertDatabaseConstraintViolation(
-        () -> jdbcTemplate.update(
-            updateTriggerRequestSql,
-            otherWorkflowRunId,
-            childRequestRowId),
+        () -> jdbcTemplate.update(updateTriggerRequestSql, otherWorkflowRunId, childRequestRowId),
         "23514",
         "ck_trigger_request_parent_workflow_run_immutable");
     assertDatabaseConstraintViolation(
-        () -> jdbcTemplate.update(
-            updateTriggerRequestSql2,
-            childRequestRowId),
+        () -> jdbcTemplate.update(updateTriggerRequestSql2, childRequestRowId),
         "23514",
         "ck_trigger_request_parent_workflow_run_immutable");
 
@@ -404,22 +380,22 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
   @DisplayName("创建子 TriggerRequest 与父 WorkflowRun 删除串行化,不会提交悬空引用")
   void shouldSerializeTriggerRequestParentWorkflowAttachmentAgainstWorkflowRunDelete()
       throws Exception {
-        final String selectPgBackendPidSql = """
+    final String selectPgBackendPidSql = """
             select pg_backend_pid()
         """;
-        final String insertTriggerRequestSql = """
+    final String insertTriggerRequestSql = """
             insert into batch.trigger_request (tenant_id, request_id, trigger_type, job_code, biz_date,\s\
             dedup_key, request_status, parent_workflow_run_id, parent_node_code)\s\
             values (?, ?, 'EVENT', 'child-job', ?, ?, 'ACCEPTED', ?, 'CHILD_JOB')\
             """;
 
-        final String deleteWorkflowRunSql = """
+    final String deleteWorkflowRunSql = """
             delete from batch.workflow_run where tenant_id = ? and id = ?
         """;
-        final String selectCountSql = """
+    final String selectCountSql = """
             select count(*) from pg_stat_activity where pid = ? and wait_event_type = 'Lock'
         """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.trigger_request where tenant_id = ? and request_id = ?
   """;
 
@@ -437,10 +413,7 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
     try {
       delete = executor.submit(
           () -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-            jdbcTemplate.update(
-                deleteWorkflowRunSql,
-                tenantId,
-                parentWorkflowRunId);
+            jdbcTemplate.update(deleteWorkflowRunSql, tenantId, parentWorkflowRunId);
             parentDeleted.countDown();
             awaitLatch(allowParentCommit);
           }));
@@ -455,8 +428,7 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
             }
           }
           attachmentStarted.countDown();
-          try (var statement = connection.prepareStatement(
-              insertTriggerRequestSql)) {
+          try (var statement = connection.prepareStatement(insertTriggerRequestSql)) {
             statement.setString(1, tenantId);
             statement.setString(2, childRequestId);
             statement.setObject(3, bizDate);
@@ -473,11 +445,8 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
       assertThat(attachmentStarted.await(5, TimeUnit.SECONDS)).isTrue();
       Awaitility.await()
           .atMost(Duration.ofSeconds(5))
-          .until(() -> jdbcTemplate.queryForObject(
-                  selectCountSql,
-                  Integer.class,
-                  attachmentPid.get())
-              == 1);
+          .until(() ->
+              jdbcTemplate.queryForObject(selectCountSql, Integer.class, attachmentPid.get()) == 1);
 
       allowParentCommit.countDown();
       delete.get(10, TimeUnit.SECONDS);
@@ -534,13 +503,13 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("TriggerRequest 已建立的歷史關聯阻止 JobInstance 身份改寫")
   void shouldRejectJobInstanceRekeyWhileTriggerRequestHistoryReferencesIt() {
-  final String selectBizDateSql = """
+    final String selectBizDateSql = """
       select biz_date from batch.job_instance where id = ?
   """;
-  final String updateJobInstanceSql = """
+    final String updateJobInstanceSql = """
       update batch.job_instance set id = id + 1000000000000 where id = ?
   """;
-  final String updateJobInstanceSql2 = """
+    final String updateJobInstanceSql2 = """
       update batch.job_instance set biz_date = biz_date + 1 where id = ?
   """;
     final String selectRelatedJobInstanceIdSql = """
@@ -563,16 +532,14 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
     assertThat(triggerRequestMapper.updateAcceptance(
             tenantId, linkedRequestId, TriggerRequestStatus.LAUNCHED.code(), jobInstanceId))
         .isOne();
-    LocalDate originalBizDate = jdbcTemplate.queryForObject(
-        selectBizDateSql, LocalDate.class, jobInstanceId);
+    LocalDate originalBizDate =
+        jdbcTemplate.queryForObject(selectBizDateSql, LocalDate.class, jobInstanceId);
 
     assertReferenceConstraintViolation(
-        () -> jdbcTemplate.update(
-            updateJobInstanceSql, jobInstanceId),
+        () -> jdbcTemplate.update(updateJobInstanceSql, jobInstanceId),
         "fk_trigger_request_related_job_instance_reference");
     assertReferenceConstraintViolation(
-        () -> jdbcTemplate.update(
-            updateJobInstanceSql2, jobInstanceId),
+        () -> jdbcTemplate.update(updateJobInstanceSql2, jobInstanceId),
         "fk_trigger_request_related_job_instance_reference");
     LocalDate selectedBizDate =
         jdbcTemplate.queryForObject(selectBizDateSql, LocalDate.class, jobInstanceId);
@@ -645,11 +612,7 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
         """;
 
     return jdbcTemplate.queryForObject(
-        insertWorkflowRunSql,
-        Long.class,
-        runTenant,
-        workflowDefinitionId,
-        bizDate);
+        insertWorkflowRunSql, Long.class, runTenant, workflowDefinitionId, bizDate);
   }
 
   private Long insertChildWorkflowRequest(
@@ -736,8 +699,15 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
     """;
 
     String id = requestId + "-" + suffix;
-        jdbcTemplate.update(
-        insertTriggerRequestSql, tenantId, id, workflowDefinitionId, bizDate, "dedup-" + id, status, "trace-" + id);
+    jdbcTemplate.update(
+        insertTriggerRequestSql,
+        tenantId,
+        id,
+        workflowDefinitionId,
+        bizDate,
+        "dedup-" + id,
+        status,
+        "trace-" + id);
   }
 
   @Test
@@ -759,7 +729,8 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
 
     String dedupKey = "dedup-" + requestId;
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, "CAL_LAUNCH_CONTEXT");
-    Long jobDefinitionId = jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, tenantId);
+    Long jobDefinitionId =
+        jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, tenantId);
     Long triggerRequestId = jdbcTemplate.queryForObject(
         insertTriggerRequestSql, Long.class, tenantId, requestId, workflowDefinitionId, dedupKey);
     insertJobInstance(jobDefinitionId, triggerRequestId, dedupKey, 1, "instance-1", "trace-1");
@@ -813,12 +784,12 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
     jdbcTemplate.update(updateRequestStatusSql, "PROCESSING", tenantId, queuedRequest);
     Long pendingRequest = insertAcceptedRequest(
         tenantId, workflowId, "approval", "root-approval", Instant.now().minusSeconds(7_200));
-    Long recentRequest = insertAcceptedRequest(
-        tenantId, workflowId, "recent", "root-recent", requestTime);
+    Long recentRequest =
+        insertAcceptedRequest(tenantId, workflowId, "recent", "root-recent", requestTime);
     Timestamp scheduledFireTime = Timestamp.from(Instant.now().minusSeconds(7_200));
     try {
-      jdbcTemplate.update(insertPendingApprovalSql, tenantId, workflowId,
-          scheduledFireTime, pendingRequest);
+      jdbcTemplate.update(
+          insertPendingApprovalSql, tenantId, workflowId, scheduledFireTime, pendingRequest);
       TriggerLaunchContinuityMetrics beforeRoot =
           triggerRequestMapper.selectLaunchContinuityMetrics(staleBefore, recentWindow);
       assertThat(beforeRoot.staleAcceptedCount()).isEqualTo(baseline.staleAcceptedCount() + 1);
@@ -826,12 +797,26 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
 
       Instant oldRootTime = Instant.now().minusSeconds(3_600);
       Timestamp oldRootCreatedAt = Timestamp.from(oldRootTime);
-      Long queuedRoot = jdbcTemplate.queryForObject(insertRootRunSql, Long.class,
-          tenantId, workflowId, queuedRequest, "SUCCESS", oldRootCreatedAt, oldRootCreatedAt);
+      Long queuedRoot = jdbcTemplate.queryForObject(
+          insertRootRunSql,
+          Long.class,
+          tenantId,
+          workflowId,
+          queuedRequest,
+          "SUCCESS",
+          oldRootCreatedAt,
+          oldRootCreatedAt);
       Instant recentRootTime = requestTime.plusSeconds(12);
       Timestamp recentRootCreatedAt = Timestamp.from(recentRootTime);
-      Long recentRoot = jdbcTemplate.queryForObject(insertRootRunSql, Long.class,
-          tenantId, workflowId, recentRequest, "RUNNING", recentRootCreatedAt, recentRootCreatedAt);
+      Long recentRoot = jdbcTemplate.queryForObject(
+          insertRootRunSql,
+          Long.class,
+          tenantId,
+          workflowId,
+          recentRequest,
+          "RUNNING",
+          recentRootCreatedAt,
+          recentRootCreatedAt);
       assertThat(queuedRoot).isNotNull();
       assertThat(recentRoot).isNotNull();
       TriggerLaunchContinuityMetrics recovered =
@@ -845,7 +830,8 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
           triggerRequestMapper.selectLaunchContinuityMetrics(staleBefore, recentWindow);
       assertThat(repeated.staleAcceptedCount()).isEqualTo(recovered.staleAcceptedCount());
       assertThat(repeated.recentLaunchedCount()).isEqualTo(recovered.recentLaunchedCount());
-      assertThat(repeated.requestToInstanceP95Seconds()).isEqualTo(recovered.requestToInstanceP95Seconds());
+      assertThat(repeated.requestToInstanceP95Seconds())
+          .isEqualTo(recovered.requestToInstanceP95Seconds());
     } finally {
       jdbcTemplate.update(deletePendingApprovalSql, tenantId);
     }
@@ -886,10 +872,7 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
         values (?, ?, ?, ?) returning id\
         """;
 
-    jdbcTemplate.update(
-        insertTenantSql,
-        workflowTenant,
-        workflowTenant);
+    jdbcTemplate.update(insertTenantSql, workflowTenant, workflowTenant);
     return jdbcTemplate.queryForObject(
         insertWorkflowDefinitionSql,
         Long.class,
@@ -947,9 +930,6 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
         true) returning id\
         """;
 
-    return jdbcTemplate.queryForObject(
-        insertJobDefinitionSql,
-        Long.class,
-        definitionTenant);
+    return jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, definitionTenant);
   }
 }

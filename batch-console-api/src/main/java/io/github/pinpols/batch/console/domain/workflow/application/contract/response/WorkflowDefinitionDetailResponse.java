@@ -1,9 +1,9 @@
 package io.github.pinpols.batch.console.domain.workflow.application.contract.response;
 
-import lombok.Builder;
-
 import java.time.Instant;
 import java.util.List;
+import lombok.Builder;
+
 @Builder
 public record WorkflowDefinitionDetailResponse(
     Long id,

@@ -22,7 +22,7 @@ import org.apache.kafka.common.errors.TopicExistsException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-/** Publishes pending outbox rows to Kafka (integration tests disable the forwarder scheduler). */
+/** 将待处理的 Outbox 记录发布到 Kafka（集成测试会禁用转发调度器）。 */
 @Component
 public class E2eOutboxPublishSupport {
 

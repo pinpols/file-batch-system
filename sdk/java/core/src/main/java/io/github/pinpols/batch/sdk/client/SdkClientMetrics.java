@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.sdk.client;
 
+import lombok.Builder;
+
 /**
  * SDK 运行时指标快照 — {@link BatchPlatformClient#metrics()} 的返回值。
  *
@@ -25,6 +27,7 @@ package io.github.pinpols.batch.sdk.client;
  * @param consumerCrashed Kafka poll loop 因非预期 Throwable 退出(参考 #1.7)
  * @param kafkaConsumerLag 最近一次 poll 观测到的最大 consumer lag(条数),{@code -1} = 未知(参考 P7-1)
  */
+@Builder
 public record SdkClientMetrics(
     String tenantId,
     String workerCode,

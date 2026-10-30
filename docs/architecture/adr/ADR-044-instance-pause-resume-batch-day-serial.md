@@ -37,7 +37,7 @@
 - `JobInstanceStatus` 增 `PAUSED`;`WorkflowRunStatus` 增 `PAUSED`。
 - **可迁移性**:`RUNNING/PARTIAL_FAILED/WAITING/READY → PAUSED`(可暂停);`PAUSED → RUNNING`(resume,回到派发);`PAUSED → CANCELLED/TERMINATED`(暂停后决定弃)。终态(`SUCCESS/FAILED/CANCELLED/TERMINATED`)**不可**进 PAUSED。
 - **语义**:实例进 PAUSED 后,派发器(`WaitingPartitionDispatchScheduler` / workflow 节点 dispatcher)**跳过**该实例的新分区 / 新节点派发;在途分区 / 节点跑完照常 REPORT,但**不推进**到下一波。CLAIM/租约/心跳机制对在途 task 不变。
-- resume:实例回 `RUNNING`,派发器重新纳入,从「已完成 + 待派发」边界继续(天然 checkpoint:已 SUCCESS 的分区 / 节点不重跑,靠既有幂等)。
+- resume:实例回 `RUNNING`,派发器重新纳入,从「已完成 + 待派发」边界继续(天然 checkpoint:已 SUCCESS 的分区 / 节点不重跑,靠既有幂等)。 Workflow 暂停时，其子 Job 中尚未派发的等待分区也暂停释放；恢复后重新纳入候选。释放与暂停按 Workflow 行锁串行，已派发的任务继续自然完成。
 
 ### 2. 批次日严格串行(可选开关,按 job 配)
 

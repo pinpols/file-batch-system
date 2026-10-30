@@ -80,6 +80,23 @@ class AlertmanagerEmitPublisherTest {
   }
 
   @Test
+  @DisplayName("恢复重试保持原标签、首次时刻和持久化关闭时间")
+  void shouldKeepResolvedIdentityAndTimeStable() {
+    AlertmanagerEmitPublisher publisher = publisher(false);
+    AlertEventEntity entity = entity();
+    entity.setStatus("CLOSED");
+    entity.setClosedAt(Instant.parse("2026-10-25T01:00:00Z"));
+    Map<String, Object> firing = publisher.buildPostableAlert(entity);
+    Map<String, Object> resolved = publisher.buildResolvedAlert(entity);
+    Map<String, Object> retried = publisher.buildResolvedAlert(entity);
+    assertThat(resolved)
+        .containsEntry("labels", firing.get("labels"))
+        .containsEntry("startsAt", firing.get("startsAt"))
+        .containsEntry("endsAt", "2026-10-25T01:00:00Z");
+    assertThat(retried).isEqualTo(resolved);
+  }
+
+  @Test
   @DisplayName("disabled 时 isEnabled=false 且 publishFiring no-op(不抛)")
   void disabledPublisher_isNoOp() {
     AlertmanagerEmitPublisher p = publisher(false);

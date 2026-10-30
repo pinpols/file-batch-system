@@ -6,6 +6,7 @@ import static org.awaitility.Awaitility.await;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpServer;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.TriggerType;
@@ -31,6 +32,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.infrastructure.QuartzLaunchJob;
+import io.github.pinpols.batch.trigger.infrastructure.QuartzScheduledFireEnumerator;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerSchedulerFacade;
 import io.github.pinpols.batch.trigger.infrastructure.scheduler.TriggerReconciler;
 import io.github.pinpols.batch.trigger.service.TriggerScheduledOccurrencePlanner;
@@ -39,6 +41,7 @@ import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -65,6 +68,8 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -91,6 +96,7 @@ import org.quartz.JobBuilder;
 import org.quartz.JobDataMap;
 import org.quartz.JobDetail;
 import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
 import org.quartz.JobKey;
 import org.quartz.Scheduler;
 import org.quartz.SimpleScheduleBuilder;
@@ -100,6 +106,8 @@ import org.quartz.TriggerKey;
 import org.quartz.TriggerListener;
 import org.quartz.impl.matchers.EverythingMatcher;
 import org.quartz.impl.matchers.GroupMatcher;
+import org.quartz.impl.matchers.KeyMatcher;
+import org.quartz.listeners.JobListenerSupport;
 import org.springframework.ai.model.anthropic.autoconfigure.AnthropicChatAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -164,6 +172,9 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
   private ObjectMapper objectMapper;
 
   @Autowired
+  private ConsoleJwtService consoleJwtService;
+
+  @Autowired
   private ForensicExportProperties forensicExportProperties;
 
   @Autowired
@@ -199,6 +210,570 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("人工批次日补跑第一项响应丢失后核对并接续第二项")
+  void shouldReconcileAndContinueManualBatchAfterRealApprovalResponseLoss() throws Exception {
+    LaunchSeed first = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+    LaunchSeed second = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+    String updateCalendarPolicySql =
+        "update batch.business_calendar set catch_up_policy = 'MANUAL_APPROVAL', catch_up_max_days = 3 where tenant_id = ? and calendar_code = 'e2e_calendar'";
+    jdbcTemplate.update(updateCalendarPolicySql, TENANT);
+    String requestKey = "manual-recovery-" + UUID.randomUUID();
+    String firstKey = requestKey + ":" + first.jobCode();
+    String secondKey = requestKey + ":" + second.jobCode();
+    AtomicInteger approvalPosts = new AtomicInteger();
+    var proxy = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    proxy.createContext("/", exchange -> {
+      try {
+        byte[] requestBytes = exchange.getRequestBody().readAllBytes();
+        URI target = URI.create("http://127.0.0.1:" + consolePort + exchange.getRequestURI());
+        var upstream = HttpRequest.newBuilder(target)
+            .timeout(Duration.ofSeconds(20))
+            .method(
+                exchange.getRequestMethod(), HttpRequest.BodyPublishers.ofByteArray(requestBytes));
+        for (String name : List.of(
+            "Content-Type", "Idempotency-Key", "X-Internal-Secret", "X-Request-Id", "X-Trace-Id")) {
+          String value = exchange.getRequestHeaders().getFirst(name);
+          if (value != null) upstream.header(name, value);
+        }
+        var response = HTTP_CLIENT.send(upstream.build(), HttpResponse.BodyHandlers.ofByteArray());
+        if (exchange.getRequestMethod().equals("POST")
+            && exchange.getRequestURI().getPath().equals("/internal/approvals")
+            && approvalPosts.incrementAndGet() == 1
+            && response.statusCode() == 200) {
+          exchange.close();
+          return;
+        }
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        exchange.sendResponseHeaders(response.statusCode(), response.body().length);
+        exchange.getResponseBody().write(response.body());
+      } catch (InterruptedException failure) {
+        Thread.currentThread().interrupt();
+        throw new IOException(failure);
+      } finally {
+        exchange.close();
+      }
+    });
+    proxy.start();
+    Map<String, Object> properties = new HashMap<>();
+    AbstractIntegrationTest.registerDynamicProperties(
+        (name, supplier) -> properties.put(name, supplier.get()), false);
+    properties.put("server.port", 0);
+    properties.put("server.address", "127.0.0.1");
+    properties.put("spring.main.web-application-type", "servlet");
+    properties.put("spring.flyway.enabled", false);
+    properties.put(
+        "spring.autoconfigure.exclude",
+        String.join(
+            ",",
+            OpenAiChatAutoConfiguration.class.getName(),
+            AnthropicChatAutoConfiguration.class.getName()));
+    properties.put("batch.startup-self-check.enabled", false);
+    properties.put("batch.security.bypass-mode", false);
+    properties.put("batch.console.security.single-session-enabled", false);
+    properties.put("batch.console.security.default-tenant-id", TENANT);
+    properties.put("batch.console.security.allowed-tenants", "t1,t2");
+    properties.put("batch.security.internal-secret", E2E_INTERNAL_SECRET);
+    properties.put(
+        "batch.console.orchestrator.base-url",
+        "http://127.0.0.1:" + proxy.getAddress().getPort());
+    String[] arguments = properties.entrySet().stream()
+        .map(entry -> "--" + entry.getKey() + "=" + entry.getValue())
+        .toArray(String[]::new);
+    try (var console = new SpringApplicationBuilder(BatchConsoleApiApplication.class)
+        .profiles("test", "e2e")
+        .run(arguments)) {
+      assertThat(console.getBean(BatchSecurityProperties.class).isBypassMode()).isFalse();
+      int port = console.getEnvironment().getProperty("local.server.port", Integer.class);
+      WebTestClient client = WebTestClient.bindToServer()
+          .baseUrl("http://127.0.0.1:" + port)
+          .responseTimeout(Duration.ofSeconds(60))
+          .build();
+      AuthenticatedConsole admin = authenticateConsole(
+          client, console.getBean(ConsoleJwtService.class), OPERATOR, "ROLE_ADMIN");
+      String body = """
+          {"tenantId":"%s","calendarCode":"e2e_calendar","jobCodes":["%s","%s"],"reason":"manual recovery"}
+          """.formatted(TENANT, first.jobCode(), second.jobCode());
+      client
+          .post()
+          .uri("/api/console/jobs/batch-days/2035-01-01/catchup")
+          .cookie("batch_console_token", admin.jwt())
+          .cookie("XSRF-TOKEN", admin.csrf())
+          .header("X-XSRF-TOKEN", admin.csrf())
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT)
+          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, requestKey)
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(body)
+          .exchange()
+          .expectStatus()
+          .is5xxServerError();
+      String selectApproval =
+          "select approval_no from batch.approval_command where tenant_id = ? and source_idempotency_key = ?";
+      var approvals = jdbcTemplate.queryForList(selectApproval, String.class, TENANT, firstKey);
+      assertThat(approvals).hasSize(1);
+      List<String> initialSecondApprovals =
+          jdbcTemplate.queryForList(selectApproval, String.class, TENANT, secondKey);
+      assertThat(initialSecondApprovals).isEmpty();
+      client
+          .post()
+          .uri("/api/console/jobs/batch-days/catchup/requests/continue")
+          .cookie("batch_console_token", admin.jwt())
+          .cookie("XSRF-TOKEN", admin.csrf())
+          .header("X-XSRF-TOKEN", admin.csrf())
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT)
+          .header(
+              CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER,
+              "continue-blocked-" + UUID.randomUUID())
+          .header("X-Original-Idempotency-Key", requestKey)
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(Map.of("tenantId", TENANT))
+          .exchange()
+          .expectStatus()
+          .isEqualTo(409);
+      assertThat(approvalPosts.get()).isEqualTo(1);
+      client
+          .post()
+          .uri("/api/console/jobs/batch-days/catchup/requests/reconcile")
+          .cookie("batch_console_token", admin.jwt())
+          .cookie("XSRF-TOKEN", admin.csrf())
+          .header("X-XSRF-TOKEN", admin.csrf())
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT)
+          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "reconcile-" + UUID.randomUUID())
+          .header("X-Original-Idempotency-Key", requestKey)
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(Map.of("tenantId", TENANT, "jobCode", first.jobCode()))
+          .exchange()
+          .expectStatus()
+          .isOk()
+          .expectBody()
+          .jsonPath("$.data.operationStatus")
+          .isEqualTo("RUNNING")
+          .jsonPath("$.data.items[0].referenceNo")
+          .isEqualTo(approvals.getFirst())
+          .jsonPath("$.data.items[1].status")
+          .isEqualTo("PENDING");
+      client
+          .post()
+          .uri("/api/console/jobs/batch-days/catchup/requests/continue")
+          .cookie("batch_console_token", admin.jwt())
+          .cookie("XSRF-TOKEN", admin.csrf())
+          .header("X-XSRF-TOKEN", admin.csrf())
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT)
+          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "continue-" + UUID.randomUUID())
+          .header("X-Original-Idempotency-Key", requestKey)
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(Map.of("tenantId", TENANT))
+          .exchange()
+          .expectStatus()
+          .isOk()
+          .expectBody()
+          .jsonPath("$.data.operationStatus")
+          .isEqualTo("COMPLETE")
+          .jsonPath("$.data.items[0].referenceNo")
+          .isEqualTo(approvals.getFirst())
+          .jsonPath("$.data.items[1].status")
+          .isEqualTo("ACCEPTED");
+      assertThat(approvalPosts.get()).isEqualTo(2);
+      List<String> finalFirstApprovals =
+          jdbcTemplate.queryForList(selectApproval, String.class, TENANT, firstKey);
+      assertThat(finalFirstApprovals).containsExactly(approvals.getFirst());
+      List<String> finalSecondApprovals =
+          jdbcTemplate.queryForList(selectApproval, String.class, TENANT, secondKey);
+      assertThat(finalSecondApprovals).hasSize(1);
+    } finally {
+      proxy.stop(0);
+    }
+  }
+
+  @Test
+  @DisplayName("Console 进程在 Trigger 接纳后崩溃，重启后按原键核对")
+  void shouldReconcileBatchDayAutoAfterConsoleProcessCrash() throws Exception {
+    startTriggerHttpServer();
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+    String updateCalendarPolicySql =
+        "update batch.business_calendar set catch_up_policy = 'AUTO', catch_up_max_days = 3 where tenant_id = ? and calendar_code = 'e2e_calendar'";
+    jdbcTemplate.update(updateCalendarPolicySql, TENANT);
+    String requestKey = "batch-crash-e2e-" + UUID.randomUUID();
+    String sourceKey = requestKey + ":" + seed.jobCode();
+    CountDownLatch accepted = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    AtomicInteger launches = new AtomicInteger();
+    var proxy = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    proxy.createContext("/", exchange -> {
+      try {
+        byte[] requestBytes = exchange.getRequestBody().readAllBytes();
+        URI target = URI.create("http://127.0.0.1:" + TRIGGER_PORT + exchange.getRequestURI());
+        var upstream = HttpRequest.newBuilder(target)
+            .timeout(Duration.ofSeconds(20))
+            .method(
+                exchange.getRequestMethod(), HttpRequest.BodyPublishers.ofByteArray(requestBytes));
+        for (String name : List.of(
+            "Content-Type", "Idempotency-Key", "X-Internal-Secret", "X-Request-Id", "X-Trace-Id")) {
+          String value = exchange.getRequestHeaders().getFirst(name);
+          if (value != null) upstream.header(name, value);
+        }
+        var response = HTTP_CLIENT.send(upstream.build(), HttpResponse.BodyHandlers.ofByteArray());
+        if (exchange.getRequestURI().getPath().equals("/api/triggers/launch")) {
+          launches.incrementAndGet();
+          if (response.statusCode() == 200) accepted.countDown();
+          release.await(45, TimeUnit.SECONDS);
+          return;
+        }
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        exchange.sendResponseHeaders(response.statusCode(), response.body().length);
+        exchange.getResponseBody().write(response.body());
+      } catch (InterruptedException failure) {
+        Thread.currentThread().interrupt();
+        throw new IOException(failure);
+      } finally {
+        exchange.close();
+      }
+    });
+    proxy.start();
+    List<Process> children = new ArrayList<>();
+    try {
+      int firstPort = reservePort();
+      Process first = startCatchUpConsoleProcess(firstPort, proxy.getAddress().getPort(), children);
+      WebTestClient firstClient = WebTestClient.bindToServer()
+          .baseUrl("http://127.0.0.1:" + firstPort)
+          .responseTimeout(Duration.ofSeconds(60))
+          .build();
+      AuthenticatedConsole admin =
+          authenticateConsole(firstClient, consoleJwtService, OPERATOR, "ROLE_ADMIN");
+      String body = """
+          {"tenantId":"%s","calendarCode":"e2e_calendar","jobCodes":["%s"],"reason":"process crash"}
+          """.formatted(TENANT, seed.jobCode());
+      var pending = CompletableFuture.runAsync(() -> {
+        try {
+          firstClient
+              .post()
+              .uri("/api/console/jobs/batch-days/2035-01-01/catchup")
+              .cookie("batch_console_token", admin.jwt())
+              .cookie("XSRF-TOKEN", admin.csrf())
+              .header("X-XSRF-TOKEN", admin.csrf())
+              .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT)
+              .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, requestKey)
+              .contentType(MediaType.APPLICATION_JSON)
+              .bodyValue(body)
+              .exchange();
+        } catch (RuntimeException expectedDisconnect) {
+          // 故意在请求进行中终止进程，以验证恢复行为。
+        }
+      });
+      assertThat(accepted.await(30, TimeUnit.SECONDS))
+          .as("Trigger accepted before crash")
+          .isTrue();
+      String selectRequestSql =
+          "select request_id from batch.trigger_request where tenant_id = ? and dedup_key = ? and parent_workflow_run_id is null";
+      var requestIds = jdbcTemplate.queryForList(selectRequestSql, String.class, TENANT, sourceKey);
+      assertThat(requestIds).hasSize(1);
+      String triggerRequest = requestIds.getFirst();
+      first.destroyForcibly();
+      assertThat(first.waitFor(15, TimeUnit.SECONDS)).isTrue();
+      release.countDown();
+      pending.get(15, TimeUnit.SECONDS);
+      int secondPort = reservePort();
+      startCatchUpConsoleProcess(secondPort, proxy.getAddress().getPort(), children);
+      WebTestClient client = WebTestClient.bindToServer()
+          .baseUrl("http://127.0.0.1:" + secondPort)
+          .responseTimeout(Duration.ofSeconds(60))
+          .build();
+      AuthenticatedConsole recoveredAdmin =
+          authenticateConsole(client, consoleJwtService, OPERATOR, "ROLE_ADMIN");
+      String countChildRequestsSql =
+          "select count(*) from batch.trigger_request where tenant_id = ? and dedup_key = ? and parent_workflow_run_id is not null";
+      await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+        Integer childCount =
+            jdbcTemplate.queryForObject(countChildRequestsSql, Integer.class, TENANT, sourceKey);
+        assertThat(childCount).isGreaterThan(0);
+      });
+      client
+          .get()
+          .uri(uri -> uri.path("/api/console/jobs/batch-days/catchup/requests/status")
+              .queryParam("tenantId", TENANT)
+              .build())
+          .cookie("batch_console_token", recoveredAdmin.jwt())
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT)
+          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, requestKey)
+          .exchange()
+          .expectStatus()
+          .isOk()
+          .expectBody()
+          .jsonPath("$.data.operationStatus")
+          .isEqualTo("RUNNING")
+          .jsonPath("$.data.items[0].status")
+          .isEqualTo("IN_FLIGHT");
+      client
+          .post()
+          .uri("/api/console/jobs/batch-days/catchup/requests/reconcile")
+          .cookie("batch_console_token", recoveredAdmin.jwt())
+          .cookie("XSRF-TOKEN", recoveredAdmin.csrf())
+          .header("X-XSRF-TOKEN", recoveredAdmin.csrf())
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT)
+          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "reconcile-" + UUID.randomUUID())
+          .header("X-Original-Idempotency-Key", requestKey)
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(Map.of("tenantId", TENANT, "jobCode", seed.jobCode()))
+          .exchange()
+          .expectStatus()
+          .isOk()
+          .expectBody()
+          .jsonPath("$.data.operationStatus")
+          .isEqualTo("COMPLETE")
+          .jsonPath("$.data.items[0].referenceNo")
+          .isEqualTo(triggerRequest);
+      assertThat(launches.get()).isEqualTo(1);
+      String countRootRequestsSql =
+          "select count(*) from batch.trigger_request where tenant_id = ? and dedup_key = ? and parent_workflow_run_id is null";
+      String countOutboxEventsSql =
+          "select count(*) from batch.trigger_outbox_event where tenant_id = ? and request_id = ?";
+      Integer rootRequestCount =
+          jdbcTemplate.queryForObject(countRootRequestsSql, Integer.class, TENANT, sourceKey);
+      assertThat(rootRequestCount).isEqualTo(1);
+      Integer outboxEventCount =
+          jdbcTemplate.queryForObject(countOutboxEventsSql, Integer.class, TENANT, triggerRequest);
+      assertThat(outboxEventCount).isEqualTo(1);
+    } finally {
+      release.countDown();
+      proxy.stop(0);
+      for (Process child : children) {
+        if (child.isAlive()) {
+          child.destroy();
+          if (!child.waitFor(10, TimeUnit.SECONDS)) {
+            child.destroyForcibly();
+            child.waitFor(15, TimeUnit.SECONDS);
+          }
+        }
+      }
+    }
+  }
+
+  private Process startCatchUpConsoleProcess(int port, int proxyPort, List<Process> children)
+      throws Exception {
+    Map<String, Object> properties = new HashMap<>();
+    AbstractIntegrationTest.registerDynamicProperties(
+        (name, supplier) -> properties.put(name, supplier.get()), false);
+    properties.put("spring.profiles.active", "test,e2e");
+    properties.put("spring.flyway.enabled", false);
+    properties.put("spring.main.web-application-type", "servlet");
+    properties.put("server.port", port);
+    properties.put("server.address", "127.0.0.1");
+    properties.put(
+        "spring.autoconfigure.exclude",
+        String.join(
+            ",",
+            OpenAiChatAutoConfiguration.class.getName(),
+            AnthropicChatAutoConfiguration.class.getName()));
+    properties.put("batch.startup-self-check.enabled", false);
+    properties.put("batch.security.bypass-mode", false);
+    properties.put("batch.console.security.single-session-enabled", false);
+    properties.put("batch.console.security.default-tenant-id", TENANT);
+    properties.put("batch.console.security.allowed-tenants", "t1,t2");
+    properties.put("batch.security.internal-secret", E2E_INTERNAL_SECRET);
+    properties.put("batch.console.orchestrator.base-url", "http://127.0.0.1:" + consolePort);
+    properties.put("batch.console.trigger.base-url", "http://127.0.0.1:" + proxyPort);
+    properties.put("batch.console.trigger.read-timeout-millis", 60000);
+    List<String> command = new ArrayList<>(List.of(
+        Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+        "-Dbatch.security.ssrf-guard.allow-private=true",
+        "-cp",
+        System.getProperty("surefire.test.class.path", System.getProperty("java.class.path")),
+        BatchConsoleApiApplication.class.getName()));
+    properties.forEach((name, value) -> command.add("--" + name + "=" + value));
+    Path directory = Path.of("../logs/verification/backend25-2026-10-30/batchday-process")
+        .toAbsolutePath()
+        .normalize();
+    Files.createDirectories(directory);
+    Path log = Files.createTempFile(directory, "console-", ".log");
+    Process child = new ProcessBuilder(command)
+        .redirectErrorStream(true)
+        .redirectOutput(log.toFile())
+        .start();
+    children.add(child);
+    await()
+        .atMost(Duration.ofSeconds(90))
+        .until(() -> Files.readString(log).contains("Started BatchConsoleApiApplication")
+            || !child.isAlive());
+    assertThat(child.isAlive()).as("Console startup log: %s", log).isTrue();
+    return child;
+  }
+
+  @Test
+  @DisplayName("批次日 AUTO 响应丢失后通过真实 Console 与 Trigger 按原键核对且不重复接纳")
+  void shouldReconcileBatchDayAutoAfterRealTriggerResponseIsDropped() throws Exception {
+    startTriggerHttpServer();
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+    String updateCalendarSql = """
+        update batch.business_calendar set catch_up_policy = 'AUTO', catch_up_max_days = 3
+         where tenant_id = ? and calendar_code = 'e2e_calendar'
+        """;
+    jdbcTemplate.update(updateCalendarSql, TENANT);
+    LocalDate bizDate = LocalDate.of(2035, 1, 1);
+    String requestKey = "batch-auto-e2e-" + UUID.randomUUID();
+    String sourceKey = requestKey + ":" + seed.jobCode();
+    AtomicInteger dropped = new AtomicInteger();
+    AtomicInteger forwarded = new AtomicInteger();
+    var proxy = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    proxy.createContext("/", exchange -> {
+      try {
+        byte[] requestBytes = exchange.getRequestBody().readAllBytes();
+        URI target = URI.create("http://127.0.0.1:" + TRIGGER_PORT + exchange.getRequestURI());
+        var upstream = HttpRequest.newBuilder(target)
+            .timeout(Duration.ofSeconds(20))
+            .method(
+                exchange.getRequestMethod(), HttpRequest.BodyPublishers.ofByteArray(requestBytes));
+        for (String name : List.of(
+            "Content-Type", "Idempotency-Key", "X-Internal-Secret", "X-Request-Id", "X-Trace-Id")) {
+          String value = exchange.getRequestHeaders().getFirst(name);
+          if (value != null) upstream.header(name, value);
+        }
+        var response = HTTP_CLIENT.send(upstream.build(), HttpResponse.BodyHandlers.ofByteArray());
+        if (exchange.getRequestURI().getPath().equals("/api/triggers/launch")) {
+          if (response.statusCode() == 200) forwarded.incrementAndGet();
+          dropped.incrementAndGet();
+          exchange.close();
+          return;
+        }
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        exchange.sendResponseHeaders(response.statusCode(), response.body().length);
+        exchange.getResponseBody().write(response.body());
+      } catch (Exception failure) {
+        exchange.sendResponseHeaders(502, -1);
+      } finally {
+        exchange.close();
+      }
+    });
+    proxy.start();
+    Map<String, Object> properties = new HashMap<>();
+    AbstractIntegrationTest.registerDynamicProperties(
+        (name, supplier) -> properties.put(name, supplier.get()), false);
+    properties.put("server.port", 0);
+    properties.put("server.address", "127.0.0.1");
+    properties.put("spring.main.web-application-type", "servlet");
+    properties.put("spring.flyway.enabled", false);
+    properties.put(
+        "spring.autoconfigure.exclude",
+        String.join(
+            ",",
+            OpenAiChatAutoConfiguration.class.getName(),
+            AnthropicChatAutoConfiguration.class.getName()));
+    properties.put("batch.startup-self-check.enabled", false);
+    properties.put("batch.security.bypass-mode", false);
+    properties.put("batch.console.security.single-session-enabled", false);
+    properties.put("batch.console.security.default-tenant-id", TENANT);
+    properties.put("batch.console.security.allowed-tenants", "t1,t2");
+    properties.put("batch.security.internal-secret", E2E_INTERNAL_SECRET);
+    properties.put("batch.console.orchestrator.base-url", "http://127.0.0.1:" + consolePort);
+    properties.put(
+        "batch.console.trigger.base-url",
+        "http://127.0.0.1:" + proxy.getAddress().getPort());
+    String[] arguments = properties.entrySet().stream()
+        .map(entry -> "--" + entry.getKey() + "=" + entry.getValue())
+        .toArray(String[]::new);
+    try (var console = new SpringApplicationBuilder(BatchConsoleApiApplication.class)
+        .profiles("test", "e2e")
+        .run(arguments)) {
+      assertThat(console.getBean(BatchSecurityProperties.class).isBypassMode()).isFalse();
+      int port = console.getEnvironment().getProperty("local.server.port", Integer.class);
+      WebTestClient client = WebTestClient.bindToServer()
+          .baseUrl("http://127.0.0.1:" + port)
+          .responseTimeout(Duration.ofSeconds(60))
+          .build();
+      AuthenticatedConsole admin = authenticateConsole(
+          client, console.getBean(ConsoleJwtService.class), OPERATOR, "ROLE_ADMIN");
+      String body = """
+          {"tenantId":"%s","calendarCode":"e2e_calendar","jobCodes":["%s"],"reason":"lost response"}
+          """.formatted(TENANT, seed.jobCode());
+      client
+          .post()
+          .uri("/api/console/jobs/batch-days/" + bizDate + "/catchup")
+          .cookie("batch_console_token", admin.jwt())
+          .cookie("XSRF-TOKEN", admin.csrf())
+          .header("X-XSRF-TOKEN", admin.csrf())
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT)
+          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, requestKey)
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(body)
+          .exchange()
+          .expectStatus()
+          .is5xxServerError();
+      assertThat(forwarded.get()).isGreaterThanOrEqualTo(1);
+      assertThat(dropped.get()).isGreaterThanOrEqualTo(1);
+      String selectRequestSql =
+          "select request_id from batch.trigger_request where tenant_id = ? and dedup_key = ?";
+      var requestIds = jdbcTemplate.queryForList(selectRequestSql, String.class, TENANT, sourceKey);
+      assertThat(requestIds).hasSize(1);
+      String triggerRequest = requestIds.getFirst();
+      client
+          .get()
+          .uri(uri -> uri.path("/api/console/jobs/batch-days/catchup/requests/status")
+              .queryParam("tenantId", TENANT)
+              .build())
+          .cookie("batch_console_token", admin.jwt())
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT)
+          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, requestKey)
+          .exchange()
+          .expectStatus()
+          .isOk()
+          .expectBody()
+          .jsonPath("$.data.operationStatus")
+          .isEqualTo("UNKNOWN");
+      client
+          .post()
+          .uri("/api/console/jobs/batch-days/catchup/requests/reconcile")
+          .cookie("batch_console_token", admin.jwt())
+          .cookie("XSRF-TOKEN", admin.csrf())
+          .header("X-XSRF-TOKEN", admin.csrf())
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT)
+          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "reconcile-" + UUID.randomUUID())
+          .header("X-Original-Idempotency-Key", requestKey)
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(Map.of("tenantId", TENANT, "jobCode", seed.jobCode()))
+          .exchange()
+          .expectStatus()
+          .isOk()
+          .expectBody()
+          .jsonPath("$.data.operationStatus")
+          .isEqualTo("COMPLETE")
+          .jsonPath("$.data.items[0].referenceNo")
+          .isEqualTo(triggerRequest);
+      int beforeReplay = dropped.get();
+      client
+          .post()
+          .uri("/api/console/jobs/batch-days/" + bizDate + "/catchup")
+          .cookie("batch_console_token", admin.jwt())
+          .cookie("XSRF-TOKEN", admin.csrf())
+          .header("X-XSRF-TOKEN", admin.csrf())
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT)
+          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, requestKey)
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(body)
+          .exchange()
+          .expectStatus()
+          .isOk()
+          .expectBody()
+          .jsonPath("$.data.items[0].referenceNo")
+          .isEqualTo(triggerRequest);
+      assertThat(dropped.get()).isEqualTo(beforeReplay);
+      String countRequestSql =
+          "select count(*) from batch.trigger_request where tenant_id = ? and dedup_key = ?";
+      String countOutboxSql =
+          "select count(*) from batch.trigger_outbox_event where tenant_id = ? and request_id = ?";
+      Integer requestCount =
+          jdbcTemplate.queryForObject(countRequestSql, Integer.class, TENANT, sourceKey);
+      assertThat(requestCount).isEqualTo(1);
+      Integer outboxCount =
+          jdbcTemplate.queryForObject(countOutboxSql, Integer.class, TENANT, triggerRequest);
+      assertThat(outboxCount).isEqualTo(1);
+    } finally {
+      proxy.stop(0);
+    }
+  }
+
+  @Test
   @DisplayName("真实 Trigger planner 发布 occurrence 与 coverage 时结算器不会误结空日")
   void shouldConvergeCoverage_whenPublicationAndSettlementRace() throws Exception {
     final String selectCoverageThroughAtSql = """
@@ -211,25 +786,25 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
 
     final String insertBusinessCalendarSql = """
         insert into batch.business_calendar (tenant_id, calendar_code, calendar_name, timezone, enabled)\s\
-        values (?, 'e2e_calendar', 'E2E coverage race calendar', 'UTC', true)\s\
+        values (?, ?, 'E2E coverage race calendar', 'UTC', true)\s\
         on conflict (tenant_id, calendar_code) do update set enabled = true\
         """;
     final String insertWorkflowDefinitionSql = """
         insert into batch.workflow_definition (tenant_id, workflow_code, workflow_name, workflow_type, version,\s\
         enabled, schedule_type, schedule_expr, timezone, trigger_mode, calendar_code, schedule_enabled)\s\
         values (?, ?, 'E2E coverage race workflow', 'DAG', 1, true, 'CRON', '0 0 9 * * ?', 'UTC', 'SCHEDULED',\s\
-        'e2e_calendar', true) returning id\
+        ?, true) returning id\
         """;
     final String insertBatchDayInstanceSql = """
         insert into batch.batch_day_instance (tenant_id, calendar_code, biz_date, day_status, open_at,\s\
-        cutoff_at) values (?, 'e2e_calendar', ?, 'CUTOFF', current_timestamp, ?)\s\
+        cutoff_at) values (?, ?, ?, 'CUTOFF', current_timestamp, ?)\s\
         on conflict (tenant_id, calendar_code, biz_date) do update\s\
         set day_status = 'CUTOFF', cutoff_at = excluded.cutoff_at\
         """;
     final String insertScheduledOccurrenceCoverageSql = """
         insert into batch.scheduled_occurrence_coverage (tenant_id, workflow_definition_id,\s\
         configuration_revision, schedule_version, calendar_code, coverage_from_at, coverage_through_at,\s\
-        last_success_at) values (?, ?, 0, 1, 'e2e_calendar', ?, ?, current_timestamp)\
+        last_success_at) values (?, ?, 0, 1, ?, ?, ?, current_timestamp)\
         """;
     final String selectCountSql = """
         select count(*) from batch.scheduled_occurrence where tenant_id = ? and workflow_definition_id = ?\s\
@@ -242,14 +817,10 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
 
     startTriggerHttpServer();
     String workflowCode = "E2E_COVERAGE_RACE_" + UUID.randomUUID().toString().replace("-", "");
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        TENANT);
+    String calendarCode = "e2e_coverage_" + UUID.randomUUID().toString().replace("-", "");
+    jdbcTemplate.update(insertBusinessCalendarSql, TENANT, calendarCode);
     Long workflowDefinitionId = jdbcTemplate.queryForObject(
-        insertWorkflowDefinitionSql,
-        Long.class,
-        TENANT,
-        workflowCode);
+        insertWorkflowDefinitionSql, Long.class, TENANT, workflowCode, calendarCode);
     Instant scanAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
     CronTrigger cronTrigger = TriggerBuilder.newTrigger()
         .withIdentity(workflowCode, "coverage-race")
@@ -260,14 +831,12 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     Instant firstFire = cronTrigger.getFireTimeAfter(Date.from(scanAt)).toInstant();
     LocalDate bizDate = firstFire.atZone(ZoneOffset.UTC).toLocalDate();
     jdbcTemplate.update(
-        insertBatchDayInstanceSql,
-        TENANT,
-        bizDate,
-        Timestamp.from(firstFire));
+        insertBatchDayInstanceSql, TENANT, calendarCode, bizDate, Timestamp.from(firstFire));
     jdbcTemplate.update(
         insertScheduledOccurrenceCoverageSql,
         TENANT,
         workflowDefinitionId,
+        calendarCode,
         Timestamp.from(scanAt.minusSeconds(1)),
         Timestamp.from(firstFire.minusMillis(1)));
 
@@ -280,15 +849,14 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     descriptor.setScheduleExpression("0 0 9 * * ?");
     descriptor.setTimezone("UTC");
     descriptor.setTriggerMode("SCHEDULED");
-    descriptor.setCalendarCode("e2e_calendar");
+    descriptor.setCalendarCode(calendarCode);
     descriptor.setEnabled(true);
     descriptor.setWorkflowEnabled(true);
 
     ExecutorService executor = Executors.newSingleThreadExecutor();
     try (var coverageLock = jdbcTemplate.getDataSource().getConnection()) {
       coverageLock.setAutoCommit(false);
-      try (var lock = coverageLock.prepareStatement(
-          selectCoverageThroughAtSql)) {
+      try (var lock = coverageLock.prepareStatement(selectCoverageThroughAtSql)) {
         lock.setString(1, TENANT);
         lock.setLong(2, workflowDefinitionId);
         try (var result = lock.executeQuery()) {
@@ -304,12 +872,13 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
       }
       TriggerScheduledOccurrencePlanner planner =
           triggerContext.getBean(TriggerScheduledOccurrencePlanner.class);
+      var plannedFireTimes = QuartzScheduledFireEnumerator.fireTimeSource(cronTrigger);
       Future<Integer> publication =
-          executor.submit(() -> planner.materialize(descriptor, cronTrigger, scanAt));
+          executor.submit(() -> planner.materialize(descriptor, plannedFireTimes, scanAt));
       awaitBlockedBySql(blockerPid, "insert into batch.scheduled_occurrence_coverage");
 
       batchDaySettleScheduler.settle();
-      assertThat(batchDayStatus(bizDate)).isEqualTo("CUTOFF");
+      assertThat(batchDayStatus(calendarCode, bizDate)).isEqualTo("CUTOFF");
       coverageLock.commit();
       assertThat(publication.get(20, TimeUnit.SECONDS)).isPositive();
     } finally {
@@ -320,14 +889,11 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         selectCountSql, Integer.class, TENANT, workflowDefinitionId, Timestamp.from(firstFire));
     assertThat(selectedScheduledOccurrenceCount).isOne();
     batchDaySettleScheduler.settle();
-    assertThat(batchDayStatus(bizDate)).isNotEqualTo("SETTLED");
+    assertThat(batchDayStatus(calendarCode, bizDate)).isNotEqualTo("SETTLED");
     jdbcTemplate.update(
-        updateScheduledOccurrenceSql,
-        TENANT,
-        workflowDefinitionId,
-        Timestamp.from(firstFire));
+        updateScheduledOccurrenceSql, TENANT, workflowDefinitionId, Timestamp.from(firstFire));
     batchDaySettleScheduler.settle();
-    assertThat(batchDayStatus(bizDate)).isEqualTo("SETTLED");
+    assertThat(batchDayStatus(calendarCode, bizDate)).isEqualTo("SETTLED");
   }
 
   @ParameterizedTest(name = "{0}")
@@ -335,34 +901,34 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
   @DisplayName("真实 Trigger API 接纳与同 JVM/独立 Orchestrator 结算按业务日围栏串行化")
   void triggerApiAdmissionRacingBatchDaySettlementShouldConverge(
       SettlementExecutionMode settlementMode) throws Exception {
-        final String selectIdSql = """
+    final String selectIdSql = """
             select id from batch.workflow_definition where tenant_id = ? and id = ? for update
         """;
-        final String selectPgBackendPidSql = """
+    final String selectPgBackendPidSql = """
             select pg_backend_pid()
         """;
-        final String selectDayStatusSql = """
+    final String selectDayStatusSql = """
             select day_status from batch.batch_day_instance where tenant_id = ? and calendar_code = ?\s\
             and biz_date = ? for update\
             """;
 
-        final String insertBusinessCalendarSql = """
+    final String insertBusinessCalendarSql = """
             insert into batch.business_calendar (tenant_id, calendar_code, calendar_name, timezone, cutoff_time,\s\
             enabled) values (?, ?, 'E2E admission fence calendar', 'UTC', '23:59:00', true)\
             """;
-        final String updateWorkflowDefinitionSql = """
+    final String updateWorkflowDefinitionSql = """
             update batch.workflow_definition set calendar_code = ? where tenant_id = ? and id = ?\
             """;
-        final String updateJobDefinitionSql = """
+    final String updateJobDefinitionSql = """
             update batch.job_definition set calendar_code = ? where tenant_id = ? and job_code = ?\
             """;
-        final String deleteTriggerRequestSql = """
+    final String deleteTriggerRequestSql = """
             delete from batch.trigger_request where tenant_id = ? and request_id = ?
         """;
-        final String selectCountSql = """
+    final String selectCountSql = """
             select count(*) from batch.trigger_request where tenant_id = ? and request_id = ?
         """;
-        final String selectCountSql2 = """
+    final String selectCountSql2 = """
             select count(*) from batch.trigger_outbox_event where tenant_id = ? and request_id = ?
         """;
     final String selectPublishStatusSql = """
@@ -374,24 +940,11 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "PROCESS", "unavailable-" + suffix, TriggerType.API);
     String calendarCode = "e2e_admit_" + suffix.substring(0, 12);
-        jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        TENANT,
-        calendarCode);
-        jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        calendarCode,
-        TENANT,
-        seed.workflowDefinitionId());
-        jdbcTemplate.update(
-        updateJobDefinitionSql,
-        calendarCode,
-        TENANT,
-        seed.jobCode());
-        jdbcTemplate.update(
-        deleteTriggerRequestSql,
-        TENANT,
-        seed.requestId());
+    jdbcTemplate.update(insertBusinessCalendarSql, TENANT, calendarCode);
+    jdbcTemplate.update(
+        updateWorkflowDefinitionSql, calendarCode, TENANT, seed.workflowDefinitionId());
+    jdbcTemplate.update(updateJobDefinitionSql, calendarCode, TENANT, seed.jobCode());
+    jdbcTemplate.update(deleteTriggerRequestSql, TENANT, seed.requestId());
 
     LocalDate admissionFirstDate = r11BizDate(1);
     insertCutoffBatchDay(calendarCode, admissionFirstDate);
@@ -399,8 +952,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     ExecutorService executor = Executors.newFixedThreadPool(2);
     try (var workflowLock = jdbcTemplate.getDataSource().getConnection()) {
       workflowLock.setAutoCommit(false);
-      try (var lock = workflowLock.prepareStatement(
-          selectIdSql)) {
+      try (var lock = workflowLock.prepareStatement(selectIdSql)) {
         lock.setString(1, TENANT);
         lock.setLong(2, seed.workflowDefinitionId());
         try (var result = lock.executeQuery()) {
@@ -440,13 +992,11 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
       Integer selectedTriggerOutboxEventCount =
           jdbcTemplate.queryForObject(selectCountSql2, Integer.class, TENANT, admissionRequestId);
       assertThat(selectedTriggerOutboxEventCount).isOne();
-      await()
-          .atMost(Duration.ofSeconds(15))
-          .untilAsserted(() -> {
-            String selectedPublishStatus = jdbcTemplate.queryForObject(
-                selectPublishStatusSql, String.class, TENANT, admissionRequestId);
-            assertThat(selectedPublishStatus).isEqualTo("PUBLISHED");
-          });
+      await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> {
+        String selectedPublishStatus = jdbcTemplate.queryForObject(
+            selectPublishStatusSql, String.class, TENANT, admissionRequestId);
+        assertThat(selectedPublishStatus).isEqualTo("PUBLISHED");
+      });
       assertThat(batchDayStatus(calendarCode, admissionFirstDate)).isNotEqualTo("SETTLED");
     } finally {
       // 刷新句柄状态期间进程退出。
@@ -461,8 +1011,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     ExecutorService settlementFirstExecutor = Executors.newFixedThreadPool(2);
     try (var batchDayLock = jdbcTemplate.getDataSource().getConnection()) {
       batchDayLock.setAutoCommit(false);
-      try (var lock = batchDayLock.prepareStatement(
-          selectDayStatusSql)) {
+      try (var lock = batchDayLock.prepareStatement(selectDayStatusSql)) {
         lock.setString(1, TENANT);
         lock.setString(2, calendarCode);
         lock.setObject(3, settlementFirstDate);
@@ -507,12 +1056,12 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
       assertThat(settlementFirstExecutor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
     }
 
-        Integer selectedTriggerRequestCountRead2 =
-            jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, rejectedRequestId);
-        assertThat(selectedTriggerRequestCountRead2).isZero();
-        Integer selectedTriggerOutboxEventCountRead2 =
-            jdbcTemplate.queryForObject(selectCountSql2, Integer.class, TENANT, rejectedRequestId);
-        assertThat(selectedTriggerOutboxEventCountRead2).isZero();
+    Integer selectedTriggerRequestCountRead2 =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, rejectedRequestId);
+    assertThat(selectedTriggerRequestCountRead2).isZero();
+    Integer selectedTriggerOutboxEventCountRead2 =
+        jdbcTemplate.queryForObject(selectCountSql2, Integer.class, TENANT, rejectedRequestId);
+    assertThat(selectedTriggerOutboxEventCountRead2).isZero();
   }
 
   @ParameterizedTest(name = "{0}")
@@ -520,10 +1069,10 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
   @DisplayName("显式 Workflow RERUN 与同 JVM/独立 Orchestrator 结算按业务日围栏串行化")
   void workflowRerunAdmissionRacingBatchDaySettlementShouldConverge(
       SettlementExecutionMode settlementMode) throws Exception {
-        final String selectIdSql = """
+    final String selectIdSql = """
             select id from batch.workflow_definition where tenant_id = ? and id = ? for update
         """;
-        final String selectDayStatusSql = """
+    final String selectDayStatusSql = """
             select day_status from batch.batch_day_instance where tenant_id = ? and calendar_code = ?\s\
             and biz_date = ? for update\
             """;
@@ -544,20 +1093,10 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "PROCESS", "unavailable-" + suffix, TriggerType.API);
     String calendarCode = "e2e_rerun_admit_" + suffix.substring(0, 12);
-        jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        TENANT,
-        calendarCode);
-        jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        calendarCode,
-        TENANT,
-        seed.workflowDefinitionId());
-        jdbcTemplate.update(
-        updateJobDefinitionSql,
-        calendarCode,
-        TENANT,
-        seed.jobCode());
+    jdbcTemplate.update(insertBusinessCalendarSql, TENANT, calendarCode);
+    jdbcTemplate.update(
+        updateWorkflowDefinitionSql, calendarCode, TENANT, seed.workflowDefinitionId());
+    jdbcTemplate.update(updateJobDefinitionSql, calendarCode, TENANT, seed.jobCode());
 
     LocalDate admissionFirstDate = r11BizDate(9);
     insertCutoffBatchDay(calendarCode, admissionFirstDate);
@@ -566,8 +1105,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     String admissionFirstRequestId = "workflow-rerun-admit-" + suffix;
     try (var workflowLock = jdbcTemplate.getDataSource().getConnection()) {
       workflowLock.setAutoCommit(false);
-      try (var lock = workflowLock.prepareStatement(
-          selectIdSql)) {
+      try (var lock = workflowLock.prepareStatement(selectIdSql)) {
         lock.setString(1, TENANT);
         lock.setLong(2, seed.workflowDefinitionId());
         try (var result = lock.executeQuery()) {
@@ -614,8 +1152,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     String settlementFirstRequestId = "workflow-rerun-settle-first-" + suffix;
     try (var batchDayLock = jdbcTemplate.getDataSource().getConnection()) {
       batchDayLock.setAutoCommit(false);
-      try (var lock = batchDayLock.prepareStatement(
-          selectDayStatusSql)) {
+      try (var lock = batchDayLock.prepareStatement(selectDayStatusSql)) {
         lock.setString(1, TENANT);
         lock.setString(2, calendarCode);
         lock.setObject(3, settlementFirstDate);
@@ -670,10 +1207,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         """;
 
     await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> {
-      Map<String, Object> request = jdbcTemplate.queryForMap(
-          selectTriggerTypeSql,
-          TENANT,
-          requestId);
+      Map<String, Object> request =
+          jdbcTemplate.queryForMap(selectTriggerTypeSql, TENANT, requestId);
       assertThat(request.get("trigger_type")).isEqualTo("RERUN");
       assertThat(request.get("request_status")).isEqualTo("LAUNCHED");
       assertThat(request.get("biz_date").toString()).isEqualTo(bizDate.toString());
@@ -688,39 +1223,39 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
   @DisplayName("Console MANUAL Workflow 接纳与同 JVM/独立 Orchestrator 结算按业务日围栏串行化")
   void consoleManualAdmissionRacingBatchDaySettlementShouldConverge(
       SettlementExecutionMode settlementMode) throws Exception {
-        final String selectIdSql = """
+    final String selectIdSql = """
             select id from batch.workflow_definition where tenant_id = ? and id = ? for update
         """;
-        final String selectDayStatusSql = """
+    final String selectDayStatusSql = """
             select day_status from batch.batch_day_instance where tenant_id = ? and calendar_code = ?\s\
             and biz_date = ? for update\
             """;
 
-        final String insertBusinessCalendarSql = """
+    final String insertBusinessCalendarSql = """
             insert into batch.business_calendar (tenant_id, calendar_code, calendar_name, timezone, cutoff_time,\s\
             enabled) values (?, ?, 'E2E Console admission fence calendar', 'UTC', '23:59:00', true)\
             """;
-        final String updateWorkflowDefinitionSql = """
+    final String updateWorkflowDefinitionSql = """
             update batch.workflow_definition set calendar_code = ? where tenant_id = ? and id = ?\
             """;
-        final String updateJobDefinitionSql = """
+    final String updateJobDefinitionSql = """
             update batch.job_definition set calendar_code = ? where tenant_id = ? and job_code = ?\
             """;
-        final String selectCountSql = """
+    final String selectCountSql = """
             select count(*) from batch.trigger_request where tenant_id = ? and workflow_definition_id = ?\s\
             and trigger_type = 'MANUAL' and biz_date = ?\
             """;
-        final String selectCountSql2 = """
+    final String selectCountSql2 = """
             select count(*) from batch.trigger_outbox_event o\s\
             join batch.trigger_request r on r.tenant_id = o.tenant_id and r.request_id = o.request_id\s\
             where r.tenant_id = ? and r.workflow_definition_id = ? and r.trigger_type = 'MANUAL'\s\
             and r.biz_date = ?\
             """;
-        final String selectCountSql3 = """
+    final String selectCountSql3 = """
             select count(*) from batch.trigger_request where tenant_id = ? and workflow_definition_id = ?\s\
             and trigger_type = 'MANUAL' and biz_date = ?\
             """;
-        final String selectCountSql4 = """
+    final String selectCountSql4 = """
             select count(*) from batch.trigger_outbox_event o\s\
             join batch.trigger_request r on r.tenant_id = o.tenant_id and r.request_id = o.request_id\s\
             where r.tenant_id = ? and r.workflow_definition_id = ? and r.trigger_type = 'MANUAL'\s\
@@ -732,20 +1267,10 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "PROCESS", "unavailable-" + suffix, TriggerType.API);
     String calendarCode = "e2e_console_admit_" + suffix.substring(0, 12);
-        jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        TENANT,
-        calendarCode);
-        jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        calendarCode,
-        TENANT,
-        seed.workflowDefinitionId());
-        jdbcTemplate.update(
-        updateJobDefinitionSql,
-        calendarCode,
-        TENANT,
-        seed.jobCode());
+    jdbcTemplate.update(insertBusinessCalendarSql, TENANT, calendarCode);
+    jdbcTemplate.update(
+        updateWorkflowDefinitionSql, calendarCode, TENANT, seed.workflowDefinitionId());
+    jdbcTemplate.update(updateJobDefinitionSql, calendarCode, TENANT, seed.jobCode());
 
     LocalDate admissionFirstDate = r11BizDate(5);
     insertCutoffBatchDay(calendarCode, admissionFirstDate);
@@ -754,8 +1279,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     ExecutorService executor = Executors.newFixedThreadPool(2);
     try (var workflowLock = jdbcTemplate.getDataSource().getConnection()) {
       workflowLock.setAutoCommit(false);
-      try (var lock = workflowLock.prepareStatement(
-          selectIdSql)) {
+      try (var lock = workflowLock.prepareStatement(selectIdSql)) {
         lock.setString(1, TENANT);
         lock.setLong(2, seed.workflowDefinitionId());
         try (var result = lock.executeQuery()) {
@@ -803,8 +1327,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     ExecutorService settlementFirstExecutor = Executors.newFixedThreadPool(2);
     try (var batchDayLock = jdbcTemplate.getDataSource().getConnection()) {
       batchDayLock.setAutoCommit(false);
-      try (var lock = batchDayLock.prepareStatement(
-          selectDayStatusSql)) {
+      try (var lock = batchDayLock.prepareStatement(selectDayStatusSql)) {
         lock.setString(1, TENANT);
         lock.setString(2, calendarCode);
         lock.setObject(3, settlementFirstDate);
@@ -844,12 +1367,12 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
       assertThat(settlementFirstExecutor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
     }
 
-        Integer selectedTriggerRequestCountRead2 = jdbcTemplate.queryForObject(
-            selectCountSql3, Integer.class, TENANT, seed.workflowDefinitionId(), settlementFirstDate);
-        assertThat(selectedTriggerRequestCountRead2).isZero();
-        Integer selectedTriggerOutboxEventCountRead2 = jdbcTemplate.queryForObject(
-            selectCountSql4, Integer.class, TENANT, seed.workflowDefinitionId(), settlementFirstDate);
-        assertThat(selectedTriggerOutboxEventCountRead2).isZero();
+    Integer selectedTriggerRequestCountRead2 = jdbcTemplate.queryForObject(
+        selectCountSql3, Integer.class, TENANT, seed.workflowDefinitionId(), settlementFirstDate);
+    assertThat(selectedTriggerRequestCountRead2).isZero();
+    Integer selectedTriggerOutboxEventCountRead2 = jdbcTemplate.queryForObject(
+        selectCountSql4, Integer.class, TENANT, seed.workflowDefinitionId(), settlementFirstDate);
+    assertThat(selectedTriggerOutboxEventCountRead2).isZero();
   }
 
   private SettlementExecution startSettlement(
@@ -859,10 +1382,10 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
       String calendarCode,
       List<SettlementExecution> executions)
       throws Exception {
-        final String updateBusinessCalendarSql = """
+    final String updateBusinessCalendarSql = """
             update batch.business_calendar set enabled = false where tenant_id = ? and calendar_code = ?\
             """;
-        final String updateBusinessCalendarSql2 = """
+    final String updateBusinessCalendarSql2 = """
             update batch.business_calendar set enabled = true where tenant_id = ? and calendar_code = ?
         """;
 
@@ -901,11 +1424,11 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
             applicationName + ".log")
         .normalize();
     Files.createDirectories(logPath.getParent());
-        int affectedBusinessCalendarRows =
-            jdbcTemplate.update(updateBusinessCalendarSql, TENANT, calendarCode);
-        assertThat(affectedBusinessCalendarRows)
-            .as("disable only the test calendar while the child application starts")
-            .isOne();
+    int affectedBusinessCalendarRows =
+        jdbcTemplate.update(updateBusinessCalendarSql, TENANT, calendarCode);
+    assertThat(affectedBusinessCalendarRows)
+        .as("disable only the test calendar while the child application starts")
+        .isOne();
     try {
       writeSettlementProcessConfig(configPath, applicationName, readyPath, releasePath);
       String classpath =
@@ -934,10 +1457,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
       awaitSettlementReady(execution);
       return execution;
     } catch (Exception exception) {
-      jdbcTemplate.update(
-          updateBusinessCalendarSql2,
-          TENANT,
-          calendarCode);
+      jdbcTemplate.update(updateBusinessCalendarSql2, TENANT, calendarCode);
       Files.deleteIfExists(configPath);
       Files.deleteIfExists(readyPath);
       Files.deleteIfExists(releasePath);
@@ -1019,7 +1539,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
 
   private int settlementBackendPid(SettlementExecution execution, int blockerPid) {
     String applicationName = execution.applicationName();
-    final String selectPidSql = """
+    final String selectPidSql =
+        """
         select pid from pg_stat_activity where ? = any(pg_blocking_pids(pid)) and wait_event_type = 'Lock'\s\
         and lower(query) like '%%update batch.batch_day_instance%%'%s\
         """.formatted((applicationName == null ? " limit 1" : " and application_name = ? limit 1"));
@@ -1052,7 +1573,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(60))
         .pollInterval(Duration.ofMillis(100))
         .untilAsserted(() -> {
-          final String selectCountSql = """
+          final String selectCountSql =
+              """
               select count(*) from pg_stat_activity where application_name = ? and wait_event_type = 'Lock'\s\
               and lower(query) like '%%' || lower(?) || '%%'%s\
               """.formatted((blockerPid == null ? "" : " and ? = any(pg_blocking_pids(pid))"));
@@ -1062,8 +1584,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
               blockerPid == null
                   ? new Object[] {execution.applicationName(), sqlFragment}
                   : new Object[] {execution.applicationName(), sqlFragment, blockerPid});
-          List<Map<String, Object>> activity = jdbcTemplate.queryForList(
-              selectPidSql);
+          List<Map<String, Object>> activity = jdbcTemplate.queryForList(selectPidSql);
           assertThat(blocked)
               .as(
                   "settlement process should wait on %s; PostgreSQL activity: %s",
@@ -1104,10 +1625,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         Files.deleteIfExists(execution.configPath());
       }
       if (execution.calendarCode() != null) {
-        jdbcTemplate.update(
-            updateBusinessCalendarSql,
-            TENANT,
-            execution.calendarCode());
+        jdbcTemplate.update(updateBusinessCalendarSql, TENANT, execution.calendarCode());
       }
       if (execution.readyPath() != null) {
         Files.deleteIfExists(execution.readyPath());
@@ -1124,51 +1642,51 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
   @DisplayName("真实外部事件 API 接纳与同 JVM/独立 Orchestrator 结算按业务日围栏串行化")
   void externalEventApiAdmissionRacingBatchDaySettlementShouldConverge(
       SettlementExecutionMode settlementMode) throws Exception {
-        final String selectAcquireBatchDaySettlementFenceSql = """
+    final String selectAcquireBatchDaySettlementFenceSql = """
             select batch.acquire_batch_day_settlement_fence(?, ?, ?)
         """;
-        final String selectDayStatusSql = """
+    final String selectDayStatusSql = """
             select day_status from batch.batch_day_instance where tenant_id = ? and calendar_code = ?\s\
             and biz_date = ? for update\
             """;
 
-        final String insertBusinessCalendarSql = """
+    final String insertBusinessCalendarSql = """
             insert into batch.business_calendar (tenant_id, calendar_code, calendar_name, timezone, cutoff_time,\s\
             enabled) values (?, ?, 'E2E event admission fence calendar', 'UTC', '23:59:00', true)\
             """;
-        final String insertWorkflowDefinitionSql = """
+    final String insertWorkflowDefinitionSql = """
             insert into batch.workflow_definition (tenant_id, workflow_code, workflow_name, workflow_type,\s\
             version, enabled, calendar_code, trigger_mode) values (?, ?, ?, 'DAG', 1, true, ?, 'EVENT')\s\
             returning id\
             """;
-        final String insertExternalEventExpectationDefinitionSql = """
+    final String insertExternalEventExpectationDefinitionSql = """
             insert into batch.external_event_expectation_definition (tenant_id, calendar_code,\s\
             workflow_definition_id, event_code, expected_local_time, enabled) values (?, ?, ?, ?, '09:30', true)\
             """;
-        final String insertApiKeySql = """
+    final String insertApiKeySql = """
             insert into batch.api_key (tenant_id, key_name, key_prefix, key_hash, salt, key_hash_algo, scopes,\s\
             enabled) values (?, ?, ?, ?, ?, ?, ?, true) returning id\
             """;
-        final String insertExpectedWorkOccurrenceSql = """
+    final String insertExpectedWorkOccurrenceSql = """
             insert into batch.expected_work_occurrence (tenant_id, calendar_code, biz_date,\s\
             workflow_definition_id, source_type, source_key, occurrence_status)\s\
             values (?, ?, ?, ?, 'EXTERNAL_EVENT', ?, 'EXPECTED')\
             """;
-        final String selectCountSql = """
+    final String selectCountSql = """
             select count(*) from batch.external_event_delivery where tenant_id = ? and event_source = ?\s\
             and event_id = ? and biz_date = ?\
             """;
-        final String selectCountSql2 = """
+    final String selectCountSql2 = """
             select count(*) from batch.expected_work_occurrence where tenant_id = ? and calendar_code = ?\s\
             and biz_date = ? and workflow_definition_id = ? and source_type = 'EXTERNAL_EVENT'\s\
             and source_key = ? and occurrence_status in ('EXPECTED', 'ARRIVED')\
             """;
-        final String insertExpectedWorkOccurrenceSql2 = """
+    final String insertExpectedWorkOccurrenceSql2 = """
             insert into batch.expected_work_occurrence (tenant_id, calendar_code, biz_date,\s\
             workflow_definition_id, source_type, source_key, occurrence_status)\s\
             values (?, ?, ?, ?, 'EXTERNAL_EVENT', ?, 'CANCELLED')\
             """;
-        final String selectCountSql3 = """
+    final String selectCountSql3 = """
             select count(*) from batch.external_event_delivery where tenant_id = ? and event_source = ?\s\
             and event_id = ?\
             """;
@@ -1182,10 +1700,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     String eventCode = "E2E_EVENT_FENCE_" + suffix;
     String source = "billing-fence-" + suffix;
     String rawApiKey = "bk_" + suffix;
-        jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        TENANT,
-        calendarCode);
+    jdbcTemplate.update(insertBusinessCalendarSql, TENANT, calendarCode);
     Long workflowDefinitionId = jdbcTemplate.queryForObject(
         insertWorkflowDefinitionSql,
         Long.class,
@@ -1193,7 +1708,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         "event-fence-" + suffix,
         "Event fence " + suffix,
         calendarCode);
-        jdbcTemplate.update(
+    jdbcTemplate.update(
         insertExternalEventExpectationDefinitionSql,
         TENANT,
         calendarCode,
@@ -1225,8 +1740,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
       ExecutorService admissionFirstExecutor = Executors.newFixedThreadPool(2);
       try (var fence = jdbcTemplate.getDataSource().getConnection()) {
         fence.setAutoCommit(false);
-        try (var acquire =
-            fence.prepareStatement(selectAcquireBatchDaySettlementFenceSql)) {
+        try (var acquire = fence.prepareStatement(selectAcquireBatchDaySettlementFenceSql)) {
           acquire.setString(1, TENANT);
           acquire.setString(2, calendarCode);
           acquire.setObject(3, admissionFirstDate);
@@ -1288,8 +1802,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
       ExecutorService settlementFirstExecutor = Executors.newFixedThreadPool(2);
       try (var batchDayLock = jdbcTemplate.getDataSource().getConnection()) {
         batchDayLock.setAutoCommit(false);
-        try (var lock = batchDayLock.prepareStatement(
-            selectDayStatusSql)) {
+        try (var lock = batchDayLock.prepareStatement(selectDayStatusSql)) {
           lock.setString(1, TENANT);
           lock.setString(2, calendarCode);
           lock.setObject(3, settlementFirstDate);
@@ -1324,8 +1837,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         assertThat(response.statusCode())
             .as("late external event admission response: %s", response.body())
             .isEqualTo(409);
-        Integer selectedExternalEventDeliveryCountRead2 =
-            jdbcTemplate.queryForObject(selectCountSql3, Integer.class, TENANT, source, lateEventId);
+        Integer selectedExternalEventDeliveryCountRead2 = jdbcTemplate.queryForObject(
+            selectCountSql3, Integer.class, TENANT, source, lateEventId);
         assertThat(selectedExternalEventDeliveryCountRead2).isZero();
       } finally {
         settlementFirstExecutor.shutdownNow();
@@ -1343,36 +1856,36 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
   @DisplayName("计划触发先接纳时结算等待同一业务日围栏并保留 occurrence")
   void scheduledAdmissionBeforeSettlement_keepsOccurrenceBlocking(ScheduledAdmissionEntry entry)
       throws Exception {
-        final String selectIdSql = """
+    final String selectIdSql = """
             select id from batch.workflow_definition where tenant_id = ? and id = ? for update
         """;
 
-        final String insertBusinessCalendarSql = """
+    final String insertBusinessCalendarSql = """
             insert into batch.business_calendar (tenant_id, calendar_code, calendar_name, timezone, cutoff_time,\s\
             enabled) values (?, ?, 'E2E scheduled admission calendar', 'UTC', '00:00:00', true)\
             """;
-        final String updateWorkflowDefinitionSql = """
+    final String updateWorkflowDefinitionSql = """
             update batch.workflow_definition\s\
             set calendar_code = ?, schedule_type = 'CRON', schedule_expr = '0 0 12 * * ?', timezone = 'UTC',\s\
             trigger_mode = 'SCHEDULED', schedule_enabled = true where tenant_id = ? and id = ?\
             """;
-        final String updateJobDefinitionSql = """
+    final String updateJobDefinitionSql = """
             update batch.job_definition set calendar_code = ? where tenant_id = ? and job_code = ?
         """;
-        final String deleteTriggerRequestSql = """
+    final String deleteTriggerRequestSql = """
             delete from batch.trigger_request where tenant_id = ? and request_id = ?
         """;
-        final String selectRequestIdSql = """
+    final String selectRequestIdSql = """
             select request_id from batch.scheduled_occurrence where tenant_id = ? and workflow_definition_id = ?\s\
             and scheduled_fire_time = ?\
             """;
-        final String selectPublishStatusSql = """
+    final String selectPublishStatusSql = """
             select publish_status from batch.trigger_outbox_event where tenant_id = ? and request_id = ?\
             """;
-        final String selectCountSql = """
+    final String selectCountSql = """
             select count(*) from batch.trigger_request where tenant_id = ? and request_id = ?
         """;
-        final String selectCountSql2 = """
+    final String selectCountSql2 = """
             select count(*) from batch.trigger_outbox_event where tenant_id = ? and request_id = ?
         """;
 
@@ -1381,24 +1894,11 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "PROCESS", "scheduled-admission-" + suffix, TriggerType.API);
     String calendarCode = "e2e_sched_admit_" + suffix.substring(0, 12);
-        jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        TENANT,
-        calendarCode);
-        jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        calendarCode,
-        TENANT,
-        seed.workflowDefinitionId());
-        jdbcTemplate.update(
-        updateJobDefinitionSql,
-        calendarCode,
-        TENANT,
-        seed.jobCode());
-        jdbcTemplate.update(
-        deleteTriggerRequestSql,
-        TENANT,
-        seed.requestId());
+    jdbcTemplate.update(insertBusinessCalendarSql, TENANT, calendarCode);
+    jdbcTemplate.update(
+        updateWorkflowDefinitionSql, calendarCode, TENANT, seed.workflowDefinitionId());
+    jdbcTemplate.update(updateJobDefinitionSql, calendarCode, TENANT, seed.jobCode());
+    jdbcTemplate.update(deleteTriggerRequestSql, TENANT, seed.requestId());
 
     LocalDate bizDate = BIZ_DATE.plusDays(10);
     Instant fireTime = bizDate.atTime(12, 0).toInstant(ZoneOffset.UTC);
@@ -1408,8 +1908,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     ExecutorService executor = Executors.newFixedThreadPool(2);
     try (var workflowLock = jdbcTemplate.getDataSource().getConnection()) {
       workflowLock.setAutoCommit(false);
-      try (var lock = workflowLock.prepareStatement(
-          selectIdSql)) {
+      try (var lock = workflowLock.prepareStatement(selectIdSql)) {
         lock.setString(1, TENANT);
         lock.setLong(2, seed.workflowDefinitionId());
         try (var result = lock.executeQuery()) {
@@ -1464,26 +1963,24 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
       assertThat(requestId).isNotBlank();
     }
     String acceptedRequestId = requestId;
-    await()
-        .atMost(Duration.ofSeconds(15))
-        .untilAsserted(() -> {
-          String selectedPublishStatus = jdbcTemplate.queryForObject(
-              selectPublishStatusSql, String.class, TENANT, acceptedRequestId);
-          assertThat(selectedPublishStatus).isEqualTo("PUBLISHED");
-        });
+    await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> {
+      String selectedPublishStatus = jdbcTemplate.queryForObject(
+          selectPublishStatusSql, String.class, TENANT, acceptedRequestId);
+      assertThat(selectedPublishStatus).isEqualTo("PUBLISHED");
+    });
     assertThat(scheduledOccurrenceStatus(seed.workflowDefinitionId(), fireTime))
         .isEqualTo("REQUESTED");
     assertThat(batchDayStatus(calendarCode, bizDate)).isNotEqualTo("SETTLED");
-        Integer selectedTriggerRequestCount =
-            jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, acceptedRequestId);
-        assertThat(selectedTriggerRequestCount).isOne();
-        Integer selectedTriggerOutboxEventCount =
-            jdbcTemplate.queryForObject(selectCountSql2, Integer.class, TENANT, acceptedRequestId);
-        assertThat(selectedTriggerOutboxEventCount).isOne();
+    Integer selectedTriggerRequestCount =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, acceptedRequestId);
+    assertThat(selectedTriggerRequestCount).isOne();
+    Integer selectedTriggerOutboxEventCount =
+        jdbcTemplate.queryForObject(selectCountSql2, Integer.class, TENANT, acceptedRequestId);
+    assertThat(selectedTriggerOutboxEventCount).isOne();
   }
 
   @Test
-  @DisplayName("结算先提交后真实 Quartz callback 不复活已跳过的 occurrence")
+  @DisplayName("结算持有围栏时真实 Quartz callback 不复活已跳过的 occurrence")
   void settlementFirstScheduledQuartzCallback_doesNotReviveSkippedOccurrence() throws Exception {
     final String selectDayStatusSql = """
         select day_status from batch.batch_day_instance where tenant_id = ? and calendar_code = ?\s\
@@ -1515,10 +2012,6 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         last_success_at) values (?, ?, batch.current_tenant_configuration_revision(?), 1, ?, current_timestamp -\s\
         interval '1 year', current_timestamp, current_timestamp)\
         """;
-    final String selectPidSql = """
-        select pid from pg_stat_activity where ? = any(pg_blocking_pids(pid))\s\
-        and lower(query) like '%%update batch.batch_day_instance%%' limit 1\
-        """;
     final String selectRequestIdSql = """
         select request_id from batch.scheduled_occurrence where tenant_id = ? and workflow_definition_id = ?\s\
         and scheduled_fire_time = ?\
@@ -1538,24 +2031,11 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "PROCESS", "settlement-first-scheduled-" + suffix, TriggerType.API);
     String calendarCode = "e2e_sched_settle_first_" + suffix.substring(0, 12);
+    jdbcTemplate.update(insertBusinessCalendarSql, TENANT, calendarCode);
     jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        TENANT,
-        calendarCode);
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        calendarCode,
-        TENANT,
-        seed.workflowDefinitionId());
-    jdbcTemplate.update(
-        updateJobDefinitionSql,
-        calendarCode,
-        TENANT,
-        seed.jobCode());
-    jdbcTemplate.update(
-        deleteTriggerRequestSql,
-        TENANT,
-        seed.requestId());
+        updateWorkflowDefinitionSql, calendarCode, TENANT, seed.workflowDefinitionId());
+    jdbcTemplate.update(updateJobDefinitionSql, calendarCode, TENANT, seed.jobCode());
+    jdbcTemplate.update(deleteTriggerRequestSql, TENANT, seed.requestId());
 
     LocalDate bizDate = BIZ_DATE.plusDays(11);
     Instant fireTime = bizDate.atTime(12, 0).toInstant(ZoneOffset.UTC);
@@ -1572,11 +2052,32 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         seed.workflowDefinitionId(),
         TENANT,
         calendarCode);
+    String callbackIdentity = "settlement-first-scheduled-" + suffix;
+    CompletableFuture<Void> callbackCompleted = new CompletableFuture<>();
+    Scheduler scheduler = triggerContext.getBean(Scheduler.class);
+    JobListenerSupport listener = new JobListenerSupport() {
+      @Override
+      public String getName() {
+        return callbackIdentity;
+      }
+
+      @Override
+      public void jobWasExecuted(JobExecutionContext context, JobExecutionException jobException) {
+        if (jobException == null) {
+          callbackCompleted.complete(null);
+        } else {
+          callbackCompleted.completeExceptionally(jobException);
+        }
+      }
+    };
+    scheduler
+        .getListenerManager()
+        .addJobListener(
+            listener, KeyMatcher.keyEquals(JobKey.jobKey(callbackIdentity, "workflow-daily-e2e")));
     ExecutorService executor = Executors.newSingleThreadExecutor();
     try (var batchDayLock = jdbcTemplate.getDataSource().getConnection()) {
       batchDayLock.setAutoCommit(false);
-      try (var lock = batchDayLock.prepareStatement(
-          selectDayStatusSql)) {
+      try (var lock = batchDayLock.prepareStatement(selectDayStatusSql)) {
         lock.setString(1, TENANT);
         lock.setString(2, calendarCode);
         lock.setObject(3, bizDate);
@@ -1588,23 +2089,14 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
       int batchDayLockPid = connectionPid(batchDayLock);
       Future<?> settlement = executor.submit(batchDaySettleScheduler::settle);
       awaitBlockedBySql(batchDayLockPid, "update batch.batch_day_instance");
-      Integer settlementPid = jdbcTemplate.queryForObject(
-          selectPidSql,
-          Integer.class, batchDayLockPid);
-      assertThat(settlementPid).isNotNull();
-
       fireScheduledOccurrenceThroughQuartz(
-          seed,
-          fireTime,
-          "settlement-first-scheduled-" + suffix,
-          calendarCode,
-          "UTC",
-          "0 0 12 * * ?");
-      awaitBlockedBySql(settlementPid, "batch.acquire_batch_day_settlement_fence");
+          seed, fireTime, callbackIdentity, calendarCode, "UTC", "0 0 12 * * ?");
+      callbackCompleted.get(20, TimeUnit.SECONDS);
       batchDayLock.commit();
 
       settlement.get(20, TimeUnit.SECONDS);
     } finally {
+      scheduler.getListenerManager().removeJobListener(listener.getName());
       executor.shutdownNow();
       assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
     }
@@ -1637,60 +2129,59 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
 
   @Test
   @DisplayName("计划覆盖发布遇到配置版本变化时回滚,结算等待新版本覆盖")
-  void shouldConvergeCoverage_whenConfigurationAndSettlementRace()
-      throws Exception {
-        final String selectScheduledFireTimeSql = """
+  void shouldConvergeCoverage_whenConfigurationAndSettlementRace() throws Exception {
+    final String selectScheduledFireTimeSql = """
             select scheduled_fire_time from batch.scheduled_occurrence where tenant_id = ?\s\
             and workflow_definition_id = ? and scheduled_fire_time = ? for update\
             """;
-        final String selectPgBackendPidSql = """
+    final String selectPgBackendPidSql = """
             select pg_backend_pid()
         """;
 
-        final String insertBusinessCalendarSql = """
+    final String insertBusinessCalendarSql = """
             insert into batch.business_calendar (tenant_id, calendar_code, calendar_name, timezone, enabled)\s\
             values (?, ?, 'E2E coverage revision calendar', 'UTC', true)\s\
             on conflict (tenant_id, calendar_code) do update set enabled = true\
             """;
-        final String insertWorkflowDefinitionSql = """
+    final String insertWorkflowDefinitionSql = """
             insert into batch.workflow_definition (tenant_id, workflow_code, workflow_name, workflow_type,\s\
             version, enabled, schedule_type, schedule_expr, timezone, trigger_mode, calendar_code,\s\
             schedule_enabled) values (?, ?, 'E2E coverage revision race workflow', 'DAG', 1, true, 'CRON',\s\
             '0 0 9 * * ?', 'UTC', 'SCHEDULED', ?, true) returning id\
             """;
-        final String selectCurrentTenantConfigurationRevisionSql = """
+    final String selectCurrentTenantConfigurationRevisionSql = """
             select batch.current_tenant_configuration_revision(?)
         """;
-        final String insertBatchDayInstanceSql = """
+    final String insertBatchDayInstanceSql = """
             insert into batch.batch_day_instance (tenant_id, calendar_code, biz_date, day_status, open_at,\s\
             cutoff_at) values (?, ?, ?, 'CUTOFF', current_timestamp, ?)\s\
             on conflict (tenant_id, calendar_code, biz_date) do update\s\
             set day_status = 'CUTOFF', cutoff_at = excluded.cutoff_at\
             """;
-        final String insertScheduledOccurrenceCoverageSql = """
+    final String insertScheduledOccurrenceCoverageSql = """
             insert into batch.scheduled_occurrence_coverage (tenant_id, workflow_definition_id,\s\
             configuration_revision, schedule_version, calendar_code, coverage_from_at, coverage_through_at,\s\
             last_success_at) values (?, ?, ?, 1, ?, ?, ?, current_timestamp)\
             """;
-        final String insertScheduledOccurrenceSql = """
+    final String insertScheduledOccurrenceSql = """
             insert into batch.scheduled_occurrence (tenant_id, workflow_definition_id, workflow_code,\s\
             schedule_version, calendar_code, scheduled_fire_time, biz_date, occurrence_status)\s\
             values (?, ?, ?, 1, ?, ?, ?, 'PLANNED')\
             """;
-        final String updateWorkflowDefinitionSql = """
+    final String updateWorkflowDefinitionSql = """
             update batch.workflow_definition\s\
             set version = 2, schedule_expr = '0 30 9 * * ?', updated_at = current_timestamp where tenant_id = ?\s\
             and id = ?\
             """;
-        final String selectCountSql = """
+    final String selectCountSql = """
             select count(*) from batch.scheduled_occurrence where tenant_id = ? and workflow_definition_id = ?\s\
             and biz_date = ?\
             """;
-        final String selectOccurrenceStatusSql = """
+    final String selectOccurrenceStatusSql = """
             select occurrence_status from batch.scheduled_occurrence where tenant_id = ?\s\
             and workflow_definition_id = ? and scheduled_fire_time = ?\
             """;
-        final String selectCountSql2 = """
+    final String selectCountSql2 = """
             select count(*) from batch.scheduled_occurrence where tenant_id = ? and workflow_definition_id = ?\s\
             and schedule_version = 2 and biz_date = ? and occurrence_status = 'PLANNED'\
             """;
@@ -1704,16 +2195,9 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     String workflowCode =
         "E2E_COVERAGE_REVISION_RACE_" + UUID.randomUUID().toString().replace("-", "");
     String calendarCode = "e2e_cov_rev_" + UUID.randomUUID().toString().replace("-", "");
-        jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        TENANT,
-        calendarCode);
+    jdbcTemplate.update(insertBusinessCalendarSql, TENANT, calendarCode);
     Long workflowDefinitionId = jdbcTemplate.queryForObject(
-        insertWorkflowDefinitionSql,
-        Long.class,
-        TENANT,
-        workflowCode,
-        calendarCode);
+        insertWorkflowDefinitionSql, Long.class, TENANT, workflowCode, calendarCode);
     long initialRevision = jdbcTemplate.queryForObject(
         selectCurrentTenantConfigurationRevisionSql, Long.class, TENANT);
     Instant scanAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
@@ -1726,13 +2210,13 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     Instant firstFire = initialTrigger.getFireTimeAfter(Date.from(scanAt)).toInstant();
     Instant nextFire = initialTrigger.getFireTimeAfter(Date.from(firstFire)).toInstant();
     LocalDate bizDate = firstFire.atZone(ZoneOffset.UTC).toLocalDate();
-        jdbcTemplate.update(
+    jdbcTemplate.update(
         insertBatchDayInstanceSql,
         TENANT,
         calendarCode,
         bizDate,
         Timestamp.from(firstFire.plusSeconds(3600)));
-        jdbcTemplate.update(
+    jdbcTemplate.update(
         insertScheduledOccurrenceCoverageSql,
         TENANT,
         workflowDefinitionId,
@@ -1740,7 +2224,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         calendarCode,
         Timestamp.from(scanAt.minusMillis(1)),
         Timestamp.from(firstFire.minusMillis(1)));
-        jdbcTemplate.update(
+    jdbcTemplate.update(
         insertScheduledOccurrenceSql,
         TENANT,
         workflowDefinitionId,
@@ -1765,8 +2249,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     ExecutorService executor = Executors.newSingleThreadExecutor();
     try (var occurrenceLock = jdbcTemplate.getDataSource().getConnection()) {
       occurrenceLock.setAutoCommit(false);
-      try (var lock = occurrenceLock.prepareStatement(
-          selectScheduledFireTimeSql)) {
+      try (var lock = occurrenceLock.prepareStatement(selectScheduledFireTimeSql)) {
         lock.setString(1, TENANT);
         lock.setLong(2, workflowDefinitionId);
         lock.setTimestamp(3, Timestamp.from(nextFire));
@@ -1784,14 +2267,12 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
 
       TriggerScheduledOccurrencePlanner planner =
           triggerContext.getBean(TriggerScheduledOccurrencePlanner.class);
+      var initialFireTimes = QuartzScheduledFireEnumerator.fireTimeSource(initialTrigger);
       Future<Integer> stalePublication =
-          executor.submit(() -> planner.materialize(staleDescriptor, initialTrigger, scanAt));
+          executor.submit(() -> planner.materialize(staleDescriptor, initialFireTimes, scanAt));
       awaitBlockedBySql(blockerPid, "insert into batch.scheduled_occurrence");
 
-      jdbcTemplate.update(
-          updateWorkflowDefinitionSql,
-          TENANT,
-          workflowDefinitionId);
+      jdbcTemplate.update(updateWorkflowDefinitionSql, TENANT, workflowDefinitionId);
       Long selectedCurrentTenantConfigurationRevision = jdbcTemplate.queryForObject(
           selectCurrentTenantConfigurationRevisionSql, Long.class, TENANT);
       assertThat(selectedCurrentTenantConfigurationRevision).isGreaterThan(initialRevision);
@@ -1807,16 +2288,16 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
       executor.shutdownNow();
     }
 
-        Integer selectedScheduledOccurrenceCount = jdbcTemplate.queryForObject(
-            selectCountSql, Integer.class, TENANT, workflowDefinitionId, bizDate);
-        assertThat(selectedScheduledOccurrenceCount).isZero();
-        String selectedOccurrenceStatus = jdbcTemplate.queryForObject(
-            selectOccurrenceStatusSql,
-            String.class,
-            TENANT,
-            workflowDefinitionId,
-            Timestamp.from(nextFire));
-        assertThat(selectedOccurrenceStatus).isEqualTo("PLANNED");
+    Integer selectedScheduledOccurrenceCount = jdbcTemplate.queryForObject(
+        selectCountSql, Integer.class, TENANT, workflowDefinitionId, bizDate);
+    assertThat(selectedScheduledOccurrenceCount).isZero();
+    String selectedOccurrenceStatus = jdbcTemplate.queryForObject(
+        selectOccurrenceStatusSql,
+        String.class,
+        TENANT,
+        workflowDefinitionId,
+        Timestamp.from(nextFire));
+    assertThat(selectedOccurrenceStatus).isEqualTo("PLANNED");
     assertThat(batchDayStatus(calendarCode, bizDate)).isEqualTo("CUTOFF");
 
     Instant currentScanAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
@@ -1838,21 +2319,18 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     currentDescriptor.setCalendarCode(calendarCode);
     currentDescriptor.setEnabled(true);
     currentDescriptor.setWorkflowEnabled(true);
+    var currentFireTimes = QuartzScheduledFireEnumerator.fireTimeSource(currentTrigger);
     assertThat(triggerContext
             .getBean(TriggerScheduledOccurrencePlanner.class)
-            .materialize(currentDescriptor, currentTrigger, currentScanAt))
+            .materialize(currentDescriptor, currentFireTimes, currentScanAt))
         .isPositive();
-        Integer selectedScheduledOccurrenceCountRead2 = jdbcTemplate.queryForObject(
-            selectCountSql2, Integer.class, TENANT, workflowDefinitionId, bizDate);
-        assertThat(selectedScheduledOccurrenceCountRead2).isEqualTo(1);
+    Integer selectedScheduledOccurrenceCountRead2 = jdbcTemplate.queryForObject(
+        selectCountSql2, Integer.class, TENANT, workflowDefinitionId, bizDate);
+    assertThat(selectedScheduledOccurrenceCountRead2).isEqualTo(1);
     batchDaySettleScheduler.settle();
     assertThat(batchDayStatus(calendarCode, bizDate)).isEqualTo("CUTOFF");
 
-        jdbcTemplate.update(
-        updateScheduledOccurrenceSql,
-        TENANT,
-        workflowDefinitionId,
-        bizDate);
+    jdbcTemplate.update(updateScheduledOccurrenceSql, TENANT, workflowDefinitionId, bizDate);
     batchDaySettleScheduler.settle();
     assertThat(batchDayStatus(calendarCode, bizDate)).isEqualTo("SETTLED");
   }
@@ -1893,16 +2371,9 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     startTriggerHttpServer();
     String calendarCode = "dst_settlement_" + UUID.randomUUID().toString().replace("-", "");
     String workflowCode = "E2E_DST_SETTLEMENT_" + UUID.randomUUID().toString().replace("-", "");
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        TENANT,
-        calendarCode);
+    jdbcTemplate.update(insertBusinessCalendarSql, TENANT, calendarCode);
     Long workflowDefinitionId = jdbcTemplate.queryForObject(
-        insertWorkflowDefinitionSql,
-        Long.class,
-        TENANT,
-        workflowCode,
-        calendarCode);
+        insertWorkflowDefinitionSql, Long.class, TENANT, workflowCode, calendarCode);
 
     Instant scanAt = Instant.parse("2026-03-08T06:59:58Z");
     Instant firstFire = Instant.parse("2026-03-08T06:59:59Z");
@@ -1919,11 +2390,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         beforeCutoffBizDate,
         Timestamp.from(scanAt));
     jdbcTemplate.update(
-        insertBatchDayInstanceSql,
-        TENANT,
-        calendarCode,
-        afterGapBizDate,
-        Timestamp.from(scanAt));
+        insertBatchDayInstanceSql, TENANT, calendarCode, afterGapBizDate, Timestamp.from(scanAt));
     Trigger trigger = TriggerBuilder.newTrigger()
         .withIdentity(workflowCode, "dst-settlement")
         .startAt(Date.from(firstFire))
@@ -1945,7 +2412,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
 
     TriggerScheduledOccurrencePlanner planner =
         triggerContext.getBean(TriggerScheduledOccurrencePlanner.class);
-    assertThat(planner.materialize(descriptor, trigger, scanAt)).isEqualTo(3);
+    var plannedFireTimes = QuartzScheduledFireEnumerator.fireTimeSource(trigger);
+    assertThat(planner.materialize(descriptor, plannedFireTimes, scanAt)).isEqualTo(3);
     List<LocalDate> expectedBizDates =
         List.of(beforeCutoffBizDate, afterGapBizDate, afterGapBizDate);
     List<LocalDate> selectedBizDateValues =
@@ -1965,7 +2433,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     assertThat(selectedBizDateValuesRead2).containsExactlyElementsOf(expectedBizDates);
     assertThat(triggerContext
             .getBean(TriggerScheduledOccurrencePlanner.class)
-            .materialize(descriptor, trigger, scanAt))
+            .materialize(descriptor, plannedFireTimes, scanAt))
         .isZero();
     assertThat(scheduledOccurrenceCount(workflowDefinitionId))
         .isEqualTo(occurrenceCountBeforeRestart);
@@ -1975,19 +2443,13 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     assertThat(batchDayStatus(calendarCode, afterGapBizDate)).isEqualTo("CUTOFF");
 
     jdbcTemplate.update(
-        updateScheduledOccurrenceSql,
-        TENANT,
-        workflowDefinitionId,
-        Timestamp.from(firstFire));
+        updateScheduledOccurrenceSql, TENANT, workflowDefinitionId, Timestamp.from(firstFire));
     batchDaySettleScheduler.settle();
     assertThat(batchDayStatus(calendarCode, beforeCutoffBizDate)).isEqualTo("SETTLED");
     assertThat(batchDayStatus(calendarCode, afterGapBizDate)).isEqualTo("CUTOFF");
 
     jdbcTemplate.update(
-        updateScheduledOccurrenceSql2,
-        TENANT,
-        workflowDefinitionId,
-        afterGapBizDate);
+        updateScheduledOccurrenceSql2, TENANT, workflowDefinitionId, afterGapBizDate);
     batchDaySettleScheduler.settle();
     assertThat(batchDayStatus(calendarCode, afterGapBizDate)).isEqualTo("SETTLED");
   }
@@ -2016,6 +2478,11 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     final String selectBizDateSql = """
         select biz_date from batch.scheduled_occurrence where tenant_id = ? and workflow_definition_id = ?\s\
         and scheduled_fire_time = ?\
+        """;
+    final String insertExistingRequestSql = """
+        insert into batch.trigger_request
+            (tenant_id, request_id, trigger_type, workflow_definition_id, biz_date, dedup_key, request_status)
+        values (?, ?, 'SCHEDULED', ?, ?, ?, 'ACCEPTED')
         """;
     final String insertScheduledOccurrenceSql = """
         insert into batch.scheduled_occurrence (tenant_id, workflow_definition_id, workflow_code,\s\
@@ -2053,32 +2520,19 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         """;
 
     startTriggerHttpServer();
-    jdbcTemplate.update(
-        insertTenantSql,
-        TENANT,
-        "R06 calendar edit E2E");
+    jdbcTemplate.update(insertTenantSql, TENANT, "R06 calendar edit E2E");
     String calendarCode = "r06_calendar_" + UUID.randomUUID().toString().replace("-", "");
     String workflowCode = "R06_SCHEDULE_" + UUID.randomUUID().toString().replace("-", "");
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        TENANT,
-        calendarCode);
+    jdbcTemplate.update(insertBusinessCalendarSql, TENANT, calendarCode);
     Instant openedAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
     LocalDate openedBizDate = openedAt.atZone(ZoneOffset.UTC).toLocalDate();
     batchDayOpenScheduler.openDueBatchDays(openedAt);
-    Map<String, Object> openedDaySnapshot = jdbcTemplate.queryForMap(
-        selectTimezoneSnapshotSql,
-        TENANT,
-        calendarCode,
-        openedBizDate);
+    Map<String, Object> openedDaySnapshot =
+        jdbcTemplate.queryForMap(selectTimezoneSnapshotSql, TENANT, calendarCode, openedBizDate);
     assertThat(openedDaySnapshot.get("timezone_snapshot")).isEqualTo("UTC");
 
     Long workflowDefinitionId = jdbcTemplate.queryForObject(
-        insertWorkflowDefinitionSql,
-        Long.class,
-        TENANT,
-        workflowCode,
-        calendarCode);
+        insertWorkflowDefinitionSql, Long.class, TENANT, workflowCode, calendarCode);
     TriggerReconciler triggerReconciler =
         AopTestUtils.getTargetObject(triggerContext.getBean(TriggerReconciler.class));
     Scheduler scheduler = triggerContext.getBean(Scheduler.class);
@@ -2098,6 +2552,13 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         Timestamp.from(firstObservedFire));
     String existingRequestId = "r06-existing-request-" + UUID.randomUUID();
     jdbcTemplate.update(
+        insertExistingRequestSql,
+        TENANT,
+        existingRequestId,
+        workflowDefinitionId,
+        openedBizDate,
+        existingRequestId);
+    jdbcTemplate.update(
         insertScheduledOccurrenceSql,
         TENANT,
         workflowDefinitionId,
@@ -2108,18 +2569,10 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         existingRequestId);
 
     Instant calendarEffectiveAt = Instant.now().plusSeconds(1).truncatedTo(ChronoUnit.MILLIS);
+    jdbcTemplate.update(updateBusinessCalendarSql, TENANT, calendarCode);
     jdbcTemplate.update(
-        updateBusinessCalendarSql,
-        TENANT,
-        calendarCode);
-    jdbcTemplate.update(
-        updateTenantConfigurationRevisionSql,
-        Timestamp.from(calendarEffectiveAt),
-        TENANT);
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        TENANT,
-        workflowDefinitionId);
+        updateTenantConfigurationRevisionSql, Timestamp.from(calendarEffectiveAt), TENANT);
+    jdbcTemplate.update(updateWorkflowDefinitionSql, TENANT, workflowDefinitionId);
     triggerReconciler.reconcile();
 
     CronTrigger updatedTrigger = (CronTrigger) scheduler.getTriggersOfJob(jobKey).stream()
@@ -2150,10 +2603,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         jdbcTemplate.queryForMap(selectTimezoneSnapshotSql2, TENANT, calendarCode, openedBizDate);
     assertThat(selectedTimezoneSnapshotRow).isEqualTo(openedDaySnapshot);
 
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql2,
-        TENANT,
-        workflowDefinitionId);
+    jdbcTemplate.update(updateWorkflowDefinitionSql2, TENANT, workflowDefinitionId);
     triggerReconciler.reconcile();
     assertThat(scheduler.checkExists(jobKey)).isFalse();
     String selectedOccurrenceStatusRead2 = jdbcTemplate.queryForObject(
@@ -2164,10 +2614,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         Timestamp.from(updatedFire));
     assertThat(selectedOccurrenceStatusRead2).isEqualTo("SUPERSEDED");
 
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql3,
-        TENANT,
-        workflowDefinitionId);
+    jdbcTemplate.update(updateWorkflowDefinitionSql3, TENANT, workflowDefinitionId);
     triggerReconciler.reconcile();
     assertThat(scheduler.checkExists(jobKey)).isTrue();
     String selectedOccurrenceStatusRead3 = jdbcTemplate.queryForObject(
@@ -2214,16 +2661,9 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     startTriggerHttpServer();
     String calendarCode = "coverage_restart_" + UUID.randomUUID().toString().replace("-", "");
     String workflowCode = "E2E_COVERAGE_RESTART_" + UUID.randomUUID().toString().replace("-", "");
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        TENANT,
-        calendarCode);
+    jdbcTemplate.update(insertBusinessCalendarSql, TENANT, calendarCode);
     Long workflowDefinitionId = jdbcTemplate.queryForObject(
-        insertWorkflowDefinitionSql,
-        Long.class,
-        TENANT,
-        workflowCode,
-        calendarCode);
+        insertWorkflowDefinitionSql, Long.class, TENANT, workflowCode, calendarCode);
 
     Instant scanAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
     CronTrigger cronTrigger = TriggerBuilder.newTrigger()
@@ -2235,11 +2675,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     Instant firstFire = cronTrigger.getFireTimeAfter(Date.from(scanAt)).toInstant();
     LocalDate bizDate = firstFire.atZone(ZoneOffset.UTC).toLocalDate();
     jdbcTemplate.update(
-        insertBatchDayInstanceSql,
-        TENANT,
-        calendarCode,
-        bizDate,
-        Timestamp.from(firstFire));
+        insertBatchDayInstanceSql, TENANT, calendarCode, bizDate, Timestamp.from(firstFire));
 
     TriggerDescriptor descriptor = new TriggerDescriptor();
     descriptor.setTenantId(TENANT);
@@ -2256,7 +2692,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
 
     TriggerScheduledOccurrencePlanner planner =
         triggerContext.getBean(TriggerScheduledOccurrencePlanner.class);
-    assertThat(planner.materialize(descriptor, cronTrigger, scanAt)).isPositive();
+    var plannedFireTimes = QuartzScheduledFireEnumerator.fireTimeSource(cronTrigger);
+    assertThat(planner.materialize(descriptor, plannedFireTimes, scanAt)).isPositive();
     long plannedCount = scheduledOccurrenceCount(workflowDefinitionId);
     Instant coverageBeforeRestart = scheduledOccurrenceCoverageThrough(workflowDefinitionId);
     assertThat(scheduledOccurrenceStatus(workflowDefinitionId, firstFire)).isEqualTo("PLANNED");
@@ -2267,16 +2704,13 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         .isEqualTo(coverageBeforeRestart);
     TriggerScheduledOccurrencePlanner restartedPlanner =
         triggerContext.getBean(TriggerScheduledOccurrencePlanner.class);
-    restartedPlanner.materialize(descriptor, cronTrigger, scanAt);
+    restartedPlanner.materialize(descriptor, plannedFireTimes, scanAt);
     assertThat(scheduledOccurrenceCount(workflowDefinitionId)).isEqualTo(plannedCount);
 
     batchDaySettleScheduler.settle();
     assertThat(batchDayStatus(calendarCode, bizDate)).isEqualTo("CUTOFF");
     jdbcTemplate.update(
-        updateScheduledOccurrenceSql,
-        TENANT,
-        workflowDefinitionId,
-        Timestamp.from(firstFire));
+        updateScheduledOccurrenceSql, TENANT, workflowDefinitionId, Timestamp.from(firstFire));
     batchDaySettleScheduler.settle();
     assertThat(batchDayStatus(calendarCode, bizDate)).isEqualTo("SETTLED");
   }
@@ -2316,16 +2750,9 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     startTriggerHttpServer();
     String calendarCode = "bounded_coverage_" + UUID.randomUUID().toString().replace("-", "");
     String workflowCode = "E2E_BOUNDED_COVERAGE_" + UUID.randomUUID().toString().replace("-", "");
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        TENANT,
-        calendarCode);
+    jdbcTemplate.update(insertBusinessCalendarSql, TENANT, calendarCode);
     Long workflowDefinitionId = jdbcTemplate.queryForObject(
-        insertWorkflowDefinitionSql,
-        Long.class,
-        TENANT,
-        workflowCode,
-        calendarCode);
+        insertWorkflowDefinitionSql, Long.class, TENANT, workflowCode, calendarCode);
 
     Instant scanAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
     Instant firstFire = scanAt.plusSeconds(1);
@@ -2359,7 +2786,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
 
     TriggerScheduledOccurrencePlanner planner =
         triggerContext.getBean(TriggerScheduledOccurrencePlanner.class);
-    int firstPass = planner.materialize(descriptor, cronTrigger, scanAt);
+    var plannedFireTimes = QuartzScheduledFireEnumerator.fireTimeSource(cronTrigger);
+    int firstPass = planner.materialize(descriptor, plannedFireTimes, scanAt);
     long expectedCount = Duration.between(firstFire, requestedThrough).getSeconds() + 1;
     assertThat(firstPass).isBetween(80_000, 99_999);
     assertThat(scheduledOccurrenceCount(workflowDefinitionId)).isEqualTo(firstPass);
@@ -2371,7 +2799,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     restartTriggerHttpServer();
     TriggerScheduledOccurrencePlanner restartedPlanner =
         triggerContext.getBean(TriggerScheduledOccurrencePlanner.class);
-    int resumedCount = restartedPlanner.materialize(descriptor, cronTrigger, scanAt);
+    int resumedCount = restartedPlanner.materialize(descriptor, plannedFireTimes, scanAt);
     assertThat(resumedCount).isPositive();
     assertThat(scheduledOccurrenceCount(workflowDefinitionId)).isEqualTo(expectedCount);
     assertThat(scheduledOccurrenceCoverageThrough(workflowDefinitionId))
@@ -2381,20 +2809,12 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     assertThat(selectedCount).isZero();
 
     long plannedForBizDate = jdbcTemplate.queryForObject(
-        selectCountSql2,
-        Long.class,
-        TENANT,
-        workflowDefinitionId,
-        bizDate);
+        selectCountSql2, Long.class, TENANT, workflowDefinitionId, bizDate);
     assertThat(plannedForBizDate).isPositive();
     batchDaySettleScheduler.settle();
     assertThat(batchDayStatus(calendarCode, bizDate)).isEqualTo("CUTOFF");
 
-    jdbcTemplate.update(
-        updateScheduledOccurrenceSql,
-        TENANT,
-        workflowDefinitionId,
-        bizDate);
+    jdbcTemplate.update(updateScheduledOccurrenceSql, TENANT, workflowDefinitionId, bizDate);
     batchDaySettleScheduler.settle();
     assertThat(batchDayStatus(calendarCode, bizDate)).isEqualTo("SETTLED");
   }
@@ -2404,11 +2824,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         select count(*) from batch.scheduled_occurrence where tenant_id = ? and workflow_definition_id = ?\
         """;
 
-    return jdbcTemplate.queryForObject(
-        selectCountSql,
-        Long.class,
-        TENANT,
-        workflowDefinitionId);
+    return jdbcTemplate.queryForObject(selectCountSql, Long.class, TENANT, workflowDefinitionId);
   }
 
   private Instant scheduledOccurrenceCoverageThrough(Long workflowDefinitionId) {
@@ -2444,11 +2860,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         and biz_date = ?\
         """;
 
-    return jdbcTemplate.queryForObject(
-        selectDayStatusSql,
-        String.class,
-        TENANT,
-        bizDate);
+    return jdbcTemplate.queryForObject(selectDayStatusSql, String.class, TENANT, bizDate);
   }
 
   private String batchDayStatus(String calendarCode, LocalDate bizDate) {
@@ -2458,11 +2870,26 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         """;
 
     return jdbcTemplate.queryForObject(
-        selectDayStatusSql,
-        String.class,
-        TENANT,
-        calendarCode,
-        bizDate);
+        selectDayStatusSql, String.class, TENANT, calendarCode, bizDate);
+  }
+
+  private void isolateScenarioCalendar(String calendarCode, LaunchSeed... seeds) {
+    final String insertCalendarSql = """
+        insert into batch.business_calendar (tenant_id, calendar_code, calendar_name, timezone, cutoff_time, enabled)
+        values (?, ?, 'Isolated occurrence scenario', 'UTC', '00:00:00', true)
+        """;
+    final String updateWorkflowCalendarSql = """
+        update batch.workflow_definition set calendar_code = ? where tenant_id = ? and id = ?
+        """;
+    final String updateJobCalendarSql = """
+        update batch.job_definition set calendar_code = ? where tenant_id = ? and job_code = ?
+        """;
+    jdbcTemplate.update(insertCalendarSql, TENANT, calendarCode);
+    for (LaunchSeed seed : seeds) {
+      jdbcTemplate.update(
+          updateWorkflowCalendarSql, calendarCode, TENANT, seed.workflowDefinitionId());
+      jdbcTemplate.update(updateJobCalendarSql, calendarCode, TENANT, seed.jobCode());
+    }
   }
 
   private void insertCutoffBatchDay(String calendarCode, LocalDate bizDate) {
@@ -2472,11 +2899,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         interval '1 day')\
         """;
 
-    jdbcTemplate.update(
-        insertBatchDayInstanceSql,
-        TENANT,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(insertBatchDayInstanceSql, TENANT, calendarCode, bizDate);
   }
 
   private LocalDate r11BizDate(int offsetDays) {
@@ -2485,13 +2908,13 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
 
   private void insertPlannedOccurrence(
       LaunchSeed seed, String calendarCode, LocalDate bizDate, Instant fireTime) {
-        final String insertScheduledOccurrenceSql = """
+    final String insertScheduledOccurrenceSql = """
             insert into batch.scheduled_occurrence (tenant_id, workflow_definition_id, workflow_code,\s\
             schedule_version, calendar_code, scheduled_fire_time, biz_date, occurrence_status)\s\
             values (?, ?, ?, 1, ?, ?, ?, 'PLANNED')\
             """;
 
-        jdbcTemplate.update(
+    jdbcTemplate.update(
         insertScheduledOccurrenceSql,
         TENANT,
         seed.workflowDefinitionId(),
@@ -2566,9 +2989,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
 
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
     while (System.nanoTime() < deadline) {
-      Integer waiting = jdbcTemplate.queryForObject(
-          selectCountSql,
-          Integer.class, sqlFragment);
+      Integer waiting = jdbcTemplate.queryForObject(selectCountSql, Integer.class, sqlFragment);
       if (waiting != null && waiting > 0) {
         return;
       }
@@ -2585,9 +3006,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
 
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
     while (System.nanoTime() < deadline) {
-      Integer waiting = jdbcTemplate.queryForObject(
-          selectCountSql,
-          Integer.class, blockerPid, sqlFragment);
+      Integer waiting =
+          jdbcTemplate.queryForObject(selectCountSql, Integer.class, blockerPid, sqlFragment);
       if (waiting != null && waiting > 0) return;
       Thread.sleep(10);
     }
@@ -2604,9 +3024,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
 
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
     while (System.nanoTime() < deadline) {
-      Integer waiting = jdbcTemplate.queryForObject(
-          selectCountSql,
-          Integer.class, blockerPid, sqlFragment);
+      Integer waiting =
+          jdbcTemplate.queryForObject(selectCountSql, Integer.class, blockerPid, sqlFragment);
       if (waiting != null && waiting >= expectedCount) {
         return;
       }
@@ -2626,10 +3045,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
     while (System.nanoTime() < deadline) {
       Integer waiting = businessJdbcTemplate.queryForObject(
-          selectCountSql,
-          Integer.class,
-          blockerPid,
-          relationName);
+          selectCountSql, Integer.class, blockerPid, relationName);
       if (waiting != null && waiting > 0) return;
       Thread.sleep(10);
     }
@@ -2728,20 +3144,10 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     Instant businessDayCutoffAt =
         bizDate.plusDays(1).atTime(LocalTime.of(6, 0)).atZone(calendarZone).toInstant();
     configureImportPayload(seed, customerNo, "Console MANUAL business date customer");
+    jdbcTemplate.update(insertBusinessCalendarSql, TENANT, calendarCode);
     jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        TENANT,
-        calendarCode);
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        calendarCode,
-        TENANT,
-        seed.workflowDefinitionId());
-    jdbcTemplate.update(
-        updateJobDefinitionSql,
-        calendarCode,
-        TENANT,
-        seed.jobCode());
+        updateWorkflowDefinitionSql, calendarCode, TENANT, seed.workflowDefinitionId());
+    jdbcTemplate.update(updateJobDefinitionSql, calendarCode, TENANT, seed.jobCode());
     jdbcTemplate.update(
         insertBatchDayInstanceSql,
         TENANT,
@@ -2767,16 +3173,13 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
           assertThat(selectedTriggerRequestCount).isOne();
         });
     String requestId = jdbcTemplate.queryForObject(
-        selectRequestIdSql,
-        String.class,
-        TENANT,
-        seed.workflowDefinitionId(),
-        bizDate);
+        selectRequestIdSql, String.class, TENANT, seed.workflowDefinitionId(), bizDate);
     await()
         .atMost(Duration.ofSeconds(60))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          Map<String, Object> launchState = jdbcTemplate.queryForMap(selectRequestStatusSql, TENANT, requestId);
+          Map<String, Object> launchState =
+              jdbcTemplate.queryForMap(selectRequestStatusSql, TENANT, requestId);
           assertThat(launchState.get("request_status"))
               .as("Console MANUAL TriggerRequest progression: %s", launchState)
               .isEqualTo("LAUNCHED");
@@ -2803,11 +3206,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
           assertThat(selectedCustomerAccountCount).isOne();
         });
 
-    jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        TENANT,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, TENANT, calendarCode, bizDate);
     batchDaySettleScheduler.settle();
     assertThat(batchDayStatus(calendarCode, bizDate)).isEqualTo("SETTLED");
   }
@@ -2967,13 +3366,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
             "content", customerContent)),
         TENANT,
         seed.jobCode());
-    jdbcTemplate.update(
-        updateBusinessCalendarSql,
-        TENANT);
-    jdbcTemplate.update(
-        insertBatchDayInstanceSql,
-        TENANT,
-        BIZ_DATE);
+    jdbcTemplate.update(updateBusinessCalendarSql, TENANT);
+    jdbcTemplate.update(insertBatchDayInstanceSql, TENANT, BIZ_DATE);
 
     fireClosedDayScheduleThroughQuartz(seed);
     await()
@@ -3045,10 +3439,20 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
               Timestamp.from(FIRE_TIME));
           assertThat(selectedOccurrenceStatusRead3).isEqualTo("REQUESTED");
           Integer selectedWorkflowRunCount = jdbcTemplate.queryForObject(
-              selectCountSql, Integer.class, TENANT, seed.workflowDefinitionId(), TENANT, requestId);
+              selectCountSql,
+              Integer.class,
+              TENANT,
+              seed.workflowDefinitionId(),
+              TENANT,
+              requestId);
           assertThat(selectedWorkflowRunCount).isEqualTo(1);
           Integer selectedWorkflowNodeRunCount = jdbcTemplate.queryForObject(
-              selectCountSql2, Integer.class, TENANT, seed.workflowDefinitionId(), TENANT, requestId);
+              selectCountSql2,
+              Integer.class,
+              TENANT,
+              seed.workflowDefinitionId(),
+              TENANT,
+              requestId);
           assertThat(selectedWorkflowNodeRunCount).isEqualTo(1);
         });
 
@@ -3077,14 +3481,14 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String selectedInstanceStatus =
-              jdbcTemplate.queryForObject(selectInstanceStatusSql, String.class, TENANT, jobInstanceId);
+          String selectedInstanceStatus = jdbcTemplate.queryForObject(
+              selectInstanceStatusSql, String.class, TENANT, jobInstanceId);
           assertThat(selectedInstanceStatus).isEqualTo("SUCCESS");
           Integer selectedJobTaskCount =
               jdbcTemplate.queryForObject(selectCountSql5, Integer.class, TENANT, jobInstanceId);
           assertThat(selectedJobTaskCount).isGreaterThan(0);
-          String selectedRunStatus =
-              jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, TENANT, requestId);
+          String selectedRunStatus = jdbcTemplate.queryForObject(
+              selectRunStatusSql, String.class, TENANT, TENANT, requestId);
           assertThat(selectedRunStatus).isEqualTo("SUCCESS");
           Integer selectedCount = new JdbcTemplate(businessDataSource)
               .queryForObject(selectCountSql8, Integer.class, TENANT, customerNo);
@@ -3111,12 +3515,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         .isZero();
 
     Long parentWorkflowRunId = jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class,
-        TENANT,
-        seed.workflowDefinitionId(),
-        TENANT,
-        requestId);
+        selectIdSql, Long.class, TENANT, seed.workflowDefinitionId(), TENANT, requestId);
     int affectedWorkflowRunRows =
         jdbcTemplate.update(updateWorkflowRunSql, TENANT, parentWorkflowRunId);
     assertThat(affectedWorkflowRunRows).isEqualTo(1);
@@ -3173,11 +3572,11 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     final String insertScheduledOccurrenceSql = """
         insert into batch.scheduled_occurrence (tenant_id, workflow_definition_id, workflow_code,\s\
         schedule_version, calendar_code, scheduled_fire_time, biz_date, occurrence_status)\s\
-        values (?, ?, ?, 1, 'e2e_calendar', ?, ?, 'PLANNED')\
+        values (?, ?, ?, 1, ?, ?, ?, 'PLANNED')\
         """;
     final String insertBatchDayInstanceSql = """
         insert into batch.batch_day_instance (tenant_id, calendar_code, biz_date, day_status, open_at,\s\
-        cutoff_at) values (?, 'e2e_calendar', ?, 'CUTOFF', current_timestamp, current_timestamp)\
+        cutoff_at) values (?, ?, ?, 'CUTOFF', current_timestamp, current_timestamp)\
         """;
     final String selectCountSql = """
         select count(*) from batch.scheduled_occurrence where tenant_id = ? and workflow_definition_id = ?\s\
@@ -3196,7 +3595,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         and trigger_request_id = (select id from batch.trigger_request where tenant_id = ? and request_id = ?)\
         """;
     final String selectDayStatusSql = """
-        select day_status from batch.batch_day_instance where tenant_id = ? and calendar_code = 'e2e_calendar'\s\
+        select day_status from batch.batch_day_instance where tenant_id = ? and calendar_code = ?\s\
         and biz_date = ?\
         """;
     final String selectJobInstanceIdSql = """
@@ -3225,6 +3624,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     Instant cutoffFireTime = cutoffBizDate.atTime(9, 30).toInstant(ZoneOffset.UTC);
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+    String calendarCode = "e2e_cutoff_" + UUID.randomUUID().toString().replace("-", "");
+    isolateScenarioCalendar(calendarCode, seed);
     String customerNo = "CUTOFF_" + UUID.randomUUID().toString().replace("-", "");
     String customerContent = """
         [{"customerNo":"%s","customerName":"Cutoff scheduled customer",
@@ -3244,14 +3645,18 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         TENANT,
         seed.workflowDefinitionId(),
         seed.jobCode(),
+        calendarCode,
         Timestamp.from(cutoffFireTime),
         cutoffBizDate);
-    jdbcTemplate.update(
-        insertBatchDayInstanceSql,
-        TENANT,
-        cutoffBizDate);
+    jdbcTemplate.update(insertBatchDayInstanceSql, TENANT, calendarCode, cutoffBizDate);
 
-    fireScheduledOccurrenceThroughQuartz(seed, cutoffFireTime, "cutoff-day-" + UUID.randomUUID());
+    fireScheduledOccurrenceThroughQuartz(
+        seed,
+        cutoffFireTime,
+        "cutoff-day-" + UUID.randomUUID(),
+        calendarCode,
+        "UTC",
+        "0 30 9 * * ?");
     await()
         .atMost(Duration.ofSeconds(30))
         .pollInterval(Duration.ofMillis(100))
@@ -3272,23 +3677,24 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
           assertThat(selectedOccurrenceStatus).isEqualTo("REQUESTED");
         });
     String requestId = jdbcTemplate.queryForObject(
-        selectRequestIdSql,
-        String.class,
-        TENANT,
-        seed.workflowDefinitionId(),
-        cutoffBizDate);
+        selectRequestIdSql, String.class, TENANT, seed.workflowDefinitionId(), cutoffBizDate);
     await()
         .atMost(Duration.ofSeconds(30))
         .pollInterval(Duration.ofMillis(100))
         .untilAsserted(() -> {
           Integer selectedWorkflowRunCount = jdbcTemplate.queryForObject(
-              selectCountSql2, Integer.class, TENANT, seed.workflowDefinitionId(), TENANT, requestId);
+              selectCountSql2,
+              Integer.class,
+              TENANT,
+              seed.workflowDefinitionId(),
+              TENANT,
+              requestId);
           assertThat(selectedWorkflowRunCount).isEqualTo(1);
         });
 
     batchDaySettleScheduler.settle();
-    String selectedDayStatus =
-        jdbcTemplate.queryForObject(selectDayStatusSql, String.class, TENANT, cutoffBizDate);
+    String selectedDayStatus = jdbcTemplate.queryForObject(
+        selectDayStatusSql, String.class, TENANT, calendarCode, cutoffBizDate);
     assertThat(selectedDayStatus).isEqualTo("IN_FLIGHT");
     await()
         .atMost(Duration.ofSeconds(30))
@@ -3314,11 +3720,11 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String selectedInstanceStatus =
-              jdbcTemplate.queryForObject(selectInstanceStatusSql, String.class, TENANT, jobInstanceId);
+          String selectedInstanceStatus = jdbcTemplate.queryForObject(
+              selectInstanceStatusSql, String.class, TENANT, jobInstanceId);
           assertThat(selectedInstanceStatus).isEqualTo("SUCCESS");
-          String selectedRunStatus =
-              jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, TENANT, requestId);
+          String selectedRunStatus = jdbcTemplate.queryForObject(
+              selectRunStatusSql, String.class, TENANT, TENANT, requestId);
           assertThat(selectedRunStatus).isEqualTo("SUCCESS");
           Integer selectedCount = new JdbcTemplate(businessDataSource)
               .queryForObject(selectCountSql3, Integer.class, TENANT, customerNo);
@@ -3326,52 +3732,51 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         });
 
     batchDaySettleScheduler.settle();
-    String selectedDayStatusRead2 =
-        jdbcTemplate.queryForObject(selectDayStatusSql, String.class, TENANT, cutoffBizDate);
+    String selectedDayStatusRead2 = jdbcTemplate.queryForObject(
+        selectDayStatusSql, String.class, TENANT, calendarCode, cutoffBizDate);
     assertThat(selectedDayStatusRead2).isEqualTo("SETTLED");
   }
 
   @Test
   @DisplayName("连续两次 Quartz fire 跨 UTC 日期后按东京业务日独立运行并结算")
-  void shouldKeepCalendarBusinessDate_whenFireCrossesUtcMidnight()
-      throws Exception {
-        final String selectCountSql3 = """
+  void shouldKeepCalendarBusinessDate_whenFireCrossesUtcMidnight() throws Exception {
+    final String selectCountSql3 = """
             select count(*)::int from biz.customer_account where tenant_id = ? and customer_no = ?\
             """;
 
-        final String insertBusinessCalendarSql = """
+    final String insertBusinessCalendarSql = """
             insert into batch.business_calendar (tenant_id, calendar_code, calendar_name, timezone, cutoff_time,\s\
             enabled) values (?, ?, 'UTC date crossing E2E', 'Asia/Tokyo', '06:00:00', true)\
             """;
-        final String updateWorkflowDefinitionSql = """
+    final String updateWorkflowDefinitionSql = """
             update batch.workflow_definition\s\
             set calendar_code = ?, schedule_type = 'CRON', schedule_expr = ?, timezone = 'UTC', trigger_mode =\s\
             'SCHEDULED', schedule_enabled = true where tenant_id = ? and id = ?\
             """;
-        final String updateTenantConfigurationRevisionSql = """
+    final String updateTenantConfigurationRevisionSql = """
             update batch.tenant_configuration_revision set updated_at = ? where tenant_id = ?
         """;
-        final String selectCountSql = """
+    final String selectCountSql = """
             select count(*) from batch.scheduled_occurrence where tenant_id = ? and workflow_definition_id = ?\s\
             and scheduled_fire_time in (?, ?)\
             """;
-        final String selectBizDateSql = """
+    final String selectBizDateSql = """
             select biz_date from batch.scheduled_occurrence where tenant_id = ? and workflow_definition_id = ?\s\
             and scheduled_fire_time in (?, ?) order by scheduled_fire_time\
             """;
-        final String selectCoverageThroughAtSql = """
+    final String selectCoverageThroughAtSql = """
             select coverage_through_at from batch.scheduled_occurrence_coverage where tenant_id = ?\s\
             and workflow_definition_id = ? and calendar_code = ?\
             """;
-        final String insertBatchDayInstanceSql = """
+    final String insertBatchDayInstanceSql = """
             insert into batch.batch_day_instance (tenant_id, calendar_code, biz_date, day_status, open_at,\s\
             cutoff_at) values (?, ?, ?, 'CUTOFF', ?, ?)\
             """;
-        final String selectRequestIdSql = """
+    final String selectRequestIdSql = """
             select request_id from batch.trigger_request where tenant_id = ? and workflow_definition_id = ?\s\
             and biz_date = ? order by id desc limit 1\
             """;
-        final String selectCountSql2 = """
+    final String selectCountSql2 = """
             select count(*) from batch.trigger_request tr\s\
             join batch.workflow_run wr on wr.tenant_id = tr.tenant_id and wr.trigger_request_id = tr.id\s\
             join batch.workflow_node_run nr on nr.workflow_run_id = wr.id and nr.job_instance_id is not null\s\
@@ -3399,16 +3804,13 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         .isEqualTo(secondBizDate.minusDays(1));
 
     String calendarCode = "utc_cross_" + UUID.randomUUID().toString().replace("-", "");
-        jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        TENANT,
-        calendarCode);
+    jdbcTemplate.update(insertBusinessCalendarSql, TENANT, calendarCode);
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
     String customerNo = "TZ_CROSS_" + UUID.randomUUID().toString().replace("-", "");
     configureImportPayload(seed, customerNo, "Calendar cross-date customer");
     String scheduleExpression = "0 30 23 * * ?";
-        jdbcTemplate.update(
+    jdbcTemplate.update(
         updateWorkflowDefinitionSql,
         calendarCode,
         scheduleExpression,
@@ -3416,7 +3818,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         seed.workflowDefinitionId());
 
     Instant scanAt = firstFireTime.minusSeconds(1);
-        jdbcTemplate.update(
+    jdbcTemplate.update(
         updateTenantConfigurationRevisionSql,
         Timestamp.from(scanAt.minus(Duration.ofDays(1))),
         TENANT);
@@ -3441,23 +3843,24 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         .build();
     TriggerScheduledOccurrencePlanner planner =
         triggerContext.getBean(TriggerScheduledOccurrencePlanner.class);
-    assertThat(planner.materialize(descriptor, plannerTrigger, scanAt)).isEqualTo(2);
-        Integer selectedScheduledOccurrenceCount = jdbcTemplate.queryForObject(
-            selectCountSql,
-            Integer.class,
-            TENANT,
-            seed.workflowDefinitionId(),
-            Timestamp.from(firstFireTime),
-            Timestamp.from(secondFireTime));
-        assertThat(selectedScheduledOccurrenceCount).isEqualTo(2);
-        List<LocalDate> selectedBizDateValues = jdbcTemplate.queryForList(
-            selectBizDateSql,
-            LocalDate.class,
-            TENANT,
-            seed.workflowDefinitionId(),
-            Timestamp.from(firstFireTime),
-            Timestamp.from(secondFireTime));
-        assertThat(selectedBizDateValues).containsExactly(firstBizDate, secondBizDate);
+    var plannedFireTimes = QuartzScheduledFireEnumerator.fireTimeSource(plannerTrigger);
+    assertThat(planner.materialize(descriptor, plannedFireTimes, scanAt)).isEqualTo(2);
+    Integer selectedScheduledOccurrenceCount = jdbcTemplate.queryForObject(
+        selectCountSql,
+        Integer.class,
+        TENANT,
+        seed.workflowDefinitionId(),
+        Timestamp.from(firstFireTime),
+        Timestamp.from(secondFireTime));
+    assertThat(selectedScheduledOccurrenceCount).isEqualTo(2);
+    List<LocalDate> selectedBizDateValues = jdbcTemplate.queryForList(
+        selectBizDateSql,
+        LocalDate.class,
+        TENANT,
+        seed.workflowDefinitionId(),
+        Timestamp.from(firstFireTime),
+        Timestamp.from(secondFireTime));
+    assertThat(selectedBizDateValues).containsExactly(firstBizDate, secondBizDate);
     Instant firstBusinessDayOpenAt = firstBizDate.atTime(6, 0).atZone(tokyoZone).toInstant();
     Instant firstBusinessDayCutoffAt =
         firstBizDate.plusDays(1).atTime(6, 0).atZone(tokyoZone).toInstant();
@@ -3465,24 +3868,22 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         secondBizDate.atTime(6, 0).atZone(tokyoZone).toInstant();
     Instant secondBusinessDayCutoffAt =
         secondBizDate.plusDays(1).atTime(6, 0).atZone(tokyoZone).toInstant();
-        assertThat(jdbcTemplate
-            .queryForObject(
-                selectCoverageThroughAtSql,
-                Timestamp.class,
-                TENANT,
-                seed.workflowDefinitionId(),
-                calendarCode)
-            .toInstant())
-        .isAfterOrEqualTo(secondBusinessDayCutoffAt);
+    Timestamp selectedCoverageThroughAt = jdbcTemplate.queryForObject(
+        selectCoverageThroughAtSql,
+        Timestamp.class,
+        TENANT,
+        seed.workflowDefinitionId(),
+        calendarCode);
+    assertThat(selectedCoverageThroughAt.toInstant()).isAfterOrEqualTo(secondBusinessDayCutoffAt);
 
-        jdbcTemplate.update(
+    jdbcTemplate.update(
         insertBatchDayInstanceSql,
         TENANT,
         calendarCode,
         firstBizDate,
         Timestamp.from(firstBusinessDayOpenAt),
         Timestamp.from(firstBusinessDayCutoffAt));
-        jdbcTemplate.update(
+    jdbcTemplate.update(
         insertBatchDayInstanceSql,
         TENANT,
         calendarCode,
@@ -3499,24 +3900,20 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
 
     awaitScheduledOccurrenceRequested(seed.workflowDefinitionId(), firstFireTime);
     String requestId = jdbcTemplate.queryForObject(
-        selectRequestIdSql,
-        String.class,
-        TENANT,
-        seed.workflowDefinitionId(),
-        firstBizDate);
+        selectRequestIdSql, String.class, TENANT, seed.workflowDefinitionId(), firstBizDate);
     Long workflowRunId = awaitWorkflowRunForRequest(requestId);
     Long jobInstanceId = awaitWorkflowJobInstanceForRequest(seed.workflowDefinitionId(), requestId);
-        Integer selectedTriggerRequestCount = jdbcTemplate.queryForObject(
-            selectCountSql2,
-            Integer.class,
-            TENANT,
-            requestId,
-            firstBizDate,
-            firstBizDate,
-            firstBizDate);
-        assertThat(selectedTriggerRequestCount)
-            .as("Quartz fire instant, Tokyo business date, and child Job identity remain distinct")
-            .isZero();
+    Integer selectedTriggerRequestCount = jdbcTemplate.queryForObject(
+        selectCountSql2,
+        Integer.class,
+        TENANT,
+        requestId,
+        firstBizDate,
+        firstBizDate,
+        firstBizDate);
+    assertThat(selectedTriggerRequestCount)
+        .as("Quartz fire instant, Tokyo business date, and child Job identity remain distinct")
+        .isZero();
 
     batchDaySettleScheduler.settle();
     assertThat(batchDayStatus(calendarCode, firstBizDate)).isEqualTo("IN_FLIGHT");
@@ -3528,8 +3925,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String selectedInstanceStatus =
-              jdbcTemplate.queryForObject(selectInstanceStatusSql, String.class, TENANT, jobInstanceId);
+          String selectedInstanceStatus = jdbcTemplate.queryForObject(
+              selectInstanceStatusSql, String.class, TENANT, jobInstanceId);
           assertThat(selectedInstanceStatus).isEqualTo("SUCCESS");
           Integer selectedCount = new JdbcTemplate(businessDataSource)
               .queryForObject(selectCountSql3, Integer.class, TENANT, customerNo);
@@ -3558,25 +3955,21 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         scheduleExpression);
     awaitScheduledOccurrenceRequested(seed.workflowDefinitionId(), secondFireTime);
     String secondRequestId = jdbcTemplate.queryForObject(
-        selectRequestIdSql,
-        String.class,
-        TENANT,
-        seed.workflowDefinitionId(),
-        secondBizDate);
+        selectRequestIdSql, String.class, TENANT, seed.workflowDefinitionId(), secondBizDate);
     Long secondWorkflowRunId = awaitWorkflowRunForRequest(secondRequestId);
     Long secondJobInstanceId =
         awaitWorkflowJobInstanceForRequest(seed.workflowDefinitionId(), secondRequestId);
-        Integer selectedTriggerRequestCountRead2 = jdbcTemplate.queryForObject(
-            selectCountSql2,
-            Integer.class,
-            TENANT,
-            secondRequestId,
-            secondBizDate,
-            secondBizDate,
-            secondBizDate);
-        assertThat(selectedTriggerRequestCountRead2)
-            .as("the second Quartz identity retains its own Tokyo business date")
-            .isZero();
+    Integer selectedTriggerRequestCountRead2 = jdbcTemplate.queryForObject(
+        selectCountSql2,
+        Integer.class,
+        TENANT,
+        secondRequestId,
+        secondBizDate,
+        secondBizDate,
+        secondBizDate);
+    assertThat(selectedTriggerRequestCountRead2)
+        .as("the second Quartz identity retains its own Tokyo business date")
+        .isZero();
     batchDaySettleScheduler.settle();
     assertThat(batchDayStatus(calendarCode, secondBizDate)).isEqualTo("IN_FLIGHT");
     await()
@@ -3591,8 +3984,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(30))
         .pollInterval(Duration.ofMillis(100))
         .untilAsserted(() -> {
-          String selectedRunStatusRead2 =
-              jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, secondWorkflowRunId);
+          String selectedRunStatusRead2 = jdbcTemplate.queryForObject(
+              selectRunStatusSql, String.class, TENANT, secondWorkflowRunId);
           assertThat(selectedRunStatusRead2).isEqualTo("SUCCESS");
         });
     batchDaySettleScheduler.settle();
@@ -3609,11 +4002,11 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     final String insertScheduledOccurrenceSql = """
         insert into batch.scheduled_occurrence (tenant_id, workflow_definition_id, workflow_code,\s\
         schedule_version, calendar_code, scheduled_fire_time, biz_date, occurrence_status)\s\
-        values (?, ?, ?, 1, 'e2e_calendar', ?, ?, 'PLANNED')\
+        values (?, ?, ?, 1, ?, ?, ?, 'PLANNED')\
         """;
     final String insertBatchDayInstanceSql = """
         insert into batch.batch_day_instance (tenant_id, calendar_code, biz_date, day_status, open_at,\s\
-        cutoff_at) values (?, 'e2e_calendar', ?, 'CUTOFF', current_timestamp, current_timestamp)\
+        cutoff_at) values (?, ?, ?, 'CUTOFF', current_timestamp, current_timestamp)\
         """;
     final String selectOccurrenceStatusSql = """
         select occurrence_status from batch.scheduled_occurrence where tenant_id = ?\s\
@@ -3629,7 +4022,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         and tr.request_id = ?\
         """;
     final String selectDayStatusSql = """
-        select day_status from batch.batch_day_instance where tenant_id = ? and calendar_code = 'e2e_calendar'\s\
+        select day_status from batch.batch_day_instance where tenant_id = ? and calendar_code = ?\s\
         and biz_date = ?\
         """;
     final String selectInstanceStatusSql = """
@@ -3655,6 +4048,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
     LaunchSeed second = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+    String calendarCode = "e2e_cutoff_" + UUID.randomUUID().toString().replace("-", "");
+    isolateScenarioCalendar(calendarCode, first, second);
     String firstCustomerNo = "DAG_A_" + UUID.randomUUID().toString().replace("-", "");
     String secondCustomerNo = "DAG_B_" + UUID.randomUUID().toString().replace("-", "");
 
@@ -3666,15 +4061,18 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         TENANT,
         first.workflowDefinitionId(),
         first.jobCode(),
+        calendarCode,
         Timestamp.from(cutoffFireTime),
         cutoffBizDate);
-    jdbcTemplate.update(
-        insertBatchDayInstanceSql,
-        TENANT,
-        cutoffBizDate);
+    jdbcTemplate.update(insertBatchDayInstanceSql, TENANT, calendarCode, cutoffBizDate);
 
     fireScheduledOccurrenceThroughQuartz(
-        first, cutoffFireTime, "cutoff-composite-" + UUID.randomUUID());
+        first,
+        cutoffFireTime,
+        "cutoff-composite-" + UUID.randomUUID(),
+        calendarCode,
+        "UTC",
+        "0 30 9 * * ?");
     await()
         .atMost(Duration.ofSeconds(30))
         .pollInterval(Duration.ofMillis(100))
@@ -3689,11 +4087,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         });
 
     String requestId = jdbcTemplate.queryForObject(
-        selectRequestIdSql,
-        String.class,
-        TENANT,
-        first.workflowDefinitionId(),
-        cutoffBizDate);
+        selectRequestIdSql, String.class, TENANT, first.workflowDefinitionId(), cutoffBizDate);
     Long workflowRunId = await()
         .atMost(Duration.ofSeconds(30))
         .pollInterval(Duration.ofMillis(100))
@@ -3711,8 +4105,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
             id -> id != null);
 
     batchDaySettleScheduler.settle();
-    String selectedDayStatus =
-        jdbcTemplate.queryForObject(selectDayStatusSql, String.class, TENANT, cutoffBizDate);
+    String selectedDayStatus = jdbcTemplate.queryForObject(
+        selectDayStatusSql, String.class, TENANT, calendarCode, cutoffBizDate);
     assertThat(selectedDayStatus).isEqualTo("IN_FLIGHT");
 
     Map<String, Long> jobInstances = Map.of(
@@ -3743,8 +4137,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         });
 
     batchDaySettleScheduler.settle();
-    String selectedDayStatusRead2 =
-        jdbcTemplate.queryForObject(selectDayStatusSql, String.class, TENANT, cutoffBizDate);
+    String selectedDayStatusRead2 = jdbcTemplate.queryForObject(
+        selectDayStatusSql, String.class, TENANT, calendarCode, cutoffBizDate);
     assertThat(selectedDayStatusRead2).isEqualTo("SETTLED");
     Integer selectedOutboxEventCount =
         jdbcTemplate.queryForObject(selectCountSql2, Integer.class, TENANT, workflowRunId);
@@ -3840,10 +4234,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
 
     configureImportPayload(first, firstCustomer, "External event target A");
     configureImportPayload(second, secondCustomer, "External event target B");
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        TENANT,
-        calendarCode);
+    jdbcTemplate.update(insertBusinessCalendarSql, TENANT, calendarCode);
     jdbcTemplate.update(
         updateWorkflowDefinitionSql,
         calendarCode,
@@ -3926,13 +4317,14 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
                 .as(
                     "external event request, each WorkflowRun, and its JobInstance keep the event business date")
                 .isZero();
-            Integer selectedTriggerRequestCountRead2 =
-                jdbcTemplate.queryForObject(selectCountSql2, Integer.class, TENANT, source, eventId);
+            Integer selectedTriggerRequestCountRead2 = jdbcTemplate.queryForObject(
+                selectCountSql2, Integer.class, TENANT, source, eventId);
             assertThat(selectedTriggerRequestCountRead2).isEqualTo(2);
             JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
             List<String> selectedCustomerNoValues = businessJdbc.queryForList(
                 selectCustomerNoSql, String.class, TENANT, firstCustomer, secondCustomer);
-            assertThat(selectedCustomerNoValues).containsExactlyInAnyOrder(firstCustomer, secondCustomer);
+            assertThat(selectedCustomerNoValues)
+                .containsExactlyInAnyOrder(firstCustomer, secondCustomer);
           });
 
       String selectedEventSource =
@@ -3951,21 +4343,18 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
       assertThat(batchDayStatus(calendarCode, bizDate)).isEqualTo("SETTLED");
     } finally {
       jdbcTemplate.update(deleteApiKeySql, apiKeyId);
-      jdbcTemplate.update(
-          deleteExternalEventExpectationDefinitionSql,
-          TENANT,
-          eventCode);
+      jdbcTemplate.update(deleteExternalEventExpectationDefinitionSql, TENANT, eventCode);
     }
   }
 
   private void insertExternalEventExpectation(
       Long workflowDefinitionId, String eventCode, String calendarCode) {
-        final String insertExternalEventExpectationDefinitionSql = """
+    final String insertExternalEventExpectationDefinitionSql = """
             insert into batch.external_event_expectation_definition (tenant_id, calendar_code,\s\
             workflow_definition_id, event_code, expected_local_time, enabled) values (?, ?, ?, ?, '09:30', true)\
             """;
 
-        jdbcTemplate.update(
+    jdbcTemplate.update(
         insertExternalEventExpectationDefinitionSql,
         TENANT,
         calendarCode,
@@ -3980,12 +4369,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         """;
 
     return jdbcTemplate.queryForObject(
-        insertWorkflowDefinitionSql,
-        Long.class,
-        TENANT,
-        workflowCode,
-        workflowCode,
-        calendarCode);
+        insertWorkflowDefinitionSql, Long.class, TENANT, workflowCode, workflowCode, calendarCode);
   }
 
   private JsonNode postTriggerEventJson(
@@ -4051,7 +4435,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         [{"customerNo":"%s","customerName":"%s",
           "customerType":"PERSONAL","certificateNo":"ID-%s","status":"ACTIVE"}]
         """.formatted(customerNo, customerName, customerNo);
-        jdbcTemplate.update(
+    jdbcTemplate.update(
         updateJobDefinitionSql,
         objectMapper.writeValueAsString(Map.of(
             "fileFormatType", "JSON",
@@ -4097,39 +4481,15 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         true), (?, ?, 'JOB_B', 'END', 'SUCCESS', true)\
         """;
 
+    jdbcTemplate.update(deleteTriggerRequestSql, TENANT, second.requestId());
+    jdbcTemplate.update(deleteWorkflowEdgeSql, TENANT, second.workflowDefinitionId());
+    jdbcTemplate.update(deleteWorkflowNodeSql, TENANT, second.workflowDefinitionId());
+    jdbcTemplate.update(deleteWorkflowDefinitionSql, TENANT, second.workflowDefinitionId());
+    jdbcTemplate.update(updateWorkflowDefinitionSql, TENANT, first.workflowDefinitionId());
+    jdbcTemplate.update(updateWorkflowNodeSql, TENANT, first.workflowDefinitionId());
     jdbcTemplate.update(
-        deleteTriggerRequestSql,
-        TENANT,
-        second.requestId());
-    jdbcTemplate.update(
-        deleteWorkflowEdgeSql,
-        TENANT,
-        second.workflowDefinitionId());
-    jdbcTemplate.update(
-        deleteWorkflowNodeSql,
-        TENANT,
-        second.workflowDefinitionId());
-    jdbcTemplate.update(
-        deleteWorkflowDefinitionSql,
-        TENANT,
-        second.workflowDefinitionId());
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        TENANT,
-        first.workflowDefinitionId());
-    jdbcTemplate.update(
-        updateWorkflowNodeSql,
-        TENANT,
-        first.workflowDefinitionId());
-    jdbcTemplate.update(
-        insertWorkflowNodeSql,
-        TENANT,
-        first.workflowDefinitionId(),
-        second.jobCode());
-    jdbcTemplate.update(
-        deleteWorkflowEdgeSql2,
-        TENANT,
-        first.workflowDefinitionId());
+        insertWorkflowNodeSql, TENANT, first.workflowDefinitionId(), second.jobCode());
+    jdbcTemplate.update(deleteWorkflowEdgeSql2, TENANT, first.workflowDefinitionId());
     jdbcTemplate.update(
         insertWorkflowEdgeSql,
         TENANT,
@@ -4152,10 +4512,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         .until(
             () -> jdbcTemplate
                 .query(
-                    selectJobInstanceIdSql,
-                    (rs, rowNum) -> rs.getLong(1),
-                    workflowRunId,
-                    nodeCode)
+                    selectJobInstanceIdSql, (rs, rowNum) -> rs.getLong(1), workflowRunId, nodeCode)
                 .stream()
                 .findFirst()
                 .orElse(null),
@@ -4198,15 +4555,12 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(30))
         .pollInterval(Duration.ofMillis(100))
         .until(
-            () -> jdbcTemplate
-                .query(
-                    selectIdSql,
-                    (rs, rowNum) -> rs.getLong(1),
-                    TENANT,
-                    requestId)
-                .stream()
-                .findFirst()
-                .orElse(null),
+            () ->
+                jdbcTemplate
+                    .query(selectIdSql, (rs, rowNum) -> rs.getLong(1), TENANT, requestId)
+                    .stream()
+                    .findFirst()
+                    .orElse(null),
             id -> id != null);
   }
 
@@ -4248,82 +4602,83 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
   @DisplayName("真实 Quartz MANUAL_APPROVAL misfire 与批日结算竞争后仍经 Worker 完成")
   void manualMisfireApprovalRacingSettlement_completesWorkerBeforeBatchDaySettlement()
       throws Exception {
-        final String lockCustomerAccountSql = "lock table biz.customer_account in share row exclusive mode";
+    final String lockCustomerAccountSql =
+        "lock table biz.customer_account in share row exclusive mode";
 
-        final String selectPgBackendPidSql = """
+    final String selectPgBackendPidSql = """
             select pg_backend_pid()
         """;
-        final String selectAcquireBatchDaySettlementFenceSql = """
+    final String selectAcquireBatchDaySettlementFenceSql = """
             select batch.acquire_batch_day_settlement_fence(?, ?, ?)
         """;
 
-        final String selectCountSql3 = """
+    final String selectCountSql3 = """
             select count(*)::int from biz.customer_account where tenant_id = ? and customer_no = ?\
             """;
 
-        final String insertBusinessCalendarSql = """
+    final String insertBusinessCalendarSql = """
             insert into batch.business_calendar (tenant_id, calendar_code, calendar_name, timezone, cutoff_time,\s\
             enabled) values (?, ?, 'Tokyo MANUAL_APPROVAL E2E', 'Asia/Tokyo', '06:00:00', true)\
             """;
-        final String updateWorkflowDefinitionSql = """
+    final String updateWorkflowDefinitionSql = """
             update batch.workflow_definition set calendar_code = ? where tenant_id = ? and id = ?
         """;
-        final String updateJobDefinitionSql = """
+    final String updateJobDefinitionSql = """
             update batch.job_definition set calendar_code = ? where tenant_id = ? and job_code = ?
         """;
-        final String updateJobDefinitionSql2 = """
+    final String updateJobDefinitionSql2 = """
             update batch.job_definition set default_params = ?::jsonb where tenant_id = ? and job_code = ?\
             """;
-        final String selectOccurrenceStatusSql = """
+    final String selectOccurrenceStatusSql = """
             select occurrence_status from batch.scheduled_occurrence where tenant_id = ?\s\
             and workflow_definition_id = ? and scheduled_fire_time = ?\
             """;
-        final String selectBizDateSql = """
+    final String selectBizDateSql = """
             select biz_date from batch.scheduled_occurrence where tenant_id = ? and workflow_definition_id = ?\s\
             and scheduled_fire_time = ?\
             """;
-        final String selectBizDateSql2 = """
+    final String selectBizDateSql2 = """
             select biz_date from batch.trigger_request where tenant_id = ? and request_id = ?
         """;
-        final String selectStatusSql = """
+    final String selectStatusSql = """
             select status from batch.trigger_misfire_pending where tenant_id = ? and workflow_definition_id = ?\s\
             and scheduled_fire_time = ?\
             """;
-        final String selectOccurrenceStatusSql2 = """
+    final String selectOccurrenceStatusSql2 = """
             select occurrence_status from batch.scheduled_occurrence where tenant_id = ?\s\
             and workflow_definition_id = ? and scheduled_fire_time = ?\
             """;
-        final String selectStatusSql2 = """
+    final String selectStatusSql2 = """
             select status from batch.trigger_misfire_pending where tenant_id = ? and workflow_definition_id = ?\s\
             and scheduled_fire_time = ?\
             """;
-        final String selectRequestIdSql = """
+    final String selectRequestIdSql = """
             select request_id from batch.trigger_request where tenant_id = ? and workflow_definition_id = ?\s\
             and request_id = ?\
             """;
-        final String selectCountSql = """
+    final String selectCountSql = """
             select count(*) from batch.workflow_run where tenant_id = ? and workflow_definition_id = ?\s\
             and trigger_request_id = (select id from batch.trigger_request where tenant_id = ?\s\
             and request_id = ?)\
             """;
-        final String selectCountSql2 = """
+    final String selectCountSql2 = """
             select count(*) from batch.workflow_node_run nr\s\
             join batch.workflow_run wr on wr.id = nr.workflow_run_id where wr.tenant_id = ?\s\
             and wr.workflow_definition_id = ? and wr.trigger_request_id = (select id from batch.trigger_request\s\
             where tenant_id = ? and request_id = ?) and nr.node_code = 'JOB' and nr.job_instance_id is not null\
             """;
-        final String selectJobInstanceIdSql = """
+    final String selectJobInstanceIdSql = """
             select nr.job_instance_id from batch.workflow_node_run nr\s\
             join batch.workflow_run wr on wr.id = nr.workflow_run_id where wr.tenant_id = ?\s\
             and wr.workflow_definition_id = ? and wr.trigger_request_id = (select id from batch.trigger_request\s\
             where tenant_id = ? and request_id = ?) and nr.node_code = 'JOB'\
             """;
-        final String selectBizDateSql3 = """
+    final String selectBizDateSql3 = """
             select wr.biz_date from batch.workflow_run wr\s\
             join batch.trigger_request tr on tr.tenant_id = wr.tenant_id and tr.id = wr.trigger_request_id\s\
             where tr.tenant_id = ? and tr.request_id = ?\
             """;
-        final String selectBizDateSql4 = """
+    final String selectBizDateSql4 = """
             select biz_date from batch.job_instance where tenant_id = ? and id = ?
         """;
     final String selectInstanceStatusSql = """
@@ -4344,26 +4699,16 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
     String calendarCode = "e2e_tokyo_misfire_" + UUID.randomUUID().toString().replace("-", "");
     ZoneId businessZone = ZoneId.of("Asia/Tokyo");
-        jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        TENANT,
-        calendarCode);
-        jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        calendarCode,
-        TENANT,
-        seed.workflowDefinitionId());
-        jdbcTemplate.update(
-        updateJobDefinitionSql,
-        calendarCode,
-        TENANT,
-        seed.jobCode());
+    jdbcTemplate.update(insertBusinessCalendarSql, TENANT, calendarCode);
+    jdbcTemplate.update(
+        updateWorkflowDefinitionSql, calendarCode, TENANT, seed.workflowDefinitionId());
+    jdbcTemplate.update(updateJobDefinitionSql, calendarCode, TENANT, seed.jobCode());
     String customerNo = "APPROVED_MISFIRE_" + UUID.randomUUID().toString().replace("-", "");
     String customerContent = """
         [{"customerNo":"%s","customerName":"Approved misfire customer",
           "customerType":"PERSONAL","certificateNo":"ID-%s","status":"ACTIVE"}]
         """.formatted(customerNo, customerNo);
-        jdbcTemplate.update(
+    jdbcTemplate.update(
         updateJobDefinitionSql2,
         objectMapper.writeValueAsString(Map.of(
             "fileFormatType", "JSON",
@@ -4395,8 +4740,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
       }
       try (var settlementFence = jdbcTemplate.getDataSource().getConnection()) {
         settlementFence.setAutoCommit(false);
-        try (var acquire = settlementFence.prepareStatement(
-            selectAcquireBatchDaySettlementFenceSql)) {
+        try (var acquire =
+            settlementFence.prepareStatement(selectAcquireBatchDaySettlementFenceSql)) {
           acquire.setString(1, TENANT);
           acquire.setString(2, calendarCode);
           acquire.setObject(3, bizDate);
@@ -4486,11 +4831,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
           assertThat(selectedStatusRead2).isEqualTo("APPROVED");
         });
     String launchRequestId = jdbcTemplate.queryForObject(
-        selectRequestIdSql,
-        String.class,
-        TENANT,
-        seed.workflowDefinitionId(),
-        requestId);
+        selectRequestIdSql, String.class, TENANT, seed.workflowDefinitionId(), requestId);
     await()
         .atMost(Duration.ofSeconds(60))
         .pollInterval(Duration.ofMillis(100))
@@ -4525,18 +4866,18 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         seed.workflowDefinitionId(),
         TENANT,
         launchRequestId);
-        LocalDate selectedBizDateRead3 =
-            jdbcTemplate.queryForObject(selectBizDateSql3, LocalDate.class, TENANT, launchRequestId);
-        assertThat(selectedBizDateRead3).isEqualTo(bizDate);
-        LocalDate selectedBizDateRead4 =
-            jdbcTemplate.queryForObject(selectBizDateSql4, LocalDate.class, TENANT, jobInstanceId);
-        assertThat(selectedBizDateRead4).isEqualTo(bizDate);
+    LocalDate selectedBizDateRead3 =
+        jdbcTemplate.queryForObject(selectBizDateSql3, LocalDate.class, TENANT, launchRequestId);
+    assertThat(selectedBizDateRead3).isEqualTo(bizDate);
+    LocalDate selectedBizDateRead4 =
+        jdbcTemplate.queryForObject(selectBizDateSql4, LocalDate.class, TENANT, jobInstanceId);
+    assertThat(selectedBizDateRead4).isEqualTo(bizDate);
     await()
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String selectedInstanceStatus =
-              jdbcTemplate.queryForObject(selectInstanceStatusSql, String.class, TENANT, jobInstanceId);
+          String selectedInstanceStatus = jdbcTemplate.queryForObject(
+              selectInstanceStatusSql, String.class, TENANT, jobInstanceId);
           assertThat(selectedInstanceStatus).isEqualTo("SUCCESS");
           String selectedRunStatus = jdbcTemplate.queryForObject(
               selectRunStatusSql, String.class, TENANT, TENANT, launchRequestId);
@@ -4546,9 +4887,9 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
           assertThat(selectedCount).isEqualTo(1);
         });
     batchDaySettleScheduler.settle();
-        String selectedDayStatus = jdbcTemplate.queryForObject(
-            selectDayStatusSql, String.class, TENANT, calendarCode, bizDate);
-        assertThat(selectedDayStatus).isEqualTo("SETTLED");
+    String selectedDayStatus = jdbcTemplate.queryForObject(
+        selectDayStatusSql, String.class, TENANT, calendarCode, bizDate);
+    assertThat(selectedDayStatus).isEqualTo("SETTLED");
   }
 
   @Test
@@ -4569,7 +4910,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         and workflow_definition_id = ? and scheduled_fire_time = ?\
         """;
     final String selectDayStatusSql = """
-        select day_status from batch.batch_day_instance where tenant_id = ? and calendar_code = 'e2e_calendar'\s\
+        select day_status from batch.batch_day_instance where tenant_id = ? and calendar_code = ?\s\
         and biz_date = ?\
         """;
     final String selectCountSql = """
@@ -4585,7 +4926,10 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
     LocalDate bizDate = LocalDate.now(ZoneOffset.UTC).minusDays(2);
-    ManualMisfire misfire = createManualMisfire(seed, bizDate);
+    String calendarCode = "e2e_reject_" + UUID.randomUUID().toString().replace("-", "");
+    isolateScenarioCalendar(calendarCode, seed);
+    ManualMisfire misfire =
+        createManualMisfire(seed, bizDate, calendarCode, ZoneOffset.UTC, LocalTime.of(9, 30));
     JsonNode submission = postConsoleJson(
         "/api/console/jobs/catch-up/approve",
         """
@@ -4631,8 +4975,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         });
 
     batchDaySettleScheduler.settle();
-    String selectedDayStatus =
-        jdbcTemplate.queryForObject(selectDayStatusSql, String.class, TENANT, bizDate);
+    String selectedDayStatus = jdbcTemplate.queryForObject(
+        selectDayStatusSql, String.class, TENANT, calendarCode, bizDate);
     assertThat(selectedDayStatus).isEqualTo("SETTLED");
     Integer selectedWorkflowRunCount = jdbcTemplate.queryForObject(
         selectCountSql, Integer.class, TENANT, seed.workflowDefinitionId(), bizDate);
@@ -4716,47 +5060,46 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
 
   @Test
   @DisplayName("双 Quartz 节点竞争审批重启后的待审批义务且 JWT/CSRF Console 只产生唯一 Worker 结果")
-  void shouldApproveRestartedMisfire_whenConsoleAuthenticated()
-      throws Exception {
-        final String selectCountSql10 = """
+  void shouldApproveRestartedMisfire_whenConsoleAuthenticated() throws Exception {
+    final String selectCountSql10 = """
             select count(*) from biz.customer_account where customer_no = ?
         """;
 
-        final String updateJobDefinitionSql = """
+    final String updateJobDefinitionSql = """
         update batch.job_definition set default_params = ?::jsonb
         where tenant_id = ? and job_code = ?
         """;
-        final String selectCountSql = """
+    final String selectCountSql = """
               select count(*) from quartz.QRTZ_SCHEDULER_STATE
-              where SCHED_NAME = 'E2eTriggerScheduler'
+              where SCHED_NAME = ?
                 and INSTANCE_NAME in ('trigger-node-1', 'trigger-node-2')
               """;
-        final String selectCountSql2 = """
+    final String selectCountSql2 = """
             select count(*) from batch.approval_command where tenant_id = ? and target_id = ?
         """;
-        final String selectCountSql3 = """
+    final String selectCountSql3 = """
             select count(*) from batch.trigger_outbox_event where tenant_id = ? and request_id = ?
         """;
-        final String selectCountSql4 = """
+    final String selectCountSql4 = """
                 select count(*) from batch.workflow_run wr
                 join batch.trigger_request r on r.id = wr.trigger_request_id
                 where r.tenant_id = ? and r.request_id = ? and wr.run_status = 'SUCCESS'
                 """;
-        final String selectCountSql5 = """
+    final String selectCountSql5 = """
           select count(*) from batch.trigger_outbox_event
           where tenant_id = ? and request_id = ? and publish_status = 'PUBLISHED'
           """;
-        final String selectCountSql6 = """
+    final String selectCountSql6 = """
           select count(*) from batch.approval_command
           where tenant_id = ? and target_id = ? and approval_no = ?
           and approval_status = 'EXECUTED' and requester_id = ? and approver_id = 'recovery-approver'
           """;
-        final String selectCountSql7 = """
+    final String selectCountSql7 = """
           select count(*) from batch.trigger_misfire_pending
           where tenant_id = ? and workflow_definition_id = ? and scheduled_fire_time = ?
           and status = 'APPROVED'
           """;
-        final String selectCountSql8 = """
+    final String selectCountSql8 = """
           select count(*) from batch.workflow_run wr
           join batch.trigger_request r on r.id = wr.trigger_request_id and r.tenant_id = wr.tenant_id
           join batch.workflow_node_run nr on nr.workflow_run_id = wr.id and nr.node_code = 'JOB'
@@ -4765,7 +5108,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
           and wr.biz_date = ? and ji.biz_date = ?
           and wr.run_status = 'SUCCESS' and nr.node_status = 'SUCCESS' and ji.instance_status = 'SUCCESS'
           """;
-        final String selectCountSql9 = """
+    final String selectCountSql9 = """
           select count(*) from batch.scheduled_occurrence
           where tenant_id = ? and workflow_definition_id = ? and scheduled_fire_time = ?
           and biz_date = ? and request_id = ? and occurrence_status = 'REQUESTED'
@@ -4776,7 +5119,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
     String customerNo = "AUTH_MISFIRE_" + UUID.randomUUID().toString().replace("-", "");
-        jdbcTemplate.update(
+    jdbcTemplate.update(
         updateJobDefinitionSql,
         objectMapper.writeValueAsString(Map.of(
             "fileFormatType",
@@ -4795,6 +5138,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     LocalDate bizDate = LocalDate.now(ZoneOffset.UTC).minusDays(1);
     ManualMisfire misfire = createManualMisfire(seed, bizDate);
     Map<String, Object> pendingBeforeRestart = pendingMisfireSnapshot(seed, misfire);
+    String schedulerName = triggerContext.getBean(Scheduler.class).getSchedulerName();
     if (triggerContext != null) {
       triggerContext.close();
       triggerContext = null;
@@ -4833,12 +5177,11 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
       await()
           .atMost(Duration.ofSeconds(40))
           .pollInterval(Duration.ofMillis(250))
-          .untilAsserted(
-              () -> {
-                Integer selectedQrtzSchedulerStateCount =
-                    jdbcTemplate.queryForObject(selectCountSql, Integer.class);
-                assertThat(selectedQrtzSchedulerStateCount).isEqualTo(2);
-              });
+          .untilAsserted(() -> {
+            Integer selectedQrtzSchedulerStateCount =
+                jdbcTemplate.queryForObject(selectCountSql, Integer.class, schedulerName);
+            assertThat(selectedQrtzSchedulerStateCount).isEqualTo(2);
+          });
       assertThat(securedConsole.getBean(BatchSecurityProperties.class).isBypassMode())
           .isFalse();
       int port = securedConsole.getEnvironment().getProperty("local.server.port", Integer.class);
@@ -4885,12 +5228,12 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
           .expectStatus()
           .isForbidden();
       assertThat(pendingMisfireSnapshot(seed, misfire)).isEqualTo(pendingBeforeRestart);
-              Integer selectedApprovalCommandCount =
-                  jdbcTemplate.queryForObject(selectCountSql2, Integer.class, TENANT, misfire.requestId());
-              assertThat(selectedApprovalCommandCount).isZero();
-              Integer selectedTriggerOutboxEventCount =
-                  jdbcTemplate.queryForObject(selectCountSql3, Integer.class, TENANT, misfire.requestId());
-              assertThat(selectedTriggerOutboxEventCount).isZero();
+      Integer selectedApprovalCommandCount =
+          jdbcTemplate.queryForObject(selectCountSql2, Integer.class, TENANT, misfire.requestId());
+      assertThat(selectedApprovalCommandCount).isZero();
+      Integer selectedTriggerOutboxEventCount =
+          jdbcTemplate.queryForObject(selectCountSql3, Integer.class, TENANT, misfire.requestId());
+      assertThat(selectedTriggerOutboxEventCount).isZero();
 
       byte[] responseBody = authenticatedConsolePost(client, maker, submissionPath, submissionBody)
           .expectStatus()
@@ -4936,38 +5279,38 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
           .atMost(Duration.ofSeconds(60))
           .pollInterval(Duration.ofMillis(200))
           .untilAsserted(() -> {
-            Integer selectedWorkflowRunCount =
-                jdbcTemplate.queryForObject(selectCountSql4, Integer.class, TENANT, misfire.requestId());
+            Integer selectedWorkflowRunCount = jdbcTemplate.queryForObject(
+                selectCountSql4, Integer.class, TENANT, misfire.requestId());
             assertThat(selectedWorkflowRunCount).isOne();
             Integer selectedCustomerAccountCount = new JdbcTemplate(businessDataSource)
                 .queryForObject(selectCountSql10, Integer.class, customerNo);
             assertThat(selectedCustomerAccountCount).isOne();
           });
-              Integer selectedTriggerOutboxEventCountRead2 =
-                  jdbcTemplate.queryForObject(selectCountSql5, Integer.class, TENANT, misfire.requestId());
-              assertThat(selectedTriggerOutboxEventCountRead2).isOne();
-              Integer selectedApprovalCommandCountRead2 = jdbcTemplate.queryForObject(
-                  selectCountSql6, Integer.class, TENANT, misfire.requestId(), approvalNo, OPERATOR);
-              assertThat(selectedApprovalCommandCountRead2).isOne();
-              Integer selectedTriggerMisfirePendingCount = jdbcTemplate.queryForObject(
-                  selectCountSql7,
-                  Integer.class,
-                  TENANT,
-                  seed.workflowDefinitionId(),
-                  Timestamp.from(misfire.fireTime()));
-              assertThat(selectedTriggerMisfirePendingCount).isOne();
-              Integer selectedWorkflowRunCountRead2 = jdbcTemplate.queryForObject(
-                  selectCountSql8, Integer.class, TENANT, misfire.requestId(), bizDate, bizDate);
-              assertThat(selectedWorkflowRunCountRead2).isOne();
-              Integer selectedScheduledOccurrenceCount = jdbcTemplate.queryForObject(
-                  selectCountSql9,
-                  Integer.class,
-                  TENANT,
-                  seed.workflowDefinitionId(),
-                  Timestamp.from(misfire.fireTime()),
-                  bizDate,
-                  misfire.requestId());
-              assertThat(selectedScheduledOccurrenceCount).isOne();
+      Integer selectedTriggerOutboxEventCountRead2 =
+          jdbcTemplate.queryForObject(selectCountSql5, Integer.class, TENANT, misfire.requestId());
+      assertThat(selectedTriggerOutboxEventCountRead2).isOne();
+      Integer selectedApprovalCommandCountRead2 = jdbcTemplate.queryForObject(
+          selectCountSql6, Integer.class, TENANT, misfire.requestId(), approvalNo, OPERATOR);
+      assertThat(selectedApprovalCommandCountRead2).isOne();
+      Integer selectedTriggerMisfirePendingCount = jdbcTemplate.queryForObject(
+          selectCountSql7,
+          Integer.class,
+          TENANT,
+          seed.workflowDefinitionId(),
+          Timestamp.from(misfire.fireTime()));
+      assertThat(selectedTriggerMisfirePendingCount).isOne();
+      Integer selectedWorkflowRunCountRead2 = jdbcTemplate.queryForObject(
+          selectCountSql8, Integer.class, TENANT, misfire.requestId(), bizDate, bizDate);
+      assertThat(selectedWorkflowRunCountRead2).isOne();
+      Integer selectedScheduledOccurrenceCount = jdbcTemplate.queryForObject(
+          selectCountSql9,
+          Integer.class,
+          TENANT,
+          seed.workflowDefinitionId(),
+          Timestamp.from(misfire.fireTime()),
+          bizDate,
+          misfire.requestId());
+      assertThat(selectedScheduledOccurrenceCount).isOne();
       assertThat(separateTrigger.process().isAlive())
           .as("the first Trigger JVM remains alive through authenticated recovery")
           .isTrue();
@@ -4999,7 +5342,6 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
             "--spring.quartz.job-store-type=jdbc",
             "--spring.quartz.jdbc.initialize-schema=never",
             "--spring.quartz.auto-startup=true",
-            "--spring.quartz.properties.org.quartz.scheduler.instanceName=E2eTriggerScheduler",
             "--spring.quartz.properties.org.quartz.scheduler.instanceId=" + instanceId,
             "--spring.quartz.properties.org.quartz.jobStore.class=org.quartz.impl.jdbcjobstore.JobStoreTX",
             "--spring.quartz.properties.org.quartz.jobStore.dataSource=quartzJobstoreDs",
@@ -5091,11 +5433,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
               and query ilike '%update batch.trigger_request%'
             """;
 
-    await()
-        .atMost(Duration.ofSeconds(20))
-        .pollInterval(Duration.ofMillis(25))
-        .untilAsserted(() ->
-    {
+    await().atMost(Duration.ofSeconds(20)).pollInterval(Duration.ofMillis(25)).untilAsserted(() -> {
       Integer selectedPgStatActivityCount =
           jdbcTemplate.queryForObject(selectCountSql, Integer.class);
       assertThat(selectedPgStatActivityCount).isGreaterThanOrEqualTo(1);
@@ -5166,7 +5504,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     properties.put("spring.main.web-application-type", "servlet");
     properties.put("spring.flyway.enabled", false);
     String excludedAutoConfigurations = String.join(
-        ",", OpenAiChatAutoConfiguration.class.getName(),
+        ",",
+        OpenAiChatAutoConfiguration.class.getName(),
         AnthropicChatAutoConfiguration.class.getName());
     properties.put("spring.autoconfigure.exclude", excludedAutoConfigurations);
     properties.put("batch.startup-self-check.enabled", false);
@@ -5184,13 +5523,15 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     String ownedExportId = null;
     forensicExportProperties.setStorageDir(exportDirectory.toString());
     try (var securedConsole = new SpringApplicationBuilder(BatchConsoleApiApplication.class)
-        .profiles("test", "e2e").run(arguments)) {
+        .profiles("test", "e2e")
+        .run(arguments)) {
       BatchSecurityProperties security = securedConsole.getBean(BatchSecurityProperties.class);
       assertThat(security.isBypassMode()).isFalse();
       int port = securedConsole.getEnvironment().getProperty("local.server.port", Integer.class);
       WebTestClient client = WebTestClient.bindToServer()
           .baseUrl("http://127.0.0.1:" + port)
-          .responseTimeout(Duration.ofSeconds(30)).build();
+          .responseTimeout(Duration.ofSeconds(30))
+          .build();
       ConsoleJwtService jwtService = securedConsole.getBean(ConsoleJwtService.class);
       AuthenticatedConsole admin =
           authenticateConsole(client, jwtService, "settlement-admin", "ROLE_ADMIN");
@@ -5201,24 +5542,52 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
       String operatePath = "/api/console/batch-days/operate";
       String reason = "Operator confirmed no expected work after source reconciliation";
       String requestBody = objectMapper.writeValueAsString(Map.of(
-          "tenantId", TENANT, "calendarCode", calendarCode, "bizDate", bizDate.toString(),
-          "action", "SETTLE_EMPTY", "operatorId", "forged-operator", "reason", reason));
-      client.post().uri(operatePath)
-          .cookie("XSRF-TOKEN", admin.csrf()).header("X-XSRF-TOKEN", admin.csrf())
-          .contentType(MediaType.APPLICATION_JSON).bodyValue(requestBody)
-          .exchange().expectStatus().isUnauthorized();
-      client.post().uri(operatePath).cookie("batch_console_token", admin.jwt())
-          .contentType(MediaType.APPLICATION_JSON).bodyValue(requestBody)
-          .exchange().expectStatus().isForbidden();
+          "tenantId",
+          TENANT,
+          "calendarCode",
+          calendarCode,
+          "bizDate",
+          bizDate.toString(),
+          "action",
+          "SETTLE_EMPTY",
+          "operatorId",
+          "forged-operator",
+          "reason",
+          reason));
+      client
+          .post()
+          .uri(operatePath)
+          .cookie("XSRF-TOKEN", admin.csrf())
+          .header("X-XSRF-TOKEN", admin.csrf())
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(requestBody)
+          .exchange()
+          .expectStatus()
+          .isUnauthorized();
+      client
+          .post()
+          .uri(operatePath)
+          .cookie("batch_console_token", admin.jwt())
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(requestBody)
+          .exchange()
+          .expectStatus()
+          .isForbidden();
       authenticatedConsolePost(client, auditor, operatePath, requestBody)
-          .expectStatus().isForbidden();
+          .expectStatus()
+          .isForbidden();
       String otherTenantBody = requestBody.replace("\"tenantId\":\"t1\"", "\"tenantId\":\"t2\"");
       authenticatedConsolePost(client, tenantAdmin, operatePath, otherTenantBody)
-          .expectStatus().isForbidden();
+          .expectStatus()
+          .isForbidden();
       // 此查询允许租户管理员，确保另行经过租户边界而非只由写接口角色拒绝。
-      client.get().uri("/api/console/batch-days/catch-up-preview?tenantId=t2&calendarCode=" + calendarCode)
+      client
+          .get()
+          .uri("/api/console/batch-days/catch-up-preview?tenantId=t2&calendarCode=" + calendarCode)
           .cookie("batch_console_token", tenantAdmin.jwt())
-          .exchange().expectStatus().isForbidden();
+          .exchange()
+          .expectStatus()
+          .isForbidden();
       Integer deniedAuditCount = jdbcTemplate.queryForObject(
           selectAuditCountSql, Integer.class, TENANT, calendarCode, bizDate);
       String deniedDayStatus = batchDayStatus(calendarCode, bizDate);
@@ -5226,25 +5595,47 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
       assertThat(deniedDayStatus).isEqualTo("CUTOFF");
 
       authenticatedConsolePost(client, admin, operatePath, requestBody)
-          .expectStatus().isOk();
+          .expectStatus()
+          .isOk();
       String settledDayStatus = batchDayStatus(calendarCode, bizDate);
       Integer settledAuditCount = jdbcTemplate.queryForObject(
           selectAuditCountSql, Integer.class, TENANT, calendarCode, bizDate);
       assertThat(settledDayStatus).isEqualTo("SETTLED");
       assertThat(settledAuditCount).isEqualTo(1);
       String exportBody = objectMapper.writeValueAsString(Map.of(
-          "tenantId", TENANT, "bizDateFrom", bizDate.toString(), "bizDateTo", bizDate.toString(),
-          "exportFormat", "BUNDLE", "requestedBy", "forged-exporter"));
+          "tenantId",
+          TENANT,
+          "bizDateFrom",
+          bizDate.toString(),
+          "bizDateTo",
+          bizDate.toString(),
+          "exportFormat",
+          "BUNDLE",
+          "requestedBy",
+          "forged-exporter"));
       String exportResponse = authenticatedConsolePost(
               client, admin, "/api/console/forensic/export", exportBody)
-          .expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody();
+          .expectStatus()
+          .isOk()
+          .expectBody(String.class)
+          .returnResult()
+          .getResponseBody();
       JsonNode exportResult = objectMapper.readTree(exportResponse).path("data");
       String exportId = exportResult.path("exportId").asText();
       ownedExportId = exportId;
       assertThat(exportId).isNotBlank();
-      String downloadPath = "/api/console/forensic/export/" + exportId + "/download?tenantId=" + TENANT;
-      byte[] bundle = client.get().uri(downloadPath).cookie("batch_console_token", admin.jwt())
-          .exchange().expectStatus().isOk().expectBody(byte[].class).returnResult().getResponseBody();
+      String downloadPath =
+          "/api/console/forensic/export/" + exportId + "/download?tenantId=" + TENANT;
+      byte[] bundle = client
+          .get()
+          .uri(downloadPath)
+          .cookie("batch_console_token", admin.jwt())
+          .exchange()
+          .expectStatus()
+          .isOk()
+          .expectBody(byte[].class)
+          .returnResult()
+          .getResponseBody();
       assertThat(bundle).isNotEmpty();
       Map<String, JsonNode> entries = new HashMap<>();
       try (var zip = new ZipInputStream(new ByteArrayInputStream(bundle), StandardCharsets.UTF_8)) {
@@ -5283,7 +5674,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     }
   }
 
-  private void cleanupAuthenticatedEmptyDay(String calendarCode, LocalDate bizDate, String exportId) {
+  private void cleanupAuthenticatedEmptyDay(
+      String calendarCode, LocalDate bizDate, String exportId) {
     final String deleteExportSql = """
         delete from batch.forensic_export_log where tenant_id = ? and export_id = ?
         """;
@@ -5356,47 +5748,44 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
       ZoneId businessZone,
       LocalTime scheduledLocalTime)
       throws Exception {
-        final String updateBusinessCalendarSql = """
+    final String updateBusinessCalendarSql = """
             update batch.business_calendar set catch_up_policy = 'MANUAL_APPROVAL', catch_up_max_days = 3\s\
             where tenant_id = ? and calendar_code = ?\
             """;
-        final String insertBatchDayInstanceSql = """
+    final String insertBatchDayInstanceSql = """
             insert into batch.batch_day_instance (tenant_id, calendar_code, biz_date, day_status, open_at,\s\
             cutoff_at) values (?, ?, ?, 'CUTOFF', current_timestamp, current_timestamp)\s\
             on conflict (tenant_id, calendar_code, biz_date) do update\s\
             set day_status = 'CUTOFF', cutoff_at = current_timestamp\
             """;
-        final String updateTenantConfigurationRevisionSql = """
+    final String updateTenantConfigurationRevisionSql = """
             update batch.tenant_configuration_revision set updated_at = ? where tenant_id = ?
         """;
-        final String selectOccurrenceStatusSql = """
+    final String selectOccurrenceStatusSql = """
             select occurrence_status from batch.scheduled_occurrence where tenant_id = ?\s\
             and workflow_definition_id = ? and scheduled_fire_time = ?\
             """;
-        final String selectBizDateSql = """
+    final String selectBizDateSql = """
             select biz_date from batch.scheduled_occurrence where tenant_id = ? and workflow_definition_id = ?\s\
             and scheduled_fire_time = ?\
             """;
-        final String selectOccurrenceStatusSql2 = """
+    final String selectOccurrenceStatusSql2 = """
             select occurrence_status from batch.scheduled_occurrence where tenant_id = ?\s\
             and workflow_definition_id = ? and scheduled_fire_time = ?\
             """;
-        final String selectCountSql = """
+    final String selectCountSql = """
             select count(*) from batch.trigger_misfire_pending p\s\
             join batch.trigger_request r on r.id = p.catch_up_request_id where p.tenant_id = ?\s\
             and p.workflow_definition_id = ? and p.scheduled_fire_time = ? and p.status = 'PENDING'\s\
             and r.request_status = 'ACCEPTED'\
             """;
-        final String selectRequestIdSql = """
+    final String selectRequestIdSql = """
             select r.request_id from batch.trigger_misfire_pending p\s\
             join batch.trigger_request r on r.id = p.catch_up_request_id where p.tenant_id = ?\s\
             and p.workflow_definition_id = ? and p.scheduled_fire_time = ?\
             """;
 
-        jdbcTemplate.update(
-        updateBusinessCalendarSql,
-        TENANT,
-        calendarCode);
+    jdbcTemplate.update(updateBusinessCalendarSql, TENANT, calendarCode);
     Scheduler scheduler = triggerContext.getBean(Scheduler.class);
     assertThat(scheduler.getMetaData().isJobStoreSupportsPersistence()).isTrue();
     scheduler.start();
@@ -5450,11 +5839,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         .build();
     assertThat(originalFireTime).isBefore(Date.from(Instant.now().minusSeconds(60)));
     assertThat(originalFireTime.toInstant().atZone(businessZone).toLocalDate()).isEqualTo(bizDate);
-        jdbcTemplate.update(
-        insertBatchDayInstanceSql,
-        TENANT,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(insertBatchDayInstanceSql, TENANT, calendarCode, bizDate);
     TriggerDescriptor descriptor = new TriggerDescriptor();
     descriptor.setTenantId(TENANT);
     descriptor.setWorkflowDefinitionId(seed.workflowDefinitionId());
@@ -5467,28 +5852,29 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     descriptor.setCalendarCode(calendarCode);
     descriptor.setEnabled(true);
     descriptor.setWorkflowEnabled(true);
-        jdbcTemplate.update(
+    jdbcTemplate.update(
         updateTenantConfigurationRevisionSql,
         Timestamp.from(startAt.minus(Duration.ofDays(1))),
         TENANT);
+    var plannedFireTimes = QuartzScheduledFireEnumerator.fireTimeSource(cronTrigger);
     int materialized = triggerContext
         .getBean(TriggerScheduledOccurrencePlanner.class)
-        .materialize(descriptor, cronTrigger, originalFireTime.toInstant());
+        .materialize(descriptor, plannedFireTimes, originalFireTime.toInstant());
     assertThat(materialized).isEqualTo(1);
-        String selectedOccurrenceStatus = jdbcTemplate.queryForObject(
-            selectOccurrenceStatusSql,
-            String.class,
-            TENANT,
-            seed.workflowDefinitionId(),
-            Timestamp.from(originalFireTime.toInstant()));
-        assertThat(selectedOccurrenceStatus).isEqualTo("PLANNED");
-        LocalDate selectedBizDate = jdbcTemplate.queryForObject(
-            selectBizDateSql,
-            LocalDate.class,
-            TENANT,
-            seed.workflowDefinitionId(),
-            Timestamp.from(originalFireTime.toInstant()));
-        assertThat(selectedBizDate).isEqualTo(bizDate);
+    String selectedOccurrenceStatus = jdbcTemplate.queryForObject(
+        selectOccurrenceStatusSql,
+        String.class,
+        TENANT,
+        seed.workflowDefinitionId(),
+        Timestamp.from(originalFireTime.toInstant()));
+    assertThat(selectedOccurrenceStatus).isEqualTo("PLANNED");
+    LocalDate selectedBizDate = jdbcTemplate.queryForObject(
+        selectBizDateSql,
+        LocalDate.class,
+        TENANT,
+        seed.workflowDefinitionId(),
+        Timestamp.from(originalFireTime.toInstant()));
+    assertThat(selectedBizDate).isEqualTo(bizDate);
     scheduler.scheduleJob(job, cronTrigger);
 
     await()
@@ -5617,10 +6003,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
 
     startTriggerHttpServer();
     awaitWorkerOnline();
-    jdbcTemplate.update(
-        insertTenantSql,
-        TENANT,
-        "disabled Workflow misfire E2E");
+    jdbcTemplate.update(insertTenantSql, TENANT, "disabled Workflow misfire E2E");
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
     String customerNo = "DISABLED_MISFIRE_" + UUID.randomUUID().toString().replace("-", "");
@@ -5637,13 +6020,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
             "content", customerContent)),
         TENANT,
         seed.jobCode());
-    jdbcTemplate.update(
-        updateBusinessCalendarSql,
-        TENANT);
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        TENANT,
-        seed.workflowDefinitionId());
+    jdbcTemplate.update(updateBusinessCalendarSql, TENANT);
+    jdbcTemplate.update(updateWorkflowDefinitionSql, TENANT, seed.workflowDefinitionId());
 
     Scheduler scheduler = triggerContext.getBean(Scheduler.class);
     assertThat(scheduler.getMetaData().isJobStoreSupportsPersistence())
@@ -5767,10 +6145,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
           assertThat(selectedTriggerRequestCount).isEqualTo(1);
         });
     String recoveryRequestId = jdbcTemplate.queryForObject(
-        selectRequestIdSql,
-        String.class,
-        TENANT,
-        seed.workflowDefinitionId());
+        selectRequestIdSql, String.class, TENANT, seed.workflowDefinitionId());
     await()
         .atMost(Duration.ofSeconds(60))
         .pollInterval(Duration.ofMillis(200))
@@ -5785,13 +6160,18 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
           assertThat(selectedWorkflowNodeRunCount).isEqualTo(1);
         });
     Long jobInstanceId = jdbcTemplate.queryForObject(
-        selectJobInstanceIdSql, Long.class, TENANT, seed.workflowDefinitionId(), TENANT, recoveryRequestId);
+        selectJobInstanceIdSql,
+        Long.class,
+        TENANT,
+        seed.workflowDefinitionId(),
+        TENANT,
+        recoveryRequestId);
     await()
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String selectedInstanceStatus =
-              jdbcTemplate.queryForObject(selectInstanceStatusSql, String.class, TENANT, jobInstanceId);
+          String selectedInstanceStatus = jdbcTemplate.queryForObject(
+              selectInstanceStatusSql, String.class, TENANT, jobInstanceId);
           assertThat(selectedInstanceStatus).isEqualTo("SUCCESS");
           String selectedRunStatus = jdbcTemplate.queryForObject(
               selectRunStatusSql, String.class, TENANT, TENANT, recoveryRequestId);
@@ -5842,7 +6222,10 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         and trigger_type = 'CATCH_UP'\
         """;
     final String selectCountSql2 = """
-        select count(*) from batch.trigger_outbox_event where tenant_id = ?
+        select count(*) from batch.trigger_outbox_event event
+        join batch.trigger_request request using (tenant_id, request_id)
+        where request.tenant_id = ? and request.workflow_definition_id = ?
+          and request.trigger_type = 'CATCH_UP'
     """;
     final String selectRequestIdSql = """
         select request_id from batch.trigger_request where tenant_id = ? and workflow_definition_id = ?\s\
@@ -5893,13 +6276,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
             "content", customerContent)),
         TENANT,
         seed.jobCode());
-    jdbcTemplate.update(
-        updateBusinessCalendarSql,
-        TENANT);
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        TENANT,
-        seed.workflowDefinitionId());
+    jdbcTemplate.update(updateBusinessCalendarSql, TENANT);
+    jdbcTemplate.update(updateWorkflowDefinitionSql, TENANT, seed.workflowDefinitionId());
 
     Scheduler scheduler = triggerContext.getBean(Scheduler.class);
     assertThat(scheduler.getMetaData().isJobStoreSupportsPersistence())
@@ -5998,21 +6376,15 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
       Integer selectedTriggerRequestCount = jdbcTemplate.queryForObject(
           selectCountSql, Integer.class, TENANT, seed.workflowDefinitionId());
       assertThat(selectedTriggerRequestCount).isEqualTo(1);
-      Integer selectedTriggerOutboxEventCount =
-          jdbcTemplate.queryForObject(selectCountSql2, Integer.class, TENANT);
+      Integer selectedTriggerOutboxEventCount = jdbcTemplate.queryForObject(
+          selectCountSql2, Integer.class, TENANT, seed.workflowDefinitionId());
       assertThat(selectedTriggerOutboxEventCount).isEqualTo(1);
     });
 
     String catchUpRequestId = jdbcTemplate.queryForObject(
-        selectRequestIdSql,
-        String.class,
-        TENANT,
-        seed.workflowDefinitionId());
-    Long triggerRequestId = jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class,
-        TENANT,
-        catchUpRequestId);
+        selectRequestIdSql, String.class, TENANT, seed.workflowDefinitionId());
+    Long triggerRequestId =
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, catchUpRequestId);
     await().atMost(Duration.ofSeconds(60)).untilAsserted(() -> {
       Integer selectedWorkflowRunCount = jdbcTemplate.queryForObject(
           selectCountSql3, Integer.class, TENANT, seed.workflowDefinitionId(), triggerRequestId);
@@ -6021,11 +6393,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
           jdbcTemplate.queryForObject(selectCountSql4, Integer.class, TENANT, triggerRequestId);
       assertThat(selectedWorkflowNodeRunCount).isEqualTo(1);
     });
-    Long jobInstanceId = jdbcTemplate.queryForObject(
-        selectJobInstanceIdSql,
-        Long.class,
-        TENANT,
-        triggerRequestId);
+    Long jobInstanceId =
+        jdbcTemplate.queryForObject(selectJobInstanceIdSql, Long.class, TENANT, triggerRequestId);
     await().atMost(Duration.ofSeconds(120)).untilAsserted(() -> {
       String selectedRunStatus =
           jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, triggerRequestId);
@@ -6191,25 +6560,16 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
 
     startTriggerHttpServer();
     awaitWorkerOnline();
-    jdbcTemplate.update(
-        insertTenantSql,
-        TENANT,
-        "DST holiday misfire E2E");
+    jdbcTemplate.update(insertTenantSql, TENANT, "DST holiday misfire E2E");
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
     LocalDate expectedBizDate = LocalDate.of(2026, 3, 9);
     LaunchSeed source = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API);
-    Long sourceJobDefinitionId = jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class,
-        TENANT,
-        source.jobCode());
-    Long sourceTriggerRequestId = jdbcTemplate.queryForObject(
-        selectIdSql2,
-        Long.class,
-        TENANT,
-        source.requestId());
+    Long sourceJobDefinitionId =
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, source.jobCode());
+    Long sourceTriggerRequestId =
+        jdbcTemplate.queryForObject(selectIdSql2, Long.class, TENANT, source.requestId());
     LocalDate sourceBizDate = expectedBizDate.minusDays(3);
     String sourceDedupKey = "dst-holiday-source-" + UUID.randomUUID();
     jdbcTemplate.queryForObject(
@@ -6222,10 +6582,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         "dst-holiday-source-" + UUID.randomUUID(),
         sourceBizDate,
         sourceDedupKey);
-    jdbcTemplate.update(
-        updateTriggerRequestSql,
-        TENANT,
-        source.requestId());
+    jdbcTemplate.update(updateTriggerRequestSql, TENANT, source.requestId());
     jdbcTemplate.update(
         updateWorkflowNodeSql,
         """
@@ -6250,29 +6607,16 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         seed.jobCode());
 
     String calendarCode = "dst_holiday_" + UUID.randomUUID().toString().replace("-", "");
-    Long calendarId = jdbcTemplate.queryForObject(
-        insertBusinessCalendarSql,
-        Long.class,
-        TENANT,
-        calendarCode);
+    Long calendarId =
+        jdbcTemplate.queryForObject(insertBusinessCalendarSql, Long.class, TENANT, calendarCode);
+    jdbcTemplate.update(insertCalendarHolidaySql, TENANT, calendarId);
     jdbcTemplate.update(
-        insertCalendarHolidaySql,
-        TENANT,
-        calendarId);
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        calendarCode,
-        TENANT,
-        seed.workflowDefinitionId());
+        updateWorkflowDefinitionSql, calendarCode, TENANT, seed.workflowDefinitionId());
 
     Instant expectedFireTime = Instant.parse("2026-03-08T07:00:00Z");
     assertThat(expectedFireTime.atZone(ZoneId.of("America/New_York")).toLocalTime())
         .isEqualTo(LocalTime.of(3, 0));
-    jdbcTemplate.update(
-        insertBatchDayInstanceSql,
-        TENANT,
-        calendarCode,
-        expectedBizDate);
+    jdbcTemplate.update(insertBatchDayInstanceSql, TENANT, calendarCode, expectedBizDate);
 
     Scheduler scheduler = triggerContext.getBean(Scheduler.class);
     assertThat(scheduler.getMetaData().isJobStoreSupportsPersistence()).isTrue();
@@ -6337,13 +6681,10 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     descriptor.setWorkflowEnabled(true);
     TriggerScheduledOccurrencePlanner occurrencePlanner =
         triggerContext.getBean(TriggerScheduledOccurrencePlanner.class);
-    assertThat(occurrencePlanner.materialize(descriptor, cronTrigger, Instant.now()))
+    var plannedFireTimes = QuartzScheduledFireEnumerator.fireTimeSource(cronTrigger);
+    assertThat(occurrencePlanner.materialize(descriptor, plannedFireTimes, Instant.now()))
         .isPositive();
-    jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        TENANT,
-        calendarCode,
-        expectedBizDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, TENANT, calendarCode, expectedBizDate);
     scheduler.scheduleJob(job, cronTrigger);
 
     AtomicInteger misfireCallbacks = new AtomicInteger();
@@ -6417,21 +6758,19 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
           assertThat(selectedTriggerRequestCount).isEqualTo(1);
         });
     String requestId = jdbcTemplate.queryForObject(
-        selectRequestIdSql,
-        String.class,
-        TENANT,
-        seed.workflowDefinitionId());
-    Long triggerRequestId = jdbcTemplate.queryForObject(
-        selectIdSql2,
-        Long.class,
-        TENANT,
-        requestId);
+        selectRequestIdSql, String.class, TENANT, seed.workflowDefinitionId());
+    Long triggerRequestId =
+        jdbcTemplate.queryForObject(selectIdSql2, Long.class, TENANT, requestId);
     await()
         .atMost(Duration.ofSeconds(60))
         .pollInterval(Duration.ofMillis(100))
         .untilAsserted(() -> {
           Integer selectedWorkflowRunCount = jdbcTemplate.queryForObject(
-              selectCountSql2, Integer.class, TENANT, seed.workflowDefinitionId(), triggerRequestId);
+              selectCountSql2,
+              Integer.class,
+              TENANT,
+              seed.workflowDefinitionId(),
+              triggerRequestId);
           assertThat(selectedWorkflowRunCount).isEqualTo(1);
         });
     batchDaySettleScheduler.settle();
@@ -6449,11 +6788,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     assertThat(selectedWorkflowNodeRunCount).isZero();
     String sourceBusinessKey = "job:" + source.jobCode() + ":" + sourceBizDate;
     jdbcTemplate.update(insertResultVersionSql, TENANT, sourceBusinessKey, TENANT, sourceDedupKey);
-    Long expectedResultVersionId = jdbcTemplate.queryForObject(
-        selectIdSql3,
-        Long.class,
-        TENANT,
-        sourceBusinessKey);
+    Long expectedResultVersionId =
+        jdbcTemplate.queryForObject(selectIdSql3, Long.class, TENANT, sourceBusinessKey);
     resultVersionPromoteService.promote(TENANT, expectedResultVersionId);
     String selectedStatus =
         jdbcTemplate.queryForObject(selectStatusSql, String.class, TENANT, expectedResultVersionId);
@@ -6466,11 +6802,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
               jdbcTemplate.queryForObject(selectCountSql4, Integer.class, TENANT, triggerRequestId);
           assertThat(selectedWorkflowNodeRunCountRead2).isEqualTo(1);
         });
-    Long jobInstanceId = jdbcTemplate.queryForObject(
-        selectJobInstanceIdSql,
-        Long.class,
-        TENANT,
-        triggerRequestId);
+    Long jobInstanceId =
+        jdbcTemplate.queryForObject(selectJobInstanceIdSql, Long.class, TENANT, triggerRequestId);
     LocalDate selectedBizDate =
         jdbcTemplate.queryForObject(selectBizDateSql, LocalDate.class, TENANT, triggerRequestId);
     assertThat(selectedBizDate).isEqualTo(expectedBizDate);
@@ -6487,11 +6820,11 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String selectedRunStatus =
-              jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, triggerRequestId);
+          String selectedRunStatus = jdbcTemplate.queryForObject(
+              selectRunStatusSql, String.class, TENANT, triggerRequestId);
           assertThat(selectedRunStatus).isEqualTo("SUCCESS");
-          String selectedInstanceStatus =
-              jdbcTemplate.queryForObject(selectInstanceStatusSql, String.class, TENANT, jobInstanceId);
+          String selectedInstanceStatus = jdbcTemplate.queryForObject(
+              selectInstanceStatusSql, String.class, TENANT, jobInstanceId);
           assertThat(selectedInstanceStatus).isEqualTo("SUCCESS");
           Integer selectedCount = new JdbcTemplate(businessDataSource)
               .queryForObject(selectCountSql6, Integer.class, TENANT, customerNo);
@@ -6510,102 +6843,102 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
   @DisplayName("根 Workflow 跨日依赖等待后由恢复扫描器派发,Worker 消费恢复参数并完成业务写入")
   void crossDayDependencyWait_recoversRootPayloadAndCompletesImportBusinessEffect()
       throws Exception {
-        final String selectCountSql3 = """
+    final String selectCountSql3 = """
             select count(*)::int from biz.customer_account where tenant_id = ? and customer_no = ?\
             """;
 
-        final String selectIdSql = """
+    final String selectIdSql = """
             select id from batch.job_definition where tenant_id = ? and job_code = ?
         """;
-        final String selectIdSql2 = """
+    final String selectIdSql2 = """
             select id from batch.trigger_request where tenant_id = ? and request_id = ?
         """;
-        final String insertJobInstanceSql = """
+    final String insertJobInstanceSql = """
             insert into batch.job_instance (tenant_id, job_definition_id, trigger_request_id, job_code,\s\
             instance_no, biz_date, trigger_type, instance_status, queue_code, worker_group, priority, dedup_key,\s\
             run_attempt, version, expected_partition_count, success_partition_count, failed_partition_count,\s\
             params_snapshot) values (?, ?, ?, ?, ?, ?, 'API', 'SUCCESS', 'e2e-q', 'DISPATCH', 5, ?, 1, 0, 0, 0,\s\
             0, '{}'::jsonb) returning id\
             """;
-        final String updateTriggerRequestSql = """
+    final String updateTriggerRequestSql = """
             update batch.trigger_request set request_status = 'LAUNCHED' where tenant_id = ? and request_id = ?\
             """;
-        final String updateWorkflowNodeSql = """
+    final String updateWorkflowNodeSql = """
             update batch.workflow_node set cross_day_dependencies = ?::jsonb,\s\
             cross_day_dependency_timeout_seconds = 600 where tenant_id = ? and workflow_definition_id = ?\s\
             and node_code = 'JOB'\
             """;
-        final String deleteTriggerRequestSql = """
+    final String deleteTriggerRequestSql = """
             delete from batch.trigger_request where tenant_id = ? and request_id = ?
         """;
-        final String selectCountSql = """
+    final String selectCountSql = """
             select count(*) from batch.workflow_run where tenant_id = ? and workflow_definition_id = ?\s\
             and trigger_request_id = (select id from batch.trigger_request where tenant_id = ?\s\
             and request_id = ?)\
             """;
-        final String selectIdSql3 = """
+    final String selectIdSql3 = """
             select id from batch.workflow_run where tenant_id = ? and workflow_definition_id = ?\s\
             and trigger_request_id = (select id from batch.trigger_request where tenant_id = ?\s\
             and request_id = ?)\
             """;
-        final String selectCoalesceSql = """
+    final String selectCoalesceSql = """
             select coalesce(string_agg(node_code || ':' || node_status, ',' order by id), '')\s\
             from batch.workflow_node_run where workflow_run_id = ?\
             """;
-        final String selectRunStatusSql = """
+    final String selectRunStatusSql = """
             select run_status || ':' || coalesce(current_node_code, '') from batch.workflow_run\s\
             where tenant_id = ? and id = ?\
             """;
-        final String selectNodeStatusSql = """
+    final String selectNodeStatusSql = """
             select node_status from batch.workflow_node_run where workflow_run_id = ? and node_code = 'JOB'\s\
             order by run_seq desc limit 1\
             """;
-        final String selectCountSql2 = """
+    final String selectCountSql2 = """
             select count(*) from batch.workflow_node_run where workflow_run_id = ? and node_code = 'JOB'\s\
             and job_instance_id is not null\
             """;
-        final String insertResultVersionSql = """
+    final String insertResultVersionSql = """
         insert into batch.result_version (tenant_id, business_key, version_no, job_instance_id,
           status, payload_storage, payload_json, generated_at, generated_by,
           promotion_policy) values (?, ?, 1, ?, 'PENDING',
           'INLINE_JSON', '{"sourceBatch":"previous-day"}'::jsonb, current_timestamp,
           'cross-day-e2e', 'AUTO_LATEST')
         """;
-        final String selectIdSql4 = """
+    final String selectIdSql4 = """
             select id from batch.result_version where tenant_id = ? and business_key = ? and version_no = 1\
             """;
-        final String selectStatusSql = """
+    final String selectStatusSql = """
             select status from batch.result_version where tenant_id = ? and id = ?
         """;
-        final String selectJobInstanceIdSql = """
+    final String selectJobInstanceIdSql = """
             select job_instance_id from batch.workflow_node_run where workflow_run_id = ? and node_code = 'JOB'\s\
             and job_instance_id is not null order by run_seq desc limit 1\
             """;
-        final String selectParamsSnapshotSql = """
+    final String selectParamsSnapshotSql = """
             select params_snapshot->'effectiveParams'->>'rootMarker' from batch.job_instance where tenant_id = ?\s\
             and id = ?\
             """;
-        final String selectParamsSnapshotSql2 = """
+    final String selectParamsSnapshotSql2 = """
             select params_snapshot->'effectiveParams'->'crossDay'->'prior_day'->'output'->>'sourceBatch'\s\
             from batch.job_instance where tenant_id = ? and id = ?\
             """;
-        final String selectParamsSnapshotSql3 = """
+    final String selectParamsSnapshotSql3 = """
             select params_snapshot->'effectiveParams'->'crossDay'->'prior_day'->>'resultVersionId'\s\
             from batch.job_instance where tenant_id = ? and id = ?\
             """;
-        final String selectBizDateSql = """
+    final String selectBizDateSql = """
             select biz_date from batch.job_instance where tenant_id = ? and id = ?
         """;
-        final String selectDataIntervalStartSql = """
+    final String selectDataIntervalStartSql = """
             select data_interval_start from batch.job_instance where tenant_id = ? and id = ?\
             """;
-        final String selectDataIntervalEndSql = """
+    final String selectDataIntervalEndSql = """
             select data_interval_end from batch.job_instance where tenant_id = ? and id = ?\
             """;
-        final String selectInstanceStatusSql = """
+    final String selectInstanceStatusSql = """
             select instance_status from batch.job_instance where tenant_id = ? and id = ?
         """;
-        final String selectRunStatusSql2 = """
+    final String selectRunStatusSql2 = """
             select run_status from batch.workflow_run where tenant_id = ? and id = ?
         """;
 
@@ -6615,16 +6948,10 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
 
     LaunchSeed source = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API);
-    Long sourceJobDefinitionId = jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class,
-        TENANT,
-        source.jobCode());
-    Long sourceTriggerRequestId = jdbcTemplate.queryForObject(
-        selectIdSql2,
-        Long.class,
-        TENANT,
-        source.requestId());
+    Long sourceJobDefinitionId =
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, source.jobCode());
+    Long sourceTriggerRequestId =
+        jdbcTemplate.queryForObject(selectIdSql2, Long.class, TENANT, source.requestId());
     String sourceInstanceNo = "cross-day-source-" + UUID.randomUUID();
     String sourceDedupKey = "cross-day-source-dedup-" + UUID.randomUUID();
     Long sourceJobInstanceId = jdbcTemplate.queryForObject(
@@ -6637,13 +6964,10 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         sourceInstanceNo,
         crossDayBizDate.minusDays(1),
         sourceDedupKey);
-        jdbcTemplate.update(
-        updateTriggerRequestSql,
-        TENANT,
-        source.requestId());
+    jdbcTemplate.update(updateTriggerRequestSql, TENANT, source.requestId());
     LaunchSeed downstream = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
-        jdbcTemplate.update(
+    jdbcTemplate.update(
         updateWorkflowNodeSql,
         """
         [{"alias":"prior_day","jobCode":"%s","bizDateOffset":-1,"scope":"REQUIRED",
@@ -6651,10 +6975,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         """.formatted(source.jobCode()),
         TENANT,
         downstream.workflowDefinitionId());
-        jdbcTemplate.update(
-        deleteTriggerRequestSql,
-        TENANT,
-        downstream.requestId());
+    jdbcTemplate.update(deleteTriggerRequestSql, TENANT, downstream.requestId());
 
     String customerNo = "CROSSDAY_" + UUID.randomUUID().toString().replace("-", "");
     String rootMarker = "root-" + UUID.randomUUID();
@@ -6708,65 +7029,50 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
           assertThat(selectedWorkflowRunCount).isEqualTo(1);
         });
     Long workflowRunId = jdbcTemplate.queryForObject(
-        selectIdSql3,
-        Long.class,
-        TENANT,
-        downstream.workflowDefinitionId(),
-        TENANT,
-        requestId);
+        selectIdSql3, Long.class, TENANT, downstream.workflowDefinitionId(), TENANT, requestId);
     await()
         .atMost(Duration.ofSeconds(30))
         .pollInterval(Duration.ofMillis(100))
         .untilAsserted(() -> {
-          String nodeRuns = jdbcTemplate.queryForObject(
-              selectCoalesceSql,
-              String.class,
-              workflowRunId);
-          String runState = jdbcTemplate.queryForObject(
-              selectRunStatusSql,
-              String.class,
-              TENANT,
-              workflowRunId);
-          List<String> selectedNodeStatusValues =
-              jdbcTemplate.query(selectNodeStatusSql, (rs, rowNum) -> rs.getString(1), workflowRunId);
+          String nodeRuns =
+              jdbcTemplate.queryForObject(selectCoalesceSql, String.class, workflowRunId);
+          String runState =
+              jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
+          List<String> selectedNodeStatusValues = jdbcTemplate.query(
+              selectNodeStatusSql, (rs, rowNum) -> rs.getString(1), workflowRunId);
           assertThat(selectedNodeStatusValues)
               .as("workflowRun state=%s nodeRuns=%s", runState, nodeRuns)
               .containsExactly("WAITING_DEPENDENCY");
         });
-        Integer selectedWorkflowNodeRunCount =
-            jdbcTemplate.queryForObject(selectCountSql2, Integer.class, workflowRunId);
-        assertThat(selectedWorkflowNodeRunCount).isZero();
+    Integer selectedWorkflowNodeRunCount =
+        jdbcTemplate.queryForObject(selectCountSql2, Integer.class, workflowRunId);
+    assertThat(selectedWorkflowNodeRunCount).isZero();
 
     String sourceBusinessKey = "job:" + source.jobCode() + ":" + crossDayBizDate.minusDays(1);
-        jdbcTemplate.update(insertResultVersionSql, TENANT, sourceBusinessKey, sourceJobInstanceId);
-    Long expectedResultVersionId = jdbcTemplate.queryForObject(
-        selectIdSql4,
-        Long.class,
-        TENANT,
-        sourceBusinessKey);
+    jdbcTemplate.update(insertResultVersionSql, TENANT, sourceBusinessKey, sourceJobInstanceId);
+    Long expectedResultVersionId =
+        jdbcTemplate.queryForObject(selectIdSql4, Long.class, TENANT, sourceBusinessKey);
     resultVersionPromoteService.promote(TENANT, expectedResultVersionId);
-        String selectedStatus =
-            jdbcTemplate.queryForObject(selectStatusSql, String.class, TENANT, expectedResultVersionId);
-        assertThat(selectedStatus).isEqualTo("EFFECTIVE");
+    String selectedStatus =
+        jdbcTemplate.queryForObject(selectStatusSql, String.class, TENANT, expectedResultVersionId);
+    assertThat(selectedStatus).isEqualTo("EFFECTIVE");
 
     await()
         .atMost(Duration.ofSeconds(90))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
           List<Long> jobInstanceIds = jdbcTemplate.query(
-              selectJobInstanceIdSql,
-              (rs, rowNum) -> rs.getLong(1),
-              workflowRunId);
+              selectJobInstanceIdSql, (rs, rowNum) -> rs.getLong(1), workflowRunId);
           assertThat(jobInstanceIds).hasSize(1);
           Long jobInstanceId = jobInstanceIds.getFirst();
-          String selectedParamsSnapshot =
-              jdbcTemplate.queryForObject(selectParamsSnapshotSql, String.class, TENANT, jobInstanceId);
+          String selectedParamsSnapshot = jdbcTemplate.queryForObject(
+              selectParamsSnapshotSql, String.class, TENANT, jobInstanceId);
           assertThat(selectedParamsSnapshot).isEqualTo(rootMarker);
-          String selectedParamsSnapshotRead2 =
-              jdbcTemplate.queryForObject(selectParamsSnapshotSql2, String.class, TENANT, jobInstanceId);
+          String selectedParamsSnapshotRead2 = jdbcTemplate.queryForObject(
+              selectParamsSnapshotSql2, String.class, TENANT, jobInstanceId);
           assertThat(selectedParamsSnapshotRead2).isEqualTo("previous-day");
-          String selectedParamsSnapshotRead3 =
-              jdbcTemplate.queryForObject(selectParamsSnapshotSql3, String.class, TENANT, jobInstanceId);
+          String selectedParamsSnapshotRead3 = jdbcTemplate.queryForObject(
+              selectParamsSnapshotSql3, String.class, TENANT, jobInstanceId);
           assertThat(selectedParamsSnapshotRead3).isEqualTo(expectedResultVersionId.toString());
           LocalDate selectedBizDate =
               jdbcTemplate.queryForObject(selectBizDateSql, LocalDate.class, TENANT, jobInstanceId);
@@ -6777,8 +7083,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
           Timestamp selectedDataIntervalEnd = jdbcTemplate.queryForObject(
               selectDataIntervalEndSql, Timestamp.class, TENANT, jobInstanceId);
           assertThat(selectedDataIntervalEnd).isEqualTo(Timestamp.from(intervalEnd));
-          String selectedInstanceStatus =
-              jdbcTemplate.queryForObject(selectInstanceStatusSql, String.class, TENANT, jobInstanceId);
+          String selectedInstanceStatus = jdbcTemplate.queryForObject(
+              selectInstanceStatusSql, String.class, TENANT, jobInstanceId);
           assertThat(selectedInstanceStatus).isEqualTo("SUCCESS");
           String selectedRunStatus =
               jdbcTemplate.queryForObject(selectRunStatusSql2, String.class, TENANT, workflowRunId);
@@ -6793,98 +7099,98 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
   @DisplayName("SDK 中断并经 lease 回收后仍从 CLAIM 消费 gate 固定版本")
   void shouldConsumePinnedVersion_whenUpstreamVersionPromoted(@TempDir Path sdkProcessDir)
       throws Exception {
-        final String selectCountSql3 = """
+    final String selectCountSql3 = """
             select count(*) from biz.customer_account where tenant_id = ? and customer_no = ?
         """;
-        final String selectCustomerNameSql = """
+    final String selectCustomerNameSql = """
             select customer_name from biz.customer_account where tenant_id = ? and customer_no = ?\
             """;
-        final String selectCountSql4 = """
+    final String selectCountSql4 = """
             select count(*) from biz.customer_account where tenant_id = ? and customer_no = ?\
             """;
-        final String selectSourceBatchNoSql = """
+    final String selectSourceBatchNoSql = """
             select source_batch_no from biz.customer_account where tenant_id = ? and customer_no = ?\
             """;
 
-        final String selectIdSql = """
+    final String selectIdSql = """
             select id from batch.job_definition where tenant_id = ? and job_code = ?
         """;
-        final String selectIdSql2 = """
+    final String selectIdSql2 = """
             select id from batch.trigger_request where tenant_id = ? and request_id = ?
         """;
-        final String insertJobInstanceSql = """
+    final String insertJobInstanceSql = """
             insert into batch.job_instance (tenant_id, job_definition_id, trigger_request_id, job_code,\s\
             instance_no, biz_date, trigger_type, instance_status, queue_code, worker_group, priority, dedup_key,\s\
             run_attempt, version, expected_partition_count, success_partition_count, failed_partition_count,\s\
             params_snapshot) values (?, ?, ?, ?, ?, ?, 'API', 'SUCCESS', 'e2e-q', 'DISPATCH', 5, ?, 1, 0, 0, 0,\s\
             0, '{}'::jsonb) returning id\
             """;
-        final String updateTriggerRequestSql = """
+    final String updateTriggerRequestSql = """
             update batch.trigger_request set request_status = 'LAUNCHED' where tenant_id = ? and request_id = ?\
             """;
-        final String updateWorkflowNodeSql = """
+    final String updateWorkflowNodeSql = """
             update batch.workflow_node set cross_day_dependencies = ?::jsonb,\s\
             cross_day_dependency_timeout_seconds = 600 where tenant_id = ? and workflow_definition_id = ?\s\
             and node_code = 'JOB'\
             """;
-        final String deleteTriggerRequestSql = """
+    final String deleteTriggerRequestSql = """
             delete from batch.trigger_request where tenant_id = ? and request_id = ?
         """;
-        final String selectCountSql = """
+    final String selectCountSql = """
             select count(*) from batch.worker_registry where tenant_id = ? and worker_code = ?\s\
             and is_self_hosted\
             """;
-        final String selectCountSql2 = """
+    final String selectCountSql2 = """
             select count(*) from batch.workflow_run where tenant_id = ? and workflow_definition_id = ?\s\
             and trigger_request_id = (select id from batch.trigger_request where tenant_id = ?\s\
             and request_id = ?)\
             """;
-        final String selectIdSql3 = """
+    final String selectIdSql3 = """
             select id from batch.workflow_run where tenant_id = ? and workflow_definition_id = ?\s\
             and trigger_request_id = (select id from batch.trigger_request where tenant_id = ?\s\
             and request_id = ?)\
             """;
-        final String selectNodeStatusSql = """
+    final String selectNodeStatusSql = """
             select node_status from batch.workflow_node_run where workflow_run_id = ? and node_code = 'JOB'\s\
             order by run_seq desc limit 1\
             """;
-        final String insertResultVersionSql = """
+    final String insertResultVersionSql = """
           insert into batch.result_version (tenant_id, business_key, version_no, job_instance_id,
             status, effective_at, payload_storage, payload_json, generated_at, generated_by,
             promotion_policy) values (?, ?, 1, ?, 'EFFECTIVE', current_timestamp,
             'INLINE_JSON', '{"sourceBatch":"previous-day-v1","recordCount":17}'::jsonb,
             current_timestamp, 'cross-day-sdk-e2e', 'AUTO_LATEST')
           """;
-        final String selectIdSql4 = """
+    final String selectIdSql4 = """
             select id from batch.result_version where tenant_id = ? and business_key = ? and version_no = 1\
             """;
-        final String insertResultVersionSql2 = """
+    final String insertResultVersionSql2 = """
           insert into batch.result_version (tenant_id, business_key, version_no, job_instance_id,
             status, payload_storage, payload_json, generated_at, generated_by, promotion_policy)
           values (?, ?, 2, ?, 'PENDING', 'INLINE_JSON',
             '{"sourceBatch":"newer-v2","recordCount":99}'::jsonb, current_timestamp,
             'cross-day-sdk-e2e-v2', 'MANUAL_APPROVAL')
           """;
-        final String selectIdSql5 = """
+    final String selectIdSql5 = """
             select id from batch.result_version where tenant_id = ? and business_key = ? and version_no = 2\
             """;
-        final String selectStatusSql = """
+    final String selectStatusSql = """
             select status from batch.result_version where tenant_id = ? and id = ?
         """;
-        final String selectPayloadJsonSql = """
+    final String selectPayloadJsonSql = """
             select payload_json from batch.result_version where tenant_id = ? and id = ?
         """;
-        final String selectPayloadJsonSql2 = """
+    final String selectPayloadJsonSql2 = """
             select payload_json::text from archive.result_version_archive where tenant_id = ? and id = ?\
             """;
-        final String selectIdSql6 = """
+    final String selectIdSql6 = """
             select id from batch.job_partition where tenant_id = ? and job_instance_id = (select job_instance_id\s\
             from batch.job_task where tenant_id = ? and id = ?)\
             """;
-        final String selectCurrentInvocationIdSql = """
+    final String selectCurrentInvocationIdSql = """
             select current_invocation_id from batch.job_partition where tenant_id = ? and id = ?
         """;
-        final String selectTaskStatusSql = """
+    final String selectTaskStatusSql = """
             select task_status from batch.job_task where tenant_id = ? and id = ?
         """;
     final String updateJobPartitionSql = """
@@ -6909,16 +7215,10 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
 
     LaunchSeed source = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "DISPATCH", "DISPATCH", TriggerType.API);
-    Long sourceJobDefinitionId = jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class,
-        TENANT,
-        source.jobCode());
-    Long sourceTriggerRequestId = jdbcTemplate.queryForObject(
-        selectIdSql2,
-        Long.class,
-        TENANT,
-        source.requestId());
+    Long sourceJobDefinitionId =
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, source.jobCode());
+    Long sourceTriggerRequestId =
+        jdbcTemplate.queryForObject(selectIdSql2, Long.class, TENANT, source.requestId());
     Long sourceJobInstanceId = jdbcTemplate.queryForObject(
         insertJobInstanceSql,
         Long.class,
@@ -6929,14 +7229,11 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         "cross-day-sdk-source-" + UUID.randomUUID(),
         crossDayBizDate.minusDays(1),
         "cross-day-sdk-source-dedup-" + UUID.randomUUID());
-        jdbcTemplate.update(
-        updateTriggerRequestSql,
-        TENANT,
-        source.requestId());
+    jdbcTemplate.update(updateTriggerRequestSql, TENANT, source.requestId());
 
     LaunchSeed downstream = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "PROCESS", "sdk-self-hosted", TriggerType.API);
-        jdbcTemplate.update(
+    jdbcTemplate.update(
         updateWorkflowNodeSql,
         """
         [{"alias":"prior_day","jobCode":"%s","bizDateOffset":-1,
@@ -6944,10 +7241,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         """.formatted(source.jobCode()),
         TENANT,
         downstream.workflowDefinitionId());
-        jdbcTemplate.update(
-        deleteTriggerRequestSql,
-        TENANT,
-        downstream.requestId());
+    jdbcTemplate.update(deleteTriggerRequestSql, TENANT, downstream.requestId());
 
     String customerNo = "CROSSDAY_SDK_" + UUID.randomUUID().toString().replace("-", "");
     String rootMarker = "sdk-root-" + UUID.randomUUID();
@@ -7024,12 +7318,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
             assertThat(selectedWorkflowRunCount).isOne();
           });
       Long workflowRunId = jdbcTemplate.queryForObject(
-          selectIdSql3,
-          Long.class,
-          TENANT,
-          downstream.workflowDefinitionId(),
-          TENANT,
-          requestId);
+          selectIdSql3, Long.class, TENANT, downstream.workflowDefinitionId(), TENANT, requestId);
       await()
           .atMost(Duration.ofSeconds(30))
           .pollInterval(Duration.ofMillis(100))
@@ -7041,11 +7330,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
 
       String sourceBusinessKey = "job:" + source.jobCode() + ":" + crossDayBizDate.minusDays(1);
       jdbcTemplate.update(insertResultVersionSql, TENANT, sourceBusinessKey, sourceJobInstanceId);
-      Long selectedVersionId = jdbcTemplate.queryForObject(
-          selectIdSql4,
-          Long.class,
-          TENANT,
-          sourceBusinessKey);
+      Long selectedVersionId =
+          jdbcTemplate.queryForObject(selectIdSql4, Long.class, TENANT, sourceBusinessKey);
 
       awaitSdkWorkerMarker(
           firstWorker,
@@ -7064,11 +7350,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
       assertThat(selectedCustomerAccountCount).isZero();
 
       jdbcTemplate.update(insertResultVersionSql2, TENANT, sourceBusinessKey, sourceJobInstanceId);
-      Long promotedVersionId = jdbcTemplate.queryForObject(
-          selectIdSql5,
-          Long.class,
-          TENANT,
-          sourceBusinessKey);
+      Long promotedVersionId =
+          jdbcTemplate.queryForObject(selectIdSql5, Long.class, TENANT, sourceBusinessKey);
       resultVersionPromoteService.promote(TENANT, promotedVersionId);
       assertThat(promotedVersionId).isNotEqualTo(selectedVersionId);
       String selectedStatus =
@@ -7081,24 +7364,17 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
       String selectedStatusRead2 =
           jdbcTemplate.queryForObject(selectStatusSql, String.class, TENANT, selectedVersionId);
       assertThat(selectedStatusRead2).isEqualTo("ARCHIVED");
-      String selectedPayloadJson =
-          jdbcTemplate.queryForObject(selectPayloadJsonSql, String.class, TENANT, selectedVersionId);
+      String selectedPayloadJson = jdbcTemplate.queryForObject(
+          selectPayloadJsonSql, String.class, TENANT, selectedVersionId);
       assertThat(selectedPayloadJson).isNull();
-      String selectedPayloadJsonRead2 =
-          jdbcTemplate.queryForObject(selectPayloadJsonSql2, String.class, TENANT, selectedVersionId);
+      String selectedPayloadJsonRead2 = jdbcTemplate.queryForObject(
+          selectPayloadJsonSql2, String.class, TENANT, selectedVersionId);
       assertThat(selectedPayloadJsonRead2).contains("previous-day-v1");
 
-      Long firstPartitionId = jdbcTemplate.queryForObject(
-          selectIdSql6,
-          Long.class,
-          TENANT,
-          TENANT,
-          claimedTaskId);
+      Long firstPartitionId =
+          jdbcTemplate.queryForObject(selectIdSql6, Long.class, TENANT, TENANT, claimedTaskId);
       String firstInvocationId = jdbcTemplate.queryForObject(
-          selectCurrentInvocationIdSql,
-          String.class,
-          TENANT,
-          firstPartitionId);
+          selectCurrentInvocationIdSql, String.class, TENANT, firstPartitionId);
       firstWorker.destroyForcibly();
       assertThat(firstWorker.waitFor(10, TimeUnit.SECONDS))
           .as("first SDK operating-system process must be forcibly terminated")
@@ -7107,10 +7383,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
           jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, claimedTaskId);
       assertThat(selectedTaskStatus).isEqualTo("RUNNING");
 
-      jdbcTemplate.update(
-          updateJobPartitionSql,
-          TENANT,
-          firstPartitionId);
+      jdbcTemplate.update(updateJobPartitionSql, TENANT, firstPartitionId);
       partitionReclaimUnit.reclaim(jobPartitionMapper.selectById(TENANT, firstPartitionId));
       String selectedTaskStatusRead2 =
           jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, claimedTaskId);
@@ -7142,10 +7415,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
           .as("the new invocation retains the fixture's proven replay-safe execution contract")
           .isZero();
       String recoveredInvocationId = jdbcTemplate.queryForObject(
-          selectCurrentInvocationIdSql,
-          String.class,
-          TENANT,
-          firstPartitionId);
+          selectCurrentInvocationIdSql, String.class, TENANT, firstPartitionId);
       assertThat(recoveredInvocationId).isNotBlank().isNotEqualTo(firstInvocationId);
       awaitSdkWorkerMarker(
           recoveredWorker,
@@ -7159,22 +7429,23 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
           .atMost(Duration.ofSeconds(60))
           .pollInterval(Duration.ofMillis(200))
           .untilAsserted(() -> {
-            String selectedRunStatus =
-                jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
+            String selectedRunStatus = jdbcTemplate.queryForObject(
+                selectRunStatusSql, String.class, TENANT, workflowRunId);
             assertThat(selectedRunStatus).isEqualTo("SUCCESS");
             String selectedCustomerName = businessJdbcTemplate.queryForObject(
                 selectCustomerNameSql, String.class, TENANT, customerNo);
             assertThat(selectedCustomerName).isEqualTo("previous-day-v1");
-            Integer selectedCustomerAccountCountRead2 =
-                businessJdbcTemplate.queryForObject(selectCountSql4, Integer.class, TENANT, customerNo);
+            Integer selectedCustomerAccountCountRead2 = businessJdbcTemplate.queryForObject(
+                selectCountSql4, Integer.class, TENANT, customerNo);
             assertThat(selectedCustomerAccountCountRead2)
-                .as("different claim invocations retain one business effect for the stable customer key")
+                .as(
+                    "different claim invocations retain one business effect for the stable customer key")
                 .isOne();
             String selectedSourceBatchNo = businessJdbcTemplate.queryForObject(
                 selectSourceBatchNoSql, String.class, TENANT, customerNo);
             assertThat(selectedSourceBatchNo).isEqualTo(selectedVersionId.toString());
-            String selectedPublishStatus =
-                jdbcTemplate.queryForObject(selectPublishStatusSql, String.class, TENANT, workflowRunId);
+            String selectedPublishStatus = jdbcTemplate.queryForObject(
+                selectPublishStatusSql, String.class, TENANT, workflowRunId);
             assertThat(selectedPublishStatus).isEqualTo("PUBLISHED");
           });
     } finally {
@@ -7290,7 +7561,6 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
             "--spring.quartz.job-store-type=jdbc",
             "--spring.quartz.jdbc.initialize-schema=never",
             "--spring.quartz.auto-startup=false",
-            "--spring.quartz.properties.org.quartz.scheduler.instanceName=E2eTriggerScheduler",
             "--spring.quartz.properties.org.quartz.jobStore.class=org.quartz.impl.jdbcjobstore.JobStoreTX",
             "--spring.quartz.properties.org.quartz.jobStore.dataSource=quartzJobstoreDs",
             "--spring.quartz.properties.org.quartz.jobStore.tablePrefix=quartz.QRTZ_",
@@ -7333,7 +7603,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(30))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          Integer selectedCount = jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT);
+          Integer selectedCount =
+              jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT);
           assertThat(selectedCount).isEqualTo(1);
         });
   }

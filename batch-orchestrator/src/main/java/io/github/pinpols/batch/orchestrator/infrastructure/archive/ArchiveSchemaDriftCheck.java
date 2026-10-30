@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.archive;
 
+import io.github.pinpols.batch.common.mapper.InformationSchemaColumnView;
 import io.github.pinpols.batch.common.mapper.InformationSchemaMapper;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -204,43 +206,23 @@ public class ArchiveSchemaDriftCheck {
   }
 
   private Map<String, ColumnMeta> columnMetaOf(String schema, String table) {
-    List<Map<String, Object>> rows = informationSchemaMapper.listColumnsWithTypes(schema, table);
+    List<InformationSchemaColumnView> rows =
+        informationSchemaMapper.listColumnsWithTypes(schema, table);
     Map<String, ColumnMeta> map = new LinkedHashMap<>();
-    for (Map<String, Object> row : rows) {
-      // PostgreSQL JDBC 通常以全小写键返回 information_schema 字段;某些驱动会大写,加防御。
-      String name = asString(row.get("column_name"));
-      if (name == null) {
-        name = asString(row.get("COLUMN_NAME"));
-      }
-      String dataType = firstNonNull(row.get("data_type"), row.get("DATA_TYPE"));
-      String isNullable = firstNonNull(row.get("is_nullable"), row.get("IS_NULLABLE"));
-      String columnDefault = firstNonNull(row.get("column_default"), row.get("COLUMN_DEFAULT"));
-      // P0 修复: PostgreSQL `data_type` 对 varchar/numeric 不带长度/精度
-      // (varchar(64) 与 varchar(128) 同样返回 'character varying'),长度差别在
-      // `character_maximum_length` / `numeric_precision` / `numeric_scale`,
-      // 必须显式比对,否则 ALTER COLUMN ... TYPE varchar(N) 的漂移会漏检。
-      String charMaxLen =
-          firstNonNull(row.get("character_maximum_length"), row.get("CHARACTER_MAXIMUM_LENGTH"));
-      String numPrec = firstNonNull(row.get("numeric_precision"), row.get("NUMERIC_PRECISION"));
-      String numScale = firstNonNull(row.get("numeric_scale"), row.get("NUMERIC_SCALE"));
-      if (name != null) {
+    for (InformationSchemaColumnView row : rows) {
+      if (EmptyChecks.isNotNull(row.columnName())) {
         map.put(
-            name,
-            new ColumnMeta(dataType, isNullable, columnDefault, charMaxLen, numPrec, numScale));
+            row.columnName(),
+            new ColumnMeta(
+                row.dataType(),
+                row.isNullable(),
+                row.columnDefault(),
+                row.characterMaximumLength(),
+                row.numericPrecision(),
+                row.numericScale()));
       }
     }
     return map;
-  }
-
-  private static String asString(Object v) {
-    return v == null ? null : v.toString();
-  }
-
-  private static String firstNonNull(Object a, Object b) {
-    if (a != null) {
-      return a.toString();
-    }
-    return b == null ? null : b.toString();
   }
 
   /**

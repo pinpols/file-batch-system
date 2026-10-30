@@ -1,12 +1,10 @@
 package io.github.pinpols.batch.trigger.mapper;
 
-import io.github.pinpols.batch.trigger.domain.param.TriggerMisfirePendingUpdateApprovalStatusParam;
-
-
 import io.github.pinpols.batch.common.enums.MisfirePendingStatus;
 import io.github.pinpols.batch.common.enums.ScheduledOccurrenceStatus;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.persistence.entity.TriggerMisfirePendingEntity;
+import io.github.pinpols.batch.trigger.domain.param.TriggerMisfirePendingUpdateApprovalStatusParam;
 import java.time.Instant;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -60,34 +58,33 @@ public interface TriggerMisfirePendingMapper {
 
   /** 审批通过(只更新 status / approvedBy / approvedAt)。 */
   default int approve(Long id, String approvedBy) {
-    TriggerMisfirePendingUpdateApprovalStatusParam triggerMisfirePendingUpdateApprovalStatusParam = TriggerMisfirePendingUpdateApprovalStatusParam.builder()
-        .id(id)
-        .approvedBy(approvedBy)
-        .rejectionReason(null)
-        .writeRejectionReason(false)
-        .targetStatus(MisfirePendingStatus.APPROVED.code())
-        .expectedStatus(MisfirePendingStatus.PENDING.code())
-        .build();
-    return updateApprovalStatus(
-        triggerMisfirePendingUpdateApprovalStatusParam);
+    TriggerMisfirePendingUpdateApprovalStatusParam triggerMisfirePendingUpdateApprovalStatusParam =
+        TriggerMisfirePendingUpdateApprovalStatusParam.builder()
+            .id(id)
+            .approvedBy(approvedBy)
+            .rejectionReason(null)
+            .writeRejectionReason(false)
+            .targetStatus(MisfirePendingStatus.APPROVED.code())
+            .expectedStatus(MisfirePendingStatus.PENDING.code())
+            .build();
+    return updateApprovalStatus(triggerMisfirePendingUpdateApprovalStatusParam);
   }
 
   /** 审批拒绝(status=REJECTED + 写 rejection_reason)。 */
   default int reject(Long id, String approvedBy, String rejectionReason) {
-    TriggerMisfirePendingUpdateApprovalStatusParam triggerMisfirePendingUpdateApprovalStatusParam2 = TriggerMisfirePendingUpdateApprovalStatusParam.builder()
-        .id(id)
-        .approvedBy(approvedBy)
-        .rejectionReason(rejectionReason)
-        .writeRejectionReason(true)
-        .targetStatus(MisfirePendingStatus.REJECTED.code())
-        .expectedStatus(MisfirePendingStatus.PENDING.code())
-        .build();
-    return updateApprovalStatus(
-        triggerMisfirePendingUpdateApprovalStatusParam2);
+    TriggerMisfirePendingUpdateApprovalStatusParam triggerMisfirePendingUpdateApprovalStatusParam2 =
+        TriggerMisfirePendingUpdateApprovalStatusParam.builder()
+            .id(id)
+            .approvedBy(approvedBy)
+            .rejectionReason(rejectionReason)
+            .writeRejectionReason(true)
+            .targetStatus(MisfirePendingStatus.REJECTED.code())
+            .expectedStatus(MisfirePendingStatus.PENDING.code())
+            .build();
+    return updateApprovalStatus(triggerMisfirePendingUpdateApprovalStatusParam2);
   }
 
-  int updateApprovalStatus(
-      TriggerMisfirePendingUpdateApprovalStatusParam parameters);
+  int updateApprovalStatus(TriggerMisfirePendingUpdateApprovalStatusParam parameters);
 
   /** 审批通过后补 fire 完成,关联 trigger_request.id。 */
   int linkCatchUpRequest(@Param("id") Long id, @Param("catchUpRequestId") Long catchUpRequestId);

@@ -1,16 +1,10 @@
 package io.github.pinpols.batch.console.domain.observability.application.contract.response;
 
-import static io.github.pinpols.batch.console.domain.observability.application.contract.response.ObservabilityResponseFieldReader.bigDecimalValue;
-import static io.github.pinpols.batch.console.domain.observability.application.contract.response.ObservabilityResponseFieldReader.integerValue;
-import static io.github.pinpols.batch.console.domain.observability.application.contract.response.ObservabilityResponseFieldReader.longValue;
-import static io.github.pinpols.batch.console.domain.observability.application.contract.response.ObservabilityResponseFieldReader.mapList;
-import static io.github.pinpols.batch.console.domain.observability.application.contract.response.ObservabilityResponseFieldReader.stringValue;
-
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaJobReportView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaReportView;
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
 import lombok.Builder;
 
 /**
@@ -31,37 +25,25 @@ public record ConsoleSlaReportResponse(
       Long failedCount,
       Long slaBreached,
       Long slaOnTime,
+      Long slaTotalWithSla,
       BigDecimal avgDurationSeconds,
       BigDecimal maxDurationSeconds,
       Long totalPartitions) {
-    static SlaJobEntry from(Map<String, Object> row) {
-      return SlaJobEntry.builder()
-        .jobCode(stringValue(row, "jobCode"))
-        .jobName(stringValue(row, "jobName"))
-        .totalInstances(longValue(row, "totalInstances"))
-        .successCount(longValue(row, "successCount"))
-        .failedCount(longValue(row, "failedCount"))
-        .slaBreached(longValue(row, "slaBreached"))
-        .slaOnTime(longValue(row, "slaOnTime"))
-        .avgDurationSeconds(bigDecimalValue(row, "avgDurationSeconds"))
-        .maxDurationSeconds(bigDecimalValue(row, "maxDurationSeconds"))
-        .totalPartitions(longValue(row, "totalPartitions"))
-        .build();
-    }
 
     static SlaJobEntry from(SlaJobReportView row) {
       return SlaJobEntry.builder()
-        .jobCode(row.jobCode())
-        .jobName(row.jobName())
-        .totalInstances(row.totalInstances() == null ? 0L : row.totalInstances())
-        .successCount(row.successCount() == null ? 0L : row.successCount())
-        .failedCount(row.failedCount() == null ? 0L : row.failedCount())
-        .slaBreached(row.slaBreached() == null ? 0L : row.slaBreached())
-        .slaOnTime(row.slaOnTime() == null ? 0L : row.slaOnTime())
-        .avgDurationSeconds(row.avgDurationSeconds())
-        .maxDurationSeconds(row.maxDurationSeconds())
-        .totalPartitions(row.totalPartitions() == null ? 0L : row.totalPartitions())
-        .build();
+          .jobCode(row.jobCode())
+          .jobName(row.jobName())
+          .totalInstances(EmptyChecks.isNull(row.totalInstances()) ? 0L : row.totalInstances())
+          .successCount(EmptyChecks.isNull(row.successCount()) ? 0L : row.successCount())
+          .failedCount(EmptyChecks.isNull(row.failedCount()) ? 0L : row.failedCount())
+          .slaBreached(EmptyChecks.isNull(row.slaBreached()) ? 0L : row.slaBreached())
+          .slaOnTime(EmptyChecks.isNull(row.slaOnTime()) ? 0L : row.slaOnTime())
+          .slaTotalWithSla(EmptyChecks.isNull(row.slaTotalWithSla()) ? 0L : row.slaTotalWithSla())
+          .avgDurationSeconds(row.avgDurationSeconds())
+          .maxDurationSeconds(row.maxDurationSeconds())
+          .totalPartitions(EmptyChecks.isNull(row.totalPartitions()) ? 0L : row.totalPartitions())
+          .build();
     }
   }
 
@@ -73,15 +55,5 @@ public record ConsoleSlaReportResponse(
         view.tenantId(),
         view.periodDays(),
         view.jobs().stream().map(SlaJobEntry::from).toList());
-  }
-
-  public static ConsoleSlaReportResponse from(Map<String, Object> row) {
-    if (row == null) {
-      return null;
-    }
-    return new ConsoleSlaReportResponse(
-        stringValue(row, "tenantId"),
-        integerValue(row, "periodDays"),
-        mapList(row, "jobs").stream().map(SlaJobEntry::from).toList());
   }
 }

@@ -8,8 +8,14 @@ import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinition
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionVersionUpdateParam;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowScheduleUpdateParam;
+import io.github.pinpols.batch.console.infrastructure.config.TenantConfigPackageExcelApplyService;
+import io.github.pinpols.batch.console.infrastructure.config.TenantConfigPackageExcelApplyService.ApplyContext;
+import io.github.pinpols.batch.console.infrastructure.config.TenantConfigPackageExcelApplyService.ApplyCounts;
+import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.PackageValidationResult;
+import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.SheetResult;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -35,6 +41,9 @@ class WorkflowDefinitionWriteContractIntegrationTest extends AbstractIntegration
 
   @Autowired
   private JdbcTemplate jdbc;
+
+  @Autowired
+  private TenantConfigPackageExcelApplyService excelApply;
 
   private String tenant;
   private Long id;
@@ -79,6 +88,35 @@ class WorkflowDefinitionWriteContractIntegrationTest extends AbstractIntegration
   }
 
   @Test
+  @DisplayName("配置包更新已有工作流时说明字段与版本一同落库")
+  void shouldPersistDescription_whenApplyingExistingWorkflow() {
+    Map<String, String> row = Map.of(
+        "workflow_code",
+        "WF_WRITE",
+        "workflow_name",
+        "Original name",
+        "workflow_type",
+        "DAG",
+        "version",
+        "1",
+        "description",
+        "更新后的专业说明");
+    SheetResult empty = new SheetResult("empty", 0, List.of(), List.of());
+    SheetResult workflows = new SheetResult("workflow_definition", 1, List.of(row), List.of());
+    PackageValidationResult input = new PackageValidationResult(
+        empty, empty, empty, empty, empty, empty, empty, empty, empty, workflows, empty, empty,
+        List.of());
+    ApplyContext context = new ApplyContext(tenant, "tester", "test", "trace-description");
+
+    ApplyCounts result = excelApply.applyAll(input, context);
+    WorkflowDefinitionEntity saved = mapper.selectById(tenant, id);
+
+    assertThat(saved.getDescription()).isEqualTo("更新后的专业说明");
+    assertThat(saved.getVersion()).isEqualTo(2);
+    assertThat(result.workflowUpdated()).isEqualTo(1);
+  }
+
+  @Test
   @DisplayName("全量定义更新只在原版本及租户匹配时递增一次,过期请求不改字段")
   void shouldCompareVersionAndTenant_whenReplacingDefinition() {
     assertThat(mapper.updateAndBumpVersion(new WorkflowDefinitionVersionUpdateParam(
@@ -94,7 +132,8 @@ class WorkflowDefinitionWriteContractIntegrationTest extends AbstractIntegration
             "Asia/Shanghai",
             "SCHEDULED",
             "CAL_B",
-            "UPSTREAM_B")))
+            "UPSTREAM_B",
+            null)))
         .isEqualTo(1);
     WorkflowDefinitionEntity updated = mapper.selectById(tenant, id);
     assertThat(updated.getVersion()).isEqualTo(2);
@@ -110,7 +149,7 @@ class WorkflowDefinitionWriteContractIntegrationTest extends AbstractIntegration
     assertThat(updated.getSingleJobDefinitionId()).isEqualTo(managedJobId);
 
     assertThat(mapper.updateAndBumpVersion(new WorkflowDefinitionVersionUpdateParam(
-            tenant, id, 1, "Stale", "DAG", true, false, "MANUAL", null, "UTC", "MANUAL", null,
+            tenant, id, 1, "Stale", "DAG", true, false, "MANUAL", null, "UTC", "MANUAL", null, null,
             null)))
         .isZero();
     assertThat(mapper.updateAndBumpVersion(new WorkflowDefinitionVersionUpdateParam(
@@ -125,6 +164,7 @@ class WorkflowDefinitionWriteContractIntegrationTest extends AbstractIntegration
             null,
             "UTC",
             "MANUAL",
+            null,
             null,
             null)))
         .isZero();
@@ -149,6 +189,7 @@ class WorkflowDefinitionWriteContractIntegrationTest extends AbstractIntegration
             null,
             "UTC",
             "MANUAL",
+            null,
             null,
             null)));
 

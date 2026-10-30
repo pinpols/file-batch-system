@@ -6,8 +6,8 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.ops.mapper.ConfigApprovalMapper;
 import io.github.pinpols.batch.console.domain.ops.param.ConfigApprovalTransitionParam;
+import io.github.pinpols.batch.console.domain.ops.view.ConfigApprovalRow;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,19 +44,21 @@ class ConfigApprovalMapperIntegrationTest extends AbstractIntegrationTest {
         """;
     jdbcTemplate.update(insertConfigApprovalSql, tenantId, releaseId);
 
-    Map<String, Object> latest = configApprovalMapper.selectLatestByRelease(tenantId, releaseId);
-    assertThat(latest)
-        .containsEntry("tenantId", tenantId)
-        .containsEntry("releaseId", releaseId)
-        .containsEntry("approvalStatus", "PENDING")
-        .containsEntry("requestedBy", "requester")
-        .containsKeys("requestedAt", "createdAt", "updatedAt");
+    ConfigApprovalRow latest = configApprovalMapper.selectLatestByRelease(tenantId, releaseId);
+    assertThat(latest).isNotNull();
+    assertThat(latest.tenantId()).isEqualTo(tenantId);
+    assertThat(latest.releaseId()).isEqualTo(releaseId);
+    assertThat(latest.approvalStatus()).isEqualTo("PENDING");
+    assertThat(latest.requestedBy()).isEqualTo("requester");
+    assertThat(latest.requestedAt()).isNotNull();
+    assertThat(latest.createdAt()).isNotNull();
+    assertThat(latest.updatedAt()).isNotNull();
 
-    long approvalId = ((Number) latest.get("id")).longValue();
-    Map<String, Object> byId = configApprovalMapper.selectById(tenantId, approvalId);
-    assertThat(byId)
-        .containsEntry("releaseId", releaseId)
-        .containsEntry("approvalStatus", "PENDING");
+    long approvalId = latest.id();
+    ConfigApprovalRow byId = configApprovalMapper.selectById(tenantId, approvalId);
+    assertThat(byId).isNotNull();
+    assertThat(byId.releaseId()).isEqualTo(releaseId);
+    assertThat(byId.approvalStatus()).isEqualTo("PENDING");
 
     int updated = configApprovalMapper.transition(
         ConfigApprovalTransitionParam.approved(tenantId, approvalId, "reviewer", "approved"));

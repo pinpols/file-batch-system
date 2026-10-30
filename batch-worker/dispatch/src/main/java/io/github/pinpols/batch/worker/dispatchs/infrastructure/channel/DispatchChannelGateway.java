@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
+import io.github.pinpols.batch.common.logging.LogSanitizer;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchDeliveryMetrics;
@@ -98,10 +100,10 @@ public class DispatchChannelGateway {
           channelConfig, result.success(), result.message(), result.evidenceRef());
     } catch (RuntimeException e) {
       log.warn(
-          "Dispatch health state could not be persisted after channel outcome: tenantId={}, channelCode={}",
-          command.tenantId(),
-          channelCode,
-          e);
+          "Dispatch health state could not be persisted after channel outcome: tenantId={}, channelCode={}, cause={}",
+          LogSanitizer.value(command.tenantId()),
+          LogSanitizer.value(channelCode),
+          SwallowedExceptionLogger.summary(e));
     }
     deliveryMetrics.recordDelivery(channelType, result.success(), false);
     return result;

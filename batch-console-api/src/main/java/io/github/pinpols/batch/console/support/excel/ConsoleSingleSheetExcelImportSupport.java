@@ -159,8 +159,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
         rows.add(rowValues);
       }
       String resolvedFileName = resolveFileName(originalFileName, defaultFileName);
-      return new ParsedWorkbook(
-          resolvedFileName, tenantId, sheetName, rows);
+      return new ParsedWorkbook(resolvedFileName, tenantId, sheetName, rows);
     } catch (BizException exception) {
       throw exception;
     } catch (Exception exception) {
@@ -201,8 +200,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
         rows.addAll(handler.rows());
       }
       String resolvedFileName = resolveFileName(originalFileName, defaultFileName);
-      return new ParsedWorkbook(
-          resolvedFileName, tenantId, sheetName, rows);
+      return new ParsedWorkbook(resolvedFileName, tenantId, sheetName, rows);
     } catch (BizException exception) {
       throw exception;
     } catch (Exception exception) {

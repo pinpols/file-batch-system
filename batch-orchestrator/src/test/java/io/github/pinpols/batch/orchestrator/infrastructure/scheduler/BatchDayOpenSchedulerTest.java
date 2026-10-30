@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
-import io.github.pinpols.batch.orchestrator.domain.param.BatchDayInstanceAdvanceOpenCursorParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
@@ -14,10 +11,10 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.orchestrator.config.BatchDayScanProperties;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.ExternalEventExpectationService;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.FileGroupExpectationService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
+import io.github.pinpols.batch.orchestrator.config.BatchDayScanProperties;
 import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayCatchupControlEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
@@ -25,6 +22,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity
 import io.github.pinpols.batch.orchestrator.domain.entity.CalendarDependencyEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.CalendarDependencyWaitEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.DisasterDayOverrideEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayInstanceAdvanceOpenCursorParam;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.infrastructure.metrics.BatchDayCatchupMetrics;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayCatchupControlMapper;
@@ -51,6 +49,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -90,11 +89,13 @@ class BatchDayOpenSchedulerTest {
         .initializeOpenCursor(any(), any(), any());
     when(batchDayInstanceMapper.selectOpenCursorForUpdate(any(), any()))
         .thenAnswer(invocation -> openCursor.get());
-    when(batchDayInstanceMapper.advanceOpenCursor(org.mockito.ArgumentMatchers.any(BatchDayInstanceAdvanceOpenCursorParam.class)))
+    when(batchDayInstanceMapper.advanceOpenCursor(
+            ArgumentMatchers.any(BatchDayInstanceAdvanceOpenCursorParam.class)))
         .thenAnswer(invocation -> {
           BatchDayInstanceAdvanceOpenCursorParam parameters = invocation.getArgument(0);
           return openCursor.compareAndSet(parameters.expectedBizDate(), parameters.nextBizDate())
-              ? 1 : 0;
+              ? 1
+              : 0;
         });
     planCalendarMapper = mock(BatchDayPlanCalendarMapper.class);
     jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
@@ -127,7 +128,8 @@ class BatchDayOpenSchedulerTest {
         catchupMetrics,
         disasterDayOverrideMapper,
         triggerRequestMapper,
-        noopTransactionManager(), new BatchDayScanProperties());
+        noopTransactionManager(),
+        new BatchDayScanProperties());
   }
 
   private static PlatformTransactionManager noopTransactionManager() {
@@ -139,12 +141,12 @@ class BatchDayOpenSchedulerTest {
 
       @Override
       public void commit(TransactionStatus status) {
-        // no-op: scheduler tests use transaction callbacks only as boundaries.
+        // 无需执行实际操作：调度器测试仅将事务回调作为边界。
       }
 
       @Override
       public void rollback(TransactionStatus status) {
-        // no-op: scheduler tests use transaction callbacks only as boundaries.
+        // 无需执行实际操作：调度器测试仅将事务回调作为边界。
       }
     };
   }
@@ -224,7 +226,8 @@ class BatchDayOpenSchedulerTest {
     verify(catchupMetrics).recordCalendarLag(4);
     verify(batchDayInstanceMapper).selectOpenCursorDate("t1", "CAL");
     verify(batchDayInstanceMapper, never()).initializeOpenCursor(any(), any(), any());
-    verify(batchDayInstanceMapper, never()).advanceOpenCursor(org.mockito.ArgumentMatchers.any(BatchDayInstanceAdvanceOpenCursorParam.class));
+    verify(batchDayInstanceMapper, never())
+        .advanceOpenCursor(ArgumentMatchers.any(BatchDayInstanceAdvanceOpenCursorParam.class));
     ArgumentCaptor<BatchDayInstanceEntity> opened =
         ArgumentCaptor.forClass(BatchDayInstanceEntity.class);
     verify(batchDayInstanceMapper).insert(opened.capture());

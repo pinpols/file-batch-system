@@ -32,7 +32,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 /**
- * Integration test: S3ExportStorage read/write/copy/remove against the active test storage backend
+ * 集成测试：使用当前测试存储后端验证 S3ExportStorage 的读取、写入、复制和删除。
  * (S3-compatible object storage by default, filesystem via {@code -Dbatch.test.storage.backend=filesystem}).
  */
 @SpringBootTest(
@@ -66,6 +66,7 @@ class S3ExportStorageIntegrationTest extends AbstractIntegrationTest {
   void shouldReuseRegisteredEncryptedArtifactAfterWholePipelineRetry() throws Exception {
     String tenantId = "seam2_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
     String objectName = "export/seam2/" + tenantId + ".json";
+    long jobInstanceId = 101L;
     String keyRef = "SEAM2_TEST_KEY";
     String keyMaterial = Base64.getEncoder()
         .encodeToString("01234567890123456789012345678901".getBytes(StandardCharsets.US_ASCII));
@@ -83,9 +84,10 @@ class S3ExportStorageIntegrationTest extends AbstractIntegrationTest {
     try {
       storage.writeObject(objectName, originalCiphertext, "application/octet-stream");
       String originalChecksum = storage.sha256Hex(objectName);
-      String originalMetadata = "{\"contentEncryptionEnabled\":true,"
-          + "\"encryptionKeyRef\":\"" + keyRef + "\","
-          + "\"encryptionObjectVersion\":\"BATCHENC1\"}";
+      String originalMetadata = """
+          {"jobInstanceId":%s,"contentEncryptionEnabled":true,
+          "encryptionKeyRef":"%s","encryptionObjectVersion":"BATCHENC1"}
+          """.formatted(jobInstanceId, keyRef);
       final String insertBatchFileRecordSql = """
           insert into batch.file_record (
               tenant_id, file_category, file_name, original_file_name, file_format_type,
@@ -107,14 +109,12 @@ class S3ExportStorageIntegrationTest extends AbstractIntegrationTest {
       final String selectBatchFileRecordSql = """
           select metadata_json::text from batch.file_record where tenant_id = ? and storage_path = ?
       """;
-      String metadataBefore = jdbcTemplate.queryForObject(
-          selectBatchFileRecordSql,
-          String.class,
-          tenantId,
-          objectName);
+      String metadataBefore =
+          jdbcTemplate.queryForObject(selectBatchFileRecordSql, String.class, tenantId, objectName);
 
       ExportJobContext context = new ExportJobContext();
       context.setTenantId(tenantId);
+      context.getAttributes().put(PipelineRuntimeKeys.JOB_INSTANCE_ID, jobInstanceId);
       context.getAttributes().put(PipelineRuntimeKeys.GENERATED_FILE_PATH, regenerated.toString());
       context.getAttributes().put(PipelineRuntimeKeys.OBJECT_NAME, objectName);
       context
@@ -152,10 +152,7 @@ class S3ExportStorageIntegrationTest extends AbstractIntegrationTest {
       final String deleteBatchFileRecordSql = """
           delete from batch.file_record where tenant_id = ? and storage_path = ?
       """;
-      jdbcTemplate.update(
-          deleteBatchFileRecordSql,
-          tenantId,
-          objectName);
+      jdbcTemplate.update(deleteBatchFileRecordSql, tenantId, objectName);
       Files.deleteIfExists(regenerated);
     }
   }

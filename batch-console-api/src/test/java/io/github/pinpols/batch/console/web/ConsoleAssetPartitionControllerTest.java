@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.web;
 
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -22,16 +21,23 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 @DisplayName("资产分区就绪查询控制器: 原始结果信封包装与租户越权透传")
+@ExtendWith(MockitoExtension.class)
 class ConsoleAssetPartitionControllerTest {
 
-  private final ConsoleOrchestratorPort orchestratorProxy = mock(ConsoleOrchestratorPort.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleOrchestratorPort orchestratorProxy;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -41,6 +47,15 @@ class ConsoleAssetPartitionControllerTest {
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleAssetPartitionController(orchestratorProxy, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .build();
+  }
+
+  @Test
+  @DisplayName("查询就绪状态时, 原始结果包装为统一信封并带出追踪标识")
+  void shouldWrapRawPayload_whenQueryingReadiness() throws Exception {
     when(orchestratorProxy.assetPartitionReadiness(
             "ta", "settlement_daily", LocalDate.parse("2026-06-30")))
         .thenReturn(new AssetPartitionReadinessResponse(
@@ -55,15 +70,6 @@ class ConsoleAssetPartitionControllerTest {
             9L,
             "OBJECT_STORE",
             "s3://bucket/path/result.csv"));
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleAssetPartitionController(orchestratorProxy, responseFactory))
-        .setControllerAdvice(exceptionHandler)
-        .build();
-  }
-
-  @Test
-  @DisplayName("查询就绪状态时, 原始结果包装为统一信封并带出追踪标识")
-  void shouldWrapRawPayload_whenQueryingReadiness() throws Exception {
     MvcResult result = mockMvc
         .perform(get("/api/console/asset-partitions/readiness")
             .param("tenantId", "ta")

@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.console.domain.rbac.service;
 
-import io.github.pinpols.batch.console.domain.rbac.param.ConsoleOidcIdentityInsertParam;
-
-
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -13,6 +10,7 @@ import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleOidcIdentityEnt
 import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleOidcIdentityMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleOidcIdentityInsertParam;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
@@ -52,15 +50,15 @@ public class ConsoleOidcIdentityService {
         .orElseThrow(() ->
             BizException.of(ResultCode.NOT_FOUND, "error.account.not_found", request.username()));
     try {
-      ConsoleOidcIdentityInsertParam consoleOidcIdentityInsertParam = ConsoleOidcIdentityInsertParam.builder()
-          .tenantId(tenantId)
-          .accountId(account.getId())
-          .issuer(properties.getIssuerUri())
-          .subject(subject)
-          .linkedBy(linkedBy)
-          .build();
-      identityMapper.insert(
-          consoleOidcIdentityInsertParam);
+      ConsoleOidcIdentityInsertParam consoleOidcIdentityInsertParam =
+          ConsoleOidcIdentityInsertParam.builder()
+              .tenantId(tenantId)
+              .accountId(account.getId())
+              .issuer(properties.getIssuerUri())
+              .subject(subject)
+              .linkedBy(linkedBy)
+              .build();
+      identityMapper.insert(consoleOidcIdentityInsertParam);
     } catch (DuplicateKeyException exception) {
       throw BizException.of(ResultCode.CONFLICT, "error.console.oidc.identity_conflict");
     }

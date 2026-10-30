@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.validation.ValidTenantId;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.ZoneId;
@@ -46,9 +47,9 @@ public class WorkflowDefinitionSaveRequest {
   @Size(max = 128)
   private String dependsOnJobCode;
 
-  private List<@Valid NodeItem> nodes;
+  private List<@NotNull @Valid NodeItem> nodes;
 
-  private List<@Valid EdgeItem> edges;
+  private List<@NotNull @Valid EdgeItem> edges;
 
   @AssertTrue(message = "workflow schedule expression or timezone is invalid")
   public boolean isScheduleConfigurationValid() {
@@ -93,6 +94,7 @@ public class WorkflowDefinitionSaveRequest {
     @ValidResourceCode
     private String nodeCode;
 
+    @NotNull
     private String nodeName;
 
     @NotBlank

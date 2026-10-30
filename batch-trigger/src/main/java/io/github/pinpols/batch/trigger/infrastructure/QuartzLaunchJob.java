@@ -1,7 +1,5 @@
 package io.github.pinpols.batch.trigger.infrastructure;
 
-import java.util.Objects;
-
 import io.github.pinpols.batch.common.enums.CatchUpPolicyType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.ScheduledOccurrenceStatus;
@@ -13,15 +11,18 @@ import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
 import io.github.pinpols.batch.trigger.domain.MisfireHandler;
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
+import io.github.pinpols.batch.trigger.infrastructure.readiness.ReadinessWaitHandoverClient;
 import io.github.pinpols.batch.trigger.service.ScheduledOccurrenceRecorder;
 import io.github.pinpols.batch.trigger.service.TriggerService;
 import io.github.pinpols.batch.trigger.service.UpstreamNotReadyException;
+import io.github.pinpols.batch.trigger.support.ReadinessWaitWindow;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -84,6 +85,7 @@ public class QuartzLaunchJob implements Job {
   private final TriggerRegistrationService triggerRegistrationService;
   private final MeterRegistry meterRegistry;
   private final ScheduledOccurrenceRecorder occurrenceRecorder;
+  private final ReadinessWaitHandoverClient readinessWaitHandoverClient;
 
   @Override
   public void execute(JobExecutionContext context) throws JobExecutionException {
@@ -115,8 +117,7 @@ public class QuartzLaunchJob implements Job {
     descriptor.setCatchUpPolicy(jobDataMap.getString(CATCH_UP_POLICY));
     descriptor.setCatchUpMaxDays(resolveCatchUpMaxDays(jobDataMap));
     descriptor.setEnabled(true);
-    boolean workflowIdentityIsIncomplete =
-        EmptyChecks.isNull(descriptor.getWorkflowDefinitionId())
+    boolean workflowIdentityIsIncomplete = EmptyChecks.isNull(descriptor.getWorkflowDefinitionId())
         || descriptor.getWorkflowDefinitionId() <= 0
         || EmptyChecks.isNull(descriptor.getTenantId())
         || EmptyChecks.isBlank(descriptor.getTenantId())
@@ -136,11 +137,7 @@ public class QuartzLaunchJob implements Job {
       String catchUpBusinessNo = IdGenerator.newBusinessNo("quartz");
       String catchUpTraceId = IdGenerator.newTraceId();
       ScheduledTriggerCommand catchUpCommand = new ScheduledTriggerCommand(
-          descriptor,
-          scheduledFireTime,
-          TriggerType.CATCH_UP,
-          catchUpBusinessNo,
-          catchUpTraceId);
+          descriptor, scheduledFireTime, TriggerType.CATCH_UP, catchUpBusinessNo, catchUpTraceId);
       triggerService.createPendingCatchUp(catchUpCommand);
       return;
     }
@@ -151,12 +148,13 @@ public class QuartzLaunchJob implements Job {
       String businessNo = IdGenerator.newBusinessNo("quartz");
       String traceId = IdGenerator.newTraceId();
       ScheduledTriggerCommand scheduledCommand = new ScheduledTriggerCommand(
-          descriptor,
-          scheduledFireTime,
-          triggerType,
-          businessNo,
-          traceId);
+          descriptor, scheduledFireTime, triggerType, businessNo, traceId);
       triggerService.launchScheduled(scheduledCommand);
+      if (readinessRetry) {
+        // 正常 fire 成功后取消 Orchestrator 侧接管等待，避免重复恢复启动。
+        readinessWaitHandoverClient.close(
+            descriptor.getTenantId(), descriptor.getWorkflowDefinitionId(), scheduledFireTime);
+      }
     } catch (BizException e) {
       // R-arch-audit-2026-05-23 P1: 用 ResultCode 枚举比较替代 e.getMessage().contains(...) 字符串匹配。
       // i18n 错误信息文本变动不再让此分支静默失效。
@@ -171,13 +169,48 @@ public class QuartzLaunchJob implements Job {
         throw new JobExecutionException(e, false);
       }
     } catch (UpstreamNotReadyException e) {
-      if (occurrenceRecorder.recordWaitingReadiness(
-          descriptor, scheduledFireTime, e.getBizDate())) {
-        ReadinessFireTiming fireTiming =
-            new ReadinessFireTiming(scheduledFireTime, actualFireTime, triggerType);
-        scheduleReadinessRetry(context, jobDataMap, descriptor, fireTiming, e);
-      }
+      ReadinessFireTiming fireTiming =
+          new ReadinessFireTiming(scheduledFireTime, actualFireTime, triggerType);
+      handleReadinessWait(context, descriptor, fireTiming, e);
     }
+  }
+
+  private void handleReadinessWait(
+      JobExecutionContext context,
+      TriggerDescriptor descriptor,
+      ReadinessFireTiming fireTiming,
+      UpstreamNotReadyException cause)
+      throws JobExecutionException {
+    JobDataMap jobDataMap = context.getMergedJobDataMap();
+    Instant proposedSince = jobDataMap.containsKey(READINESS_DEFERRED_SINCE)
+        ? Instant.ofEpochMilli(jobDataMap.getLongValue(READINESS_DEFERRED_SINCE))
+        : fireTiming.actualFireTime();
+    Instant proposedDeadline =
+        proposedSince.plusSeconds(triggerRuntimeProperties.getReadinessWindowSeconds());
+    if (!occurrenceRecorder.recordWaitingReadiness(
+        descriptor,
+        fireTiming.originalFireTime(),
+        cause.getBizDate(),
+        proposedSince,
+        proposedDeadline)) {
+      return;
+    }
+    ReadinessWaitWindow window =
+        occurrenceRecorder.readinessWaitWindow(descriptor, fireTiming.originalFireTime());
+    if (EmptyChecks.isNull(window)) {
+      // 在读取前 occurrence 已被其他流程推进，不再移交或创建重试。
+      return;
+    }
+    if (EmptyChecks.isNull(window.deferredSince()) || EmptyChecks.isNull(window.deadline())) {
+      throw new JobExecutionException("readiness wait window is incomplete", false);
+    }
+    readinessWaitHandoverClient.handover(
+        descriptor,
+        fireTiming.originalFireTime(),
+        cause.getBizDate(),
+        window.deferredSince(),
+        window.deadline());
+    scheduleReadinessRetry(context, jobDataMap, descriptor, fireTiming, window, cause);
   }
 
   private Instant resolveScheduledFireTime(JobExecutionContext context, JobDataMap jobDataMap) {
@@ -207,18 +240,15 @@ public class QuartzLaunchJob implements Job {
       JobDataMap jobDataMap,
       TriggerDescriptor descriptor,
       ReadinessFireTiming fireTiming,
+      ReadinessWaitWindow window,
       UpstreamNotReadyException cause)
       throws JobExecutionException {
     Instant originalFireTime = fireTiming.originalFireTime();
     Instant actualFireTime = fireTiming.actualFireTime();
     TriggerType triggerType = fireTiming.triggerType();
-    Instant deferredSince = actualFireTime;
-    if (jobDataMap.containsKey(READINESS_DEFERRED_SINCE)) {
-      long deferredSinceMillis = jobDataMap.getLongValue(READINESS_DEFERRED_SINCE);
-      deferredSince = Instant.ofEpochMilli(deferredSinceMillis);
-    }
+    Instant deferredSince = window.deferredSince();
     Duration waited = Duration.between(deferredSince, actualFireTime);
-    if (waited.getSeconds() >= triggerRuntimeProperties.getReadinessWindowSeconds()) {
+    if (!actualFireTime.isBefore(window.deadline())) {
       occurrenceRecorder.record(
           descriptor,
           originalFireTime,

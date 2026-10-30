@@ -1,10 +1,10 @@
 package io.github.pinpols.batch.console.domain.workflow.query;
 
-import lombok.Builder;
-
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
+import lombok.Builder;
+
 @Builder
 public record WorkflowDefinitionQuery(
     String tenantId,

@@ -37,7 +37,7 @@ PR 描述模板 — 编辑时仅删除不适用段落,保留勾选/填写部分�
 ## 涉及方法参数 ≥ 6
 
 - [ ] 公共接口:已封装为 Command / Context / Request / Param 对象
-- [ ] 内联 `new` 调用 argc>6:已用 `@Builder` + 提取引用变量;参考 `docs/archive/plans/positional-args-cleanup-plan-2026-05-01.md`
+- [ ] 内联 `new` 调用 argc>6:已用 `@Builder` + 提取引用变量;参考 `docs/coding-conventions.md`
 
 ## 涉及业务异常
 

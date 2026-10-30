@@ -4,7 +4,6 @@ import static io.github.pinpols.batch.orchestrator.application.engine.CountConti
 import static io.github.pinpols.batch.orchestrator.application.engine.CountContinuityFixtures.output;
 import static io.github.pinpols.batch.orchestrator.application.engine.CountContinuityFixtures.policy;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -22,23 +21,33 @@ import java.math.BigInteger;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @DisplayName("条数连续性：冻结的数据关系、范围证据、差额和执行身份")
+@ExtendWith(MockitoExtension.class)
 class CountContinuityOutboxServiceTest {
-  private final WorkflowRunMapper runs = mock(WorkflowRunMapper.class);
-  private final WorkflowNodeRunMapper nodes = mock(WorkflowNodeRunMapper.class);
-  private final DomainEventPublisher publisher = mock(DomainEventPublisher.class);
-  private final CountContinuityOutboxService service =
-      new CountContinuityOutboxService(runs, nodes, publisher, new ObjectMapper());
-  private final WorkflowRunEntity run = new WorkflowRunEntity();
-  private final WorkflowNodeRunEntity upstream = nodeRun(11L, "IMPORT");
-  private final WorkflowNodeRunEntity current = nodeRun(22L, "PROCESS");
+  @Mock
+  private WorkflowRunMapper runs;
+
+  @Mock
+  private WorkflowNodeRunMapper nodes;
+
+  @Mock
+  private DomainEventPublisher publisher;
+
+  private CountContinuityOutboxService service;
+  private WorkflowRunEntity run;
+  private WorkflowNodeRunEntity upstream;
+  private WorkflowNodeRunEntity current;
 
   @Test
   @DisplayName("普通控制边导入一行后导出六行，不构成数据丢失告警")
@@ -70,6 +79,7 @@ class CountContinuityOutboxServiceTest {
   @Test
   @DisplayName("同范围同单位的不一致仍产生真实差异告警")
   void shouldPublishMismatch_whenComparableCountsDiffer() {
+    when(nodes.selectLatestByWorkflowRunIdAndNodeCode(7L, "IMPORT")).thenReturn(upstream);
     fixture(
         policy(0, ""),
         output("output", 1000, "version-1", "RECORDS"),
@@ -92,6 +102,7 @@ class CountContinuityOutboxServiceTest {
   @Test
   @DisplayName("同范围同单位且计数相同，写入明确的匹配审计")
   void shouldRecordMatchedEvidence_whenComparableCountsMatch() {
+    when(nodes.selectLatestByWorkflowRunIdAndNodeCode(7L, "IMPORT")).thenReturn(upstream);
     fixture(
         policy(0, ""),
         output("output", 1000, "version-1", "RECORDS"),
@@ -106,6 +117,7 @@ class CountContinuityOutboxServiceTest {
   @Test
   @DisplayName("合法过滤差额要求精确匹配并保留声明原因")
   void shouldAccountForExactDeclaredDelta_whenFilteringIsDeclared() {
+    when(nodes.selectLatestByWorkflowRunIdAndNodeCode(7L, "IMPORT")).thenReturn(upstream);
     fixture(
         policy(50, "rejected rows accounted in validation"),
         output("output", 1000, "version-1", "RECORDS"),
@@ -122,6 +134,7 @@ class CountContinuityOutboxServiceTest {
   @Test
   @DisplayName("声明五十行过滤仍多丢一行，继续产生差异告警")
   void shouldRejectExtraDifference_whenDeltaDoesNotMatchExactly() {
+    when(nodes.selectLatestByWorkflowRunIdAndNodeCode(7L, "IMPORT")).thenReturn(upstream);
     fixture(
         policy(50, "documented rejection"),
         output("output", 1000, "version-1", "RECORDS"),
@@ -135,6 +148,7 @@ class CountContinuityOutboxServiceTest {
   @Test
   @DisplayName("仅声明允许差额但未上报排除记账时不能称为匹配")
   void shouldRecordUnverified_whenDeclaredDeltaHasNoReportedAccounting() {
+    when(nodes.selectLatestByWorkflowRunIdAndNodeCode(7L, "IMPORT")).thenReturn(upstream);
     fixture(
         policy(50, "documented rejection"),
         output("output", 1000, "version-1", "RECORDS"),
@@ -150,6 +164,7 @@ class CountContinuityOutboxServiceTest {
   @Test
   @DisplayName("排除计数与声明差额不一致时保持未验证")
   void shouldRecordUnverified_whenReportedExclusionsDoNotMatchDeclaration() {
+    when(nodes.selectLatestByWorkflowRunIdAndNodeCode(7L, "IMPORT")).thenReturn(upstream);
     fixture(
         policy(50, "documented rejection"),
         output("output", 1000, "version-1", "RECORDS"),
@@ -165,6 +180,7 @@ class CountContinuityOutboxServiceTest {
   @Test
   @DisplayName("排除计数相同但没有取证引用时保持未验证")
   void shouldRecordUnverified_whenReportedExclusionsHaveNoEvidenceReference() {
+    when(nodes.selectLatestByWorkflowRunIdAndNodeCode(7L, "IMPORT")).thenReturn(upstream);
     fixture(
         policy(50, "documented rejection"),
         output("output", 1000, "version-1", "RECORDS"),
@@ -186,6 +202,7 @@ class CountContinuityOutboxServiceTest {
       String inputScope,
       String inputUnit,
       String reason) {
+    when(nodes.selectLatestByWorkflowRunIdAndNodeCode(7L, "IMPORT")).thenReturn(upstream);
     fixture(
         policy(0, ""),
         output("output", 1000, upstreamScope, upstreamUnit),
@@ -210,6 +227,7 @@ class CountContinuityOutboxServiceTest {
   @MethodSource("invalidCounts")
   @DisplayName("计数为负、小数、溢出、字符串或缺失时保持未验证")
   void shouldRejectInvalidCounts_whenNumericEvidenceIsNotAnExactNonnegativeLong(Object value) {
+    when(nodes.selectLatestByWorkflowRunIdAndNodeCode(7L, "IMPORT")).thenReturn(upstream);
     fixture(
         policy(0, ""),
         output("output", value, "version-1", "RECORDS"),
@@ -250,6 +268,7 @@ class CountContinuityOutboxServiceTest {
   @Test
   @DisplayName("存在多条控制依赖时，只查询声明的数据来源")
   void shouldUseOnlyDeclaredUpstream_whenOtherControlDependenciesExist() {
+    when(nodes.selectLatestByWorkflowRunIdAndNodeCode(7L, "IMPORT")).thenReturn(upstream);
     fixture(
         policy(0, ""),
         output("output", 1000, "version-1", "RECORDS"),
@@ -265,6 +284,7 @@ class CountContinuityOutboxServiceTest {
   @Test
   @DisplayName("上游失败的重试记录不能提供成功产出的核对依据")
   void shouldRecordUnverified_whenLatestUpstreamIsNotSuccessful() {
+    when(nodes.selectLatestByWorkflowRunIdAndNodeCode(7L, "IMPORT")).thenReturn(upstream);
     fixture(
         policy(0, ""),
         output("output", 1000, "version-1", "RECORDS"),
@@ -314,6 +334,7 @@ class CountContinuityOutboxServiceTest {
   @Test
   @DisplayName("节点产出 JSON 损坏时保持未验证")
   void shouldRecordUnverified_whenPersistedOutputIsMalformed() {
+    when(nodes.selectLatestByWorkflowRunIdAndNodeCode(7L, "IMPORT")).thenReturn(upstream);
     fixture(
         policy(0, ""),
         output("output", 1000, "version-1", "RECORDS"),
@@ -330,6 +351,7 @@ class CountContinuityOutboxServiceTest {
   @Test
   @DisplayName("当前执行未成功时，已写入的部分计数也不能称为匹配")
   void shouldRecordUnverified_whenCurrentExecutionIsNotSuccessful() {
+    when(nodes.selectLatestByWorkflowRunIdAndNodeCode(7L, "IMPORT")).thenReturn(upstream);
     fixture(
         policy(0, ""),
         output("output", 1000, "version-1", "RECORDS"),
@@ -367,6 +389,7 @@ class CountContinuityOutboxServiceTest {
   @Test
   @DisplayName("重复执行节点使用新执行身份，核对事件不被首次执行遮盖")
   void shouldUseNewEventIdentity_whenNodeHasAnotherRun() {
+    when(nodes.selectLatestByWorkflowRunIdAndNodeCode(7L, "IMPORT")).thenReturn(upstream);
     fixture(
         policy(0, ""),
         output("output", 1000, "version-1", "RECORDS"),
@@ -382,6 +405,7 @@ class CountContinuityOutboxServiceTest {
   @Test
   @DisplayName("已持久化产出与本次回报不一致时不误判匹配")
   void shouldRecordUnverified_whenReportDoesNotMatchPersistedOutput() {
+    when(nodes.selectLatestByWorkflowRunIdAndNodeCode(7L, "IMPORT")).thenReturn(upstream);
     fixture(
         policy(0, ""),
         output("output", 1000, "version-1", "RECORDS"),
@@ -434,7 +458,6 @@ class CountContinuityOutboxServiceTest {
     upstream.setOutput(JsonUtils.toJson(fromOutput));
     current.setOutput(JsonUtils.toJson(input));
     when(runs.selectByIdAnyTenant(7L)).thenReturn(run);
-    when(nodes.selectLatestByWorkflowRunIdAndNodeCode(7L, "IMPORT")).thenReturn(upstream);
     when(nodes.selectLatestByWorkflowRunIdAndNodeCode(7L, "PROCESS")).thenReturn(current);
   }
 
@@ -450,5 +473,13 @@ class CountContinuityOutboxServiceTest {
     node.setNodeStatus("SUCCESS");
     node.setRunSeq(1);
     return node;
+  }
+
+  @BeforeEach
+  void initializeSubject() {
+    service = new CountContinuityOutboxService(runs, nodes, publisher, new ObjectMapper());
+    run = new WorkflowRunEntity();
+    upstream = nodeRun(11L, "IMPORT");
+    current = nodeRun(22L, "PROCESS");
   }
 }

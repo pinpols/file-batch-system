@@ -14,6 +14,97 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 
 
+class SimRuntimeProfileRecoveryTest(unittest.TestCase):
+    """核心服务恢复不得静默清除场景要求的Worker模式。"""
+
+    def run_recovery(self, import_mode="default", process_mode="default", healthy=False, fail=False):
+        harness = (ROOT / "scripts/local/sim-harness.sh").read_text()
+        function = re.search(r"(?ms)^ensure_core_runtime\(\) \{.*?^\}", harness).group()
+        with tempfile.TemporaryDirectory() as directory:
+            shell = r'''
+set -euo pipefail
+SIM_LOG_DIR="$PWD"
+SIM_JAVA_OPTS=""
+ORCHESTRATOR_PORT=1 CONSOLE_API_PORT=2 TRIGGER_PORT=3 WORKER_IMPORT_PORT=4
+WORKER_EXPORT_PORT=5 WORKER_DISPATCH_PORT=6 WORKER_PROCESS_PORT=7 WORKER_ATOMIC_PORT=8
+curl() {
+  if [[ "$TEST_HEALTHY" == 1 || -f probed ]]; then printf 200;
+  else : > probed; printf 503; fi
+}
+bash() { printf 'CORE\n' >> calls; }
+batch_configure_local_jvm_runtime_env() { :; }
+restart_import() { printf 'IMPORT:%s\n' "$1" >> calls; }
+restart_process_batch_claim() {
+  printf 'PROCESS:%s\n' "$1" >> calls
+  [[ "$TEST_FAIL_PROFILE" == 0 ]]
+}
+sleep() { :; }
+'''
+            shell += function + '\nensure_core_runtime "$TEST_IMPORT" "$TEST_PROCESS"\n'
+            shell += "printf 'STAGE\n' >> calls\n"
+            result = subprocess.run(
+                ["bash", "-c", shell], cwd=directory, capture_output=True, text=True,
+                env={**os.environ, "TEST_HEALTHY": str(int(healthy)),
+                     "TEST_FAIL_PROFILE": str(int(fail)), "TEST_IMPORT": import_mode,
+                     "TEST_PROCESS": process_mode},
+            )
+            calls = Path(directory, "calls")
+            return result, calls.read_text().splitlines() if calls.exists() else []
+
+    def test_healthy_runtime_does_not_restart_existing_profile(self):
+        result, calls = self.run_recovery(process_mode="enabled", healthy=True)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(["STAGE"], calls)
+
+    def test_core_restart_restores_batch_claim_before_stage(self):
+        result, calls = self.run_recovery(process_mode="enabled")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(["CORE", "PROCESS:enabled", "STAGE"], calls)
+
+    def test_core_restart_restores_each_required_import_profile(self):
+        for mode in ("skip", "checkpoint", "bundle"):
+            with self.subTest(mode=mode):
+                result, calls = self.run_recovery(import_mode=mode)
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual(["CORE", f"IMPORT:{mode}", "STAGE"], calls)
+
+    def test_failed_profile_restore_does_not_run_stage(self):
+        result, calls = self.run_recovery(process_mode="enabled", fail=True)
+        self.assertNotEqual(0, result.returncode)
+        self.assertEqual(["CORE", "PROCESS:enabled"], calls)
+
+    def test_failed_restart_is_not_masked_by_healthy_old_process_in_conditional_call(self):
+        harness = (ROOT / "scripts/local/sim-harness.sh").read_text()
+        names = ("ensure_core_runtime", "restart_import", "restart_process_batch_claim")
+        functions = "\n".join(
+            re.search(rf"(?ms)^{name}\(\) \{{.*?^\}}", harness).group() for name in names
+        )
+        for helper, mode in zip(names, ("default", "checkpoint", "enabled")):
+            with self.subTest(helper=helper), tempfile.TemporaryDirectory() as directory:
+                shell = r'''
+set -euo pipefail
+SIM_LOG_DIR="$PWD" SIM_JAVA_OPTS="" BATCH_SCRIPT_RUNTIME=host
+ORCHESTRATOR_PORT=1 CONSOLE_API_PORT=2 TRIGGER_PORT=3 WORKER_IMPORT_PORT=4
+WORKER_EXPORT_PORT=5 WORKER_DISPATCH_PORT=6 WORKER_PROCESS_PORT=7 WORKER_ATOMIC_PORT=8
+curl() {
+  if [[ "$TEST_HELPER" == ensure_core_runtime && ! -f probed ]]; then
+    : > probed; printf 503
+  else printf 200; fi
+}
+bash() { printf 'RESTART\n' >> calls; return 7; }
+batch_configure_local_jvm_runtime_env() { :; }
+sleep() { :; }
+'''
+                shell += functions + '\nif "$TEST_HELPER" "$TEST_MODE"; then\n'
+                shell += "printf 'STAGE\n' >> calls\nelse printf 'BLOCKED\n' >> calls\nfi\n"
+                result = subprocess.run(
+                    ["bash", "-c", shell], cwd=directory, capture_output=True, text=True,
+                    env={**os.environ, "TEST_HELPER": helper, "TEST_MODE": mode},
+                )
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual(["RESTART", "BLOCKED"], Path(directory, "calls").read_text().splitlines())
+
+
 class SimRuntimeCleanupTest(unittest.TestCase):
     def setUp(self):
         self.sql = (ROOT / "scripts/local/sql/reset-platform-runtime.sql").read_text()

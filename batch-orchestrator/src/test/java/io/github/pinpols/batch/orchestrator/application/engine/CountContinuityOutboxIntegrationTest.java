@@ -63,9 +63,7 @@ class CountContinuityOutboxIntegrationTest extends AbstractIntegrationTest {
         output("output", 1000, "version-1", "RECORDS"),
         output("input", 950, "version-1", "RECORDS"),
         scenario -> {
-          jdbc.update(
-              updateWorkflowDefinitionSql,
-              scenario.definitionId());
+          jdbc.update(updateWorkflowDefinitionSql, scenario.definitionId());
           inTransaction(scenario, () -> {
             check(scenario);
             check(scenario);
@@ -84,8 +82,8 @@ class CountContinuityOutboxIntegrationTest extends AbstractIntegrationTest {
           inTransaction(scenario, () -> check(scenario));
 
           assertThat(events(scenario)).hasSize(2).doesNotHaveDuplicates();
-          List<Long> recordedExecutions =
-              jdbc.queryForList(selectStatementSql, Long.class, scenario.tenant(), scenario.runId());
+          List<Long> recordedExecutions = jdbc.queryForList(
+              selectStatementSql, Long.class, scenario.tenant(), scenario.runId());
           assertThat(recordedExecutions).containsExactly(scenario.currentId(), retryId);
         });
   }
@@ -122,8 +120,8 @@ class CountContinuityOutboxIntegrationTest extends AbstractIntegrationTest {
           inTransaction(scenario, () -> check(scenario));
 
           assertThat(statuses(scenario)).containsExactly("UNVERIFIED");
-          String selectedEventType =
-              jdbc.queryForObject(selectEventTypeSql, String.class, scenario.tenant(), scenario.runId());
+          String selectedEventType = jdbc.queryForObject(
+              selectEventTypeSql, String.class, scenario.tenant(), scenario.runId());
           assertThat(selectedEventType).isEqualTo("workflow.node.count.continuity.checked.v1");
           String selectedPayloadJson = jdbc.queryForObject(
               selectPayloadJsonSql, String.class, scenario.tenant(), scenario.runId());
@@ -150,9 +148,7 @@ class CountContinuityOutboxIntegrationTest extends AbstractIntegrationTest {
         output("input", 950, "version-1", "RECORDS"),
         scenario -> {
           String reported = currentOutput(scenario);
-          jdbc.update(
-              updateWorkflowNodeRunSql,
-              scenario.currentId());
+          jdbc.update(updateWorkflowNodeRunSql, scenario.currentId());
           assertThatThrownBy(() -> inTransaction(scenario, () -> {
                 finishNode(scenario, reported);
                 check(scenario);
@@ -221,11 +217,11 @@ class CountContinuityOutboxIntegrationTest extends AbstractIntegrationTest {
       Map<String, Object> upstream,
       Map<String, Object> current,
       Consumer<Scenario> exercise) {
-        final String deleteOutboxEventSql = """
+    final String deleteOutboxEventSql = """
             delete from batch.outbox_event where tenant_id = ? and aggregate_type = 'WORKFLOW_RUN'\s\
             and aggregate_id = ?
         """;
-        final String deleteOutboxEventDedupKeySql = """
+    final String deleteOutboxEventDedupKeySql = """
             delete from batch.outbox_event_dedup_key where tenant_id = ?
         """;
     final String deleteWorkflowNodeRunSql = """
@@ -246,10 +242,7 @@ class CountContinuityOutboxIntegrationTest extends AbstractIntegrationTest {
     try {
       exercise.accept(scenario);
     } finally {
-      jdbc.update(
-          deleteOutboxEventSql,
-          tenant,
-          runId);
+      jdbc.update(deleteOutboxEventSql, tenant, runId);
       jdbc.update(deleteOutboxEventDedupKeySql, tenant);
       jdbc.update(deleteWorkflowNodeRunSql, runId);
       jdbc.update(deleteWorkflowRunSql, runId);
@@ -276,7 +269,12 @@ class CountContinuityOutboxIntegrationTest extends AbstractIntegrationTest {
     Long definitionId = jdbc.queryForObject(insertWorkflowDefinitionSql, Long.class, tenant);
     String snapshot = CountContinuityFixtures.snapshot(tenant, definitionId, params, true);
     Long runId = jdbc.queryForObject(
-        insertWorkflowRunSql, Long.class, tenant, definitionId, LocalDate.of(2026, 10, 16), snapshot);
+        insertWorkflowRunSql,
+        Long.class,
+        tenant,
+        definitionId,
+        LocalDate.of(2026, 10, 16),
+        snapshot);
     Long upstreamId = insertNode(runId, "IMPORT", 1, JsonUtils.toJson(upstream));
     Long currentId = insertNode(runId, "PROCESS", 1, JsonUtils.toJson(current));
     return new Scenario(tenant, definitionId, runId, upstreamId, currentId);
@@ -318,10 +316,7 @@ class CountContinuityOutboxIntegrationTest extends AbstractIntegrationTest {
         update batch.workflow_node_run set node_status = 'SUCCESS', output = ?::jsonb where id = ?
     """;
 
-    jdbc.update(
-        updateWorkflowNodeRunSql,
-        output,
-        scenario.currentId());
+    jdbc.update(updateWorkflowNodeRunSql, output, scenario.currentId());
   }
 
   private List<String> events(Scenario scenario) {
@@ -340,7 +335,8 @@ class CountContinuityOutboxIntegrationTest extends AbstractIntegrationTest {
         and aggregate_id = ? order by id
         """;
 
-    return jdbc.queryForList(selectPayloadJsonSql, String.class, scenario.tenant(), scenario.runId());
+    return jdbc.queryForList(
+        selectPayloadJsonSql, String.class, scenario.tenant(), scenario.runId());
   }
 
   private record Scenario(

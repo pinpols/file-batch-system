@@ -181,6 +181,83 @@ class WorkflowGraphValidatorTest {
   }
 
   @Test
+  @DisplayName("N_OF 汇聚阈值不合法时图校验必须拒绝")
+  void shouldRejectInvalidNOfJoinThreshold() {
+    for (String threshold : List.of("1.5", "4294967297", "3")) {
+      var nodes = nodes("START", "B", "C", "GW", "END");
+      nodes.get(3).setNodeType("GATEWAY");
+      nodes.get(3).setNodeParams("{\"joinMode\":\"N_OF\",\"joinThreshold\":" + threshold + "}");
+      seed(
+          nodes,
+          edges(
+              edge("START", "B"),
+              edge("START", "C"),
+              edge("B", "GW"),
+              edge("C", "GW"),
+              edge("GW", "END")));
+      assertThat(validator.validate(1L).errors())
+          .as(threshold)
+          .anySatisfy(issue -> assertThat(issue.code()).isEqualTo("V10"));
+    }
+  }
+
+  @Test
+  @DisplayName("多入边网关缺少或使用未知汇聚模式时图校验拒绝")
+  void shouldRejectMissingOrUnknownGatewayJoinMode() {
+    for (String params : List.of("{}", "{\"joinMode\":\"BAD\"}", "{\"joinMode\":\"3_OF_4\"}")) {
+      var nodes = nodes("START", "B", "C", "GW", "END");
+      nodes.get(3).setNodeType("GATEWAY");
+      nodes.get(3).setNodeParams(params);
+      seed(
+          nodes,
+          edges(
+              edge("START", "B"),
+              edge("START", "C"),
+              edge("B", "GW"),
+              edge("C", "GW"),
+              edge("GW", "END")));
+      assertThat(validator.validate(1L).errors())
+          .as(params)
+          .anySatisfy(issue -> assertThat(issue.code()).isEqualTo("V9"));
+    }
+  }
+
+  @Test
+  @DisplayName("单入边分支允许无汇聚模式但拒绝显式未知模式")
+  void shouldAllowBranchWithoutJoinModeButRejectUnknownMode() {
+    var nodes = nodes("START", "GW", "END");
+    nodes.get(1).setNodeType("GATEWAY");
+    nodes.get(1).setNodeParams("{}");
+    seed(nodes, edges(edge("START", "GW"), edge("GW", "END")));
+    assertThat(validator.validate(1L).errors()).noneMatch(issue -> issue.code().equals("V9"));
+    nodes.get(1).setNodeParams("{\"joinMode\":\"BAD\"}");
+    assertThat(validator.validate(1L).errors())
+        .anySatisfy(issue -> assertThat(issue.code()).isEqualTo("V9"));
+  }
+
+  @Test
+  @DisplayName("非网关节点显式无效汇聚配置在启动图验证中拒绝")
+  void shouldRejectInvalidJoinConfigOnTask() {
+    for (String params :
+        List.of("{\"joinMode\":\"BAD\"}", "{\"joinMode\":\"N_OF\",\"joinThreshold\":3}")) {
+      var nodes = nodes("START", "B", "C", "TASK_JOIN", "END");
+      nodes.get(3).setNodeParams(params);
+      seed(
+          nodes,
+          edges(
+              edge("START", "B"),
+              edge("START", "C"),
+              edge("B", "TASK_JOIN"),
+              edge("C", "TASK_JOIN"),
+              edge("TASK_JOIN", "END")));
+      String expected = params.contains("BAD") ? "V9" : "V10";
+      assertThat(validator.validate(1L).errors())
+          .as(params)
+          .anySatisfy(issue -> assertThat(issue.code()).isEqualTo(expected));
+    }
+  }
+
+  @Test
   @DisplayName("起点节点存在入边时判定为结构错误")
   void shouldReportStructureError_whenStartNodeHasIncomingEdge() {
     seed(

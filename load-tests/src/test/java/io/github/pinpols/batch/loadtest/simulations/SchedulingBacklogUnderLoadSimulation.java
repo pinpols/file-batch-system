@@ -22,7 +22,7 @@ import static io.gatling.javaapi.http.HttpDsl.*;
  *
  * <p>This scenario does not pretend to prove scheduling correctness by itself. Run it together with
  * {@code load-tests/scripts/sample-scheduler-backlog.sh}; Gatling gives endpoint latency/error
- * curves, while the sampler gives WAITING/READY/RUNNING/backlog slope and completion throughput.
+ * 性能曲线；采样器则提供 WAITING/READY/RUNNING/积压趋势及完成吞吐量。
  */
 public class SchedulingBacklogUnderLoadSimulation extends Simulation {
 

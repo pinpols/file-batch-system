@@ -36,14 +36,12 @@ class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
   @AfterEach
   void cleanup() {
     // 把测试加的临时列删干净,防污染其他 IT
-    String dropDriftTestColumnSql =
-        """
+    String dropDriftTestColumnSql = """
         alter table batch.outbox_event drop column if exists drift_test_col
     """;
     jdbcTemplate.execute(dropDriftTestColumnSql);
     // 列级类型漂移用例 — 把 tenant_id 类型还原回 varchar(64)
-    String restoreTenantIdColumnTypeSql =
-        """
+    String restoreTenantIdColumnTypeSql = """
         alter table batch.outbox_event alter column tenant_id type varchar(64)
     """;
     jdbcTemplate.execute(restoreTenantIdColumnTypeSql);
@@ -60,8 +58,7 @@ class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
   @DisplayName("热表新增列而归档表未同步时校验失败,并提示通过迁移补齐归档表结构")
   void shouldDetectDrift_whenHotTableHasExtraColumn() {
     // 模拟:运维给 batch.outbox_event 加了 column,但忘了同步 archive.outbox_event_archive
-    String addDriftTestColumnSql =
-        """
+    String addDriftTestColumnSql = """
         alter table batch.outbox_event add column drift_test_col varchar(64)
     """;
     jdbcTemplate.execute(addDriftTestColumnSql);
@@ -130,8 +127,8 @@ class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
       if (coldCols.isEmpty()) {
         continue;
       }
-      Integer pkCount = jdbcTemplate.queryForObject(
-          archivePrimaryKeyCountSql, Integer.class, archiveTable);
+      Integer pkCount =
+          jdbcTemplate.queryForObject(archivePrimaryKeyCountSql, Integer.class, archiveTable);
       if (pkCount == null || pkCount == 0) {
         missingPk.add(archiveTable);
       }
@@ -147,8 +144,7 @@ class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
     // 模拟:运维 ALTER batch.outbox_event ALTER COLUMN tenant_id TYPE varchar(128),
     // 但 archive.outbox_event_archive.tenant_id 仍是 varchar(64) — 列名集合相等,
     // 但 archive INSERT 在 tenantId 超过 64 字符时会截断 / 失败,checkOnStartup() 看不到。
-    String widenTenantIdColumnTypeSql =
-        """
+    String widenTenantIdColumnTypeSql = """
         alter table batch.outbox_event alter column tenant_id type varchar(128)
     """;
     jdbcTemplate.execute(widenTenantIdColumnTypeSql);

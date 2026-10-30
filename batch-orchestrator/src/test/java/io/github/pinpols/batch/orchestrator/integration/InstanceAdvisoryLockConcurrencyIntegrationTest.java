@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -62,25 +63,26 @@ class InstanceAdvisoryLockConcurrencyIntegrationTest extends AbstractIntegration
   private JdbcTemplate jdbcTemplate;
 
   @Autowired
-  private TransactionTemplate transactionTemplate;
+  private PlatformTransactionManager transactionManager;
 
   @Test
   @DisplayName("同一实例上的并发读改写被实例级咨询锁串行化, 无丢更新且最终计数等于并发线程数, 锁自身不产生死锁")
   void advisoryLock_serializesConcurrentRmwOnSameInstance_noLostUpdate_lockSelfNoDeadlock()
       throws Exception {
-        final String selectSuccessPartitionCountSql = """
+    final String selectSuccessPartitionCountSql = """
             SELECT success_partition_count FROM batch.job_instance WHERE id = ?
             """;
-        final String updateJobInstanceSql = """
+    final String updateJobInstanceSql = """
             UPDATE batch.job_instance SET success_partition_count = ? WHERE id = ?
             """;
-  final String selectSuccessPartitionCountSql2 = """
+    final String selectSuccessPartitionCountSql2 = """
       SELECT success_partition_count FROM batch.job_instance WHERE id = ?
   """;
 
     String suffix = "adv-" + System.nanoTime();
     long instanceId = seedInstance(suffix);
     int threads = 8;
+    TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
 
     try {
       CountDownLatch startGate = new CountDownLatch(1);
@@ -93,14 +95,9 @@ class InstanceAdvisoryLockConcurrencyIntegrationTest extends AbstractIntegration
           transactionTemplate.executeWithoutResult(status -> {
             jobInstanceMapper.acquireInstanceAdvisoryLock(TENANT, instanceId);
             Integer current = jdbcTemplate.queryForObject(
-                selectSuccessPartitionCountSql,
-                Integer.class,
-                instanceId);
+                selectSuccessPartitionCountSql, Integer.class, instanceId);
             int next = (current == null ? 0 : current) + 1;
-            jdbcTemplate.update(
-                updateJobInstanceSql,
-                next,
-                instanceId);
+            jdbcTemplate.update(updateJobInstanceSql, next, instanceId);
           });
           return null;
         }));
@@ -113,10 +110,8 @@ class InstanceAdvisoryLockConcurrencyIntegrationTest extends AbstractIntegration
       }
       pool.shutdown();
 
-      Integer finalCount = jdbcTemplate.queryForObject(
-          selectSuccessPartitionCountSql2,
-          Integer.class,
-          instanceId);
+      Integer finalCount =
+          jdbcTemplate.queryForObject(selectSuccessPartitionCountSql2, Integer.class, instanceId);
       // 串行化 → 无丢更新 → 恰好 == 线程数。
       assertThat(finalCount)
           .as("advisory lock must serialize RMW, no lost update")
@@ -141,6 +136,7 @@ class InstanceAdvisoryLockConcurrencyIntegrationTest extends AbstractIntegration
     long instanceA = seedInstance(suffixA);
     long instanceB = seedInstance(suffixB);
     int perInstance = 6;
+    TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
 
     try {
       CountDownLatch startGate = new CountDownLatch(1);
@@ -154,13 +150,9 @@ class InstanceAdvisoryLockConcurrencyIntegrationTest extends AbstractIntegration
             transactionTemplate.executeWithoutResult(status -> {
               jobInstanceMapper.acquireInstanceAdvisoryLock(TENANT, instanceId);
               Integer current = jdbcTemplate.queryForObject(
-                  selectSuccessPartitionCountSql,
-                  Integer.class,
-                  instanceId);
+                  selectSuccessPartitionCountSql, Integer.class, instanceId);
               jdbcTemplate.update(
-                  updateJobInstanceSql,
-                  (current == null ? 0 : current) + 1,
-                  instanceId);
+                  updateJobInstanceSql, (current == null ? 0 : current) + 1, instanceId);
             });
             return null;
           }));
@@ -188,10 +180,8 @@ class InstanceAdvisoryLockConcurrencyIntegrationTest extends AbstractIntegration
         SELECT success_partition_count FROM batch.job_instance WHERE id = ?
     """;
 
-    Integer v = jdbcTemplate.queryForObject(
-        selectSuccessPartitionCountSql,
-        Integer.class,
-        instanceId);
+    Integer v =
+        jdbcTemplate.queryForObject(selectSuccessPartitionCountSql, Integer.class, instanceId);
     return v == null ? 0 : v;
   }
 
@@ -211,11 +201,8 @@ class InstanceAdvisoryLockConcurrencyIntegrationTest extends AbstractIntegration
         jdbcTemplate, TENANT, "GENERAL", "DEFAULT", TriggerType.MANUAL, BIZ_DATE);
     WorkflowChildTriggerSeed child = LaunchIntegrationFixture.prepareWorkflowChildTriggerRequest(
         jdbcTemplate, TENANT, workflow, BIZ_DATE, TriggerType.MANUAL);
-    Long jobDefinitionId = jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class,
-        TENANT,
-        workflow.jobCode());
+    Long jobDefinitionId =
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, workflow.jobCode());
     return jdbcTemplate.queryForObject(
         insertJobInstanceSql,
         Long.class,
@@ -229,13 +216,13 @@ class InstanceAdvisoryLockConcurrencyIntegrationTest extends AbstractIntegration
   }
 
   private void cleanupInstance(long instanceId, String suffix) {
-  final String selectTriggerRequestIdSql = """
+    final String selectTriggerRequestIdSql = """
       SELECT trigger_request_id FROM batch.job_instance WHERE id = ?
   """;
-  final String selectParentWorkflowRunIdSql = """
+    final String selectParentWorkflowRunIdSql = """
       SELECT parent_workflow_run_id FROM batch.trigger_request WHERE id = ?
   """;
-  final String selectTriggerRequestIdSql2 = """
+    final String selectTriggerRequestIdSql2 = """
       SELECT trigger_request_id FROM batch.workflow_run WHERE id = ?
   """;
     final String deleteJobInstanceSql = """
@@ -248,16 +235,12 @@ class InstanceAdvisoryLockConcurrencyIntegrationTest extends AbstractIntegration
         DELETE FROM batch.workflow_run WHERE id = ?
     """;
 
-    Long triggerRequestId = jdbcTemplate.queryForObject(
-        selectTriggerRequestIdSql, Long.class, instanceId);
-    Long workflowRunId = jdbcTemplate.queryForObject(
-        selectParentWorkflowRunIdSql,
-        Long.class,
-        triggerRequestId);
-    Long rootTriggerRequestId = jdbcTemplate.queryForObject(
-        selectTriggerRequestIdSql2,
-        Long.class,
-        workflowRunId);
+    Long triggerRequestId =
+        jdbcTemplate.queryForObject(selectTriggerRequestIdSql, Long.class, instanceId);
+    Long workflowRunId =
+        jdbcTemplate.queryForObject(selectParentWorkflowRunIdSql, Long.class, triggerRequestId);
+    Long rootTriggerRequestId =
+        jdbcTemplate.queryForObject(selectTriggerRequestIdSql2, Long.class, workflowRunId);
     jdbcTemplate.update(deleteJobInstanceSql, instanceId);
     jdbcTemplate.update(deleteTriggerRequestSql, triggerRequestId);
     jdbcTemplate.update(deleteWorkflowRunSql, workflowRunId);

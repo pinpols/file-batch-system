@@ -1,3 +1,5 @@
+> 历史原始记录：本轮恢复保留，正文中的结论、参数、状态和操作步骤仅适用于原日期/基线。提炼方法不替代原始证据；当前事实须按[文档治理](../../standards/document-governance.md)重新核实。本轮未执行原测试或扫描。
+
 # 批量日 (Business Day) & 作业实例化 vs 业界 — 缺陷盘点 2026-05-03
 
 > **范围**：本仓 `batch_day_instance` / `business_calendar` / `LaunchService` / `SchedulePlanBuilder` 等批量日生命周期与作业实例化机制，与 Apache Airflow / Spring Batch / DolphinScheduler / 银行核心批 / AWS Batch 对比。

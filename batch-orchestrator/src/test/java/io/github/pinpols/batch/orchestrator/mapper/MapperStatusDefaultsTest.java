@@ -1,15 +1,5 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplayEntryClaimIfCurrentParam;
-import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplayEntryResetStaleUnboundParam;
-import io.github.pinpols.batch.orchestrator.domain.param.ForensicExportLogMarkCompletedParam;
-import io.github.pinpols.batch.orchestrator.domain.param.TriggerRequestReconcileStatusParam;
-import io.github.pinpols.batch.orchestrator.domain.param.TriggerRequestUpdateAcceptanceGuardedParam;
-import io.github.pinpols.batch.orchestrator.domain.param.WorkerRegistryStartDrainTransitionParam;
-
-
-import io.github.pinpols.batch.orchestrator.domain.param.BatchDayWaitingLaunchTransitionParam;
-import io.github.pinpols.batch.orchestrator.domain.param.BatchDayWaitingLaunchCalendarQuery;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.doReturn;
@@ -17,7 +7,15 @@ import static org.mockito.Mockito.mock;
 
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplayEntryClaimIfCurrentParam;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplayEntryResetStaleUnboundParam;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayWaitingLaunchCalendarQuery;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayWaitingLaunchTransitionParam;
 import io.github.pinpols.batch.orchestrator.domain.param.CustomTaskTypeUpsertParam;
+import io.github.pinpols.batch.orchestrator.domain.param.ForensicExportLogMarkCompletedParam;
+import io.github.pinpols.batch.orchestrator.domain.param.TriggerRequestReconcileStatusParam;
+import io.github.pinpols.batch.orchestrator.domain.param.TriggerRequestUpdateAcceptanceGuardedParam;
+import io.github.pinpols.batch.orchestrator.domain.param.WorkerRegistryStartDrainTransitionParam;
 import io.github.pinpols.batch.orchestrator.mapper.ForensicExportLogMapper.CompletionParam;
 import io.github.pinpols.batch.orchestrator.mapper.ForensicExportLogMapper.FailureParam;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper.ArchiveParam;
@@ -51,21 +49,25 @@ class MapperStatusDefaultsTest {
 
     BatchDayReplayEntryMapper replay = mock(BatchDayReplayEntryMapper.class, CALLS_REAL_METHODS);
     doReturn(List.of()).when(replay).selectBySessionAndStatus(4L, null, "PENDING", 15);
-    doReturn(1).when(replay).claimIfCurrent(BatchDayReplayEntryClaimIfCurrentParam.builder()
-        .id(7L)
-        .tenantId("tenant-a")
-        .sessionId(4L)
-        .now(NOW)
-        .expectedStatus("PENDING")
-        .targetStatus("RUNNING")
-        .build());
-    doReturn(1).when(replay).resetStaleUnbound(BatchDayReplayEntryResetStaleUnboundParam.builder()
-        .sessionId(4L)
-        .cutoff(NOW.minusSeconds(60))
-        .now(NOW)
-        .expectedStatus("RUNNING")
-        .targetStatus("PENDING")
-        .build());
+    doReturn(1)
+        .when(replay)
+        .claimIfCurrent(BatchDayReplayEntryClaimIfCurrentParam.builder()
+            .id(7L)
+            .tenantId("tenant-a")
+            .sessionId(4L)
+            .now(NOW)
+            .expectedStatus("PENDING")
+            .targetStatus("RUNNING")
+            .build());
+    doReturn(1)
+        .when(replay)
+        .resetStaleUnbound(BatchDayReplayEntryResetStaleUnboundParam.builder()
+            .sessionId(4L)
+            .cutoff(NOW.minusSeconds(60))
+            .now(NOW)
+            .expectedStatus("RUNNING")
+            .targetStatus("PENDING")
+            .build());
 
     assertThat(replay.selectBySessionAndStatus(4L, "PENDING", 15)).isEmpty();
     assertThat(replay.claimPending(7L, "tenant-a", 4L, NOW)).isEqualTo(1);
@@ -82,10 +84,22 @@ class MapperStatusDefaultsTest {
     doReturn(List.of()).when(waiting).selectByStatus("tenant-a", "WAITING", 15);
     doReturn(List.of())
         .when(waiting)
-        .selectByCalendarBizDateAndStatus(BatchDayWaitingLaunchCalendarQuery.builder().tenantId("tenant-a").calendarCode("calendar-a").bizDate(bizDate).waitStatus("WAITING").limit(15).build());
+        .selectByCalendarBizDateAndStatus(BatchDayWaitingLaunchCalendarQuery.builder()
+            .tenantId("tenant-a")
+            .calendarCode("calendar-a")
+            .bizDate(bizDate)
+            .waitStatus("WAITING")
+            .limit(15)
+            .build());
     doReturn(1)
         .when(waiting)
-        .transitionStatus(BatchDayWaitingLaunchTransitionParam.builder().tenantId("tenant-a").requestId("request-a").releasedBy("operator-a").expectedStatus("WAITING").targetStatus("RELEASED").build());
+        .transitionStatus(BatchDayWaitingLaunchTransitionParam.builder()
+            .tenantId("tenant-a")
+            .requestId("request-a")
+            .releasedBy("operator-a")
+            .expectedStatus("WAITING")
+            .targetStatus("RELEASED")
+            .build());
 
     assertThat(waiting.insert(waitingEntity)).isEqualTo(1);
     assertThat(waiting.selectWaiting("tenant-a", 15)).isEmpty();
@@ -117,16 +131,15 @@ class MapperStatusDefaultsTest {
     FailureParam failure = new FailureParam("tenant-a", "export-a", "failed", NOW, "FAILED");
     doReturn(1).when(forensic).complete(completion);
     doReturn(1).when(forensic).fail(failure);
-    assertThat(forensic.markCompleted(
-            ForensicExportLogMarkCompletedParam.builder()
-                .tenantId("tenant-a")
-                .exportId("export-a")
-                .storagePath("s3://bucket/key")
-                .fileSizeBytes(12L)
-                .sha256("sha")
-                .rowCountsJson("{}")
-                .completedAt(NOW)
-                .build()))
+    assertThat(forensic.markCompleted(ForensicExportLogMarkCompletedParam.builder()
+            .tenantId("tenant-a")
+            .exportId("export-a")
+            .storagePath("s3://bucket/key")
+            .fileSizeBytes(12L)
+            .sha256("sha")
+            .rowCountsJson("{}")
+            .completedAt(NOW)
+            .build()))
         .isEqualTo(1);
     assertThat(forensic.markFailed("tenant-a", "export-a", "failed", NOW)).isEqualTo(1);
 
@@ -161,15 +174,14 @@ class MapperStatusDefaultsTest {
     TriggerRequestMapper trigger = mock(TriggerRequestMapper.class, CALLS_REAL_METHODS);
     doReturn(1)
         .when(trigger)
-        .updateAcceptanceGuarded(
-            TriggerRequestUpdateAcceptanceGuardedParam.builder()
-                .tenantId("tenant-a")
-                .requestId("request-a")
-                .requestStatus("ACCEPTED")
-                .relatedJobInstanceId(7L)
-                .protectedStatuses(List.of("LAUNCHED", "REJECTED", "DUPLICATE"))
-                .launchedStatus("LAUNCHED")
-                .build());
+        .updateAcceptanceGuarded(TriggerRequestUpdateAcceptanceGuardedParam.builder()
+            .tenantId("tenant-a")
+            .requestId("request-a")
+            .requestStatus("ACCEPTED")
+            .relatedJobInstanceId(7L)
+            .protectedStatuses(List.of("LAUNCHED", "REJECTED", "DUPLICATE"))
+            .launchedStatus("LAUNCHED")
+            .build());
     doReturn(List.of())
         .when(trigger)
         .selectStaleByRequestAndExcludedInstanceStatus(NOW, 15, "ACCEPTED", "CREATED");
@@ -185,15 +197,14 @@ class MapperStatusDefaultsTest {
             .build());
     doReturn(1)
         .when(trigger)
-        .reconcileStatus(
-            TriggerRequestReconcileStatusParam.builder()
-                .tenantId("tenant-a")
-                .requestId("request-a")
-                .jobInstanceId(7L)
-                .targetStatus("LAUNCHED")
-                .expectedStatuses(List.of("ACCEPTED", "DUPLICATE"))
-                .requireUnboundInstance(false)
-                .build());
+        .reconcileStatus(TriggerRequestReconcileStatusParam.builder()
+            .tenantId("tenant-a")
+            .requestId("request-a")
+            .jobInstanceId(7L)
+            .targetStatus("LAUNCHED")
+            .expectedStatuses(List.of("ACCEPTED", "DUPLICATE"))
+            .requireUnboundInstance(false)
+            .build());
 
     assertThat(trigger.updateAcceptance("tenant-a", "request-a", "ACCEPTED", 7L))
         .isEqualTo(1);
@@ -207,13 +218,15 @@ class MapperStatusDefaultsTest {
     doReturn(1)
         .when(worker)
         .updateStaleHeartbeatsStatus(60L, "OFFLINE", List.of("ONLINE", "DRAINING"));
-    doReturn(1).when(worker).startDrainTransition(WorkerRegistryStartDrainTransitionParam.builder()
-        .tenantId("tenant-a")
-        .workerCode("worker-a")
-        .expectedStatus("ONLINE")
-        .nextStatus("DRAINING")
-        .timeoutSeconds(30)
-        .build());
+    doReturn(1)
+        .when(worker)
+        .startDrainTransition(WorkerRegistryStartDrainTransitionParam.builder()
+            .tenantId("tenant-a")
+            .workerCode("worker-a")
+            .expectedStatus("ONLINE")
+            .nextStatus("DRAINING")
+            .timeoutSeconds(30)
+            .build());
     doReturn(1).when(worker).warmupTransition("tenant-a", "worker-a", "OFFLINE", "ONLINE");
 
     assertThat(worker.markDecommissioned("tenant-a", "worker-a")).isEqualTo(1);

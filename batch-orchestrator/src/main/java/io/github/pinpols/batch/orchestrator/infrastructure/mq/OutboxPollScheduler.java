@@ -132,8 +132,9 @@ public class OutboxPollScheduler {
   public void onApplicationReady(ApplicationReadyEvent ignored) {
     OutboxProperties outbox = governance.outbox();
     // STATIC 模式下校验 ENV 里的 shard 配置合法性；DYNAMIC 模式下由 ShardAssignmentProvider 保证
-    boolean staticShardIndexIsInvalid = outbox.getShardingMode() == OutboxProperties.ShardingMode.STATIC
-        && (outbox.getShardIndex() < 0 || outbox.getShardIndex() >= outbox.getShardTotal());
+    boolean staticShardIndexIsInvalid =
+        outbox.getShardingMode() == OutboxProperties.ShardingMode.STATIC
+            && (outbox.getShardIndex() < 0 || outbox.getShardIndex() >= outbox.getShardTotal());
     if (staticShardIndexIsInvalid) {
       throw new IllegalStateException("Invalid Outbox shard configuration: shardIndex="
           + outbox.getShardIndex()
@@ -230,8 +231,7 @@ public class OutboxPollScheduler {
           ? SwallowedExceptionLogger.summary(dae)
           : SwallowedExceptionLogger.summary(mostSpecificCause);
       log.warn(
-          "Outbox poll transient database failure; retrying on the next cycle: {}",
-          failureSummary);
+          "Outbox poll transient database failure; retrying on the next cycle: {}", failureSummary);
       log.debug("Outbox poll database exception", dae);
     } catch (OutOfMemoryError oom) {
       // 内存溢出 — 严重故障，记录后让 JVM 默认 OOM handler 接管

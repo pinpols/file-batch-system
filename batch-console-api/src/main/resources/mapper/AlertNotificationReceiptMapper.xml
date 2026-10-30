@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.domain.notification.mapper.AlertNotificationReceiptMapper">
+    <select id="bindTenant" resultType="string">
+        SELECT set_config('app.tenant_id', #{tenantId}, true)
+    </select>
+
+    <insert id="recordDelivered">
+        INSERT INTO batch.alert_notification_receipt (
+            tenant_id, dedup_fingerprint, receiver_code, firing_delivered_at, resolved_delivered_at)
+        SELECT tenant_id, dedup_fingerprint, #{receiver},
+               CASE WHEN #{notificationStatus} = 'firing' THEN current_timestamp ELSE NULL END,
+               CASE WHEN #{notificationStatus} = 'resolved' THEN current_timestamp ELSE NULL END
+        FROM batch.alert_event
+        WHERE tenant_id = #{tenantId}
+          AND dedup_fingerprint = #{fingerprint}
+          AND alert_type = #{alertType}
+          AND #{notificationStatus} IN ('firing', 'resolved')
+        ON CONFLICT (tenant_id, dedup_fingerprint, receiver_code) DO UPDATE SET
+            firing_delivered_at = COALESCE(batch.alert_notification_receipt.firing_delivered_at,
+                                            excluded.firing_delivered_at),
+            resolved_delivered_at = COALESCE(excluded.resolved_delivered_at,
+                                             batch.alert_notification_receipt.resolved_delivered_at),
+            updated_at = current_timestamp
+    </insert>
+</mapper>

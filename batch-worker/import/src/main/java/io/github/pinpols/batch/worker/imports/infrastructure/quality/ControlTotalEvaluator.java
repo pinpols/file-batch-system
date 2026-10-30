@@ -36,8 +36,10 @@ public class ControlTotalEvaluator {
 
   /** 每个 chunk 调用:按 amountField 累加金额到 running sum(仅 controlTotalCheck 启用且配了 amountField 时)。 */
   public void accumulate(ValidationSession session, List<Map<String, Object>> rows) {
-    boolean accumulationInputIsIncomplete =
-        EmptyChecks.isNull(session) || EmptyChecks.isNull(session.context()) || EmptyChecks.isNull(rows) || EmptyChecks.isEmpty(rows);
+    boolean accumulationInputIsIncomplete = EmptyChecks.isNull(session)
+        || EmptyChecks.isNull(session.context())
+        || EmptyChecks.isNull(rows)
+        || EmptyChecks.isEmpty(rows);
     if (accumulationInputIsIncomplete) {
       return;
     }

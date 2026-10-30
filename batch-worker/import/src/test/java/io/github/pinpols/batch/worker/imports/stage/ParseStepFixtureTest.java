@@ -47,7 +47,7 @@ class ParseStepFixtureTest {
     parseStep = new ParseStep(new ObjectMapper(), runtimeRepository, recordGovernanceService);
   }
 
-  // ── CSV comma-delimited (with header, 10 data rows) ────────────────────────
+  // ── 逗号分隔 CSV（含表头和 10 行数据）────────────────────────
 
   @Test
   @DisplayName("逗号分隔夹具:跳过表头后解析出十条数据行")
@@ -61,7 +61,7 @@ class ParseStepFixtureTest {
     assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 10L);
   }
 
-  // ── Pipe-delimited (5 data rows) ───────────────────────────────────────────
+  // ── 管道符分隔文件（5 行数据）──────────────────────────
 
   @Test
   @DisplayName("竖线分隔夹具:五条数据行全部解析")
@@ -75,7 +75,7 @@ class ParseStepFixtureTest {
     assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 5L);
   }
 
-  // ── Tab-separated (5 data rows) ────────────────────────────────────────────
+  // ── 制表符分隔文件（5 行数据）───────────────────────────
 
   @Test
   @DisplayName("制表符分隔夹具:五条数据行全部解析")
@@ -117,7 +117,7 @@ class ParseStepFixtureTest {
     assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 5L);
   }
 
-  // ── UTF-8 BOM CSV (header with BOM prefix stripped) ────────────────────────
+  // ── 带 UTF-8 BOM 的 CSV（表头会去除 BOM 前缀）────────────────────────
 
   @Test
   @DisplayName("带字节序标记的夹具:剥离标记后解析出三条数据行")
@@ -142,7 +142,7 @@ class ParseStepFixtureTest {
     assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 3L);
   }
 
-  // ── Excel fixture (programmatically built, 3 data rows) ───────────────────
+  // ── Excel fixture（程序生成，含 3 行数据）───────────────────
 
   @Test
   @DisplayName("表格夹具:程序化构造的工作簿解析出三条记录")
@@ -233,7 +233,7 @@ class ParseStepFixtureTest {
     assertThat(result.code()).isEqualTo("IMPORT_PARSE_FAILED");
   }
 
-  // ── Bad-records CSV (2 valid rows: C001 and C010) ──────────────────────────
+  // ── 含异常记录的 CSV（有效行是 C001 和 C010）──────────────────
 
   @Test
   @DisplayName("含坏记录的夹具:解析阶段照单计数,校验留给后续阶段")

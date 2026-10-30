@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
 import io.github.pinpols.batch.common.config.BatchProfileSupport;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.worker.atomic.config.AtomicWorkerConfiguration;
 import io.github.pinpols.batch.worker.atomic.http.HttpExecutorProperties;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicRuntimeStatus.HttpStatus;
@@ -102,7 +103,9 @@ public class AtomicRuntimeStatusService {
       String product = conn.getMetaData().getDatabaseProductName();
       return product == null ? "unknown" : product;
     } catch (SQLException ex) {
-      log.debug("atomic runtime status: detect SQL dialect failed", ex);
+      log.debug(
+          "atomic runtime status: detect SQL dialect failed: {}",
+          SwallowedExceptionLogger.summary(ex));
       return "unknown";
     }
   }

@@ -16,6 +16,7 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
+import java.util.function.Predicate;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -240,12 +241,28 @@ public class ActiveTaskLeaseRegistry {
   }
 
   public void remove(String taskId) {
+    removeIfMatching(taskId, lease -> true);
+  }
+
+  /** 仅移除本批持有且尚未启动的认领项，防止批次异常退出后无限续租。 */
+  public void removeQueuedClaim(
+      String taskId, String tenantId, String workerId, String partitionInvocationId) {
+    if (EmptyChecks.isNull(tenantId) || EmptyChecks.isNull(workerId)) return;
+    removeIfMatching(
+        taskId,
+        lease -> EmptyChecks.isNotNull(lease)
+            && !lease.isExecutionStarted()
+            && sameOwner(lease, tenantId, workerId, partitionInvocationId));
+  }
+
+  private void removeIfMatching(String taskId, Predicate<ActiveTaskLease> condition) {
     if (taskId == null) {
       return;
     }
     ActiveTaskLease removedLease;
     shutdownLock.writeLock().lock();
     try {
+      if (!condition.test(activeTaskLeases.get(taskId))) return;
       removedLease = activeTaskLeases.remove(taskId);
       completingLeases.remove(taskId);
       lostLeases.remove(taskId);

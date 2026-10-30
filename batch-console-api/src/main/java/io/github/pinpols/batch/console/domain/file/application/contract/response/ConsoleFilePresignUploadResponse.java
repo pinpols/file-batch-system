@@ -1,7 +1,5 @@
 package io.github.pinpols.batch.console.domain.file.application.contract.response;
 
-import java.util.Map;
-
 /**
  * 托管上传会话响应（{@code POST /api/console/files/presign-upload}）。
  *
@@ -19,21 +17,4 @@ public record ConsoleFilePresignUploadResponse(
     String uploadUrl,
     String storageBucket,
     String storagePath,
-    String fileName) {
-
-  public static ConsoleFilePresignUploadResponse from(Map<String, Object> row) {
-    if (row == null) {
-      return null;
-    }
-    return new ConsoleFilePresignUploadResponse(
-        FileMapResponseFieldReader.longValue(row, "fileId"),
-        FileMapResponseFieldReader.stringValue(row, "status"),
-        FileMapResponseFieldReader.stringValue(row, "uploadMode"),
-        FileMapResponseFieldReader.stringValue(row, "uploadMethod"),
-        FileMapResponseFieldReader.stringValue(row, "contentField"),
-        FileMapResponseFieldReader.stringValue(row, "uploadUrl"),
-        FileMapResponseFieldReader.stringValue(row, "storageBucket"),
-        FileMapResponseFieldReader.stringValue(row, "storagePath"),
-        FileMapResponseFieldReader.stringValue(row, "fileName"));
-  }
-}
+    String fileName) {}

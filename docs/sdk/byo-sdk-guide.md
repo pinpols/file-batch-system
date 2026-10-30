@@ -95,6 +95,9 @@ PAUSED    → Kafka assignment.pause(),不收新消息;in-flight 继续跑
 DRAINING  → Kafka assignment.pause();在手任务跑完后调 deactivate 退出
 ```
 
+已经 poll 到但尚未认领的记录也属于背压边界: 恢复后先处理原记录, 或 seek 回原 offset,
+提交不得跨过它。CLAIM 尚未确认或失败时不能按“已入队”确认消费, 也不能依赖尚不存在的租约补发。
+
 **partition 级 pause/resume**(Kafka client 一般有 `assignment.pause(partitions)` API):capacity-aware backpressure 用 —— in-flight 满了暂停 partition,处理完再 resume。Java SDK `KafkaTaskConsumer.applyBackpressure()` 是参考实现。
 
 ### 1.6 优雅停止(stop with timeout)

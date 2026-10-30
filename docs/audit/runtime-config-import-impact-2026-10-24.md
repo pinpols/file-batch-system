@@ -23,11 +23,25 @@ Workflow 启动在创建 `WorkflowRun` 时持久化 `workflowVersionSnapshot` �
 
 此处只核对 Orchestrator Workflow 快照和 Job 重跑解析源码，不宣称所有 Worker/SDK/历史兼容路径均完成了运行时影响验证。
 
+## 其余配置类别的消费者核对
+
+补充沿配置类型注册表逐类核对其余导入类别，避免将 `default` 分支一概当成“无需失效”：
+
+| 配置类别 | 运行时读取方式 | 导入后的可见性边界 |
+|---|---|---|
+| `RESOURCE_QUEUE` | `DefaultResourceQueueManager` 通过 `ResourceQueueMapper` 读取租户启用队列，进程内 Caffeine 只缓存列表及空结果 | 该队列读取不走 Redis 配置缓存失效事件。`OrchestratorConfigCacheProperties.localPositiveTtlMillis` 默认 250ms，文档与代码注明变更最迟在 TTL 窗口后生效；这是有界陈旧窗口，不是即时跨实例失效 |
+| `FILE_CHANNEL` | Worker `FileDispatchRepository.loadChannel` 在分发准备及回执轮询路径按租户、渠道查询数据库 | 检查到的读取路径未使用 Orchestrator 配置缓存；在途任务仍可能使用已准备并传递的 dispatch payload，后续读取直接命中数据库 |
+| `FILE_TEMPLATE` | Workflow/Job 启动时由 `FileTemplateSnapshotService` 读取并固定执行快照；文件治理权限由 `FileGovernanceRepository.loadTemplateSecurityForFile` 直接查询 | 已启动执行使用持久快照；文件授权读取直接访问数据库。未发现依赖 `ConfigReleaseTypeRegistry` 的长驻模板缓存 |
+| `ALERT_ROUTING` | 当前配置 Mapper 的应用消费者位于 Console 通知路由管理/查询路径 | 本次全仓生产代码搜索未发现 Orchestrator/Worker 读取该批量导入配置；未据此推断未来 SDK 或外部消费方 |
+
+上述结论是代码路径静态盘点，不覆盖运行期第三方消费者、异步事件传播和动态权限缓存，也没有验证 250ms 实际配置覆盖值。`FILE_CHANNEL` 的分发任务载荷与 `FILE_TEMPLATE` 的冻结快照语义均需结合后续配置变更时在途任务策略理解，不能把新配置生效等同于重写已生成任务。
+
 ## 证据边界
 
 - 静态跟踪入口：`DefaultConsoleTenantConfigInitApplicationService.batchInit`、`ConfigSyncImportExecutor.execute`、`ConfigSyncTargetExecutor.execute`、`TenantConfigInitTenantExecutor.execute`、`DefaultConsoleTenantConfigCopyService`。
 - Excel 路径：`DefaultTenantConfigPackageExcelService.apply` → `TenantConfigPackageExcelApplyService.applyAll`。
 - 下游失效：`ConsoleConfigCacheInvalidationService` 的 after-commit Redis 删除与 `batch:config:invalidation` 广播；Orchestrator 订阅并清除本地近缓存，见配置 runbook §5。
 - 在途运行与重跑：`DefaultWorkflowRunLaunchService` 持久化 Workflow 版本和执行快照；`WorkflowRunExecutionSnapshot` 校验运行快照身份；`RerunJobDefinitionResolver` 按明确策略选择原始、最新或指定版本 Job 定义。
-- 已补充批量初始化 Job 创建缓存失效、dry-run 不失效以及 dry-run 不触发托管 Workflow provisioner 的单元断言源码；当前遵照本任务限制，未编译或执行测试。
-- 未运行应用、未操作数据库、未验证真实多实例 Redis/Orchestrator 传播时延。配置发布快照对所有其他运行时消费者的影响仍需按类别继续核对。
+- 2026-10-24 原审计阶段只补充断言源码，尚未编译或执行；2026-10-25 在 `fix/wdi-current`（HEAD `f3d5e400d` 加当前未提交改动）补齐编译和行为验证，定向 70 项全部通过、0 跳过。覆盖批量初始化、配置同步、租户复制、缓存 after-commit、Excel Apply 权限与监控策略。
+- 真实 PostgreSQL／Redis 联合验证通过：批量初始化提交后清除 Job／托管 Workflow 缓存，严格回滚和 dry-run 保留缓存、dry-run 不生成配置；其它租户缓存保持原值。Excel 公共 Apply 服务在事务提交后删除日历缓存；回调注册后注入异常会回滚数据库、保留缓存，并释放上传会话的 Apply 占位以便重试。两组实际依赖测试共 15 项，已包含在上述 70 项中，不能重复累加。
+- 本次启动的是隔离测试应用和依赖，未验证真实多实例 Redis／Orchestrator 传播时延、真实在途任务更新语义、队列 250ms 覆盖值下的可见性或目标部署环境。源码静态盘点仍不覆盖任意外部消费者。

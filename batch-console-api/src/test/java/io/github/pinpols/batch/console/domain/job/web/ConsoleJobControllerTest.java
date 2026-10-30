@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15,33 +14,45 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.domain.job.application.ConsoleJobApprovalService;
-import io.github.pinpols.batch.console.domain.job.application.ConsoleJobRecoveryService;
 import io.github.pinpols.batch.console.application.contract.request.WorkflowNodeReplayPreviewRequest;
 import io.github.pinpols.batch.console.application.contract.request.WorkflowRunReplayRequest;
 import io.github.pinpols.batch.console.application.contract.response.ConsoleWorkflowRunReplayPreviewResponse;
+import io.github.pinpols.batch.console.domain.job.application.ConsoleJobApprovalService;
+import io.github.pinpols.batch.console.domain.job.application.ConsoleJobRecoveryService;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleWorkflowRunReplaySubmissionResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.command.CompensationCommandRequest;
 import io.github.pinpols.batch.console.shared.command.DeadLetterReplayRequest;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 @DisplayName("作业控制器: Job 根触发入口已退役")
+@ExtendWith(MockitoExtension.class)
 class ConsoleJobControllerTest {
 
-  private final ConsoleJobRecoveryService recoveryService = mock(ConsoleJobRecoveryService.class);
-  private final ConsoleJobApprovalService approvalService = mock(ConsoleJobApprovalService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleJobRecoveryService recoveryService;
+
+  @Mock
+  private ConsoleJobApprovalService approvalService;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -143,11 +154,22 @@ class ConsoleJobControllerTest {
   void shouldRouteWholeWorkflowReplayPreview() throws Exception {
     when(recoveryService.previewWorkflowRunReplay(any()))
         .thenReturn(new ConsoleWorkflowRunReplayPreviewResponse(
-            "t1", 71L, 9L, 3, java.time.LocalDate.parse("2026-03-27"), "CAL-A",
-            null, null, "CREATE_NEW_VERSION", "USE_ORIGINAL_CONFIG", null,
-            java.util.UUID.fromString("44a76b9e-3cc0-46f0-9ac4-16ca44f80684"),
-            "preview-token", java.time.Instant.parse("2026-03-27T00:05:00Z"), java.util.List.of(),
-            java.util.List.of()));
+            "t1",
+            71L,
+            9L,
+            3,
+            LocalDate.parse("2026-03-27"),
+            "CAL-A",
+            null,
+            null,
+            "CREATE_NEW_VERSION",
+            "USE_ORIGINAL_CONFIG",
+            null,
+            UUID.fromString("44a76b9e-3cc0-46f0-9ac4-16ca44f80684"),
+            "preview-token",
+            Instant.parse("2026-03-27T00:05:00Z"),
+            List.of(),
+            List.of()));
 
     mockMvc
         .perform(post("/api/console/jobs/workflow-run/replay-preview")
@@ -182,7 +204,8 @@ class ConsoleJobControllerTest {
 
     mockMvc
         .perform(post("/api/console/jobs/workflow-run/replay-operations")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER,
+            .header(
+                CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER,
                 "44a76b9e-3cc0-46f0-9ac4-16ca44f80684")
             .contentType(APPLICATION_JSON)
             .content(replayRequestJson))
@@ -190,10 +213,10 @@ class ConsoleJobControllerTest {
 
     ArgumentCaptor<WorkflowRunReplayRequest> requestCaptor =
         ArgumentCaptor.forClass(WorkflowRunReplayRequest.class);
-    verify(recoveryService).submitWorkflowRunReplay(requestCaptor.capture(),
-        eq("44a76b9e-3cc0-46f0-9ac4-16ca44f80684"));
-    assertThat(requestCaptor.getValue().getOperationKey())
-        .isEqualTo(operationKey);
+    verify(recoveryService)
+        .submitWorkflowRunReplay(
+            requestCaptor.capture(), eq("44a76b9e-3cc0-46f0-9ac4-16ca44f80684"));
+    assertThat(requestCaptor.getValue().getOperationKey()).isEqualTo(operationKey);
   }
 
   @Test

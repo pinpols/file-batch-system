@@ -2,10 +2,13 @@ package io.github.pinpols.batch.worker.atomic.shell;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
@@ -23,7 +26,10 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 /**
  * {@link ShellTaskExecutor} 单测 — 含真实进程执行(only POSIX,Windows 跳过)。
@@ -31,6 +37,7 @@ import org.junit.jupiter.api.io.TempDir;
  * <p>分两组:Validation(无进程) + Execution(真进程,跑 /bin/echo / sleep / false 等)。
  */
 @DisplayName("命令执行器: 参数校验, 能力声明与真实进程执行")
+@ExtendWith(OutputCaptureExtension.class)
 class ShellTaskExecutorTest {
 
   @TempDir
@@ -51,6 +58,34 @@ class ShellTaskExecutorTest {
 
   private TaskContext ctxWithParams(Map<String, Object> params) {
     return new TaskContext("t1", "job-1", "ti-1", "w-1", params, Map.of());
+  }
+
+  @Test
+  @DisplayName("执行器意外异常日志不得输出原始凭据")
+  void shouldMaskUnexpectedErrorInLog(CapturedOutput output) {
+    TaskContext context = mock(TaskContext.class);
+    when(context.tenantId()).thenReturn("t1");
+    when(context.jobCode()).thenReturn("job-1");
+    when(context.parameters()).thenThrow(new RuntimeException("context token=probe-secret"));
+
+    TaskResult result = executor.execute(context);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.output()).containsEntry("error_code", "EXECUTION_FAILED");
+    assertThat(result.error()).hasMessageContaining("probe-secret");
+    assertThat(output.getOut()).doesNotContain("probe-secret");
+  }
+
+  @Test
+  @DisplayName("无效超时参数不得静默使用默认超时并启动进程")
+  void shouldRejectNonIntegralOrNonNumericTimeout() {
+    for (Object value : List.of("1", 1.5d, new BigInteger("18446744073709551617"))) {
+      TaskResult result =
+          executor.execute(ctxWithParams(Map.of("command", "/bin/echo", "timeoutSeconds", value)));
+      assertThat(result.output())
+          .as("timeout=%s", value)
+          .containsEntry("error_code", "CONFIG_INVALID");
+    }
   }
 
   // ─── Validation ──────────────────────────────────────────────────────────────
@@ -82,6 +117,16 @@ class ShellTaskExecutorTest {
           executor.execute(ctxWithParams(Map.of("command", "/bin/echo", "args", "not-a-list")));
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("args must be a list");
+    }
+
+    @Test
+    @DisplayName("列表项不是字符串时拒绝执行，不能隐式转换对象")
+    void shouldReject_whenArgItemIsNotString() {
+      TaskResult result = executor.execute(ctxWithParams(
+          Map.of("command", "/bin/echo", "args", List.of(Map.of("mode", "summary")))));
+
+      assertThat(result.success()).isFalse();
+      assertThat(result.message()).contains("args must be a list of strings");
     }
 
     @Test

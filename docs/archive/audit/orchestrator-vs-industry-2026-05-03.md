@@ -1,3 +1,5 @@
+> 历史证据（2026-10-25 存量核对）：ADR-013 及 timeout/stuck reconciler 的原始设计问题来源。正文仅表示原日期/基线；当前规则与状态见[现行入口](../../architecture/core-model.md)及 TODO，本轮没有重新执行原测试或扫描。
+
 # Orchestrator vs 业界实现 — 缺陷盘点 2026-05-03
 
 > **范围**：本仓 `batch-orchestrator` 模块的关键能力与业界主流批量/工作流调度系统对比，识别真缺陷与设计取舍。

@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.worker.imports.stage.format;
 
-import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService.BadRecordCommand;
-
-
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -14,6 +11,7 @@ import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
 import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
+import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService.BadRecordCommand;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.Writer;
@@ -170,10 +168,7 @@ public class ParseSupport {
     Object rawParsedCount = param.context().getAttributes().get(KEY_PARSED_COUNT);
     long parsedCount = numberValue(rawParsedCount);
     long nextParsedCount = parsedCount + 1;
-    param
-        .context()
-        .getAttributes()
-        .put(KEY_PARSED_COUNT, nextParsedCount);
+    param.context().getAttributes().put(KEY_PARSED_COUNT, nextParsedCount);
   }
 
   @Builder
@@ -209,15 +204,14 @@ public class ParseSupport {
       String message,
       Object rawRecord,
       ImportRecordGovernanceService.SourceLocator locator) {
-    ImportRecordGovernanceService.BadRecordCommand command =
-        BadRecordCommand.builder()
-            .stage(ImportStage.PARSE)
-            .recordNo(recordNo)
-            .errorCode(errorCode)
-            .errorMessage(message)
-            .rawRecord(rawRecord)
-            .locator(locator)
-            .build();
+    ImportRecordGovernanceService.BadRecordCommand command = BadRecordCommand.builder()
+        .stage(ImportStage.PARSE)
+        .recordNo(recordNo)
+        .errorCode(errorCode)
+        .errorMessage(message)
+        .rawRecord(rawRecord)
+        .locator(locator)
+        .build();
     if (!recordGovernanceService.isSkippable(errorCode)) {
       recordGovernanceService.recordFailedRecord(context, command);
       throw new IllegalStateException(message);

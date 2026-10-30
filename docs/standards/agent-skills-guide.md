@@ -4,15 +4,19 @@
 
 本指南说明在 `file-batch-system` 与配对前端 `batch-console` 中如何选择、组合和验收 Agent Skill。它是使用入口，不复制各 `SKILL.md` 的完整流程；当前代码、契约、CI、`AGENTS.md` 和对应 Skill 才是执行依据。
 
-两仓全部项目 Skill 均配置中文界面显示名与中文短说明，方便在 Skill 列表中识别并通过中文任务表述匹配。Skill 的 `name` 和目录名保留英文规范名；明确使用 `$skill` 时仍使用该英文名，中文显示名不是命令别名。
+两仓全部项目 Skill 均配置中文界面显示名与中文短说明，方便在 Skill 列表中识别；自然语言任务匹配以`SKILL.md`的`description`为依据。Skill 的 `name` 和目录名保留英文规范名；明确使用 `$skill` 时仍使用该英文名，中文显示名不是命令别名。
+
+`agents/openai.yaml`维护界面元数据及确有需要的调用策略／依赖，补元数据不隐含禁用自动匹配、添加工具依赖或扩大动作授权。`default_prompt`可选，不要求为已有技能机械补字段。`references/`仅承载条件化的详细方法，入口应说明何时加载；短技能直接引用权威文档，不创建空目录或复制个人偏好。涉及归档、证据拆分或全量提炼时，文档治理入口按需加载[证据保留与提炼方法](../../.agents/skills/documentation-governance/references/evidence-preservation-and-extraction.md)。
 
 ## 选择顺序
 
-1. 前后端周期治理、全量深扫、规范防退化或代码腐化盘点：使用 [`cross-repo-governance-review`](../../.agents/skills/cross-repo-governance-review/SKILL.md)。
-2. 后端单仓项目级架构、质量、风险与维护评估：使用 [`project-engineering-review`](../../.agents/skills/project-engineering-review/SKILL.md)。
-3. 单个 PR 或 diff 的正确性、可读性和验证复核：使用 [`code-review-and-gates`](../../.agents/skills/code-review-and-gates/SKILL.md)。
-4. 跨信任边界、恶意输入和多故障组合的系统审查：仅在明确需要时使用 [`adversarial-system-review`](../../.agents/skills/adversarial-system-review/SKILL.md)。
-5. 已明确的领域任务直接进入专项 Skill；提交、PR、合并和清理额外使用 [`git-pr-workflow`](../../.agents/skills/git-pr-workflow/SKILL.md)。
+1. 前后端周期/全域治理、跨仓规范漂移与发布治理复核：使用 [`cross-repo-governance-review`](../../.agents/skills/cross-repo-governance-review/SKILL.md)，负责双仓20域覆盖和结论汇总。
+2. 后端全量规约、工程治理、架构/责任边界与维护评估：使用 [`project-engineering-review`](../../.agents/skills/project-engineering-review/SKILL.md)，维护25工作包及规范补充。
+3. 代码 Bug 扫描、逻辑/并发/数据错误或普通 PR/diff 审查：使用 [`code-review-and-gates`](../../.agents/skills/code-review-and-gates/SKILL.md)，按 Bug 专项或变更综合模式执行。
+4. 明确的攻击者/信任边界绕过、恶意输入或故障组合：使用 [`adversarial-system-review`](../../.agents/skills/adversarial-system-review/SKILL.md)，增加对抗时间线与验证。
+5. 明确领域任务直接进入现有专项；提交、PR、合并和清理按实际授权另用 [`git-pr-workflow`](../../.agents/skills/git-pr-workflow/SKILL.md)。
+
+一次请求选择一个主入口，按实际风险加载必要专项。同一基线的范围、发现和验证证据直接复用，不要求四个入口对同一代码各审一遍。只查 Bug 不自动做全量规约；只做规约治理不自动做 Bug 全扫描；普通失败路径不自动升级为对抗式审查。
 
 总控 Skill 保证覆盖面，专项 Skill 提供领域判断。普通小改动不需要加载所有技能，也不能因为加载了总控就自动获得外部状态变更授权。
 
@@ -127,8 +131,12 @@
 |---|---|---|
 | 月度/季度双仓治理、首次全量基线 | `cross-repo-governance-review` | 固定覆盖两仓 20 个治理领域 |
 | 后端架构方案、跨模块工程评估 | `project-engineering-review` | 架构目标、模块职责/依赖、数据边界、迁移兼容、质量与维护性；批量调度领域设计再组合 `batch-scheduling-engineering` |
-| PR/diff 审查 | `code-review-and-gates` | 聚焦本次完整 diff，不混入无关历史债务 |
+| 后端规约治理、存量规范与可读性整改 | `project-engineering-review` | 维护[25工作包及补充覆盖](../../.agents/skills/project-engineering-review/references/backend-convention-coverage.md)，交付规约证据、行为保持及局部验证 |
+| 代码问题扫描、查 Bug、逻辑/并发/数据错误 | `code-review-and-gates`（Bug专项） | 统一维护[Bug标准与失效机制](../../.agents/skills/code-review-and-gates/references/bug-mechanisms.md)，按用户指定模块/diff/全工程定位与验证；纯规约项不计Bug |
+| PR/diff 审查 | `code-review-and-gates`（变更综合） | 同一套Bug方法加实际触及的规约/可读性；完整diff与必要消费者，不扩展为全工程治理 |
 | 威胁与故障路径深审 | `adversarial-system-review` | 仅用于系统级攻击面和故障组合 |
+| 联合版本、Release Manifest、环境晋级/回滚 | `release-deployment` | 规划与实际发布分开；Git/tag、环境部署分别核对授权 |
+| 日志、指标、追踪、采集、告警生命周期实施 | `observability-governance` | 运行诊断仍走只读总控；规则通过与真实送达分层 |
 | 本地开发、构建、Docker/Compose 开发部署和联调 | `developer-workflow` | 以本地开发/Docker Runbook 为操作依据，按需路由配置、脚本、CI、契约和验收 Skill |
 | 运维状态、日志、告警、容量和恢复分析 | `operations-analysis` | 只读总控；不执行部署、启停、迁移、写入、清理、压测或故障注入 |
 | 功能/Bug/Issue 修复交付，分支、PR、合并、清理 | `git-pr-workflow` | 先核对相关 Issue/PR、变更路径和共享契约；管理多 PR 依赖、合并顺序和冲突；各外部状态变更分别授权 |
@@ -213,6 +221,10 @@
 - 只有本轮实际完成的检查可以写成 `PASS`；`SKIP`、`QUEUED`、`IN_PROGRESS` 和历史绿灯不是通过。
 - 审查命令不授权修复；修复不授权提交；提交 PR 不授权合并或清理。
 - 历史 audit/review 只用于提出复发假设，必须在当前 SHA 上重新核实。
+
+## 从文档和脚本持续完善技能
+
+[本轮全量覆盖记录](../audit/document-script-skill-review-2026-10-25.md)与[逐文件清单](../audit/document-script-skill-coverage-2026-10-25.csv)区分全文静态盘点、人工交叉核对和未执行的验证。现行文档维护事实，脚本是当前参数/副作用来源，技能只维护可复用决策与验证方法，历史原文继续保留。遇到运行行为与文档冲突时记录证据，不把旧建议直接写成强制规则。
 
 ## 维护规则
 

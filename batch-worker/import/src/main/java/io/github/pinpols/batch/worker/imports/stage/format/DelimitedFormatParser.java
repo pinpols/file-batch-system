@@ -20,7 +20,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Parses delimited text (CSV, TSV, pipe-separated, etc.) into NDJSON records.
+ * 将分隔文本（CSV、TSV、管道符分隔等）解析为 NDJSON 记录。
  *
  * <p>Backed by Univocity Parsers (RFC 4180 严格解析：正确处理嵌入引号、跨行字段、转义、 BOM、CR/LF 混合换行符)。替换了原手写
  * tokenizer，免费获得边界 case 覆盖。
@@ -36,7 +36,7 @@ public class DelimitedFormatParser implements FormatParser {
     this.support = support;
   }
 
-  // CPD-OFF: Delimited and fixed-width parsers intentionally share the format-parser lifecycle.
+  // CPD-OFF: 分隔文本解析器和定长文本解析器有意共用格式解析器生命周期。
   @Override
   public long parse(ImportJobContext context, FormatParseRequest request, BufferedWriter writer)
       throws Exception {

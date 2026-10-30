@@ -15,7 +15,6 @@ import org.quartz.JobDetail;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobKey;
 import org.quartz.ObjectAlreadyExistsException;
-import org.quartz.ObjectAlreadyExistsException;
 import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
 import org.quartz.SimpleScheduleBuilder;
@@ -54,7 +53,7 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
 
   @Override
   public void triggerFired(Trigger trigger, JobExecutionContext context) {
-    // no-op: only misfire events need recovery scheduling.
+    // 无需执行实际操作：只有 misfire 事件需要安排恢复任务。
   }
 
   @Override
@@ -259,7 +258,8 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
   }
 
   private JobKey ensureDurableRecoveryJob(
-      Scheduler scheduler, JobKey sourceJobKey, Long workflowDefinitionId) throws SchedulerException {
+      Scheduler scheduler, JobKey sourceJobKey, Long workflowDefinitionId)
+      throws SchedulerException {
     if (isDedicatedRecoveryJob(sourceJobKey)) {
       return sourceJobKey;
     }
@@ -282,13 +282,11 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
           workflowDefinitionId);
       return null;
     }
-    JobKey recoveryJobKey = JobKey.jobKey(
-        tenantId + ":RECOVERY:" + workflowDefinitionId, sourceJobKey.getGroup());
+    JobKey recoveryJobKey =
+        JobKey.jobKey(tenantId + ":RECOVERY:" + workflowDefinitionId, sourceJobKey.getGroup());
     if (!scheduler.checkExists(recoveryJobKey)) {
-      JobDetail recoveryJob = sourceJob.getJobBuilder()
-          .withIdentity(recoveryJobKey)
-          .storeDurably()
-          .build();
+      JobDetail recoveryJob =
+          sourceJob.getJobBuilder().withIdentity(recoveryJobKey).storeDurably().build();
       try {
         scheduler.addJob(recoveryJob, false);
       } catch (ObjectAlreadyExistsException alreadyRegistered) {
@@ -309,6 +307,6 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
       Trigger trigger,
       JobExecutionContext context,
       Trigger.CompletedExecutionInstruction triggerInstructionCode) {
-    // no-op: completion events do not affect misfire recovery.
+    // 无需执行实际操作：完成事件不会影响 misfire 恢复。
   }
 }

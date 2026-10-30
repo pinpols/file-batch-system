@@ -159,13 +159,13 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("Workflow 根参数不能让新 JobInstance 指向其他租户的 rerun 父实例")
   void shouldRejectCrossTenantJobInstanceParentReferenceBeforeInsert() {
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from batch.job_instance where tenant_id = ? and job_code = ?
   """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.job_instance where tenant_id = ? and parent_instance_id = ?
   """;
-  final String selectCountSql3 = """
+    final String selectCountSql3 = """
       select count(*) from batch.workflow_run where tenant_id = ? and trigger_request_id = (select id\s\
       from batch.trigger_request where tenant_id = ? and request_id = ?)
   """;
@@ -256,15 +256,10 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
         launchRequest(tenantB, workflowB, bizDate, TriggerType.API));
     Long workflowRunAId = Long.valueOf(responseA.instanceNo());
     Long workflowRunBId = Long.valueOf(responseB.instanceNo());
-    Long jobInstanceAId = jdbcTemplate.queryForObject(
-        selectJobInstanceIdSql,
-        Long.class,
-        workflowRunAId);
-    Long jobDefinitionBId = jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class,
-        tenantB,
-        workflowB.jobCode());
+    Long jobInstanceAId =
+        jdbcTemplate.queryForObject(selectJobInstanceIdSql, Long.class, workflowRunAId);
+    Long jobDefinitionBId =
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, tenantB, workflowB.jobCode());
     Long unlinkedJobInstanceBId = jdbcTemplate.queryForObject(
         insertJobInstanceSql,
         Long.class,
@@ -281,10 +276,8 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
         jdbcTemplate.queryForObject(selectTenantIdSql, String.class, unlinkedJobInstanceBId);
     assertThat(selectedTenantIdRead2).isEqualTo(tenantB);
 
-    assertThatThrownBy(() -> jdbcTemplate.update(
-            insertWorkflowNodeRunSql,
-            workflowRunAId,
-            unlinkedJobInstanceBId))
+    assertThatThrownBy(() ->
+            jdbcTemplate.update(insertWorkflowNodeRunSql, workflowRunAId, unlinkedJobInstanceBId))
         .isInstanceOf(DataIntegrityViolationException.class);
     Integer selectedWorkflowNodeRunCount =
         jdbcTemplate.queryForObject(selectCountSql, Integer.class, workflowRunAId);
@@ -324,18 +317,18 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("任一上游未就绪时所有触发类型共用持久化等待并保留原业务日")
   void shouldPersistDependencyWaitAtUnifiedLaunchEntry() {
-  final String insertJobDependencySql = """
+    final String insertJobDependencySql = """
       insert into batch.job_dependency (tenant_id, downstream_job_code, upstream_job_code, dependency_order)\s\
       values (?, ?, ?, 0), (?, ?, ?, 1)\
       """;
-  final String selectRequestStatusSql = """
+    final String selectRequestStatusSql = """
       select request_status from batch.trigger_request where tenant_id = ? and request_id = ?
   """;
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from batch.job_dependency_waiting_launch where tenant_id = ? and request_id = ?\s\
       and biz_date = ? and wait_status = 'WAITING'\
       """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.job_instance where tenant_id = ? and job_code = ?
   """;
 
@@ -388,23 +381,23 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
         END $$
         """;
 
-  final String grantUsageSql = """
+    final String grantUsageSql = """
       GRANT USAGE ON SCHEMA batch TO job_dependency_wait_rls_test
   """;
-  final String grantSelectSql = """
+    final String grantSelectSql = """
       GRANT SELECT ON ALL TABLES IN SCHEMA batch TO job_dependency_wait_rls_test
       """;
-  final String grantInsertSql = """
+    final String grantInsertSql = """
       GRANT INSERT, UPDATE, DELETE ON batch.job_dependency_waiting_launch, batch.trigger_request TO\s\
       job_dependency_wait_rls_test\
       """;
-  final String grantUsageSql2 = """
+    final String grantUsageSql2 = """
       GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA batch TO job_dependency_wait_rls_test\
       """;
-  final String setLocalSql = """
+    final String setLocalSql = """
       SET LOCAL ROLE job_dependency_wait_rls_test
   """;
-  final String setLocalSql2 = """
+    final String setLocalSql2 = """
       SET LOCAL app.tenant_id = ''
   """;
 
@@ -429,11 +422,7 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
         jdbcTemplate, TENANT, "DISPATCH", "IT_DEP_RLS", TriggerType.EVENT, bizDate);
     WorkflowLaunchSeed upstream = LaunchIntegrationFixture.prepareWorkflowLaunchWithoutWorker(
         jdbcTemplate, TENANT, "DISPATCH", "IT_DEP_RLS", TriggerType.API, bizDate);
-    jdbcTemplate.update(
-        insertJobDependencySql,
-        TENANT,
-        downstream.jobCode(),
-        upstream.jobCode());
+    jdbcTemplate.update(insertJobDependencySql, TENANT, downstream.jobCode(), upstream.jobCode());
     String requestId = "rls-dependency-wait-" + UUID.randomUUID();
     LaunchRequest request = LaunchRequest.builder()
         .tenantId(TENANT)
@@ -453,8 +442,7 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
     assertThat(triggerRequestMapper.insert(original)).isEqualTo(1);
     jdbcTemplate.execute(doStatementSql);
     jdbcTemplate.execute(grantUsageSql);
-    jdbcTemplate.execute(
-        grantSelectSql);
+    jdbcTemplate.execute(grantSelectSql);
     jdbcTemplate.execute(grantInsertSql);
     jdbcTemplate.execute(grantUsageSql2);
 
@@ -482,7 +470,8 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
     assertThat(selectedJobDependencyWaitingLaunchCount).isEqualTo(1);
 
     makeUpstreamEffective(upstream, bizDate);
-    String snapshot = jdbcTemplate.queryForObject(selectDependencySnapshotSql, String.class, TENANT, requestId);
+    String snapshot =
+        jdbcTemplate.queryForObject(selectDependencySnapshotSql, String.class, TENANT, requestId);
     String notReady = transaction.execute(status -> {
       jdbcTemplate.execute(setLocalSql);
       jdbcTemplate.execute(setLocalSql2);
@@ -537,10 +526,7 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
           order by (reference->>'resultVersionId')::bigint
           """;
 
-    jdbcTemplate.update(
-        insertTenantSql,
-        TENANT,
-        TENANT);
+    jdbcTemplate.update(insertTenantSql, TENANT, TENANT);
     LocalDate bizDate = LocalDate.of(2026, 12, 16);
     WorkflowLaunchSeed downstream = LaunchIntegrationFixture.prepareWorkflowLaunchWithoutWorker(
         jdbcTemplate, TENANT, "DISPATCH", "IT_DEP_RESUME", TriggerType.EVENT, bizDate);
@@ -584,7 +570,7 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
         "job:" + upstreamOne.jobCode() + ":" + bizDate,
         "job:" + upstreamTwo.jobCode() + ":" + bizDate);
     List<Long> observedVersionIds =
-    jdbcTemplate.queryForList(selectStatementSql, Long.class, TENANT, launchedInstanceId);
+        jdbcTemplate.queryForList(selectStatementSql, Long.class, TENANT, launchedInstanceId);
     assertThat(expectedVersionIds).hasSize(2);
     assertThat(observedVersionIds).containsExactlyElementsOf(expectedVersionIds);
   }
@@ -611,8 +597,7 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
         tenantB, () -> prepareRunnableDependencyWait(tenantB, "B", bizDate));
     DependencyWaitFixture suspendedWait = RlsTenantContextHolder.runWithTenant(
         suspendedTenant, () -> prepareRunnableDependencyWait(suspendedTenant, "S", bizDate));
-        jdbcTemplate.update(
-        updateTenantSql, suspendedTenant);
+    jdbcTemplate.update(updateTenantSql, suspendedTenant);
 
     JobDependencyWaitingLaunchReconciler target =
         AopTestUtils.getUltimateTargetObject(dependencyWaitingLaunchReconciler);
@@ -644,20 +629,13 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
         select count(*) from batch.job_instance where tenant_id = ? and job_code = ?
     """;
 
-    jdbcTemplate.update(
-        insertTenantSql,
-        TENANT,
-        TENANT);
+    jdbcTemplate.update(insertTenantSql, TENANT, TENANT);
     LocalDate bizDate = LocalDate.of(2026, 12, 19);
     WorkflowLaunchSeed downstream = LaunchIntegrationFixture.prepareWorkflowLaunchWithoutWorker(
         jdbcTemplate, TENANT, "DISPATCH", "IT_DEP_CONCURRENT_RELEASE", TriggerType.EVENT, bizDate);
     WorkflowLaunchSeed upstream = LaunchIntegrationFixture.prepareWorkflowLaunchWithoutWorker(
         jdbcTemplate, TENANT, "DISPATCH", "IT_DEP_CONCURRENT_RELEASE", TriggerType.API, bizDate);
-    jdbcTemplate.update(
-        insertJobDependencySql,
-        TENANT,
-        downstream.jobCode(),
-        upstream.jobCode());
+    jdbcTemplate.update(insertJobDependencySql, TENANT, downstream.jobCode(), upstream.jobCode());
     LaunchResponse deferred =
         workflowRunLaunchService.launch(launchRequest(downstream, bizDate, TriggerType.EVENT));
     String childRequestId = childRequestId(deferred);
@@ -715,23 +693,27 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
     final String selectWaitStatusSql = """
         select wait_status from batch.job_dependency_waiting_launch where tenant_id = ? and request_id = ?\
         """;
-  final String insertBatchDayInstanceSql = """
+    final String insertBatchDayInstanceSql = """
       insert into batch.batch_day_instance (tenant_id, calendar_code, biz_date, day_status, open_at, late_count,\s\
       catchup_count, timezone_snapshot, dst_policy_snapshot, frozen, version, created_at, updated_at, dry_run)\s\
       values (?, 'JOB_CALENDAR', ?, 'CUTOFF', current_timestamp, 0, 0, 'UTC',\s\
       'gap=RUN_AT_NEXT_VALID_TIME;overlap=RUN_ONCE_EARLIER_OFFSET', false, 0, current_timestamp,\s\
       current_timestamp, false)\
       """;
-  final String updateWorkflowRunSql = """
+    final String updateWorkflowRunSql = """
       update batch.workflow_run set run_status = 'SUCCESS', finished_at = current_timestamp where tenant_id = ?\s\
       and trigger_request_id = (select id from batch.trigger_request where tenant_id = ? and request_id = ?)\
       """;
-  final String selectRequestStatusSql = """
+    final String selectRequestStatusSql = """
       select request_status from batch.trigger_request where tenant_id = ? and request_id = ?\
       """;
-  final String updateWorkflowRunSql2 = """
+    final String updateWorkflowRunSql2 = """
       update batch.workflow_run set run_status = 'SUCCESS', finished_at = current_timestamp where tenant_id = ?\s\
       and id = ?\
+      """;
+    final String completeLaunchedJobsSql = """
+      update batch.job_instance set instance_status = 'SUCCESS', finished_at = current_timestamp
+      where tenant_id = ? and id in (?, ?)
       """;
 
     LocalDate bizDate = LocalDate.of(2026, 12, 20);
@@ -739,11 +721,7 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
         jdbcTemplate, TENANT, "DISPATCH", "IT_DEP_SETTLE", TriggerType.EVENT, bizDate);
     WorkflowLaunchSeed upstream = LaunchIntegrationFixture.prepareWorkflowLaunchWithoutWorker(
         jdbcTemplate, TENANT, "DISPATCH", "IT_DEP_SETTLE", TriggerType.API, bizDate);
-    jdbcTemplate.update(
-        insertJobDependencySql,
-        TENANT,
-        downstream.jobCode(),
-        upstream.jobCode());
+    jdbcTemplate.update(insertJobDependencySql, TENANT, downstream.jobCode(), upstream.jobCode());
 
     LaunchResponse deferred =
         workflowRunLaunchService.launch(launchRequest(downstream, bizDate, TriggerType.EVENT));
@@ -753,10 +731,7 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
         jdbcTemplate.queryForObject(selectWaitStatusSql, String.class, TENANT, childRequestId);
     assertThat(selectedWaitStatus).isEqualTo("WAITING");
 
-    jdbcTemplate.update(
-        insertBatchDayInstanceSql,
-        TENANT,
-        bizDate);
+    jdbcTemplate.update(insertBatchDayInstanceSql, TENANT, bizDate);
 
     batchDaySettleScheduler.settle();
     assertThat(batchDayStatus(bizDate)).isEqualTo("IN_FLIGHT");
@@ -764,12 +739,8 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
         jdbcTemplate.queryForObject(selectWaitStatusSql, String.class, TENANT, childRequestId);
     assertThat(selectedWaitStatusRead2).isEqualTo("WAITING");
 
-    makeUpstreamEffective(upstream, bizDate);
-    jdbcTemplate.update(
-        updateWorkflowRunSql,
-        TENANT,
-        TENANT,
-        upstream.requestId());
+    JobInstanceEntity upstreamInstance = makeUpstreamEffective(upstream, bizDate);
+    jdbcTemplate.update(updateWorkflowRunSql, TENANT, TENANT, upstream.requestId());
     dependencyWaitingLaunchReconciler.reconcileTenant(TENANT);
 
     String selectedWaitStatusRead3 =
@@ -780,10 +751,13 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
     assertThat(selectedRequestStatus).isEqualTo("LAUNCHED");
     assertThat(batchDayStatus(bizDate)).isEqualTo("IN_FLIGHT");
 
-    jdbcTemplate.update(
-        updateWorkflowRunSql2,
-        TENANT,
-        workflowRunId);
+    // 此夹具没有 Worker；显式完成上游与下游 Job，批日才具备结算资格。
+    Long downstreamInstanceId = LaunchIntegrationFixture.selectDispatchedJobInstanceId(
+        jdbcTemplate, TENANT, deferred.instanceNo());
+    assertThat(jdbcTemplate.update(
+            completeLaunchedJobsSql, TENANT, upstreamInstance.getId(), downstreamInstanceId))
+        .isEqualTo(2);
+    jdbcTemplate.update(updateWorkflowRunSql2, TENANT, workflowRunId);
     batchDaySettleScheduler.settle();
 
     assertThat(batchDayStatus(bizDate)).isEqualTo("SETTLED");
@@ -826,25 +800,14 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
         jdbcTemplate, TENANT, "DISPATCH", "IT_DEP_SETTLE_RACE", TriggerType.EVENT, bizDate);
     WorkflowLaunchSeed upstream = LaunchIntegrationFixture.prepareWorkflowLaunchWithoutWorker(
         jdbcTemplate, TENANT, "DISPATCH", "IT_DEP_SETTLE_RACE", TriggerType.API, bizDate);
-    jdbcTemplate.update(
-        insertJobDependencySql,
-        TENANT,
-        downstream.jobCode(),
-        upstream.jobCode());
+    jdbcTemplate.update(insertJobDependencySql, TENANT, downstream.jobCode(), upstream.jobCode());
 
     LaunchResponse deferred =
         workflowRunLaunchService.launch(launchRequest(downstream, bizDate, TriggerType.EVENT));
     String childRequestId = childRequestId(deferred);
     makeUpstreamEffective(upstream, bizDate);
-    jdbcTemplate.update(
-        updateWorkflowRunSql,
-        TENANT,
-        TENANT,
-        upstream.requestId());
-    jdbcTemplate.update(
-        insertBatchDayInstanceSql,
-        TENANT,
-        bizDate);
+    jdbcTemplate.update(updateWorkflowRunSql, TENANT, TENANT, upstream.requestId());
+    jdbcTemplate.update(insertBatchDayInstanceSql, TENANT, bizDate);
 
     if ("SETTLEMENT_FIRST".equals(order)) {
       batchDaySettleScheduler.settle();
@@ -873,11 +836,7 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
         and biz_date = ?\
         """;
 
-    return jdbcTemplate.queryForObject(
-        selectDayStatusSql,
-        String.class,
-        TENANT,
-        bizDate);
+    return jdbcTemplate.queryForObject(selectDayStatusSql, String.class, TENANT, bizDate);
   }
 
   @ParameterizedTest
@@ -901,17 +860,17 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
               select wait_status, last_not_ready_reason, dependency_snapshot::text as snapshot
               from batch.job_dependency_waiting_launch where tenant_id = ? and request_id = ?
               """;
-  final String selectDependencySnapshotSql = """
+    final String selectDependencySnapshotSql = """
               select dependency_snapshot = ?::jsonb from batch.job_dependency_waiting_launch
               where tenant_id = ? and request_id = ?
               """;
-  final String selectRequestStatusSql = """
+    final String selectRequestStatusSql = """
       select request_status from batch.trigger_request where tenant_id = ? and request_id = ?
   """;
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from batch.job_instance where tenant_id = ? and job_code = ?
   """;
-  final String selectWaitStatusSql2 = """
+    final String selectWaitStatusSql2 = """
             select wait_status from batch.job_dependency_waiting_launch
             where tenant_id = ? and request_id = ?
             """;
@@ -1003,29 +962,19 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
         select count(*) from batch.job_instance where tenant_id = ? and job_code = ?
     """;
 
-    jdbcTemplate.update(
-        insertTenantSql,
-        TENANT,
-        TENANT);
+    jdbcTemplate.update(insertTenantSql, TENANT, TENANT);
     LocalDate bizDate = LocalDate.of(2026, 12, 17);
     WorkflowLaunchSeed downstream = LaunchIntegrationFixture.prepareWorkflowLaunchWithoutWorker(
         jdbcTemplate, TENANT, "DISPATCH", "IT_DEP_PENDING_VERSION", TriggerType.EVENT, bizDate);
     WorkflowLaunchSeed upstream = LaunchIntegrationFixture.prepareWorkflowLaunchWithoutWorker(
         jdbcTemplate, TENANT, "DISPATCH", "IT_DEP_PENDING_VERSION", TriggerType.API, bizDate);
-    jdbcTemplate.update(
-        insertJobDependencySql,
-        TENANT,
-        downstream.jobCode(),
-        upstream.jobCode());
+    jdbcTemplate.update(insertJobDependencySql, TENANT, downstream.jobCode(), upstream.jobCode());
     LaunchResponse downstreamRun =
         workflowRunLaunchService.launch(launchRequest(downstream, bizDate, TriggerType.EVENT));
     String childRequestId = childRequestId(downstreamRun);
     JobInstanceEntity upstreamInstance = makeUpstreamEffective(upstream, bizDate);
     String dependencySnapshot = jdbcTemplate.queryForObject(
-        selectDependencySnapshotSql,
-        String.class,
-        TENANT,
-        childRequestId);
+        selectDependencySnapshotSql, String.class, TENANT, childRequestId);
     assertThat(jobDependencyWaitingLaunchService.findNotReadyReason(
             TENANT, downstream.jobCode(), bizDate, dependencySnapshot))
         .isNull();
@@ -1035,11 +984,8 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
         "job:" + upstream.jobCode() + ":" + bizDate,
         upstreamInstance.getId());
 
-    String launchPayload = jdbcTemplate.queryForObject(
-        selectLaunchPayloadSql,
-        String.class,
-        TENANT,
-        childRequestId);
+    String launchPayload =
+        jdbcTemplate.queryForObject(selectLaunchPayloadSql, String.class, TENANT, childRequestId);
     LaunchRequest persistedLaunch = JsonUtils.fromJson(launchPayload, LaunchRequest.class);
     assertThat(jobDependencyWaitingLaunchService.captureOrDefer(persistedLaunch))
         .isEmpty();
@@ -1069,21 +1015,14 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
         select wait_status from batch.job_dependency_waiting_launch where tenant_id = ? and request_id = ?\
         """;
 
-    jdbcTemplate.update(
-        insertTenantSql,
-        TENANT,
-        TENANT);
+    jdbcTemplate.update(insertTenantSql, TENANT, TENANT);
     LocalDate downstreamBizDate = LocalDate.of(2026, Month.DECEMBER, 14);
     LocalDate upstreamBizDate = LocalDate.of(2026, Month.DECEMBER, 11);
     WorkflowLaunchSeed downstream = LaunchIntegrationFixture.prepareWorkflowLaunchWithoutWorker(
         jdbcTemplate, TENANT, "DISPATCH", "IT_DEP_PREV_DAY", TriggerType.EVENT, downstreamBizDate);
     WorkflowLaunchSeed upstream = LaunchIntegrationFixture.prepareWorkflowLaunchWithoutWorker(
         jdbcTemplate, TENANT, "DISPATCH", "IT_DEP_PREV_DAY", TriggerType.API, upstreamBizDate);
-    jdbcTemplate.update(
-        insertJobDependencySql,
-        TENANT,
-        downstream.jobCode(),
-        upstream.jobCode());
+    jdbcTemplate.update(insertJobDependencySql, TENANT, downstream.jobCode(), upstream.jobCode());
     LaunchResponse deferred = workflowRunLaunchService.launch(
         launchRequest(downstream, downstreamBizDate, TriggerType.EVENT));
     String childRequestId = childRequestId(deferred);
@@ -1146,17 +1085,17 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
     final String deleteJobDependencySql = """
           delete from batch.job_dependency where tenant_id = ? and downstream_job_code = ?
           """;
-  final String selectWaitStatusSql = """
+    final String selectWaitStatusSql = """
           select wait_status from batch.job_dependency_waiting_launch
           where tenant_id = ? and request_id = ?
           """;
-  final String selectCountSql = """
+    final String selectCountSql = """
           select count(*) from batch.job_instance where tenant_id = ? and job_code = ?
           """;
-  final String selectRequestStatusSql = """
+    final String selectRequestStatusSql = """
           select request_status from batch.trigger_request where tenant_id = ? and request_id = ?
           """;
-  final String selectDependencySnapshotSql2 = """
+    final String selectDependencySnapshotSql2 = """
         select dependency_snapshot::text from batch.job_dependency_waiting_launch
         where tenant_id = ? and request_id = ?
         """;
@@ -1179,9 +1118,16 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
         jdbcTemplate, TENANT, "DISPATCH", "IT_DEP_MIXED", TriggerType.API, priorWorkday);
     WorkflowLaunchSeed sameDay = LaunchIntegrationFixture.prepareWorkflowLaunchWithoutWorker(
         jdbcTemplate, TENANT, "DISPATCH", "IT_DEP_MIXED", TriggerType.API, downstreamDate);
-    Long calendarId = jdbcTemplate.queryForObject(insertBusinessCalendarSql, Long.class, TENANT, calendarCode);
+    Long calendarId =
+        jdbcTemplate.queryForObject(insertBusinessCalendarSql, Long.class, TENANT, calendarCode);
     jdbcTemplate.update(
-        insertCalendarHolidaySql, TENANT, calendarId, priorWorkday, TENANT, calendarId, priorWorkday.minusDays(1));
+        insertCalendarHolidaySql,
+        TENANT,
+        calendarId,
+        priorWorkday,
+        TENANT,
+        calendarId,
+        priorWorkday.minusDays(1));
     jdbcTemplate.update(updateJobDefinitionSql, calendarCode, TENANT, downstream.jobCode());
     jdbcTemplate.update(
         insertJobDependencySql,
@@ -1195,7 +1141,8 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
     LaunchResponse root =
         workflowRunLaunchService.launch(launchRequest(downstream, downstreamDate, triggerType));
     String requestId = childRequestId(root);
-    String snapshot = jdbcTemplate.queryForObject(selectDependencySnapshotSql, String.class, TENANT, requestId);
+    String snapshot =
+        jdbcTemplate.queryForObject(selectDependencySnapshotSql, String.class, TENANT, requestId);
     assertThat(snapshot).contains(priorWorkday.toString(), previous.jobCode(), sameDay.jobCode());
 
     // 从 DO_NOTHING cron 回调合并掉的遗漏触发。AUTO 模式使用持久化
@@ -1230,7 +1177,7 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
     assertThat(jobInstanceMapper.selectById(TENANT, instanceId).getBizDate())
         .isEqualTo(downstreamDate);
     DependencyResultReference[] references = JsonUtils.fromJson(
-    jdbcTemplate.queryForObject(selectStatementSql, String.class, TENANT, instanceId),
+        jdbcTemplate.queryForObject(selectStatementSql, String.class, TENANT, instanceId),
         DependencyResultReference[].class);
     assertThat(references)
         .extracting(
@@ -1254,8 +1201,9 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
                 sameDayInstance.getId()));
     assertThat(references).allSatisfy(reference -> {
       assertThat(reference.versionNo()).isEqualTo(1);
-      assertThat(reference.resultVersionId())
-          .isEqualTo(jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, reference.businessKey()));
+      Long selectedId =
+          jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, reference.businessKey());
+      assertThat(reference.resultVersionId()).isEqualTo(selectedId);
       assertThat(reference.effectiveAt()).isNotNull();
     });
   }
@@ -1293,27 +1241,17 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
           and detail_json ->> 'requestId' = ?
         """;
 
-    jdbcTemplate.update(
-        insertTenantSql,
-        TENANT,
-        TENANT);
+    jdbcTemplate.update(insertTenantSql, TENANT, TENANT);
     LocalDate bizDate = LocalDate.of(2026, 12, 18);
     WorkflowLaunchSeed downstream = LaunchIntegrationFixture.prepareWorkflowLaunchWithoutWorker(
         jdbcTemplate, TENANT, "DISPATCH", "IT_DEP_TIMEOUT", TriggerType.EVENT, bizDate);
     WorkflowLaunchSeed upstream = LaunchIntegrationFixture.prepareWorkflowLaunchWithoutWorker(
         jdbcTemplate, TENANT, "DISPATCH", "IT_DEP_TIMEOUT", TriggerType.API, bizDate);
-    jdbcTemplate.update(
-        insertJobDependencySql,
-        TENANT,
-        downstream.jobCode(),
-        upstream.jobCode());
+    jdbcTemplate.update(insertJobDependencySql, TENANT, downstream.jobCode(), upstream.jobCode());
     LaunchResponse response =
         workflowRunLaunchService.launch(launchRequest(downstream, bizDate, TriggerType.EVENT));
     String childRequestId = childRequestId(response);
-    jdbcTemplate.update(
-        updateJobDependencyWaitingLaunchSql,
-        TENANT,
-        childRequestId);
+    jdbcTemplate.update(updateJobDependencyWaitingLaunchSql, TENANT, childRequestId);
 
     dependencyWaitingLaunchReconciler.reconcileTenant(TENANT);
     dependencyWaitingLaunchReconciler.reconcileTenant(TENANT);
@@ -1327,10 +1265,9 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
     Integer selectedAlertEventCount =
         jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT);
     assertThat(selectedAlertEventCount).isEqualTo(1);
-    Map<String, Object> alertRow = jdbcTemplate.queryForMap(
-        selectAlertContextSql, TENANT, childRequestId);
-    JsonNode alertDetail = JsonUtils.fromJson(
-        (String) alertRow.get("detail_json"), JsonNode.class);
+    Map<String, Object> alertRow =
+        jdbcTemplate.queryForMap(selectAlertContextSql, TENANT, childRequestId);
+    JsonNode alertDetail = JsonUtils.fromJson((String) alertRow.get("detail_json"), JsonNode.class);
     assertThat(alertDetail.path("workflowRunId").asLong())
         .isEqualTo(Long.parseLong(response.instanceNo()));
     assertThat(alertDetail.path("nodeCode").asText()).isEqualTo("JOB");
@@ -1403,11 +1340,8 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
         launchRequest(tenantId, upstream, bizDate, TriggerType.API));
     Long instanceId = LaunchIntegrationFixture.selectDispatchedJobInstanceId(
         jdbcTemplate, tenantId, response.instanceNo());
-        jdbcTemplate.update(
-        insertResultVersionSql,
-        tenantId,
-        "job:" + upstream.jobCode() + ":" + bizDate,
-        instanceId);
+    jdbcTemplate.update(
+        insertResultVersionSql, tenantId, "job:" + upstream.jobCode() + ":" + bizDate, instanceId);
     return jobInstanceMapper.selectById(tenantId, instanceId);
   }
 
@@ -1422,11 +1356,7 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
         jdbcTemplate, tenantId, "DISPATCH", "R20_SYSTEM_" + label, TriggerType.EVENT, bizDate);
     WorkflowLaunchSeed upstream = LaunchIntegrationFixture.prepareWorkflowLaunchWithoutWorker(
         jdbcTemplate, tenantId, "DISPATCH", "R20_SYSTEM_" + label, TriggerType.API, bizDate);
-        jdbcTemplate.update(
-        insertJobDependencySql,
-        tenantId,
-        downstream.jobCode(),
-        upstream.jobCode());
+    jdbcTemplate.update(insertJobDependencySql, tenantId, downstream.jobCode(), upstream.jobCode());
     LaunchResponse response = workflowRunLaunchService.launch(
         launchRequest(tenantId, downstream, bizDate, TriggerType.EVENT));
     String childRequestId = childRequestId(tenantId, response);
@@ -1440,20 +1370,17 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
         on conflict (tenant_id) do update set status = 'ACTIVE'\
         """;
 
-    jdbcTemplate.update(
-        insertTenantSql,
-        tenantId,
-        tenantId);
+    jdbcTemplate.update(insertTenantSql, tenantId, tenantId);
   }
 
   private void assertWaitReleased(DependencyWaitFixture fixture) {
-  final String selectWaitStatusSql = """
+    final String selectWaitStatusSql = """
       select wait_status from batch.job_dependency_waiting_launch where tenant_id = ? and request_id = ?\
       """;
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from batch.job_instance where tenant_id = ? and job_code = ?
   """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.job_instance where tenant_id = ? and job_code <> ?\s\
       and job_code like 'IT_DISPATCH_%%'\
       """;

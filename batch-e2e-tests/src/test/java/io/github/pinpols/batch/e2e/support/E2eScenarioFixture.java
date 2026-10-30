@@ -144,8 +144,8 @@ public final class E2eScenarioFixture {
   }
 
   /**
-   * Same as {@link #prepareLaunchWithoutPreSeededWorker(JdbcTemplate, String, String, String,
-   * TriggerType)} but allows orchestrator-level retry policy (FIXED / EXPONENTIAL) for failure-path
+   * 与 {@link #prepareLaunchWithoutPreSeededWorker(JdbcTemplate, String, String, String,
+   * TriggerType)} 相同，但允许为失败路径轮询配置 Orchestrator 级重试策略（FIXED / EXPONENTIAL）。
    * E2E.
    */
   public static LaunchSeed prepareLaunchWithoutPreSeededWorker(LaunchPreparationSpec spec) {
@@ -215,8 +215,9 @@ public final class E2eScenarioFixture {
 
     spec.jdbc().update(insertBusinessCalendarSql, spec.tenantId());
 
-    Long workflowDefinitionId =
-        spec.jdbc().queryForObject(insertWorkflowDefinitionSql, Long.class, spec.tenantId(), jobCode, jobDefinitionId);
+    Long workflowDefinitionId = spec.jdbc()
+        .queryForObject(
+            insertWorkflowDefinitionSql, Long.class, spec.tenantId(), jobCode, jobDefinitionId);
 
     spec.jdbc()
         .update(
@@ -229,7 +230,12 @@ public final class E2eScenarioFixture {
             spec.tenantId(),
             workflowDefinitionId);
     spec.jdbc()
-        .update(insertWorkflowEdgeSql, spec.tenantId(), workflowDefinitionId, spec.tenantId(), workflowDefinitionId);
+        .update(
+            insertWorkflowEdgeSql,
+            spec.tenantId(),
+            workflowDefinitionId,
+            spec.tenantId(),
+            workflowDefinitionId);
 
     spec.jdbc()
         .update(

@@ -18,6 +18,7 @@ import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.PresignDownloadFileRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileOperationResponse;
 import io.github.pinpols.batch.console.domain.file.mapper.FileRecordMapper;
+import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.view.FileRecordStorageView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
@@ -32,27 +33,45 @@ import java.io.InputStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.multipart.MultipartFile;
 
 @DisplayName("文件应用服务: 审批目标绑定、越权拦截与内容上传落库")
+@ExtendWith(MockitoExtension.class)
 class DefaultConsoleFileApplicationServiceTest {
 
-  private final OrchestratorInternalRestClient orchestratorClient =
-      mock(OrchestratorInternalRestClient.class);
-  private final OrchestratorApprovalClient approvalClient = mock(OrchestratorApprovalClient.class);
-  private final ConsoleRequestMetadataResolver metadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
-  private final ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
-  private final FileRecordMapper fileRecordMapper = mock(FileRecordMapper.class);
-  private final BatchObjectStore objectStore = mock(BatchObjectStore.class);
-  private final S3StorageProperties s3Properties = new S3StorageProperties();
+  @Mock
+  private OrchestratorInternalRestClient orchestratorClient;
+
+  @Mock
+  private OrchestratorApprovalClient approvalClient;
+
+  @Mock
+  private ConsoleRequestMetadataResolver metadataResolver;
+
+  @Mock
+  private ConsoleTenantGuard tenantGuard;
+
+  @Mock
+  private FileRecordMapper fileRecordMapper;
+
+  @Mock
+  private FileTemplateConfigMapper fileTemplateConfigMapper;
+
+  @Mock
+  private BatchObjectStore objectStore;
+
+  private S3StorageProperties s3Properties;
   private DefaultConsoleFileApplicationService service;
 
   @BeforeEach
   void setUp() {
+    s3Properties = new S3StorageProperties();
     s3Properties.setBucket("default-bucket");
     service = new DefaultConsoleFileApplicationService(
         orchestratorClient,
@@ -60,14 +79,15 @@ class DefaultConsoleFileApplicationServiceTest {
         metadataResolver,
         tenantGuard,
         fileRecordMapper,
+        fileTemplateConfigMapper,
         objectStore,
         s3Properties);
-    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
   }
 
   @Test
   @DisplayName("带审批单预签名下载时审批目标必须绑定本次文件")
   void shouldRequireApprovalBoundToDownloadedFile_whenPresignDownloadWithApprovalId() {
+    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
     // 回归守护本次安全修复:presignDownload 带 approvalId 时,审批二次校验必须绑定
     // targetType=FILE + targetId=本次 fileId(而非 none()),否则同租任一 APPROVED 单可越权解锁。
     when(metadataResolver.current())
@@ -91,6 +111,7 @@ class DefaultConsoleFileApplicationServiceTest {
   @Test
   @DisplayName("审批单为空时提交的审批目标同样绑定本次文件与租户")
   void shouldNotSkipApprovalBinding_whenApprovalIdBlank() {
+    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
     // approvalId 空白走"发起审批"分支,提交目标同样是 FILE/fileId(与校验侧对称)。
     when(approvalClient.submitApproval(any())).thenReturn("APR-NEW");
     PresignDownloadFileRequest request = new PresignDownloadFileRequest();
@@ -148,6 +169,7 @@ class DefaultConsoleFileApplicationServiceTest {
   @Test
   @DisplayName("上传内容按文件记录写入对象存储对应桶与路径")
   void shouldWriteUploadedContentToObjectStore() {
+    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
     when(fileRecordMapper.selectFileRecordById("t1", 1L))
         .thenReturn(new FileRecordStorageView(
             1L, "t1", "a.csv", "text/csv", "S3", "uploads/t1/a.csv", "bucket-a", null));
@@ -169,6 +191,7 @@ class DefaultConsoleFileApplicationServiceTest {
   @Test
   @DisplayName("内容写入对象存储后关闭上传输入流")
   void shouldCloseUploadInputStreamAfterStorePut() {
+    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
     when(fileRecordMapper.selectFileRecordById("t1", 1L))
         .thenReturn(new FileRecordStorageView(
             1L, "t1", "a.csv", null, "S3", "uploads/t1/a.csv", "bucket-a", null));
@@ -184,6 +207,7 @@ class DefaultConsoleFileApplicationServiceTest {
   @Test
   @DisplayName("本地路径文件记录不允许上传内容")
   void shouldRejectLocalPathFileRecordForUploadContent() {
+    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
     when(fileRecordMapper.selectFileRecordById("t1", 1L))
         .thenReturn(
             new FileRecordStorageView(1L, "t1", "a.csv", null, "LOCAL", "/tmp/a.csv", null, null));

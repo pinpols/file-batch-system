@@ -1,14 +1,18 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
+import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
+import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor;
 import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
+import io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties;
 import io.github.pinpols.batch.worker.core.domain.PulledTask;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
@@ -29,29 +33,38 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 @DisplayName("CLAIM 响应前的暂停时间计入租约年龄")
+@ExtendWith(MockitoExtension.class)
 class DefaultTaskExecutionWrapperClaimLeaseTest {
 
   private static final long STALE_AFTER_MILLIS = 20_000L;
   private static final long LONG_PAUSE_NANOS = 21_000_000_000L;
 
   private final AtomicLong clock = new AtomicLong(1_000_000_000L);
-  private final StepExecutionAdapter stepExecutionAdapter = mock(StepExecutionAdapter.class);
-  private final TaskExecutionClient taskExecutionClient = mock(TaskExecutionClient.class);
-  private final ActiveTaskLeaseRegistry activeTaskLeaseRegistry =
-      new ActiveTaskLeaseRegistry(clock::get);
-  private final WorkerExecutionTimeoutProperties timeoutProperties =
-      new WorkerExecutionTimeoutProperties();
+
+  @Mock
+  private StepExecutionAdapter stepExecutionAdapter;
+
+  @Mock
+  private TaskExecutionClient taskExecutionClient;
+
+  private ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
+  private WorkerExecutionTimeoutProperties timeoutProperties;
   private TaskExecutionPool executionPool;
   private ThreadPoolTaskScheduler watchdogScheduler;
   private DefaultTaskExecutionWrapper wrapper;
 
   @BeforeEach
   void setUp() {
+    activeTaskLeaseRegistry = new ActiveTaskLeaseRegistry(clock::get);
+    timeoutProperties = new WorkerExecutionTimeoutProperties();
     timeoutProperties.setPoolSize(1);
     timeoutProperties.setDefaultTimeoutSeconds(60L);
     timeoutProperties.setMaxTimeoutSeconds(120L);
@@ -76,7 +89,7 @@ class DefaultTaskExecutionWrapperClaimLeaseTest {
         timeoutProperties,
         meterRegistryProvider,
         watchdogScheduler,
-        10_000L);
+        new WorkerLeaseProperties());
   }
 
   @AfterEach
@@ -100,6 +113,12 @@ class DefaultTaskExecutionWrapperClaimLeaseTest {
     when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
         .thenReturn(StepExecutionResponse.successResponse());
 
+    TaskLeaseRenewItem startItem =
+        TaskLeaseRenewItem.executionStart("tenant-1", 42L, "worker-1", "inv-42");
+    List<TaskLeaseRenewItem> startItems = List.of(startItem);
+    when(taskExecutionClient.renewLeasesBatch(startItems))
+        .thenReturn(Map.of(42L, TaskLeaseRenewResult.renewed(42L)));
+
     EffectiveTaskConfig claimed = wrapper.claim("tenant-1", 42L, "worker-1").orElseThrow();
     WorkerExecutionResult result = wrapper.execute(pulledTask(claimed));
 
@@ -109,6 +128,7 @@ class DefaultTaskExecutionWrapperClaimLeaseTest {
     order
         .verify(taskExecutionClient)
         .renewLeasesBatch(List.of(new TaskLeaseRenewItem("tenant-1", 42L, "worker-1", "inv-42")));
+    order.verify(taskExecutionClient).renewLeasesBatch(startItems);
     order.verify(stepExecutionAdapter).execute(any(StepExecutionRequest.class));
   }
 
@@ -133,6 +153,37 @@ class DefaultTaskExecutionWrapperClaimLeaseTest {
         .containsExactlyInAnyOrder("42", "43");
     assertThat(activeTaskLeaseRegistry.isRenewalDue("42", STALE_AFTER_MILLIS)).isTrue();
     assertThat(activeTaskLeaseRegistry.isRenewalDue("43", STALE_AFTER_MILLIS)).isTrue();
+  }
+
+  @Test
+  @DisplayName("批量首项发生致命错误时释放未启动的认领租约，保持原错误传播")
+  void shouldReleaseQueuedClaims_whenFatalErrorAbortsBatch() {
+    EffectiveTaskConfig first = effectiveConfig(42L);
+    EffectiveTaskConfig second = effectiveConfig(43L);
+    when(taskExecutionClient.claimBatch(any()))
+        .thenReturn(
+            List.of(new TaskClaimResult(42L, true, first), new TaskClaimResult(43L, true, second)));
+    when(taskExecutionClient.renewLeasesBatch(any()))
+        .thenReturn(Map.of(42L, TaskLeaseRenewResult.renewed(42L)));
+    LinkageError fatal = new LinkageError("测试业务入口链接失败");
+    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class))).thenThrow(fatal);
+    TaskDispatchExecutor dispatcher = new TaskDispatchExecutor(wrapper);
+    TaskDispatchMessage firstMessage = dispatchMessage(42L);
+    TaskDispatchMessage secondMessage = dispatchMessage(43L);
+    List<TaskDispatchMessage> messages = List.of(firstMessage, secondMessage);
+
+    assertThatThrownBy(() -> dispatcher.executeBatchDetailed(messages, "worker-1"))
+        .isSameAs(fatal);
+    assertThat(activeTaskLeaseRegistry.snapshot()).isEmpty();
+  }
+
+  private static TaskDispatchMessage dispatchMessage(long id) {
+    return TaskDispatchMessage.builder()
+        .tenantId("tenant-1")
+        .taskId(id)
+        .jobCode("JOB")
+        .workerType("IMPORT")
+        .build();
   }
 
   private static EffectiveTaskConfig effectiveConfig(Long taskId) {

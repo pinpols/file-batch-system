@@ -1,13 +1,14 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.governance;
 
-import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.utils.AlertLabels;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -98,11 +99,28 @@ public class AlertmanagerEmitPublisher {
 
   /** 推一条 firing 告警（disabled / null → no-op）。 */
   public void publishFiring(AlertEventEntity entity) {
+    if (EmptyChecks.isNotNull(entity) && "CLOSED".equals(entity.getStatus())) {
+      return;
+    }
+    publish(entity, false);
+  }
+
+  /** 重发已持久化的关闭意图；最终渠道回执另行确认，不把入队当作送达。 */
+  public void publishResolved(AlertEventEntity entity) {
+    if (EmptyChecks.isNull(entity)
+        || EmptyChecks.isNull(entity.getClosedAt())
+        || !"CLOSED".equals(entity.getStatus())) {
+      return;
+    }
+    publish(entity, true);
+  }
+
+  private void publish(AlertEventEntity entity, boolean resolved) {
     if (executor == null || entity == null) {
       return;
     }
     try {
-      executor.execute(() -> sendQuietly(entity));
+      executor.execute(() -> sendQuietly(entity, resolved));
     } catch (RejectedExecutionException ex) {
       recordEmitMetric("rejected");
       SwallowedExceptionLogger.info(
@@ -131,14 +149,16 @@ public class AlertmanagerEmitPublisher {
     }
   }
 
-  private void sendQuietly(AlertEventEntity entity) {
+  private void sendQuietly(AlertEventEntity entity, boolean resolved) {
     try {
-      Map<String, Object> alert = buildPostableAlert(entity);
+      Map<String, Object> alert =
+          resolved ? buildResolvedAlert(entity) : buildPostableAlert(entity);
       List<Map<String, Object>> alerts = List.of(alert);
       String body = JsonUtils.toJson(alerts);
       Duration connectTimeout = Duration.ofMillis(props.getConnectTimeoutMillis());
       Duration requestTimeout = Duration.ofMillis(props.getTimeoutMillis());
-      OutboundHttpContent httpContent = new OutboundHttpContent(body, "application/json; charset=utf-8");
+      OutboundHttpContent httpContent =
+          new OutboundHttpContent(body, "application/json; charset=utf-8");
       OutboundHttpRequest request = OutboundHttpRequest.post(
           alertsUri,
           Map.of(),
@@ -199,6 +219,13 @@ public class AlertmanagerEmitPublisher {
     } else if (entity.getLastSeenAt() != null) {
       alert.put("startsAt", entity.getLastSeenAt().toString());
     }
+    return alert;
+  }
+
+  /** 发生和恢复共用标签与首次时间；恢复时间使用持久意图，不随重试推进。 */
+  Map<String, Object> buildResolvedAlert(AlertEventEntity entity) {
+    Map<String, Object> alert = buildPostableAlert(entity);
+    alert.put("endsAt", entity.getClosedAt().toString());
     return alert;
   }
 

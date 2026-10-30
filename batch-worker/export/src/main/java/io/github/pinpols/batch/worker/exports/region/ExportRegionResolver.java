@@ -116,19 +116,17 @@ public final class ExportRegionResolver {
       return List.of();
     }
     return list.stream()
-        .filter(
-            value -> {
-              if (EmptyChecks.isNull(value)) {
-                return false;
-              }
-              String filterText = String.valueOf(value);
-              return Texts.hasText(filterText);
-            })
-        .map(
-            value -> {
-              String mappedText = String.valueOf(value);
-              return mappedText.trim();
-            })
+        .filter(value -> {
+          if (EmptyChecks.isNull(value)) {
+            return false;
+          }
+          String filterText = String.valueOf(value);
+          return Texts.hasText(filterText);
+        })
+        .map(value -> {
+          String mappedText = String.valueOf(value);
+          return mappedText.trim();
+        })
         .toList();
   }
 }

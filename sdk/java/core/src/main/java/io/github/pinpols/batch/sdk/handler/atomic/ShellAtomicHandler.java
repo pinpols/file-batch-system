@@ -113,10 +113,10 @@ public class ShellAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obj
       try {
         Files.createDirectory(root);
       } catch (FileAlreadyExistsException alreadyExists) {
-        // Existing directory is validated below.
+        // 目录是否存在将在下方校验。
       }
     } catch (FileAlreadyExistsException alreadyExists) {
-      // Existing directory is validated below.
+      // 目录是否存在将在下方校验。
     }
     if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) {
       throw new IOException("private SDK workdir is not a directory: " + root);
@@ -129,7 +129,7 @@ public class ShellAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obj
               PosixFilePermission.OWNER_WRITE,
               PosixFilePermission.OWNER_EXECUTE));
     } catch (UnsupportedOperationException ignored) {
-      // Windows ACLs and non-POSIX filesystems enforce permissions outside this API.
+      // Windows ACL 和非 POSIX 文件系统会在此 API 之外强制执行权限控制。
     }
     try {
       return Files.createTempDirectory(root, "sdk-shell-", directoryPermissions);
@@ -143,7 +143,7 @@ public class ShellAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obj
                 PosixFilePermission.OWNER_WRITE,
                 PosixFilePermission.OWNER_EXECUTE));
       } catch (UnsupportedOperationException ignoredPermissions) {
-        // Windows ACLs and non-POSIX filesystems enforce permissions outside this API.
+        // Windows ACL 和非 POSIX 文件系统会在此 API 之外强制执行权限控制。
       }
       return path;
     }

@@ -1,13 +1,10 @@
 package io.github.pinpols.batch.console.domain.audit.mapper;
 
+import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiConversationEntity;
+import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiTurnEntity;
 import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiConversationAllocateTurnNoParam;
 import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationPageByOwnerQuery;
 import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationTurnsQuery;
-
-
-import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiConversationEntity;
-import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiTurnEntity;
-import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -35,8 +32,7 @@ public interface ConsoleAiConversationMapper {
 
   int insertConversation(ConsoleAiConversationEntity conversation);
 
-  Long allocateTurnNo(
-      ConsoleAiConversationAllocateTurnNoParam parameters);
+  Long allocateTurnNo(ConsoleAiConversationAllocateTurnNoParam parameters);
 
   default List<ConsoleAiTurnEntity> selectRecentCompleteTurns(
       String tenantId, String conversationId, int limit) {
@@ -77,8 +73,7 @@ public interface ConsoleAiConversationMapper {
   List<ConsoleAiConversationEntity> selectPageByOwner(
       ConsoleAiConversationPageByOwnerQuery parameters);
 
-  List<ConsoleAiTurnEntity> selectTurns(
-      ConsoleAiConversationTurnsQuery parameters);
+  List<ConsoleAiTurnEntity> selectTurns(ConsoleAiConversationTurnsQuery parameters);
 
   int deleteConversation(
       @Param("tenantId") String tenantId,

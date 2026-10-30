@@ -409,9 +409,11 @@ class PipelineProgressArchiveIntegrationTest extends AbstractIntegrationTest {
       assertThat(result.getExitCode())
           .as(result.getStdout() + result.getStderr())
           .isZero();
-      assertThat(isolated.queryForObject(selectCountSql, Integer.class, target)).isZero();
-      assertThat(isolated.queryForObject(selectInstanceStatusSql, String.class, running))
-          .isEqualTo("RUNNING");
+      Integer selectedCount = isolated.queryForObject(selectCountSql, Integer.class, target);
+      assertThat(selectedCount).isZero();
+      String selectedInstanceStatus =
+          isolated.queryForObject(selectInstanceStatusSql, String.class, running);
+      assertThat(selectedInstanceStatus).isEqualTo("RUNNING");
     } finally {
       final String dropDatabaseSql = """
           drop database %s with (force)\
@@ -576,17 +578,11 @@ class PipelineProgressArchiveIntegrationTest extends AbstractIntegrationTest {
       String deleteHotQualityEvidenceSql = """
           delete from batch.data_quality_check where tenant_id=? and job_instance_id=?\
           """;
-      jdbc.update(
-          deleteHotQualityEvidenceSql,
-          fixture.tenant(),
-          fixture.jobId());
+      jdbc.update(deleteHotQualityEvidenceSql, fixture.tenant(), fixture.jobId());
       String deleteArchivedQualityEvidenceSql = """
           delete from archive.data_quality_check_archive where tenant_id=? and job_instance_id=?\
           """;
-      jdbc.update(
-          deleteArchivedQualityEvidenceSql,
-          fixture.tenant(),
-          fixture.jobId());
+      jdbc.update(deleteArchivedQualityEvidenceSql, fixture.tenant(), fixture.jobId());
       jdbc.update(deletePipelineProgressSql, fixture.pipelineId());
       jdbc.update(deletePipelineProgressArchiveSql, fixture.pipelineId());
       jdbc.update(deletePipelineInstanceSql, fixture.pipelineId());

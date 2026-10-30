@@ -123,3 +123,7 @@ helm lint helm/batch-platform
 | 把所有 `${BATCH_*}` 都加入 `.env.example` | 运维入口过载，真正关键开关被淹没 | L0/L1 才进入模板，L2/L3 保持 runbook 或代码默认 |
 | 生产用 `.env.prod` 直连真实密钥 | 密钥泄漏、审计困难 | 使用 Secret/ExternalSecret/CI 注入 |
 | 只改 Helm 不改 registry | CI 无法识别这是生产一等入口 | 先登记 registry，再补 Helm |
+
+## 维护通知部署范围
+
+`BATCH_MAINTENANCE_ALERT_SCOPE` 是重启生效的部署标识，不是租户业务配置。同一 Console 与 Prometheus 使用相同唯一值，跨环境/工作树不得共用；Docker 给应用 target 与外部告警附加该标签，Helm 默认派生为 `namespace.release` 并同步 ServiceMonitor、可用性查询和 Console。Alertmanager 地址、启用条件、空范围保留告警及实际加载检查见[维护 SOP](maintenance-mode.md#10-维护期通知抑制2026-10-26)。

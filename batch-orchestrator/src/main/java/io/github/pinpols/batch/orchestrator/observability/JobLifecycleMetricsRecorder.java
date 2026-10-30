@@ -145,8 +145,7 @@ public class JobLifecycleMetricsRecorder {
       String failureClass = snapshot.failureClass();
       String errorCode = resolveErrorCode(failureClass);
       boolean dryRun = snapshot.dryRun();
-      jobLifecycleMetrics.recordFailure(
-          tenantId, jobType, errorCode, dryRun);
+      jobLifecycleMetrics.recordFailure(tenantId, jobType, errorCode, dryRun);
     }
   }
 

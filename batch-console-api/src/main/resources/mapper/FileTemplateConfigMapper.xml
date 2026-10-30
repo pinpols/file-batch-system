@@ -195,8 +195,60 @@
         limit 1
     </select>
 
-    <select id="selectByUniqueKey" resultType="map">
-        select *
+    <sql id="fileTemplateFullColumns">
+        id,
+        tenant_id,
+        template_code,
+        template_name,
+        template_type,
+        biz_type,
+        file_format_type,
+        charset,
+        target_charset,
+        with_bom,
+        line_separator,
+        delimiter,
+        quote_char,
+        escape_char,
+        record_length,
+        header_rows,
+        footer_rows,
+        header_template,
+        trailer_template,
+        checksum_type,
+        compress_type,
+        encrypt_type,
+        naming_rule,
+        field_mappings,
+        validation_rule_set,
+        default_query_code,
+        default_query_sql,
+        query_param_schema,
+        streaming_enabled,
+        page_size,
+        fetch_size,
+        chunk_size,
+        preview_masking_enabled,
+        error_line_masking_enabled,
+        log_masking_enabled,
+        content_encryption_enabled,
+        encryption_key_ref,
+        download_requires_approval,
+        masking_rule_set,
+        load_target_ref,
+        export_data_ref,
+        enabled,
+        version,
+        description,
+        created_by,
+        updated_by,
+        created_at,
+        updated_at
+    </sql>
+
+    <select id="selectByUniqueKey" resultMap="FileTemplateConfigQueryViewResultMap">
+        select
+        <include refid="fileTemplateFullColumns"/>
         from batch.file_template_config
         where tenant_id = #{tenantId}
           and template_code = #{templateCode}
@@ -205,8 +257,22 @@
         limit 1
     </select>
 
-    <select id="selectById" resultType="map">
-        select * from batch.file_template_config
+    <select id="selectEnabledByTenantAndCode" resultMap="FileTemplateConfigQueryViewResultMap">
+        select
+        <include refid="fileTemplateFullColumns"/>
+        from batch.file_template_config
+        where tenant_id = #{tenantId}
+          and template_code = #{templateCode}
+          and enabled = true
+          and is_deleted = false
+        order by version desc
+        limit 1
+    </select>
+
+    <select id="selectById" resultMap="FileTemplateConfigQueryViewResultMap">
+        select
+        <include refid="fileTemplateFullColumns"/>
+        from batch.file_template_config
         where tenant_id = #{tenantId} and id = #{id}
           and is_deleted = false
         limit 1
@@ -216,6 +282,15 @@
         update batch.file_template_config
         set enabled = #{enabled}, updated_at = current_timestamp
         where tenant_id = #{tenantId} and id = #{id} and is_deleted = false
+    </update>
+
+    <update id="toggleEnabledIfUnchanged">
+        update batch.file_template_config
+        set enabled = true, updated_at = current_timestamp
+        where tenant_id = #{p.tenantId} and id = #{p.id} and is_deleted = false
+          and template_type is not distinct from #{p.templateType,jdbcType=VARCHAR}
+          and file_format_type is not distinct from #{p.fileFormatType,jdbcType=VARCHAR}
+          and field_mappings is not distinct from #{p.fieldMappingsJson,jdbcType=VARCHAR}::jsonb
     </update>
 
     <!--

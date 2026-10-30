@@ -184,6 +184,8 @@ def java_files(glob: str) -> list[Path]:
     """按 glob 收集 Java 源码，剔除 target / 压测 / E2E / test-support。"""
     files: list[Path] = []
     for path in ROOT.glob(glob):
+        if path.relative_to(ROOT).parts[0] == "logs":
+            continue
         posix = path.as_posix()
         if any(part in posix for part in EXCLUDED_PARTS):
             continue

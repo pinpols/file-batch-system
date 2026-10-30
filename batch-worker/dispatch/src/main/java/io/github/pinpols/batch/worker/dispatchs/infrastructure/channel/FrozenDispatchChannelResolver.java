@@ -45,7 +45,8 @@ public class FrozenDispatchChannelResolver {
     return Optional.of(channelConfig);
   }
 
-  private Map<String, Object> reveal(String protectedSnapshot, String tenantId, String channelCode) {
+  private Map<String, Object> reveal(
+      String protectedSnapshot, String tenantId, String channelCode) {
     try {
       String plaintext = secretPayloadProtector.revealEncrypted(protectedSnapshot);
       FrozenDispatchChannelSnapshot snapshot =

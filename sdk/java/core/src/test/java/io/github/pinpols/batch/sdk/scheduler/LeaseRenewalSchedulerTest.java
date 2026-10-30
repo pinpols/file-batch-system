@@ -13,11 +13,11 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage;
 import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
+import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
+import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
-import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
-import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
@@ -127,8 +127,8 @@ class LeaseRenewalSchedulerTest {
       }
     };
     TaskDispatcher dispatcher = new TaskDispatcher(cfg, Map.of("tt", handler), http);
-    TaskDispatchMessage message = new TaskDispatchMessage(
-        42L, "tx", "job-1", "tt", "ti-9", Map.of(), Map.of());
+    TaskDispatchMessage message =
+        new TaskDispatchMessage(42L, "tx", "job-1", "tt", "ti-9", Map.of(), Map.of());
     try {
       TaskDispatcher.DispatchDecision decision = dispatcher.onMessage(message);
       assertThat(decision).isEqualTo(TaskDispatcher.DispatchDecision.SUBMITTED);

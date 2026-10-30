@@ -1,30 +1,24 @@
 package io.github.pinpols.batch.orchestrator.application.service.sensor;
 
-import io.github.pinpols.batch.orchestrator.domain.query.SensorFileArrivalLatestArrivalQuery;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.orchestrator.domain.query.SensorFileArrivalLatestArrivalQuery;
+import io.github.pinpols.batch.orchestrator.domain.view.SensorFileArrivalView;
 import io.github.pinpols.batch.orchestrator.infrastructure.sensor.FileArrivalSensorPolicy;
 import io.github.pinpols.batch.orchestrator.mapper.SensorFileArrivalMapper;
 import java.time.Duration;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -45,11 +39,11 @@ class FileArrivalSensorPolicyTest {
   @Test
   @DisplayName("查询到最新到达记录时判定为命中并带出文件标识")
   void probe_matched_returnsHit() {
-    Map<String, Object> hit = new LinkedHashMap<>();
-    hit.put("fileId", 42L);
-    hit.put("fileName", "settle-001.csv");
-    when(mapper.selectLatestArrival(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "ta") && java.util.Objects.equals(parameters.namePattern(), "settle-%"))))
+    SensorFileArrivalView hit =
+        new SensorFileArrivalView(42L, "settle-001.csv", null, null, null, null);
+    when(mapper.selectLatestArrival(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.tenantId(), "ta")
+            && Objects.equals(parameters.namePattern(), "settle-%"))))
         .thenReturn(hit);
 
     SensorProbeResult r = policy.probe(ctx(Map.of("pattern", "settle-*", "maxAgeSeconds", 3600)));
@@ -62,7 +56,7 @@ class FileArrivalSensorPolicyTest {
   @DisplayName("没有到达记录时判定为未就绪")
   void probe_noHit_returnsNotYet() {
     when(mapper.selectLatestArrival(
-            org.mockito.ArgumentMatchers.any(SensorFileArrivalLatestArrivalQuery.class)))
+            ArgumentMatchers.any(SensorFileArrivalLatestArrivalQuery.class)))
         .thenReturn(null);
     SensorProbeResult r = policy.probe(ctx(Map.of("pattern", "x-*", "maxAgeSeconds", 600)));
     assertThat(r.status()).isEqualTo(SensorProbeStatus.NOT_YET);
@@ -80,7 +74,7 @@ class FileArrivalSensorPolicyTest {
   @DisplayName("查询过程抛异常时判定为探针失败并给出错误键")
   void probe_mapperThrows_returnsError() {
     when(mapper.selectLatestArrival(
-            org.mockito.ArgumentMatchers.any(SensorFileArrivalLatestArrivalQuery.class)))
+            ArgumentMatchers.any(SensorFileArrivalLatestArrivalQuery.class)))
         .thenThrow(new RuntimeException("db down"));
     SensorProbeResult r = policy.probe(ctx(Map.of("pattern", "*.csv", "maxAgeSeconds", 3600)));
     assertThat(r.status()).isEqualTo(SensorProbeStatus.ERROR);
@@ -88,19 +82,41 @@ class FileArrivalSensorPolicyTest {
   }
 
   @Test
+  @DisplayName("文件传感器异常详情不回传凭据")
+  void probe_mapperErrorDoesNotExposeCredentials() {
+    when(mapper.selectLatestArrival(
+            ArgumentMatchers.any(SensorFileArrivalLatestArrivalQuery.class)))
+        .thenThrow(
+            new RuntimeException("connection failed password=sample-secret token=sample-token"));
+    SensorProbeResult result = policy.probe(ctx(Map.of("pattern", "*.csv", "maxAgeSeconds", 3600)));
+    assertThat(result.status()).isEqualTo(SensorProbeStatus.ERROR);
+    assertThat(result.errorArgs().toString())
+        .contains("connection failed")
+        .doesNotContain("sample-secret", "sample-token");
+  }
+
+  @Test
+  @DisplayName("文件到达最大年龄不能将小数截断为整数")
+  void shouldRejectFractionalMaxAge() {
+    SensorProbeResult result = policy.probe(ctx(Map.of("pattern", "*.csv", "maxAgeSeconds", 1.5)));
+    assertThat(result.status()).isEqualTo(SensorProbeStatus.ERROR);
+    assertThat(result.errorKey()).isEqualTo("error.workflow.sensor_spec_invalid");
+    verifyNoInteractions(mapper);
+  }
+
+  @Test
   @DisplayName("渠道来源为文件传输时按该来源类型过滤并带出时间下界")
   void probe_channelCodeSftp_filterSftpSourceType() {
     when(mapper.selectLatestArrival(
-            org.mockito.ArgumentMatchers.any(SensorFileArrivalLatestArrivalQuery.class)))
+            ArgumentMatchers.any(SensorFileArrivalLatestArrivalQuery.class)))
         .thenReturn(null);
     policy.probe(ctx(Map.of(
         "channelCode", "sftp_bank_in",
         "pattern", "*.csv",
         "maxAgeSeconds", 3600)));
-    ArgumentCaptor<SensorFileArrivalLatestArrivalQuery> queryCaptor = ArgumentCaptor.forClass(SensorFileArrivalLatestArrivalQuery.class);
-    verify(mapper)
-        .selectLatestArrival(
-            queryCaptor.capture());
+    ArgumentCaptor<SensorFileArrivalLatestArrivalQuery> queryCaptor =
+        ArgumentCaptor.forClass(SensorFileArrivalLatestArrivalQuery.class);
+    verify(mapper).selectLatestArrival(queryCaptor.capture());
     assertThat(queryCaptor.getValue().tenantId()).isEqualTo("ta");
     assertThat(queryCaptor.getValue().namePattern()).isEqualTo("%.csv");
     assertThat(queryCaptor.getValue().sourceType()).isEqualTo("SFTP");
@@ -110,8 +126,10 @@ class FileArrivalSensorPolicyTest {
   @Test
   @DisplayName("显式绑定 workflow 业务日并可要求到达组完整后才命中")
   void probe_completeGroup_usesWorkflowBizDate() {
-    when(mapper.selectLatestArrival(org.mockito.ArgumentMatchers.any(SensorFileArrivalLatestArrivalQuery.class)))
-        .thenReturn(Map.of("fileId", 91L, "bizDate", "2026-05-07"));
+    when(mapper.selectLatestArrival(
+            ArgumentMatchers.any(SensorFileArrivalLatestArrivalQuery.class)))
+        .thenReturn(
+            new SensorFileArrivalView(91L, null, null, null, LocalDate.parse("2026-05-07"), null));
 
     SensorProbeResult result = policy.probe(new SensorContext(
         "ta",
@@ -133,15 +151,20 @@ class FileArrivalSensorPolicyTest {
 
     assertThat(result.status()).isEqualTo(SensorProbeStatus.MATCHED);
     verify(mapper)
-        .selectLatestArrival(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "ta") && java.util.Objects.equals(parameters.namePattern(), "settle-%.csv") && java.util.Objects.equals(parameters.bizDate(), LocalDate.parse("2026-05-07")) && java.util.Objects.equals(parameters.fileGroupCode(), "SETTLEMENT") && java.util.Objects.equals(parameters.workflowDefinitionId(), 902L) && java.util.Objects.equals(parameters.requireCompleteGroup(), true)));
+        .selectLatestArrival(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.tenantId(), "ta")
+            && Objects.equals(parameters.namePattern(), "settle-%.csv")
+            && Objects.equals(parameters.bizDate(), LocalDate.parse("2026-05-07"))
+            && Objects.equals(parameters.fileGroupCode(), "SETTLEMENT")
+            && Objects.equals(parameters.workflowDefinitionId(), 902L)
+            && Objects.equals(parameters.requireCompleteGroup(), true)));
   }
 
   @Test
   @DisplayName("旧配置不自动追加 workflow 业务日过滤")
   void probe_legacyConfig_keepsUnscopedBizDate() {
     when(mapper.selectLatestArrival(
-            org.mockito.ArgumentMatchers.any(SensorFileArrivalLatestArrivalQuery.class)))
+            ArgumentMatchers.any(SensorFileArrivalLatestArrivalQuery.class)))
         .thenReturn(null);
 
     policy.probe(new SensorContext(
@@ -153,8 +176,13 @@ class FileArrivalSensorPolicyTest {
         null));
 
     verify(mapper)
-        .selectLatestArrival(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "ta") && java.util.Objects.equals(parameters.namePattern(), "%.csv") && parameters.bizDate() == null && parameters.fileGroupCode() == null && parameters.workflowDefinitionId() == null && java.util.Objects.equals(parameters.requireCompleteGroup(), false)));
+        .selectLatestArrival(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.tenantId(), "ta")
+            && Objects.equals(parameters.namePattern(), "%.csv")
+            && parameters.bizDate() == null
+            && parameters.fileGroupCode() == null
+            && parameters.workflowDefinitionId() == null
+            && Objects.equals(parameters.requireCompleteGroup(), false)));
   }
 
   @Test

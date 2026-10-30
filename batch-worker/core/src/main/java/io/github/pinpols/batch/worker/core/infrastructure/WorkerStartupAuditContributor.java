@@ -13,12 +13,14 @@ public interface WorkerStartupAuditContributor {
   record WorkerStartupAuditResult(boolean healthy, Map<String, Object> details) {
 
     public static WorkerStartupAuditResult healthy(Map<String, Object> details) {
-      Map<String, Object> immutableDetails = EmptyChecks.isNull(details) ? Map.of() : Map.copyOf(details);
+      Map<String, Object> immutableDetails =
+          EmptyChecks.isNull(details) ? Map.of() : Map.copyOf(details);
       return new WorkerStartupAuditResult(true, immutableDetails);
     }
 
     public static WorkerStartupAuditResult unhealthy(Map<String, Object> details) {
-      Map<String, Object> immutableDetails = EmptyChecks.isNull(details) ? Map.of() : Map.copyOf(details);
+      Map<String, Object> immutableDetails =
+          EmptyChecks.isNull(details) ? Map.of() : Map.copyOf(details);
       return new WorkerStartupAuditResult(false, immutableDetails);
     }
   }

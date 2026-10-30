@@ -35,7 +35,22 @@
         </foreach>
     </select>
 
-    <select id="selectByQuery" resultType="map">
+    <resultMap id="ConsoleUserAccountRowMap"
+               type="io.github.pinpols.batch.console.domain.rbac.view.ConsoleUserAccountRow">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="username" javaType="java.lang.String"/>
+            <arg column="display_name" javaType="java.lang.String"/>
+            <arg column="authorities_csv" javaType="java.lang.String"/>
+            <arg column="enabled" javaType="java.lang.Boolean"/>
+            <arg column="must_change_password" javaType="java.lang.Boolean"/>
+            <arg column="created_at" javaType="java.lang.Object"/>
+            <arg column="updated_at" javaType="java.lang.Object"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="ConsoleUserAccountRowMap">
         select id, tenant_id, username, display_name, authorities_csv, enabled, must_change_password, created_at, updated_at
         from batch.console_user_account
         <where>
@@ -71,14 +86,14 @@
         </where>
     </select>
 
-    <select id="selectById" resultType="map">
+    <select id="selectById" resultMap="ConsoleUserAccountRowMap">
         select id, tenant_id, username, display_name, authorities_csv, enabled, must_change_password, created_at, updated_at
         from batch.console_user_account
         where id = #{id}
         limit 1
     </select>
 
-    <select id="selectByUsername" resultType="map">
+    <select id="selectByUsername" resultMap="ConsoleUserAccountRowMap">
         select id, tenant_id, username, display_name, authorities_csv, enabled, must_change_password, created_at, updated_at
         from batch.console_user_account
         where lower(username) = lower(#{username})

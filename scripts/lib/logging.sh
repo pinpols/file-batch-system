@@ -186,8 +186,7 @@ log_find_archived_log_files() {
   local archive_dir="$root/logs/archive/$kind" component_dir
 
   if [[ "$kind" == app ]]; then
-    # 先锁定父请求，再锁定子等待记录，与启动/拒绝准入时的锁顺序一致。
-    # 迁移期间需同时包含旧版扁平目录，以及当前布局所用的
+    # 同时枚举旧版扁平归档和当前按组件分目录的布局，避免遗漏到期日志。
     if [[ -d "$archive_dir" ]]; then
       find "$archive_dir" -maxdepth 1 -type f -name '*.log' -mtime "+${retention_days}" -print0
     fi

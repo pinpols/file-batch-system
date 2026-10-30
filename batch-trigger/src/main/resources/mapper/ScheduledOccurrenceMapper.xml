@@ -113,6 +113,7 @@
             updated_at = CURRENT_TIMESTAMP
         where batch.scheduled_occurrence.occurrence_status in
               ('PLANNED', 'WAITING_READINESS', 'MISFIRE_PENDING')
+          and batch.scheduled_occurrence.request_id is null
     </insert>
 
     <insert id="insertPlannedWithStatus">
@@ -144,6 +145,8 @@
             calendar_code = excluded.calendar_code,
             biz_date = excluded.biz_date,
             occurrence_status = #{targetStatus},
+            readiness_deferred_since = null,
+            readiness_deadline = null,
             updated_at = CURRENT_TIMESTAMP
         where batch.scheduled_occurrence.occurrence_status in ('PLANNED', 'SUPERSEDED')
           and batch.scheduled_occurrence.schedule_version &lt;= excluded.schedule_version
@@ -265,6 +268,45 @@
          limit #{limit}
     </select>
 
+    <select id="selectExpiredReadinessWaits"
+            resultType="io.github.pinpols.batch.trigger.domain.query.ExpiredReadinessWaitRow">
+        select tenant_id            as tenantId,
+               workflow_definition_id as workflowDefinitionId,
+               scheduled_fire_time  as scheduledFireTime,
+               readiness_deadline   as deadline
+          from batch.scheduled_occurrence
+         where occurrence_status = 'WAITING_READINESS'
+           and readiness_deadline &lt;= #{now}
+         order by readiness_deadline asc
+         limit #{limit}
+    </select>
+
+    <update id="timeoutExpiredReadinessWait">
+        update batch.scheduled_occurrence
+           set occurrence_status = 'READINESS_TIMEOUT', updated_at = CURRENT_TIMESTAMP
+         where tenant_id = #{wait.tenantId}
+           and workflow_definition_id = #{wait.workflowDefinitionId}
+           and scheduled_fire_time = #{wait.scheduledFireTime}
+           and occurrence_status = 'WAITING_READINESS'
+           and readiness_deadline &lt;= #{now}
+    </update>
+
+    <resultMap id="readinessWaitWindow" type="io.github.pinpols.batch.trigger.support.ReadinessWaitWindow">
+        <constructor>
+            <arg column="readiness_deferred_since" javaType="java.time.Instant"/>
+            <arg column="readiness_deadline" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectReadinessWaitWindow" resultMap="readinessWaitWindow">
+        select readiness_deferred_since, readiness_deadline
+        from batch.scheduled_occurrence
+        where tenant_id = #{tenantId} and workflow_definition_id = #{workflowDefinitionId}
+          and scheduled_fire_time = #{scheduledFireTime}
+          and occurrence_status = 'WAITING_READINESS'
+          and schedule_version = #{scheduleVersion}
+    </select>
+
     <update id="supersedeFuturePlannedWithStatus">
         update batch.scheduled_occurrence
         set occurrence_status = #{targetStatus},
@@ -361,4 +403,16 @@
               )
           )
     </select>
+
+    <!-- 补写 readiness 等待窗口：只更新当前等待记录，避免覆盖已推进态。 -->
+    <update id="updateReadinessWait">
+        update batch.scheduled_occurrence
+        set readiness_deferred_since = coalesce(readiness_deferred_since, #{deferredSince}),
+            readiness_deadline = coalesce(readiness_deadline, #{deadline}),
+            updated_at = CURRENT_TIMESTAMP
+        where tenant_id = #{tenantId}
+          and workflow_definition_id = #{workflowDefinitionId}
+          and scheduled_fire_time = #{scheduledFireTime}
+          and occurrence_status = 'WAITING_READINESS'
+    </update>
 </mapper>

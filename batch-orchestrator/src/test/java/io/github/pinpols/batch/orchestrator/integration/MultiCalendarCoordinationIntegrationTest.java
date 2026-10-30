@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.orchestrator.integration;
 
-import io.github.pinpols.batch.orchestrator.domain.query.SensorFileArrivalLatestArrivalQuery;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -12,6 +9,8 @@ import io.github.pinpols.batch.orchestrator.application.service.batchday.BatchDa
 import io.github.pinpols.batch.orchestrator.application.service.batchday.BatchDayCatchupPreviewService;
 import io.github.pinpols.batch.orchestrator.application.service.calendar.CalendarDependencyWaitGovernanceService;
 import io.github.pinpols.batch.orchestrator.domain.entity.CalendarDependencyWaitEntity;
+import io.github.pinpols.batch.orchestrator.domain.query.SensorFileArrivalLatestArrivalQuery;
+import io.github.pinpols.batch.orchestrator.domain.view.SensorFileArrivalView;
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.BatchDayOpenScheduler;
 import io.github.pinpols.batch.orchestrator.mapper.CalendarDependencyWaitMapper;
 import io.github.pinpols.batch.orchestrator.mapper.SensorFileArrivalMapper;
@@ -135,8 +134,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     """;
 
     jdbcTemplate.update(deleteBatchDayOpenCursorSql, TENANT);
-    jdbcTemplate.update(
-        deleteBatchDayCatchupControlEventSql, TENANT);
+    jdbcTemplate.update(deleteBatchDayCatchupControlEventSql, TENANT);
     jdbcTemplate.update(deleteBatchDayCatchupControlSql, TENANT);
     jdbcTemplate.update(deleteCalendarDependencySql, TENANT);
     jdbcTemplate.update(deleteCalendarDependencyWaitSql, TENANT);
@@ -184,16 +182,16 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
         insert into batch.trigger_request (tenant_id, request_id, trigger_type, workflow_definition_id,\s\
         biz_date, dedup_key, request_status, trace_id) values (?, ?, 'SCHEDULED', ?, ?, ?, 'ACCEPTED', ?)\
         """;
-  final String selectDayStatusSql = """
+    final String selectDayStatusSql = """
       select day_status from batch.batch_day_instance where tenant_id = ? and calendar_code = ? and biz_date = ?\
       """;
-  final String selectLastScannedBizDateSql = """
+    final String selectLastScannedBizDateSql = """
       select last_scanned_biz_date from batch.batch_day_open_cursor where tenant_id = ? and calendar_code = ?\
       """;
-  final String updateTriggerRequestSql = """
+    final String updateTriggerRequestSql = """
       update batch.trigger_request set request_status = 'REJECTED' where tenant_id = ? and request_id = ?\
       """;
-  final String selectDayStatusSql2 = """
+    final String selectDayStatusSql2 = """
       select day_status, operation_reason from batch.batch_day_instance where tenant_id = ?\s\
       and calendar_code = ? and biz_date = ?\
       """;
@@ -202,12 +200,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     String workflowCode = "WF_SKIP_RACE_" + System.nanoTime();
     String requestId = "calendar-skip-race-" + System.nanoTime();
     insertCalendar(calendarCode, "Asia/Shanghai", "SKIP");
-    jdbcTemplate.update(
-        insertCalendarHolidaySql,
-        TENANT,
-        BIZ,
-        TENANT,
-        calendarCode);
+    jdbcTemplate.update(insertCalendarHolidaySql, TENANT, BIZ, TENANT, calendarCode);
     Long workflowDefinitionId = jdbcTemplate.queryForObject(
         insertWorkflowDefinitionSql,
         Long.class,
@@ -234,17 +227,11 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
         selectLastScannedBizDateSql, LocalDate.class, TENANT, calendarCode);
     assertThat(selectedLastScannedBizDate).isEqualTo(BIZ.minusDays(1));
 
-    jdbcTemplate.update(
-        updateTriggerRequestSql,
-        TENANT,
-        requestId);
+    jdbcTemplate.update(updateTriggerRequestSql, TENANT, requestId);
     scheduler.openDueBatchDays(now.plusSeconds(1));
 
-    Map<String, Object> skipped = jdbcTemplate.queryForMap(
-        selectDayStatusSql2,
-        TENANT,
-        calendarCode,
-        BIZ);
+    Map<String, Object> skipped =
+        jdbcTemplate.queryForMap(selectDayStatusSql2, TENANT, calendarCode, BIZ);
     assertThat(skipped.get("day_status")).isEqualTo("SKIPPED");
     assertThat(skipped.get("operation_reason")).isEqualTo("CALENDAR_HOLIDAY_SKIP");
     LocalDate selectedLastScannedBizDateRead2 = jdbcTemplate.queryForObject(
@@ -293,12 +280,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     String requestId = "child-calendar-skip-" + System.nanoTime();
     String nodeCode = "CHILD_JOB_" + System.nanoTime();
     insertCalendar(calendarCode, "Asia/Shanghai", "SKIP");
-    jdbcTemplate.update(
-        insertCalendarHolidaySql,
-        TENANT,
-        BIZ,
-        TENANT,
-        calendarCode);
+    jdbcTemplate.update(insertCalendarHolidaySql, TENANT, BIZ, TENANT, calendarCode);
     Long workflowDefinitionId = jdbcTemplate.queryForObject(
         insertWorkflowDefinitionSql,
         Long.class,
@@ -307,15 +289,8 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
         "Child calendar skip workflow",
         calendarCode);
     Long workflowRunId = jdbcTemplate.queryForObject(
-        insertWorkflowRunSql,
-        Long.class,
-        TENANT,
-        workflowDefinitionId,
-        BIZ);
-    jdbcTemplate.update(
-        insertWorkflowNodeRunSql,
-        workflowRunId,
-        nodeCode);
+        insertWorkflowRunSql, Long.class, TENANT, workflowDefinitionId, BIZ);
+    jdbcTemplate.update(insertWorkflowNodeRunSql, workflowRunId, nodeCode);
     jdbcTemplate.update(
         insertTriggerRequestSql,
         TENANT,
@@ -375,12 +350,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     String workflowCode = "WF_SKIP_FENCE_" + System.nanoTime();
     String requestId = "calendar-skip-fence-" + System.nanoTime();
     insertCalendar(calendarCode, "Asia/Shanghai", "SKIP");
-    jdbcTemplate.update(
-        insertCalendarHolidaySql,
-        TENANT,
-        BIZ,
-        TENANT,
-        calendarCode);
+    jdbcTemplate.update(insertCalendarHolidaySql, TENANT, BIZ, TENANT, calendarCode);
     Long workflowDefinitionId = jdbcTemplate.queryForObject(
         insertWorkflowDefinitionSql,
         Long.class,
@@ -392,7 +362,8 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     String triggerName = "skip_fence_" + UUID.randomUUID().toString().replace('-', '_');
     String functionName = triggerName + "_fn";
     long advisoryKey = UUID.randomUUID().getMostSignificantBits() & Long.MAX_VALUE;
-    final String createFunctionSql = """
+    final String createFunctionSql =
+        """
         create function batch.%s() returns trigger language plpgsql as $$
         begin
           if new.tenant_id = '%s' and new.calendar_code = '%s' and new.biz_date = date '%s'
@@ -423,9 +394,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
       Future<String> admission = null;
       try {
         awaitBlockedBy(blockerPid);
-        Integer openingPid = jdbcTemplate.queryForObject(
-            selectPidSql,
-            Integer.class, blockerPid);
+        Integer openingPid = jdbcTemplate.queryForObject(selectPidSql, Integer.class, blockerPid);
         assertThat(openingPid).isNotNull();
 
         admission = executor.submit(
@@ -438,8 +407,8 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
 
         opening.get(10, TimeUnit.SECONDS);
         assertThat(admission.get(10, TimeUnit.SECONDS)).isEqualTo("BDA01");
-        String selectedDayStatus =
-            jdbcTemplate.queryForObject(selectDayStatusSql, String.class, TENANT, calendarCode, BIZ);
+        String selectedDayStatus = jdbcTemplate.queryForObject(
+            selectDayStatusSql, String.class, TENANT, calendarCode, BIZ);
         assertThat(selectedDayStatus).isEqualTo("SKIPPED");
         Integer selectedTriggerRequestCount =
             jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, requestId);
@@ -456,8 +425,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
       final String dropTriggerSql = """
           drop trigger if exists %s on batch.batch_day_instance\
           """.formatted(triggerName);
-      jdbcTemplate.execute(
-          dropTriggerSql);
+      jdbcTemplate.execute(dropTriggerSql);
       final String dropFunctionSql = """
           drop function if exists batch.%s()\
           """.formatted(functionName);
@@ -474,8 +442,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
 
     try (Connection connection = dataSource.getConnection()) {
       connection.setAutoCommit(false);
-      try (PreparedStatement statement = connection.prepareStatement(
-          insertTriggerRequestSql)) {
+      try (PreparedStatement statement = connection.prepareStatement(insertTriggerRequestSql)) {
         statement.setString(1, tenantId);
         statement.setString(2, id);
         statement.setLong(3, workflowDefinitionId);
@@ -498,10 +465,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
 
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
     while (System.nanoTime() < deadline) {
-      Integer waiting = jdbcTemplate.queryForObject(
-          selectCountSql,
-          Integer.class,
-          blockerPid);
+      Integer waiting = jdbcTemplate.queryForObject(selectCountSql, Integer.class, blockerPid);
       if (waiting != null && waiting > 0) return;
       Thread.sleep(10);
     }
@@ -529,29 +493,27 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
           select ?, id, ?, 'HOLIDAY', 'upstream holiday', 'CALENDAR'
           from batch.business_calendar where tenant_id = ? and calendar_code = 'CAL_HOLIDAY_UP'
           """;
-  final String insertCalendarDependencySql = """
+    final String insertCalendarDependencySql = """
       insert into batch.calendar_dependency (tenant_id, upstream_code, downstream_code, rule, enabled)\s\
-      values (?, 'CAL_HOLIDAY_UP', 'CAL_HOLIDAY_DOWN', 'WAIT_SETTLED', true)\
+      values (?, 'CAL_HOLIDAY_UP', 'cal_holiday_down', 'WAIT_SETTLED', true)\
       """;
-  final String selectWaitStatusSql = """
+    final String selectWaitStatusSql = """
       select wait_status, blocked_reason, manual_action from batch.calendar_dependency_wait where tenant_id = ?\s\
-      and calendar_code = 'CAL_HOLIDAY_DOWN' and biz_date = ?\
+      and calendar_code = 'cal_holiday_down' and biz_date = ?\
       """;
-  final String selectDayStatusSql = """
+    final String selectDayStatusSql = """
       select day_status, operated_by, operation_reason from batch.batch_day_instance where tenant_id = ?\s\
-      and calendar_code = 'CAL_HOLIDAY_DOWN' and biz_date = ?\
+      and calendar_code = 'cal_holiday_down' and biz_date = ?\
       """;
-  final String selectWaitStatusSql2 = """
+    final String selectWaitStatusSql2 = """
       select wait_status, manual_operator_id, manual_reason from batch.calendar_dependency_wait\s\
-      where tenant_id = ? and calendar_code = 'CAL_HOLIDAY_DOWN' and biz_date = ?\
+      where tenant_id = ? and calendar_code = 'cal_holiday_down' and biz_date = ?\
       """;
 
     insertCalendar("CAL_HOLIDAY_UP", "Asia/Shanghai", "SKIP");
-    insertCalendar("CAL_HOLIDAY_DOWN", "Asia/Shanghai");
+    insertCalendar("cal_holiday_down", "Asia/Shanghai");
     jdbcTemplate.update(insertCalendarHolidaySql, TENANT, BIZ, TENANT);
-    jdbcTemplate.update(
-        insertCalendarDependencySql,
-        TENANT);
+    jdbcTemplate.update(insertCalendarDependencySql, TENANT);
     Instant now = BIZ.atTime(23, 0).atZone(ZoneId.of("Asia/Shanghai")).toInstant();
 
     scheduler.openDueBatchDays(now);
@@ -563,10 +525,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     // 按最新的持久化调度状态协调 Quartz，不改写该状态。
     // 只确保存在持久化恢复目标；不要启用或注册主调度。
     scheduler.openDueBatchDays(now.plusSeconds(1));
-    Map<String, Object> waiting = jdbcTemplate.queryForMap(
-        selectWaitStatusSql,
-        TENANT,
-        BIZ);
+    Map<String, Object> waiting = jdbcTemplate.queryForMap(selectWaitStatusSql, TENANT, BIZ);
     assertThat(waiting.get("wait_status")).isEqualTo("WAITING");
     assertThat(waiting.get("blocked_reason").toString()).contains(":status=SKIPPED");
     assertThat(waiting.get("manual_action")).isNull();
@@ -576,18 +535,12 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
             TENANT, "CAL_HOLIDAY_DOWN", BIZ, "RELEASE", "ops-user", "holiday upstream waived"));
     scheduler.openDueBatchDays(now.plusSeconds(2));
 
-    Map<String, Object> downstream = jdbcTemplate.queryForMap(
-        selectDayStatusSql,
-        TENANT,
-        BIZ);
+    Map<String, Object> downstream = jdbcTemplate.queryForMap(selectDayStatusSql, TENANT, BIZ);
     assertThat(downstream.get("day_status")).isEqualTo("OPEN");
     assertThat(downstream.get("operated_by")).isEqualTo("ops-user");
     assertThat(downstream.get("operation_reason").toString())
         .contains("MANUAL_CALENDAR_DEPENDENCY_RELEASE:holiday upstream waived");
-    Map<String, Object> openedWait = jdbcTemplate.queryForMap(
-        selectWaitStatusSql2,
-        TENANT,
-        BIZ);
+    Map<String, Object> openedWait = jdbcTemplate.queryForMap(selectWaitStatusSql2, TENANT, BIZ);
     assertThat(openedWait.get("wait_status")).isEqualTo("OPENED");
     assertThat(openedWait.get("manual_operator_id")).isEqualTo("ops-user");
     assertThat(openedWait.get("manual_reason")).isEqualTo("holiday upstream waived");
@@ -610,25 +563,17 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
 
     insertCalendar("CAL_CATCHUP", "Asia/Shanghai");
     LocalDate lastOpened = BIZ.minusDays(20);
-    jdbcTemplate.update(
-        insertBatchDayInstanceSql,
-        TENANT,
-        lastOpened);
+    jdbcTemplate.update(insertBatchDayInstanceSql, TENANT, lastOpened);
 
     Instant recoveredAt = BIZ.atTime(23, 0).atZone(ZoneId.of("Asia/Shanghai")).toInstant();
     scheduler.openDueBatchDays(recoveredAt);
-    Integer firstScanCount = jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        TENANT);
+    Integer firstScanCount = jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT);
     assertThat(firstScanCount).isEqualTo(15);
     // 在单个租户、Workflow 和调度版本内有界读取尚未观察到的触发记录。
     scheduler.openDueBatchDays(recoveredAt.plusSeconds(60));
 
-    List<LocalDate> openedDates = jdbcTemplate.queryForList(
-        selectBizDateSql,
-        LocalDate.class,
-        TENANT);
+    List<LocalDate> openedDates =
+        jdbcTemplate.queryForList(selectBizDateSql, LocalDate.class, TENANT);
     assertThat(openedDates)
         .containsExactlyElementsOf(
             Stream.iterate(lastOpened, date -> date.plusDays(1)).limit(21).toList());
@@ -637,10 +582,10 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("数据库拒绝无同租户日历的 catch-up 控制并保护被引用日历")
   void shouldEnforceCatchupControlCalendarReference() {
-  final String insertBatchDayCatchupControlSql = """
+    final String insertBatchDayCatchupControlSql = """
       insert into batch.batch_day_catchup_control (tenant_id, calendar_code) values (?, ?)\
       """;
-  final String insertBatchDayCatchupControlSql2 = """
+    final String insertBatchDayCatchupControlSql2 = """
       insert into batch.batch_day_catchup_control (tenant_id, calendar_code) values (?, ?)\
       """;
     final String deleteBusinessCalendarSql = """
@@ -652,31 +597,19 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
 
     insertCalendar("CAL_CONTROL_FK", "Asia/Shanghai");
 
-    assertThatThrownBy(() -> jdbcTemplate.update(
-            insertBatchDayCatchupControlSql,
-            TENANT,
-            "CAL_CONTROL_ORPHAN"))
+    assertThatThrownBy(() ->
+            jdbcTemplate.update(insertBatchDayCatchupControlSql, TENANT, "CAL_CONTROL_ORPHAN"))
         .isInstanceOf(DataIntegrityViolationException.class);
-    assertThatThrownBy(() -> jdbcTemplate.update(
-            insertBatchDayCatchupControlSql,
-            "t2",
-            "CAL_CONTROL_FK"))
+    assertThatThrownBy(
+            () -> jdbcTemplate.update(insertBatchDayCatchupControlSql, "t2", "CAL_CONTROL_FK"))
         .isInstanceOf(DataIntegrityViolationException.class);
 
-    jdbcTemplate.update(
-        insertBatchDayCatchupControlSql2,
-        TENANT,
-        "CAL_CONTROL_FK");
-    assertThatThrownBy(() -> jdbcTemplate.update(
-            deleteBusinessCalendarSql,
-            TENANT,
-            "CAL_CONTROL_FK"))
+    jdbcTemplate.update(insertBatchDayCatchupControlSql2, TENANT, "CAL_CONTROL_FK");
+    assertThatThrownBy(
+            () -> jdbcTemplate.update(deleteBusinessCalendarSql, TENANT, "CAL_CONTROL_FK"))
         .isInstanceOf(DataIntegrityViolationException.class);
     assertThatThrownBy(() -> jdbcTemplate.update(
-            updateBusinessCalendarSql,
-            "CAL_CONTROL_RENAMED",
-            TENANT,
-            "CAL_CONTROL_FK"))
+            updateBusinessCalendarSql, "CAL_CONTROL_RENAMED", TENANT, "CAL_CONTROL_FK"))
         .isInstanceOf(DataIntegrityViolationException.class);
   }
 
@@ -690,14 +623,14 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
         delete from batch.business_calendar where tenant_id = ? and calendar_code = ?
     """;
 
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from pg_stat_activity where ? = any(pg_blocking_pids(pid)) and state = 'active'\s\
       and query ilike '%%batch_day_catchup_control%%'\
       """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.batch_day_catchup_control where tenant_id = ? and calendar_code = ?\
       """;
-  final String selectCountSql3 = """
+    final String selectCountSql3 = """
       select count(*) from batch.batch_day_catchup_control_event where tenant_id = ? and calendar_code = ?\
       """;
     final String deleteBatchDayCatchupControlEventSql = """
@@ -717,15 +650,14 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     try (Connection deleteTransaction = dataSource.getConnection()) {
       deleteTransaction.setAutoCommit(false);
       int deletePid;
-      try (PreparedStatement pidQuery =
-          deleteTransaction.prepareStatement(selectPgBackendPidSql)) {
+      try (PreparedStatement pidQuery = deleteTransaction.prepareStatement(selectPgBackendPidSql)) {
         try (ResultSet resultSet = pidQuery.executeQuery()) {
           assertThat(resultSet.next()).isTrue();
           deletePid = resultSet.getInt(1);
         }
       }
-      try (PreparedStatement deleteCalendar = deleteTransaction.prepareStatement(
-          deleteBusinessCalendarSql2)) {
+      try (PreparedStatement deleteCalendar =
+          deleteTransaction.prepareStatement(deleteBusinessCalendarSql2)) {
         deleteCalendar.setString(1, TENANT);
         deleteCalendar.setString(2, calendarCode);
         assertThat(deleteCalendar.executeUpdate()).isEqualTo(1);
@@ -735,13 +667,11 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
           () -> batchDayCatchupControlService.change(new BatchDayCatchupControlService.PauseCommand(
               TENANT, calendarCode, "PAUSE", "ops-race", "calendar deletion race")));
       try {
-        Awaitility.await()
-            .atMost(Duration.ofSeconds(10))
-            .untilAsserted(() -> {
-              Integer selectedPgStatActivityCount =
-                  jdbcTemplate.queryForObject(selectCountSql, Integer.class, deletePid);
-              assertThat(selectedPgStatActivityCount).isEqualTo(1);
-            });
+        Awaitility.await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+          Integer selectedPgStatActivityCount =
+              jdbcTemplate.queryForObject(selectCountSql, Integer.class, deletePid);
+          assertThat(selectedPgStatActivityCount).isEqualTo(1);
+        });
         deleteTransaction.commit();
       } catch (RuntimeException | Error failure) {
         deleteTransaction.rollback();
@@ -766,18 +696,9 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     } finally {
       executor.shutdownNow();
       assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
-      jdbcTemplate.update(
-          deleteBatchDayCatchupControlEventSql,
-          TENANT,
-          calendarCode);
-      jdbcTemplate.update(
-          deleteBatchDayCatchupControlSql,
-          TENANT,
-          calendarCode);
-      jdbcTemplate.update(
-          deleteBusinessCalendarSql,
-          TENANT,
-          calendarCode);
+      jdbcTemplate.update(deleteBatchDayCatchupControlEventSql, TENANT, calendarCode);
+      jdbcTemplate.update(deleteBatchDayCatchupControlSql, TENANT, calendarCode);
+      jdbcTemplate.update(deleteBusinessCalendarSql, TENANT, calendarCode);
     }
   }
 
@@ -799,10 +720,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     insertCalendar("CAL_PREVIEW", "Asia/Shanghai");
     LocalDate currentBizDate = LocalDate.now(ZoneId.of("Asia/Shanghai"));
     LocalDate cursorDate = currentBizDate.minusDays(3);
-    jdbcTemplate.update(
-        insertBatchDayOpenCursorSql,
-        TENANT,
-        cursorDate);
+    jdbcTemplate.update(insertBatchDayOpenCursorSql, TENANT, cursorDate);
 
     var preview = batchDayCatchupPreviewService.preview(TENANT, "CAL_PREVIEW");
 
@@ -812,15 +730,10 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
         .isNotEmpty()
         .first()
         .isEqualTo(cursorDate.plusDays(1));
-    LocalDate persistedCursor = jdbcTemplate.queryForObject(
-        selectLastScannedBizDateSql,
-        LocalDate.class,
-        TENANT);
+    LocalDate persistedCursor =
+        jdbcTemplate.queryForObject(selectLastScannedBizDateSql, LocalDate.class, TENANT);
     assertThat(persistedCursor).isEqualTo(cursorDate);
-    Integer batchDayCount = jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        TENANT);
+    Integer batchDayCount = jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT);
     assertThat(batchDayCount).isZero();
   }
 
@@ -839,12 +752,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     insertCalendar("CAL_HISTORY", "Asia/Shanghai");
     LocalDate from = LocalDate.of(2026, 4, 1);
     LocalDate through = LocalDate.of(2026, 4, 4);
-    jdbcTemplate.update(
-        insertBatchDayInstanceSql,
-        TENANT,
-        from,
-        TENANT,
-        from.plusDays(2));
+    jdbcTemplate.update(insertBatchDayInstanceSql, TENANT, from, TENANT, from.plusDays(2));
 
     var inventory =
         batchDayCatchupPreviewService.inventoryHistoricalGaps(TENANT, "CAL_HISTORY", from, through);
@@ -852,10 +760,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     assertThat(inventory.inspectedDateCount()).isEqualTo(4);
     assertThat(inventory.missingRecordCandidates())
         .containsExactly(from.plusDays(1), from.plusDays(3));
-    Integer persistedCount = jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        TENANT);
+    Integer persistedCount = jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT);
     assertThat(persistedCount).isEqualTo(2);
     assertThatThrownBy(() -> batchDayCatchupPreviewService.inventoryHistoricalGaps(
             TENANT, "CAL_HISTORY", from, from.plusDays(90)))
@@ -866,19 +771,19 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("管理员暂停后调度器保留 catch-up 游标,恢复后继续并保留不可变审计事件")
   void shouldPauseAndResumeCatchupWithTenantScopedAudit() {
-  final String insertBatchDayOpenCursorSql = """
+    final String insertBatchDayOpenCursorSql = """
       insert into batch.batch_day_open_cursor (tenant_id, calendar_code, last_scanned_biz_date)\s\
       values (?, 'CAL_PAUSE', ?)\
       """;
-  final String selectLastScannedBizDateSql = """
+    final String selectLastScannedBizDateSql = """
       select last_scanned_biz_date from batch.batch_day_open_cursor where tenant_id = ?\s\
       and calendar_code = 'CAL_PAUSE'\
       """;
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from batch.batch_day_instance where tenant_id = ? and calendar_code = 'CAL_PAUSE'\s\
       and biz_date = ?\
       """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.batch_day_catchup_control_event where tenant_id = ?\s\
       and calendar_code = 'CAL_PAUSE'\
       """;
@@ -890,25 +795,17 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
         ? localNow.toLocalDate().minusDays(1)
         : localNow.toLocalDate();
     LocalDate cursorDate = currentBizDate.minusDays(3);
-    jdbcTemplate.update(
-        insertBatchDayOpenCursorSql,
-        TENANT,
-        cursorDate);
+    jdbcTemplate.update(insertBatchDayOpenCursorSql, TENANT, cursorDate);
     var paused =
         batchDayCatchupControlService.change(new BatchDayCatchupControlService.PauseCommand(
             TENANT, "CAL_PAUSE", "PAUSE", "ops-1", "maintenance window"));
     scheduler.openDueBatchDays(now);
-    LocalDate cursorDuringPause = jdbcTemplate.queryForObject(
-        selectLastScannedBizDateSql,
-        LocalDate.class,
-        TENANT);
+    LocalDate cursorDuringPause =
+        jdbcTemplate.queryForObject(selectLastScannedBizDateSql, LocalDate.class, TENANT);
     assertThat(paused.paused()).isTrue();
     assertThat(cursorDuringPause).isEqualTo(cursorDate);
-    Integer currentDayCount = jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        TENANT,
-        currentBizDate);
+    Integer currentDayCount =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, currentBizDate);
     assertThat(currentDayCount).isEqualTo(1);
     assertThat(batchDayCatchupPreviewService.preview(TENANT, "CAL_PAUSE").catchupPaused())
         .isTrue();
@@ -916,10 +813,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     var resumed =
         batchDayCatchupControlService.change(new BatchDayCatchupControlService.PauseCommand(
             TENANT, "CAL_PAUSE", "RESUME", "ops-2", "maintenance complete"));
-    Integer eventCount = jdbcTemplate.queryForObject(
-        selectCountSql2,
-        Integer.class,
-        TENANT);
+    Integer eventCount = jdbcTemplate.queryForObject(selectCountSql2, Integer.class, TENANT);
     assertThat(resumed.paused()).isFalse();
     assertThat(eventCount).isEqualTo(2);
   }
@@ -937,30 +831,30 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
         END $$
         """;
 
-  final String grantUsageSql = """
+    final String grantUsageSql = """
       GRANT USAGE ON SCHEMA batch TO batch_catchup_rls_test
   """;
-  final String grantSelectSql = """
+    final String grantSelectSql = """
       GRANT SELECT ON ALL TABLES IN SCHEMA batch TO batch_catchup_rls_test
       """;
     // FOR KEY SHARE 即使不修改行，也要求至少一列 UPDATE 权限；仅补锁查询所需的列权限。
     final String grantInstanceReferenceLockSql = """
         GRANT UPDATE (updated_at) ON batch.job_instance TO batch_catchup_rls_test
         """;
-  final String grantInsertSql = """
+    final String grantInsertSql = """
       GRANT INSERT, UPDATE ON batch.batch_day_open_cursor TO batch_catchup_rls_test
       """;
-  final String grantInsertSql2 = """
+    final String grantInsertSql2 = """
       GRANT INSERT ON batch.batch_day_instance, batch.job_execution_log TO batch_catchup_rls_test\
       """;
-  final String grantInsertSql3 = """
+    final String grantInsertSql3 = """
       GRANT INSERT, UPDATE, DELETE ON batch.batch_day_catchup_control, batch.batch_day_catchup_control_event TO\s\
       batch_catchup_rls_test\
       """;
-  final String grantUpdateSql = """
+    final String grantUpdateSql = """
       GRANT UPDATE ON batch.calendar_dependency_wait TO batch_catchup_rls_test
       """;
-  final String grantUsageSql2 = """
+    final String grantUsageSql2 = """
       GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA batch TO batch_catchup_rls_test
       """;
     final String setLocalSql = """
@@ -969,26 +863,26 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
 
     final String selectCountSql = """
         select count(*) from batch.batch_day_catchup_control_event where tenant_id = ?\s\
-        and calendar_code = 'CAL_RLS'\
+        and calendar_code = 'cal_rls'\
         """;
     final String selectManualActionSql = """
         select manual_action from batch.calendar_dependency_wait where tenant_id = ?\s\
-        and calendar_code = 'CAL_RLS' and biz_date = ?\
+        and calendar_code = 'cal_rls' and biz_date = ?\
         """;
     final String selectLastScannedBizDateSql = """
         select last_scanned_biz_date from batch.batch_day_open_cursor where tenant_id = ?\s\
-        and calendar_code = 'CAL_RLS'\
+        and calendar_code = 'cal_rls'\
         """;
     final String selectDayStatusSql = """
-        select day_status from batch.batch_day_instance where tenant_id = ? and calendar_code = 'CAL_RLS'\s\
+        select day_status from batch.batch_day_instance where tenant_id = ? and calendar_code = 'cal_rls'\s\
         and biz_date = ?\
         """;
 
-    insertCalendar("CAL_RLS", "Asia/Shanghai");
+    insertCalendar("cal_rls", "Asia/Shanghai");
     Instant waitCreatedAt = Instant.now();
     calendarDependencyWaitMapper.upsertWaiting(CalendarDependencyWaitEntity.builder()
         .tenantId(TENANT)
-        .calendarCode("CAL_RLS")
+        .calendarCode("cal_rls")
         .bizDate(BIZ)
         .blockedReason("BLOCKED_BY_UPSTREAM_CALENDAR:CAL_UPSTREAM")
         .firstWaitingAt(waitCreatedAt)
@@ -998,17 +892,13 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
         .build());
     jdbcTemplate.execute(doStatementSql);
     jdbcTemplate.execute(grantUsageSql);
-    jdbcTemplate.execute(
-        grantSelectSql);
+    jdbcTemplate.execute(grantSelectSql);
     jdbcTemplate.execute(grantInstanceReferenceLockSql);
-    jdbcTemplate.execute(
-        grantInsertSql);
+    jdbcTemplate.execute(grantInsertSql);
     jdbcTemplate.execute(grantInsertSql2);
     jdbcTemplate.execute(grantInsertSql3);
-    jdbcTemplate.execute(
-        grantUpdateSql);
-    jdbcTemplate.execute(
-        grantUsageSql2);
+    jdbcTemplate.execute(grantUpdateSql);
+    jdbcTemplate.execute(grantUsageSql2);
 
     TransactionTemplate transaction = new TransactionTemplate(transactionManager);
     var paused = transaction.execute(status -> {
@@ -1016,7 +906,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
       return RlsTenantContextHolder.runWithTenant(
           TENANT,
           () -> batchDayCatchupControlService.change(new BatchDayCatchupControlService.PauseCommand(
-              TENANT, "CAL_RLS", "PAUSE", "ops-rls", "verify tenant RLS")));
+              TENANT, "cal_rls", "PAUSE", "ops-rls", "verify tenant RLS")));
     });
 
     assertThat(paused).isNotNull();
@@ -1027,9 +917,9 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     var observed = transaction.execute(status -> {
       jdbcTemplate.execute(setLocalSql);
       return RlsTenantContextHolder.runWithTenant(TENANT, () -> {
-        assertThat(batchDayCatchupControlService.current(TENANT, "CAL_RLS").paused())
+        assertThat(batchDayCatchupControlService.current(TENANT, "cal_rls").paused())
             .isTrue();
-        assertThat(batchDayCatchupPreviewService.preview(TENANT, "CAL_RLS").catchupPaused())
+        assertThat(batchDayCatchupPreviewService.preview(TENANT, "cal_rls").catchupPaused())
             .isTrue();
         return true;
       });
@@ -1038,11 +928,13 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     var governanceObserved = transaction.execute(status -> {
       jdbcTemplate.execute(setLocalSql);
       return RlsTenantContextHolder.runWithTenant(TENANT, () -> {
-        assertThat(calendarDependencyWaitGovernanceService.list(TENANT, "CAL_RLS", "WAITING", 10))
-            .hasSize(1);
-        calendarDependencyWaitGovernanceService.requestManualAction(
+        var waits = calendarDependencyWaitGovernanceService.list(TENANT, "CAL_RLS", "WAITING", 10);
+        assertThat(waits).hasSize(1);
+        assertThat(waits.get(0).calendarCode()).isEqualTo("cal_rls");
+        var updatedWait = calendarDependencyWaitGovernanceService.requestManualAction(
             new CalendarDependencyWaitGovernanceService.ManualActionCommand(
                 TENANT, "CAL_RLS", BIZ, "RELEASE", "ops-rls", "release after review"));
+        assertThat(updatedWait.calendarCode()).isEqualTo("cal_rls");
         return true;
       });
     });
@@ -1055,7 +947,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
       jdbcTemplate.execute(setLocalSql);
       return RlsTenantContextHolder.runWithTenant(TENANT, () -> {
         batchDayCatchupControlService.change(new BatchDayCatchupControlService.PauseCommand(
-            TENANT, "CAL_RLS", "RESUME", "ops-rls", "resume scheduler RLS verification"));
+            TENANT, "cal_rls", "RESUME", "ops-rls", "resume scheduler RLS verification"));
         scheduler.openDueBatchDays(BIZ.atTime(15, 0).toInstant(ZoneOffset.UTC));
         return true;
       });
@@ -1072,13 +964,13 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("NEXT_WORKDAY 提前创建滚动目标后仍推进原始日期游标")
   void shouldAdvanceRawDateCursorWhenHolidayRollCreatesFutureDay() {
-  final String insertCalendarHolidaySql = """
+    final String insertCalendarHolidaySql = """
           insert into batch.calendar_holiday
             (tenant_id, calendar_id, biz_date, day_type, holiday_name, scope)
           select ?, id, ?, 'HOLIDAY', 'roll start', 'CALENDAR'
           from batch.business_calendar where tenant_id = ? and calendar_code = 'CAL_ROLL_NEXT'
           """;
-  final String insertCalendarHolidaySql2 = """
+    final String insertCalendarHolidaySql2 = """
         insert into batch.calendar_holiday
           (tenant_id, calendar_id, biz_date, day_type, holiday_name, scope)
         select ?, id, ?, 'HOLIDAY', 'roll target holiday', 'CALENDAR'
@@ -1100,25 +992,17 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     insertCalendar("CAL_ROLL_NEXT", "Asia/Shanghai", "NEXT_WORKDAY");
     jdbcTemplate.update(insertCalendarHolidaySql, TENANT, BIZ, TENANT);
     jdbcTemplate.update(insertCalendarHolidaySql2, TENANT, BIZ.plusDays(1), TENANT);
-    jdbcTemplate.update(
-        insertBatchDayInstanceSql,
-        TENANT,
-        BIZ.minusDays(1));
+    jdbcTemplate.update(insertBatchDayInstanceSql, TENANT, BIZ.minusDays(1));
 
     Instant firstDate = BIZ.atTime(23, 0).atZone(ZoneId.of("Asia/Shanghai")).toInstant();
     scheduler.openDueBatchDays(firstDate);
-    Integer rolledRows = jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        TENANT,
-        BIZ.plusDays(2));
+    Integer rolledRows =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, BIZ.plusDays(2));
     assertThat(rolledRows).isEqualTo(1);
 
     scheduler.openDueBatchDays(firstDate.plusSeconds(86_400));
-    LocalDate cursor = jdbcTemplate.queryForObject(
-        selectLastScannedBizDateSql,
-        LocalDate.class,
-        TENANT);
+    LocalDate cursor =
+        jdbcTemplate.queryForObject(selectLastScannedBizDateSql, LocalDate.class, TENANT);
     assertThat(cursor).isEqualTo(BIZ.plusDays(1));
   }
 
@@ -1137,9 +1021,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     insertCalendar("CAL_CN", "Asia/Shanghai");
     insertCalendar("CAL_HK", "Asia/Hong_Kong");
     // HK 依赖 CN SETTLED
-    jdbcTemplate.update(
-        insertCalendarDependencySql,
-        TENANT);
+    jdbcTemplate.update(insertCalendarDependencySql, TENANT);
 
     // 第一轮：CN 还没 SETTLED → HK 应被 deferred / 不开
     Instant now = BIZ.atTime(23, 0).atZone(ZoneId.of("UTC")).toInstant();
@@ -1154,9 +1036,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     }
 
     // 模拟 CN 进 SETTLED
-    jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        TENANT);
+    jdbcTemplate.update(updateBatchDayInstanceSql, TENANT);
 
     // 第二轮：CN SETTLED 后 HK 应能开
     scheduler.openDueBatchDays(now.plusSeconds(1));
@@ -1168,81 +1048,70 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("日历依赖只允许引用同租户日历并阻止删除仍被引用的日历")
   void shouldEnforceSameTenantCalendarDependencyReferences() {
-  final String insertBusinessCalendarSql = """
+    final String insertBusinessCalendarSql = """
       insert into batch.business_calendar (tenant_id, calendar_code, calendar_name, timezone, cutoff_time,\s\
       enabled) values ('t2', ?, 'foreign', 'UTC', '22:00', true)\
       """;
-  final String insertCalendarDependencySql = """
+    final String insertCalendarDependencySql = """
       insert into batch.calendar_dependency (tenant_id, upstream_code, downstream_code, rule, enabled)\s\
       values (?, ?, 'CAL_DEP_DOWN', 'WAIT_SETTLED', true)\
       """;
-  final String insertCalendarDependencySql2 = """
+    final String insertCalendarDependencySql2 = """
       insert into batch.calendar_dependency (tenant_id, upstream_code, downstream_code, rule, enabled)\s\
       values (?, 'CAL_DEP_UP', ?, 'WAIT_SETTLED', true)\
       """;
-  final String deleteBusinessCalendarSql = """
+    final String deleteBusinessCalendarSql = """
       delete from batch.business_calendar where tenant_id = ? and calendar_code = ?
   """;
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from batch.calendar_dependency where tenant_id = ? and upstream_code = 'CAL_DEP_UP'\
       """;
-  final String deleteBusinessCalendarSql2 = """
+    final String deleteBusinessCalendarSql2 = """
       delete from batch.business_calendar where tenant_id = 't2' and calendar_code = ?
   """;
 
     String foreignCalendar = "CAL_DEP_FOREIGN_" + System.nanoTime();
     insertCalendar("CAL_DEP_UP", "Asia/Shanghai");
     insertCalendar("CAL_DEP_DOWN", "Asia/Shanghai");
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        foreignCalendar);
+    jdbcTemplate.update(insertBusinessCalendarSql, foreignCalendar);
 
     try {
-      assertThatThrownBy(() -> jdbcTemplate.update(
-              insertCalendarDependencySql,
-              TENANT,
-              foreignCalendar))
+      assertThatThrownBy(
+              () -> jdbcTemplate.update(insertCalendarDependencySql, TENANT, foreignCalendar))
           .isInstanceOf(DataIntegrityViolationException.class);
-      assertThatThrownBy(() -> jdbcTemplate.update(
-              insertCalendarDependencySql2,
-              TENANT,
-              foreignCalendar))
+      assertThatThrownBy(
+              () -> jdbcTemplate.update(insertCalendarDependencySql2, TENANT, foreignCalendar))
           .isInstanceOf(DataIntegrityViolationException.class);
 
       insertCalendarDependency("CAL_DEP_UP", "CAL_DEP_DOWN");
-      assertThatThrownBy(() -> jdbcTemplate.update(
-              deleteBusinessCalendarSql,
-              TENANT,
-              "CAL_DEP_UP"))
+      assertThatThrownBy(() -> jdbcTemplate.update(deleteBusinessCalendarSql, TENANT, "CAL_DEP_UP"))
           .isInstanceOf(DataIntegrityViolationException.class);
       Integer selectedCalendarDependencyCount =
           jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT);
       assertThat(selectedCalendarDependencyCount).isEqualTo(1);
     } finally {
-      jdbcTemplate.update(
-          deleteBusinessCalendarSql2,
-          foreignCalendar);
+      jdbcTemplate.update(deleteBusinessCalendarSql2, foreignCalendar);
     }
   }
 
   @Test
   @DisplayName("日历节假日直接写入必须与引用日历属于同一租户")
   void shouldEnforceSameTenantCalendarHolidayReference() {
-  final String selectIdSql = """
+    final String selectIdSql = """
       select id from batch.business_calendar where tenant_id = ? and calendar_code = ?
   """;
-  final String insertBusinessCalendarSql = """
+    final String insertBusinessCalendarSql = """
       insert into batch.business_calendar (tenant_id, calendar_code, calendar_name, timezone, cutoff_time,\s\
       enabled) values ('t2', ?, 'foreign', 'UTC', '22:00', true)\
       """;
-  final String selectIdSql2 = """
+    final String selectIdSql2 = """
       select id from batch.business_calendar where tenant_id = 't2' and calendar_code = ?
   """;
-  final String insertCalendarHolidaySql = """
+    final String insertCalendarHolidaySql = """
       insert into batch.calendar_holiday (tenant_id, calendar_id, biz_date, day_type, holiday_name, scope)\s\
       values (?, ?, ?, 'HOLIDAY', 'local holiday', 'CALENDAR')\
       """;
-  final String insertCalendarHolidaySql2 = """
+    final String insertCalendarHolidaySql2 = """
       insert into batch.calendar_holiday (tenant_id, calendar_id, biz_date, day_type, holiday_name, scope)\s\
       values (?, ?, ?, 'HOLIDAY', 'foreign holiday', 'CALENDAR')\
       """;
@@ -1255,40 +1124,20 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
 
     String foreignCalendar = "CAL_HOLIDAY_FOREIGN_" + System.nanoTime();
     insertCalendar("CAL_HOLIDAY_LOCAL", "Asia/Shanghai");
-    Long localCalendarId = jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class,
-        TENANT,
-        "CAL_HOLIDAY_LOCAL");
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        foreignCalendar);
-    Long foreignCalendarId = jdbcTemplate.queryForObject(
-        selectIdSql2,
-        Long.class,
-        foreignCalendar);
+    Long localCalendarId =
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, "CAL_HOLIDAY_LOCAL");
+    jdbcTemplate.update(insertBusinessCalendarSql, foreignCalendar);
+    Long foreignCalendarId = jdbcTemplate.queryForObject(selectIdSql2, Long.class, foreignCalendar);
 
     try {
-      jdbcTemplate.update(
-          insertCalendarHolidaySql,
-          TENANT,
-          localCalendarId,
-          BIZ);
+      jdbcTemplate.update(insertCalendarHolidaySql, TENANT, localCalendarId, BIZ);
 
       assertThatThrownBy(() -> jdbcTemplate.update(
-              insertCalendarHolidaySql2,
-              TENANT,
-              foreignCalendarId,
-              BIZ.plusDays(1)))
+              insertCalendarHolidaySql2, TENANT, foreignCalendarId, BIZ.plusDays(1)))
           .isInstanceOf(DataIntegrityViolationException.class);
     } finally {
-      jdbcTemplate.update(
-          deleteCalendarHolidaySql,
-          TENANT,
-          foreignCalendarId);
-      jdbcTemplate.update(
-          deleteBusinessCalendarSql,
-          foreignCalendar);
+      jdbcTemplate.update(deleteCalendarHolidaySql, TENANT, foreignCalendarId);
+      jdbcTemplate.update(deleteBusinessCalendarSql, foreignCalendar);
     }
   }
 
@@ -1298,39 +1147,39 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     final String insertCalendarGroupSql = """
         insert into batch.calendar_group (tenant_id, group_code) values (?, ?), (?, ?), (?, ?)\
         """;
-  final String selectIdSql = """
+    final String selectIdSql = """
       select id from batch.business_calendar where tenant_id = ? and calendar_code = ?
   """;
-  final String updateBusinessCalendarSql = """
+    final String updateBusinessCalendarSql = """
       update batch.business_calendar set group_code = ? where tenant_id = ? and id = ?
   """;
-  final String insertCalendarHolidaySql = """
+    final String insertCalendarHolidaySql = """
       insert into batch.calendar_holiday (tenant_id, calendar_id, biz_date, day_type, holiday_name, scope,\s\
       group_code) values (?, ?, ?, 'HOLIDAY', 'valid group holiday', 'GROUP', ?)\
       """;
-  final String updateBusinessCalendarSql2 = """
+    final String updateBusinessCalendarSql2 = """
       update batch.business_calendar set group_code = ? where tenant_id = ? and id = ?\
       """;
-  final String insertCalendarHolidaySql2 = """
+    final String insertCalendarHolidaySql2 = """
       insert into batch.calendar_holiday (tenant_id, calendar_id, biz_date, day_type, holiday_name, scope,\s\
       group_code) values (?, ?, ?, 'HOLIDAY', 'foreign group holiday', 'GROUP', ?)\
       """;
-  final String insertCalendarHolidaySql3 = """
+    final String insertCalendarHolidaySql3 = """
       insert into batch.calendar_holiday (tenant_id, calendar_id, biz_date, day_type, holiday_name, scope,\s\
       group_code) values (?, ?, ?, 'HOLIDAY', 'wrong representative', 'GROUP', ?)\
       """;
-  final String deleteCalendarGroupSql = """
+    final String deleteCalendarGroupSql = """
       delete from batch.calendar_group where tenant_id = ? and group_code = ?
   """;
-  final String deleteCalendarHolidaySql = """
+    final String deleteCalendarHolidaySql = """
       delete from batch.calendar_holiday where tenant_id = ? and (group_code in (?, ?, ?)\s\
       or calendar_id in (select id from batch.business_calendar where tenant_id = ?\s\
       and calendar_code in (?, ?)))\
       """;
-  final String deleteBusinessCalendarSql = """
+    final String deleteBusinessCalendarSql = """
       delete from batch.business_calendar where tenant_id = ? and calendar_code in (?, ?)
   """;
-  final String deleteCalendarGroupSql2 = """
+    final String deleteCalendarGroupSql2 = """
       delete from batch.calendar_group where (tenant_id = ? and group_code in (?, ?)) or (tenant_id = 't2'\s\
       and group_code = ?)\
       """;
@@ -1342,66 +1191,27 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     String otherCalendar = "CAL_GROUP_OTHER_" + System.nanoTime();
     try {
       jdbcTemplate.update(
-          insertCalendarGroupSql,
-          TENANT,
-          localGroup,
-          TENANT,
-          otherGroup,
-          "t2",
-          foreignGroup);
+          insertCalendarGroupSql, TENANT, localGroup, TENANT, otherGroup, "t2", foreignGroup);
       insertCalendar(localCalendar, "Asia/Shanghai");
       insertCalendar(otherCalendar, "Asia/Shanghai");
-      Long localCalendarId = jdbcTemplate.queryForObject(
-          selectIdSql,
-          Long.class,
-          TENANT,
-          localCalendar);
-      Long otherCalendarId = jdbcTemplate.queryForObject(
-          selectIdSql,
-          Long.class,
-          TENANT,
-          otherCalendar);
-      jdbcTemplate.update(
-          updateBusinessCalendarSql,
-          localGroup,
-          TENANT,
-          localCalendarId);
-      jdbcTemplate.update(
-          updateBusinessCalendarSql,
-          otherGroup,
-          TENANT,
-          otherCalendarId);
-      jdbcTemplate.update(
-          insertCalendarHolidaySql,
-          TENANT,
-          localCalendarId,
-          BIZ,
-          localGroup);
+      Long localCalendarId =
+          jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, localCalendar);
+      Long otherCalendarId =
+          jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, otherCalendar);
+      jdbcTemplate.update(updateBusinessCalendarSql, localGroup, TENANT, localCalendarId);
+      jdbcTemplate.update(updateBusinessCalendarSql, otherGroup, TENANT, otherCalendarId);
+      jdbcTemplate.update(insertCalendarHolidaySql, TENANT, localCalendarId, BIZ, localGroup);
 
       assertThatThrownBy(() -> jdbcTemplate.update(
-              updateBusinessCalendarSql2,
-              foreignGroup,
-              TENANT,
-              localCalendarId))
+              updateBusinessCalendarSql2, foreignGroup, TENANT, localCalendarId))
           .isInstanceOf(DataIntegrityViolationException.class);
       assertThatThrownBy(() -> jdbcTemplate.update(
-              insertCalendarHolidaySql2,
-              TENANT,
-              localCalendarId,
-              BIZ.plusDays(1),
-              foreignGroup))
+              insertCalendarHolidaySql2, TENANT, localCalendarId, BIZ.plusDays(1), foreignGroup))
           .isInstanceOf(DataIntegrityViolationException.class);
       assertThatThrownBy(() -> jdbcTemplate.update(
-              insertCalendarHolidaySql3,
-              TENANT,
-              otherCalendarId,
-              BIZ.plusDays(2),
-              localGroup))
+              insertCalendarHolidaySql3, TENANT, otherCalendarId, BIZ.plusDays(2), localGroup))
           .isInstanceOf(DataIntegrityViolationException.class);
-      assertThatThrownBy(() -> jdbcTemplate.update(
-              deleteCalendarGroupSql,
-              TENANT,
-              localGroup))
+      assertThatThrownBy(() -> jdbcTemplate.update(deleteCalendarGroupSql, TENANT, localGroup))
           .isInstanceOf(DataIntegrityViolationException.class);
     } finally {
       jdbcTemplate.update(
@@ -1413,17 +1223,8 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
           TENANT,
           localCalendar,
           otherCalendar);
-      jdbcTemplate.update(
-          deleteBusinessCalendarSql,
-          TENANT,
-          localCalendar,
-          otherCalendar);
-      jdbcTemplate.update(
-          deleteCalendarGroupSql2,
-          TENANT,
-          localGroup,
-          otherGroup,
-          foreignGroup);
+      jdbcTemplate.update(deleteBusinessCalendarSql, TENANT, localCalendar, otherCalendar);
+      jdbcTemplate.update(deleteCalendarGroupSql2, TENANT, localGroup, otherGroup, foreignGroup);
     }
   }
 
@@ -1503,12 +1304,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
           throw new IllegalStateException(
               "calendar dependency writers did not synchronize", failure);
         }
-        return jdbcTemplate.update(
-                insertCalendarDependencySql,
-                TENANT,
-                upstream,
-                downstream)
-            == 1;
+        return jdbcTemplate.update(insertCalendarDependencySql, TENANT, upstream, downstream) == 1;
       }));
     } catch (DataIntegrityViolationException rejectedCycle) {
       return false;
@@ -1525,11 +1321,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
         values (?, ?, ?, 'WAIT_SETTLED', true)\
         """;
 
-    jdbcTemplate.update(
-        insertCalendarDependencySql,
-        TENANT,
-        upstream,
-        downstream);
+    jdbcTemplate.update(insertCalendarDependencySql, TENANT, upstream, downstream);
   }
 
   @Test
@@ -1539,19 +1331,19 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
         insert into batch.calendar_dependency (tenant_id, upstream_code, downstream_code, rule, enabled)\s\
         values (?, 'CAL_CN', 'CAL_HK', 'WAIT_SETTLED', true)\
         """;
-  final String selectWaitStatusSql = """
+    final String selectWaitStatusSql = """
       select wait_status, biz_date from batch.calendar_dependency_wait where tenant_id = ?\s\
       and calendar_code = 'CAL_HK' and biz_date = ?\
       """;
-  final String updateBatchDayInstanceSql = """
+    final String updateBatchDayInstanceSql = """
       update batch.batch_day_instance set day_status = 'SETTLED', settled_at = current_timestamp\s\
       where tenant_id = ? and calendar_code = 'CAL_CN' and biz_date = ?\
       """;
-  final String selectDayStatusSql = """
+    final String selectDayStatusSql = """
       select day_status from batch.batch_day_instance where tenant_id = ? and calendar_code = 'CAL_HK'\s\
       and biz_date = ?\
       """;
-  final String selectWaitStatusSql2 = """
+    final String selectWaitStatusSql2 = """
       select wait_status from batch.calendar_dependency_wait where tenant_id = ? and calendar_code = 'CAL_HK'\s\
       and biz_date = ?\
       """;
@@ -1562,41 +1354,27 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
 
     insertCalendar("CAL_CN", "Asia/Shanghai");
     insertCalendar("CAL_HK", "Asia/Shanghai");
-    jdbcTemplate.update(
-        insertCalendarDependencySql,
-        TENANT);
+    jdbcTemplate.update(insertCalendarDependencySql, TENANT);
     Instant firstOpen = BIZ.atTime(23, 0).atZone(ZoneId.of("Asia/Shanghai")).toInstant();
 
     scheduler.openDueBatchDays(firstOpen);
 
-    Map<String, Object> waitBefore = jdbcTemplate.queryForMap(
-        selectWaitStatusSql,
-        TENANT,
-        BIZ);
+    Map<String, Object> waitBefore = jdbcTemplate.queryForMap(selectWaitStatusSql, TENANT, BIZ);
     assertThat(waitBefore.get("wait_status")).isEqualTo("WAITING");
     RlsTenantContextHolder.runWithTenant(
         TENANT,
         () -> assertThat(calendarDependencyWaitMapper.countWaitingByTenantCalendarBizDate(
                 TENANT, "CAL_HK", BIZ))
             .isEqualTo(1));
-    jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        TENANT,
-        BIZ);
+    jdbcTemplate.update(updateBatchDayInstanceSql, TENANT, BIZ);
 
     Instant afterCutoff =
         BIZ.plusDays(1).atTime(23, 0).atZone(ZoneId.of("Asia/Shanghai")).toInstant();
     scheduler.openDueBatchDays(afterCutoff);
 
-    Map<String, Object> recoveredDay = jdbcTemplate.queryForMap(
-        selectDayStatusSql,
-        TENANT,
-        BIZ);
+    Map<String, Object> recoveredDay = jdbcTemplate.queryForMap(selectDayStatusSql, TENANT, BIZ);
     assertThat(recoveredDay.get("day_status")).isEqualTo("OPEN");
-    Map<String, Object> waitAfter = jdbcTemplate.queryForMap(
-        selectWaitStatusSql2,
-        TENANT,
-        BIZ);
+    Map<String, Object> waitAfter = jdbcTemplate.queryForMap(selectWaitStatusSql2, TENANT, BIZ);
     assertThat(waitAfter.get("wait_status")).isEqualTo("OPENED");
     RlsTenantContextHolder.runWithTenant(
         TENANT,
@@ -1604,11 +1382,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
                 TENANT, "CAL_HK", BIZ))
             .isZero());
     scheduler.openDueBatchDays(afterCutoff);
-    Integer recoveredRows = jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        TENANT,
-        BIZ);
+    Integer recoveredRows = jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, BIZ);
     assertThat(recoveredRows).isEqualTo(1);
   }
 
@@ -1626,9 +1400,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
 
     insertCalendar("CAL_CN", "Asia/Shanghai");
     insertCalendar("CAL_HK", "Asia/Shanghai");
-    jdbcTemplate.update(
-        insertCalendarDependencySql,
-        TENANT);
+    jdbcTemplate.update(insertCalendarDependencySql, TENANT);
     Instant now = BIZ.atTime(23, 0).atZone(ZoneId.of("Asia/Shanghai")).toInstant();
 
     CompletableFuture<Void> first =
@@ -1637,11 +1409,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
         CompletableFuture.runAsync(() -> scheduler.openDueBatchDays(now));
     CompletableFuture.allOf(first, second).get(30, TimeUnit.SECONDS);
 
-    Integer waitRows = jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        TENANT,
-        BIZ);
+    Integer waitRows = jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, BIZ);
     assertThat(waitRows).isEqualTo(1);
   }
 
@@ -1667,31 +1435,20 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
 
     insertCalendar("CAL_DEP_PENDING", "Asia/Shanghai");
     insertCalendar("CAL_TIMEOUT", "Asia/Shanghai");
-    jdbcTemplate.update(
-        insertCalendarDependencySql,
-        TENANT);
+    jdbcTemplate.update(insertCalendarDependencySql, TENANT);
     Instant now = Instant.now();
     scheduler.openDueBatchDays(now);
     var localNow = now.atZone(ZoneId.of("Asia/Shanghai"));
     LocalDate bizDate = localNow.toLocalTime().isBefore(LocalTime.of(22, 0))
         ? localNow.toLocalDate().minusDays(1)
         : localNow.toLocalDate();
-    jdbcTemplate.update(
-        updateCalendarDependencyWaitSql,
-        TENANT,
-        bizDate);
+    jdbcTemplate.update(updateCalendarDependencyWaitSql, TENANT, bizDate);
 
     scheduler.openDueBatchDays(now);
     scheduler.openDueBatchDays(now.plusSeconds(1));
 
-    Integer alertRows = jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        TENANT);
-    Map<String, Object> wait = jdbcTemplate.queryForMap(
-        selectWaitStatusSql,
-        TENANT,
-        bizDate);
+    Integer alertRows = jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT);
+    Map<String, Object> wait = jdbcTemplate.queryForMap(selectWaitStatusSql, TENANT, bizDate);
     assertThat(alertRows).isEqualTo(1);
     assertThat(wait.get("wait_status")).isEqualTo("WAITING");
     assertThat(wait.get("timeout_alerted_at")).isNotNull();
@@ -1700,27 +1457,24 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("Console 人工 RELEASE 和 SKIP 请求经 Orchestrator 调度器审计落实")
   void shouldApplyAuditedManualCalendarDependencyActions() {
-  final String insertCalendarDependencySql = """
+    final String insertCalendarDependencySql = """
       insert into batch.calendar_dependency (tenant_id, upstream_code, downstream_code, rule, enabled)\s\
-      values (?, 'CAL_DEP_PENDING', 'CAL_MANUAL_RELEASE', 'WAIT_SETTLED', true), (?, 'CAL_DEP_PENDING',\s\
-      'CAL_MANUAL_SKIP', 'WAIT_SETTLED', true)\
+      values (?, 'cal_dep_pending', 'cal_manual_release', 'WAIT_SETTLED', true), (?, 'cal_dep_pending',\s\
+      'cal_manual_skip', 'WAIT_SETTLED', true)\
       """;
-  final String selectDayStatusSql = """
+    final String selectDayStatusSql = """
       select day_status, operated_by, operation_reason from batch.batch_day_instance where tenant_id = ?\s\
-      and calendar_code = 'CAL_MANUAL_RELEASE' and biz_date = ?\
+      and calendar_code = 'cal_manual_release' and biz_date = ?\
       """;
-  final String selectDayStatusSql2 = """
+    final String selectDayStatusSql2 = """
       select day_status, operated_by, operation_reason from batch.batch_day_instance where tenant_id = ?\s\
-      and calendar_code = 'CAL_MANUAL_SKIP' and biz_date = ?\
+      and calendar_code = 'cal_manual_skip' and biz_date = ?\
       """;
 
-    insertCalendar("CAL_DEP_PENDING", "Asia/Shanghai");
-    insertCalendar("CAL_MANUAL_RELEASE", "Asia/Shanghai");
-    insertCalendar("CAL_MANUAL_SKIP", "Asia/Shanghai");
-    jdbcTemplate.update(
-        insertCalendarDependencySql,
-        TENANT,
-        TENANT);
+    insertCalendar("cal_dep_pending", "Asia/Shanghai");
+    insertCalendar("cal_manual_release", "Asia/Shanghai");
+    insertCalendar("cal_manual_skip", "Asia/Shanghai");
+    jdbcTemplate.update(insertCalendarDependencySql, TENANT, TENANT);
     Instant now = Instant.now();
     var localNow = now.atZone(ZoneId.of("Asia/Shanghai"));
     LocalDate bizDate = localNow.toLocalTime().isBefore(LocalTime.of(22, 0))
@@ -1739,18 +1493,12 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
 
     scheduler.openDueBatchDays(now.plusSeconds(2));
 
-    Map<String, Object> releasedDay = jdbcTemplate.queryForMap(
-        selectDayStatusSql,
-        TENANT,
-        bizDate);
+    Map<String, Object> releasedDay = jdbcTemplate.queryForMap(selectDayStatusSql, TENANT, bizDate);
     assertThat(releasedDay.get("day_status")).isEqualTo("OPEN");
     assertThat(releasedDay.get("operated_by")).isEqualTo("ops-user");
     assertThat(releasedDay.get("operation_reason").toString())
         .contains("MANUAL_CALENDAR_DEPENDENCY_RELEASE:upstream approved");
-    Map<String, Object> skippedDay = jdbcTemplate.queryForMap(
-        selectDayStatusSql2,
-        TENANT,
-        bizDate);
+    Map<String, Object> skippedDay = jdbcTemplate.queryForMap(selectDayStatusSql2, TENANT, bizDate);
     assertThat(skippedDay.get("day_status")).isEqualTo("SKIPPED");
     assertThat(skippedDay.get("operated_by")).isEqualTo("ops-user");
     assertThat(skippedDay.get("operation_reason").toString())
@@ -1777,7 +1525,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     try {
       insertSensorFile(oldFile, BIZ.minusDays(1), groupCode, "TRIGGERED", now.minusHours(2));
       insertSensorFile(currentFile, BIZ, groupCode, "WAITING_ARRIVAL", now.minusHours(1));
-      Map<String, Object> incomplete = RlsTenantContextHolder.runWithTenant(
+      SensorFileArrivalView incomplete = RlsTenantContextHolder.runWithTenant(
           TENANT,
           () -> sensorFileArrivalMapper.selectLatestArrival(
               SensorFileArrivalLatestArrivalQuery.builder()
@@ -1792,11 +1540,8 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
                   .build()));
       assertThat(incomplete).isNull();
 
-      jdbcTemplate.update(
-          updateFileRecordSql,
-          TENANT,
-          currentFile);
-      Map<String, Object> matched = RlsTenantContextHolder.runWithTenant(
+      jdbcTemplate.update(updateFileRecordSql, TENANT, currentFile);
+      SensorFileArrivalView matched = RlsTenantContextHolder.runWithTenant(
           TENANT,
           () -> sensorFileArrivalMapper.selectLatestArrival(
               SensorFileArrivalLatestArrivalQuery.builder()
@@ -1809,13 +1554,10 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
                   .workflowDefinitionId(null)
                   .requireCompleteGroup(true)
                   .build()));
-      assertThat(matched).containsEntry("fileName", currentFile);
-      assertThat(matched.get("bizDate").toString()).isEqualTo(BIZ.toString());
+      assertThat(matched.fileName()).isEqualTo(currentFile);
+      assertThat(matched.bizDate().toString()).isEqualTo(BIZ.toString());
     } finally {
-      jdbcTemplate.update(
-          deleteFileRecordSql,
-          TENANT,
-          filePrefix + "%");
+      jdbcTemplate.update(deleteFileRecordSql, TENANT, filePrefix + "%");
     }
   }
 
@@ -1844,13 +1586,9 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     Long waitingWorkflowId = insertSensorWorkflow(waitingWorkflowCode);
     try {
       insertSensorFile(fileName, BIZ, groupCode, "TRIGGERED", now);
-      jdbcTemplate.update(
-          updateFileRecordSql,
-          sourceWorkflowCode,
-          TENANT,
-          fileName);
+      jdbcTemplate.update(updateFileRecordSql, sourceWorkflowCode, TENANT, fileName);
 
-      Map<String, Object> wrongTarget = RlsTenantContextHolder.runWithTenant(
+      SensorFileArrivalView wrongTarget = RlsTenantContextHolder.runWithTenant(
           TENANT,
           () -> sensorFileArrivalMapper.selectLatestArrival(
               SensorFileArrivalLatestArrivalQuery.builder()
@@ -1865,7 +1603,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
                   .build()));
       assertThat(wrongTarget).isNull();
 
-      Map<String, Object> matchingTarget = RlsTenantContextHolder.runWithTenant(
+      SensorFileArrivalView matchingTarget = RlsTenantContextHolder.runWithTenant(
           TENANT,
           () -> sensorFileArrivalMapper.selectLatestArrival(
               SensorFileArrivalLatestArrivalQuery.builder()
@@ -1878,15 +1616,10 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
                   .workflowDefinitionId(sourceWorkflowId)
                   .requireCompleteGroup(true)
                   .build()));
-      assertThat(matchingTarget).containsEntry("fileName", fileName);
+      assertThat(matchingTarget.fileName()).isEqualTo(fileName);
     } finally {
-      jdbcTemplate.update(
-          deleteFileRecordSql, TENANT, fileName);
-      jdbcTemplate.update(
-          deleteWorkflowDefinitionSql,
-          TENANT,
-          sourceWorkflowId,
-          waitingWorkflowId);
+      jdbcTemplate.update(deleteFileRecordSql, TENANT, fileName);
+      jdbcTemplate.update(deleteWorkflowDefinitionSql, TENANT, sourceWorkflowId, waitingWorkflowId);
     }
   }
 
@@ -1897,11 +1630,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
         """;
 
     return jdbcTemplate.queryForObject(
-        insertWorkflowDefinitionSql,
-        Long.class,
-        TENANT,
-        workflowCode,
-        workflowCode);
+        insertWorkflowDefinitionSql, Long.class, TENANT, workflowCode, workflowCode);
   }
 
   private void insertSensorFile(
@@ -1910,14 +1639,14 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
       String groupCode,
       String arrivalState,
       OffsetDateTime createdAt) {
-        final String insertFileRecordSql = """
+    final String insertFileRecordSql = """
             insert into batch.file_record (tenant_id, file_category, file_name, file_format_type, storage_type,\s\
             storage_path, source_type, file_status, biz_date, metadata_json, created_at)\s\
             values (?, 'INPUT', ?, 'DELIMITED', 'S3', ?, 'SFTP', 'RECEIVED', ?,\s\
             jsonb_build_object('fileGroupCode', ?, 'arrivalState', ?), ?)\
             """;
 
-        jdbcTemplate.update(
+    jdbcTemplate.update(
         insertFileRecordSql,
         TENANT,
         fileName,
@@ -1979,13 +1708,11 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
           GRANT USAGE ON SCHEMA batch TO %s
       """.formatted(role);
       jdbcTemplate.execute(grantUsageSql);
-      final String grantSelectSql =
-          """
+      final String grantSelectSql = """
           GRANT SELECT, INSERT ON batch.calendar_dependency_wait TO %s
       """.formatted(role);
       jdbcTemplate.execute(grantSelectSql);
-      final String grantBatchDayCursorSql =
-          """
+      final String grantBatchDayCursorSql = """
           GRANT SELECT, INSERT ON batch.batch_day_open_cursor TO %s
       """.formatted(role);
       jdbcTemplate.execute(grantBatchDayCursorSql);
@@ -1994,22 +1721,10 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
           """.formatted(role);
       jdbcTemplate.execute(grantWaitSequenceUsageSql);
       insertCalendar("CAL_RLS", "Asia/Shanghai");
-      jdbcTemplate.update(
-          insertCalendarDependencyWaitSql,
-          TENANT,
-          BIZ);
-      jdbcTemplate.update(
-          insertCalendarDependencyWaitSql,
-          "t2",
-          BIZ);
-      jdbcTemplate.update(
-          insertBatchDayOpenCursorSql,
-          TENANT,
-          BIZ);
-      jdbcTemplate.update(
-          insertBatchDayOpenCursorSql,
-          "t2",
-          BIZ);
+      jdbcTemplate.update(insertCalendarDependencyWaitSql, TENANT, BIZ);
+      jdbcTemplate.update(insertCalendarDependencyWaitSql, "t2", BIZ);
+      jdbcTemplate.update(insertBatchDayOpenCursorSql, TENANT, BIZ);
+      jdbcTemplate.update(insertBatchDayOpenCursorSql, "t2", BIZ);
 
       jdbcTemplate.execute((ConnectionCallback<Void>) connection -> {
         connection.setAutoCommit(false);
@@ -2022,20 +1737,16 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
               SELECT set_config('app.tenant_id', '%s', true)
               """.formatted(TENANT);
           statement.execute(selectSetConfigSql);
-          try (var result = statement.executeQuery(
-              selectCountSql)) {
+          try (var result = statement.executeQuery(selectCountSql)) {
             assertThat(result.next()).isTrue();
             assertThat(result.getLong(1)).isEqualTo(1L);
           }
-          try (var result = statement.executeQuery(
-              selectCountSql2)) {
+          try (var result = statement.executeQuery(selectCountSql2)) {
             assertThat(result.next()).isTrue();
             assertThat(result.getLong(1)).isEqualTo(1L);
           }
           statement.execute(savepointBeforeWaitRlsViolationSql);
-          assertThatThrownBy(
-                  () -> statement.executeUpdate(
-                      insertCalendarDependencyWaitSql2))
+          assertThatThrownBy(() -> statement.executeUpdate(insertCalendarDependencyWaitSql2))
               .isInstanceOf(SQLException.class)
               .hasMessageContaining("row-level security");
           statement.execute(rollbackToSql);
@@ -2106,14 +1817,9 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
         """;
 
     String cutoffJson = "{\"default\":\"22:00\",\"weekdayPattern\":{\"THURSDAY\":\"12:00\"}}";
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        TENANT,
-        cutoffJson);
+    jdbcTemplate.update(insertBusinessCalendarSql, TENANT, cutoffJson);
 
-    Map<String, Object> row = jdbcTemplate.queryForMap(
-        selectCalendarCodeSql,
-        TENANT);
+    Map<String, Object> row = jdbcTemplate.queryForMap(selectCalendarCodeSql, TENANT);
 
     assertThat(row.get("cutoff_schedule").toString())
         .contains("default")
@@ -2134,13 +1840,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
         holiday_roll_rule, enabled) values (?, ?, ?, ?, '22:00', ?, true)\
         """;
 
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        TENANT,
-        code,
-        code,
-        timezone,
-        holidayRollRule);
+    jdbcTemplate.update(insertBusinessCalendarSql, TENANT, code, code, timezone, holidayRollRule);
   }
 
   private Map<String, Object> selectFirstBatchDay(String calendarCode) {
@@ -2149,10 +1849,8 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
         order by biz_date desc, id desc limit 1\
         """;
 
-    List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-        selectStatementSql,
-        TENANT,
-        calendarCode);
+    List<Map<String, Object>> rows =
+        jdbcTemplate.queryForList(selectStatementSql, TENANT, calendarCode);
     return rows.isEmpty() ? null : rows.get(0);
   }
 }

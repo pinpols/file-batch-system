@@ -1,10 +1,9 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
-import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.TENANT_ID;
-import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.params;
-
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
+import io.github.pinpols.batch.worker.core.mapper.PlatformFileTemplateConfigView;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
@@ -21,8 +20,8 @@ public class PlatformFileTemplateRepository {
     if (!Texts.hasText(tenantId) || !Texts.hasText(templateCode)) {
       return Map.of();
     }
-    Map<String, Object> config = mapper.selectLatestTemplateConfig(
-        params(TENANT_ID, tenantId, "templateCode", templateCode, "templateType", templateType));
-    return config == null ? Map.of() : config;
+    PlatformFileTemplateConfigView config =
+        mapper.selectLatestTemplateConfig(tenantId, templateCode, templateType);
+    return EmptyChecks.isNull(config) ? Map.of() : config.toPluginValues();
   }
 }

@@ -146,7 +146,8 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
   private JobDefinitionEntity resolveExecutionDefinition(SchedulePlanCommand command) {
     JobDefinitionEntity jobDefinition = command.executionDefinition();
     if (EmptyChecks.isNull(jobDefinition)) {
-      jobDefinition = configCacheService.findEnabledJobDefinition(command.tenantId(), command.jobCode());
+      jobDefinition =
+          configCacheService.findEnabledJobDefinition(command.tenantId(), command.jobCode());
     } else {
       boolean executionDefinitionDoesNotMatchScheduleTarget =
           !Objects.equals(command.tenantId(), jobDefinition.tenantId())
@@ -186,8 +187,8 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
     ShardStrategy shardStrategy = jobDefinition == null
         ? ShardStrategy.NONE
         : ShardStrategy.fromCode(jobDefinition.shardStrategy());
-    int configuredMinPartitionCount = firstPositiveInt(
-        params.get("minPartitionCount"), params.get("minShardCount"));
+    int configuredMinPartitionCount =
+        firstPositiveInt(params.get("minPartitionCount"), params.get("minShardCount"));
     int minPartitionCount = Math.max(1, configuredMinPartitionCount);
     int configuredMaxPartitionCount = firstPositiveInt(
         params.get("maxPartitionLimit"),
@@ -276,7 +277,7 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
       if (value != null) {
         try {
           String rawValue = String.valueOf(value);
-      String normalizedValue = rawValue.trim();
+          String normalizedValue = rawValue.trim();
           int parsed = Integer.parseInt(normalizedValue);
           if (parsed > 0) {
             return parsed;
@@ -308,7 +309,7 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
       if (value != null) {
         try {
           String rawValue = String.valueOf(value);
-      String normalizedValue = rawValue.trim();
+          String normalizedValue = rawValue.trim();
           long parsed = Long.parseLong(normalizedValue);
           if (parsed >= 0) {
             return parsed;

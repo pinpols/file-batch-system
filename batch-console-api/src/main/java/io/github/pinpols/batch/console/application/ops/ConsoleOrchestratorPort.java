@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.console.application.ops;
 
-import io.github.pinpols.batch.console.application.ops.command.ForensicExportCommand;
-import io.github.pinpols.batch.console.application.ops.command.CalendarDependencyActionCommand;
-import io.github.pinpols.batch.console.application.ops.command.BatchDayOperationCommand;
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.application.contract.response.ConsoleReplayOperationResponse;
 import io.github.pinpols.batch.console.application.contract.response.ops.AssetPartitionReadinessResponse;
 import io.github.pinpols.batch.console.application.contract.response.ops.CapacityProfileResponse;
 import io.github.pinpols.batch.console.application.contract.response.ops.LineageEvidenceResponse;
+import io.github.pinpols.batch.console.application.ops.command.BatchDayOperationCommand;
+import io.github.pinpols.batch.console.application.ops.command.CalendarDependencyActionCommand;
+import io.github.pinpols.batch.console.application.ops.command.ForensicExportCommand;
+import io.github.pinpols.batch.console.application.ops.query.ConsolePersistentWaitQuery;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayCatchupPreviewResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayHistoricalGapInventoryResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayOperateResponse;
@@ -14,6 +16,7 @@ import io.github.pinpols.batch.console.application.ops.response.ConsoleCalendarD
 import io.github.pinpols.batch.console.application.ops.response.ConsoleInstanceActionResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleJobDependencyWaitResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsolePartitionActionResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsolePersistentWaitPageResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleRetryFailedPartitionsResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunActionResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunSkipNodeResponse;
@@ -25,7 +28,6 @@ import io.github.pinpols.batch.console.domain.job.application.contract.response.
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayReplaySessionResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleDryRunPlanResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleReplayOperationPreviewResponse;
-import io.github.pinpols.batch.console.application.contract.response.ConsoleReplayOperationResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleResultVersionResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleForensicExportResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OutboxCleanupProxyResponse;
@@ -117,7 +119,10 @@ public interface ConsoleOrchestratorPort {
   List<ConsoleJobDependencyWaitResponse> listJobDependencyWaits(
       String tenantId, String waitStatus, String jobCode, int limit);
 
-  ConsoleCalendarDependencyWaitResponse requestCalendarDependencyWaitAction(CalendarDependencyActionCommand command);
+  ConsolePersistentWaitPageResponse listPersistentWaits(ConsolePersistentWaitQuery query);
+
+  ConsoleCalendarDependencyWaitResponse requestCalendarDependencyWaitAction(
+      CalendarDependencyActionCommand command);
 
   /**
    * ADR-022 v0.1 转发 forensic 取证导出请求 — 同步生成 bundle，返回 exportId / sha256 / size / 路径。

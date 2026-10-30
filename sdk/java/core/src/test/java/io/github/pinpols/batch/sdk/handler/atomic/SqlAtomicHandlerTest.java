@@ -271,7 +271,8 @@ class SqlAtomicHandlerTest {
   @ParameterizedTest(name = "{0}")
   @MethodSource("statementSplittingCases")
   @DisplayName("只有引号和注释之外的分号切分 SQL，保留原始片段与非空尾句")
-  void shouldPreserveStatementBoundaries_whenQuotesOrCommentsContainDelimiters(String scenario, String sql, List<String> expected) {
+  void shouldPreserveStatementBoundaries_whenQuotesOrCommentsContainDelimiters(
+      String scenario, String sql, List<String> expected) {
     List<String> statements = SqlAtomicHandler.splitStatements(sql);
 
     assertThat(statements).containsExactlyElementsOf(expected);
@@ -281,19 +282,26 @@ class SqlAtomicHandlerTest {
     return Stream.of(
         Arguments.of("empty", " ; ; \n", List.of()),
         Arguments.of("tail", " SELECT 1; SELECT 2 ", List.of("SELECT 1", "SELECT 2")),
-        Arguments.of("single-quoted-semicolon", "SELECT ';';SELECT 2", List.of("SELECT ';'", "SELECT 2")),
-        Arguments.of("escaped-single-quote", "SELECT 'it''s;ok';SELECT 2",
+        Arguments.of(
+            "single-quoted-semicolon", "SELECT ';';SELECT 2", List.of("SELECT ';'", "SELECT 2")),
+        Arguments.of(
+            "escaped-single-quote",
+            "SELECT 'it''s;ok';SELECT 2",
             List.of("SELECT 'it''s;ok'", "SELECT 2")),
-        Arguments.of("double-quoted-semicolon", "SELECT \"semi;colon\";SELECT 2",
+        Arguments.of(
+            "double-quoted-semicolon",
+            "SELECT \"semi;colon\";SELECT 2",
             List.of("SELECT \"semi;colon\"", "SELECT 2")),
-        Arguments.of("line-comment", "SELECT 1 -- ; still comment\r\n;SELECT 2",
+        Arguments.of(
+            "line-comment",
+            "SELECT 1 -- ; still comment\r\n;SELECT 2",
             List.of("SELECT 1 -- ; still comment", "SELECT 2")),
-        Arguments.of("block-comment", "SELECT /* ; ' \" */ 1;SELECT 2",
+        Arguments.of(
+            "block-comment",
+            "SELECT /* ; ' \" */ 1;SELECT 2",
             List.of("SELECT /* ; ' \" */ 1", "SELECT 2")),
-        Arguments.of("trailing-comment", "SELECT 1;-- tail ;",
-            List.of("SELECT 1", "-- tail ;")),
-        Arguments.of("unterminated-quote", "SELECT 'tail;still quote",
-            List.of("SELECT 'tail;still quote")));
+        Arguments.of("trailing-comment", "SELECT 1;-- tail ;", List.of("SELECT 1", "-- tail ;")),
+        Arguments.of(
+            "unterminated-quote", "SELECT 'tail;still quote", List.of("SELECT 'tail;still quote")));
   }
-
 }

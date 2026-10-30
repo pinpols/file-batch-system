@@ -54,70 +54,24 @@ file-batch-system/
 ## 模块结构图
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  ROOT["file-batch-system"]
-
-  subgraph CONTROL["平台控制与调度面"]
-    TRIGGER["batch-trigger\nQuartz / Calendar / Trigger Outbox"]
-    ORCH["batch-orchestrator\n状态主机 / Claim / Report / Workflow"]
-    CONSOLE["batch-console-api\nREST / 查询 / 审批 / 运维"]
-  end
-
-  subgraph EXECUTION["执行面"]
-    CORE["worker-core\nWorker SPI / Lease / Report"]
-    IMPORT["worker-import"]
-    EXPORT["worker-export"]
-    PROCESS["worker-process"]
-    DISPATCH["worker-dispatch"]
-    ATOMIC["worker-atomic\nShell / SQL / Stored Proc / HTTP"]
-  end
-
-  COMMON["batch-common\n跨模块基础设施"]
-  DB[("PostgreSQL\n配置 / 状态 / 审计 / 附件元数据")]
-  BUS["Kafka / Redis"]
-  BATCH_OBJECTS["S3 兼容对象存储\n批处理文件"]
-  AI_OBJECTS["独立 S3 bucket / prefix\nAI 会话附件"]
-  FE["../batch-console\n配对前端仓库"]
-
-  ROOT --> CONTROL
-  ROOT --> EXECUTION
-  ROOT --> COMMON
-  FE -->|"REST / OpenAPI"| CONSOLE
-  TRIGGER -->|"trigger outbox / launch"| ORCH
-  ORCH -->|"task dispatch / report"| CORE
-  CORE --> IMPORT
-  CORE --> EXPORT
-  CORE --> PROCESS
-  CORE --> DISPATCH
-  CORE --> ATOMIC
-  CONSOLE -->|"查询 / 运维 / 配置 / AI 审计"| DB
-  CONSOLE -->|"AI 附件受控读写"| AI_OBJECTS
-  TRIGGER --> DB
-  TRIGGER --> BUS
-  ORCH --> DB
-  ORCH --> BUS
-  CORE --> DB
-  CORE --> BUS
-  CORE --> BATCH_OBJECTS
-  COMMON -. "AutoConfig / Outbox / RLS / Timezone" .-> CONTROL
-  COMMON -. "共享运行时契约" .-> EXECUTION
-
-  subgraph CONSOLE_LAYERS["batch-console-api 内部边界"]
-    WEB["web\nHTTP / SSE 适配"]
-    CONTRACT["application.contract\nRequest / Query / Response"]
-    APP["application\nUse Case / Config / Realtime / Tx"]
-    DOMAIN["domain\nEntity / Rule / Port"]
-    SHARED["shared / support\n公共值对象 / Web 支撑"]
-    INFRA["infrastructure\nMyBatis / Redis / Kafka / ObjectStore / AI"]
-    AI_USE_CASE["AI application service\n会话 / 授权 / 附件用例"]
-    WEB --> CONTRACT --> APP --> DOMAIN
-    APP --> AI_USE_CASE
-    APP --> SHARED
-    APP -. "port implementation" .-> INFRA
-    WEB -. "only HTTP adapters" .-> APP
-  end
-
-  CONSOLE --- CONSOLE_LAYERS
+  FE["batch-console · 配对前端"] --> C["batch-console-api"]
+  C -->|"发起运行"| T["batch-trigger"]
+  C -->|"审批 / 运维"| O["batch-orchestrator"]
+  T -->|"Trigger Outbox Relay"| K1["Kafka · launch"] --> O
+  O -->|"Task Outbox Relay"| K2["Kafka · task dispatch"] --> W["五类 Worker 应用"]
+  W -->|"HTTP CLAIM / REPORT"| O
+  C --> DB[("平台 PostgreSQL")]
+  T --> DB
+  O --> DB
+  W --> B["业务库 / 批处理对象存储 / 外部通道"]
+  C --> A["AI 附件 · 独立 bucket / prefix"]
+  COMMON["batch-common · 共享库"] -. "依赖" .-> C
+  T -. "依赖" .-> COMMON
+  O -. "依赖" .-> COMMON
+  W -. "依赖" .-> COMMON
+  W -. "依赖" .-> CORE["batch-worker/core · 共享执行库"]
 ```
 
 图中两条边界需要同时成立：平台运行时沿 `trigger → orchestrator → worker` 传递任务状态；
@@ -188,57 +142,37 @@ batch-e2e-tests
 ### 平台模块展开图
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart LR
+  subgraph WORKERS["Worker 应用 · 前四类复用文件 Pipeline"]
+    IMP["import"]
+    EXP["export"]
+    PROC["process"]
+    DISP["dispatch"]
+    AT["atomic"]
+  end
+  IMP -. "依赖" .-> CORE["batch-worker/core<br/>SPI / 租约 / Pipeline runtime"]
+  EXP -. "依赖" .-> CORE
+  PROC -. "依赖" .-> CORE
+  DISP -. "依赖" .-> CORE
+  AT -. "依赖" .-> CORE
+  CORE -. "依赖" .-> COMMON["batch-common<br/>共享基础设施"]
+  T["batch-trigger<br/>Quartz / Calendar / Outbox"] -. "依赖" .-> COMMON
+  O["batch-orchestrator<br/>应用 / 领域 / 持久化"] -. "依赖" .-> COMMON
+```
+
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  COMMON["batch-common\nconfig / events / outbox / security / RLS / i18n"]
-
-  subgraph TRIGGER_MODULE["batch-trigger"]
-    TQ["quartz\ncalendar\noutbox"]
+  subgraph CONSOLE["batch-console-api · 内部依赖"]
+    WEB["web · HTTP / SSE"] --> CONTRACT["application.contract"]
+    WEB --> APP["application · 用例"]
+    APP --> CONTRACT
+    APP --> DOMAIN["domain · 规则 / Port"]
+    INFRA["infrastructure · Port 实现"] -. "实现" .-> DOMAIN
+    APP --> SHARED["shared / support"]
   end
-
-  subgraph ORCHESTRATOR_MODULE["batch-orchestrator"]
-    OA["controller / application"]
-    OD["domain / infrastructure / mapper"]
-    OA --> OD
-  end
-
-  subgraph CORE_MODULE["batch-worker-core"]
-    CORE_SUPPORT["support / route"]
-    CI["infrastructure / mapper / pipeline runtime"]
-    CORE_SUPPORT --> CI
-  end
-
-  subgraph PIPELINE_MODULES["pipeline workers"]
-    IMP["worker-import\nimports/stage"]
-    EXP["worker-export\nexports/stage/renderer/sink"]
-    PROC["worker-process\nprocesses/stage"]
-    DISP["worker-dispatch\ndispatch/stage/target"]
-    AT["worker-atomic\natomic/{shell,sql,stored-proc,http}"]
-  end
-
-  subgraph CONSOLE_MODULE["batch-console-api"]
-    CW["web\nController / SSE / file stream"]
-    CC["application.contract\nrequest / query / response"]
-    CA["application + domain\nuse case / config / rule / port"]
-    CONSOLE_SHARED["shared / support\n值对象 / 安全 / Web 支撑"]
-    CX["infrastructure\nMyBatis / Redis / Kafka / ObjectStore / AI / HTTP"]
-    AI_ATTACH["AI attachment use case\n授权 / 归一化 / 元数据 / 保留策略"]
-    CW --> CC --> CA
-    CA --> CONSOLE_SHARED
-    CA --> AI_ATTACH
-    CA -. "port implementation" .-> CX
-  end
-
-  TQ -->|"trigger_outbox"| OA
-  OA -->|"dispatch / report / lease"| CI
-  CI --> IMP
-  CI --> EXP
-  CI --> PROC
-  CI --> DISP
-  CI --> AT
-  COMMON -. "shared runtime" .-> TQ
-  COMMON -. "shared runtime" .-> OA
-  COMMON -. "shared runtime" .-> CI
-  COMMON -. "shared runtime" .-> CW
+  APP -. "依赖" .-> COMMON["batch-common · 共享基础设施"]
 ```
 
 ### 辅助模块边界

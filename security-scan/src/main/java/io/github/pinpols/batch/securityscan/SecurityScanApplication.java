@@ -2,27 +2,27 @@ package io.github.pinpols.batch.securityscan;
 
 public final class SecurityScanApplication {
 
-    private SecurityScanApplication() {
+  private SecurityScanApplication() {}
+
+  public static void main(String[] args) {
+    SecurityScanOptions options = SecurityScanOptions.parse(args);
+    if (options.help()) {
+      printUsage();
+      return;
     }
 
-    public static void main(String[] args) {
-        SecurityScanOptions options = SecurityScanOptions.parse(args);
-        if (options.help()) {
-            printUsage();
-            return;
-        }
+    SecurityScanOrchestrator orchestrator =
+        new SecurityScanOrchestrator(new ProcessCommandExecutor());
+    ScanReport report = orchestrator.run(options);
+    report.printSummary();
 
-        SecurityScanOrchestrator orchestrator = new SecurityScanOrchestrator(new ProcessCommandExecutor());
-        ScanReport report = orchestrator.run(options);
-        report.printSummary();
-
-        if (report.hasFailures()) {
-            System.exit(1);
-        }
+    if (report.hasFailures()) {
+      System.exit(1);
     }
+  }
 
-    private static void printUsage() {
-        System.out.println("""
+  private static void printUsage() {
+    System.out.println("""
             Thin security scan orchestrator.
 
             Usage:
@@ -41,5 +41,5 @@ public final class SecurityScanApplication {
               --dry-run
               --help
             """);
-    }
+  }
 }

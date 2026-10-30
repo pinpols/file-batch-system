@@ -8,16 +8,23 @@ import static org.mockito.Mockito.*;
 import io.github.pinpols.batch.console.config.ConsolePushProperties;
 import io.github.pinpols.batch.console.domain.notification.service.JobPushDeliveryService;
 import java.util.function.BooleanSupplier;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @DisplayName("持久推送队列轮询的启动与关闭")
+@ExtendWith(MockitoExtension.class)
 class ConsolePushJobNotifierTest {
   private final ConsolePushProperties properties = new ConsolePushProperties();
-  private final JobPushDeliveryService deliveries = mock(JobPushDeliveryService.class);
-  private final ConsolePushJobNotifier notifier =
-      new ConsolePushJobNotifier(properties, deliveries);
+
+  @Mock
+  private JobPushDeliveryService deliveries;
+
+  private ConsolePushJobNotifier notifier;
 
   @DisplayName("仅轮询持久设备队列并传递实时关闭状态")
   @Test
@@ -72,5 +79,10 @@ class ConsolePushJobNotifierTest {
     }
     notifier.pollOnce();
     verifyNoInteractions(deliveries);
+  }
+
+  @BeforeEach
+  void initializeSubject() {
+    notifier = new ConsolePushJobNotifier(properties, deliveries);
   }
 }

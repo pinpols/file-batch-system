@@ -1,7 +1,9 @@
+> 历史证据（2026-10-25 存量核对）：保留与v1问题记录配对的386项历史验证和事务纠错。正文仅表示原日期/基线；当前规则与状态见[现行入口](../../architecture/outbox-architecture.md)及 TODO，本轮没有重新执行原测试或扫描。
+
 # 深度问题修复报告
 
 > 修复日期：2026-04-15
-> 基准文档：`docs/archive/audit/deep-issue-analysis-2026-04-30.md`（25 项问题）
+> 基准文档：`docs/archive/audit/deep-issue-analysis-v1-2026-04-15.md`（25 项问题）
 > 验证结果：全量编译通过 | 386 tests, 0 failures | spotless clean
 
 ---

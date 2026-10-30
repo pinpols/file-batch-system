@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.domain.governance.web;
 
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -23,18 +22,26 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 @DisplayName("治理参数控制台接口: 查询、更新与重置的响应契约")
+@ExtendWith(MockitoExtension.class)
 class ConsoleGovernanceControllerTest {
 
-  private final ConsoleSystemParameterService parameterService =
-      mock(ConsoleSystemParameterService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
-  private final ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
+  @Mock
+  private ConsoleSystemParameterService parameterService;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
+  @Mock
+  private ConsoleTenantGuard tenantGuard;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -45,9 +52,6 @@ class ConsoleGovernanceControllerTest {
 
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
     when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
@@ -67,8 +71,6 @@ class ConsoleGovernanceControllerTest {
   @Test
   @DisplayName("查询治理参数返回成功, 且已配置项以字符串值出现在数据体中")
   void shouldListGovernanceParams() throws Exception {
-    when(parameterService.getValue("t1", "governance.outbox.circuit-breaker.failure-threshold"))
-        .thenReturn(Optional.of("5"));
     when(parameterService.getValue(anyString(), anyString())).thenReturn(Optional.empty());
     when(parameterService.getValue("t1", "governance.outbox.circuit-breaker.failure-threshold"))
         .thenReturn(Optional.of("5"));
@@ -84,6 +86,9 @@ class ConsoleGovernanceControllerTest {
   @Test
   @DisplayName("更新治理参数返回成功, 并按操作人与默认说明写入新值")
   void shouldUpdateGovernanceParam() throws Exception {
+    when(requestMetadataResolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
     mockMvc
         .perform(post("/api/console/ops/governance")
             .param("tenantId", "t1")

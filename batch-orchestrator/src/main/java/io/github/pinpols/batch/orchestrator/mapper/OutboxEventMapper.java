@@ -1,13 +1,11 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
+import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkFailedBatchParam;
 import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkFailedParam;
 import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkPublishingBatchParam;
 import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkPublishingParam;
-
-
-import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
-import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
 import io.github.pinpols.batch.orchestrator.domain.query.OutboxEventQuery;
 import java.time.Instant;
 import java.util.List;
@@ -19,8 +17,7 @@ public interface OutboxEventMapper {
 
   List<OutboxEventEntity> selectPending(OutboxEventQuery query);
 
-  int markPublishing(
-      OutboxEventMarkPublishingParam parameters);
+  int markPublishing(OutboxEventMarkPublishingParam parameters);
 
   int markPublished(
       @Param("tenantId") String tenantId,
@@ -28,8 +25,7 @@ public interface OutboxEventMapper {
       @Param("status") String status,
       @Param("publishingStatus") String publishingStatus);
 
-  int markFailed(
-      OutboxEventMarkFailedParam parameters);
+  int markFailed(OutboxEventMarkFailedParam parameters);
 
   int markGiveUp(
       @Param("tenantId") String tenantId,
@@ -41,8 +37,7 @@ public interface OutboxEventMapper {
    * PERF(5.4) 阶段一：单租户一批 id 的 set-based 抢占 —— 一条 UPDATE 完成 NEW/FAILED→PUBLISHING CAS 并 RETURNING 胜出
    * id 集（publish_attempt 递增语义与单条 markPublishing 一致）。tenant_id 为复合分布键， 调用方按租户分组后逐租户调用。
    */
-  List<Long> markPublishingBatch(
-      OutboxEventMarkPublishingBatchParam parameters);
+  List<Long> markPublishingBatch(OutboxEventMarkPublishingBatchParam parameters);
 
   /**
    * PERF(5.4) 阶段三：单租户一批 id 的 set-based markPublished。保留 R3-P0-6 的 {@code publish_status=PUBLISHING}
@@ -55,8 +50,7 @@ public interface OutboxEventMapper {
       @Param("publishingStatus") String publishingStatus);
 
   /** PERF(5.4) 阶段三：单租户一批 id 的 set-based markFailed（同一 nextPublishAt）。守卫同 markFailed。 */
-  int markFailedBatch(
-      OutboxEventMarkFailedBatchParam parameters);
+  int markFailedBatch(OutboxEventMarkFailedBatchParam parameters);
 
   /** PERF(5.4) 阶段三：单租户一批 id 的 set-based markGiveUp。守卫同 markGiveUp。 */
   int markGiveUpBatch(

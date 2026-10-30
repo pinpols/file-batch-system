@@ -8,14 +8,13 @@ import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
 import java.util.Optional;
 import java.util.function.Function;
 
-/** Shared normalization for database and Redis quota reservation implementations. */
+/** 数据库和 Redis 配额预留实现共用的规范化逻辑。 */
 final class QuotaReservationSupport {
 
   private QuotaReservationSupport() {}
 
   static Precheck precheck(QuotaReservationRequest request) {
-    boolean reservationRequestIsNotApplicable =
-        EmptyChecks.isNull(request)
+    boolean reservationRequestIsNotApplicable = EmptyChecks.isNull(request)
         || request.owner() == null
         || !Texts.hasText(request.owner().tenantId())
         || !Texts.hasText(request.owner().quotaScope())

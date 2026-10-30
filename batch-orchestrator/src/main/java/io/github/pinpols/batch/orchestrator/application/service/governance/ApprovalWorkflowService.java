@@ -25,6 +25,8 @@ public interface ApprovalWorkflowService {
 
   ApprovalRecord get(String tenantId, String approvalNo);
 
+  ApprovalRecord getBySourceKey(String tenantId, String sourceIdempotencyKey);
+
   record ApprovalContext(String tenantId) {}
 
   record ApprovalIdentity(ApprovalContext context, String approvalNo) {}
@@ -215,6 +217,11 @@ public interface ApprovalWorkflowService {
     @JsonProperty("sourceIdempotencyKey")
     public String sourceIdempotencyKey() {
       return source.sourceIdempotencyKey();
+    }
+
+    @JsonProperty("sourceApprovalReason")
+    public String sourceApprovalReason() {
+      return source.approvalReason();
     }
   }
 }

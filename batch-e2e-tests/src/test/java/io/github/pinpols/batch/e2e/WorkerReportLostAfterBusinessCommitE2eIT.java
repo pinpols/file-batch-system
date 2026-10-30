@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
@@ -18,8 +19,8 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.e2e.apps.E2eSettlementProcessConfiguration;
 import io.github.pinpols.batch.e2e.apps.E2eReportRecoveryOrchestratorApplication;
+import io.github.pinpols.batch.e2e.apps.E2eSettlementProcessConfiguration;
 import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
 import io.github.pinpols.batch.e2e.support.E2eOutboxPublishSupport;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
@@ -48,6 +49,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -164,6 +168,10 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
   private int localServerPort;
 
   private Path dispatchExecJar;
+  private Path importExecJar;
+  private Path processExecJar;
+  private Path exportExecJar;
+  private Path atomicExecJar;
 
   @DynamicPropertySource
   static void registerBusinessDatabaseProperties(DynamicPropertyRegistry registry) {
@@ -295,85 +303,254 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("Import Worker 中断后租约回收复用指纹位点续跑")
+  void shouldResumeImportCheckpointAfterWorkerProcessIsKilled() throws Exception {
+    final String updateTemplateSql = """
+        update batch.file_template_config set chunk_size = 1
+        where tenant_id = ? and template_code = 'IMP-CUSTOMER-JSON-ARRAY'
+        """;
+    final String insertCustomerSql = """
+        insert into biz.customer_account (tenant_id, customer_no, customer_name, customer_type, status)
+        values (?, ?, 'before', 'PERSONAL', 'ACTIVE')
+        """;
+    final String lockCustomerSql = """
+        select id from biz.customer_account where tenant_id = ? and customer_no = ? for update
+        """;
+    final String backendPidSql = "select pg_backend_pid()";
+    final String blockedCountSql =
+        "select count(*) from pg_stat_activity where ? = any(pg_blocking_pids(pid))";
+    final String selectPartitionSql = """
+        select p.id from batch.job_partition p join batch.job_instance ji
+          on ji.tenant_id = p.tenant_id and ji.id = p.job_instance_id
+        where ji.tenant_id = ? and ji.dedup_key = ?
+        """;
+    final String selectCheckpointSql = """
+        select pp.position_marker from batch.pipeline_progress pp
+        join batch.pipeline_instance pi on pi.tenant_id = pp.tenant_id and pi.id = pp.pipeline_instance_id
+        join batch.job_instance ji on ji.tenant_id = pi.tenant_id and ji.id = pi.related_job_instance_id
+        where ji.tenant_id = ? and ji.dedup_key = ? and pp.stage = 'LOAD'
+        """;
+    final String expireLeaseSql = """
+        update batch.job_partition set lease_expire_at = current_timestamp - interval '1 minute'
+        where tenant_id = ? and id = ?
+        """;
+    final String selectFinalCheckpointSql = """
+        select pp.position_marker, pp.processed_count, pp.completed from batch.pipeline_progress pp
+        join batch.pipeline_instance pi on pi.tenant_id = pp.tenant_id and pi.id = pp.pipeline_instance_id
+        join batch.job_instance ji on ji.tenant_id = pi.tenant_id and ji.id = pi.related_job_instance_id
+        where ji.tenant_id = ? and ji.dedup_key = ? and pp.stage = 'LOAD'
+        """;
+    final String selectCustomersSql = """
+        select customer_no, customer_name from biz.customer_account
+        where tenant_id = ? and customer_no in (?, ?) order by customer_no
+        """;
+    String suffix = Long.toUnsignedString(System.nanoTime());
+    String firstCustomer = "CKPTA" + suffix;
+    String secondCustomer = "CKPTB" + suffix;
+    String workerPoolCode = "ckpt-import-" + suffix;
+    String consumerGroupId = "batch-import-ckpt-" + suffix;
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        platformJdbc, TENANT, "IMPORT", "IMPORT", TriggerType.API, BIZ_DATE);
+    platformJdbc.update(updateTemplateSql, TENANT);
+    JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
+    businessJdbc.update(insertCustomerSql, TENANT, secondCustomer);
+    Map<String, Object> params = new LinkedHashMap<>();
+    params.put("fileFormatType", "JSON");
+    params.put("templateCode", "IMP-CUSTOMER-JSON-ARRAY");
+    params.put("bizType", "CUSTOMER");
+    params.put(
+        "content",
+        objectMapper.writeValueAsString(List.of(
+            Map.of(
+                "customerNo",
+                firstCustomer,
+                "customerName",
+                "First",
+                "customerType",
+                "PERSONAL",
+                "certificateNo",
+                firstCustomer,
+                "status",
+                "ACTIVE"),
+            Map.of(
+                "customerNo",
+                secondCustomer,
+                "customerName",
+                "Second",
+                "customerType",
+                "PERSONAL",
+                "certificateNo",
+                secondCustomer,
+                "status",
+                "ACTIVE"))));
+    Path firstLog = createWorkerLog("checkpoint-reclaim-first-");
+    Path secondLog = createWorkerLog("checkpoint-reclaim-second-");
+    Process firstWorker = null;
+    Process replacementWorker = null;
+    try (Connection lock = businessDataSource.getConnection()) {
+      lock.setAutoCommit(false);
+      int blockerPid;
+      try (PreparedStatement pidStatement = lock.prepareStatement(backendPidSql);
+          ResultSet result = pidStatement.executeQuery()) {
+        result.next();
+        blockerPid = result.getInt(1);
+      }
+      try (PreparedStatement statement = lock.prepareStatement(lockCustomerSql)) {
+        statement.setString(1, TENANT);
+        statement.setString(2, secondCustomer);
+        try (ResultSet result = statement.executeQuery()) {
+          assertThat(result.next()).isTrue();
+        }
+      }
+      try {
+        firstWorker =
+            startImportWorker(workerPoolCode, consumerGroupId, firstLog, 600_000, "first");
+        awaitWorkerStarted(firstWorker, firstLog);
+        awaitWorkerPoolOnline(workerPoolCode);
+        launchService.launch(new LaunchRequest(
+            TENANT,
+            seed.workflowDefinitionId(),
+            BIZ_DATE,
+            TriggerType.API,
+            seed.requestId(),
+            "checkpoint-process-reclaim",
+            params));
+        outboxPublishSupport.publishAllPending(TENANT);
+        await()
+            .atMost(Duration.ofSeconds(120))
+            .pollInterval(Duration.ofMillis(200))
+            .untilAsserted(() -> {
+              assertThat(platformJdbc.queryForList(
+                      selectCheckpointSql, String.class, TENANT, seed.dedupKey()))
+                  .singleElement()
+                  .asString()
+                  .matches("1:[0-9a-f]{64}");
+              assertThat(businessJdbc.queryForObject(blockedCountSql, Integer.class, blockerPid))
+                  .isPositive();
+            });
+        String firstMarker =
+            platformJdbc.queryForObject(selectCheckpointSql, String.class, TENANT, seed.dedupKey());
+        stopProcess(firstWorker);
+        firstWorker = null;
+        lock.rollback();
+        Long partitionId =
+            platformJdbc.queryForObject(selectPartitionSql, Long.class, TENANT, seed.dedupKey());
+        platformJdbc.update(expireLeaseSql, TENANT, partitionId);
+        JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, partitionId);
+        partitionReclaimUnit.reclaim(partition);
+        outboxPublishSupport.publishAllPending(TENANT);
+        replacementWorker =
+            startImportWorker(workerPoolCode, consumerGroupId, secondLog, 600_000, "second");
+        awaitWorkerStarted(replacementWorker, secondLog);
+        await()
+            .atMost(Duration.ofSeconds(120))
+            .pollInterval(Duration.ofMillis(200))
+            .untilAsserted(() -> {
+              assertThat(reportStatus(seed)).isEqualTo("SUCCESS");
+            });
+        Map<String, Object> finalCheckpoint =
+            platformJdbc.queryForMap(selectFinalCheckpointSql, TENANT, seed.dedupKey());
+        assertThat(finalCheckpoint)
+            .containsEntry("position_marker", "2:" + firstMarker.substring(2))
+            .containsEntry("processed_count", 2L)
+            .containsEntry("completed", true);
+        assertThat(businessJdbc.queryForList(
+                selectCustomersSql, TENANT, firstCustomer, secondCustomer))
+            .anySatisfy(row -> assertThat(row)
+                .containsEntry("customer_no", firstCustomer)
+                .containsEntry("customer_name", "First"))
+            .anySatisfy(row -> assertThat(row)
+                .containsEntry("customer_no", secondCustomer)
+                .containsEntry("customer_name", "Second"))
+            .hasSize(2);
+      } finally {
+        stopProcess(firstWorker);
+        stopProcess(replacementWorker);
+        lock.rollback();
+      }
+    }
+  }
+
+  @Test
   @DisplayName("真实 Import Worker 业务写入后旧实例失联,回收任务由新实例完成且只产生一条业务记录")
   void shouldCompleteReclaimedAttemptOnReplacementWorker_withoutDuplicateBusinessEffect()
       throws Exception {
-        final String selectCountSql = """
+    final String selectCountSql = """
             select count(*)::int from biz.customer_account where tenant_id = ? and customer_no = ?
         """;
-        final String selectIdSql = """
+    final String selectIdSql = """
             select t.id from batch.job_task t join batch.job_instance ji on ji.id = t.job_instance_id\s\
             where ji.tenant_id = ? and ji.dedup_key = ?\
             """;
-        final String selectIdSql2 = """
+    final String selectIdSql2 = """
             select p.id from batch.job_partition p join batch.job_instance ji on ji.id = p.job_instance_id\s\
             where ji.tenant_id = ? and ji.dedup_key = ?\
             """;
-        final String updateJobPartitionSql = """
+    final String updateJobPartitionSql = """
             update batch.job_partition set lease_expire_at = current_timestamp - interval '1 minute'\s\
             where tenant_id = ? and id = ?\
             """;
-        final String selectPayloadJsonSql = """
+    final String selectPayloadJsonSql = """
             select payload_json ->> 'selectedWorkerId' from batch.outbox_event where tenant_id = ?\s\
             and event_key = ?\
             """;
-        final String selectCountSql2 = """
+    final String selectCountSql2 = """
             select count(*) from batch.job_task where tenant_id = ? and job_instance_id = (select id\s\
             from batch.job_instance where tenant_id = ? and dedup_key = ?)\
             """;
-        final String selectCountSql3 = """
+    final String selectCountSql3 = """
             select count(*) from batch.outbox_event where tenant_id = ? and event_key = ?
         """;
-        final String selectIdSql3 = """
+    final String selectIdSql3 = """
             select id from batch.job_instance where tenant_id = ? and dedup_key = ?
         """;
-        final String selectWorkflowRunIdSql = """
+    final String selectWorkflowRunIdSql = """
             select nr.workflow_run_id from batch.workflow_node_run nr\s\
             join batch.workflow_run wr on wr.id = nr.workflow_run_id where wr.tenant_id = ?\s\
             and nr.job_instance_id = ? and nr.node_code = 'JOB'\
             """;
-        final String selectRunStatusSql = """
+    final String selectRunStatusSql = """
             select run_status from batch.workflow_run where tenant_id = ? and id = ?
         """;
-        final String selectCountSql4 = """
+    final String selectCountSql4 = """
             select count(*) from batch.outbox_event where tenant_id = ? and aggregate_type = 'WORKFLOW_RUN'\s\
             and aggregate_id = ? and event_type = 'WORKFLOW_TERMINAL' and payload_json->>'runStatus' = 'SUCCESS'\
             """;
-        final String selectCountSql5 = """
+    final String selectCountSql5 = """
             select count(*) from batch.workflow_run where tenant_id = ? and id = ?
         """;
-        final String selectCountSql6 = """
+    final String selectCountSql6 = """
             select count(*) from batch.workflow_node_run where workflow_run_id = ? and node_code = 'JOB'\s\
             and node_status = 'SUCCESS' and job_instance_id = ?\
             """;
-        final String selectCountSql7 = """
+    final String selectCountSql7 = """
             select count(*) from batch.workflow_node_run where workflow_run_id = ? and node_code = 'END'\s\
             and node_status = 'SUCCESS'\
             """;
-        final String selectInstanceStatusSql = """
+    final String selectInstanceStatusSql = """
             select instance_status from batch.job_instance where tenant_id = ? and id = ?
         """;
-        final String selectSuccessPartitionCountSql = """
+    final String selectSuccessPartitionCountSql = """
             select success_partition_count from batch.job_instance where tenant_id = ? and id = ?
         """;
-        final String selectFailedPartitionCountSql = """
+    final String selectFailedPartitionCountSql = """
             select failed_partition_count + cancelled_partition_count from batch.job_instance\s\
             where tenant_id = ? and id = ?\
             """;
-        final String selectPartitionStatusSql = """
+    final String selectPartitionStatusSql = """
             select partition_status from batch.job_partition where tenant_id = ? and id = ?
         """;
-        final String selectRetryCountSql = """
+    final String selectRetryCountSql = """
             select retry_count from batch.job_partition where tenant_id = ? and id = ?
         """;
-        final String selectCurrentInvocationIdSql = """
+    final String selectCurrentInvocationIdSql = """
             select current_invocation_id from batch.job_partition where tenant_id = ? and id = ?
         """;
-        final String selectCountSql8 = """
+    final String selectCountSql8 = """
             select count(*) from batch.retry_schedule where tenant_id = ? and related_type = 'JOB_PARTITION'\s\
             and related_id = ?\
             """;
-        final String selectCountSql9 = """
+    final String selectCountSql9 = """
             select count(*) from batch.dead_letter_task where tenant_id = ? and source_type = 'JOB_PARTITION'\s\
             and source_id = ?\
             """;
@@ -464,21 +641,11 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
 
       stopProcess(worker1);
       worker1 = null;
-      Long taskId = platformJdbc.queryForObject(
-          selectIdSql,
-          Long.class,
-          TENANT,
-          seed.dedupKey());
-      Long partitionId = platformJdbc.queryForObject(
-          selectIdSql2,
-          Long.class,
-          TENANT,
-          seed.dedupKey());
+      Long taskId = platformJdbc.queryForObject(selectIdSql, Long.class, TENANT, seed.dedupKey());
+      Long partitionId =
+          platformJdbc.queryForObject(selectIdSql2, Long.class, TENANT, seed.dedupKey());
       JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, partitionId);
-      platformJdbc.update(
-          updateJobPartitionSql,
-          TENANT,
-          partitionId);
+      platformJdbc.update(updateJobPartitionSql, TENANT, partitionId);
       partitionReclaimUnit.reclaim(partition);
       assertThat(reportStatus(seed)).isEqualTo("READY");
       String selectedPayloadJson = platformJdbc.queryForObject(
@@ -526,16 +693,10 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
           TENANT,
           TENANT + ":reclaim:" + partitionId + ":v" + partition.getVersion());
       assertThat(selectedOutboxEventCount).isEqualTo(1);
-      Long jobInstanceId = platformJdbc.queryForObject(
-          selectIdSql3,
-          Long.class,
-          TENANT,
-          seed.dedupKey());
-      Long workflowRunId = platformJdbc.queryForObject(
-          selectWorkflowRunIdSql,
-          Long.class,
-          TENANT,
-          jobInstanceId);
+      Long jobInstanceId =
+          platformJdbc.queryForObject(selectIdSql3, Long.class, TENANT, seed.dedupKey());
+      Long workflowRunId =
+          platformJdbc.queryForObject(selectWorkflowRunIdSql, Long.class, TENANT, jobInstanceId);
       await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
         String selectedRunStatus =
             platformJdbc.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
@@ -709,16 +870,10 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
 
       stopProcess(worker1);
       worker1 = null;
-      Long partitionId = platformJdbc.queryForObject(
-          selectIdSql,
-          Long.class,
-          TENANT,
-          seed.dedupKey());
+      Long partitionId =
+          platformJdbc.queryForObject(selectIdSql, Long.class, TENANT, seed.dedupKey());
       JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, partitionId);
-      platformJdbc.update(
-          updateJobPartitionSql,
-          TENANT,
-          partitionId);
+      platformJdbc.update(updateJobPartitionSql, TENANT, partitionId);
       partitionReclaimUnit.reclaim(partition);
       assertThat(reportStatus(seed)).isEqualTo("READY");
       outboxPublishSupport.publishAllPending(TENANT);
@@ -896,16 +1051,10 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
       worker1 = null;
       businessProxy.toxics().get("r16_commit_ack_delay").remove();
 
-      Long partitionId = platformJdbc.queryForObject(
-          selectIdSql,
-          Long.class,
-          TENANT,
-          seed.dedupKey());
+      Long partitionId =
+          platformJdbc.queryForObject(selectIdSql, Long.class, TENANT, seed.dedupKey());
       JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, partitionId);
-      platformJdbc.update(
-          updateJobPartitionSql,
-          TENANT,
-          partitionId);
+      platformJdbc.update(updateJobPartitionSql, TENANT, partitionId);
       partitionReclaimUnit.reclaim(partition);
       assertThat(reportStatus(seed)).isEqualTo("READY");
       outboxPublishSupport.publishAllPending(TENANT);
@@ -1056,11 +1205,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
         platformJdbc, TENANT, "DISPATCH", "dispatch", TriggerType.API, BIZ_DATE);
     String queueCode = "r16-dispatch-q-" + suffix;
     platformJdbc.update(insertResourceQueueSql, TENANT, queueCode);
-    platformJdbc.update(
-        updateJobDefinitionSql,
-        queueCode,
-        TENANT,
-        seed.jobCode());
+    platformJdbc.update(updateJobDefinitionSql, queueCode, TENANT, seed.jobCode());
     Map<String, Object> params = Map.of(
         "fileId",
         String.valueOf(fileId),
@@ -1154,16 +1299,10 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
 
       stopProcess(worker1);
       worker1 = null;
-      Long partitionId = platformJdbc.queryForObject(
-          selectIdSql,
-          Long.class,
-          TENANT,
-          seed.dedupKey());
+      Long partitionId =
+          platformJdbc.queryForObject(selectIdSql, Long.class, TENANT, seed.dedupKey());
       JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, partitionId);
-      platformJdbc.update(
-          updateJobPartitionSql,
-          TENANT,
-          partitionId);
+      platformJdbc.update(updateJobPartitionSql, TENANT, partitionId);
       partitionReclaimUnit.reclaim(partition);
       assertThat(reportStatus(seed)).isEqualTo("READY");
       outboxPublishSupport.publishAllPending(TENANT);
@@ -2119,11 +2258,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
           BIZ_DATE,
           "r25-smtp-trace-" + suffix);
       platformJdbc.update(
-          insertEmailChannelSql,
-          TENANT,
-          channelCode,
-          smtpEndpoint,
-          smtpServer.port());
+          insertEmailChannelSql, TENANT, channelCode, smtpEndpoint, smtpServer.port());
       platformJdbc.update(updateJobRetrySql, "FIXED", 3, TENANT, seed.jobCode());
       ensureKafkaTopicsExist(List.of(
           BatchTopics.TASK_DISPATCH_DISPATCH,
@@ -2161,7 +2296,8 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
         final boolean acceptedMessage = smtpServer.awaitAcceptedMessage(Duration.ofSeconds(90));
         final List<String> smtpProtocolEvents = smtpServer.protocolEvents();
         assertThat(acceptedMessage)
-            .as("SMTP accepts DATA while dispatch remains CREATED; protocol events: %s",
+            .as(
+                "SMTP accepts DATA while dispatch remains CREATED; protocol events: %s",
                 smtpProtocolEvents)
             .isTrue();
         final int acceptedMessageCount = smtpServer.acceptedMessageCount();
@@ -2173,9 +2309,10 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
         stopProcess(firstWorker);
         firstWorker = null;
         smtpServer.releaseAfterAcceptance();
-        Long taskId = platformJdbc.queryForObject(selectTaskIdSql, Long.class, TENANT, seed.dedupKey());
-        Long partitionId = platformJdbc.queryForObject(
-            selectPartitionIdSql, Long.class, TENANT, seed.dedupKey());
+        Long taskId =
+            platformJdbc.queryForObject(selectTaskIdSql, Long.class, TENANT, seed.dedupKey());
+        Long partitionId =
+            platformJdbc.queryForObject(selectPartitionIdSql, Long.class, TENANT, seed.dedupKey());
         JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, partitionId);
         platformJdbc.update(updatePartitionLeaseSql, TENANT, partitionId);
         partitionReclaimUnit.reclaim(partition);
@@ -2188,10 +2325,10 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
         awaitDispatchWorkerStarted(replacementWorker, replacementWorkerLog);
         awaitWorkerPoolOnline(workerPoolCode, "DISPATCH");
         await().atMost(Duration.ofSeconds(120)).untilAsserted(() -> {
-          final String taskStatus = platformJdbc.queryForObject(
-              selectTaskStatusSql, String.class, TENANT, taskId);
-          final String taskErrorCode = platformJdbc.queryForObject(
-              selectTaskErrorCodeSql, String.class, TENANT, taskId);
+          final String taskStatus =
+              platformJdbc.queryForObject(selectTaskStatusSql, String.class, TENANT, taskId);
+          final String taskErrorCode =
+              platformJdbc.queryForObject(selectTaskErrorCodeSql, String.class, TENANT, taskId);
           assertThat(taskStatus).isEqualTo("FAILED");
           assertThat(taskErrorCode).isEqualTo("EXTERNAL_OUTCOME_UNKNOWN");
         });
@@ -2280,11 +2417,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
     String consumerGroupId = "batch-worker-atomic-r16-" + suffix;
     String queueCode = "r16-atomic-q-" + suffix;
     platformJdbc.update(insertResourceQueueSql, TENANT, queueCode);
-    platformJdbc.update(
-        updateJobDefinitionSql,
-        queueCode,
-        TENANT,
-        seed.jobCode());
+    platformJdbc.update(updateJobDefinitionSql, queueCode, TENANT, seed.jobCode());
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("taskType", "http");
     params.put("url", "http://127.0.0.1:" + server.getAddress().getPort() + "/atomic");
@@ -2365,16 +2498,10 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
 
       stopProcess(worker1);
       worker1 = null;
-      Long partitionId = platformJdbc.queryForObject(
-          selectIdSql,
-          Long.class,
-          TENANT,
-          seed.dedupKey());
+      Long partitionId =
+          platformJdbc.queryForObject(selectIdSql, Long.class, TENANT, seed.dedupKey());
       JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, partitionId);
-      platformJdbc.update(
-          updateJobPartitionSql,
-          TENANT,
-          partitionId);
+      platformJdbc.update(updateJobPartitionSql, TENANT, partitionId);
       partitionReclaimUnit.reclaim(partition);
       assertThat(reportStatus(seed)).isEqualTo("READY");
       outboxPublishSupport.publishAllPending(TENANT);
@@ -2403,8 +2530,8 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
       await().atMost(Duration.ofSeconds(120)).untilAsserted(() -> {
         assertThat(reportStatus(seed)).isEqualTo("SUCCESS");
         assertThat(reportOutboxCount(seed)).isZero();
-        Integer selectedCount =
-            platformJdbc.queryForObject(selectCountSql, Integer.class, TENANT, TENANT, seed.dedupKey());
+        Integer selectedCount = platformJdbc.queryForObject(
+            selectCountSql, Integer.class, TENANT, TENANT, seed.dedupKey());
         assertThat(selectedCount).isEqualTo(1);
       });
     } finally {
@@ -2488,11 +2615,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
     String consumerGroupId = "batch-worker-atomic-r25-unknown-" + suffix;
     String queueCode = "r25-atomic-unknown-q-" + suffix;
     platformJdbc.update(insertResourceQueueSql, TENANT, queueCode);
-    platformJdbc.update(
-        updateJobDefinitionSql,
-        queueCode,
-        TENANT,
-        seed.jobCode());
+    platformJdbc.update(updateJobDefinitionSql, queueCode, TENANT, seed.jobCode());
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("taskType", "http");
     params.put("url", "http://127.0.0.1:" + server.getAddress().getPort() + "/atomic-unknown");
@@ -2555,16 +2678,10 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
 
       stopProcess(worker);
       worker = null;
-      Long partitionId = platformJdbc.queryForObject(
-          selectIdSql,
-          Long.class,
-          TENANT,
-          seed.dedupKey());
+      Long partitionId =
+          platformJdbc.queryForObject(selectIdSql, Long.class, TENANT, seed.dedupKey());
       JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, partitionId);
-      platformJdbc.update(
-          updateJobPartitionSql,
-          TENANT,
-          partitionId);
+      platformJdbc.update(updateJobPartitionSql, TENANT, partitionId);
       partitionReclaimUnit.reclaim(partition);
 
       assertThat(reportStatus(seed)).isEqualTo("FAILED");
@@ -2577,10 +2694,8 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
       Integer selectedCount =
           platformJdbc.queryForObject(selectCountSql, Integer.class, TENANT, partitionId);
       assertThat(selectedCount).isZero();
-      Map<String, Object> deadLetterOutcome = platformJdbc.queryForMap(
-          selectDeadLetterOutcomeSql,
-          TENANT,
-          partitionId);
+      Map<String, Object> deadLetterOutcome =
+          platformJdbc.queryForMap(selectDeadLetterOutcomeSql, TENANT, partitionId);
       assertThat(deadLetterOutcome)
           .containsEntry("dead_letter_count", 1)
           .containsEntry("replay_budget", 0)
@@ -3389,8 +3504,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
     List<String> markerRows = Files.readAllLines(marker, StandardCharsets.UTF_8);
     assertThat(markerRows).hasSize(1);
     String markerJson = markerRows.getFirst();
-    return objectMapper.readValue(
-        markerJson, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+    return objectMapper.readValue(markerJson, new TypeReference<Map<String, Object>>() {});
   }
 
   private void captureActiveSparkOwnedProcesses(
@@ -3783,48 +3897,48 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
   @DisplayName("真实 Export Worker reclaim 与重复派发复用同一对象和 file_record，旧报告被拒")
   void shouldReuseExportArtifactAfterReclaimOnReplacementWorker_withoutDuplicateFileRecord()
       throws Exception {
-        final String insertSettlementBatchSql = """
+    final String insertSettlementBatchSql = """
         insert into biz.settlement_batch (
             tenant_id, batch_no, biz_date, accounting_period, batch_status,
             total_record_count, total_amount, currency
         ) values (?, ?, date '2026-01-15', '202601', 'READY', 1, 0, 'CNY')
         returning id
         """;
-        final String insertSettlementDetailSql = """
+    final String insertSettlementDetailSql = """
         insert into biz.settlement_detail (
             tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,
             gross_amount, fee_amount, net_amount, currency, settlement_status
         ) values (?, ?, ?, ?, date '2026-01-15', '202601', 10.00, 1.00, 9.00, 'CNY', 'READY')
         """;
-        final String selectIdSql = """
+    final String selectIdSql = """
             select p.id from batch.job_partition p join batch.job_instance ji on ji.id = p.job_instance_id\s\
             where ji.tenant_id = ? and ji.dedup_key = ?\
             """;
-        final String updateJobPartitionSql = """
+    final String updateJobPartitionSql = """
             update batch.job_partition set lease_expire_at = current_timestamp - interval '1 minute'\s\
             where tenant_id = ? and id = ?\
             """;
-        final String selectPayloadJsonSql = """
+    final String selectPayloadJsonSql = """
             select payload_json ->> 'selectedWorkerId' from batch.outbox_event where tenant_id = ?\s\
             and event_key = ?\
             """;
-        final String selectCountSql = """
+    final String selectCountSql = """
             select count(*)::int from batch.file_record where tenant_id = ? and source_ref = ?\s\
             and file_status = 'GENERATED'\
             """;
-        final String selectCountSql2 = """
+    final String selectCountSql2 = """
             select count(*) from batch.job_task where tenant_id = ? and job_instance_id = (select id\s\
             from batch.job_instance where tenant_id = ? and dedup_key = ?)\
             """;
-        final String selectIdSql2 = """
+    final String selectIdSql2 = """
             select id from batch.job_task where tenant_id = ? and job_instance_id = (select id\s\
             from batch.job_instance where tenant_id = ? and dedup_key = ?)\
             """;
-        final String selectPayloadJsonSql2 = """
+    final String selectPayloadJsonSql2 = """
             select payload_json::text from batch.outbox_event where tenant_id = ?\s\
             and aggregate_type = 'JOB_TASK' and aggregate_id = ? and event_key = ?\
             """;
-        final String selectCountSql3 = """
+    final String selectCountSql3 = """
             select count(*)::int from batch.file_record where tenant_id = ? and source_ref = ?\s\
             and file_status = 'GENERATED'\
             """;
@@ -3835,7 +3949,8 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
     String settlementNo = "R15-SET-" + Long.toUnsignedString(System.nanoTime());
     String customerNo = "R15-CUSTOMER-" + Long.toUnsignedString(System.nanoTime());
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
-    Long batchId = businessJdbc.queryForObject(insertSettlementBatchSql, Long.class, TENANT, batchNo);
+    Long batchId =
+        businessJdbc.queryForObject(insertSettlementBatchSql, Long.class, TENANT, batchNo);
     businessJdbc.update(insertSettlementDetailSql, TENANT, batchId, settlementNo, customerNo);
 
     Map<String, Object> params = new LinkedHashMap<>();
@@ -3930,16 +4045,10 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
 
       stopProcess(worker1);
       worker1 = null;
-      Long partitionId = platformJdbc.queryForObject(
-          selectIdSql,
-          Long.class,
-          TENANT,
-          seed.dedupKey());
+      Long partitionId =
+          platformJdbc.queryForObject(selectIdSql, Long.class, TENANT, seed.dedupKey());
       JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, partitionId);
-      platformJdbc.update(
-          updateJobPartitionSql,
-          TENANT,
-          partitionId);
+      platformJdbc.update(updateJobPartitionSql, TENANT, partitionId);
       partitionReclaimUnit.reclaim(partition);
       assertThat(reportStatus(seed)).isEqualTo("READY");
       String selectedPayloadJson = platformJdbc.queryForObject(
@@ -3985,12 +4094,8 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
           selectCountSql2, Integer.class, TENANT, TENANT, seed.dedupKey());
       assertThat(selectedJobTaskCount).isEqualTo(1);
 
-      Long taskId = platformJdbc.queryForObject(
-          selectIdSql2,
-          Long.class,
-          TENANT,
-          TENANT,
-          seed.dedupKey());
+      Long taskId =
+          platformJdbc.queryForObject(selectIdSql2, Long.class, TENANT, TENANT, seed.dedupKey());
       String recoveryDispatchPayload = platformJdbc.queryForObject(
           selectPayloadJsonSql2,
           String.class,
@@ -4049,11 +4154,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
         where ji.tenant_id = ? and ji.dedup_key = ?\
         """;
 
-    return platformJdbc.queryForObject(
-        selectTaskStatusSql,
-        String.class,
-        TENANT,
-        seed.dedupKey());
+    return platformJdbc.queryForObject(selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
   }
 
   private int reportOutboxCount(LaunchSeed seed) {
@@ -4064,11 +4165,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
         """;
 
     return platformJdbc.queryForObject(
-        selectCountSql,
-        Integer.class,
-        TENANT,
-        TENANT,
-        seed.dedupKey());
+        selectCountSql, Integer.class, TENANT, TENANT, seed.dedupKey());
   }
 
   private String reportOutboxStatus(LaunchSeed seed) {
@@ -4079,11 +4176,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
         """;
 
     return platformJdbc.queryForObject(
-        selectPublishStatusSql,
-        String.class,
-        TENANT,
-        TENANT,
-        seed.dedupKey());
+        selectPublishStatusSql, String.class, TENANT, TENANT, seed.dedupKey());
   }
 
   private Map<String, Object> queryGeneratedExport(String batchNo) {
@@ -4092,10 +4185,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
         and file_status = 'GENERATED'\
         """;
 
-    return platformJdbc.queryForMap(
-        selectStoragePathSql,
-        TENANT,
-        batchNo);
+    return platformJdbc.queryForMap(selectStoragePathSql, TENANT, batchNo);
   }
 
   private Process startImportWorker(
@@ -4344,11 +4434,10 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
   }
 
   private Path locateAtomicExecJar() throws IOException, InterruptedException {
-    Path targetDir = projectRoot().resolve("batch-worker/atomic/target");
-    Path execJar = findLatestExecJar(targetDir);
-    if (execJar != null) {
-      return execJar;
+    if (atomicExecJar != null && Files.isRegularFile(atomicExecJar)) {
+      return atomicExecJar;
     }
+    Path targetDir = projectRoot().resolve("batch-worker/atomic/target");
     Path logFile = Files.createTempFile("worker-atomic-build-", ".log");
     ProcessBuilder builder = new ProcessBuilder(
         "./mvnw", "-o", "-ntp", "-pl", "batch-worker/atomic", "-am", "-DskipTests", "package");
@@ -4369,11 +4458,11 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
         process.destroyForcibly();
       }
     }
-    execJar = findLatestExecJar(targetDir);
-    if (execJar == null) {
+    atomicExecJar = findLatestExecJar(targetDir);
+    if (atomicExecJar == null) {
       throw new IllegalStateException("batch-worker-atomic exec jar not found under " + targetDir);
     }
-    return execJar;
+    return atomicExecJar;
   }
 
   private Path locateDispatchExecJar() throws IOException, InterruptedException {
@@ -4509,14 +4598,21 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
   }
 
   private Path locateProcessExecJar() throws IOException, InterruptedException {
-    Path targetDir = projectRoot().resolve("batch-worker/process/target");
-    Path execJar = findLatestExecJar(targetDir);
-    if (execJar != null) {
-      return execJar;
+    if (processExecJar != null && Files.isRegularFile(processExecJar)) {
+      return processExecJar;
     }
+    Path targetDir = projectRoot().resolve("batch-worker/process/target");
     Path logFile = Files.createTempFile("worker-process-build-", ".log");
     ProcessBuilder builder = new ProcessBuilder(
-        "mvn", "-q", "-pl", "batch-worker/process", "-am", "-DskipTests", "package");
+        "./mvnw",
+        "-o",
+        "-q",
+        "-ntp",
+        "-pl",
+        "batch-worker/process",
+        "-am",
+        "-DskipTests",
+        "package");
     builder.directory(projectRoot().toFile());
     builder.redirectErrorStream(true);
     builder.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile.toFile()));
@@ -4534,11 +4630,11 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
         process.destroyForcibly();
       }
     }
-    execJar = findLatestExecJar(targetDir);
-    if (execJar == null) {
+    processExecJar = findLatestExecJar(targetDir);
+    if (processExecJar == null) {
       throw new IllegalStateException("batch-worker-process exec jar not found under " + targetDir);
     }
-    return execJar;
+    return processExecJar;
   }
 
   private Process startExportWorker(
@@ -4604,14 +4700,21 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
   }
 
   private Path locateExportExecJar() throws IOException, InterruptedException {
-    Path targetDir = projectRoot().resolve("batch-worker/export/target");
-    Path execJar = findLatestExecJar(targetDir);
-    if (execJar != null) {
-      return execJar;
+    if (exportExecJar != null && Files.isRegularFile(exportExecJar)) {
+      return exportExecJar;
     }
+    Path targetDir = projectRoot().resolve("batch-worker/export/target");
     Path logFile = Files.createTempFile("worker-export-build-", ".log");
     ProcessBuilder builder = new ProcessBuilder(
-        "mvn", "-q", "-pl", "batch-worker/export", "-am", "-DskipTests", "package");
+        "./mvnw",
+        "-o",
+        "-q",
+        "-ntp",
+        "-pl",
+        "batch-worker/export",
+        "-am",
+        "-DskipTests",
+        "package");
     builder.directory(projectRoot().toFile());
     builder.redirectErrorStream(true);
     builder.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile.toFile()));
@@ -4629,22 +4732,29 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
         process.destroyForcibly();
       }
     }
-    execJar = findLatestExecJar(targetDir);
-    if (execJar == null) {
+    exportExecJar = findLatestExecJar(targetDir);
+    if (exportExecJar == null) {
       throw new IllegalStateException("batch-worker-export exec jar not found under " + targetDir);
     }
-    return execJar;
+    return exportExecJar;
   }
 
   private Path locateImportExecJar() throws IOException, InterruptedException {
-    Path targetDir = projectRoot().resolve("batch-worker/import/target");
-    Path execJar = findLatestExecJar(targetDir);
-    if (execJar != null) {
-      return execJar;
+    if (importExecJar != null && Files.isRegularFile(importExecJar)) {
+      return importExecJar;
     }
+    Path targetDir = projectRoot().resolve("batch-worker/import/target");
     Path logFile = Files.createTempFile("worker-import-build-", ".log");
     ProcessBuilder builder = new ProcessBuilder(
-        "mvn", "-q", "-pl", "batch-worker/import", "-am", "-DskipTests", "package");
+        "./mvnw",
+        "-o",
+        "-q",
+        "-ntp",
+        "-pl",
+        "batch-worker/import",
+        "-am",
+        "-DskipTests",
+        "package");
     builder.directory(projectRoot().toFile());
     builder.redirectErrorStream(true);
     builder.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile.toFile()));
@@ -4662,11 +4772,11 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
         process.destroyForcibly();
       }
     }
-    execJar = findLatestExecJar(targetDir);
-    if (execJar == null) {
+    importExecJar = findLatestExecJar(targetDir);
+    if (importExecJar == null) {
       throw new IllegalStateException("batch-worker-import exec jar not found under " + targetDir);
     }
-    return execJar;
+    return importExecJar;
   }
 
   private Path findLatestExecJar(Path targetDir) throws IOException {

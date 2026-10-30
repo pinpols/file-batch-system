@@ -28,16 +28,16 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
- * 端到端测试：Workflow 根请求的幂等护栏（防同一业务日创建多个活跃 WorkflowRun）。
+ * 端到端测试：同一业务日只创建一个活跃 WorkflowRun，后续根请求持久化等待容量。
  *
- * <p>测试意图：验证 Workflow 根请求在业务日维度收敛到一个活跃 WorkflowRun，并把同日重复请求终结为
- * DUPLICATE，抵御上游重放、网络重试和并发重复请求。
+ * <p>测试意图：直接向 Orchestrator 提交两条已受理请求时，验证活跃名额约束和等待恢复记录。
+ * 本测试直接插入 trigger_request，不经过上游的去重受理流程。
  *
  * <p>覆盖场景：
  *
  * <ol>
- *   <li><b>串行重复</b>：第二次 launch 使用不同 request_id 触发同一个 Workflow，必须被识别为 DUPLICATE。
- *   <li><b>并发重复</b>：两个线程在 {@link CountDownLatch} 栅栏后同时 launch 同一个 Workflow，最终只创建一个活跃 run。
+ *   <li><b>串行请求</b>：第二次 launch 使用不同 request_id 触发同一个 Workflow，进入容量等待。
+ *   <li><b>并发请求</b>：两个线程在 {@link CountDownLatch} 栅栏后同时 launch 同一个 Workflow，最终只创建一个活跃 run，另一条请求进入容量等待。
  * </ol>
  */
 @E2eSpringBootTest(
@@ -50,7 +50,7 @@ import org.springframework.test.context.jdbc.Sql;
       E2eTestSql.IMPORT_TEMPLATE_SEED,
     })
 @Tag("critical")
-@DisplayName("端到端测试: 同一 Workflow 同一业务日的串行重放与并发触发只创建一个活跃 WorkflowRun")
+@DisplayName("端到端测试: 同一 Workflow 同一业务日只创建一个活跃 WorkflowRun 并持久化容量等待")
 class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -62,11 +62,11 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
   private JdbcTemplate jdbcTemplate;
 
   /**
-   * Sequential duplicate: launch once, then re-launch with a different request_id but the same
-   * dedup_key. The second call must be treated as a duplicate — no second job_instance created.
+   * 顺序请求：先发起一次，再使用不同的 request_id 和相同的 dedup_key
+   * 重新发起；第二条请求等待容量，且不得创建第二个活跃 WorkflowRun。
    */
   @Test
-  @DisplayName("同一 Workflow 用不同请求标识串行重复触发时, 第二个请求终结为重复且只保留一个活跃 run")
+  @DisplayName("同一 Workflow 串行触发时第二个请求等待容量且只保留一个活跃 run")
   void shouldKeepSingleInstance_whenSameDedupKeyLaunchedTwice() {
     final String insertTriggerRequestSql = """
         insert into batch.trigger_request (
@@ -115,20 +115,20 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
         "e2e-tr-dedup-seq-2",
         Map.of()));
 
-    Long activeRunCount =
-    jdbcTemplate.queryForObject(selectCountSql, Long.class, TENANT, seed.workflowDefinitionId());
+    Long activeRunCount = jdbcTemplate.queryForObject(
+        selectCountSql, Long.class, TENANT, seed.workflowDefinitionId());
     assertThat(activeRunCount).isEqualTo(1L);
     assertThat(requestStatus(seed.workflowDefinitionId(), seed.dedupKey()))
-        .containsExactlyInAnyOrder("DUPLICATE", "LAUNCHED");
+        .containsExactlyInAnyOrder("PROCESSING", "LAUNCHED");
+    assertWaitingCount(seed.workflowDefinitionId(), 1L);
   }
 
   /**
-   * Concurrent duplicate: two threads race to launch the same job (same dedup_key) behind a
-   * CountDownLatch barrier. Regardless of which thread wins the insert, exactly one {@code
-   * 同一 Workflow 业务日的第二次启动必须识别为重复请求。
+   * 并发请求：两个线程使用相同的 dedup_key 竞争启动同一 Workflow，并在
+   * CountDownLatch 屏障处同步。最终只能有一个活跃 run，另一条请求持久化等待。
    */
   @Test
-  @DisplayName("两个线程在栅栏后并发发起同一去重键的触发请求时, 两次调用均有结果且落库仅一条作业实例, 两条触发请求分别收敛为已发起与重复两种终态")
+  @DisplayName("两个线程并发发起同一 Workflow 时只有一个活跃 run 且另一条请求等待容量")
   void shouldReturnSingleWinner_whenSameDedupKeyLaunchedConcurrently() throws Exception {
     final String insertTriggerRequestSql = """
         insert into batch.trigger_request (
@@ -147,7 +147,7 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
             order by request_status
             """;
 
-    // Seed: job_definition + workflow_definition + two trigger_requests sharing the same dedup_key
+    // 准备数据：创建 job_definition、workflow_definition，以及共享同一 dedup_key 的两条 trigger_requests。
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
 
@@ -218,18 +218,20 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
       executor.shutdownNow();
     }
 
-    // One launch must succeed; the other is either a duplicate return or a constraint exception
-    assertThat(successCount.get() + errorCount.get()).isEqualTo(2);
+    // 两次调用均成功返回；活跃名额由数据库约束保护。
+    assertThat(successCount.get()).isEqualTo(2);
+    assertThat(errorCount.get()).isZero();
 
     // 必须存在活跃的 WorkflowRun 记录。
-    Long activeRunCount =
-    jdbcTemplate.queryForObject(selectCountSql, Long.class, TENANT, seed.workflowDefinitionId());
+    Long activeRunCount = jdbcTemplate.queryForObject(
+        selectCountSql, Long.class, TENANT, seed.workflowDefinitionId());
     assertThat(activeRunCount).isEqualTo(1L);
 
-    // Verify both trigger_requests were updated (one LAUNCHED, one DUPLICATE)
+    // 一条请求已启动，另一条仍在等待容量。
     List<String> statuses = jdbcTemplate.queryForList(
         selectRequestStatusSql, String.class, TENANT, seed.workflowDefinitionId(), seed.dedupKey());
-    assertThat(statuses).containsExactlyInAnyOrder("DUPLICATE", "LAUNCHED");
+    assertThat(statuses).containsExactlyInAnyOrder("PROCESSING", "LAUNCHED");
+    assertWaitingCount(seed.workflowDefinitionId(), 1L);
   }
 
   private List<String> requestStatus(Long workflowDefinitionId, String dedupKey) {
@@ -238,6 +240,18 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
         where tenant_id = ? and workflow_definition_id = ? and dedup_key = ?
         """;
 
-    return jdbcTemplate.queryForList(selectRequestStatusSql, String.class, TENANT, workflowDefinitionId, dedupKey);
+    return jdbcTemplate.queryForList(
+        selectRequestStatusSql, String.class, TENANT, workflowDefinitionId, dedupKey);
+  }
+
+  private void assertWaitingCount(Long workflowDefinitionId, long expected) {
+    final String selectWaitingCountSql = """
+        select count(*) from batch.workflow_launch_wait
+        where tenant_id = ? and workflow_definition_id = ? and biz_date = date '2026-01-15'
+          and dry_run = false and wait_status = 'WAITING'
+        """;
+    Long waitingCount = jdbcTemplate.queryForObject(
+        selectWaitingCountSql, Long.class, TENANT, workflowDefinitionId);
+    assertThat(waitingCount).isEqualTo(expected);
   }
 }

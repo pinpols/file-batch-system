@@ -57,7 +57,8 @@ class SensorWaitFixtureE2eIT extends AbstractIntegrationTest {
 
     Long workflowDefinitionId = jdbcTemplate.queryForObject(selectIdSql, Long.class);
 
-    Map<String, Object> waitNode = jdbcTemplate.queryForMap(selectNodeTypeSql, workflowDefinitionId);
+    Map<String, Object> waitNode =
+        jdbcTemplate.queryForMap(selectNodeTypeSql, workflowDefinitionId);
 
     assertThat(waitNode.get("node_type")).isEqualTo("WAIT");
     assertThat(String.valueOf(waitNode.get("node_params")))
@@ -65,7 +66,8 @@ class SensorWaitFixtureE2eIT extends AbstractIntegrationTest {
         .contains("\"pattern\": \"settle-*.csv\"")
         .contains("\"timeout_seconds\": 3600");
 
-    Integer edgeCount = jdbcTemplate.queryForObject(selectCountSql, Integer.class, workflowDefinitionId);
+    Integer edgeCount =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, workflowDefinitionId);
     assertThat(edgeCount).isEqualTo(2);
 
     WorkflowValidationResult result = workflowGraphValidator.validate(workflowDefinitionId);

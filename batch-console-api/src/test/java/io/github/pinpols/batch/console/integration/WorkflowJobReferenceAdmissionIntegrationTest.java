@@ -86,6 +86,25 @@ class WorkflowJobReferenceAdmissionIntegrationTest extends AbstractMutationInteg
     assertThat(nodeCount()).isZero();
   }
 
+  @Test
+  @DisplayName("缺少节点名称的创建请求返回参数错误且不产生定义或节点")
+  void shouldRejectMissingNodeName_withoutPartialWrites() {
+    String request = body("no_name", "valid", true).replace(",\"nodeName\":\"Start\"", "");
+    client
+        .post()
+        .uri("/api/console/workflow-definitions")
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(request)
+        .exchange()
+        .expectStatus()
+        .isBadRequest()
+        .expectBody()
+        .jsonPath("$.code")
+        .isEqualTo("VALIDATION_ERROR");
+    assertThat(definitionCount()).isZero();
+    assertThat(nodeCount()).isZero();
+  }
+
   @ParameterizedTest
   @ValueSource(strings = {"missing", "foreign", "disabled"})
   @DisplayName("草稿保留未就绪 Job 引用，启用定义和日程均失败关闭")
@@ -167,9 +186,10 @@ class WorkflowJobReferenceAdmissionIntegrationTest extends AbstractMutationInteg
     String selectedRelatedJobCode =
         jdbcTemplate.queryForObject(selectRelatedJobCodeSql, String.class, id);
     assertThat(selectedRelatedJobCode).isEqualTo(prefix + "_valid");
+    // create 已写入草稿的初始版本快照；被拒绝的 full update 不得再追加版本行。
     Integer selectedWorkflowDefinitionVersionCount =
         jdbcTemplate.queryForObject(selectCountSql, Integer.class, id);
-    assertThat(selectedWorkflowDefinitionVersionCount).isZero();
+    assertThat(selectedWorkflowDefinitionVersionCount).isOne();
   }
 
   @Test
@@ -263,6 +283,31 @@ class WorkflowJobReferenceAdmissionIntegrationTest extends AbstractMutationInteg
     assertThat(response.results())
         .singleElement()
         .satisfies(result -> assertThat(result.workflowDefinitions().failed()).isEqualTo(1));
+    assertThat(definitionCount()).isZero();
+    assertThat(nodeCount()).isZero();
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  @DisplayName("配置导入和演练都拒绝缺少节点名称且无部分落库")
+  void shouldRejectImportedNodeWithoutName_withoutPartialWrites(boolean dryRun) {
+    NodeSpec node = new NodeSpec();
+    node.setNodeCode("start");
+    node.setNodeType("START");
+    WorkflowDefinitionSpec workflow = new WorkflowDefinitionSpec();
+    workflow.setWorkflowCode(prefix + "_no_node_name");
+    workflow.setWorkflowName("Missing node name");
+    workflow.setWorkflowType("DAG");
+    workflow.setNodes(List.of(node));
+    TenantConfigBatchInitRequest request = new TenantConfigBatchInitRequest();
+    request.setTargetTenantIds(List.of(TENANT));
+    request.setDryRun(dryRun);
+    request.setWorkflowDefinitions(List.of(workflow));
+
+    TenantConfigBatchInitResponse response = initService.batchInit(request, "ref-admin", prefix);
+
+    assertThat(response.results().getFirst().workflowDefinitions().failed()).isOne();
+    assertThat(response.results().getFirst().workflowDefinitions().created()).isZero();
     assertThat(definitionCount()).isZero();
     assertThat(nodeCount()).isZero();
   }

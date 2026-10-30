@@ -18,11 +18,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
+import lombok.Builder;
 
 /**
  * 从 {@code file_template_config.query_param_schema.jdbcMappedImport} 或顶层 {@code
  * jdbc_mapped_import}（JSON 对象）解析而来。
  */
+@Builder
 public record JdbcMappedImportSpec(
     String schema,
     String table,
@@ -102,18 +104,19 @@ public record JdbcMappedImportSpec(
       replacePartitionColumns = parseStringList(root.get("partitionReplaceColumns"));
     }
     StageSwap stageSwap = parseStageSwap(root.get("stageSwap"));
-    return new JdbcMappedImportSpec(
-        schema,
-        table,
-        tenantColumn,
-        mappings,
-        conflicts,
-        system,
-        defaultRegion,
-        allowedRegions,
-        loadStrategy,
-        replacePartitionColumns,
-        stageSwap);
+    return JdbcMappedImportSpec.builder()
+        .schema(schema)
+        .table(table)
+        .tenantColumn(tenantColumn)
+        .columnMappings(mappings)
+        .conflictColumns(conflicts)
+        .systemBindings(system)
+        .defaultRegion(defaultRegion)
+        .allowedRegions(allowedRegions)
+        .loadStrategy(loadStrategy)
+        .replacePartitionColumns(replacePartitionColumns)
+        .stageSwap(stageSwap)
+        .build();
   }
 
   private static String required(Map<String, Object> root, String key) {
@@ -465,7 +468,8 @@ public record JdbcMappedImportSpec(
 
   public void validateIdentifiers(Collection<String> allowedSchemas) {
     validateMappingCardinality();
-    if (loadStrategy == ImportLoadStrategy.BATCH_UPSERT && EmptyChecks.isEmpty(Objects.requireNonNull(conflictColumns))) {
+    if (loadStrategy == ImportLoadStrategy.BATCH_UPSERT
+        && EmptyChecks.isEmpty(Objects.requireNonNull(conflictColumns))) {
       throw new WorkerConfigException(
           "jdbc-mapped-import BATCH_UPSERT requires conflictColumns: schema="
               + schema

@@ -387,6 +387,14 @@
       "sensitivity": "PUBLIC"
     },
     {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/readiness/TriggerInternalProperties.java#TriggerInternalProperties",
+      "className": "TriggerInternalProperties",
+      "prefix": "batch.trigger.internal",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
       "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/forensic/ForensicExportProperties.java#ForensicExportProperties",
       "className": "ForensicExportProperties",
       "prefix": "batch.forensic",
@@ -414,6 +422,14 @@
       "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/trigger/TriggerLaunchReconcilerProperties.java#TriggerLaunchReconcilerProperties",
       "className": "TriggerLaunchReconcilerProperties",
       "prefix": "batch.trigger.launch.reconcile",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/trigger/TriggerLaunchRecoveryProperties.java#TriggerLaunchRecoveryProperties",
+      "className": "TriggerLaunchRecoveryProperties",
+      "prefix": "batch.trigger.launch-recovery",
       "source": "STATIC",
       "activation": "RESTART_REQUIRED",
       "sensitivity": "PUBLIC"
@@ -598,6 +614,14 @@
       "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/RateLimitProperties.java#RateLimitProperties",
       "className": "RateLimitProperties",
       "prefix": "batch.rate-limit",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/ReplayOperationProperties.java#ReplayOperationProperties",
+      "className": "ReplayOperationProperties",
+      "prefix": "batch.replay-operation",
       "source": "STATIC",
       "activation": "RESTART_REQUIRED",
       "sensitivity": "PUBLIC"

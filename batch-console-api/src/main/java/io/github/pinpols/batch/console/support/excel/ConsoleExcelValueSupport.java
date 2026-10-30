@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.support.excel;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.Locale;
 
-/** Shared scalar conversion helpers for Excel validation rules. */
+/** Excel 校验规则共用的标量转换辅助方法。 */
 public final class ConsoleExcelValueSupport {
 
   private ConsoleExcelValueSupport() {}

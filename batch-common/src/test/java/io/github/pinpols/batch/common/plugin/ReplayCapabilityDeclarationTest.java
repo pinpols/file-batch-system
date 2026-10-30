@@ -105,7 +105,8 @@ class ReplayCapabilityDeclarationTest {
         "tenant+business-key",
         "manual-reconciliation");
 
-    assertThat(conservative.covers(ReplayCapabilityDeclaration.unknown("plugin-x"))).isFalse();
+    assertThat(conservative.covers(ReplayCapabilityDeclaration.unknown("plugin-x")))
+        .isFalse();
     assertThat(conservative.covers(nonIdempotent)).isFalse();
   }
 
@@ -114,11 +115,13 @@ class ReplayCapabilityDeclarationTest {
   void shouldRequirePositiveOperationAndCapability_whenCreatingReplayGuard() {
     ReplayCapabilityDeclaration unknown = ReplayCapabilityDeclaration.unknown("plugin-x");
 
-    assertThatThrownBy(() -> new ReplayExecutionGuard(0L, declaration(
-            List.of("DATABASE_WRITE"),
-            IdempotencyCapability.IDEMPOTENT_BY_UNIQUE_CONSTRAINT,
-            "tenant+business-key",
-            "database-unique-constraint")))
+    assertThatThrownBy(() -> new ReplayExecutionGuard(
+            0L,
+            declaration(
+                List.of("DATABASE_WRITE"),
+                IdempotencyCapability.IDEMPOTENT_BY_UNIQUE_CONSTRAINT,
+                "tenant+business-key",
+                "database-unique-constraint")))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("replayOperationId must be positive");
     assertThatThrownBy(() -> new ReplayExecutionGuard(7L, unknown))

@@ -107,8 +107,11 @@ jobs:
         shell: bash
         run: |
           source scripts/lib/gate-result.sh
-          gate_run FULL_SIM_XLSX_FIXTURES "Sim 配置包 Excel schema" python3 scripts/fix-fixture-xlsx.py --check
-          gate_run FULL_SIM_XLSX_FIXTURE_TEST "Sim 配置包 Excel schema 门禁测试" python3 -m unittest scripts/ci/tests/test_fix_fixture_xlsx.py
+          gate_run FULL_SIM_XLSX_FIXTURES "Sim 配置包 Excel schema" python3 scripts/sim/fix-fixture-xlsx.py --check
+          gate_run FULL_SIM_XLSX_FIXTURE_TEST "Sim 配置包 Excel schema 门禁测试" python3 -m unittest \
+            scripts/ci/tests/test_fix_fixture_xlsx.py \
+            scripts/ci/tests/test_sim_tenant_fixture.py \
+            scripts/ci/tests/test_config_package_fixture_generators.py
 
       - name: Verify repository hygiene
         shell: bash
@@ -146,6 +149,9 @@ jobs:
           gate_run FULL_SOFT_GATES "软门禁治理" python3 scripts/ci/check-soft-gate-governance.py
           gate_run FULL_FLAKY_QUARANTINE "flaky 测试隔离治理" python3 scripts/ci/check-flaky-test-governance.py
           gate_run FULL_CI_QUALITY_GUARD_TESTS "CI 质量治理门禁测试" python3 -m unittest \
+            scripts/ci/tests/test_validate_flyway_schema.py \
+            scripts/ci/tests/test_check_migration_safety.py \
+            scripts/ci/tests/test_select_affected_tests.py \
             scripts/ci/tests/test_check_script_governance.py \
             scripts/ci/tests/test_check_docs_structure.py \
             scripts/ci/tests/test_document_naming_policy.py \
@@ -157,6 +163,7 @@ jobs:
             scripts/ci/tests/test_check_java_governance_test_coverage.py \
             scripts/ci/tests/test_java_worktree_source_inventory.py \
             scripts/ci/tests/test_sim_sftp_known_hosts.py \
+            scripts/ci/tests/test_sim_export_partition_evidence.py \
             scripts/ci/tests/test_sim_fault_channel_cleanup.py \
             scripts/ci/tests/test_sim_worker_readiness.py \
             scripts/ci/tests/test_runtime_warning_audit.py \
@@ -392,6 +399,9 @@ jobs:
         # full-ci-gate 自身也做静态侧守护,防绕过 PR 直推 main 时新增 / 重命名 E2E 漏挂 shard。
         run: bash scripts/ci/run-gate.sh FULL_E2E_SHARD_COVERAGE "E2E shard 覆盖" -- bash scripts/ci/check-e2e-shard-coverage.sh
 
+      - name: Test E2E shard coverage guard
+        run: bash scripts/ci/run-gate.sh --group governance FULL_E2E_SHARD_COVERAGE_TEST "E2E shard 覆盖守卫测试" -- python3 -m unittest scripts/ci/tests/test_e2e_shard_coverage.py scripts/ci/tests/test_e2e_method_completeness.py
+
       - name: Verify full-ci covers all integration test modules
         shell: bash
         # 主 reactor 里含 *IntegrationTest / *IT 的模块必须进入下方 unit-it 的
@@ -452,7 +462,7 @@ jobs:
           ./mvnw install -pl "$MODULES" -am -DskipTests \
             -Dspotless.check.skip=true -Dpmd.skip=true -B
           ./mvnw verify -pl batch-orchestrator,batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit \
-            -Dtest='!*ArchTest,!*ConventionTest' \
+            -Dtest='!*ArchTest,!*ConventionTest,!ArchiveDiagnosticCadenceProbeIT' \
             -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
           # 覆盖率门禁(BUNDLE 25% LINE + 15 个核心类 80% lock-in 棘轮)。原仅本地 strict-verify 跑,
@@ -723,9 +733,8 @@ jobs:
 
       - name: Security scan — secrets
         shell: bash
-        # --skip-tests:绕开 security-scan 子模块单测(纯内部 orchestrator/options 逻辑,
-        # 跟 scan 业务正确性无关;Java 25 + mockito javaagent 偶发 fork JVM crash 历史多次)
-        run: bash scripts/ci/run-gate.sh FULL_SECRET_SCAN "密钥泄漏扫描" -- bash scripts/ci/security-scan.sh --skip-tests -- --mode=secret
+        # 独立模块不属于主 reactor；打包时执行其编排和报告单测，再运行密钥扫描。
+        run: bash scripts/ci/run-gate.sh FULL_SECRET_SCAN "密钥泄漏扫描" -- bash scripts/ci/security-scan.sh -- --mode=secret
 
       - name: Install trivy
         shell: bash
@@ -783,14 +792,13 @@ jobs:
           output_format: cli
 
   # ===========================================================================
-  # Job 3: e2e shard matrix。28 个 *E2eIT 按 2026-10-07 实测 LPT 均衡分成 6 组。
-  # 单 shard 测试体约 148-179s；加依赖安装和 Testcontainers 后目标 wall-clock 4-5min。
+  # Job 3: e2e shard matrix。原六片保留历史基线；新增场景独立分片，避免集中形成长尾。
   #
   # 分组证据见 docs/verifications/ci-gate-runtime-optimization-2026-10-07.md。
   # ===========================================================================
   e2e-shard:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: ${{ (contains(matrix.shard.tests, 'shouldStopAtomicSparkReplay') || matrix.shard.tests == 'WorkerReportLostAfterBusinessCommitE2eIT') && 30 || 25 }}
     env:
       TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
     strategy:
@@ -844,6 +852,65 @@ jobs:
               DispatchPipelineE2eIT,
               AtomicTaskLoadE2eIT,
               FilesystemBackendPipelineE2eIT
+          - id: 7
+            label: "business commit recovery"
+            tests: >-
+              WorkerReportLostAfterBusinessCommitE2eIT#shouldRecoverWhenReportAcknowledgementIsLostAfterCommitAndWorkerRestarts+shouldResumeImportCheckpointAfterWorkerProcessIsKilled+shouldCompleteReclaimedAttemptOnReplacementWorker_withoutDuplicateBusinessEffect+shouldReuseProcessCommitAfterReclaim_withoutDuplicateBusinessEffect+shouldReplayProcessPublish_whenCommitResponseIsLostAfterDatabaseCommit
+          - id: 8
+            label: "workflow catch-up and approval"
+            tests: >-
+              WorkflowOccurrenceCatchUpApprovalE2eIT
+          - id: 9
+            label: "stale report fence"
+            tests: >-
+              StaleWorkerReportFenceE2eIT
+          - id: 10
+            label: "self-service compensation"
+            tests: >-
+              SelfServiceJobCompensationHttpE2eIT
+          - id: 11
+            label: "Kafka namespace isolation"
+            tests: >-
+              KafkaConsumerNamespaceIsolationE2eIT,
+              AtomicWorkerKafkaNamespaceIsolationE2eIT,
+              DispatchWorkerKafkaNamespaceIsolationE2eIT,
+              ExportWorkerKafkaNamespaceIsolationE2eIT,
+              ProcessWorkerKafkaNamespaceIsolationE2eIT
+          - id: 12
+            label: "launch and replay recovery"
+            tests: >-
+              JobPushProcessRecoveryE2eIT,
+              LaunchProcessCrashRecoveryE2eIT,
+              ReadinessHandoverE2eIT,
+              ReplayAdmissionRecoveryE2eIT
+          - id: 13
+            label: "approval and notification"
+            tests: >-
+              ApprovalSourceReconciliationE2eIT,
+              JobSlaAlertmanagerIdentityE2eIT,
+              TriggerLaunchRecoveryE2eIT,
+              WorkflowTerminalNotificationE2eIT
+          - id: 14
+            label: "export and SDK recovery"
+            tests: >-
+              ExportPartitionContentE2eIT,
+              SdkOrdinaryLeaseRecoveryE2eIT
+          - id: 15
+            label: "terminal process recovery"
+            tests: >-
+              WorkflowTerminalNotificationProcessRecoveryE2eIT
+          - id: 16
+            label: "recovery methods 2"
+            tests: >-
+              WorkerReportLostAfterBusinessCommitE2eIT#shouldNotDuplicateDispatchSideEffect_whenWorkerIsReclaimedAfterDelivery+shouldNotRedeliverAfterWorkerCrash_whenApiPushAcceptedBeforeOutcomePersisted+shouldReuseOssObjectsAfterReclaim_whenReportWasLostAfterManifestCommit+shouldNotUploadAfterWorkerCrash_whenOssObjectCommittedBeforeAcknowledgement+shouldNotRedeliverAfterWorkerCrash_whenSmtpAcceptedMessageBeforeOutcomePersisted
+          - id: 17
+            label: "recovery methods 3"
+            tests: >-
+              WorkerReportLostAfterBusinessCommitE2eIT#shouldDeduplicateAtomicHttpSideEffect_whenWorkerIsReclaimedAfterDelivery+shouldStopAtomicReplayAfterNonIdempotentSideEffect_whenWorkerIsReclaimed+shouldStopAtomicShellReplay_whenWorkerCrashesAfterFilesystemSideEffect+shouldStopAtomicSparkReplay_whenWorkerCrashesAfterSparkOutputCommit+shouldStopAtomicSparkReplay_whenWorkerJvmCrashesDuringActiveSparkAction
+          - id: 18
+            label: "recovery methods 4"
+            tests: >-
+              WorkerReportLostAfterBusinessCommitE2eIT#shouldStopAtomicSqlReplay_whenWorkerCrashesAfterDatabaseCommit+shouldStopAtomicStoredProcReplay_whenWorkerCrashesAfterDatabaseCommit+shouldReuseExportArtifactAfterReclaimOnReplacementWorker_withoutDuplicateFileRecord
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -852,6 +919,16 @@ jobs:
 
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
+
+      - name: Setup Python for Spark recovery scenarios
+        if: (contains(matrix.shard.tests, 'shouldStopAtomicSparkReplay') || matrix.shard.tests == 'WorkerReportLostAfterBusinessCommitE2eIT')
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+
+      - name: Prepare verified Spark runtime
+        if: (contains(matrix.shard.tests, 'shouldStopAtomicSparkReplay') || matrix.shard.tests == 'WorkerReportLostAfterBusinessCommitE2eIT')
+        run: python3 scripts/local/spark-e2e-runtime.py --prepare
 
       - name: Install upstream modules to ~/.m2 (skip tests)
         shell: bash
@@ -866,14 +943,18 @@ jobs:
           TESTS="${{ matrix.shard.tests }}"
           # 去掉 YAML 折行引入的空白
           TESTS=$(echo "$TESTS" | tr -d ' \n')
-          ./mvnw test -pl batch-e2e-tests \
-            -Dtest="$TESTS" \
-            -Dsurefire.failIfNoSpecifiedTests=false -B
+          if [[ "$TESTS" == *shouldStopAtomicSparkReplay* || "$TESTS" == "WorkerReportLostAfterBusinessCommitE2eIT" ]]; then
+            python3 scripts/local/spark-e2e-runtime.py -- ./mvnw test -pl batch-e2e-tests \
+              -Dtest="$TESTS" -Dsurefire.failIfNoSpecifiedTests=false -B
+          else
+            ./mvnw test -pl batch-e2e-tests \
+              -Dtest="$TESTS" -Dsurefire.failIfNoSpecifiedTests=false -B
+          fi
 
       - name: Verify E2E shard ${{ matrix.shard.id }} run completeness
         shell: bash
         # 运行侧闭环:failIfNoSpecifiedTests=false 会把「清单列了但没真跑」吞成绿色。
-        # 比对本 shard 实际产出的 surefire testsuite report 数 == 清单声明的类数,不等则 fail。
+        # 校验类报告至少有执行用例；方法分片还需逐项匹配，不能仅以文件存在认定通过。
         run: |
           bash scripts/ci/check-e2e-run-completeness.sh \
             "${{ matrix.shard.tests }}" \

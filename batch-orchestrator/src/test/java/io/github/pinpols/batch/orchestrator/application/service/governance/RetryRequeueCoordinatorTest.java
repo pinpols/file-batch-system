@@ -1,15 +1,10 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
-import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
-
-
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -24,6 +19,7 @@ import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
+import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity;
@@ -36,11 +32,13 @@ import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.RetryScheduleMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.util.List;
+import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentMatchers;
 
 @DisplayName("重试重排队协调器: 认领丢失, 分区与任务复位及重试派发事件")
 class RetryRequeueCoordinatorTest {
@@ -110,8 +108,13 @@ class RetryRequeueCoordinatorTest {
     verify(jobPartitionMapper).resetForDispatch("tenant-a", 10L, PartitionStatus.READY.code(), 4L);
     verify(jobTaskMapper).resetForRetry("tenant-a", 30L, TaskStatus.READY.code(), 8L);
     verify(taskDispatchOutboxService)
-        .writeDispatchEvent(
-            org.mockito.ArgumentMatchers.argThat(command -> command != null && command.jobInstance() == instance && command.task() == firstTask && command.partition() == partition && java.util.Objects.equals(command.traceId(), "trace-20") && java.util.Objects.equals(command.eventKey(), "retry-event") && java.util.Objects.equals(command.runModeOverride(), RunMode.RETRY)));
+        .writeDispatchEvent(ArgumentMatchers.argThat(command -> command != null
+            && command.jobInstance() == instance
+            && command.task() == firstTask
+            && command.partition() == partition
+            && Objects.equals(command.traceId(), "trace-20")
+            && Objects.equals(command.eventKey(), "retry-event")
+            && Objects.equals(command.runModeOverride(), RunMode.RETRY)));
   }
 
   @Test
@@ -136,7 +139,7 @@ class RetryRequeueCoordinatorTest {
         .resetForDispatch(anyString(), anyLong(), anyString(), anyLong());
     verify(jobTaskMapper, never()).resetForRetry(anyString(), anyLong(), anyString(), anyLong());
     verify(taskDispatchOutboxService, never())
-        .writeDispatchEvent(org.mockito.ArgumentMatchers.any(TaskDispatchEventCommand.class));
+        .writeDispatchEvent(ArgumentMatchers.any(TaskDispatchEventCommand.class));
   }
 
   @Test
@@ -157,7 +160,7 @@ class RetryRequeueCoordinatorTest {
 
     verify(jobTaskMapper, never()).resetForRetry(anyString(), anyLong(), anyString(), anyLong());
     verify(taskDispatchOutboxService, never())
-        .writeDispatchEvent(org.mockito.ArgumentMatchers.any(TaskDispatchEventCommand.class));
+        .writeDispatchEvent(ArgumentMatchers.any(TaskDispatchEventCommand.class));
   }
 
   @Test
@@ -176,8 +179,13 @@ class RetryRequeueCoordinatorTest {
     verify(jobStepInstanceMapper)
         .resetForRetryByJobTaskId("tenant-a", 30L, 1, StepInstanceStatus.READY.code());
     verify(taskDispatchOutboxService)
-        .writeDispatchEvent(
-            org.mockito.ArgumentMatchers.argThat(command -> command != null && command.jobInstance() == instance && command.task() == task && java.util.Objects.equals(command.partition(), null) && java.util.Objects.equals(command.traceId(), "trace-20") && java.util.Objects.equals(command.eventKey(), "retry-task") && java.util.Objects.equals(command.runModeOverride(), RunMode.RETRY)));
+        .writeDispatchEvent(ArgumentMatchers.argThat(command -> command != null
+            && command.jobInstance() == instance
+            && command.task() == task
+            && Objects.equals(command.partition(), null)
+            && Objects.equals(command.traceId(), "trace-20")
+            && Objects.equals(command.eventKey(), "retry-task")
+            && Objects.equals(command.runModeOverride(), RunMode.RETRY)));
   }
 
   @Test
@@ -197,7 +205,7 @@ class RetryRequeueCoordinatorTest {
         .resetForRetryByJobTaskId(anyString(), anyLong(), anyInt(), anyString());
     verify(jobTaskMapper, never()).resetForRetry(anyString(), anyLong(), anyString(), anyLong());
     verify(taskDispatchOutboxService, never())
-        .writeDispatchEvent(org.mockito.ArgumentMatchers.any(TaskDispatchEventCommand.class));
+        .writeDispatchEvent(ArgumentMatchers.any(TaskDispatchEventCommand.class));
   }
 
   @Test
@@ -211,7 +219,7 @@ class RetryRequeueCoordinatorTest {
 
     verify(jobInstanceMapper, never()).selectById(anyString(), anyLong());
     verify(taskDispatchOutboxService, never())
-        .writeDispatchEvent(org.mockito.ArgumentMatchers.any(TaskDispatchEventCommand.class));
+        .writeDispatchEvent(ArgumentMatchers.any(TaskDispatchEventCommand.class));
   }
 
   @ParameterizedTest
@@ -244,7 +252,7 @@ class RetryRequeueCoordinatorTest {
     verify(jobPartitionMapper, never())
         .resetForDispatch(anyString(), anyLong(), anyString(), anyLong());
     verify(taskDispatchOutboxService, never())
-        .writeDispatchEvent(org.mockito.ArgumentMatchers.any(TaskDispatchEventCommand.class));
+        .writeDispatchEvent(ArgumentMatchers.any(TaskDispatchEventCommand.class));
   }
 
   @ParameterizedTest
@@ -275,7 +283,7 @@ class RetryRequeueCoordinatorTest {
 
     verify(jobTaskMapper, never()).resetForRetry(anyString(), anyLong(), anyString(), anyLong());
     verify(taskDispatchOutboxService, never())
-        .writeDispatchEvent(org.mockito.ArgumentMatchers.any(TaskDispatchEventCommand.class));
+        .writeDispatchEvent(ArgumentMatchers.any(TaskDispatchEventCommand.class));
   }
 
   private static RetryScheduleEntity retrySchedule(Long id, Long relatedId) {

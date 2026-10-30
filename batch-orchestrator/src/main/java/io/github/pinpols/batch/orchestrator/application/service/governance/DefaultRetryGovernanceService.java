@@ -1,9 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
-import io.github.pinpols.batch.orchestrator.domain.param.DeadLetterTaskMarkReplayFailureParam;
-import io.github.pinpols.batch.orchestrator.domain.param.DeadLetterTaskMarkReplaySuccessParam;
-
-
 import io.github.pinpols.batch.common.enums.DeadLetterErrorClass;
 import io.github.pinpols.batch.common.enums.DeadLetterReplayStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -29,6 +25,8 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.RetryScheduleEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.DeadLetterTaskMarkReplayFailureParam;
+import io.github.pinpols.batch.orchestrator.domain.param.DeadLetterTaskMarkReplaySuccessParam;
 import io.github.pinpols.batch.orchestrator.domain.query.RetryScheduleQuery;
 import io.github.pinpols.batch.orchestrator.mapper.DeadLetterTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
@@ -225,7 +223,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         RetryScheduleStatus.WAITING.code(),
         BatchDateTimeSupport.utcNow(),
         governance.retry().getBatchSize());
-    List<RetryScheduleEntity> dueRetries = retryScheduleMapper.selectByQuery(dueRetryQuery);
+    List<RetryScheduleEntity> dueRetries = retryScheduleMapper.selectDueNotPaused(dueRetryQuery);
     for (RetryScheduleEntity retrySchedule : dueRetries) {
       try {
         RlsTenantContextHolder.runWithTenant(
@@ -285,8 +283,11 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
           deadLetter.getMaxReplayCount() == null ? 0 : deadLetter.getMaxReplayCount();
       // 边界保护: scheduler 选出的应满足 replay_count < max_replay_count, 但配置 / 数据漂移可能让 max=0 漏进来
       if (currentReplayCount >= maxReplayCount) {
-        RlsTenantContextHolder.runWithTenant(
+        int changed = RlsTenantContextHolder.runWithTenant(
             tenantId, () -> deadLetterTaskMapper.markGiveUp(tenantId, deadLetterId));
+        if (changed == 0) {
+          continue;
+        }
         log.warn(
             "dead letter give up (max replay count reached on entry): tenantId={},"
                 + " deadLetterId={}, replayCount={}, maxReplayCount={}",
@@ -325,8 +326,11 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         // markReplayFailure 已在 replayDeadLetter 内部被调用; 这里检查是否已用尽预算, 转 GIVE_UP
         int newReplayCount = currentReplayCount + 1;
         if (newReplayCount >= maxReplayCount) {
-          RlsTenantContextHolder.runWithTenant(
+          int changed = RlsTenantContextHolder.runWithTenant(
               tenantId, () -> deadLetterTaskMapper.markGiveUp(tenantId, deadLetterId));
+          if (changed == 0) {
+            continue;
+          }
           log.warn(
               "dead letter give up (max replay count exhausted): tenantId={},"
                   + " deadLetterId={}, replayCount={}, maxReplayCount={}, lastError={}",
@@ -383,11 +387,10 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
       throw new IllegalStateException("reclaim task not found");
     }
     String status = task.getStatus();
-    boolean taskStatusIsNotReclaimable =
-        !TaskStatus.RUNNING.code().equals(status)
-            && !TaskStatus.FAILED.code().equals(status)
-            && !TaskStatus.CANCELLED.code().equals(status)
-            && !TaskStatus.TERMINATED.code().equals(status);
+    boolean taskStatusIsNotReclaimable = !TaskStatus.RUNNING.code().equals(status)
+        && !TaskStatus.FAILED.code().equals(status)
+        && !TaskStatus.CANCELLED.code().equals(status)
+        && !TaskStatus.TERMINATED.code().equals(status);
     if (taskStatusIsNotReclaimable) {
       throw new IllegalStateException(
           "reclaim only allowed from RUNNING or terminal state, current status: " + status);
@@ -415,13 +418,11 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         .externalActionVerifiedNotExecuted(false)
         .externalOutcomeEvidenceReference(null)
         .build();
-    replayDeadLetter(
-        replayInput);
+    replayDeadLetter(replayInput);
   }
 
   @Override
-  public void replayDeadLetter(
-      DeadLetterReplayInput input) {
+  public void replayDeadLetter(DeadLetterReplayInput input) {
     String tenantId = input.tenantId();
     Long deadLetterTaskId = input.deadLetterTaskId();
     String operatorId = input.operatorId();
@@ -448,8 +449,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     }
     // P1-1: 人工触发的死信重放,先写 audit 再走主流程。
     // 审计和实际重放分别独立提交：审计必须在重放失败时保留，重放仍需满足 outbox 的事务要求。
-    inNewTransaction(() -> appendDeadLetterReplayAudit(
-        input));
+    inNewTransaction(() -> appendDeadLetterReplayAudit(input));
     replayDeadLetterInNewTransaction(tenantId, deadLetterTaskId);
   }
 
@@ -476,14 +476,12 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
           .externalActionVerifiedNotExecuted(true)
           .externalOutcomeEvidenceReference(evidenceReference)
           .build();
-      appendDeadLetterReplayAudit(
-        auditInput);
+      appendDeadLetterReplayAudit(auditInput);
     });
   }
 
   /** 写一条 DEAD_LETTER_REPLAY 审计日志。 独立 REQUIRES_NEW 短事务,保证即使 replayDeadLetter 自身失败,audit 仍留痕。 */
-  private void appendDeadLetterReplayAudit(
-      DeadLetterReplayInput input) {
+  private void appendDeadLetterReplayAudit(DeadLetterReplayInput input) {
     String tenantId = input.tenantId();
     Long deadLetterTaskId = input.deadLetterTaskId();
     String operatorId = input.operatorId();
@@ -527,6 +525,17 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   @Override
   public void replayDeadLetter(String tenantId, Long deadLetterTaskId) {
     replayDeadLetterInNewTransaction(tenantId, deadLetterTaskId);
+  }
+
+  @Override
+  public void replayDeadLetterInCurrentTransaction(String tenantId, Long deadLetterTaskId) {
+    TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+    transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_MANDATORY);
+    RuntimeException failure = transaction.execute(
+        status -> replayDeadLetterWithinTransaction(tenantId, deadLetterTaskId, status));
+    if (EmptyChecks.isNotNull(failure)) {
+      throw failure;
+    }
   }
 
   private RuntimeException replayDeadLetterWithinTransaction(
@@ -583,18 +592,20 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
               tenantId + ":dead-letter:" + deadLetterTaskId);
         } else {
           retryRequeueCoordinator.requeuePartition(
-              tenantId, deadLetterTask.getSourceId(), tenantId + ":dead-letter:" + deadLetterTaskId);
+              tenantId,
+              deadLetterTask.getSourceId(),
+              tenantId + ":dead-letter:" + deadLetterTaskId);
         }
-        DeadLetterTaskMarkReplaySuccessParam deadLetterTaskMarkReplaySuccessParam = DeadLetterTaskMarkReplaySuccessParam.builder()
-            .tenantId(tenantId)
-            .id(deadLetterTaskId)
-            .successStatus(DeadLetterReplayStatus.SUCCESS.code())
-            .replayCount(replayCount)
-            .lastReplayAt(replayAt)
-            .lastReplayResult("REPLAY_ACCEPTED")
-            .build();
-        deadLetterTaskMapper.markReplaySuccess(
-            deadLetterTaskMarkReplaySuccessParam);
+        DeadLetterTaskMarkReplaySuccessParam deadLetterTaskMarkReplaySuccessParam =
+            DeadLetterTaskMarkReplaySuccessParam.builder()
+                .tenantId(tenantId)
+                .id(deadLetterTaskId)
+                .successStatus(DeadLetterReplayStatus.SUCCESS.code())
+                .replayCount(replayCount)
+                .lastReplayAt(replayAt)
+                .lastReplayResult("REPLAY_ACCEPTED")
+                .build();
+        deadLetterTaskMapper.markReplaySuccess(deadLetterTaskMarkReplaySuccessParam);
         status.releaseSavepoint(savepoint);
         return null;
       } catch (RuntimeException exception) {
@@ -627,17 +638,17 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         Instant nextAuto = shouldScheduleAutoRetry(deadLetterTask, replayCount)
             ? calculateNextRetryAt(RetryPolicyType.EXPONENTIAL.code(), replayCount)
             : null;
-        DeadLetterTaskMarkReplayFailureParam deadLetterTaskMarkReplayFailureParam = DeadLetterTaskMarkReplayFailureParam.builder()
-            .tenantId(tenantId)
-            .id(deadLetterTaskId)
-            .targetStatus(DeadLetterReplayStatus.FAILED.code())
-            .replayCount(replayCount)
-            .lastReplayAt(replayAt)
-            .lastReplayResult(truncateReplayResultSummary(exception))
-            .nextReplayAt(nextAuto)
-            .build();
-        deadLetterTaskMapper.markReplayFailure(
-            deadLetterTaskMarkReplayFailureParam);
+        DeadLetterTaskMarkReplayFailureParam deadLetterTaskMarkReplayFailureParam =
+            DeadLetterTaskMarkReplayFailureParam.builder()
+                .tenantId(tenantId)
+                .id(deadLetterTaskId)
+                .targetStatus(DeadLetterReplayStatus.FAILED.code())
+                .replayCount(replayCount)
+                .lastReplayAt(replayAt)
+                .lastReplayResult(truncateReplayResultSummary(exception))
+                .nextReplayAt(nextAuto)
+                .build();
+        deadLetterTaskMapper.markReplayFailure(deadLetterTaskMarkReplayFailureParam);
         return exception;
       }
     } finally {
@@ -679,9 +690,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
       Integer resolvedRetryMaxCount = EmptyChecks.isNull(retryMaxCount)
           ? governance.retry().getDefaultMaxRetryCount()
           : retryMaxCount;
-      return new RetryPolicyPlan(
-          resolvedRetryPolicy,
-          resolvedRetryMaxCount);
+      return new RetryPolicyPlan(resolvedRetryPolicy, resolvedRetryMaxCount);
     }
     return resolveRetryPolicy(jobInstance.getJobDefinitionId());
   }

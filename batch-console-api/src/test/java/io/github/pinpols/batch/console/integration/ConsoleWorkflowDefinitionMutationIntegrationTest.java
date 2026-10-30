@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -120,6 +122,117 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationI
     jdbcTemplate.update(deleteWorkflowEdgeSql, defId);
     jdbcTemplate.update(deleteWorkflowNodeSql, defId);
     jdbcTemplate.update(deleteWorkflowDefinitionSql, defId);
+  }
+
+  @Test
+  @DisplayName("Workflow 策略允许租户管理员读写并拒绝租户用户修改")
+  void shouldAuthorizeWorkflowMonitoringPolicyByTenantRole() {
+    final String selectIdSql = """
+        SELECT id FROM batch.workflow_definition WHERE tenant_id = ? AND workflow_code = ?
+    """;
+    final String selectPolicySql = """
+        SELECT soft_runtime_seconds, start_grace_seconds
+        FROM batch.workflow_monitoring_policy WHERE tenant_id = ? AND workflow_definition_id = ?
+    """;
+    final String deleteWorkflowEdgeSql = """
+        DELETE FROM batch.workflow_edge WHERE workflow_definition_id = ?
+    """;
+    final String deleteWorkflowNodeSql = """
+        DELETE FROM batch.workflow_node WHERE workflow_definition_id = ?
+    """;
+    final String deleteWorkflowDefinitionSql = """
+        DELETE FROM batch.workflow_definition WHERE id = ?
+    """;
+
+    String workflowCode = "int_wf_policy_auth_" + System.currentTimeMillis();
+    Long definitionId = null;
+    String policyBody = """
+        {
+          "tenantId": "int-wf-ta",
+          "softRuntimeSeconds": 300,
+          "softRuntimeSeverity": "ERROR",
+          "startGraceSeconds": 120,
+          "startGraceSeverity": "WARN",
+          "completionDeadlineLocalTime": "04:30",
+          "completionDeadlineDayOffset": 1,
+          "completionDeadlineSeverity": "CRITICAL"
+        }
+        """;
+    try {
+      client
+          .post()
+          .uri("/api/console/workflow-definitions")
+          .header(
+              CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER,
+              "idem-wf-policy-create-" + workflowCode)
+          .header("X-Console-User", "workflow-policy-admin")
+          .header("X-Console-Roles", "ROLE_TENANT_ADMIN")
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, "int-wf-ta")
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(body(workflowCode, "task1", "start"))
+          .exchange()
+          .expectStatus()
+          .isOk();
+
+      definitionId =
+          jdbcTemplate.queryForObject(selectIdSql, Long.class, "int-wf-ta", workflowCode);
+      String policyPath = "/api/console/workflow-definitions/{id}/monitoring-policy";
+      client
+          .put()
+          .uri(policyPath, definitionId)
+          .header(
+              CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-wf-policy-save-" + workflowCode)
+          .header("X-Console-User", "workflow-policy-admin")
+          .header("X-Console-Roles", "ROLE_TENANT_ADMIN")
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, "int-wf-ta")
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(policyBody)
+          .exchange()
+          .expectStatus()
+          .isOk()
+          .expectBody(String.class)
+          .value(body -> assertThat(body).contains("\"softRuntimeSeconds\":300"));
+
+      client
+          .get()
+          .uri(policyPath + "?tenantId={tenantId}", definitionId, "int-wf-ta")
+          .header("X-Console-User", "workflow-policy-admin")
+          .header("X-Console-Roles", "ROLE_TENANT_ADMIN")
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, "int-wf-ta")
+          .exchange()
+          .expectStatus()
+          .isOk()
+          .expectBody(String.class)
+          .value(body -> assertThat(body)
+              .contains("\"softRuntimeSeconds\":300")
+              .contains("\"startGraceSeconds\":120"));
+
+      client
+          .put()
+          .uri(policyPath, definitionId)
+          .header(
+              CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-wf-policy-user-" + workflowCode)
+          .header("X-Console-User", "workflow-policy-user")
+          .header("X-Console-Roles", "ROLE_TENANT_USER")
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, "int-wf-ta")
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(policyBody)
+          .exchange()
+          .expectStatus()
+          .isForbidden();
+
+      Map<String, Object> stored =
+          jdbcTemplate.queryForMap(selectPolicySql, "int-wf-ta", definitionId);
+      assertThat(stored)
+          .containsEntry("soft_runtime_seconds", 300)
+          .containsEntry("start_grace_seconds", 120);
+    } finally {
+      if (definitionId != null) {
+        jdbcTemplate.update(deleteWorkflowEdgeSql, definitionId);
+        jdbcTemplate.update(deleteWorkflowNodeSql, definitionId);
+        jdbcTemplate.update(deleteWorkflowDefinitionSql, definitionId);
+      }
+    }
   }
 
   @Test
@@ -389,6 +502,122 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationI
     // 守护:异常数据不入库
     Long cnt = jdbcTemplate.queryForObject(selectCountSql, Long.class, "int_wf_bad_node");
     assertThat(cnt).isZero();
+  }
+
+  @Test
+  @DisplayName("创建 Workflow 时拒绝汇聚阈值小数或溢出且不写入定义")
+  void shouldRejectInvalidJoinThresholdWithoutPersistingWorkflow() {
+    String tenant = "wf-join-" + System.nanoTime();
+    String count =
+        "select count(*) from batch.workflow_definition where tenant_id = ? and workflow_code = ?";
+    for (String threshold : List.of("1.5", "4294967297")) {
+      String code = "wf_join_bad_" + threshold.replace('.', '_');
+      Map<String, Object> request = joinThresholdRequest(tenant, code, threshold);
+      client
+          .post()
+          .uri("/api/console/workflow-definitions")
+          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-" + tenant + "-" + code)
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(request)
+          .exchange()
+          .expectStatus()
+          .isBadRequest();
+      assertThat(jdbcTemplate.queryForObject(count, Long.class, tenant, code)).isZero();
+    }
+    String validCode = "wf_join_valid";
+    client
+        .post()
+        .uri("/api/console/workflow-definitions")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-" + tenant + "-valid")
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(joinThresholdRequest(tenant, validCode, "1.0"))
+        .exchange()
+        .expectStatus()
+        .isOk();
+    assertThat(jdbcTemplate.queryForObject(count, Long.class, tenant, validCode))
+        .isEqualTo(1L);
+  }
+
+  private Map<String, Object> joinThresholdRequest(String tenant, String code, String threshold) {
+    return Map.of(
+        "tenantId",
+        tenant,
+        "workflowCode",
+        code,
+        "workflowName",
+        "join test",
+        "workflowType",
+        "DAG",
+        "enabled",
+        false,
+        "nodes",
+        List.of(
+            Map.of("nodeCode", "start", "nodeName", "start", "nodeType", "START"),
+            Map.of("nodeCode", "a", "nodeName", "a", "nodeType", "TASK"),
+            Map.of("nodeCode", "b", "nodeName", "b", "nodeType", "TASK"),
+            Map.of(
+                "nodeCode",
+                "gw",
+                "nodeName",
+                "gw",
+                "nodeType",
+                "GATEWAY",
+                "nodeParams",
+                "{\"joinMode\":\"N_OF\",\"joinThreshold\":" + threshold + "}"),
+            Map.of("nodeCode", "end", "nodeName", "end", "nodeType", "END")),
+        "edges",
+        List.of(
+            Map.of("fromNodeCode", "start", "toNodeCode", "a"),
+            Map.of("fromNodeCode", "start", "toNodeCode", "b"),
+            Map.of("fromNodeCode", "a", "toNodeCode", "gw"),
+            Map.of("fromNodeCode", "b", "toNodeCode", "gw"),
+            Map.of("fromNodeCode", "gw", "toNodeCode", "end")));
+  }
+
+  @Test
+  @DisplayName("单入边网关显式无效汇聚模式时 HTTP 拒绝且不写入")
+  void shouldRejectInvalidBranchJoinModeWithoutPersisting() {
+    String code = "wf_branch_bad_" + System.nanoTime();
+    String count =
+        "select count(*) from batch.workflow_definition where tenant_id = ? and workflow_code = ?";
+    String request = body(code, "gateway", "start")
+        .replace(
+            "\"nodeType\": \"TASK\"",
+            "\"nodeType\": \"GATEWAY\", \"nodeParams\": \"{\\\"joinMode\\\":\\\"BAD\\\"}\"");
+    client
+        .post()
+        .uri("/api/console/workflow-definitions")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-" + code)
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(request)
+        .exchange()
+        .expectStatus()
+        .isBadRequest();
+    assertThat(jdbcTemplate.queryForObject(count, Long.class, "int-wf-ta", code))
+        .isZero();
+  }
+
+  @Test
+  @DisplayName("普通节点显式无效汇聚模式时 HTTP 拒绝且不写入")
+  void shouldRejectInvalidTaskJoinModeWithoutPersisting() {
+    String code = "wf_task_join_bad_" + System.nanoTime();
+    String count =
+        "select count(*) from batch.workflow_definition where tenant_id = ? and workflow_code = ?";
+    String request = body(code, "task1", "start")
+        .replace(
+            "\"nodeType\": \"TASK\"",
+            "\"nodeType\": \"TASK\", \"nodeParams\": \"{\\\"joinMode\\\":\\\"BAD\\\"}\"");
+    client
+        .post()
+        .uri("/api/console/workflow-definitions")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-" + code)
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(request)
+        .exchange()
+        .expectStatus()
+        .isBadRequest();
+    assertThat(jdbcTemplate.queryForObject(count, Long.class, "int-wf-ta", code))
+        .isZero();
   }
 
   @Test

@@ -75,12 +75,13 @@ public final class AtomicConnectionManager {
    * <p>仅 PostgreSQL 实现;其他方言需要在调用前自行守门或扩展本方法。
    */
   public static void requireNonOsCapableRole(Connection conn) throws SQLException {
+    String roleCapabilitiesSql = "SELECT rolsuper,"
+        + " pg_has_role(current_user, 'pg_execute_server_program', 'MEMBER') AS prog,"
+        + " pg_has_role(current_user, 'pg_read_server_files', 'MEMBER') AS rdf,"
+        + " pg_has_role(current_user, 'pg_write_server_files', 'MEMBER') AS wsf "
+        + "FROM pg_roles WHERE rolname = current_user";
     try (Statement st = conn.createStatement();
-        ResultSet rs = st.executeQuery("SELECT rolsuper,"
-            + " pg_has_role(current_user, 'pg_execute_server_program', 'MEMBER') AS prog,"
-            + " pg_has_role(current_user, 'pg_read_server_files', 'MEMBER') AS rdf,"
-            + " pg_has_role(current_user, 'pg_write_server_files', 'MEMBER') AS wsf "
-            + "FROM pg_roles WHERE rolname = current_user")) {
+        ResultSet rs = st.executeQuery(roleCapabilitiesSql)) {
       if (rs.next()) {
         boolean superuser = rs.getBoolean("rolsuper");
         boolean prog = rs.getBoolean("prog");

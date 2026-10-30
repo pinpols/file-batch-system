@@ -9,8 +9,8 @@ import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.ReplayOperationType;
 import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -81,8 +81,7 @@ public class FileTemplateSnapshotService {
       }
     } else if (EmptyChecks.isNotEmpty(snapshots)) {
       Object firstPayloadSnapshot = snapshots.values().iterator().next();
-      pinned.put(
-          FrozenFileTemplateSnapshot.PAYLOAD_KEY, firstPayloadSnapshot);
+      pinned.put(FrozenFileTemplateSnapshot.PAYLOAD_KEY, firstPayloadSnapshot);
     }
     return pinned;
   }
@@ -239,13 +238,12 @@ public class FileTemplateSnapshotService {
     } catch (NumberFormatException | ArithmeticException invalidIdentity) {
       throw invalidSnapshot();
     }
-    boolean sourceSnapshotMatchesDispatch =
-        EmptyChecks.isNotNull(source)
-            && request.tenantId().equals(source.getTenantId())
-            && definition.jobCode().equals(source.getJobCode())
-            && definition.id().equals(source.getJobDefinitionId())
-            && Objects.equals(request.bizDate(), source.getBizDate())
-            && !EmptyChecks.isBlank(source.getParamsSnapshot());
+    boolean sourceSnapshotMatchesDispatch = EmptyChecks.isNotNull(source)
+        && request.tenantId().equals(source.getTenantId())
+        && definition.jobCode().equals(source.getJobCode())
+        && definition.id().equals(source.getJobDefinitionId())
+        && Objects.equals(request.bizDate(), source.getBizDate())
+        && !EmptyChecks.isBlank(source.getParamsSnapshot());
     if (!sourceSnapshotMatchesDispatch) {
       throw invalidSnapshot();
     }
@@ -359,8 +357,8 @@ public class FileTemplateSnapshotService {
     Long parentWorkflowRunId = positiveLong(parentWorkflowRunIdValue);
     boolean workflowExecutionMetadataDoesNotMatchBinding =
         !boundWorkflowRunId.equals(parentWorkflowRunId)
-        || !binding.nodeCode().equals(parameters.get("_parentNodeCode"))
-        || !ReplayOperationType.WORKFLOW_RUN.code().equals(parameters.get("operationType"));
+            || !binding.nodeCode().equals(parameters.get("_parentNodeCode"))
+            || !ReplayOperationType.WORKFLOW_RUN.code().equals(parameters.get("operationType"));
     if (workflowExecutionMetadataDoesNotMatchBinding) {
       throw invalidSnapshot();
     }

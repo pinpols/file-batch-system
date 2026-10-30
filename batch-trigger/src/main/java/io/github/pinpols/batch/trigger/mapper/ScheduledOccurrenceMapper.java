@@ -1,18 +1,19 @@
 package io.github.pinpols.batch.trigger.mapper;
 
+import io.github.pinpols.batch.common.enums.ScheduledOccurrenceStatus;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceAcceptRejectedOccurrenceParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceInsertCatchUpAuditParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceInsertPlannedParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceInsertPlannedWithStatusParam;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceReadinessWaitParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceRecordClosedBatchDayRejectionParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceRecordCoverageParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceSupersedeFuturePlannedWithStatusParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceTransitionStatusParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceUpsertObservedParam;
-
-
-import io.github.pinpols.batch.common.enums.ScheduledOccurrenceStatus;
+import io.github.pinpols.batch.trigger.domain.query.ExpiredReadinessWaitRow;
 import io.github.pinpols.batch.trigger.domain.query.UnobservedPlannedOccurrenceQuery;
+import io.github.pinpols.batch.trigger.support.ReadinessWaitWindow;
 import io.github.pinpols.batch.trigger.support.ScheduledOccurrenceCoverage;
 import io.github.pinpols.batch.trigger.support.ScheduledOccurrenceObservation;
 import java.time.Instant;
@@ -20,8 +21,22 @@ import java.time.LocalDate;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
-/** 取得围栏的请求。请求启动或进入终态前，游标继续停留在该日期。 */
+/** 定时触发 occurrence、补跑审计与覆盖范围的数据访问。 */
 public interface ScheduledOccurrenceMapper {
+
+  /** 已过 readiness 等待窗口的 WAITING_READINESS 记录；按截止时间升序限批量扫尾。 */
+  List<ExpiredReadinessWaitRow> selectExpiredReadinessWaits(
+      @Param("now") Instant now, @Param("limit") int limit);
+
+  /** 只终结扫描时刻仍到期的等待，防止扫描后窗口被延长。 */
+  int timeoutExpiredReadinessWait(
+      @Param("wait") ExpiredReadinessWaitRow wait, @Param("now") Instant now);
+
+  ReadinessWaitWindow selectReadinessWaitWindow(
+      @Param("tenantId") String tenantId,
+      @Param("workflowDefinitionId") Long workflowDefinitionId,
+      @Param("scheduledFireTime") Instant scheduledFireTime,
+      @Param("scheduleVersion") int scheduleVersion);
 
   ScheduledOccurrenceObservation selectObservedOccurrence(
       @Param("tenantId") String tenantId,
@@ -45,20 +60,16 @@ public interface ScheduledOccurrenceMapper {
   boolean isCoverageCurrentForTenantConfiguration(
       @Param("tenantId") String tenantId, @Param("workflowDefinitionId") Long workflowDefinitionId);
 
-  int upsertObserved(
-      ScheduledOccurrenceUpsertObservedParam parameters);
+  int upsertObserved(ScheduledOccurrenceUpsertObservedParam parameters);
 
   int recordClosedBatchDayRejection(
       ScheduledOccurrenceRecordClosedBatchDayRejectionParam parameters);
 
-  int transitionStatus(
-      ScheduledOccurrenceTransitionStatusParam parameters);
+  int transitionStatus(ScheduledOccurrenceTransitionStatusParam parameters);
 
-  int acceptRejectedOccurrence(
-      ScheduledOccurrenceAcceptRejectedOccurrenceParam parameters);
+  int acceptRejectedOccurrence(ScheduledOccurrenceAcceptRejectedOccurrenceParam parameters);
 
-  int insertCatchUpAudit(
-      ScheduledOccurrenceInsertCatchUpAuditParam parameters);
+  int insertCatchUpAudit(ScheduledOccurrenceInsertCatchUpAuditParam parameters);
 
   String selectOccurrenceStatusForUpdate(
       @Param("tenantId") String tenantId,
@@ -83,8 +94,7 @@ public interface ScheduledOccurrenceMapper {
 
   List<Instant> selectUnobservedPlannedTimesBefore(UnobservedPlannedOccurrenceQuery query);
 
-  default int insertPlanned(
-      ScheduledOccurrenceInsertPlannedParam parameters) {
+  default int insertPlanned(ScheduledOccurrenceInsertPlannedParam parameters) {
     String tenantId = parameters.tenantId();
     Long workflowDefinitionId = parameters.workflowDefinitionId();
     String workflowCode = parameters.workflowCode();
@@ -93,32 +103,34 @@ public interface ScheduledOccurrenceMapper {
     Instant scheduledFireTime = parameters.scheduledFireTime();
     LocalDate bizDate = parameters.bizDate();
 
-    ScheduledOccurrenceInsertPlannedWithStatusParam scheduledOccurrenceInsertPlannedWithStatusParam = ScheduledOccurrenceInsertPlannedWithStatusParam.builder()
-        .tenantId(tenantId)
-        .workflowDefinitionId(workflowDefinitionId)
-        .workflowCode(workflowCode)
-        .scheduleVersion(scheduleVersion)
-        .calendarCode(calendarCode)
-        .scheduledFireTime(scheduledFireTime)
-        .bizDate(bizDate)
-        .targetStatus(ScheduledOccurrenceStatus.PLANNED.code())
-        .build();
-    return insertPlannedWithStatus(
-        scheduledOccurrenceInsertPlannedWithStatusParam);
+    ScheduledOccurrenceInsertPlannedWithStatusParam
+        scheduledOccurrenceInsertPlannedWithStatusParam =
+            ScheduledOccurrenceInsertPlannedWithStatusParam.builder()
+                .tenantId(tenantId)
+                .workflowDefinitionId(workflowDefinitionId)
+                .workflowCode(workflowCode)
+                .scheduleVersion(scheduleVersion)
+                .calendarCode(calendarCode)
+                .scheduledFireTime(scheduledFireTime)
+                .bizDate(bizDate)
+                .targetStatus(ScheduledOccurrenceStatus.PLANNED.code())
+                .build();
+    return insertPlannedWithStatus(scheduledOccurrenceInsertPlannedWithStatusParam);
   }
 
-  int insertPlannedWithStatus(
-      ScheduledOccurrenceInsertPlannedWithStatusParam parameters);
+  int insertPlannedWithStatus(ScheduledOccurrenceInsertPlannedWithStatusParam parameters);
 
   default int supersedeFuturePlanned(
       String tenantId, Long workflowDefinitionId, int currentScheduleVersion, Instant now) {
-    ScheduledOccurrenceSupersedeFuturePlannedWithStatusParam scheduledOccurrenceSupersedeFuturePlannedWithStatusParam = ScheduledOccurrenceSupersedeFuturePlannedWithStatusParam.builder()
-        .tenantId(tenantId)
-        .workflowDefinitionId(workflowDefinitionId)
-        .currentScheduleVersion(currentScheduleVersion)
-        .now(now)
-        .targetStatus(ScheduledOccurrenceStatus.SUPERSEDED.code())
-        .build();
+    ScheduledOccurrenceSupersedeFuturePlannedWithStatusParam
+        scheduledOccurrenceSupersedeFuturePlannedWithStatusParam =
+            ScheduledOccurrenceSupersedeFuturePlannedWithStatusParam.builder()
+                .tenantId(tenantId)
+                .workflowDefinitionId(workflowDefinitionId)
+                .currentScheduleVersion(currentScheduleVersion)
+                .now(now)
+                .targetStatus(ScheduledOccurrenceStatus.SUPERSEDED.code())
+                .build();
     return supersedeFuturePlannedWithStatus(
         scheduledOccurrenceSupersedeFuturePlannedWithStatusParam);
   }
@@ -137,14 +149,16 @@ public interface ScheduledOccurrenceMapper {
       @Param("now") Instant now,
       @Param("targetStatus") String targetStatus);
 
-  int recordCoverage(
-      ScheduledOccurrenceRecordCoverageParam parameters);
+  int recordCoverage(ScheduledOccurrenceRecordCoverageParam parameters);
 
   ScheduledOccurrenceCoverage selectCoverage(
       @Param("tenantId") String tenantId,
       @Param("workflowDefinitionId") Long workflowDefinitionId,
       @Param("scheduleVersion") int scheduleVersion,
       @Param("calendarCode") String calendarCode);
+
+  /** 补写 readiness 等待窗口（仅对当前 WAITING_READINESS 记录生效）。 */
+  int updateReadinessWait(ScheduledOccurrenceReadinessWaitParam parameters);
 
   int countBlockingByCalendarAndBizDate(
       @Param("tenantId") String tenantId,

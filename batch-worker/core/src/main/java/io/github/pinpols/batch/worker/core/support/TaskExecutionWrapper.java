@@ -17,5 +17,8 @@ public interface TaskExecutionWrapper {
   /** 批量 CLAIM 成功后先登记所有待执行租约，使续租器覆盖当前批次中仍在排队的任务。 */
   void registerClaimedBatch(List<PulledTask> tasks);
 
+  /** 批次退出后停止为本批未启动项续租；已执行项和其他 invocation 不受影响。 */
+  void releaseUnexecutedClaims(List<PulledTask> tasks);
+
   WorkerExecutionResult execute(PulledTask task);
 }

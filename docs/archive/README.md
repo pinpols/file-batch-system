@@ -1,24 +1,18 @@
-# 历史归档索引
+# 历史原始记录索引
 
-归档按当前文档职责分类，有实际材料才建立对应子目录。历史结论不代表当前实现或当前待办；规则见 [文档治理规范](../standards/document-governance.md)，当前路径见 [文档路由](../standards/document-routing-guide.md)。
+历史资料保留排障过程、失败尝试、原始测量和方案取舍；旧结论不自动成为当前规则或当前通过。现行规范维护原文，可复用方法进入对应技能，二者均不替代原始证据。
 
-| 归档目录 | 放什么 | 当前权威入口 |
-|---|---|---|
-| [architecture/](architecture/README.md) | 历史架构与边界资产 | [当前目录](../architecture/README.md) |
-| [audit/](audit/README.md) | 历史系统/专项审计与评估 | [当前目录](../audit/README.md) |
-| [design/](design/README.md) | 历史业务设计与方案对比 | [当前目录](../design/README.md) |
-| [plans/](plans/README.md) | 历史阶段方案、路线与台账快照 | [当前目录](../plans/README.md) |
-| [review/](review/README.md) | 历史代码与差异审查 | [当前目录](../review/README.md) |
-| [runbook/](runbook/README.md) | 已被现行手册取代的操作流程 | [当前目录](../runbook/README.md) |
-| [standards/](standards/README.md) | 已被现行规范吸收的规则与范围裁决 | [当前目录](../standards/README.md) |
-| [stats/](stats/README.md) | 历史统计快照 | [当前目录](../stats/README.md) |
-| [testing/](testing/README.md) | 历史测试方法与覆盖矩阵 | [当前目录](../testing/README.md) |
-| [verifications/](verifications/README.md) | 历史实测、验收和兼容性证据 | [当前目录](../verifications/README.md) |
+| 分类 | 用途 |
+|---|---|
+| [architecture](architecture/README.md) | 历史架构事实与决定背景 |
+| [design](design/README.md) | 历史方案比较、实施前提和弃选理由 |
+| [standards](standards/README.md) | 能力范围与优先级的原判断 |
+| [audit](audit/README.md) | 原始审计、扫描和缺陷线索 |
+| [plans](plans/README.md) | 实施过程、假设、变更和阶段结果 |
+| [review](review/README.md) | 原始代码审查和复现记录 |
+| [runbook](runbook/README.md) | 原运维方案、故障/恢复与测量过程；不作为当前操作入口 |
+| [stats](stats/README.md) | 原基线与口径下的规模快照 |
+| [testing](testing/README.md) | 原测试方法、覆盖盘点及验证假设 |
+| [verifications](verifications/README.md) | 实际执行、失败与修复记录 |
 
-## 归档命名与维护
-
-- 一次性材料统一 `<topic>-YYYY-MM-DD.md`；多版本为 `<topic>-vN-YYYY-MM-DD.md`；跨日为 `<topic>-YYYY-MM-DD-to-YYYY-MM-DD.md`。
-- 文件日期采用原始基线、审查或执行日期；缺失时查原始 Git 记录，不把归档日当作重新审计日期。
-- 关联 ADR 的旧方案、探索与优先级材料以业务主题命名，关联编号写在正文。正式决策入口继续在当前 ADR 索引中维护状态。
-- 索引与迁移链接继续维护；历史结论不追溯改写。每个子目录 README 维护全部同级文档的跳转和用途。
-- 原 analysis/backlog 分桶已按方案、审计、验证、设计等职责拆分；统计归档统一在 stats/，不再另设 docs/archive/stats/。
+[分类复核](../audit/document-classification-and-naming-review-2026-10-24.md)记录恢复纠偏和实际验证边界；[经验提炼映射](../audit/archive-experience-skill-extraction-2026-10-25.csv)对应原文、来源哈希、方法和现行技能。查当前行为应按[文档路由](../standards/document-routing-guide.md)返回权威文档与代码。

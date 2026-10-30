@@ -19,6 +19,8 @@
 
 | 文件 | 范围 | 一句话 |
 |---|---|---|
+| [frontend-backend-bug-review-2026-10-27.md](frontend-backend-bug-review-2026-10-27.md#backend-review-record) | 前后端Bug及分层验证汇总 | 原14项风险片段复核、问题/首红/命令、历史运行证据及当前未验边界；合并三份原报告 |
+| [backend-bug-review-2026-10-26.md](backend-bug-review-2026-10-26.md) | 后端高风险业务链与部署配置 | 初轮九项及后续逐文件审查证据，当前任务仍未全量完成 |
 | `batch-worker-sdk-deep-review-2026-05-31.md` | SDK 三件套(core + starter + testkit) | SDK 全模块代码深度审查,产生改进点列表 |
 | `project-deep-review-2026-06-08.md` | 前后端全项目 | 架构/设计/安全/资源/业务/流程/运维/测试全局深度审查快照 |
 | `be-test-consistency-2026-05-21.md` | 全仓测试代码 | 测试一致性专项审查 |
@@ -55,3 +57,7 @@
 | [project-deep-review-2026-06-08.md](project-deep-review-2026-06-08.md) | 项目全局深度审查报告（2026-06-08） |
 | [random-crypto-id-review-2026-10-01.md](random-crypto-id-review-2026-10-01.md) | 随机数、加密算法与 ID 生成审查（2026-10-01） |
 | [runtime-parameter-tuning-review-2026-09-14.md](runtime-parameter-tuning-review-2026-09-14.md) | 运行参数调优审查与压测计划（2026-09-14） |
+
+全工程 Bug 续审的文件状态与摘要见[2026-10-26 后端逐文件清单](backend-bug-file-coverage-2026-10-26.csv)；当前仍有待审/待验证项，进度以 TODO Master 和文件证据为准。
+
+- [2026-10-26 Console 写路径权限候选处置](backend-console-write-auth-review-2026-10-26.csv)：95 文件初筛、12 候选按实际用途排除，不代表完整 Controller 语义审查。

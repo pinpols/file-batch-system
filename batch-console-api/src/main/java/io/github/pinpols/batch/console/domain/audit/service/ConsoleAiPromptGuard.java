@@ -145,8 +145,7 @@ public class ConsoleAiPromptGuard {
 
   private AiPromptCategory resolveCategory(String keyword) {
     String normalized = keyword.toLowerCase(Locale.ROOT);
-    boolean promptTargetsFileGovernance =
-        normalized.contains("file")
+    boolean promptTargetsFileGovernance = normalized.contains("file")
         || normalized.contains("文件")
         || normalized.contains("archive")
         || normalized.contains("dispatch")
@@ -156,16 +155,14 @@ public class ConsoleAiPromptGuard {
     if (promptTargetsFileGovernance) {
       return AiPromptCategory.FILE_GOVERNANCE;
     }
-    boolean promptTargetsWorkflow =
-        normalized.contains("workflow")
+    boolean promptTargetsWorkflow = normalized.contains("workflow")
         || normalized.contains("dag")
         || normalized.contains("节点")
         || normalized.contains("工作流");
     if (promptTargetsWorkflow) {
       return AiPromptCategory.WORKFLOW;
     }
-    boolean promptTargetsExecutionOperations =
-        normalized.contains("worker")
+    boolean promptTargetsExecutionOperations = normalized.contains("worker")
         || normalized.contains("trigger")
         || normalized.contains("orchestrator")
         || normalized.contains("job")

@@ -40,6 +40,7 @@ export START_TS
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/export-stage3c.log"
 import json, os, subprocess, sys, time, urllib.request
+from scripts.sim.export_partition_evidence import verify_partition_contents
 from scripts.sim.launch_contract import workflow_id_for_fixture
 from pathlib import Path
 
@@ -143,6 +144,15 @@ print(f"\n-- assertion_summary --\n{summary}", flush=True)
 if summary != "1|1|8|8|8|80|3|3":
     print("❌ Export Stage3c assertion failed, expected 1|1|8|8|8|80|3|3", flush=True)
     sys.exit(1)
+
+objects_result = psql_file("select-export-partition-objects.sql", ta_vars, tuples=True)
+records = json.loads(objects_result.stdout)
+alias = os.environ.get("MINIO_MC_ALIAS") or "local"
+objects = [f"{alias}/{record['bucket']}/{record['path']}" for record in records]
+def read_object(path):
+    return subprocess.check_output(["bash", "scripts/lib/minio-mc.sh", "cat", path], text=True)
+verify_partition_contents(objects, 8, 80, read_object)
+print("  [contents] 80 customer keys present exactly once", flush=True)
 
 print(f"\n==> Stage 3c export scenario PASS: batchNo={BATCH} startTs={START_TS}", flush=True)
 PY

@@ -124,10 +124,7 @@ public class OrchestratorGracefulShutdown
     } catch (RuntimeException ex) {
       ReadinessState failedState = state;
       String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn(
-          "publish readiness state {} failed (non-fatal): {}",
-          failedState,
-          causeSummary);
+      log.warn("publish readiness state {} failed (non-fatal): {}", failedState, causeSummary);
     }
   }
 

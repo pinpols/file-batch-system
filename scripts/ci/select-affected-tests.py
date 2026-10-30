@@ -6,14 +6,14 @@ Test Impact Analysis (TIA) POC — 测试类粒度。
 
 策略(方案 B,自建静态依赖图):
   1. git diff <base>..<head> 拿改动的 .java 文件
-  2. 提取改动文件的 fully-qualified class name(package + filename)
+  2. 生产文件按 package + filename 定位，测试文件提取实际顶层测试类名
   3. 反向 import 图迭代(最多 5 跳)— 求出受影响的 main FQN 闭包
      - 精确 import 匹配
      - import com.foo.* 通配匹配
      - 同 package 直接用 simple-name 也算引用(扫 java text 字界)
   4. 扫所有测试源 (*Test.java / *IT.java / *Tests.java),复用同样的匹配规则
      找到任一引用受影响 FQN 的测试 → 加入选中集
-  5. 测试类自身被改 → 直接选中
+  5. 测试类自身被改 → 按实际类名直接选中
 
 输出:
   stdout 一行一个 test 类(simple class name,逗号拼给 mvn -Dtest 用)
@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import os
 import re
+import runpy
 import subprocess
 import sys
 from pathlib import Path
@@ -37,6 +38,7 @@ TEST_GLOB = "src/test/java"
 MAIN_GLOB = "src/main/java"
 EXCLUDE_PATHS = (".agents/", "target/", "build/")
 MAX_HOPS = 5
+JAVA_SCAN = runpy.run_path(str(Path(__file__).with_name("check-test-conventions.py")))
 
 
 def log(msg: str) -> None:
@@ -93,20 +95,42 @@ def is_test_file(java_file: Path) -> bool:
     )
 
 
+def test_class_names(java_file: Path) -> set[str]:
+    """按源码顶层类名选测，避免 package-private 测试类名与文件名不同。"""
+    masked = JAVA_SCAN["mask_java"](read_text(java_file))
+    nodes = JAVA_SCAN["class_nodes"](masked)
+    names = {
+        node.name
+        for node in nodes
+        if node.parent is None and node.name.endswith(("Test", "Tests", "IT"))
+    }
+    return names or {java_file.stem}
+
+
+def worktree_java_files() -> list[Path]:
+    """枚举 Git 跟踪及未忽略的未跟踪源码，排除工作区已删除文件。"""
+    result = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "*.java"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        check=True,
+    )
+    files = {REPO_ROOT / os.fsdecode(path) for path in result.stdout.split(b"\0") if path}
+    return sorted(path for path in files if path.is_file())
+
+
 def all_main_files() -> list[Path]:
     out: list[Path] = []
-    for java in REPO_ROOT.rglob("*.java"):
+    for java in worktree_java_files():
         rel = java.relative_to(REPO_ROOT).as_posix()
-        if any(seg in rel for seg in EXCLUDE_PATHS):
-            continue
-        if MAIN_GLOB in rel:
+        if MAIN_GLOB in rel and not any(seg in rel for seg in EXCLUDE_PATHS):
             out.append(java)
     return out
 
 
 def all_test_files() -> list[Path]:
     out: list[Path] = []
-    for java in REPO_ROOT.rglob("*.java"):
+    for java in worktree_java_files():
         rel = java.relative_to(REPO_ROOT).as_posix()
         if any(seg in rel for seg in EXCLUDE_PATHS):
             continue
@@ -174,7 +198,7 @@ def main() -> int:
         if not fqn:
             continue
         if is_test_file(f):
-            directly_changed_tests.add(fqn.rsplit(".", 1)[-1])
+            directly_changed_tests.update(test_class_names(f))
         else:
             changed_main_fqns.add(fqn)
 
@@ -218,7 +242,7 @@ def main() -> int:
     selected: set[str] = set(directly_changed_tests)
     for tf in test_files:
         if references_any(tf, imports_of(tf), impacted):
-            selected.add(tf.stem)
+            selected.update(test_class_names(tf))
 
     log(f"[tia] selected tests: {len(selected)} / {len(test_files)}")
     for name in sorted(selected):

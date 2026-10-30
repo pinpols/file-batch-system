@@ -146,13 +146,8 @@ public class ConsoleOpsSummaryRealtimeStream implements ConsoleOpsSummaryRealtim
     }
     String cursor = cursorFactory.nextCursor();
     Instant emittedAt = dateTimeSupport.nowInstant();
-    ConsoleSseEvent event = new ConsoleSseEvent(
-        tenantId,
-        STREAM,
-        EVENT_TYPE,
-        cursor,
-        summary,
-        emittedAt);
+    ConsoleSseEvent event =
+        new ConsoleSseEvent(tenantId, STREAM, EVENT_TYPE, cursor, summary, emittedAt);
     realtimeEventHub.publish(event);
     realtimeEventBusPublisher.publish(event);
   }
@@ -166,10 +161,9 @@ public class ConsoleOpsSummaryRealtimeStream implements ConsoleOpsSummaryRealtim
     CachedSummary cached = summaryCache.getIfPresent(tenantId);
     // 双重 TTL 控制:Caffeine expireAfterWrite 回退 10s,业务侧再用 cachedAtMillis 精确判过期
     // —— 保留原逻辑等价语义,改动只是把无界存储换成有界 Caffeine。
-    boolean cachedSummaryIsReusable =
-        !forceRefresh
-            && EmptyChecks.isNotNull(cached)
-            && now - cached.cachedAtMillis() <= SUMMARY_CACHE_TTL_MILLIS;
+    boolean cachedSummaryIsReusable = !forceRefresh
+        && EmptyChecks.isNotNull(cached)
+        && now - cached.cachedAtMillis() <= SUMMARY_CACHE_TTL_MILLIS;
     if (cachedSummaryIsReusable) {
       return cached.summary();
     }

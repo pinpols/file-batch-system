@@ -127,19 +127,19 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("NONE 策略下结果不明的外部副作用进入死信且不会被自动重投")
   void nonIdempotentExternalOutcome_withRetryDisabled_requiresManualReconciliation() {
-  final String updateJobDefinitionSql = """
+    final String updateJobDefinitionSql = """
       update batch.job_definition set retry_policy = 'NONE', retry_max_count = 0 where tenant_id = ?\s\
       and job_code = ?\
       """;
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from batch.retry_schedule where tenant_id = ? and related_type = 'JOB_PARTITION'\s\
       and related_id = ?\
       """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.dead_letter_task where tenant_id = ? and source_type = 'JOB_PARTITION'\s\
       and source_id = ? and replay_status = 'NEW' and max_replay_count = 0 and next_replay_at is null\
       """;
-  final String selectCountSql3 = """
+    final String selectCountSql3 = """
       select count(*) from batch.dead_letter_task where tenant_id = ? and source_type = 'JOB_PARTITION'\s\
       and source_id = ? and replay_status = 'NEW' and replay_count = 0\
       """;
@@ -147,10 +147,7 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
     LocalDate bizDate = BIZ_DATE.plusDays(Math.floorMod(System.nanoTime(), 10_000));
     WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "DEFAULT", TriggerType.API, bizDate);
-    jdbcTemplate.update(
-        updateJobDefinitionSql,
-        TENANT,
-        seed.jobCode());
+    jdbcTemplate.update(updateJobDefinitionSql, TENANT, seed.jobCode());
 
     LaunchRequest request = LaunchRequest.builder()
         .tenantId(TENANT)
@@ -239,19 +236,13 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
     LocalDate bizDate = BIZ_DATE.plusDays(Math.floorMod(System.nanoTime(), 10_000));
     WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "DEFAULT", TriggerType.SCHEDULED, bizDate);
-    jdbcTemplate.update(
-        updateTriggerRequestSql,
-        TENANT,
-        seed.requestId());
+    jdbcTemplate.update(updateTriggerRequestSql, TENANT, seed.requestId());
     jdbcTemplate.update(
         updateWorkerRegistrySql,
         JsonUtils.toJson(List.of(WorkerCapabilities.DRY_RUN_SAFE)),
         TENANT,
         seed.workerCode());
-    jdbcTemplate.update(
-        updateJobDefinitionSql,
-        TENANT,
-        seed.jobCode());
+    jdbcTemplate.update(updateJobDefinitionSql, TENANT, seed.jobCode());
 
     LaunchRequest launchRequest = LaunchRequest.builder()
         .tenantId(TENANT)
@@ -287,17 +278,13 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
         .build();
     taskExecutionService.applyTaskOutcome(firstAttemptOutcome);
 
-    jdbcTemplate.update(
-        updateRetryScheduleSql,
-        partition.getId());
+    jdbcTemplate.update(updateRetryScheduleSql, partition.getId());
     retryGovernanceService.dispatchDueRetries();
     EffectiveTaskConfig retryClaim = taskControllerApplicationService.claim(
         task.getId(), new TaskClaimCommand(TENANT, seed.workerCode(), null));
 
     String workflowCode = jdbcTemplate.queryForObject(
-        selectWorkflowCodeSql,
-        String.class,
-        seed.workflowDefinitionId());
+        selectWorkflowCodeSql, String.class, seed.workflowDefinitionId());
     jdbcTemplate.update(
         insertScheduledOccurrenceSql,
         TENANT,
@@ -306,18 +293,15 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
         Timestamp.from(Instant.parse("2026-12-25T09:00:00Z")),
         bizDate,
         seed.requestId());
-    jdbcTemplate.update(
-        insertBatchDayInstanceSql,
-        TENANT,
-        bizDate);
+    jdbcTemplate.update(insertBatchDayInstanceSql, TENANT, bizDate);
 
-    try (Connection fence = jdbcTemplate.getDataSource().getConnection();
-        ExecutorService executor = Executors.newFixedThreadPool(1)) {
+    try (ExecutorService executor = Executors.newFixedThreadPool(2);
+        Connection fence = jdbcTemplate.getDataSource().getConnection()) {
       fence.setAutoCommit(false);
       acquireSettlementFence(fence, TENANT, "JOB_CALENDAR", bizDate);
       int blockerPid = backendPid(fence);
       Future<?> settlement = executor.submit(batchDaySettleScheduler::settle);
-      awaitBlockedBy(blockerPid);
+      awaitBlockedBy(blockerPid, 1);
 
       TaskOutcomeCommand retryOutcomeCommand = TaskOutcomeCommand.builder()
           .tenantId(TENANT)
@@ -326,9 +310,13 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
           .resultSummary("{}")
           .partitionInvocationId(retryClaim.partitionInvocationId())
           .build();
-      taskExecutionService.applyTaskOutcome(retryOutcomeCommand);
+      Future<?> report =
+          executor.submit(() -> taskExecutionService.applyTaskOutcome(retryOutcomeCommand));
+      awaitBlockedBy(blockerPid, 2);
       fence.commit();
-      settlement.get(10, TimeUnit.SECONDS);
+      report.get(10, TimeUnit.SECONDS);
+      // settle() 会扫描共享集成测试环境中所有待处理的业务日。
+      settlement.get(60, TimeUnit.SECONDS);
     }
 
     assertThat(jobInstanceMapper.selectById(TENANT, jobInstanceId).getInstanceStatus())
@@ -345,17 +333,17 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
   }
 
   private void verifyRetryKeepsExecutionSnapshot(boolean dryRun) {
-  final String updateTriggerRequestSql = """
+    final String updateTriggerRequestSql = """
       update batch.trigger_request set dry_run = true where tenant_id = ? and request_id = ?
   """;
-  final String updateWorkerRegistrySql = """
+    final String updateWorkerRegistrySql = """
       update batch.worker_registry set capability_tags = ?::jsonb where tenant_id = ? and worker_code = ?\
       """;
-  final String updateJobDefinitionSql = """
+    final String updateJobDefinitionSql = """
       update batch.job_definition set retry_policy = 'FIXED', retry_max_count = 1, default_params =\s\
       '{"retrySnapshot":"v1"}'::jsonb where tenant_id = ? and job_code = ?\
       """;
-  final String updateJobDefinitionSql2 = """
+    final String updateJobDefinitionSql2 = """
       update batch.job_definition set retry_policy = 'NONE', retry_max_count = 0, default_params =\s\
       '{"retrySnapshot":"v2"}'::jsonb, job_type = 'EXPORT', version = version + 1 where tenant_id = ?\s\
       and job_code = ?\
@@ -368,20 +356,14 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
     WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "DEFAULT", TriggerType.API, BIZ_DATE);
     if (dryRun) {
-      jdbcTemplate.update(
-          updateTriggerRequestSql,
-          TENANT,
-          seed.requestId());
+      jdbcTemplate.update(updateTriggerRequestSql, TENANT, seed.requestId());
       jdbcTemplate.update(
           updateWorkerRegistrySql,
           JsonUtils.toJson(List.of(WorkerCapabilities.DRY_RUN_SAFE)),
           TENANT,
           seed.workerCode());
     }
-    jdbcTemplate.update(
-        updateJobDefinitionSql,
-        TENANT,
-        seed.jobCode());
+    jdbcTemplate.update(updateJobDefinitionSql, TENANT, seed.jobCode());
 
     // 1) Launch
     LaunchRequest launchRequest = LaunchRequest.builder()
@@ -408,10 +390,7 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
     assertThat(executionPolicy.get("retryMaxCount")).isEqualTo(1);
 
     // 实例创建后管理员修改策略、参数及 Job 类型；已有任务重试必须继续使用已派发的快照。
-    jdbcTemplate.update(
-        updateJobDefinitionSql2,
-        TENANT,
-        seed.jobCode());
+    jdbcTemplate.update(updateJobDefinitionSql2, TENANT, seed.jobCode());
 
     Long taskInstanceId = jobInstance.getId();
     JobTaskQuery taskQuery = JobTaskQuery.ofJobInstance(TENANT, taskInstanceId);
@@ -428,7 +407,7 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
     // 2) Claim
     taskExecutionService.assignWorker(TENANT, task.getId(), seed.workerCode());
 
-    // 3) Report failure → retry should be scheduled
+    // 3) 回报失败后应安排重试
     // 镜像生产:CLAIM 确立的 invocationId 随 report 回填(见 R3-P1-10 report invocation fence)。
     // partition 在 CLAIM 后才写入 current_invocation_id,故重读该行取回值。
     JobPartitionEntity claimedPartition = jobPartitionMapper.selectById(TENANT, partition.getId());
@@ -455,15 +434,13 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
         .isTrue();
 
     // 4) Make retry due immediately, then dispatch
-    jdbcTemplate.update(
-        updateRetryScheduleSql,
-        partition.getId());
+    jdbcTemplate.update(updateRetryScheduleSql, partition.getId());
 
     long outboxBefore = countOutboxForTenant(TENANT);
     retryGovernanceService.dispatchDueRetries();
     long outboxAfter = countOutboxForTenant(TENANT);
 
-    // A new outbox event should have been written for the re-queued partition
+    // 重新入队的分区应写入新的 Outbox 事件。
     assertThat(outboxAfter).isGreaterThan(outboxBefore);
 
     // 重投递后走生产 CLAIM 应用服务，断言返回的仍是首次派发时冻结的参数和系统 Pipeline 身份。
@@ -503,8 +480,7 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
         select count(*) from batch.outbox_event where tenant_id = ?
     """;
 
-    Long n = jdbcTemplate.queryForObject(
-        selectCountSql, Long.class, tenantId);
+    Long n = jdbcTemplate.queryForObject(selectCountSql, Long.class, tenantId);
     return n == null ? 0L : n;
   }
 
@@ -537,18 +513,15 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
     }
   }
 
-  private void awaitBlockedBy(int blockerPid) throws Exception {
+  private void awaitBlockedBy(int blockerPid, int waiterCount) throws Exception {
     final String selectCountSql = """
         select count(*) from pg_stat_activity where ? = any(pg_blocking_pids(pid))
     """;
 
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
     while (System.nanoTime() < deadline) {
-      Integer waiting = jdbcTemplate.queryForObject(
-          selectCountSql,
-          Integer.class,
-          blockerPid);
-      if (waiting != null && waiting > 0) return;
+      Integer waiting = jdbcTemplate.queryForObject(selectCountSql, Integer.class, blockerPid);
+      if (waiting != null && waiting >= waiterCount) return;
       Thread.sleep(10);
     }
     throw new AssertionError("Batch-day settlement did not reach its advisory-lock barrier");

@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.worker.imports.domain;
 
-/** Stable error codes emitted by the import validation stages. */
+/** 导入校验阶段输出的稳定错误码。 */
 public enum ImportValidationErrorCode {
   NULL("IMPORT_VALIDATE_NULL"),
   REQUIRED("IMPORT_VALIDATE_REQUIRED"),

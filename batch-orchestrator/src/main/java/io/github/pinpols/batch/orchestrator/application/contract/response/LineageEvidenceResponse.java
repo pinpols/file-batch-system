@@ -2,6 +2,8 @@ package io.github.pinpols.batch.orchestrator.application.contract.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.SensitiveEvidenceMasking;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -17,6 +19,7 @@ public record LineageEvidenceResponse(
     List<DispatchRecord> dispatchRecords,
     LineageCoverage coverage) {
 
+  @Builder
   public record LineageCoverage(
       String scope,
       Long resultVersionId,
@@ -96,7 +99,12 @@ public record LineageEvidenceResponse(
       @JsonProperty("trace_id") String traceId,
       @JsonProperty("metadata_json") Map<String, Object> metadataJson,
       @JsonProperty("created_at") Instant createdAt,
-      @JsonProperty("updated_at") Instant updatedAt) {}
+      @JsonProperty("updated_at") Instant updatedAt) {
+    public FileRecord {
+      storagePath = SensitiveEvidenceMasking.maskText(storagePath);
+      metadataJson = SensitiveEvidenceMasking.maskMetadata(metadataJson);
+    }
+  }
 
   /** DispatchRecord 的固定证据字段；数据库投影保留既有 snake_case 键。 */
   @Builder
@@ -118,7 +126,12 @@ public record LineageEvidenceResponse(
       @JsonProperty("dispatched_at") Instant dispatchedAt,
       @JsonProperty("ack_at") Instant ackAt,
       @JsonProperty("created_at") Instant createdAt,
-      @JsonProperty("updated_at") Instant updatedAt) {}
+      @JsonProperty("updated_at") Instant updatedAt) {
+    public DispatchRecord {
+      dispatchTarget = SensitiveEvidenceMasking.maskText(dispatchTarget);
+      errorMessage = SwallowedExceptionLogger.safeMessage(errorMessage, 1024);
+    }
+  }
 
   /** 结果版本沿用既有 camelCase 键，未生成的版本字段保留 null。 */
   @Builder

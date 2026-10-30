@@ -158,7 +158,8 @@ class WorkerControllerTest {
                   "tenantId": "t1", "workerCode": "worker-1", "status": "RUNNING",
                   "pipelineProgress": [
                     {"taskId": 10, "pipelineInstanceId": 20, "stageCode": "LOAD",
-                     "rowsProcessed": 100, "totalRowsHint": 200}
+                     "rowsProcessed": 100, "totalRowsHint": 200,
+                     "partitionInvocationId": "claim-1", "pipelineStepRunId": 30}
                   ]
                 }
                 """))
@@ -167,7 +168,8 @@ class WorkerControllerTest {
     verify(workerRegistryService).heartbeat(eq("worker-1"), captor.capture());
     assertThat(captor.getValue().tenantId()).isEqualTo("t1");
     assertThat(captor.getValue().pipelineProgress())
-        .containsExactly(new WorkerPipelineProgressDto(10L, 20L, "LOAD", 100L, 200L));
+        .containsExactly(
+            new WorkerPipelineProgressDto(10L, 20L, "LOAD", 100L, 200L, "claim-1", 30L));
   }
 
   @Test

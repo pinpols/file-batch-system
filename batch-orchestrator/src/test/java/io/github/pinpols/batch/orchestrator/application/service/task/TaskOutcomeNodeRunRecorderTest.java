@@ -17,9 +17,10 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
 
 /**
@@ -33,6 +34,7 @@ import org.springframework.dao.DuplicateKeyException;
  * <p>task outcome 主流程的状态推进由 Testcontainers 集成测试覆盖。
  */
 @DisplayName("节点运行记录器: 并发幂等、序号推进与字段持久化")
+@ExtendWith(MockitoExtension.class)
 class TaskOutcomeNodeRunRecorderTest {
 
   @Test
@@ -58,7 +60,6 @@ class TaskOutcomeNodeRunRecorderTest {
 
   @BeforeEach
   void setUp() {
-    MockitoAnnotations.openMocks(this);
     recorder = new TaskOutcomeNodeRunRecorder(
         new OrchestratorWorkflowMappers(null, null, workflowNodeRunMapper));
   }

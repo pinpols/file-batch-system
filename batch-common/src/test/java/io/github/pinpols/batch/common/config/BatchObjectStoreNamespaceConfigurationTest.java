@@ -9,9 +9,11 @@ import static org.mockito.Mockito.verify;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.NamespacedObjectStore;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.io.ByteArrayInputStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 
 @DisplayName("对象存储的部署命名空间配置")
@@ -34,7 +36,7 @@ class BatchObjectStoreNamespaceConfigurationTest {
             encryptionProperties,
             beanFactory.getBeanProvider(BatchObjectCryptoService.class),
             beanFactory.getBeanProvider(BatchKmsProperties.class),
-            beanFactory.getBeanProvider(io.micrometer.core.instrument.MeterRegistry.class));
+            beanFactory.getBeanProvider(MeterRegistry.class));
 
     assertThat(store).isInstanceOf(NamespacedObjectStore.class);
     store.put("bucket", "result.csv", new ByteArrayInputStream(new byte[] {1}), 1, "text/csv");
@@ -53,18 +55,18 @@ class BatchObjectStoreNamespaceConfigurationTest {
             new ObjectStoreEncryptionProperties(),
             new StaticListableBeanFactory().getBeanProvider(BatchObjectCryptoService.class),
             new StaticListableBeanFactory().getBeanProvider(BatchKmsProperties.class),
-            new StaticListableBeanFactory()
-                .getBeanProvider(io.micrometer.core.instrument.MeterRegistry.class));
+            new StaticListableBeanFactory().getBeanProvider(MeterRegistry.class));
 
     assertThat(store).isSameAs(delegate);
     store.put("bucket", "result.csv", new ByteArrayInputStream(new byte[] {1}), 1, "text/csv");
     verify(delegate).put(eq("bucket"), eq("result.csv"), any(), eq(1L), eq("text/csv"));
   }
+
   private static BatchObjectStoreAutoConfiguration configuration(
       KafkaNamespaceProperties namespaceProperties) {
     StaticListableBeanFactory beanFactory = new StaticListableBeanFactory();
     beanFactory.addBean("deploymentNamespace", namespaceProperties);
-    org.springframework.beans.factory.ObjectProvider<KafkaNamespaceProperties> namespaceProvider =
+    ObjectProvider<KafkaNamespaceProperties> namespaceProvider =
         beanFactory.getBeanProvider(KafkaNamespaceProperties.class);
     return new BatchObjectStoreAutoConfiguration(namespaceProvider);
   }

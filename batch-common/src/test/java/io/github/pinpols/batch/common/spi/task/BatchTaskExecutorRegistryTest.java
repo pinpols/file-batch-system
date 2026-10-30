@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -102,8 +103,7 @@ class BatchTaskExecutorRegistryTest {
     BatchTaskExecutor executor = new StubExecutor("shell");
     BatchTaskExecutorRegistry registry = new BatchTaskExecutorRegistry(List.of(executor));
 
-    ReplayCapabilityDeclaration declaration =
-        registry.replayCapability("shell", java.util.Map.of());
+    ReplayCapabilityDeclaration declaration = registry.replayCapability("shell", Map.of());
 
     assertThat(declaration.pluginId()).isEqualTo("shell");
     assertThat(declaration.isFullyDeclared()).isFalse();

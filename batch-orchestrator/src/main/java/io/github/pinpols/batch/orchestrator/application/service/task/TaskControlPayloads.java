@@ -3,12 +3,13 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import java.util.List;
 import java.util.Map;
+import lombok.Builder;
 
 /**
- * Application-layer payloads for worker task control use cases.
+ * Worker 任务控制用例的应用层载荷。
  *
  * <p>HTTP request/response DTOs stay in the controller package and are mapped at the web edge; the
- * task control service consumes these payloads so task orchestration logic does not depend on
+ * 任务控制服务接收这些载荷，使任务编排逻辑不依赖
  * controller types.
  */
 public final class TaskControlPayloads {
@@ -29,6 +30,7 @@ public final class TaskControlPayloads {
 
   public record TaskClaimItemResult(Long taskId, boolean claimed, EffectiveTaskConfig config) {}
 
+  @Builder
   public record TaskExecutionReportCommand(
       Long taskId,
       String tenantId,

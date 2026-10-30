@@ -26,7 +26,97 @@
         download_requires_approval, masking_rule_set, export_data_ref, load_target_ref, is_deleted
     </sql>
 
-    <select id="selectFileRecord" resultType="map">
+    <resultMap id="PlatformFileRecordViewResultMap"
+               type="io.github.pinpols.batch.worker.core.mapper.PlatformFileRecordView">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="file_code" javaType="java.lang.String"/>
+            <arg column="biz_type" javaType="java.lang.String"/>
+            <arg column="file_category" javaType="java.lang.String"/>
+            <arg column="file_name" javaType="java.lang.String"/>
+            <arg column="original_file_name" javaType="java.lang.String"/>
+            <arg column="file_ext" javaType="java.lang.String"/>
+            <arg column="file_format_type" javaType="java.lang.String"/>
+            <arg column="charset" javaType="java.lang.String"/>
+            <arg column="mime_type" javaType="java.lang.String"/>
+            <arg column="file_size_bytes" javaType="java.lang.Long"/>
+            <arg column="checksum_type" javaType="java.lang.String"/>
+            <arg column="checksum_value" javaType="java.lang.String"/>
+            <arg column="storage_type" javaType="java.lang.String"/>
+            <arg column="storage_path" javaType="java.lang.String"/>
+            <arg column="storage_bucket" javaType="java.lang.String"/>
+            <arg column="file_version" javaType="java.lang.String"/>
+            <arg column="file_generation_no" javaType="java.lang.Integer"/>
+            <arg column="is_latest" javaType="java.lang.Boolean"/>
+            <arg column="source_type" javaType="java.lang.String"/>
+            <arg column="source_ref" javaType="java.lang.String"/>
+            <arg column="file_status" javaType="java.lang.String"/>
+            <arg column="biz_date" javaType="java.time.LocalDate"/>
+            <arg column="trace_id" javaType="java.lang.String"/>
+            <arg column="metadata_json" javaType="java.lang.Object"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="PlatformFileTemplateConfigViewResultMap"
+               type="io.github.pinpols.batch.worker.core.mapper.PlatformFileTemplateConfigView">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="template_code" javaType="java.lang.String"/>
+            <arg column="template_name" javaType="java.lang.String"/>
+            <arg column="template_type" javaType="java.lang.String"/>
+            <arg column="biz_type" javaType="java.lang.String"/>
+            <arg column="file_format_type" javaType="java.lang.String"/>
+            <arg column="charset" javaType="java.lang.String"/>
+            <arg column="target_charset" javaType="java.lang.String"/>
+            <arg column="with_bom" javaType="java.lang.Boolean"/>
+            <arg column="line_separator" javaType="java.lang.String"/>
+            <arg column="delimiter" javaType="java.lang.String"/>
+            <arg column="quote_char" javaType="java.lang.String"/>
+            <arg column="escape_char" javaType="java.lang.String"/>
+            <arg column="record_length" javaType="java.lang.Integer"/>
+            <arg column="header_rows" javaType="java.lang.Integer"/>
+            <arg column="footer_rows" javaType="java.lang.Integer"/>
+            <arg column="header_template" javaType="java.lang.Object"/>
+            <arg column="trailer_template" javaType="java.lang.Object"/>
+            <arg column="checksum_type" javaType="java.lang.String"/>
+            <arg column="compress_type" javaType="java.lang.String"/>
+            <arg column="encrypt_type" javaType="java.lang.String"/>
+            <arg column="naming_rule" javaType="java.lang.String"/>
+            <arg column="field_mappings" javaType="java.lang.Object"/>
+            <arg column="validation_rule_set" javaType="java.lang.Object"/>
+            <arg column="default_query_code" javaType="java.lang.String"/>
+            <arg column="default_query_sql" javaType="java.lang.String"/>
+            <arg column="query_param_schema" javaType="java.lang.Object"/>
+            <arg column="streaming_enabled" javaType="java.lang.Boolean"/>
+            <arg column="page_size" javaType="java.lang.Integer"/>
+            <arg column="fetch_size" javaType="java.lang.Integer"/>
+            <arg column="chunk_size" javaType="java.lang.Integer"/>
+            <arg column="enabled" javaType="java.lang.Boolean"/>
+            <arg column="version" javaType="java.lang.Integer"/>
+            <arg column="description" javaType="java.lang.String"/>
+            <arg column="created_by" javaType="java.lang.String"/>
+            <arg column="updated_by" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+            <arg column="preprocess_pipeline" javaType="java.lang.Object"/>
+            <arg column="preview_masking_enabled" javaType="java.lang.Boolean"/>
+            <arg column="error_line_masking_enabled" javaType="java.lang.Boolean"/>
+            <arg column="log_masking_enabled" javaType="java.lang.Boolean"/>
+            <arg column="content_encryption_enabled" javaType="java.lang.Boolean"/>
+            <arg column="encryption_key_ref" javaType="java.lang.String"/>
+            <arg column="download_requires_approval" javaType="java.lang.Boolean"/>
+            <arg column="masking_rule_set" javaType="java.lang.Object"/>
+            <arg column="export_data_ref" javaType="java.lang.Object"/>
+            <arg column="load_target_ref" javaType="java.lang.Object"/>
+            <arg column="is_deleted" javaType="java.lang.Boolean"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectFileRecord" resultMap="PlatformFileRecordViewResultMap">
         select <include refid="fileRecordColumns"/>
         from batch.file_record
         where tenant_id = #{tenantId}
@@ -41,7 +131,7 @@
           and storage_path = #{storagePath}
     </select>
 
-    <select id="selectFileRecordByStoragePath" resultType="map">
+    <select id="selectFileRecordByStoragePath" resultMap="PlatformFileRecordViewResultMap">
         select <include refid="fileRecordColumns"/>
         from batch.file_record
         where tenant_id = #{tenantId}
@@ -51,7 +141,7 @@
         limit 1
     </select>
 
-    <select id="selectLatestTemplateConfig" resultType="map">
+    <select id="selectLatestTemplateConfig" resultMap="PlatformFileTemplateConfigViewResultMap">
         select <include refid="fileTemplateConfigColumns"/>
         from batch.file_template_config
         where tenant_id = #{tenantId}
@@ -72,7 +162,7 @@
       会拒绝。改 ON CONFLICT 复用现有行:把状态重置到 RUNNING、清掉旧错误、
       把 id 通过 RETURNING 回填给 useGeneratedKeys,调用方不需感知。
     -->
-    <insert id="insertPipelineInstance" parameterType="map" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+    <insert id="insertPipelineInstance" parameterType="io.github.pinpols.batch.worker.core.param.PlatformPipelineInsertParam" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.pipeline_instance (
             tenant_id, system_pipeline_code, system_pipeline_version,
             job_code, pipeline_type,
@@ -88,10 +178,12 @@
             where file_record.tenant_id = #{tenantId}
               and file_record.id = #{fileId}
         ))
+          <!-- 父实例归档持行锁；引用检查也持锁，等待后重新确认父实例仍存在。 -->
           and (CAST(#{relatedJobInstanceId,jdbcType=BIGINT} AS bigint) is null or exists (
             select 1 from batch.job_instance job_instance
             where job_instance.tenant_id = #{tenantId}
               and job_instance.id = #{relatedJobInstanceId}
+            for key share
         ))
         on conflict (related_job_instance_id)
           where related_job_instance_id is not null
@@ -219,7 +311,7 @@
         limit 1
     </select>
 
-    <insert id="insertStepRun" parameterType="map" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+    <insert id="insertStepRun" parameterType="io.github.pinpols.batch.worker.core.param.PlatformStepRunInsertParam" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.pipeline_step_run (
             pipeline_instance_id, step_code, stage_code, run_seq,
             step_status, input_summary, started_at
@@ -241,7 +333,22 @@
             duration_ms = greatest(0, extract(epoch from (current_timestamp - started_at)) * 1000)::bigint,
             finished_at = current_timestamp
         where id = #{stepRunId}
+          and step_status in ('RUNNING', 'RETRYING')
     </update>
+
+    <!-- JSON 数组编码避免租户/文件编码中的分隔符造成逻辑身份歧义；独立 MAX 查询使用锁等待后的快照。 -->
+    <select id="lockFileGeneration" resultType="int">
+        select 1
+        from (
+            select pg_advisory_xact_lock(
+                hashtextextended(
+                    jsonb_build_array('file_record_generation',
+                        cast(#{tenantId} as text), cast(#{fileCode} as text))::text,
+                    0
+                )
+            )
+        ) file_generation_lock
+    </select>
 
     <select id="selectMaxFileGenerationNo" resultType="java.lang.Integer">
         select coalesce(max(file_generation_no), 0)
@@ -259,7 +366,7 @@
           and is_latest = true
     </update>
 
-    <insert id="insertFileRecord" parameterType="map" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+    <insert id="insertFileRecord" parameterType="io.github.pinpols.batch.worker.core.param.PlatformFileInsertParam" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.file_record (
             tenant_id, file_code, biz_type, file_category, file_name, original_file_name,
             file_ext, file_format_type, charset, mime_type, file_size_bytes,
@@ -302,7 +409,7 @@
         where id = #{fileId}
     </update>
 
-    <insert id="insertFileErrorRecord" parameterType="map" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+    <insert id="insertFileErrorRecord" parameterType="io.github.pinpols.batch.worker.core.param.PlatformFileErrorInsertParam" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.file_error_record (
             tenant_id, file_id, pipeline_instance_id, pipeline_step_run_id, record_no,
             error_code, error_message, error_key, error_args,

@@ -1,9 +1,5 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.file;
 
-import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceInsertIfAbsentParam;
-import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceTransitionStatusByGenerationParam;
-
-
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
@@ -20,6 +16,8 @@ import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceInsertIfAbsentParam;
+import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceTransitionStatusByGenerationParam;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ExpectedWorkOccurrenceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
@@ -212,7 +210,8 @@ public class BundleArrivalLauncher {
       }
       return true;
     }
-    boolean bundleBindingIsIncomplete = fileId == null || (templateCode == null && targetRef == null);
+    boolean bundleBindingIsIncomplete = EmptyChecks.isNull(fileId)
+        || (EmptyChecks.isNull(templateCode) && EmptyChecks.isNull(targetRef));
     if (bundleBindingIsIncomplete) {
       return false;
     }
@@ -297,12 +296,7 @@ public class BundleArrivalLauncher {
     LaunchOutcome existingOutcome = persistedOutcome(tenantId, requestId);
     if (EmptyChecks.isNotNull(existingOutcome)) {
       markExpectedWorkSatisfied(
-          tenantId,
-          workflow,
-          fileGroupCode,
-          candidate,
-          requestId,
-          existingOutcome);
+          tenantId, workflow, fileGroupCode, candidate, requestId, existingOutcome);
       return existingOutcome;
     }
     String traceId = IdGenerator.newTraceId();
@@ -343,8 +337,7 @@ public class BundleArrivalLauncher {
     if (EmptyChecks.isNull(outcome)) {
       throw new IllegalStateException("bundle launch returned no instance or durable outcome");
     }
-    markExpectedWorkSatisfied(
-        tenantId, workflow, fileGroupCode, candidate, requestId, outcome);
+    markExpectedWorkSatisfied(tenantId, workflow, fileGroupCode, candidate, requestId, outcome);
     log.info(
         "bundle arrival outcome={}: tenantId={}, fileGroupCode={}, workflowCode={}, fileCount={},"
             + " bizDate={}, requestId={}",
@@ -373,30 +366,32 @@ public class BundleArrivalLauncher {
       if (isTerminal(batchDay)) {
         return false;
       }
-      ExpectedWorkOccurrenceInsertIfAbsentParam expectedWorkOccurrenceInsertIfAbsentParam = ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
-          .tenantId(tenantId)
-          .calendarCode(calendarCode)
-          .bizDate(bizDate)
-          .workflowDefinitionId(workflowDefinitionId)
-          .sourceType("FILE_GROUP")
-          .sourceKey(fileGroupCode)
-          .expectedAt(BatchDateTimeSupport.utcNow())
-          .dueAt(null)
-          .build();
-      expectedWorkOccurrenceMapper.insertIfAbsent(
-          expectedWorkOccurrenceInsertIfAbsentParam);
-      ExpectedWorkOccurrenceTransitionStatusByGenerationParam expectedWorkOccurrenceTransitionStatusByGenerationParam = ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
-          .tenantId(tenantId)
-          .calendarCode(calendarCode)
-          .workflowDefinitionId(workflowDefinitionId)
-          .sourceType("FILE_GROUP")
-          .sourceKey(fileGroupCode)
-          .bizDate(bizDate)
-          .generation(null)
-          .expectedStatus("EXPECTED")
-          .newStatus("ARRIVED")
-          .triggerRequestId(null)
-          .build();
+      ExpectedWorkOccurrenceInsertIfAbsentParam expectedWorkOccurrenceInsertIfAbsentParam =
+          ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
+              .tenantId(tenantId)
+              .calendarCode(calendarCode)
+              .bizDate(bizDate)
+              .workflowDefinitionId(workflowDefinitionId)
+              .sourceType("FILE_GROUP")
+              .sourceKey(fileGroupCode)
+              .expectedAt(BatchDateTimeSupport.utcNow())
+              .dueAt(null)
+              .build();
+      expectedWorkOccurrenceMapper.insertIfAbsent(expectedWorkOccurrenceInsertIfAbsentParam);
+      ExpectedWorkOccurrenceTransitionStatusByGenerationParam
+          expectedWorkOccurrenceTransitionStatusByGenerationParam =
+              ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
+                  .tenantId(tenantId)
+                  .calendarCode(calendarCode)
+                  .workflowDefinitionId(workflowDefinitionId)
+                  .sourceType("FILE_GROUP")
+                  .sourceKey(fileGroupCode)
+                  .bizDate(bizDate)
+                  .generation(null)
+                  .expectedStatus("EXPECTED")
+                  .newStatus("ARRIVED")
+                  .triggerRequestId(null)
+                  .build();
       expectedWorkOccurrenceMapper.transitionStatus(
           expectedWorkOccurrenceTransitionStatusByGenerationParam);
       return true;
@@ -432,18 +427,20 @@ public class BundleArrivalLauncher {
     TransactionTemplate transaction = new TransactionTemplate(transactionManager);
     transaction.executeWithoutResult(status -> {
       expectedWorkOccurrenceMapper.setTenantContext(tenantId);
-      ExpectedWorkOccurrenceTransitionStatusByGenerationParam expectedWorkOccurrenceTransitionStatusByGenerationParam2 = ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
-          .tenantId(tenantId)
-          .calendarCode(calendarCode)
-          .workflowDefinitionId(workflowDefinitionId)
-          .sourceType("FILE_GROUP")
-          .sourceKey(fileGroupCode)
-          .bizDate(candidate.bizDate())
-          .generation(null)
-          .expectedStatus("ARRIVED")
-          .newStatus("SATISFIED")
-          .triggerRequestId(requestId)
-          .build();
+      ExpectedWorkOccurrenceTransitionStatusByGenerationParam
+          expectedWorkOccurrenceTransitionStatusByGenerationParam2 =
+              ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
+                  .tenantId(tenantId)
+                  .calendarCode(calendarCode)
+                  .workflowDefinitionId(workflowDefinitionId)
+                  .sourceType("FILE_GROUP")
+                  .sourceKey(fileGroupCode)
+                  .bizDate(candidate.bizDate())
+                  .generation(null)
+                  .expectedStatus("ARRIVED")
+                  .newStatus("SATISFIED")
+                  .triggerRequestId(requestId)
+                  .build();
       expectedWorkOccurrenceMapper.transitionStatus(
           expectedWorkOccurrenceTransitionStatusByGenerationParam2);
     });

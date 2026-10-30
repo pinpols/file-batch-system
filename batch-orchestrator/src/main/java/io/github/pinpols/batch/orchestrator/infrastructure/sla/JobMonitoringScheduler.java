@@ -9,10 +9,15 @@ import io.github.pinpols.batch.orchestrator.config.SlaGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.view.JobMonitoringAlertCandidate;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import jakarta.annotation.PostConstruct;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,18 +32,30 @@ import org.springframework.stereotype.Component;
 public class JobMonitoringScheduler {
 
   private static final String VIOLATION_TYPE_TAG = "violation_type";
+  private static final String FAILURE_STAGE_TAG = "failure_stage";
 
   private final JobMonitoringMapper jobMonitoringMapper;
   private final JobMonitoringAlertEmissionService emissionService;
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final MeterRegistry meterRegistry;
   private final SlaGovernanceProperties properties;
+  private final Map<Violation, ScanSignal> scanSignals = new EnumMap<>(Violation.class);
+  private final Map<Violation, ScanSignal> alertSignals = new EnumMap<>(Violation.class);
+  private boolean healthGaugesRegistered;
+
+  {
+    for (Violation violation : Violation.values()) {
+      scanSignals.put(violation, new ScanSignal());
+      alertSignals.put(violation, new ScanSignal());
+    }
+  }
 
   @Scheduled(
       fixedDelayString = "${batch.sla.job-monitoring.poll-interval-millis:30000}",
       scheduler = "jobMonitoringTaskScheduler")
   @SchedulerLock(name = "job_monitoring_scan", lockAtMostFor = "PT2M", lockAtLeastFor = "PT5S")
   public void scan() {
+    registerHealthGauges();
     if (!properties.getJobMonitoring().isEnabled() || gracefulShutdown.isDraining()) {
       return;
     }
@@ -68,6 +85,7 @@ public class JobMonitoringScheduler {
         querySucceeded = true;
       } catch (RuntimeException exception) {
         outcome = "failure";
+        scanSignals.get(violation).recordFailure();
         meterRegistry
             .counter(
                 "batch.job.monitoring.scan.failures.total", VIOLATION_TYPE_TAG, violation.name())
@@ -82,10 +100,16 @@ public class JobMonitoringScheduler {
             .record(System.nanoTime() - queryStartedAt, TimeUnit.NANOSECONDS);
       }
       if (querySucceeded) {
+        scanSignals.get(violation).recordSuccess();
         meterRegistry
             .summary("batch.job.monitoring.scan.candidates", VIOLATION_TYPE_TAG, violation.name())
             .record(EmptyChecks.isNull(candidates) ? 0 : candidates.size());
-        scanCandidates(candidates, violation);
+        boolean alertPersistenceSucceeded = scanCandidates(candidates, violation);
+        if (alertPersistenceSucceeded) {
+          alertSignals.get(violation).recordSuccess();
+        } else {
+          outcome = "failure";
+        }
       }
     } finally {
       Timer.builder("batch.job.monitoring.scan.duration")
@@ -96,14 +120,17 @@ public class JobMonitoringScheduler {
     }
   }
 
-  private void scanCandidates(List<JobMonitoringAlertCandidate> candidates, Violation violation) {
+  private boolean scanCandidates(
+      List<JobMonitoringAlertCandidate> candidates, Violation violation) {
     if (EmptyChecks.isEmpty(candidates)) {
-      return;
+      return true;
     }
+    boolean allAlertsPersisted = true;
     for (JobMonitoringAlertCandidate candidate : candidates) {
       if (EmptyChecks.isNull(candidate)
           || EmptyChecks.isNull(candidate.tenantId())
-          || EmptyChecks.isNull(candidate.jobInstanceId())) {
+          || (EmptyChecks.isNull(candidate.jobInstanceId())
+              && EmptyChecks.isNull(candidate.triggerRequestId()))) {
         continue;
       }
       try {
@@ -115,6 +142,8 @@ public class JobMonitoringScheduler {
               .increment();
         }
       } catch (RuntimeException exception) {
+        alertSignals.get(violation).recordFailure();
+        allAlertsPersisted = false;
         meterRegistry
             .counter(
                 "batch.job.monitoring.alert.failures.total", VIOLATION_TYPE_TAG, violation.name())
@@ -122,6 +151,80 @@ public class JobMonitoringScheduler {
         SwallowedExceptionLogger.warn(
             JobMonitoringScheduler.class, "catch:monitoringAlertEmission", exception);
       }
+    }
+    return allAlertsPersisted;
+  }
+
+  @PostConstruct
+  synchronized void registerHealthGauges() {
+    if (healthGaugesRegistered) {
+      return;
+    }
+    Gauge.builder(
+            "batch.job.monitoring.enabled",
+            properties,
+            value -> value.getJobMonitoring().isEnabled() ? 1.0d : 0.0d)
+        .register(meterRegistry);
+    Gauge.builder(
+            "batch.job.monitoring.poll.interval.seconds",
+            properties,
+            value -> value.getJobMonitoring().getPollIntervalMillis() / 1000.0d)
+        .register(meterRegistry);
+    for (Violation violation : Violation.values()) {
+      ScanSignal scanSignal = scanSignals.get(violation);
+      ScanSignal alertSignal = alertSignals.get(violation);
+      Gauge.builder(
+              "batch.job.monitoring.last.failure.timestamp.seconds",
+              scanSignal,
+              ScanSignal::lastFailureTimestampSeconds)
+          .tag(VIOLATION_TYPE_TAG, violation.name())
+          .tag(FAILURE_STAGE_TAG, "scan")
+          .register(meterRegistry);
+      Gauge.builder(
+              "batch.job.monitoring.last.success.timestamp.seconds",
+              scanSignal,
+              ScanSignal::lastSuccessTimestampSeconds)
+          .tag(VIOLATION_TYPE_TAG, violation.name())
+          .tag(FAILURE_STAGE_TAG, "scan")
+          .register(meterRegistry);
+      Gauge.builder(
+              "batch.job.monitoring.last.failure.timestamp.seconds",
+              alertSignal,
+              ScanSignal::lastFailureTimestampSeconds)
+          .tag(VIOLATION_TYPE_TAG, violation.name())
+          .tag(FAILURE_STAGE_TAG, "alert_persistence")
+          .register(meterRegistry);
+      Gauge.builder(
+              "batch.job.monitoring.last.success.timestamp.seconds",
+              alertSignal,
+              ScanSignal::lastSuccessTimestampSeconds)
+          .tag(VIOLATION_TYPE_TAG, violation.name())
+          .tag(FAILURE_STAGE_TAG, "alert_persistence")
+          .register(meterRegistry);
+    }
+    healthGaugesRegistered = true;
+  }
+
+  private static final class ScanSignal {
+    private final AtomicLong lastFailureAtMillis = new AtomicLong();
+    private final AtomicLong lastSuccessAtMillis = new AtomicLong();
+
+    private double lastFailureTimestampSeconds() {
+      return lastFailureAtMillis.get() / 1000.0d;
+    }
+
+    private double lastSuccessTimestampSeconds() {
+      return lastSuccessAtMillis.get() / 1000.0d;
+    }
+
+    private void recordFailure() {
+      long previous = Math.max(lastFailureAtMillis.get(), lastSuccessAtMillis.get());
+      lastFailureAtMillis.set(Math.max(System.currentTimeMillis(), previous + 1));
+    }
+
+    private void recordSuccess() {
+      long previous = Math.max(lastFailureAtMillis.get(), lastSuccessAtMillis.get());
+      lastSuccessAtMillis.set(Math.max(System.currentTimeMillis(), previous + 1));
     }
   }
 }

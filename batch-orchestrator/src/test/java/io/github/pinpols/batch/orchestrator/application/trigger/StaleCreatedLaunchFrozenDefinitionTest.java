@@ -32,18 +32,37 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("创建态恢复的冻结定义:复用父运行快照,版本漂移拒绝派发")
 class StaleCreatedLaunchFrozenDefinitionTest {
 
-  @Mock private JobInstanceMapper instances;
-  @Mock private TriggerRequestMapper requests;
-  @Mock private PartitionDispatchService dispatch;
-  @Mock private LaunchService launch;
-  @Mock private LaunchValidationService validation;
-  @Mock private OrchestratorGracefulShutdown shutdown;
+  @Mock
+  private JobInstanceMapper instances;
+
+  @Mock
+  private TriggerRequestMapper requests;
+
+  @Mock
+  private PartitionDispatchService dispatch;
+
+  @Mock
+  private LaunchService launch;
+
+  @Mock
+  private LaunchValidationService validation;
+
+  @Mock
+  private OrchestratorGracefulShutdown shutdown;
+
   private StaleCreatedLaunchRecoveryScheduler scheduler;
 
   @BeforeEach
   void setUp() {
-    scheduler = new StaleCreatedLaunchRecoveryScheduler(instances, requests, dispatch, launch,
-        validation, shutdown, new SimpleMeterRegistry(), new StaleCreatedLaunchRecoveryProperties());
+    scheduler = new StaleCreatedLaunchRecoveryScheduler(
+        instances,
+        requests,
+        dispatch,
+        launch,
+        validation,
+        shutdown,
+        new SimpleMeterRegistry(),
+        new StaleCreatedLaunchRecoveryProperties());
     JobInstanceEntity instance = new JobInstanceEntity();
     instance.setId(10L);
     instance.setTenantId("ta");
@@ -59,7 +78,8 @@ class StaleCreatedLaunchFrozenDefinitionTest {
     request.setTenantId("ta");
     request.setRequestId("request-a");
     request.setRequestStatus(TriggerRequestStatus.LAUNCHED.code());
-    when(instances.selectStaleCreatedLaunchCandidates(any(), anyInt())).thenReturn(List.of(instance));
+    when(instances.selectStaleCreatedLaunchCandidates(any(), anyInt()))
+        .thenReturn(List.of(instance));
     when(requests.selectById("ta", 30L)).thenReturn(request);
   }
 
@@ -67,7 +87,8 @@ class StaleCreatedLaunchFrozenDefinitionTest {
   @DisplayName("恢复向 T2 传递与原实例同版本的已验证执行定义")
   void shouldDispatchFrozenDefinition_whenPersistedInstanceVersionMatches() {
     JobDefinitionEntity frozen = definition(1);
-    when(validation.load(any())).thenReturn(new LaunchValidationService.LaunchLoadResult(null, frozen, null, null));
+    when(validation.load(any()))
+        .thenReturn(new LaunchValidationService.LaunchLoadResult(null, frozen, null, null));
 
     scheduler.recover();
 
@@ -81,7 +102,8 @@ class StaleCreatedLaunchFrozenDefinitionTest {
   @Test
   @DisplayName("解析到当前新版本而非原实例版本时不创建分区或回写已恢复")
   void shouldRefuseDispatch_whenResolvedVersionDiffersFromPersistedInstance() {
-    when(validation.load(any())).thenReturn(new LaunchValidationService.LaunchLoadResult(null, definition(2), null, null));
+    when(validation.load(any()))
+        .thenReturn(new LaunchValidationService.LaunchLoadResult(null, definition(2), null, null));
 
     scheduler.recover();
 
@@ -91,6 +113,10 @@ class StaleCreatedLaunchFrozenDefinitionTest {
 
   private static JobDefinitionEntity definition(int version) {
     return JobDefinitionEntity.builder()
-        .id(20L).tenantId("ta").jobCode("JOB_A").version(version).build();
+        .id(20L)
+        .tenantId("ta")
+        .jobCode("JOB_A")
+        .version(version)
+        .build();
   }
 }

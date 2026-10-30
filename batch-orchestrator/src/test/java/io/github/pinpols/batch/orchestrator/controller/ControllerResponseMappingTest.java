@@ -67,10 +67,15 @@ class ControllerResponseMappingTest {
     ((ObjectNode) taskEntityJson).remove("jobInstanceBizDate");
     ((ObjectNode) taskEntityJson).remove("nonIdempotentStartedAt");
     ((ObjectNode) taskEntityJson).remove("externalOutcomeResolutionVersion");
+    ((ObjectNode) taskEntityJson).remove("externalOutcomeResolutionTriggerRequestId");
+    ((ObjectNode) taskEntityJson).remove("externalOutcomeResolutionConsumedAt");
     JsonNode taskResponseJson = objectMapper.valueToTree(JobTaskResponse.from(task));
     assertThat(taskResponseJson).isEqualTo(taskEntityJson);
     assertThat(taskResponseJson.has("nonIdempotentStartedAt")).isFalse();
     assertThat(taskResponseJson.has("externalOutcomeResolutionVersion")).isFalse();
+    assertThat(taskResponseJson.has("externalOutcomeResolutionTriggerRequestId"))
+        .isFalse();
+    assertThat(taskResponseJson.has("externalOutcomeResolutionConsumedAt")).isFalse();
     assertThat(taskResponseJson.has("jobInstanceBizDate")).isFalse();
   }
 

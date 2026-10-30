@@ -48,6 +48,8 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
@@ -79,6 +81,7 @@ class BatchDaySettleSchedulerTest {
     jobInstanceMapper = mock(JobInstanceMapper.class);
     jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
     triggerRequestMapper = mock(TriggerRequestMapper.class);
+    when(triggerRequestMapper.insertBatchDayCatchUpIfAbsent(any())).thenReturn(1);
     workflowDefinitionMapper = mock(WorkflowDefinitionMapper.class);
     configCacheService = mock(OrchestratorConfigCacheService.class);
     launchApplicationService = mock(LaunchApplicationService.class);
@@ -290,7 +293,8 @@ class BatchDaySettleSchedulerTest {
             "t1", 501L, true))
         .thenReturn(new WorkflowDefinitionEntity(
             801L, "t1", "WF_FAILED_JOB", "Failed job", "SINGLE_JOB", 1, true, 501L, null));
-    when(triggerRequestMapper.selectByTenantAndDedupKey(eq("t1"), anyString())).thenReturn(null);
+    when(triggerRequestMapper.selectCatchUpRootByDedupKey(eq("t1"), anyString()))
+        .thenReturn(null);
     when(batchDayInstanceMapper.updateWithCas(any())).thenReturn(1);
     when(launchApplicationService.launchFromTrustedQueue(any()))
         .thenReturn(new LaunchResponse("inst-001", "trace-001"));
@@ -304,7 +308,7 @@ class BatchDaySettleSchedulerTest {
     assertThat(batchCaptor.getAllValues().get(1).dayStatus()).isEqualTo("FAILED");
     ArgumentCaptor<TriggerRequestEntity> triggerCaptor =
         ArgumentCaptor.forClass(TriggerRequestEntity.class);
-    verify(triggerRequestMapper).insert(triggerCaptor.capture());
+    verify(triggerRequestMapper).insertBatchDayCatchUpIfAbsent(triggerCaptor.capture());
     assertThat(triggerCaptor.getValue().getWorkflowDefinitionId()).isEqualTo(801L);
     assertThat(triggerCaptor.getValue().getJobCode()).isNull();
     ArgumentCaptor<LaunchRequest> launchCaptor = ArgumentCaptor.forClass(LaunchRequest.class);
@@ -335,7 +339,8 @@ class BatchDaySettleSchedulerTest {
             "t1", 501L, true))
         .thenReturn(new WorkflowDefinitionEntity(
             801L, "t1", "WF_FAILED_JOB", "Failed job", "SINGLE_JOB", 1, true, 501L, null));
-    when(triggerRequestMapper.selectByTenantAndDedupKey(eq("t1"), anyString())).thenReturn(null);
+    when(triggerRequestMapper.selectCatchUpRootByDedupKey(eq("t1"), anyString()))
+        .thenReturn(null);
     when(launchApplicationService.launchFromTrustedQueue(any()))
         .thenReturn(new LaunchResponse("inst-002", "trace-002"));
 
@@ -347,12 +352,12 @@ class BatchDaySettleSchedulerTest {
     verify(batchDayInstanceMapper).selectFailedDaysNeedingCatchUp(100);
     ArgumentCaptor<TriggerRequestEntity> accepted =
         ArgumentCaptor.forClass(TriggerRequestEntity.class);
-    verify(triggerRequestMapper).insert(accepted.capture());
+    verify(triggerRequestMapper).insertBatchDayCatchUpIfAbsent(accepted.capture());
     LaunchRequest frozen =
         JsonUtils.fromJsonStrict(accepted.getValue().getLaunchPayload(), LaunchRequest.class);
     assertThat(frozen.dataIntervalStart()).isEqualTo(originalStart);
     assertThat(frozen.dataIntervalEnd()).isEqualTo(originalStart.plusSeconds(86400));
-    when(triggerRequestMapper.selectByTenantAndDedupKey(eq("t1"), anyString()))
+    when(triggerRequestMapper.selectCatchUpRootByDedupKey(eq("t1"), anyString()))
         .thenReturn(accepted.getValue());
     failedJob.setDataIntervalStart(originalStart.plusSeconds(86400));
     scheduler.settle();
@@ -360,6 +365,116 @@ class BatchDaySettleSchedulerTest {
     verify(launchApplicationService, times(2)).launchFromTrustedQueue(launched.capture());
     assertThat(launched.getAllValues()).containsExactly(frozen, frozen);
     verify(batchDayInstanceMapper, never()).updateWithCas(any());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  @DisplayName("重扫已接纳补跑时当前受管 Workflow 变化不能改写原请求")
+  void shouldPreserveAcceptedCatchUpWhenCurrentWorkflowChanges(boolean currentWorkflowExists) {
+    BatchDayInstanceEntity failedDay = candidate("FAILED");
+    JobInstanceEntity failedJob = jobInstance("FAILED_JOB", 103L);
+    LaunchRequest frozen = LaunchRequest.builder()
+        .tenantId("t1")
+        .requestId("accepted-catchup")
+        .workflowDefinitionId(801L)
+        .bizDate(failedDay.bizDate())
+        .triggerType(TriggerType.CATCH_UP)
+        .build();
+    TriggerRequestEntity accepted = new TriggerRequestEntity();
+    accepted.setTenantId("t1");
+    accepted.setRequestId(frozen.requestId());
+    accepted.setWorkflowDefinitionId(frozen.workflowDefinitionId());
+    accepted.setBizDate(frozen.bizDate());
+    accepted.setRequestStatus("ACCEPTED");
+    accepted.setLaunchPayload(JsonUtils.toJson(frozen));
+    when(batchDayInstanceMapper.selectByDayStatusIn(any())).thenReturn(List.of());
+    when(batchDayInstanceMapper.selectFailedDaysNeedingCatchUp(100)).thenReturn(List.of(failedDay));
+    when(jobInstanceMapper.selectBatchDayCatchUpCandidates("t1", "CAL", failedDay.bizDate()))
+        .thenReturn(List.of(failedJob));
+    when(configCacheService.findEnabledBusinessCalendar("t1", "CAL")).thenReturn(calendar("AUTO"));
+    when(configCacheService.findEnabledJobDefinition("t1", "FAILED_JOB"))
+        .thenReturn(JobDefinitionEntity.builder()
+            .id(501L)
+            .tenantId("t1")
+            .jobCode("FAILED_JOB")
+            .build());
+    WorkflowDefinitionEntity current = currentWorkflowExists
+        ? new WorkflowDefinitionEntity(
+            802L, "t1", "WF_NEW", "new", "SINGLE_JOB", 1, true, 501L, null)
+        : null;
+    when(workflowDefinitionMapper.selectFirstByTenantAndSingleJobDefinitionIdAndEnabled(
+            "t1", 501L, true))
+        .thenReturn(current);
+    when(triggerRequestMapper.selectCatchUpRootByDedupKey(eq("t1"), anyString()))
+        .thenReturn(accepted);
+    when(launchApplicationService.launchFromTrustedQueue(any()))
+        .thenReturn(new LaunchResponse("inst", "trace"));
+
+    scheduler.settle();
+
+    verify(triggerRequestMapper, never())
+        .updateAcceptance(anyString(), anyString(), eq("REJECTED"), any());
+    verify(launchApplicationService).launchFromTrustedQueue(frozen);
+  }
+
+  @Test
+  @DisplayName("检查关联期间其他执行器已接纳补跑时保留新请求")
+  void shouldPreserveCatchUpAcceptedDuringMissingWorkflowCheck() {
+    BatchDayInstanceEntity failedDay = candidate("FAILED");
+    JobInstanceEntity failedJob = jobInstance("FAILED_JOB", 103L);
+    TriggerRequestEntity accepted = new TriggerRequestEntity();
+    accepted.setTenantId("t1");
+    accepted.setRequestId("concurrent-catchup");
+    accepted.setRequestStatus("ACCEPTED");
+    when(batchDayInstanceMapper.selectByDayStatusIn(any())).thenReturn(List.of());
+    when(batchDayInstanceMapper.selectFailedDaysNeedingCatchUp(100)).thenReturn(List.of(failedDay));
+    when(jobInstanceMapper.selectBatchDayCatchUpCandidates("t1", "CAL", failedDay.bizDate()))
+        .thenReturn(List.of(failedJob));
+    when(configCacheService.findEnabledBusinessCalendar("t1", "CAL")).thenReturn(calendar("AUTO"));
+    when(triggerRequestMapper.selectCatchUpRootByDedupKey(eq("t1"), anyString()))
+        .thenReturn(null, accepted);
+
+    scheduler.settle();
+
+    verify(triggerRequestMapper, never())
+        .updateAcceptance(anyString(), anyString(), eq("REJECTED"), any());
+    verify(triggerRequestMapper, never()).insertBatchDayCatchUpIfAbsent(any());
+    verify(launchApplicationService, never()).launchFromTrustedQueue(any());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"GIVE_UP", "DUPLICATE"})
+  @DisplayName("同一失败日因其他任务重扫时，放弃或重复请求不能自动重投")
+  void shouldNotLaunchTerminalCatchUpWhenDayIsScannedForOtherJobs(String status) {
+    BatchDayInstanceEntity failedDay = candidate("FAILED");
+    JobInstanceEntity failedJob = jobInstance("FAILED_JOB", 103L);
+    TriggerRequestEntity terminal = new TriggerRequestEntity();
+    terminal.setTenantId("t1");
+    terminal.setRequestId("terminal-catchup");
+    terminal.setWorkflowDefinitionId(801L);
+    terminal.setBizDate(failedDay.bizDate());
+    terminal.setRequestStatus(status);
+    LaunchRequest frozen = LaunchRequest.builder()
+        .tenantId("t1")
+        .requestId("terminal-catchup")
+        .workflowDefinitionId(801L)
+        .bizDate(failedDay.bizDate())
+        .triggerType(TriggerType.CATCH_UP)
+        .build();
+    terminal.setLaunchPayload(JsonUtils.toJson(frozen));
+    when(batchDayInstanceMapper.selectByDayStatusIn(any())).thenReturn(List.of());
+    when(batchDayInstanceMapper.selectFailedDaysNeedingCatchUp(100)).thenReturn(List.of(failedDay));
+    when(jobInstanceMapper.selectBatchDayCatchUpCandidates("t1", "CAL", failedDay.bizDate()))
+        .thenReturn(List.of(failedJob));
+    when(configCacheService.findEnabledBusinessCalendar("t1", "CAL")).thenReturn(calendar("AUTO"));
+    when(triggerRequestMapper.selectCatchUpRootByDedupKey(eq("t1"), anyString()))
+        .thenReturn(terminal);
+
+    scheduler.settle();
+
+    verify(triggerRequestMapper, never())
+        .updateAcceptance(anyString(), anyString(), anyString(), any());
+    verify(launchApplicationService, never()).launchFromTrustedQueue(any());
   }
 
   @Test
@@ -389,7 +504,8 @@ class BatchDaySettleSchedulerTest {
             "t1", 501L, true))
         .thenReturn(new WorkflowDefinitionEntity(
             801L, "t1", "WF_FAILED_JOB", "Failed job", "SINGLE_JOB", 1, true, 501L, null));
-    when(triggerRequestMapper.selectByTenantAndDedupKey(eq("t1"), anyString())).thenReturn(null);
+    when(triggerRequestMapper.selectCatchUpRootByDedupKey(eq("t1"), anyString()))
+        .thenReturn(null);
     when(batchDayInstanceMapper.updateWithCas(any())).thenReturn(1);
 
     scheduler.settle();
@@ -397,7 +513,7 @@ class BatchDaySettleSchedulerTest {
     verify(batchDayInstanceMapper, atLeastOnce()).updateWithCas(any());
     ArgumentCaptor<TriggerRequestEntity> triggerCaptor =
         ArgumentCaptor.forClass(TriggerRequestEntity.class);
-    verify(triggerRequestMapper).insert(triggerCaptor.capture());
+    verify(triggerRequestMapper).insertBatchDayCatchUpIfAbsent(triggerCaptor.capture());
     assertThat(triggerCaptor.getValue().getWorkflowDefinitionId()).isEqualTo(801L);
     assertThat(triggerCaptor.getValue().getJobCode()).isNull();
     verify(launchApplicationService, never()).launchFromTrustedQueue(any());
@@ -426,14 +542,15 @@ class BatchDaySettleSchedulerTest {
     when(workflowDefinitionMapper.selectFirstByTenantAndSingleJobDefinitionIdAndEnabled(
             "t1", 501L, true))
         .thenReturn(null);
-    when(triggerRequestMapper.selectByTenantAndDedupKey(eq("t1"), anyString())).thenReturn(null);
+    when(triggerRequestMapper.selectCatchUpRootByDedupKey(eq("t1"), anyString()))
+        .thenReturn(null);
     when(batchDayInstanceMapper.updateWithCas(any())).thenReturn(1);
 
     scheduler.settle();
 
     ArgumentCaptor<TriggerRequestEntity> triggerCaptor =
         ArgumentCaptor.forClass(TriggerRequestEntity.class);
-    verify(triggerRequestMapper).insert(triggerCaptor.capture());
+    verify(triggerRequestMapper).insertBatchDayCatchUpIfAbsent(triggerCaptor.capture());
     assertThat(triggerCaptor.getValue().getRequestStatus()).isEqualTo("REJECTED");
     verify(launchApplicationService, never()).launchFromTrustedQueue(any());
   }

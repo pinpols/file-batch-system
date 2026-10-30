@@ -110,6 +110,75 @@ class ConsolePendingCatchUpQueryIntegrationTest extends AbstractIntegrationTest 
     assertThat(rows.get(0).getWorkflowCode()).isEqualTo("WF_JOB_A");
   }
 
+  @Test
+  @DisplayName("同一请求多张审批单时列表仍按请求分页并显示最新审批")
+  void shouldPageRequestsOnce_whenMultipleApprovalsExist() {
+    String tenantId = "t-catchup-duplicate-" + System.nanoTime();
+    insertCatchUp(tenantId, "WF_OLD", "2026-06-20");
+    insertCatchUp(tenantId, "WF_NEW", "2026-06-21");
+    String selectRequestSql =
+        "select request_id from batch.trigger_request where tenant_id = ? order by id desc limit 1";
+    String requestId = jdbcTemplate.queryForObject(selectRequestSql, String.class, tenantId);
+    String insert = """
+        insert into batch.approval_command
+          (tenant_id, approval_no, approval_type, action_type, target_type, target_id,
+           payload_json, approval_status, source_idempotency_key)
+        values (?, ?, 'CATCH_UP', 'CATCH_UP', 'CATCH_UP', ?, '{}'::jsonb, ?, ?)
+        """;
+    jdbcTemplate.update(insert, tenantId, "old", requestId, "REJECTED", "first-key");
+    jdbcTemplate.update(insert, tenantId, "new", requestId, "PENDING", "second-key");
+    jdbcTemplate.update(insert, tenantId + "-other", "foreign", requestId, "PENDING", "other-key");
+    PendingCatchUpQuery query = PendingCatchUpQuery.builder()
+        .tenantId(tenantId)
+        .pageRequest(new PageRequest(1, 2))
+        .build();
+    List<PendingCatchUpEntity> rows = pendingCatchUpMapper.selectByQuery(query);
+    assertThat(pendingCatchUpMapper.countByQuery(query)).isEqualTo(2);
+    assertThat(rows)
+        .extracting(PendingCatchUpEntity::getWorkflowCode)
+        .containsExactly("WF_NEW", "WF_OLD");
+    assertThat(rows.getFirst().getApprovalNo()).isEqualTo("new");
+    assertThat(rows.getFirst().getApprovalStatus()).isEqualTo("PENDING");
+    assertThat(rows.getLast().getApprovalNo()).isNull();
+  }
+
+  @Test
+  @DisplayName("重复审批不影响游标分页,其他租户审批不会覆盖最新单据")
+  void shouldPreserveCursorAndTenantIsolation_whenMultipleApprovalsExist() {
+    String tenantId = "t-catchup-cursor-" + System.nanoTime();
+    insertCatchUp(tenantId, "WF_FIRST", "2026-06-20");
+    insertCatchUp(tenantId, "WF_LAST", "2026-06-21");
+    String selectRequestSql =
+        "select request_id from batch.trigger_request where tenant_id = ? order by id desc limit 1";
+    String requestId = jdbcTemplate.queryForObject(selectRequestSql, String.class, tenantId);
+    String insert = """
+        insert into batch.approval_command
+          (tenant_id, approval_no, approval_type, action_type, target_type, target_id,
+           payload_json, approval_status, source_idempotency_key)
+        values (?, ?, 'CATCH_UP', 'CATCH_UP', 'CATCH_UP', ?, '{}'::jsonb, ?, ?)
+        """;
+    jdbcTemplate.update(insert, tenantId, "old", requestId, "REJECTED", "first-key");
+    jdbcTemplate.update(insert, tenantId, "new", requestId, "PENDING", "second-key");
+    jdbcTemplate.update(insert, tenantId + "-other", "foreign", requestId, "PENDING", "other-key");
+    PendingCatchUpQuery firstQuery = PendingCatchUpQuery.builder()
+        .tenantId(tenantId)
+        .pageRequest(new PageRequest(1, 1))
+        .build();
+    List<PendingCatchUpEntity> first = pendingCatchUpMapper.selectByQuery(firstQuery);
+    assertThat(first).hasSize(1);
+    assertThat(first.getFirst().getWorkflowCode()).isEqualTo("WF_LAST");
+    assertThat(first.getFirst().getApprovalNo()).isEqualTo("new");
+    PendingCatchUpQuery secondQuery = PendingCatchUpQuery.builder()
+        .tenantId(tenantId)
+        .pageRequest(new PageRequest(1, 1))
+        .cursorId(first.getFirst().getId())
+        .build();
+    List<PendingCatchUpEntity> second = pendingCatchUpMapper.selectByQuery(secondQuery);
+    assertThat(second).hasSize(1);
+    assertThat(second.getFirst().getWorkflowCode()).isEqualTo("WF_FIRST");
+    assertThat(second.getFirst().getApprovalNo()).isNull();
+  }
+
   // ── helpers ───────────────────────────────────────────────────────────────
 
   private void insertCatchUp(String tenantId, String workflowCode, String bizDate) {

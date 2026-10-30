@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.domain.ops.web;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -20,6 +19,9 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.env.Environment;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
@@ -38,13 +40,18 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
  * </ul>
  */
 @DisplayName("测试数据清理接口:生产环境拒绝启用, 非法前缀拦截, 合法请求只转发编排层")
+@ExtendWith(MockitoExtension.class)
 class ConsoleAdminTestDataControllerTest {
 
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
-  private final Environment environment = mock(Environment.class);
-  private final ConsoleOrchestratorPort orchestratorProxyService =
-      mock(ConsoleOrchestratorPort.class);
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
+  @Mock
+  private Environment environment;
+
+  @Mock
+  private ConsoleOrchestratorPort orchestratorProxyService;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -52,15 +59,7 @@ class ConsoleAdminTestDataControllerTest {
     ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
     ConsoleApiExceptionHandler exceptionHandler =
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     when(environment.getActiveProfiles()).thenReturn(new String[] {"test"});
-    when(orchestratorProxyService.adminTestDataCleanupByPrefix("e2e"))
-        .thenReturn(Map.of("job_definition", 1, "workflow_definition", 1));
-    when(orchestratorProxyService.adminTestDataCleanupByPrefix("test"))
-        .thenReturn(Map.of("job_definition", 0));
-    when(orchestratorProxyService.adminTestDataCleanupByExactTenantIds(List.of("td", "te")))
-        .thenReturn(Map.of("tenant", 2));
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
@@ -89,6 +88,8 @@ class ConsoleAdminTestDataControllerTest {
   @Test
   @DisplayName("空前缀守卫:仅空白的前缀返回参数错误, 且不触达编排层")
   void shouldRejectBlankPrefixAtMethodGuard() throws Exception {
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     // controller 内部 if (prefix.isBlank()) 回退,@Pattern 在 standalone MockMvc 不触发
     // (MethodValidationPostProcessor 需要 Spring context),所以这里走方法内 guard
     mockMvc
@@ -101,6 +102,10 @@ class ConsoleAdminTestDataControllerTest {
   @Test
   @DisplayName("前缀清理:合法前缀按表计数回填成功响应, 并转发编排层")
   void shouldForwardValidPrefixCleanupToOrchestrator() throws Exception {
+    when(orchestratorProxyService.adminTestDataCleanupByPrefix("e2e"))
+        .thenReturn(Map.of("job_definition", 1, "workflow_definition", 1));
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     mockMvc
         .perform(delete("/api/console/admin/test-data").param("prefix", "e2e"))
         .andExpect(status().isOk())
@@ -113,6 +118,10 @@ class ConsoleAdminTestDataControllerTest {
   @Test
   @DisplayName("精确清理:逗号分隔的标识列表解析后转发, 并回填清理计数")
   void shouldForwardExactIdsCleanupToOrchestrator() throws Exception {
+    when(orchestratorProxyService.adminTestDataCleanupByExactTenantIds(List.of("td", "te")))
+        .thenReturn(Map.of("tenant", 2));
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     mockMvc
         .perform(delete("/api/console/admin/test-data/by-ids").param("ids", "td,te"))
         .andExpect(status().isOk())

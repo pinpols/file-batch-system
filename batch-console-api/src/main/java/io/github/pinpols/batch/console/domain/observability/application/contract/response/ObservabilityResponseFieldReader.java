@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.observability.application.contrac
 
 import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
 
-/** Observability-domain facade for the shared map-backed response converter. */
+/** 可观测性领域门面，封装共享的 Map 响应转换器。 */
 final class ObservabilityResponseFieldReader extends ConsoleResponseFieldReader {
 
   private ObservabilityResponseFieldReader() {}

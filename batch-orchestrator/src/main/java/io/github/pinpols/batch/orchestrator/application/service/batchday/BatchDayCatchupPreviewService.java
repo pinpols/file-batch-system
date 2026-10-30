@@ -4,9 +4,9 @@ import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.orchestrator.config.BatchDayScanProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayCatchupControlEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
-import io.github.pinpols.batch.orchestrator.config.BatchDayScanProperties;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayCatchupControlMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BusinessCalendarMapper;
@@ -43,8 +43,7 @@ public class BatchDayCatchupPreviewService {
   private final BatchDayScanProperties batchDayScanProperties;
 
   public BatchDayCatchupPreview preview(String tenantId, String calendarCode) {
-    boolean calendarScopeIsIncomplete =
-        EmptyChecks.isNull(tenantId)
+    boolean calendarScopeIsIncomplete = EmptyChecks.isNull(tenantId)
         || EmptyChecks.isBlank(tenantId)
         || EmptyChecks.isNull(calendarCode)
         || EmptyChecks.isBlank(calendarCode);
@@ -59,8 +58,7 @@ public class BatchDayCatchupPreviewService {
 
   public BatchDayHistoricalGapInventory inventoryHistoricalGaps(
       String tenantId, String calendarCode, LocalDate fromDate, LocalDate throughDate) {
-    boolean calendarScopeIsIncomplete =
-        EmptyChecks.isNull(tenantId)
+    boolean calendarScopeIsIncomplete = EmptyChecks.isNull(tenantId)
         || EmptyChecks.isBlank(tenantId)
         || EmptyChecks.isNull(calendarCode)
         || EmptyChecks.isBlank(calendarCode);

@@ -1,23 +1,23 @@
 package io.github.pinpols.batch.trigger.service;
 
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.enums.ScheduledOccurrenceStatus;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.CodeNormalizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.trigger.domain.command.ScheduledOccurrenceCatchUpCommand;
+import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceAcceptRejectedOccurrenceParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceInsertCatchUpAuditParam;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceReadinessWaitParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceRecordClosedBatchDayRejectionParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceTransitionStatusParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceUpsertObservedParam;
-
-
-import io.github.pinpols.batch.common.enums.ScheduledOccurrenceStatus;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
-import io.github.pinpols.batch.trigger.support.ScheduledOccurrenceObservation;
-import io.github.pinpols.batch.trigger.domain.command.ScheduledOccurrenceCatchUpCommand;
-import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.domain.query.UnobservedPlannedOccurrenceQuery;
 import io.github.pinpols.batch.trigger.mapper.ScheduledOccurrenceMapper;
 import io.github.pinpols.batch.trigger.mapper.TriggerRequestMapper;
+import io.github.pinpols.batch.trigger.support.ReadinessWaitWindow;
+import io.github.pinpols.batch.trigger.support.ScheduledOccurrenceObservation;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -26,7 +26,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 批次日自动补扫的租户级控制及不可变审计历史。 */
+/** 记录定时触发 occurrence 的观察、状态转换及补跑审计。 */
 @Service
 @RequiredArgsConstructor
 public class ScheduledOccurrenceRecorder {
@@ -38,6 +38,19 @@ public class ScheduledOccurrenceRecorder {
   @Transactional
   public boolean recordWaitingReadiness(
       TriggerDescriptor descriptor, Instant fireTime, LocalDate bizDate) {
+    return recordWaitingReadiness(descriptor, fireTime, bizDate, null, null);
+  }
+
+  /**
+   * 带等待窗口的登记：deferredSince/deadline 随等待记录落库，使无 Quartz 回调时也能由扫尾器终结。
+   */
+  @Transactional
+  public boolean recordWaitingReadiness(
+      TriggerDescriptor descriptor,
+      Instant fireTime,
+      LocalDate bizDate,
+      Instant deferredSince,
+      Instant readinessDeadline) {
     int workflowVersion = resolveWorkflowVersion(descriptor);
     Boolean admissionLocked = triggerRequestMapper.lockScheduledWorkflowAdmission(
         descriptor.getTenantId(), descriptor.getWorkflowDefinitionId(), fireTime, workflowVersion);
@@ -54,7 +67,21 @@ public class ScheduledOccurrenceRecorder {
       }
       return false;
     }
-    return recordObserved(descriptor, fireTime, bizDate, ScheduledOccurrenceStatus.WAITING_READINESS, null) == 1;
+    boolean recorded = recordObserved(
+            descriptor, fireTime, bizDate, ScheduledOccurrenceStatus.WAITING_READINESS, null)
+        == 1;
+    if (recorded
+        && EmptyChecks.isNotNull(deferredSince)
+        && EmptyChecks.isNotNull(readinessDeadline)) {
+      mapper.updateReadinessWait(ScheduledOccurrenceReadinessWaitParam.builder()
+          .tenantId(descriptor.getTenantId())
+          .workflowDefinitionId(descriptor.getWorkflowDefinitionId())
+          .scheduledFireTime(fireTime)
+          .deferredSince(deferredSince)
+          .deadline(readinessDeadline)
+          .build());
+    }
+    return recorded;
   }
 
   private int resolveWorkflowVersion(TriggerDescriptor descriptor) {
@@ -63,14 +90,27 @@ public class ScheduledOccurrenceRecorder {
         : descriptor.getWorkflowVersion();
   }
 
+  public ReadinessWaitWindow readinessWaitWindow(TriggerDescriptor descriptor, Instant fireTime) {
+    return mapper.selectReadinessWaitWindow(
+        descriptor.getTenantId(),
+        descriptor.getWorkflowDefinitionId(),
+        fireTime,
+        resolveWorkflowVersion(descriptor));
+  }
+
   public ScheduledOccurrenceObservation observed(TriggerDescriptor descriptor, Instant fireTime) {
-    return mapper.selectObservedOccurrence(descriptor.getTenantId(), descriptor.getWorkflowDefinitionId(), fireTime);
+    return mapper.selectObservedOccurrence(
+        descriptor.getTenantId(), descriptor.getWorkflowDefinitionId(), fireTime);
   }
 
   /** 与请求及Outbox处于同一事务，终态或原始身份失配时不能确认接纳。 */
   public void recordAccepted(
-      ScheduledTriggerCommand command, LocalDate bizDate, ScheduledOccurrenceStatus status, String requestId) {
-    int changed = recordObserved(command.descriptor(), command.fireTime(), bizDate, status, requestId);
+      ScheduledTriggerCommand command,
+      LocalDate bizDate,
+      ScheduledOccurrenceStatus status,
+      String requestId) {
+    int changed =
+        recordObserved(command.descriptor(), command.fireTime(), bizDate, status, requestId);
     if (changed != 1) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.launch_not_pending");
     }
@@ -86,10 +126,12 @@ public class ScheduledOccurrenceRecorder {
   }
 
   private int recordObserved(
-      TriggerDescriptor descriptor, Instant scheduledFireTime, LocalDate bizDate,
-      ScheduledOccurrenceStatus status, String requestId) {
-    boolean occurrenceIdentityIsIncomplete =
-        EmptyChecks.isNull(descriptor)
+      TriggerDescriptor descriptor,
+      Instant scheduledFireTime,
+      LocalDate bizDate,
+      ScheduledOccurrenceStatus status,
+      String requestId) {
+    boolean occurrenceIdentityIsIncomplete = EmptyChecks.isNull(descriptor)
         || EmptyChecks.isNull(descriptor.getWorkflowDefinitionId())
         || EmptyChecks.isNull(descriptor.getWorkflowCode())
         || EmptyChecks.isNull(scheduledFireTime)
@@ -104,30 +146,30 @@ public class ScheduledOccurrenceRecorder {
     String workflowCode = descriptor.getWorkflowCode();
     String calendarCode = CodeNormalizer.toConfigFormOrNull(descriptor.getCalendarCode());
     String statusCode = status.code();
-    ScheduledOccurrenceUpsertObservedParam scheduledOccurrenceUpsertObservedParam = ScheduledOccurrenceUpsertObservedParam.builder()
-        .tenantId(tenantId)
-        .workflowDefinitionId(workflowDefinitionId)
-        .workflowCode(workflowCode)
-        .scheduleVersion(scheduleVersion)
-        .calendarCode(calendarCode)
-        .scheduledFireTime(scheduledFireTime)
-        .bizDate(bizDate)
-        .status(statusCode)
-        .requestId(requestId)
-        .build();
+    ScheduledOccurrenceUpsertObservedParam scheduledOccurrenceUpsertObservedParam =
+        ScheduledOccurrenceUpsertObservedParam.builder()
+            .tenantId(tenantId)
+            .workflowDefinitionId(workflowDefinitionId)
+            .workflowCode(workflowCode)
+            .scheduleVersion(scheduleVersion)
+            .calendarCode(calendarCode)
+            .scheduledFireTime(scheduledFireTime)
+            .bizDate(bizDate)
+            .status(statusCode)
+            .requestId(requestId)
+            .build();
     return mapper.upsertObserved(scheduledOccurrenceUpsertObservedParam);
   }
 
-  public void recordClosedBatchDayRejection(
+  public int recordClosedBatchDayRejection(
       TriggerDescriptor descriptor, Instant scheduledFireTime, LocalDate bizDate, String reason) {
-    boolean rejectionIdentityIsIncomplete =
-        EmptyChecks.isNull(descriptor)
+    boolean rejectionIdentityIsIncomplete = EmptyChecks.isNull(descriptor)
         || EmptyChecks.isNull(descriptor.getWorkflowDefinitionId())
         || EmptyChecks.isNull(descriptor.getWorkflowCode())
         || EmptyChecks.isNull(scheduledFireTime)
         || EmptyChecks.isNull(bizDate);
     if (rejectionIdentityIsIncomplete) {
-      return;
+      return 0;
     }
     int scheduleVersion =
         EmptyChecks.isNull(descriptor.getWorkflowVersion()) ? 0 : descriptor.getWorkflowVersion();
@@ -136,18 +178,20 @@ public class ScheduledOccurrenceRecorder {
     String workflowCode = descriptor.getWorkflowCode();
     String calendarCode = CodeNormalizer.toConfigFormOrNull(descriptor.getCalendarCode());
     String rejectionStatus = ScheduledOccurrenceStatus.CLOSED_DAY_REJECTED.code();
-    ScheduledOccurrenceRecordClosedBatchDayRejectionParam scheduledOccurrenceRecordClosedBatchDayRejectionParam = ScheduledOccurrenceRecordClosedBatchDayRejectionParam.builder()
-        .tenantId(tenantId)
-        .workflowDefinitionId(workflowDefinitionId)
-        .workflowCode(workflowCode)
-        .scheduleVersion(scheduleVersion)
-        .calendarCode(calendarCode)
-        .scheduledFireTime(scheduledFireTime)
-        .bizDate(bizDate)
-        .status(rejectionStatus)
-        .reason(reason)
-        .build();
-    mapper.recordClosedBatchDayRejection(
+    ScheduledOccurrenceRecordClosedBatchDayRejectionParam
+        scheduledOccurrenceRecordClosedBatchDayRejectionParam =
+            ScheduledOccurrenceRecordClosedBatchDayRejectionParam.builder()
+                .tenantId(tenantId)
+                .workflowDefinitionId(workflowDefinitionId)
+                .workflowCode(workflowCode)
+                .scheduleVersion(scheduleVersion)
+                .calendarCode(calendarCode)
+                .scheduledFireTime(scheduledFireTime)
+                .bizDate(bizDate)
+                .status(rejectionStatus)
+                .reason(reason)
+                .build();
+    return mapper.recordClosedBatchDayRejection(
         scheduledOccurrenceRecordClosedBatchDayRejectionParam);
   }
 
@@ -158,16 +202,16 @@ public class ScheduledOccurrenceRecorder {
       ScheduledOccurrenceStatus expectedStatus,
       ScheduledOccurrenceStatus newStatus,
       String requestId) {
-    ScheduledOccurrenceTransitionStatusParam scheduledOccurrenceTransitionStatusParam = ScheduledOccurrenceTransitionStatusParam.builder()
-        .tenantId(tenantId)
-        .workflowDefinitionId(workflowDefinitionId)
-        .scheduledFireTime(scheduledFireTime)
-        .expectedStatus(expectedStatus.code())
-        .newStatus(newStatus.code())
-        .requestId(requestId)
-        .build();
-    return mapper.transitionStatus(
-        scheduledOccurrenceTransitionStatusParam);
+    ScheduledOccurrenceTransitionStatusParam scheduledOccurrenceTransitionStatusParam =
+        ScheduledOccurrenceTransitionStatusParam.builder()
+            .tenantId(tenantId)
+            .workflowDefinitionId(workflowDefinitionId)
+            .scheduledFireTime(scheduledFireTime)
+            .expectedStatus(expectedStatus.code())
+            .newStatus(newStatus.code())
+            .requestId(requestId)
+            .build();
+    return mapper.transitionStatus(scheduledOccurrenceTransitionStatusParam);
   }
 
   public boolean acceptRejectedOccurrence(
@@ -180,30 +224,31 @@ public class ScheduledOccurrenceRecorder {
     Long workflowDefinitionId = command.request().getWorkflowDefinitionId();
     LocalDate bizDate = command.request().getBizDate();
     String requestId = command.requestId();
-    ScheduledOccurrenceAcceptRejectedOccurrenceParam scheduledOccurrenceAcceptRejectedOccurrenceParam = ScheduledOccurrenceAcceptRejectedOccurrenceParam.builder()
-        .tenantId(tenantId)
-        .workflowDefinitionId(workflowDefinitionId)
-        .scheduledFireTime(scheduledFireTime)
-        .bizDate(bizDate)
-        .requestId(requestId)
-        .targetStatus(targetStatus.code())
-        .build();
-    int updated = mapper.acceptRejectedOccurrence(
-        scheduledOccurrenceAcceptRejectedOccurrenceParam);
+    ScheduledOccurrenceAcceptRejectedOccurrenceParam
+        scheduledOccurrenceAcceptRejectedOccurrenceParam =
+            ScheduledOccurrenceAcceptRejectedOccurrenceParam.builder()
+                .tenantId(tenantId)
+                .workflowDefinitionId(workflowDefinitionId)
+                .scheduledFireTime(scheduledFireTime)
+                .bizDate(bizDate)
+                .requestId(requestId)
+                .targetStatus(targetStatus.code())
+                .build();
+    int updated = mapper.acceptRejectedOccurrence(scheduledOccurrenceAcceptRejectedOccurrenceParam);
     if (updated != 1) {
       return false;
     }
-    ScheduledOccurrenceInsertCatchUpAuditParam scheduledOccurrenceInsertCatchUpAuditParam = ScheduledOccurrenceInsertCatchUpAuditParam.builder()
-        .tenantId(tenantId)
-        .workflowDefinitionId(workflowDefinitionId)
-        .scheduledFireTime(scheduledFireTime)
-        .bizDate(bizDate)
-        .requestId(requestId)
-        .requestedBy(requestedBy)
-        .reason(reason)
-        .build();
-    mapper.insertCatchUpAudit(
-        scheduledOccurrenceInsertCatchUpAuditParam);
+    ScheduledOccurrenceInsertCatchUpAuditParam scheduledOccurrenceInsertCatchUpAuditParam =
+        ScheduledOccurrenceInsertCatchUpAuditParam.builder()
+            .tenantId(tenantId)
+            .workflowDefinitionId(workflowDefinitionId)
+            .scheduledFireTime(scheduledFireTime)
+            .bizDate(bizDate)
+            .requestId(requestId)
+            .requestedBy(requestedBy)
+            .reason(reason)
+            .build();
+    mapper.insertCatchUpAudit(scheduledOccurrenceInsertCatchUpAuditParam);
     return true;
   }
 

@@ -20,8 +20,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Import worker 启动时扫自己挂的业务库（{@code biz} schema）把 (table, columns) 清单上报到 {@code
- * batch.biz_table_schema}。console-api 上传 Excel 时用于拦住 {@code targetColumn} / {@code
- * jdbcMappedImport.columnMappings[*].to} 指向不存在表/列的坏配置。
+ * batch.biz_table_schema}。当前仓库未接入使用此快照核验 Excel 目标表或列的读取链路。
  *
  * <p>单租户部署下，worker 挂的 biz DS 代表真实的业务库；多租户 / 分库部署须扩展本类支持多 schema_name。
  */
@@ -80,7 +79,7 @@ public class BizTableSchemaRegistrar {
         }
       }
     } catch (Exception ex) {
-      // 失败降级：console-api 查到空表就跳过 targetColumn 校验（兼容首次部署无 biz 库的场景）
+      // 读取失败时不刷新，保留此前快照；不能据此判断业务库当前结构。
       log.error("biz_table_schema snapshot failed while reading business metadata", ex);
       return;
     }

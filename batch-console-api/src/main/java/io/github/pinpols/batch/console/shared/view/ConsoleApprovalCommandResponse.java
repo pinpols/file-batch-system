@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.shared.view;
 
+import java.time.OffsetDateTime;
 import lombok.Builder;
 
-import java.time.OffsetDateTime;
 @Builder
 public record ConsoleApprovalCommandResponse(
     Long id,

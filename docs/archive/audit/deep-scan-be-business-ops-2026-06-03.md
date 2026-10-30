@@ -1,3 +1,5 @@
+> 历史证据（2026-10-25 存量核对）：ApprovalType 等源码仍引用的业务状态审计来源；保留误判撤回记录。正文仅表示原日期/基线；当前规则与状态见[现行入口](../../architecture/core-model.md)及 TODO，本轮没有重新执行原测试或扫描。
+
 # BE 业务 + 运维深度扫描 — 2026-06-03
 
 > 范围:`batch-orchestrator` 核心业务状态机 + 治理 + 运维端点 + worker 协同(lease / outbox / approval / replay / batch-day / dead-letter / alert)。base=origin/main(4d47f332)。

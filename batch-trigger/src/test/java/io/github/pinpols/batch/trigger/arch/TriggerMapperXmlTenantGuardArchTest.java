@@ -21,8 +21,6 @@ class TriggerMapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTe
         "TriggerMisfirePendingMapper#linkCatchUpRequest",
         "TriggerMisfirePendingMapper#expireBefore",
         // 触发发件箱发布器状态机:发布器全局轮询后按全局行 id 推进;resetStalePublishing 为跨租 reaper
-        "TriggerOutboxEventMapper#markPublishing",
-        "TriggerOutboxEventMapper#markPublished",
         "TriggerOutboxEventMapper#markPublishedBatch",
         "TriggerOutboxEventMapper#markFailed",
         "TriggerOutboxEventMapper#resetStalePublishing");

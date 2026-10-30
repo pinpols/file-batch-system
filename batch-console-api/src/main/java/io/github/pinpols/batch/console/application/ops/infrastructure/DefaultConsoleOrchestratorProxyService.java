@@ -1,16 +1,18 @@
 package io.github.pinpols.batch.console.application.ops.infrastructure;
 
-import io.github.pinpols.batch.console.application.ops.command.ForensicExportCommand;
-import io.github.pinpols.batch.console.application.ops.command.CalendarDependencyActionCommand;
-import io.github.pinpols.batch.console.application.ops.command.BatchDayOperationCommand;
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.resilience.DownstreamFallback;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.console.application.contract.response.ConsoleReplayOperationResponse;
 import io.github.pinpols.batch.console.application.contract.response.ops.AssetPartitionReadinessResponse;
 import io.github.pinpols.batch.console.application.contract.response.ops.CapacityProfileResponse;
 import io.github.pinpols.batch.console.application.contract.response.ops.LineageEvidenceResponse;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
+import io.github.pinpols.batch.console.application.ops.command.BatchDayOperationCommand;
+import io.github.pinpols.batch.console.application.ops.command.CalendarDependencyActionCommand;
+import io.github.pinpols.batch.console.application.ops.command.ForensicExportCommand;
+import io.github.pinpols.batch.console.application.ops.query.ConsolePersistentWaitQuery;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayCatchupPreviewResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayHistoricalGapInventoryResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayOperateResponse;
@@ -18,6 +20,7 @@ import io.github.pinpols.batch.console.application.ops.response.ConsoleCalendarD
 import io.github.pinpols.batch.console.application.ops.response.ConsoleInstanceActionResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleJobDependencyWaitResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsolePartitionActionResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsolePersistentWaitPageResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleRetryFailedPartitionsResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunActionResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunSkipNodeResponse;
@@ -30,7 +33,6 @@ import io.github.pinpols.batch.console.domain.job.application.contract.response.
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayReplaySessionResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleDryRunPlanResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleReplayOperationPreviewResponse;
-import io.github.pinpols.batch.console.application.contract.response.ConsoleReplayOperationResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleResultVersionResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleForensicExportResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OutboxCleanupProxyResponse;
@@ -424,7 +426,40 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   }
 
   @Override
-  public ConsoleCalendarDependencyWaitResponse requestCalendarDependencyWaitAction(CalendarDependencyActionCommand command) {
+  public ConsolePersistentWaitPageResponse listPersistentWaits(ConsolePersistentWaitQuery query) {
+    String resolved = tenantGuard.resolveTenant(query.tenantId());
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "persistent-waits-list",
+        () -> orchestratorInternalRestClient
+            .client()
+            .get()
+            .uri(uriBuilder -> {
+              UriBuilder requestUri = uriBuilder
+                  .path("/internal/ops/persistent-waits")
+                  .queryParam(PARAM_TENANT_ID, resolved)
+                  .queryParam("pageNo", query.pageNo())
+                  .queryParam("pageSize", query.pageSize());
+              if (EmptyChecks.isNotNull(query.waitType()))
+                requestUri.queryParam("waitType", query.waitType());
+              if (EmptyChecks.isNotNull(query.waitStatus()))
+                requestUri.queryParam("waitStatus", query.waitStatus());
+              if (EmptyChecks.isNotNull(query.workflowDefinitionId())) {
+                requestUri.queryParam("workflowDefinitionId", query.workflowDefinitionId());
+              }
+              if (EmptyChecks.isNotNull(query.bizDateFrom()))
+                requestUri.queryParam("bizDateFrom", query.bizDateFrom());
+              if (EmptyChecks.isNotNull(query.bizDateTo()))
+                requestUri.queryParam("bizDateTo", query.bizDateTo());
+              return requestUri.build();
+            })
+            .retrieve()
+            .body(ConsolePersistentWaitPageResponse.class));
+  }
+
+  @Override
+  public ConsoleCalendarDependencyWaitResponse requestCalendarDependencyWaitAction(
+      CalendarDependencyActionCommand command) {
     String tenantId = command.tenantId();
     String calendarCode = command.calendarCode();
     LocalDate bizDate = command.bizDate();

@@ -7,7 +7,7 @@
 # 会被生产构建或运行加载的配置(pom.xml / Dockerfile / helm values / docker-compose /
 # .github workflows / 启动脚本)。
 #
-# 背景(对齐 docs/agent-baseline.md「ADR 与范围纪律」+ docs/archive/audit/jdk-feature-usage-analysis-2026-06-09.md 的 P1):
+# 背景(对齐 docs/agent-baseline.md「ADR 与范围纪律」+ docs/architecture/runtime-compatibility-contract.md 的运行时约束):
 #   项目主工程以 JDK 21 为编译/运行基线,但 preview/incubator 特性(Structured Concurrency、
 #   Stable Values、Primitive Patterns 等)语法/行为在跨小版本间不稳定,且 `--enable-preview`
 #   会让 class 文件带 preview 标记 → 同一 minor JDK 才能运行,破坏生产可移植性。
@@ -85,7 +85,7 @@ if [[ ${#VIOLATIONS[@]} -gt 0 ]]; then
   echo "  - preview/incubator(Structured Concurrency / Stable Values / Primitive Patterns / Vector API 等)"
   echo "    禁止进入生产 profile;只能在 load-tests(benchmark)模块做隔离实验。"
   echo "  - 若确需本地临时跑 preview spike,通过 run-gate 的 ignore 模式显式忽略(不要提交带 --enable-preview 的配置)。"
-  echo "  - 背景见 docs/archive/audit/jdk-feature-usage-analysis-2026-06-09.md「不建议现在使用」小节。"
+  echo "  - 背景见 docs/architecture/runtime-compatibility-contract.md。"
   exit 1
 fi
 

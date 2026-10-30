@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
-import io.github.pinpols.batch.orchestrator.domain.param.BatchDayInstanceAdvanceOpenCursorParam;
-
-
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
@@ -14,8 +11,8 @@ import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.ExternalEventExpectationService;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.FileGroupExpectationService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
 import io.github.pinpols.batch.orchestrator.config.BatchDayScanProperties;
+import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayCatchupControlEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
@@ -23,6 +20,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.CalendarDependencyEnti
 import io.github.pinpols.batch.orchestrator.domain.entity.CalendarDependencyWaitEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.DisasterDayOverrideEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayInstanceAdvanceOpenCursorParam;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.infrastructure.metrics.BatchDayCatchupMetrics;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayCatchupControlMapper;
@@ -189,16 +187,15 @@ public class BatchDayOpenScheduler {
         // 游标位置，待请求启动或进入终态后由后续扫描结算。
         break;
       }
-      BatchDayInstanceAdvanceOpenCursorParam batchDayInstanceAdvanceOpenCursorParam = BatchDayInstanceAdvanceOpenCursorParam.builder()
-          .tenantId(calendar.tenantId())
-          .calendarCode(calendar.calendarCode())
-          .expectedBizDate(cursor)
-          .nextBizDate(next)
-          .scannedAt(now)
-          .build();
-      if (batchDayInstanceMapper.advanceOpenCursor(
-              batchDayInstanceAdvanceOpenCursorParam)
-          != 1) {
+      BatchDayInstanceAdvanceOpenCursorParam batchDayInstanceAdvanceOpenCursorParam =
+          BatchDayInstanceAdvanceOpenCursorParam.builder()
+              .tenantId(calendar.tenantId())
+              .calendarCode(calendar.calendarCode())
+              .expectedBizDate(cursor)
+              .nextBizDate(next)
+              .scannedAt(now)
+              .build();
+      if (batchDayInstanceMapper.advanceOpenCursor(batchDayInstanceAdvanceOpenCursorParam) != 1) {
         throw new IllegalStateException(
             "Batch-day open cursor changed while locked for tenant=" + calendar.tenantId()
                 + ", calendar=" + calendar.calendarCode() + ", expected=" + cursor);
@@ -539,24 +536,28 @@ public class BatchDayOpenScheduler {
       Instant cutoffAt, Instant slaDeadlineAt, String timezone, String dstPolicy) {}
 
   private BatchDayInstanceEntity.BatchDayInstanceEntityBuilder newOpenBatchDay(
-      BusinessCalendarEntity calendar, LocalDate bizDate, Instant now, BatchDayTimingSnapshot timing) {
-    BatchDayInstanceEntity.BatchDayInstanceEntityBuilder dayBuilder = BatchDayInstanceEntity.builder()
-        .tenantId(calendar.tenantId())
-        .calendarCode(calendar.calendarCode())
-        .bizDate(bizDate)
-        .dayStatus("OPEN")
-        .openAt(now)
-        .cutoffAt(timing.cutoffAt())
-        .slaDeadlineAt(timing.slaDeadlineAt())
-        .lateCount(0)
-        .catchupCount(0)
-        .timezoneSnapshot(timing.timezone())
-        .dstPolicySnapshot(timing.dstPolicy())
-        .frozen(false)
-        .version(0L)
-        .createdAt(now)
-        .updatedAt(now)
-        .dryRun(false);
+      BusinessCalendarEntity calendar,
+      LocalDate bizDate,
+      Instant now,
+      BatchDayTimingSnapshot timing) {
+    BatchDayInstanceEntity.BatchDayInstanceEntityBuilder dayBuilder =
+        BatchDayInstanceEntity.builder()
+            .tenantId(calendar.tenantId())
+            .calendarCode(calendar.calendarCode())
+            .bizDate(bizDate)
+            .dayStatus("OPEN")
+            .openAt(now)
+            .cutoffAt(timing.cutoffAt())
+            .slaDeadlineAt(timing.slaDeadlineAt())
+            .lateCount(0)
+            .catchupCount(0)
+            .timezoneSnapshot(timing.timezone())
+            .dstPolicySnapshot(timing.dstPolicy())
+            .frozen(false)
+            .version(0L)
+            .createdAt(now)
+            .updatedAt(now)
+            .dryRun(false);
     return dayBuilder;
   }
 
@@ -669,9 +670,8 @@ public class BatchDayOpenScheduler {
       BatchDayInstanceEntity skipped, Instant now) {
     batchDayInstanceMapper.acquireSettlementFence(
         skipped.tenantId(), skipped.calendarCode(), skipped.bizDate());
-    BatchDayInstanceEntity existingBatchDay =
-        batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            skipped.tenantId(), skipped.calendarCode(), skipped.bizDate());
+    BatchDayInstanceEntity existingBatchDay = batchDayInstanceMapper.selectByTenantCalendarBizDate(
+        skipped.tenantId(), skipped.calendarCode(), skipped.bizDate());
     if (EmptyChecks.isNotNull(existingBatchDay)) {
       return true;
     }

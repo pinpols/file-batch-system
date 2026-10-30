@@ -171,8 +171,7 @@ class SdkAgainstStubOrchestratorE2eIT {
       // SDK 经过了 register + claim,证明 wire 协议端到端通
       assertThat(stub.registrations()).isNotEmpty();
       assertThat(stub.claims()).contains(424242L);
-      assertThat(report.raw().get("partitionInvocationId"))
-          .isEqualTo(stub.invocation(424242L));
+      assertThat(report.raw().get("partitionInvocationId")).isEqualTo(stub.invocation(424242L));
       assertThat(stub.nonIdempotentStarts()).doesNotContainKey(424242L);
     } finally {
       client.stop();
@@ -262,8 +261,7 @@ class SdkAgainstStubOrchestratorE2eIT {
           .containsEntry("resultVersionId", 701)
           .containsEntry("recordCount", 17)
           .containsEntry("sourceBatch", "selected-v1");
-      assertThat(report.raw().get("partitionInvocationId"))
-          .isEqualTo(stub.invocation(taskId));
+      assertThat(report.raw().get("partitionInvocationId")).isEqualTo(stub.invocation(taskId));
       assertThat(stub.nonIdempotentStarts()).doesNotContainKey(taskId);
     } finally {
       client.stop();
@@ -285,7 +283,9 @@ class SdkAgainstStubOrchestratorE2eIT {
     private final ObjectMapper mapper = new ObjectMapper();
     private final Map<Long, RecordedReport> reports = new ConcurrentHashMap<>();
     private final Map<Long, String> claimPayloads = new ConcurrentHashMap<>();
+
     private record ClaimedExecution(String tenantId, String workerId, String invocationId) {}
+
     private final Map<Long, ClaimedExecution> claimedExecutions = new ConcurrentHashMap<>();
     private final Map<Long, String> nonIdempotentStarts = new ConcurrentHashMap<>();
     private final List<Map<String, Object>> registrations = new CopyOnWriteArrayList<>();
@@ -377,8 +377,11 @@ class SdkAgainstStubOrchestratorE2eIT {
         } else if (path.endsWith("/claim")) {
           Long taskId = parseTaskIdFromPath(path);
           String workerId = body.get("workerId") instanceof String value ? value : null;
-          if (taskId == null || !claimPayloads.containsKey(taskId)
-              || !TENANT.equals(body.get("tenantId")) || workerId == null || workerId.isBlank()) {
+          if (taskId == null
+              || !claimPayloads.containsKey(taskId)
+              || !TENANT.equals(body.get("tenantId"))
+              || workerId == null
+              || workerId.isBlank()) {
             respond(exchange, 409);
             return;
           }

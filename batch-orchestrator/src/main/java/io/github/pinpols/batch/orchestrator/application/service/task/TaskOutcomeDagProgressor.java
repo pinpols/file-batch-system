@@ -64,12 +64,13 @@ final class TaskOutcomeDagProgressor {
   void advance(Context ctx) {
     String sourcePayload = resolveSourcePayload(ctx);
     ctx.activeNodes().remove(ctx.currentNodeCode());
-    TaskOutcomeService.NodeRunOutcome.NodeRunOutcomeBuilder currentOutcomeBuilder = NodeRunOutcome.builder()
-        .success(ctx.nodeProgress().unsuccessfulCount() == 0)
-        .errorCode(ctx.command().errorCode())
-        .errorMessage(ctx.command().errorMessage())
-        .errorKey(ctx.command().errorKey())
-        .errorArgs(ctx.command().errorArgs());
+    TaskOutcomeService.NodeRunOutcome.NodeRunOutcomeBuilder currentOutcomeBuilder =
+        NodeRunOutcome.builder()
+            .success(ctx.nodeProgress().unsuccessfulCount() == 0)
+            .errorCode(ctx.command().errorCode())
+            .errorMessage(ctx.command().errorMessage())
+            .errorKey(ctx.command().errorKey())
+            .errorArgs(ctx.command().errorArgs());
     Long startedAtWorkflowRunId = ctx.workflowRun().getId();
     String startedAtNodeCode = ctx.currentNodeCode();
     Instant workflowStartedAt = ctx.workflowRun().getStartedAt();

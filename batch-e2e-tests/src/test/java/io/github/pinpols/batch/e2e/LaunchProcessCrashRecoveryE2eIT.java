@@ -84,42 +84,42 @@ class LaunchProcessCrashRecoveryE2eIT extends AbstractIntegrationTest {
   @DisplayName("持久化事实提交后强杀发布或消费 JVM,新进程自动恢复同一请求且业务结果唯一")
   void shouldRecoverAcceptedLaunch_whenProcessDiesBeforeDeliveryAcknowledgement(CrashWindow window)
       throws Exception {
-        final String selectPgBackendPidSql = """
+    final String selectPgBackendPidSql = """
             select pg_backend_pid()
         """;
 
-        final String deleteTriggerRequestSql = """
+    final String deleteTriggerRequestSql = """
             delete from batch.trigger_request where tenant_id='t1' and request_id=?
         """;
-        final String createFunctionSql = """
+    final String createFunctionSql = """
         create function batch.e2e_hold_launch_boundary() returns trigger language plpgsql as $$
         begin perform pg_advisory_xact_lock(TG_ARGV[0]::bigint); return new; end $$
         """;
-        final String selectCountSql = """
+    final String selectCountSql = """
                 select count(*) from pg_stat_activity
                 where ? = any(pg_blocking_pids(pid)) and query ilike ?
                 """;
-        final String selectRequestStatusSql = """
+    final String selectRequestStatusSql = """
             select request_status from batch.trigger_request where tenant_id='t1' and request_id=?
             """;
-        final String selectPublishStatusSql = """
+    final String selectPublishStatusSql = """
               select publish_status from batch.trigger_outbox_event where tenant_id='t1' and request_id=?
               """;
-        final String selectRunStatusSql = """
+    final String selectRunStatusSql = """
             select run_status from batch.workflow_run where tenant_id='t1' and workflow_definition_id=?
             """;
-        final String selectCountSql2 = """
+    final String selectCountSql2 = """
             select count(*) from biz.customer_account where tenant_id='t1' and customer_no=?
             """;
-        final String selectPublishStatusSql2 = """
+    final String selectPublishStatusSql2 = """
             select publish_status from batch.trigger_outbox_event where tenant_id='t1' and request_id=?
             """;
-        final String selectCountSql3 = """
+    final String selectCountSql3 = """
           select count(*) from batch.job_task t join batch.job_instance j
           on j.id=t.job_instance_id and j.tenant_id=t.tenant_id
           where j.tenant_id='t1' and j.job_code=?
           """;
-        final String selectCountSql4 = """
+    final String selectCountSql4 = """
           select count(*) from batch.outbox_event where tenant_id='t1'
           and event_type='IMPORT' and payload_json->>'jobCode'=?
           """;
@@ -135,9 +135,7 @@ class LaunchProcessCrashRecoveryE2eIT extends AbstractIntegrationTest {
     await().atMost(Duration.ofSeconds(15)).until(() -> !parentListener.isRunning());
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbc, "t1", "IMPORT", "import", TriggerType.API);
-    jdbc.update(
-        deleteTriggerRequestSql,
-        seed.requestId());
+    jdbc.update(deleteTriggerRequestSql, seed.requestId());
     String customer = "JVMLOSS" + Long.toUnsignedString(System.nanoTime());
     LocalDate bizDate = LocalDate.of(2026, 1, 15).plusDays(window.ordinal());
     String group = "r22-launch-" + seed.requestId();
@@ -163,7 +161,7 @@ class LaunchProcessCrashRecoveryE2eIT extends AbstractIntegrationTest {
       try (Connection gate = DriverManager.getConnection(
               platformJdbcUrl(), platformJdbcUsername(), platformJdbcPassword());
           var sql = gate.createStatement()) {
-            final String selectPgAdvisoryLockSql = """
+        final String selectPgAdvisoryLockSql = """
                 select pg_advisory_lock(%s)\
                 """.formatted(lockKey);
         sql.execute(selectPgAdvisoryLockSql);
@@ -213,13 +211,11 @@ class LaunchProcessCrashRecoveryE2eIT extends AbstractIntegrationTest {
                     .build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(accepted.statusCode()).as(accepted.body()).isEqualTo(200);
-        await()
-            .atMost(Duration.ofSeconds(60))
-            .untilAsserted(() -> {
-              Integer selectedPgStatActivityCount =
-                  jdbc.queryForObject(selectCountSql, Integer.class, gatePid, "%update batch." + table + "%");
-              assertThat(selectedPgStatActivityCount).isEqualTo(1);
-            });
+        await().atMost(Duration.ofSeconds(60)).untilAsserted(() -> {
+          Integer selectedPgStatActivityCount = jdbc.queryForObject(
+              selectCountSql, Integer.class, gatePid, "%update batch." + table + "%");
+          assertThat(selectedPgStatActivityCount).isEqualTo(1);
+        });
         String selectedRequestStatus =
             jdbc.queryForObject(selectRequestStatusSql, String.class, seed.requestId());
         assertThat(selectedRequestStatus).isEqualTo("ACCEPTED");
@@ -300,10 +296,7 @@ class LaunchProcessCrashRecoveryE2eIT extends AbstractIntegrationTest {
         select count(*) from batch.workflow_run where tenant_id='t1' and workflow_definition_id=?
     """;
 
-    return jdbc.queryForObject(
-        selectCountSql,
-        Integer.class,
-        seed.workflowDefinitionId());
+    return jdbc.queryForObject(selectCountSql, Integer.class, seed.workflowDefinitionId());
   }
 
   private Long rootId(LaunchSeed seed) {
@@ -311,10 +304,7 @@ class LaunchProcessCrashRecoveryE2eIT extends AbstractIntegrationTest {
         select id from batch.workflow_run where tenant_id='t1' and workflow_definition_id=?
     """;
 
-    return jdbc.queryForObject(
-        selectIdSql,
-        Long.class,
-        seed.workflowDefinitionId());
+    return jdbc.queryForObject(selectIdSql, Long.class, seed.workflowDefinitionId());
   }
 
   private int jobCount(LaunchSeed seed) {
@@ -322,10 +312,7 @@ class LaunchProcessCrashRecoveryE2eIT extends AbstractIntegrationTest {
         select count(*) from batch.job_instance where tenant_id='t1' and job_code=?
     """;
 
-    return jdbc.queryForObject(
-        selectCountSql,
-        Integer.class,
-        seed.jobCode());
+    return jdbc.queryForObject(selectCountSql, Integer.class, seed.jobCode());
   }
 
   private ConsumerRecord<String, String> readLaunchRecord(String requestId) {

@@ -4,7 +4,10 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews;
+import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceLatencyMetrics;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -30,21 +33,21 @@ public class FileGovernanceMetricsCacheService {
   private final FileGovernanceRepository fileGovernanceRepository;
   private final ObjectMapper objectMapper;
 
-  public Map<String, Object> load(
+  public FileGovernanceLatencyMetrics load(
       String tenantId,
       long arrivalThresholdSeconds,
       long processingThresholdSeconds,
       long processingMaxAgeSeconds,
       int sampleSize) {
     if (!Texts.hasText(tenantId)) {
-      return Map.of();
+      return FileGovernanceLatencyMetrics.empty(null);
     }
     String key = BatchRedisKeys.fileGovernanceMetrics(tenantId);
     Map<Object, Object> cached = redis.entries(key);
     if (!cached.isEmpty()) {
-      return toResponse(cached);
+      return FileGovernanceLatencyMetrics.from(toResponse(cached));
     }
-    Map<String, Object> computed = compute(
+    FileGovernanceLatencyMetrics computed = compute(
         tenantId,
         arrivalThresholdSeconds,
         processingThresholdSeconds,
@@ -54,7 +57,7 @@ public class FileGovernanceMetricsCacheService {
     return computed;
   }
 
-  public Map<String, Object> compute(
+  public FileGovernanceLatencyMetrics compute(
       String tenantId,
       long arrivalThresholdSeconds,
       long processingThresholdSeconds,
@@ -68,30 +71,53 @@ public class FileGovernanceMetricsCacheService {
     long processingMax =
         fileGovernanceRepository.maxProcessingDelaySeconds(tenantId, processingMaxAgeSeconds);
     List<Map<String, Object>> arrivalSamples = arrivalCount > 0
-        ? fileGovernanceRepository.selectArrivalDelaySamples(
-            tenantId, arrivalThresholdSeconds, sampleSize)
+        ? fileGovernanceRepository
+            .selectArrivalDelaySamples(tenantId, arrivalThresholdSeconds, sampleSize)
+            .stream()
+            .map(FileGovernanceViews.ArrivalDelaySampleRow::toCacheValues)
+            .toList()
         : List.of();
     List<Map<String, Object>> processingSamples = processingCount > 0
-        ? fileGovernanceRepository.selectProcessingDelaySamples(
-            tenantId, processingThresholdSeconds, processingMaxAgeSeconds, sampleSize)
+        ? fileGovernanceRepository
+            .selectProcessingDelaySamples(
+                tenantId, processingThresholdSeconds, processingMaxAgeSeconds, sampleSize)
+            .stream()
+            .map(FileGovernanceViews.ProcessingDelaySampleRow::toCacheValues)
+            .toList()
         : List.of();
-    Map<String, Object> response = new LinkedHashMap<>();
-    response.put("tenantId", tenantId);
-    response.put("arrivalDelayViolations", arrivalCount);
-    response.put("maxArrivalDelaySeconds", arrivalMax);
-    response.put("processingDelayViolations", processingCount);
-    response.put("maxProcessingDelaySeconds", processingMax);
-    response.put("arrivalDelaySamples", arrivalSamples);
-    response.put("processingDelaySamples", processingSamples);
-    return response;
+    return new FileGovernanceLatencyMetrics(
+        tenantId,
+        arrivalCount,
+        arrivalMax,
+        processingCount,
+        processingMax,
+        arrivalSamples,
+        processingSamples);
   }
 
-  public void write(String tenantId, Map<String, Object> metrics) {
-    if (!Texts.hasText(tenantId) || metrics == null || metrics.isEmpty()) {
+  public void write(String tenantId, FileGovernanceLatencyMetrics metrics) {
+    if (!Texts.hasText(tenantId) || EmptyChecks.isNull(metrics)) {
       return;
     }
     Map<String, String> hash = new LinkedHashMap<>();
-    metrics.forEach((key, value) -> hash.put(key, writeJson(key, value)));
+    hash.put("tenantId", writeJson("tenantId", metrics.tenantId()));
+    hash.put(
+        "arrivalDelayViolations",
+        writeJson("arrivalDelayViolations", metrics.arrivalDelayViolations()));
+    hash.put(
+        "maxArrivalDelaySeconds",
+        writeJson("maxArrivalDelaySeconds", metrics.maxArrivalDelaySeconds()));
+    hash.put(
+        "processingDelayViolations",
+        writeJson("processingDelayViolations", metrics.processingDelayViolations()));
+    hash.put(
+        "maxProcessingDelaySeconds",
+        writeJson("maxProcessingDelaySeconds", metrics.maxProcessingDelaySeconds()));
+    hash.put(
+        "arrivalDelaySamples", writeJson("arrivalDelaySamples", metrics.arrivalDelaySamples()));
+    hash.put(
+        "processingDelaySamples",
+        writeJson("processingDelaySamples", metrics.processingDelaySamples()));
     redis.putHashAll(BatchRedisKeys.fileGovernanceMetrics(tenantId), hash, METRICS_TTL);
   }
 

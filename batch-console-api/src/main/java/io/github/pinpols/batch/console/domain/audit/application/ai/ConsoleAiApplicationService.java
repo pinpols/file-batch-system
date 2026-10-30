@@ -10,6 +10,7 @@ import java.time.OffsetDateTime;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.UUID;
+import lombok.Builder;
 import reactor.core.publisher.Mono;
 
 /** 控制台 AI 对话应用服务：基于 Spring AI 的聊天与审计写入数据库。 */
@@ -54,6 +55,7 @@ public interface ConsoleAiApplicationService {
       Instant updatedAt,
       OffsetDateTime expiresAt) {}
 
+  @Builder
   record TurnSummary(
       long turnNo,
       UUID clientTurnId,

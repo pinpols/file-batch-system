@@ -44,8 +44,7 @@ python3 scripts/ci/check-console-openapi-paths.py
 
 这个脚本校验 Controller 路径与 OpenAPI path 是否一致。前端的 `npm run gen:api:check` 只能确认生成类型与当前 OpenAPI YAML 同步，不能发现 Controller 已新增但 YAML 漏写的问题。
 
-当前契约以本目录 OpenAPI 和协议文档为准；2026-05-19 的一次性整理记录已归档到
-[`frontend-backend-contract-cleanup-2026-05-19.md`](../archive/verifications/frontend-backend-contract-cleanup-2026-05-19.md)。
+当前契约以本目录 OpenAPI 和[协议文档](console-api-protocol.md)为准；旧的一次性整理结论已吸收，不另存重复报告。
 
 ## 相关入口
 
@@ -53,4 +52,4 @@ python3 scripts/ci/check-console-openapi-paths.py
 |---|---|
 | 控制台菜单树 + 角色可见性 | [`../design/console-sidebar-menu-tree.md`](../design/console-sidebar-menu-tree.md) |
 | Console-API 读写分离 | [`../runbook/read-replica.md`](../runbook/read-replica.md) |
-| Console-API 历史 gap 快照 | [`api-gap-analysis-2026-04-10.md`](../archive/audit/api-gap-analysis-2026-04-10.md)；当前契约以本目录 OpenAPI 为准 |
+| Console-API 协议与接口范围 | [console-api-protocol.md](console-api-protocol.md)；机读契约以本目录 OpenAPI 为准 |

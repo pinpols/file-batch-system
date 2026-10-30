@@ -67,6 +67,8 @@ late_arrival_tolerance_min = 60
 
 ### 变更 2：新增 batch_day_instance 表
 
+以下保留建模示例，不能用于独立初始化；当前列、约束与状态以 Flyway 为准。状态约束已包含 V101/V107 的管理态与 `SETTLING`。
+
 批量日的运行态主体。每个 `(tenant_id, calendar_code, biz_date)` 对应一行。
 
 ```sql
@@ -85,24 +87,25 @@ CREATE TABLE IF NOT EXISTS batch.batch_day_instance (
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_batch_day_instance UNIQUE (tenant_id, calendar_code, biz_date),
-    CONSTRAINT ck_batch_day_status   CHECK (day_status IN ('OPEN','CUTOFF','IN_FLIGHT','SETTLED','FAILED'))
+    CONSTRAINT ck_batch_day_status CHECK (day_status IN (
+        'OPEN','CUTOFF','IN_FLIGHT','SETTLING','SETTLED','FAILED','SKIPPED','MANUAL_RELEASED'
+    ))
 );
 ```
 
 **day_status 状态机：**
 
-```
-OPEN ──── cutoff_time 到达 ──────────────────→ CUTOFF
-            │
-            ▼
-         CUTOFF ── 存在 IN_FLIGHT 实例 ──→ IN_FLIGHT
-            │
-            ├── 所有实例终态 SUCCESS/PARTIAL ──→ SETTLED
-            │
-            └── 存在 FAILED 且无覆盖 ────────→ FAILED
-
-IN_FLIGHT ── 所有实例终态 SUCCESS/PARTIAL ──→ SETTLED
-IN_FLIGHT ── 存在 FAILED 且无覆盖 ──────────→ FAILED
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  O[OPEN] -->|到达 cutoff| C[CUTOFF]
+  C -->|仍有活跃根运行 / 子 JOB 或未收敛义务| I[IN_FLIGHT]
+  C -->|满足结算前置条件，CAS 占位| S[SETTLING]
+  I -->|满足结算前置条件，CAS 占位| S
+  S -->|仍有活跃根运行 / 子 JOB 或未收敛义务| I
+  S -->|无根运行，继续等待| C
+  S -->|根运行 FAILED / TERMINATED| F[FAILED]
+  S -->|根运行已结束且无失败，义务已收敛| D[SETTLED]
 ```
 
 当前实现由 Orchestrator 的 `BatchDayOpenScheduler` 按租户日历主动打开业务日；`BatchDayCutoffScheduler` 推进 cutoff，`BatchDaySettleScheduler` 汇总作业终态。作业实例仍由定时、事件、API 或 Workflow 按需创建；首次作业创建路径保留 upsert 作为回退。业务日状态推进与 Worker 执行链路解耦。
@@ -182,21 +185,25 @@ if (bizDate == null) {
 
 ```
 1. 查询 day_status = OPEN 的记录
-2. 对每条记录：按日历时区与 cutoff schedule 计算 cutoff instant
-3. 若 now >= cutoff instant：CAS 推进 day_status = CUTOFF, cutoff_at = 计算出的 instant
-         同时触发：late_arrival 容忍窗口开始计时
+2. 跳过冻结或身份字段不完整的记录；优先使用已持久化 cutoff_at，为空时按业务日的次日日切边界与日历时区、cutoff schedule、DST 策略计算
+3. 若 now >= cutoff instant：在所属租户上下文内，以版本 CAS 推进 day_status = CUTOFF；版本递增与审计写入同一短事务
+4. CAS 冲突本轮跳过；未来或冻结记录保持原状，重复扫描不重复审计
 ```
+
+Trigger 只负责触发调度，不注册批量日生命周期定时器、不直接写 `batch_day_instance`。Orchestrator 是该状态机的唯一所有者；部署时需要更新 Trigger 和 Orchestrator 的对应构建，旧进程中的重复定时器不会因源码删除而自行退出。
 
 ### BatchDaySettleScheduler（batch-orchestrator 模块）
 
 每分钟轮询，检查 CUTOFF / IN_FLIGHT 状态的批量日是否已可结算：
 
 ```
-1. 查询 day_status IN (CUTOFF, IN_FLIGHT) 的记录
-2. 对每条：查询关联 job_instance（biz_date + calendar_code 关联）
-3. 若所有实例均终态：
-   - 全部 SUCCESS/PARTIAL → SETTLED
-   - 存在 FAILED 无 catch-up 覆盖 → FAILED
+1. 扫描 CUTOFF / IN_FLIGHT / SETTLING 的批量日，按 WorkflowRun 根统计并检查子 JOB 活跃态与预期义务
+2. 符合条件时，用独立事务 CAS 占位为 SETTLING；已有 SETTLING 可重入
+3. 结算事务重新核验：
+   - 仍有活跃根运行 / 子 JOB 或未收敛义务 → IN_FLIGHT
+   - 无关联根运行 → CUTOFF，等待后续处理
+   - 根运行存在 FAILED / TERMINATED → FAILED
+   - 根运行已结束、无失败且义务已收敛 → SETTLED
 ```
 
 无作业实例时当前不会自动结算普通工作日，避免把漏触发误判成功；按日历 `SKIP` 的节假日会显式落 `SKIPPED` 终态。正常空日策略需要作业计划清单作为预期输入后再定义。
@@ -337,9 +344,19 @@ Response: ConsoleBatchDayWindowResponse
 POST /api/console/jobs/batch-days/{bizDate}/catchup
     Body: { tenantId, calendarCode, jobCodes?: [] }
 
-→ 对指定 bizDate 的 FAILED job（或指定 jobCodes）触发 catch-up
+→ 未指定 jobCodes 时选择指定 bizDate 的正式 FAILED / PARTIAL_FAILED job，排除 dry-run；也可显式指定 jobCodes
 → 受 catch_up_policy 约束（AUTO 直接跑，MANUAL_APPROVAL 走审批）
 ```
+
+日历策略为 `NONE` 时，批量日补跑入口返回状态冲突，不创建审批或触发请求。
+
+批量日汇总、失败补跑及实例来源重放按作业实例冻结的 `calendar_code` 和业务日归属，后续修改作业定义日历不会改变历史归属。默认候选和自动恢复只使用正式实例，排除演练实例；显式传入作业编码仍按入口自身约束处理。
+
+自动补跑先解析整批作业的受管 Workflow，任一目标无效时不提交本批任何触发请求。后续逐项远程提交并非分布式事务，出现调用失败或结果不明时需以原幂等键对账，不能据此推断整批未提交。
+
+人工审批按请求键和作业编码派生每项审批键；拼接结果超过审批表长度限制时使用稳定摘要，相同请求重试沿用同一身份。批量日请求没有指定调度时间，因此审批载荷不添加每次变化的当前时间，避免同一身份的重试产生载荷冲突。已存在的旧审批载荷仍以原记录为准。
+
+作业汇总的 `catchupCount` 统计批日补跑快照中能明确归属本日历和作业的已受理或已启动正式请求：Console 自动及批日人工审批执行快照使用 `jobCode`，自动恢复请求使用批日补跑去重键。批日人工审批将日历保存在审批载荷中，并在批准执行时传给触发快照；没有批日历身份的通用补跑审批不计入该字段。
 
 ---
 
@@ -357,7 +374,7 @@ Phase 2：biz_date 算法修复（影响 SCHEDULED 触发路径）
   └─ 单测：5 个场景验收
 
 Phase 3：批量日生命周期（新能力，不改现有链路）
-  └─ BatchDayCutoffScheduler（batch-trigger）
+  └─ BatchDayCutoffScheduler（batch-orchestrator）
   └─ BatchDaySettleScheduler（batch-orchestrator）
   └─ DefaultLaunchService upsert batch_day_instance
 

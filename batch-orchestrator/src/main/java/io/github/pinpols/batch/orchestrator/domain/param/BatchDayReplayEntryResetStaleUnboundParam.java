@@ -6,8 +6,4 @@ import lombok.Builder;
 /** 绑定一次resetStaleUnbound操作；字段可空性、筛选与状态条件沿用原映射语句和上游校验。 */
 @Builder
 public record BatchDayReplayEntryResetStaleUnboundParam(
-    Long sessionId,
-    Instant cutoff,
-    Instant now,
-    String expectedStatus,
-    String targetStatus) {}
+    Long sessionId, Instant cutoff, Instant now, String expectedStatus, String targetStatus) {}

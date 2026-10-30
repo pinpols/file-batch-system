@@ -5,7 +5,7 @@ import java.util.Objects;
 import javax.sql.DataSource;
 import org.springframework.jdbc.datasource.DataSourceUtils;
 
-/** AutoCloseable wrapper for Spring-managed DataSource connections. */
+/** Spring 管理的 DataSource 连接的 AutoCloseable 包装器。 */
 public final class DataSourceConnectionLease implements AutoCloseable {
 
   private final Connection connection;

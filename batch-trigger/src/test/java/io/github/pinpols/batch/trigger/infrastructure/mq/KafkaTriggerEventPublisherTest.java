@@ -29,8 +29,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
 
 /**
  * ADR-010 Stage 5: KafkaTriggerEventPublisher 单测,覆盖:
@@ -43,7 +41,6 @@ import org.mockito.quality.Strictness;
  * </ol>
  */
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("Kafka 触发器事件发布:校验发送消息头与 trace 透传,并覆盖序列化与发送失败的返回值")
 class KafkaTriggerEventPublisherTest {
 

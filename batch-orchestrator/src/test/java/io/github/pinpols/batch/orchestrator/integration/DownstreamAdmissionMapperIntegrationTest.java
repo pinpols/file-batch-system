@@ -6,6 +6,7 @@ import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.mapper.DownstreamAdmissionMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.List;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -29,6 +30,12 @@ class DownstreamAdmissionMapperIntegrationTest extends AbstractIntegrationTest {
       DownstreamAdmissionMapper downstreamAdmissionMapper, JdbcTemplate jdbcTemplate) {
     this.downstreamAdmissionMapper = downstreamAdmissionMapper;
     this.jdbcTemplate = jdbcTemplate;
+  }
+
+  @AfterEach
+  void removeChannelFixtures() {
+    String deleteChannelsSql = "delete from batch.file_channel_config where tenant_id in (?, ?)";
+    jdbcTemplate.update(deleteChannelsSql, tenant, tenant + "-other");
   }
 
   @Test
@@ -55,6 +62,12 @@ class DownstreamAdmissionMapperIntegrationTest extends AbstractIntegrationTest {
   }
 
   private void insertHealth(String tenantId, String channelCode, String status) {
+    String insertFileChannelConfigSql = """
+        insert into batch.file_channel_config
+            (tenant_id, channel_code, channel_name, channel_type, config_json)
+        values (?, ?, ?, 'SFTP', '{}'::jsonb)
+        """;
+    jdbcTemplate.update(insertFileChannelConfigSql, tenantId, channelCode, channelCode);
     String insertFileChannelHealthSql = """
         insert into batch.file_channel_health
             (tenant_id, channel_code, channel_type, health_status)

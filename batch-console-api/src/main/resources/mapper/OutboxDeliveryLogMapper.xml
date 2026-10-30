@@ -1,7 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.ops.mapper.OutboxDeliveryLogMapper">
-    <select id="selectByQuery" resultType="map">
+    <resultMap id="OutboxDeliveryLogRowMap"
+               type="io.github.pinpols.batch.console.domain.ops.view.OutboxDeliveryLogRow">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="event_type" javaType="java.lang.String"/>
+            <arg column="event_key" javaType="java.lang.String"/>
+            <arg column="trace_id" javaType="java.lang.String"/>
+            <arg column="delivery_status" javaType="java.lang.String"/>
+            <arg column="target_topic" javaType="java.lang.String"/>
+            <arg column="delivery_attempt" javaType="java.lang.Integer"/>
+            <arg column="error_key" javaType="java.lang.String"/>
+            <arg column="error_args" javaType="java.lang.String"/>
+            <arg column="error_message" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="OutboxDeliveryLogRowMap">
         select id,
                tenant_id,
                event_type,
@@ -25,6 +44,9 @@
         </if>
         <if test="eventKey != null and eventKey != ''">
             and event_key = #{eventKey}
+        </if>
+        <if test="targetTopic != null and targetTopic != ''">
+            and strpos(lower(target_topic), lower(#{targetTopic})) &gt; 0
         </if>
         <if test="traceId != null and traceId != ''">
             and trace_id = #{traceId}
@@ -53,6 +75,9 @@
         </if>
         <if test="eventKey != null and eventKey != ''">
             and event_key = #{eventKey}
+        </if>
+        <if test="targetTopic != null and targetTopic != ''">
+            and strpos(lower(target_topic), lower(#{targetTopic})) &gt; 0
         </if>
         <if test="traceId != null and traceId != ''">
             and trace_id = #{traceId}

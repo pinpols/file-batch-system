@@ -60,7 +60,7 @@
 
 ### 历史优先级与范围边界
 
-> ADR-012 / 021..027 的"做不做 / 什么时候做 / 边界在哪"决策档已归档：[`docs/archive/standards/worker-capability-priority-and-scope-2026-05-06.md`](../../archive/standards/worker-capability-priority-and-scope-2026-05-06.md)
+> ADR-012 / 021..027 的系统能力边界和实施优先级见[系统职责范围](../system-scope-boundary.md)；各 ADR 保留自身的具体范围与决策。
 >
 > 系统定位一句话：**"批量运行控制面 + 文件 / 任务交付闭环"，不扩张为"企业数据治理 + 容器资源编排 + 合规审计平台"**。
 

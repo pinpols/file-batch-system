@@ -45,7 +45,7 @@ import org.junit.jupiter.api.Test;
  *   <li>状态型参数对象不得重新暴露公共构造器或通用 builder
  * </ol>
  *
- * <p>方案见 {@code docs/archive/plans/positional-args-cleanup-plan-2026-05-01.md} v3。
+ * <p>现行规则见 {@code docs/coding-conventions.md} §1。
  */
 @DisplayName("方法位置参数规约守护: 已治理类型禁止构造与空值组合回潮")
 class PositionalArgsConventionTest {

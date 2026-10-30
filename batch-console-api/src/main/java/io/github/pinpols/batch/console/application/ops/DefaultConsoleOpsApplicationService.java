@@ -93,19 +93,20 @@ public class DefaultConsoleOpsApplicationService implements ConsoleOpsSummaryPor
   }
 
   private ConsoleOpsSummaryResponse toResponse(String tenantId, OpsSummaryMetrics metrics) {
-    return new ConsoleOpsSummaryResponse(
-        tenantId,
-        metrics.pendingApprovals(),
-        metrics.alerts().openAlerts(),
-        metrics.alerts().criticalAlerts(),
-        metrics.jobs().runningJobs(),
-        metrics.jobs().failedJobs(),
-        metrics.jobs().slaBreaches(),
-        metrics.workers().onlineWorkers(),
-        metrics.workers().drainingWorkers(),
-        metrics.workers().offlineWorkers(),
-        metrics.outbox().outboxRetryBacklog(),
-        metrics.outbox().outboxDeliveryFailures());
+    return ConsoleOpsSummaryResponse.builder()
+        .tenantId(tenantId)
+        .pendingApprovals(metrics.pendingApprovals())
+        .openAlerts(metrics.alerts().openAlerts())
+        .criticalAlerts(metrics.alerts().criticalAlerts())
+        .runningJobs(metrics.jobs().runningJobs())
+        .failedJobs(metrics.jobs().failedJobs())
+        .slaBreaches(metrics.jobs().slaBreaches())
+        .onlineWorkers(metrics.workers().onlineWorkers())
+        .drainingWorkers(metrics.workers().drainingWorkers())
+        .offlineWorkers(metrics.workers().offlineWorkers())
+        .outboxRetryBacklog(metrics.outbox().outboxRetryBacklog())
+        .outboxDeliveryFailures(metrics.outbox().outboxDeliveryFailures())
+        .build();
   }
 
   private record OpsSummaryMetrics(

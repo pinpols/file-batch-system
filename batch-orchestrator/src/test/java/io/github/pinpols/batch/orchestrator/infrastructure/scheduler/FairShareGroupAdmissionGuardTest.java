@@ -2,23 +2,28 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @DisplayName("公平份额分组准入守卫:验证准入校验的加锁顺序,硬上限拒绝与只读容量观测")
+@ExtendWith(MockitoExtension.class)
 class FairShareGroupAdmissionGuardTest {
 
-  private final JobInstanceMapper jobInstanceMapper = mock(JobInstanceMapper.class);
-  private final FairShareGroupAdmissionGuard guard =
-      new FairShareGroupAdmissionGuard(jobInstanceMapper);
+  @Mock
+  private JobInstanceMapper jobInstanceMapper;
+
+  private FairShareGroupAdmissionGuard guard;
 
   @Test
   @DisplayName("校验准入容量时先获取分组咨询锁再统计在用实例数")
@@ -54,5 +59,10 @@ class FairShareGroupAdmissionGuardTest {
   private static TenantQuotaPolicyEntity groupPolicy(int cap) {
     return new TenantQuotaPolicyEntity(
         1L, "tenant-a", "fair", 0, 0, 0, 1, "settlement", 0, 0, "NONE", cap, true, "QUEUE_DEFER");
+  }
+
+  @BeforeEach
+  void initializeSubject() {
+    guard = new FairShareGroupAdmissionGuard(jobInstanceMapper);
   }
 }

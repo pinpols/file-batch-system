@@ -111,38 +111,18 @@ class WorkflowGraphTenantForeignKeyIntegrationTest {
         delete from batch.business_calendar where tenant_id in (?, ?, ?)
     """;
 
-    jdbc.update(
-        deleteExternalEventExpectationDefinitionSql,
-        tenant,
-        otherTenant);
-    jdbc.update(
-        deleteFileGroupExpectationDefinitionSql,
-        tenant,
-        otherTenant);
+    jdbc.update(deleteExternalEventExpectationDefinitionSql, tenant, otherTenant);
+    jdbc.update(deleteFileGroupExpectationDefinitionSql, tenant, otherTenant);
     for (Relation relation : Relation.values()) {
       final String deleteStatementSql = """
           delete from batch.%s where workflow_definition_id in (?, ?)\
           """.formatted(relation.table);
-      jdbc.update(
-          deleteStatementSql,
-          definitionId,
-          otherDefinitionId);
+      jdbc.update(deleteStatementSql, definitionId, otherDefinitionId);
     }
     jdbc.update(deleteTriggerRequestSql, tenant, otherTenant);
-    jdbc.update(
-        deleteWorkflowDefinitionSql,
-        definitionId,
-        otherDefinitionId);
-    jdbc.update(
-        deleteBatchDayCatchupControlSql,
-        tenant,
-        otherTenant,
-        tenant + "-moved");
-    jdbc.update(
-        deleteBusinessCalendarSql,
-        tenant,
-        otherTenant,
-        tenant + "-moved");
+    jdbc.update(deleteWorkflowDefinitionSql, definitionId, otherDefinitionId);
+    jdbc.update(deleteBatchDayCatchupControlSql, tenant, otherTenant, tenant + "-moved");
+    jdbc.update(deleteBusinessCalendarSql, tenant, otherTenant, tenant + "-moved");
     dataSource.destroy();
   }
 
@@ -156,8 +136,7 @@ class WorkflowGraphTenantForeignKeyIntegrationTest {
         .rootCause()
         .isInstanceOfSatisfying(
             SQLException.class, failure -> assertThat(failure.getSQLState()).isEqualTo("23503"));
-    String reparentChildSql =
-        """
+    String reparentChildSql = """
         update batch.%s set workflow_definition_id=? where id=?\
         """.formatted(relation.table);
     assertThatThrownBy(() -> jdbc.update(reparentChildSql, otherDefinitionId, childId))
@@ -185,8 +164,7 @@ class WorkflowGraphTenantForeignKeyIntegrationTest {
     """;
 
     Long childId = insertChild(jdbc, relation, tenant, definitionId, "valid");
-    assertThatThrownBy(
-            () -> jdbc.update(deleteWorkflowDefinitionSql, definitionId))
+    assertThatThrownBy(() -> jdbc.update(deleteWorkflowDefinitionSql, definitionId))
         .rootCause()
         .isInstanceOfSatisfying(
             SQLException.class, failure -> assertThat(failure.getSQLState()).isEqualTo("23503"));
@@ -215,7 +193,8 @@ class WorkflowGraphTenantForeignKeyIntegrationTest {
           """;
 
     for (Relation relation : Relation.values()) {
-      List<Map<String, Object>> constraints = jdbc.queryForList(selectConnameSql, "batch." + relation.table);
+      List<Map<String, Object>> constraints =
+          jdbc.queryForList(selectConnameSql, "batch." + relation.table);
       assertThat(constraints).singleElement().satisfies(row -> {
         assertThat(row).containsEntry("convalidated", true).containsEntry("delete_action", "a");
         assertThat(row.get("definition").toString())
@@ -245,10 +224,7 @@ class WorkflowGraphTenantForeignKeyIntegrationTest {
         .rootCause()
         .isInstanceOfSatisfying(
             SQLException.class, failure -> assertThat(failure.getSQLState()).isEqualTo("23503"));
-    assertThatThrownBy(() -> jdbc.update(
-            updateWorkflowDefinitionSql,
-            tenant,
-            definitionId))
+    assertThatThrownBy(() -> jdbc.update(updateWorkflowDefinitionSql, tenant, definitionId))
         .rootCause()
         .isInstanceOfSatisfying(
             SQLException.class, failure -> assertThat(failure.getSQLState()).isEqualTo("23503"));
@@ -296,19 +272,19 @@ class WorkflowGraphTenantForeignKeyIntegrationTest {
   @DisplayName("预期子写与父日历更新并发时，父更新先提交后子写由复合FK拒绝")
   void shouldSerializeCalendarUpdateAgainstConcurrentExpectationInsert(String table)
       throws Exception {
-        final String selectPgBackendPidSql = """
+    final String selectPgBackendPidSql = """
             select pg_backend_pid()
         """;
-        final String updateWorkflowDefinitionSql = """
+    final String updateWorkflowDefinitionSql = """
             update batch.workflow_definition set calendar_code='OTHER_CALENDAR' where tenant_id=? and id=?
         """;
-        final String selectCoalesceSql = """
+    final String selectCoalesceSql = """
             select coalesce(? = any(pg_blocking_pids(?)), false)
         """;
-        final String selectCountSql = """
+    final String selectCountSql = """
             select count(*) from batch.external_event_expectation_definition where workflow_definition_id=?
         """;
-        final String selectCountSql2 = """
+    final String selectCountSql2 = """
             select count(*) from batch.file_group_expectation_definition where workflow_definition_id=?
         """;
 
@@ -321,21 +297,15 @@ class WorkflowGraphTenantForeignKeyIntegrationTest {
       JdbcTemplate childJdbc = new JdbcTemplate(new SingleConnectionDataSource(child, true));
       Integer parentPid = parentJdbc.queryForObject(selectPgBackendPidSql, Integer.class);
       Integer childPid = childJdbc.queryForObject(selectPgBackendPidSql, Integer.class);
-      parentJdbc.update(
-          updateWorkflowDefinitionSql,
-          tenant,
-          definitionId);
+      parentJdbc.update(updateWorkflowDefinitionSql, tenant, definitionId);
       Future<?> insert = executor.submit(
           () -> insertExpectation(childJdbc, table, tenant, "CAL_FK", definitionId, "racing"));
       try {
         Awaitility.await()
             .atMost(Duration.ofSeconds(5))
             .until(() -> insert.isDone()
-                || Boolean.TRUE.equals(jdbc.queryForObject(
-                    selectCoalesceSql,
-                    Boolean.class,
-                    parentPid,
-                    childPid)));
+                || Boolean.TRUE.equals(
+                    jdbc.queryForObject(selectCoalesceSql, Boolean.class, parentPid, childPid)));
         Boolean selectedCoalesce =
             jdbc.queryForObject(selectCoalesceSql, Boolean.class, parentPid, childPid);
         assertThat(selectedCoalesce).isTrue();
@@ -355,15 +325,9 @@ class WorkflowGraphTenantForeignKeyIntegrationTest {
     } finally {
       executor.shutdownNow();
     }
-    assertThat(jdbc.queryForObject(
-                selectCountSql,
-                Long.class,
-                definitionId)
-            + jdbc.queryForObject(
-                selectCountSql2,
-                Long.class,
-                definitionId))
-        .isZero();
+    Long selectedCount = jdbc.queryForObject(selectCountSql, Long.class, definitionId);
+    Long selectedCount2 = jdbc.queryForObject(selectCountSql2, Long.class, definitionId);
+    assertThat(selectedCount + selectedCount2).isZero();
   }
 
   @ParameterizedTest
@@ -394,19 +358,14 @@ class WorkflowGraphTenantForeignKeyIntegrationTest {
       Integer parentPid = parentJdbc.queryForObject(selectPgBackendPidSql, Integer.class);
       Integer childPid = childJdbc.queryForObject(selectPgBackendPidSql, Integer.class);
       insertExpectation(childJdbc, table, tenant, "CAL_FK", definitionId, "racing-first");
-      Future<?> update = executor.submit(() -> parentJdbc.update(
-          updateWorkflowDefinitionSql,
-          tenant,
-          definitionId));
+      Future<?> update = executor.submit(
+          () -> parentJdbc.update(updateWorkflowDefinitionSql, tenant, definitionId));
       try {
         Awaitility.await()
             .atMost(Duration.ofSeconds(5))
             .until(() -> update.isDone()
-                || Boolean.TRUE.equals(jdbc.queryForObject(
-                    selectCoalesceSql,
-                    Boolean.class,
-                    childPid,
-                    parentPid)));
+                || Boolean.TRUE.equals(
+                    jdbc.queryForObject(selectCoalesceSql, Boolean.class, childPid, parentPid)));
         Boolean selectedCoalesce =
             jdbc.queryForObject(selectCoalesceSql, Boolean.class, childPid, parentPid);
         assertThat(selectedCoalesce).isTrue();
@@ -450,9 +409,11 @@ class WorkflowGraphTenantForeignKeyIntegrationTest {
           """;
 
     if ("external_event_expectation_definition".equals(table)) {
-      target.update(insertExternalEventExpectationDefinitionSql, tenantId, calendarCode, parentId, code);
+      target.update(
+          insertExternalEventExpectationDefinitionSql, tenantId, calendarCode, parentId, code);
     } else if ("file_group_expectation_definition".equals(table)) {
-      target.update(insertFileGroupExpectationDefinitionSql, tenantId, calendarCode, parentId, code);
+      target.update(
+          insertFileGroupExpectationDefinitionSql, tenantId, calendarCode, parentId, code);
     } else {
       throw new IllegalArgumentException("unsupported expectation table");
     }
@@ -483,21 +444,15 @@ class WorkflowGraphTenantForeignKeyIntegrationTest {
       JdbcTemplate childJdbc = new JdbcTemplate(new SingleConnectionDataSource(child, true));
       Integer parentPid = parentJdbc.queryForObject(selectPgBackendPidSql, Integer.class);
       Integer childPid = childJdbc.queryForObject(selectPgBackendPidSql, Integer.class);
-      parentJdbc.update(
-          updateWorkflowDefinitionSql,
-          tenant + "-moved",
-          definitionId);
+      parentJdbc.update(updateWorkflowDefinitionSql, tenant + "-moved", definitionId);
       Future<Long> inserted = executor.submit(
           () -> insertChild(childJdbc, Relation.NODE, tenant, definitionId, "racing"));
       try {
         Awaitility.await()
             .atMost(Duration.ofSeconds(5))
             .until(() -> inserted.isDone()
-                || Boolean.TRUE.equals(jdbc.queryForObject(
-                    selectCoalesceSql,
-                    Boolean.class,
-                    parentPid,
-                    childPid)));
+                || Boolean.TRUE.equals(
+                    jdbc.queryForObject(selectCoalesceSql, Boolean.class, parentPid, childPid)));
         Boolean selectedCoalesce =
             jdbc.queryForObject(selectCoalesceSql, Boolean.class, parentPid, childPid);
         assertThat(selectedCoalesce).isTrue();

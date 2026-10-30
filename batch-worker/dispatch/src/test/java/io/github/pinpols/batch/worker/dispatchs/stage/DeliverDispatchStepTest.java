@@ -186,8 +186,7 @@ class DeliverDispatchStepTest {
     when(fileDispatchRepository.latestDispatchRecord("t1", 10L, "CH1"))
         .thenReturn(Optional.of(new DispatchRecordSnapshot(
             "FAILED", "FAILED", "req-1", null, "EXTERNAL_OUTCOME_UNKNOWN", "verified not sent")));
-    when(fileDispatchRepository.beginVerifiedExternalOutcomeAttempt(
-            "t1", 10L, "CH1", 200L, 100L))
+    when(fileDispatchRepository.beginVerifiedExternalOutcomeAttempt("t1", 10L, "CH1", 200L, 100L))
         .thenReturn(1);
     when(dispatchChannelGateway.dispatch(any())).thenReturn(successResult());
     when(fileDispatchRepository.markSent(any(), any(), any(), any(), any(), any()))

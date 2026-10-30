@@ -1,11 +1,11 @@
 package io.github.pinpols.batch.orchestrator.integration;
 
-import io.github.pinpols.batch.orchestrator.domain.param.DataAssetUpsertParam;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionMaterializationCommand;
 import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionSnapshot;
+import io.github.pinpols.batch.orchestrator.domain.param.DataAssetUpsertParam;
 import io.github.pinpols.batch.orchestrator.mapper.AssetPartitionMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
@@ -130,7 +130,13 @@ class AssetPartitionReadinessMapperIntegrationTest extends AbstractIntegrationTe
   // ---- helpers ----
 
   private long ensureAsset(String assetCode) {
-    assetPartitionMapper.upsertDataAsset(DataAssetUpsertParam.builder().tenantId(TENANT).assetCode(assetCode).assetType("JOB").displayName(assetCode).ownerJobCode(assetCode).build());
+    assetPartitionMapper.upsertDataAsset(DataAssetUpsertParam.builder()
+        .tenantId(TENANT)
+        .assetCode(assetCode)
+        .assetType("JOB")
+        .displayName(assetCode)
+        .ownerJobCode(assetCode)
+        .build());
     Long id = assetPartitionMapper.selectDataAssetId(TENANT, assetCode, "JOB");
     assertThat(id).isNotNull();
     return id;
@@ -170,18 +176,19 @@ class AssetPartitionReadinessMapperIntegrationTest extends AbstractIntegrationTe
 
   private AssetPartitionMaterializationCommand command(
       long assetId, String assetCode, long resultVersionId, String businessKey) {
-    return new AssetPartitionMaterializationCommand(
-        TENANT,
-        assetId,
-        assetCode,
-        PARTITION_KEY,
-        BIZ_DATE,
-        resultVersionId,
-        businessKey,
-        STUB_JOB_INSTANCE_ID,
-        Instant.parse("2026-05-04T10:00:00Z"),
-        "INLINE_JSON",
-        null);
+    return AssetPartitionMaterializationCommand.builder()
+        .tenantId(TENANT)
+        .assetId(assetId)
+        .assetCode(assetCode)
+        .partitionKey(PARTITION_KEY)
+        .bizDate(BIZ_DATE)
+        .resultVersionId(resultVersionId)
+        .businessKey(businessKey)
+        .jobInstanceId(STUB_JOB_INSTANCE_ID)
+        .effectiveAt(Instant.parse("2026-05-04T10:00:00Z"))
+        .payloadStorage("INLINE_JSON")
+        .payloadRef(null)
+        .build();
   }
 
   private Long pointerVersionId(String assetCode) {
@@ -190,10 +197,6 @@ class AssetPartitionReadinessMapperIntegrationTest extends AbstractIntegrationTe
         where tenant_id = ? and asset_code = ? and partition_key = ?
         """;
     return jdbcTemplate.queryForObject(
-        pointerVersionIdSql,
-        Long.class,
-        TENANT,
-        assetCode,
-        PARTITION_KEY);
+        pointerVersionIdSql, Long.class, TENANT, assetCode, PARTITION_KEY);
   }
 }

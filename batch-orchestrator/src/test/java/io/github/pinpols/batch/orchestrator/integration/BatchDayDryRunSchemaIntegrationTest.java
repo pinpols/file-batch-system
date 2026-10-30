@@ -164,12 +164,7 @@ class BatchDayDryRunSchemaIntegrationTest extends AbstractIntegrationTest {
         ) values (?, ?, ?, ?, now() - interval '25 hours', now() - interval '25 hours', ?)
         """;
     jdbcTemplate.update(
-        insertExpiredPreviewTokenSql,
-        TENANT,
-        tokenHash,
-        "f".repeat(64),
-        "0".repeat(64),
-        sessionId);
+        insertExpiredPreviewTokenSql, TENANT, tokenHash, "f".repeat(64), "0".repeat(64), sessionId);
 
     assertThat(previewTokenMapper.deleteExpired(
             Instant.now(), Instant.now().minus(Duration.ofHours(24)), 10))
@@ -249,13 +244,13 @@ class BatchDayDryRunSchemaIntegrationTest extends AbstractIntegrationTest {
       Long sourceInstanceId,
       Long resultVersionId,
       String planSnapshot) {
-        final String insertReplayEntrySql = """
+    final String insertReplayEntrySql = """
     insert into batch.batch_day_replay_entry (
     session_id, tenant_id, job_code, source_instance_id, result_version_id,
     plan_snapshot, status
     ) values (?, ?, ?, ?, ?, cast(? as jsonb), 'PENDING')
     """;
-        jdbcTemplate.update(
+    jdbcTemplate.update(
         insertReplayEntrySql,
         sessionId,
         tenantId,
@@ -272,23 +267,14 @@ class BatchDayDryRunSchemaIntegrationTest extends AbstractIntegrationTest {
         ) values (?, ?, ?, ?, now() + interval '5 minutes', now(), ?)
         """;
     jdbcTemplate.update(
-        insertPreviewTokenSql,
-        tenantId,
-        tokenHash,
-        "b".repeat(64),
-        "c".repeat(64),
-        sessionId);
+        insertPreviewTokenSql, tenantId, tokenHash, "b".repeat(64), "c".repeat(64), sessionId);
   }
 
   private int entryCount(long sessionId) {
-    String countReplayEntriesSql =
-        """
+    String countReplayEntriesSql = """
         select count(*) from batch.batch_day_replay_entry where session_id = ?
     """;
-    Integer count = jdbcTemplate.queryForObject(
-        countReplayEntriesSql,
-        Integer.class,
-        sessionId);
+    Integer count = jdbcTemplate.queryForObject(countReplayEntriesSql, Integer.class, sessionId);
     return count == null ? 0 : count;
   }
 
@@ -297,10 +283,6 @@ class BatchDayDryRunSchemaIntegrationTest extends AbstractIntegrationTest {
         select column_name from information_schema.columns
          where table_schema = ? and table_name = ? order by ordinal_position
         """;
-    return jdbcTemplate.queryForList(
-        selectTableColumnsSql,
-        String.class,
-        schema,
-        table);
+    return jdbcTemplate.queryForList(selectTableColumnsSql, String.class, schema, table);
   }
 }

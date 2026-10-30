@@ -205,6 +205,7 @@ data:
   BATCH_CONSOLE_ALERTMANAGER_TENANT_ID: {{ ((.Values.alertmanager).console).tenantId | default "system" | quote }}
   BATCH_CONSOLE_ALERTMANAGER_SILENCE_ENABLED: {{ ((.Values.alertmanager).console).silenceEnabled | default false | quote }}
   BATCH_CONSOLE_ALERTMANAGER_API_BASE_URL: {{ ((.Values.alertmanager).console).apiBaseUrl | default "" | quote }}
+  BATCH_MAINTENANCE_ALERT_SCOPE: {{ ((.Values.alertmanager).console).maintenanceScope | default (printf "%s.%s" .Release.Namespace .Release.Name) | quote }}
   BATCH_STORAGE_BACKEND: {{ (.Values.storage).backend | default "s3" | quote }}
   BATCH_STORAGE_BACKEND_CUTOVER_ID: {{ (.Values.storage).backendCutoverId | default "" | quote }}
   BATCH_STORAGE_FILESYSTEM_ROOT: {{ (.Values.storage).filesystemRoot | default "" | quote }}
@@ -306,6 +307,10 @@ data:
   BATCH_REPLAY_DISPATCH_LOCK_AT_LEAST_FOR: {{ (.Values.orchestrator.replayDispatch).lockAtLeastFor | default "PT15S" | quote }}
   BATCH_REPLAY_DISPATCH_LOCK_AT_MOST_FOR: {{ (.Values.orchestrator.replayDispatch).lockAtMostFor | default "PT1M" | quote }}
   BATCH_REPLAY_DISPATCH_CLAIM_TIMEOUT_MILLIS: {{ (.Values.orchestrator.replayDispatch).claimTimeoutMillis | default 300000 | quote }}
+  BATCH_WORKER_BATCH_CLAIM_ENABLED: {{ dig "enabled" false (.Values.orchestrator.workerBatchClaim | default dict) | quote }}
+  BATCH_WORKER_BATCH_CLAIM_MAX_BATCH_SIZE: {{ dig "maxBatchSize" 32 (.Values.orchestrator.workerBatchClaim | default dict) | quote }}
+  BATCH_WORKER_TASK_CLIENT_REPORT_BATCH_ENABLED: {{ dig "reportBatchEnabled" false (.Values.orchestrator.workerTaskClient | default dict) | quote }}
+  BATCH_WORKER_TASK_CLIENT_REPORT_BATCH_WAIT_MILLIS: {{ dig "reportBatchWaitMillis" 5 (.Values.orchestrator.workerTaskClient | default dict) | quote }}
   BATCH_WORKER_REPORT_OUTBOX_ENABLED: {{ (.Values.orchestrator.workerReportOutbox).enabled | default false | quote }}
   BATCH_WORKER_REPORT_OUTBOX_STORAGE: {{ (.Values.orchestrator.workerReportOutbox).storage | default "PLATFORM_PG" | quote }}
   BATCH_WORKER_REPORT_OUTBOX_CUTOVER_ID: {{ (.Values.orchestrator.workerReportOutbox).cutoverId | default "" | quote }}

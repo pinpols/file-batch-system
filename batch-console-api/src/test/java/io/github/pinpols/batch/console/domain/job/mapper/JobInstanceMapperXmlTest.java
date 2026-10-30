@@ -50,6 +50,28 @@ class JobInstanceMapperXmlTest {
     }
   }
 
+  @Test
+  @DisplayName("SLA 列表与计数使用相同的业务状态筛选")
+  void shouldUseSameBusinessStatusesForSlaListAndCount() throws Exception {
+    Configuration configuration = new Configuration();
+    parseMapper(configuration, "mapper/CommonFragments.xml");
+    parseMapper(configuration, "mapper/JobInstanceMapper.xml");
+    JobInstanceQuery query = JobInstanceQuery.builder()
+        .tenantId("tenant-a")
+        .slaBreached(true)
+        .pageRequest(new PageRequest(1, 20))
+        .build();
+    for (String statement : new String[] {"selectByQuery", "countByQuery"}) {
+      String sql = configuration
+          .getMappedStatement(JobInstanceMapper.class.getName() + "." + statement)
+          .getBoundSql(query)
+          .getSql();
+      assertThat(slaStatuses(sql))
+          .as(statement + " SLA 筛选状态")
+          .containsExactlyInAnyOrder("CREATED", "WAITING", "READY", "RUNNING", "PARTIAL_FAILED");
+    }
+  }
+
   private static void parseMapper(Configuration configuration, String resource) throws Exception {
     try (InputStream inputStream =
         Thread.currentThread().getContextClassLoader().getResourceAsStream(resource)) {

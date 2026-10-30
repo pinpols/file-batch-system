@@ -20,8 +20,8 @@ import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKe
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.FrozenDispatchChannelResolver;
 import java.nio.charset.StandardCharsets;
-import java.util.Optional;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
@@ -81,8 +81,8 @@ public class PrepareDispatchStep implements DispatchStageStep {
       if (rawPayload != null) { // empty-check: allow - Sonar S2259
         JsonNode secretBindings = rawPayload.get(DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS);
         if (EmptyChecks.isNotNull(secretBindings) && secretBindings.isObject()) {
-          Map<String, Object> secretBindingValues =
-              objectMapper.convertValue(secretBindings, new TypeReference<Map<String, Object>>() {});
+          Map<String, Object> secretBindingValues = objectMapper.convertValue(
+              secretBindings, new TypeReference<Map<String, Object>>() {});
           attrs.put(DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS, secretBindingValues);
         }
       }
@@ -111,6 +111,15 @@ public class PrepareDispatchStep implements DispatchStageStep {
             "file record not found",
             objectMapper);
       }
+      if (!Texts.hasText(payload.channelCode())) {
+        return DispatchStageResult.failure(
+            stage(),
+            "DISPATCH_PREPARE_CHANNEL_NOT_FOUND",
+            "error.dispatch.prepare.channel_not_found",
+            new Object[0],
+            "channel code missing",
+            objectMapper);
+      }
       Optional<Map<String, Object>> frozenChannelConfig = frozenDispatchChannelResolver.resolve(
           context.getTenantId(), payload.channelCode(), context.getRawPayload());
       Map<String, Object> channelRow;
@@ -126,7 +135,8 @@ public class PrepareDispatchStep implements DispatchStageStep {
         }
         channelRow = frozenChannelConfig.orElseThrow();
       } else {
-        channelRow = fileDispatchRepository.loadChannel(context.getTenantId(), payload.channelCode());
+        channelRow =
+            fileDispatchRepository.loadChannel(context.getTenantId(), payload.channelCode());
       }
       if (channelRow.isEmpty()) {
         return DispatchStageResult.failure(
@@ -142,24 +152,22 @@ public class PrepareDispatchStep implements DispatchStageStep {
       attrs.put(PipelineRuntimeKeys.FILE_RECORD, fileRecord);
       attrs.put(PipelineRuntimeKeys.CHANNEL_CONFIG, channelConfig);
       attrs.put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.TRUE.equals(payload.forceRetry()));
-      Object receiptPolicy = channelConfig.getOrDefault(
-          "receipt_policy", FileReceiptPolicy.NONE.code());
-      attrs.put(
-          DispatchRuntimeKeys.RECEIPT_STATUS,
-          receiptPolicy);
+      Object receiptPolicy =
+          channelConfig.getOrDefault("receipt_policy", FileReceiptPolicy.NONE.code());
+      attrs.put(DispatchRuntimeKeys.RECEIPT_STATUS, receiptPolicy);
       Long pipelineInstanceId =
           PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
-      pipelineRuns.bindFileToPipelineInstance(
-          context.getTenantId(), pipelineInstanceId, fileId);
+      pipelineRuns.bindFileToPipelineInstance(context.getTenantId(), pipelineInstanceId, fileId);
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(PrepareDispatchStep.class, "catch:Exception", ex);
+      String failureSummary = SwallowedExceptionLogger.summary(ex);
 
       return DispatchStageResult.failure(
           stage(),
           "DISPATCH_PREPARE_PARSE_FAILED",
           "error.dispatch.prepare.parse_failed",
-          new Object[] {ex.getMessage()},
-          ex.getMessage(),
+          new Object[] {failureSummary},
+          failureSummary,
           objectMapper);
     }
     return DispatchStageResult.success(stage());

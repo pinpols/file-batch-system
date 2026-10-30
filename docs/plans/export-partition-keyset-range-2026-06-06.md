@@ -1,12 +1,14 @@
 # EXPORT 分片 keyset 区间优化(方案A)Implementation Plan
 
+> **2026-10-30 状态：原独立探测方案已复现分片重叠，两种内置插件现统一使用哈希。** 旧 `partition_keyset_range` 配置暂不激活范围划分，也不执行 min/max 探测；两种插件的失败反例及真实数据库对账见[治理记录](../audit/backend-25-package-governance-2026-10-26.md)的 `BUG-20261028-EXPORT-MIXED-SPLIT`。自定义插件的分片逻辑不由此规划器控制。范围优化需先设计所有分片共享的冻结计划并验证恢复，性能容量后续评估；哈希方案本身不提供跨分片数据库一致性快照。下文保留原设计和实施记录，不代表当前内置插件多分片运行行为。
+
 **Goal:** 让导出分片在命中激活条件时,每片在 DB 侧只读自己 1/N 的游标区间(索引区间扫),把 hashtext 的 N× 全表扫描放大降到 ~1×;不命中则逐字节退回现有 hashtext。
 
 **Architecture:** 在两个 ExportDataPlugin(`SqlTemplateExportDataPlugin` / `GenericJdbcMappedExportDataPlugin`)的 `loadDetailPage` 内,首次调用(`exportSnapshot` 无缓存边界)时算游标列 `min/max` 等宽区间 `[loN,hiN)` 缓存进 `exportSnapshot`(跨页复用的同一可变 map);分页谓词由 hashtext 换成 `cur>=:__loN AND cur<:__hiN`(末片含上界)。边界每分区自算,不经 orchestrator(对称 import range-slice 的每分区 `statObject`)。任何异常/空 min-max/非数值游标列 → 退回 hashtext,绝不失败。
 
 **Tech Stack:** Java 21、Spring JDBC(NamedParameterJdbcTemplate / JdbcTemplate)、PostgreSQL、JUnit5 + AssertJ + Mockito、Testcontainers(`AbstractIntegrationTest`)。
 
-**设计依据:** `docs/archive/plans/export-partition-keyset-range-2026-06-06.md`
+**设计依据:** 原短版区间设计已并入本文，当前约束与实施记录在本文维护。
 
 ---
 
@@ -618,7 +620,7 @@ git commit -m "test(export-keyset): 端到端 4 片无重叠+全覆盖+倾斜+�
 
 - [ ] **Step 1: 更新 backlog 状态**
 
-把 `docs/archive/plans/export-partition-keyset-range-2026-06-06.md` 顶部状态由「已设计,待实测瓶颈驱动」改为
+把 `docs/plans/export-partition-keyset-range-2026-06-06.md` 顶部状态由「已设计,待实测瓶颈驱动」改为
 「✅ 已实现(2026-06-06)」并在末尾加「实现记录」(对照 import backlog 的写法)。
 
 - [ ] **Step 2: 模块全量测试(防止局部跑漏)**
@@ -637,7 +639,7 @@ Expected: BUILD SUCCESS
 git push -u origin feature/export-keyset-range
 gh pr create --base main --head feature/export-keyset-range \
   --title "feat(export): 分片 keyset 区间优化 — hashtext N× 全扫降到 ~1×(opt-in)" \
-  --body "实现 docs/archive/plans/export-partition-keyset-range-2026-06-06.md。激活(partitionCount>1 + partition_keyset_range=true + 数值游标列)时每分区 min/max 等宽区间走索引区间扫;否则退 hashtext。带 fallback 绝不失败。"
+  --body "实现 docs/plans/export-partition-keyset-range-2026-06-06.md。激活(partitionCount>1 + partition_keyset_range=true + 数值游标列)时每分区 min/max 等宽区间走索引区间扫;否则退 hashtext。带 fallback 绝不失败。"
 gh pr merge --auto --squash
 ```
 

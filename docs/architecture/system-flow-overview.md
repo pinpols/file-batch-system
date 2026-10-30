@@ -10,23 +10,24 @@
 定时、人工、文件到达与外部事件均进入显式 Workflow 目标。Quartz 是定时机会计算器，不能从框架注册表推断业务日已履行；各触发来源的占比需用实际运行数据衡量。
 
 ```mermaid
-flowchart LR
-  Q["Quartz / Workflow 日程"] --> T["Trigger：接纳请求与机会记账"]
-  I["Console / 文件到达 / 外部事件"] --> T
-  T --> TO["trigger_request + trigger_outbox_event"]
-  TO --> TK["Kafka：触发消息"]
-  TK --> O["Orchestrator：WorkflowRun 与冻结图"]
-  O --> N["WorkflowNodeRun：控制、等待或 JOB"]
-  N --> J["JOB 节点：JobInstance / Partition / Task"]
-  J --> OB["状态与 outbox_event 同事务"]
-  OB --> K["Kafka：按类型与 Worker 路由"]
-  K --> W["内建 Worker / 自托管 SDK"]
-  W --> C["CLAIM 与 lease/invocation 核验"]
-  C --> E["业务库 / 文件 / 对象存储 / 外部渠道"]
-  E --> R["REPORT / 本地报告恢复"]
-  R --> O
-  O --> F["节点及根终态 / 结果版本 / 终态事件"]
-  B["BatchDay / 机会覆盖 / 输入义务"] -. "准入与结算证据" .-> O
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  E["日程 / Console / 到达事件"] --> T["Trigger 接纳请求"]
+  T --> TO[("请求 + Trigger Outbox")]
+  TO --> TR["Trigger Relay"] --> K1["Kafka · launch"]
+  K1 --> O["Orchestrator"]
+  subgraph R["顶层运行与按需物化"]
+    WR["WorkflowRun · 冻结图"] --> NR["WorkflowNodeRun"]
+    NR --> C["START / END / GATEWAY / WAIT"]
+    NR --> J["JOB → 独立 JobInstance"] --> PT["Partition / Task"]
+  end
+  O --> WR
+  PT --> TX[("运行状态 + Task Outbox")]
+  TX --> OR["Outbox Relay"] --> K2["Kafka · task dispatch"]
+  K2 --> W["五类 Worker"]
+  W -->|"HTTP CLAIM / REPORT"| O
+  W --> B["业务数据 / 文件 / 外部服务"]
+  O -. "按义务与终态证据结算" .-> BD["BatchDay"]
 ```
 
 ### 一句话叙事
@@ -44,26 +45,23 @@ flowchart LR
 trigger → orchestrator 调度链走 outbox + Kafka 异步模式（2026-05-02 固化，原同步 HTTP 桥已删除）：
 
 ```mermaid
-flowchart LR
-  TR[trigger]
-  TOX[("trigger_outbox_event<br/>V80, JSONB payload")]
-  RELAY["TriggerOutboxRelay<br/>@Scheduled 200ms<br/>ShedLock 互斥"]
-  KT[Kafka topic<br/>batch.trigger.launch.v1<br/>key=tenantId:requestId]
-  TLC[TriggerLaunchConsumer<br/>MANUAL_IMMEDIATE ack]
-  LS[orchestrator<br/>LaunchApplicationService.launch]
-
-  TR ==>|"同事务 INSERT<br/>trigger_request + trigger_outbox_event"| TOX
-  RELAY -. "SELECT FOR UPDATE SKIP LOCKED" .-> TOX
-  RELAY ==>|"KafkaTriggerEventPublisher<br/>acks=all + idempotence"| KT
-  RELAY -. "UPDATE PUBLISHED / FAILED+退避" .-> TOX
-  KT ==>|"@KafkaListener consume"| TLC
-  TLC ==>|"调用本地 Workflow 根启动服务"| LS
-  LS -. "请求身份 / WorkflowRun 唯一接纳防重复" .-> LS
-
-  classDef sync fill:#e3f2fd,stroke:#1565c0;
-  classDef async fill:#fff3e0,stroke:#ef6c00;
-  class TR,LS sync
-  class TOX,RELAY,KT,TLC async
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+sequenceDiagram
+  participant Caller as 日程 / Console
+  participant T as Trigger
+  participant DB as 平台数据库
+  participant Relay as Trigger Relay
+  participant K as Kafka
+  participant O as Orchestrator
+  Caller->>T: 来源身份 + Workflow 目标
+  T->>DB: 同事务保存请求与 Outbox
+  T-->>Caller: requestId / 接纳结果
+  Relay->>DB: 认领待发布事件
+  Relay->>K: LaunchEnvelope
+  K-->>Relay: ACK
+  Relay->>DB: 标记发布结果
+  K->>O: 投递原请求
+  O->>DB: 幂等准备 WorkflowRun
 ```
 
 **收益**：trigger 重启不丢已 fire 的 launch（Quartz fire 后第一时间落 outbox，relay 重启续传）；orchestrator 短暂宕机不阻塞 trigger Quartz worker thread。
@@ -81,87 +79,29 @@ flowchart LR
 > 定时任务由 Trigger 自动发起，人工/API/事件入口按各自契约接纳，实际占比取决于租户负载。本节只是补充运营 5 条支线，不要据此理解为"系统都靠人点"。
 
 ```mermaid
-%%{init: {'flowchart': {'curve': 'linear', 'nodeSpacing': 50, 'rankSpacing': 60, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%
-flowchart LR
-  USER([用户 / 前端]):::user
-
-  subgraph BFF ["batch-console-api"]
-    direction TB
-    AUTH["AuthN/Z + RateLimit<br/>+ Audit + Idempotent"]:::svc
-    CFG[Config CRUD]:::svc
-    QRY["Query / Report<br/>(@Transactional readOnly)"]:::svc
-    SSE["RealtimeEventHub<br/>(SSE)"]:::svc
-    AI["AI Assistant<br/>(OpenAI proxy)"]:::svc
-    LAUNCH[Manual Launch]:::svc
-    COMP["Compensate / Rerun<br/>(POST /api/console/.../compensate)"]:::svc
-  end
-
-  PRIM[("PG primary<br/>:15432<br/>(写)")]:::store
-  REPL[("PG replica<br/>:15433<br/>readOnly 路由<br/>fail-open 退主")]:::store
-  REDIS[("Redis Streams<br/>+ pub/sub config evict")]:::store
-  COMPDB[("compensation_command<br/>(在 PRIM 之内)")]:::store
-  TRG["batch-trigger<br/>(POST /api/triggers/launch)"]:::svc
-  ORCH["batch-orchestrator<br/>(/internal/compensate /<br/>config-cache evict)"]:::svc
-  OPENAI[(OpenAI / 私有化代理)]:::extern
-
-  USER ==> AUTH
-  AUTH --> CFG
-  AUTH --> QRY
-  AUTH --> SSE
-  AUTH --> AI
-  AUTH --> LAUNCH
-  AUTH --> COMP
-
-  CFG    ==>|"INSERT / UPDATE<br/>job_definition / workflow_definition<br/>file_channel / batch_window"| PRIM
-  CFG    -.->|"afterCommit pub/sub<br/>evict orchestrator cache"| REDIS
-  CFG    -.->|"DB 直改场景手动 evict<br/>POST /api/console/ops/cache/evict-*"| ORCH
-  QRY    ==>|"SELECT 走 read replica"| REPL
-  QRY    -.->|"replica 挂 → fail-open 退主"| PRIM
-  SSE    -.->|"消费 stream<br/>+ 推 SSE 给前端"| REDIS
-  AI     ==>|"chat / classify"| OPENAI
-  LAUNCH ==>|"HTTP forward"| TRG
-  COMP   ==>|"HTTP /internal/compensate<br/>(operatorId / reason)"| ORCH
-  ORCH   ==>|"INSERT compensation_command<br/>+ outbox(COMPENSATE event)"| COMPDB
-
-  %% ─── 边按协议着色（与主图同套色编码，下标从 0 起） ─────────
-  %%   0     USER → AUTH（蓝 = HTTP 入站）
-  linkStyle 0 stroke:#1565c0,stroke-width:2.5px
-  %%   1..6  AUTH → 6 个 handler（灰细 = 内部路由）
-  linkStyle 1,2,3,4,5,6 stroke:#616161,stroke-width:1.2px
-  %%   7     CFG → PRIM 写（绿）
-  linkStyle 7 stroke:#2e7d32,stroke-width:2.5px
-  %%   8     CFG → REDIS pub/sub evict（黄虚 = 控制信号）
-  linkStyle 8 stroke:#f9a825,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   9     CFG → ORCH 手动 evict（蓝虚 = HTTP 控制）
-  linkStyle 9 stroke:#1565c0,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   10    QRY → REPL 读（紫）
-  linkStyle 10 stroke:#7b1fa2,stroke-width:2.5px
-  %%   11    QRY → PRIM fail-open 退主（紫虚 = 降级控制）
-  linkStyle 11 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   12    SSE → REDIS Streams（黄虚 = Redis pub/sub）
-  linkStyle 12 stroke:#f9a825,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   13    AI → OpenAI（红 = 外部副作用）
-  linkStyle 13 stroke:#c62828,stroke-width:2.5px
-  %%   14    LAUNCH → TRG（蓝 = HTTP 同步）
-  linkStyle 14 stroke:#1565c0,stroke-width:2.5px
-  %%   15    COMP → ORCH 补偿（蓝 = HTTP 同步）
-  linkStyle 15 stroke:#1565c0,stroke-width:2.5px
-  %%   16    ORCH → compensation_command 写入数据库（绿 = JDBC 写）
-  linkStyle 16 stroke:#2e7d32,stroke-width:2.5px
-
-  classDef user    fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
-  classDef svc     fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;
-  classDef store   fill:#f3e5f5,stroke:#6a1b9a,stroke-width:1.5px,color:#4a148c;
-  classDef extern  fill:#fce4ec,stroke:#ad1457,stroke-width:1.5px,color:#880e4f;
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  U["Console 前端"] --> C["Console API · 认证 / 租户 / 授权"]
+  C --> CFG["配置用例"] --> DB[("平台 PostgreSQL")]
+  C --> Q["运行查询"] --> DB
+  C --> RT["SSE 事件桥"]
+  RT <--> R["Redis Pub/Sub + 重放缓冲"]
+  RT --> U
+  C --> L["运行发起"] --> T["Trigger"]
+  C --> OPS["审批 / 补偿 / 重放"] --> O["Orchestrator"]
+  C --> AI["AI 只读工具 / 会话"]
+  AI --> DB
+  AI --> P["受控模型服务"]
+  AI --> A["独立附件存储"]
 ```
 
 ### 关键约束
 
 - **写路径只走 primary**：CRUD 接口的 `@Transactional`（默认 readWrite）路由到 primary；查询接口类级 `@Transactional(readOnly = true)` 路由到 replica。`ReadReplicaRoutingDataSource` 在 replica 异常时 fail-open 退回 primary（per-instance quarantine，详见 `ReadReplicaProperties`）。
 - **配置改动必须走 console**：直改 DB 不会触发 afterCommit 事件 → orchestrator Redis 缓存失效要等 5min TTL；运维场景请用 `POST /api/console/ops/cache/evict-*` 6 个端点手动 evict（详见 `ConsoleConfigCacheController`）。
-- **SSE 客户端绑定到具体实例**：实例死亡 → SSE 断开 → 浏览器 reconnect 落到新实例 → 从 Redis Streams replay buffer 续推（见 `ConsoleRealtimeEventHub` + `ConsoleRealtimeReplayStore`）。
+- **SSE 客户端绑定到具体实例**：实例死亡 → SSE 断开 → 浏览器 reconnect 落到新实例 → 从 Redis 重放缓冲续推（见 `ConsoleRealtimeEventHub` + `ConsoleRealtimeReplayStore`）。
 - **AI 走代理出网**：所有 prompt 经 `ConsoleAiPromptGuard` 过滤分类（PLATFORM / REJECTED_*），结果写 `console_ai_audit_log` 留痕。
-- **补偿命令写入数据库 + outbox 派发**：`POST .../compensate` 经 console → orchestrator `/internal/compensate` → INSERT `compensation_command` + 同事务 `outbox_event(eventType=COMPENSATE)`，由 OutboxPollScheduler 异步发到 Kafka，对应 worker 反向执行（DELETE biz / 删 MinIO 对象 / 通知外部对端撤销）。
+- **补偿命令写入数据库 + outbox 派发**：`POST .../compensate` 经 console → orchestrator `/internal/compensations` → INSERT `compensation_command` + 同事务 `outbox_event(eventType=COMPENSATE)`，由 OutboxPollScheduler 异步发到 Kafka，对应 worker 反向执行（DELETE biz / 删 MinIO 对象 / 通知外部对端撤销）。
 
 ---
 
@@ -171,71 +111,17 @@ flowchart LR
 单独画一张图说明：所有进程怎么把可观测信号送出去 + 运营怎么从 Grafana 一站排障。
 
 ```mermaid
-%%{init: {'flowchart': {'curve': 'linear', 'nodeSpacing': 50, 'rankSpacing': 60, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%
-flowchart LR
-  subgraph APPS ["应用进程（每个 JVM 独立上报）"]
-    direction TB
-    SVC1["batch-trigger"]:::svc
-    SVC2["batch-orchestrator"]:::svc
-    SVC3["batch-console-api"]:::svc
-    SVC4["worker-import / export / process / dispatch / atomic"]:::worker
-  end
-
-  OTEL["otel-collector<br/>memory_limiter + batch + resource attr<br/>(deployment.environment / service.namespace)"]:::svc
-
-  TEMPO[("Tempo<br/>traces · OTLP gRPC :4317<br/>metrics_generator: service-graph + span-metrics")]:::store
-  JAEGER[("Jaeger<br/>traces · UI 兼容")]:::store
-  LOKI[("Loki<br/>logs · OTLP /otlp/v1/logs<br/>structured metadata + schema v13")]:::store
-  PROM[("Prometheus<br/>metrics · scrape /actuator/prometheus<br/>retention 7d")]:::store
-  ALERT["Alertmanager"]:::svc
-  GRAF["Grafana<br/>(三件套统一入口)"]:::svc
-  USER([运营 / SRE]):::user
-
-  SVC1 ==>|"OTLP HTTP :4318<br/>(traces + logs · Spring Boot OTel starter)"| OTEL
-  SVC2 ==>|"OTLP HTTP :4318"| OTEL
-  SVC3 ==>|"OTLP HTTP :4318"| OTEL
-  SVC4 ==>|"OTLP HTTP :4318"| OTEL
-
-  OTEL ==>|"traces fan-out (主)"| TEMPO
-  OTEL ==>|"traces fan-out (兼容)"| JAEGER
-  OTEL ==>|"logs"| LOKI
-
-  PROM -.->|"scrape /actuator/prometheus<br/>+ exporters (postgres / redis / kafka / node / cAdvisor)"| SVC1
-  PROM -.->|"scrape"| SVC2
-  PROM -.->|"scrape"| SVC3
-  PROM -.->|"scrape"| SVC4
-  PROM ==>|"alert rules<br/>batch.yml"| ALERT
-
-  GRAF -.->|"datasource: Prometheus<br/>(exemplars → Tempo)"| PROM
-  GRAF -.->|"datasource: Tempo<br/>(tracesToLogsV2 → Loki<br/>+ tracesToMetrics → Prometheus)"| TEMPO
-  GRAF -.->|"datasource: Loki<br/>(derivedFields traceId → Tempo)"| LOKI
-  GRAF -.->|"datasource: Jaeger<br/>(legacy fallback)"| JAEGER
-
-  USER ==>|"http://localhost:13000<br/>(主入口 · 一站排障)"| GRAF
-  USER -.->|"http://localhost:16686<br/>(legacy)"| JAEGER
-
-  %% ─── 协议色编码（与主图同套色板） ─────────
-  %%   0..3 应用 → OTel（橙 = OTLP 异步，但语义是上报，画粗实更直观）
-  linkStyle 0,1,2,3 stroke:#ef6c00,stroke-width:2.5px
-  %%   4,5  OTel → traces 后端（橙）
-  linkStyle 4,5 stroke:#ef6c00,stroke-width:2.5px
-  %%   6    OTel → Loki（橙）
-  linkStyle 6 stroke:#ef6c00,stroke-width:2.5px
-  %%   7..10 Prometheus scrape（灰虚 = 控制平面拉取）
-  linkStyle 7,8,9,10 stroke:#616161,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   11   Prometheus → Alertmanager 推告警（红）
-  linkStyle 11 stroke:#c62828,stroke-width:2.5px
-  %%   12..15 Grafana datasource 链（紫虚 = 查询）
-  linkStyle 12,13,14,15 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   16   USER → Grafana（蓝）
-  linkStyle 16 stroke:#1565c0,stroke-width:2.5px
-  %%   17   USER → Jaeger legacy（蓝虚）
-  linkStyle 17 stroke:#1565c0,stroke-width:1.5px,stroke-dasharray:4 3
-
-  classDef user    fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
-  classDef svc     fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;
-  classDef worker  fill:#fff3e0,stroke:#ef6c00,stroke-width:1.5px,color:#e65100;
-  classDef store   fill:#f3e5f5,stroke:#6a1b9a,stroke-width:1.5px,color:#4a148c;
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  A["控制服务 + 五类 Worker"] -->|"Trace / Log"| OT["OpenTelemetry Collector"]
+  OT --> T["Tempo · Trace"]
+  OT --> L["Loki · Log"]
+  OT -. "可选兼容后端" .-> J["Jaeger"]
+  P["Prometheus"] -->|"抓取指标"| A
+  P --> AM["Alertmanager"] --> N["通知渠道"]
+  G["Grafana"] -->|"查询"| T
+  G -->|"查询"| L
+  G -->|"查询"| P
 ```
 
 ### 一站排障路径（典型）
@@ -255,15 +141,16 @@ flowchart LR
 单作业与组合图共用同一层DAG；图的层级不是可配置的子Workflow树。
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  WD["WorkflowDefinition：日程与图版本"] --> WR["WorkflowRun：冻结图和运行日期"]
-  WD --> G["START → JOB / GATEWAY / WAIT → END"]
-  WR --> NR["WorkflowNodeRun：状态、输出、依赖证据"]
-  NR --> J["JOB 引用 JobDefinition"]
-  J --> JI["按节点创建 JobInstance"]
-  JI --> P["分区 / 任务 / 系统 Pipeline"]
-  P --> W["Outbox → Kafka → CLAIM → EXECUTE → REPORT"]
-  W --> NR
+  D["WorkflowDefinition"] -->|"冻结"| R["WorkflowRun · 顶层运行"]
+  R --> N["WorkflowNodeRun"]
+  N --> C["控制节点 · 就地推进"]
+  N -->|"JOB 到达"| J["独立 JobInstance"]
+  J --> P["JobPartition"] --> T["JobTask"]
+  J -. "文件类型" .-> PI["系统 Pipeline · 阶段观测"]
+  T -->|"CLAIM / EXECUTE / REPORT"| W["Worker"]
+  J -->|"终态与输出"| N
 ```
 
 ### 关键决策点
@@ -284,92 +171,33 @@ DLQ 在本系统里**走两条互补轨**：
   （`DefaultRetryGovernanceService`）
 
 ```mermaid
-%%{init: {'flowchart': {'curve': 'linear', 'nodeSpacing': 50, 'rankSpacing': 60, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%
-flowchart LR
-  subgraph WORKERS ["执行层 · 五类 Worker"]
-    direction TB
-    WI["worker-import / export / process / dispatch / atomic"]:::worker
-    DLP["DeadLetterPublisher<br/>(D-3 毒丸隔离)"]:::svc
-  end
-
-  ORCH["batch-orchestrator<br/>DefaultRetryGovernanceService"]:::svc
-  RETRY[("retry_schedule<br/>(retry 调度表)")]:::store
-  DLT[("dead_letter_task<br/>replay_status NEW→REPLAYING<br/>→SUCCESS/FAILED/GIVE_UP<br/>source_type ∈ {JOB_INSTANCE / JOB_PARTITION /<br/>JOB_TASK / PIPELINE_INSTANCE / FILE_DISPATCH /<br/>MQ_MESSAGE}")]:::store
-  KDLQ[("Kafka<br/>batch.task.dead-letter<br/>(毒丸隔离 topic)")]:::store
-  K[("Kafka<br/>batch.task.dispatch.*<br/>(主派发，重放回流到这里)")]:::store
-  CONSOLE["batch-console-api<br/>DLQ Query / Replay"]:::svc
-  USER([运营]):::user
-
-  %% ─── 轨道一：Kafka 隔离（毒丸消息） ─────────────
-  WI -->|"反序列化错<br/>/ 不可恢复异常"| DLP
-  DLP ==>|"publish (D-3)"| KDLQ
-
-  %% ─── 轨道二：DB 落盘（业务级失败重放） ──────────
-  WI -.->|"report FAILED + retry_count >= max"| ORCH
-  ORCH ==>|"INSERT (replay_status=NEW)"| DLT
-  ORCH -.->|"耗尽前先调度 retry"| RETRY
-
-  %% ─── console 查询 + 重放 ─────────────────────
-  USER ==>|"POST /api/console/jobs/dead-letters/replay<br/>+ select for review"| CONSOLE
-  CONSOLE -.->|"SELECT (走 read replica)"| DLT
-  CONSOLE ==>|"审批通过的 DLQ_REPLAY → HTTP /internal/compensations"| ORCH
-  ORCH ==>|"markReplaying<br/>+ INSERT outbox(REPLAY)"| DLT
-  ORCH ==>|"重新 publish 到原 dispatch topic"| K
-  ORCH ==>|"成功 → markReplaySuccess<br/>失败 → markReplayFailure"| DLT
-
-  %% ─── 协议色 ─────────────────────
-  %%   0    worker → DLP（灰内部）
-  linkStyle 0 stroke:#616161,stroke-width:1.5px
-  %%   1    DLP → KDLQ（橙 = Kafka publish）
-  linkStyle 1 stroke:#ef6c00,stroke-width:2.5px
-  %%   2    worker report FAILED → ORCH（蓝虚 = HTTP 控制信号）
-  linkStyle 2 stroke:#1565c0,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   3    ORCH → DLT INSERT（绿 = JDBC 写）
-  linkStyle 3 stroke:#2e7d32,stroke-width:2.5px
-  %%   4    ORCH -.-> RETRY（绿虚 = JDBC 控制）
-  linkStyle 4 stroke:#2e7d32,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   5    USER → CONSOLE replay（蓝 = HTTP）
-  linkStyle 5 stroke:#1565c0,stroke-width:2.5px
-  %%   6    CONSOLE → DLT 查询（紫虚 = JDBC 读）
-  linkStyle 6 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   7    CONSOLE → ORCH replay（蓝 = HTTP 同步）
-  linkStyle 7 stroke:#1565c0,stroke-width:2.5px
-  %%   8    ORCH → DLT markReplaying（绿）
-  linkStyle 8 stroke:#2e7d32,stroke-width:2.5px
-  %%   9    ORCH → K 重新 publish（橙）
-  linkStyle 9 stroke:#ef6c00,stroke-width:2.5px
-  %%   10   ORCH → DLT mark Success/Failure（绿）
-  linkStyle 10 stroke:#2e7d32,stroke-width:2.5px
-
-  classDef user    fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
-  classDef svc     fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;
-  classDef worker  fill:#fff3e0,stroke:#ef6c00,stroke-width:1.5px,color:#e65100;
-  classDef store   fill:#f3e5f5,stroke:#6a1b9a,stroke-width:1.5px,color:#4a148c;
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  W["Worker"] -->|"无法解析 / 毒消息"| DP["DeadLetterPublisher"] --> KDL["Kafka DLQ"]
+  W -->|"执行失败 REPORT"| O["Orchestrator"]
+  O --> RS[("retry_schedule")]
+  RS -->|"到期 / 允许重试"| O
+  O -->|"耗尽或不可重试"| DL[("dead_letter_task")]
+  C["Console 审批"] -->|"受控重放请求"| O
+  DL -. "原始失败证据" .-> O
+  O -->|"新运行 / 尝试 + 来源关联"| TX[("运行状态 + Outbox")]
+  TX --> R["Outbox Relay"] --> K["Kafka · task dispatch"] --> W
 ```
 
 ### `dead_letter_task.replay_status` 状态机
 
-```
-       worker FAILED + retry 耗尽
-                │
-                ▼
-              NEW ──────────► GIVE_UP（运营标记放弃）
-                │
-       console approve replay
-                │
-                ▼
-           REPLAYING
-                │
-        ┌───────┴───────┐
-        ▼               ▼
-     SUCCESS         FAILED
-                        │
-                  console 决定
-                        │
-              ┌─────────┴─────────┐
-              ▼                   ▼
-            NEW                GIVE_UP
-        (重新 replay)        (停止处理)
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+stateDiagram-v2
+  [*] --> NEW: 创建死信
+  NEW --> REPLAYING: 审批并开始重放
+  NEW --> GIVE_UP: 放弃
+  REPLAYING --> SUCCESS: 重放成功
+  REPLAYING --> FAILED: 重放失败
+  FAILED --> NEW: 再次提交处理
+  FAILED --> GIVE_UP: 放弃
+  SUCCESS --> [*]
+  GIVE_UP --> [*]
 ```
 
 ### 关键约束
@@ -381,98 +209,28 @@ flowchart LR
 
 ---
 
-## 1.9 弹性伸缩拓扑 — 6 个模块各自怎么扩 + 协调机制
+## 1.9 弹性伸缩拓扑 — 应用副本与协调机制
 
-不同模块的扩缩约束完全不同：trigger 受 ShedLock 限制只能横向扩、worker 横向扩靠 Kafka rebalance、orchestrator 横向扩靠 Outbox sharding。这张图把扩缩机制 + 触发信号 + 协调依赖一图全景。
+Trigger 的 Quartz 集群锁协调日程触发，辅助调度使用 ShedLock；Orchestrator 依靠持久化状态控制与 Outbox 分片协作；Worker 依靠 Kafka consumer group 与分区租约扩展。副本上下限、HPA 或 KEDA 以各环境部署配置为准。
 
 ```mermaid
-%%{init: {'flowchart': {'curve': 'linear', 'nodeSpacing': 40, 'rankSpacing': 70, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%
-flowchart LR
-  subgraph SIGNAL ["扩缩信号源（Prometheus + KEDA）"]
-    direction TB
-    PROM[(Prometheus<br/>scrape /actuator/prometheus)]:::store
-    KAFKA_LAG{{KEDA Kafka lag scaler<br/>consumer_group lag &gt; threshold}}:::flag
-    CPU{{HPA CPU/Memory<br/>70% threshold}}:::flag
-    HTTP_QPS{{Custom metric<br/>HTTP req/s}}:::flag
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  subgraph CONTROL["控制服务"]
+    T["Trigger 副本"] --- Q["Quartz 数据库锁"]
+    O["Orchestrator 副本"] --- SH["Outbox 分片 / 持久化 CAS"]
+    C["Console API 副本"]
   end
-
-  subgraph APP ["应用层（k8s Deployment / StatefulSet）"]
-    direction TB
-    CONSOLE["console-api<br/>📈 1 → 10 实例<br/>HPA: CPU + HTTP QPS"]:::svc
-    TRIGGER["trigger<br/>📈 2 → 5 实例<br/>HPA: CPU<br/>⚠️ Quartz cluster lock 自协调"]:::svc
-    ORCH["orchestrator (StatefulSet)<br/>📈 3 → 10 实例<br/>HPA: CPU + Outbox lag<br/>⚠️ ShedLock + Outbox shard"]:::svc
-    W_IMPORT["worker-import<br/>📈 2 → 20 实例<br/>KEDA: Kafka lag"]:::worker
-    W_EXPORT["worker-export<br/>📈 1 → 10 实例<br/>KEDA: Kafka lag"]:::worker
-    W_DISP["worker-dispatch<br/>📈 1 → 10 实例<br/>KEDA: Kafka lag<br/>+ 渠道熔断"]:::worker
-    W_PROCESS["worker-process<br/>📈 2 → 8 实例<br/>KEDA: Kafka lag<br/>+ WAP staging"]:::worker
+  subgraph EXEC["执行服务"]
+    W["IMPORT / EXPORT / PROCESS / DISPATCH / ATOMIC"]
+    CG["Kafka consumer group + Partition lease"]
+    W --- CG
   end
-
-  subgraph COORD ["扩缩时的协调机制（防止多实例冲突）"]
-    direction TB
-    SHEDLOCK[(ShedLock<br/>Redis: orchestrator scheduler<br/>JDBC: trigger scheduler)]:::store
-    SHARD[(Outbox shard<br/>动态分配<br/>shardTotal=N)]:::store
-    QRTZ_LOCK[(QRTZ_LOCKS<br/>PG SELECT FOR UPDATE)]:::store
-    KAFKA_GROUP[(Kafka consumer group<br/>partition rebalance)]:::store
-    LEASE[(job_partition.lease<br/>worker CLAIM 持锁)]:::store
-  end
-
-  subgraph LIMIT ["扩缩上限的硬约束"]
-    direction TB
-    PG_CONN["PG max_connections<br/>500 / 1000<br/>限制总实例 × pool"]:::extern
-    KAFKA_PART["Kafka partition 数<br/>限制 worker 并发上限"]:::extern
-    REDIS_HA["Redis 高可用<br/>单点挂 ≈ orchestrator 协调失效"]:::extern
-  end
-
-  HTTP_QPS -.->|HPA| CONSOLE
-  CPU -.->|HPA| TRIGGER
-  CPU -.->|HPA| ORCH
-  KAFKA_LAG -.->|Outbox lag| ORCH
-  KAFKA_LAG -.->|topic lag| W_IMPORT
-  KAFKA_LAG -.->|topic lag| W_EXPORT
-  KAFKA_LAG -.->|topic lag| W_DISP
-  KAFKA_LAG -.->|topic lag| W_PROCESS
-
-  PROM ==> KAFKA_LAG
-  PROM ==> CPU
-  PROM ==> HTTP_QPS
-
-  TRIGGER -->|cluster lock| QRTZ_LOCK
-  TRIGGER -->|辅助调度 lock| SHEDLOCK
-  ORCH -->|scheduler lock| SHEDLOCK
-  ORCH -->|动态分片| SHARD
-  W_IMPORT -->|consumer group| KAFKA_GROUP
-  W_EXPORT -->|consumer group| KAFKA_GROUP
-  W_DISP -->|consumer group| KAFKA_GROUP
-  W_PROCESS -->|consumer group| KAFKA_GROUP
-  W_IMPORT -->|partition CLAIM| LEASE
-  W_EXPORT -->|partition CLAIM| LEASE
-  W_DISP -->|partition CLAIM| LEASE
-  W_PROCESS -->|partition CLAIM| LEASE
-
-  CONSOLE -.-> PG_CONN
-  ORCH -.-> PG_CONN
-  TRIGGER -.-> PG_CONN
-  W_IMPORT -.-> PG_CONN
-  W_IMPORT -.-> KAFKA_PART
-  W_EXPORT -.-> KAFKA_PART
-  W_DISP -.-> KAFKA_PART
-  W_PROCESS -.-> KAFKA_PART
-  ORCH -.-> REDIS_HA
-
-  %% 信号 → 应用：黄色虚线（控制流）
-  linkStyle 0,1,2,3,4,5,6,7 stroke:#f9a825,stroke-width:1.5px,stroke-dasharray:4 3
-  %% Prometheus → 信号：橙色实线（指标流）
-  linkStyle 8,9,10 stroke:#ef6c00,stroke-width:2.5px
-  %% 应用 → 协调：紫色实线（DB/Redis 写）
-  linkStyle 11,12,13,14,15,16,17,18,19,20,21,22 stroke:#7b1fa2,stroke-width:1.5px
-  %% 应用 → 上限：红色虚线（capacity ceiling）
-  linkStyle 23,24,25,26,27,28,29,30,31 stroke:#c62828,stroke-width:1.2px,stroke-dasharray:5 4
-
-  classDef svc     fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;
-  classDef worker  fill:#fff3e0,stroke:#ef6c00,stroke-width:1.5px,color:#e65100;
-  classDef store   fill:#f3e5f5,stroke:#6a1b9a,stroke-width:1.5px,color:#4a148c;
-  classDef extern  fill:#fce4ec,stroke:#ad1457,stroke-width:1.5px,color:#880e4f;
-  classDef flag    fill:#fffde7,stroke:#f9a825,stroke-width:1.5px,color:#f57f17;
+  P["Prometheus 指标"] --> H["HPA · 资源 / 自定义指标"]
+  K["Kafka lag"] --> KE["KEDA · 事件指标"]
+  H -. "按部署配置选择" .-> W
+  KE -. "按部署配置选择" .-> W
+  H -. "按服务配置" .-> CONTROL
 ```
 
 ### 关键约束（按"为什么这样扩"分类）
@@ -494,7 +252,7 @@ flowchart LR
 
 - 扩缩机制 + HPA 配置示例 → [`../runbook/autoscaling-strategy.md`](../runbook/autoscaling-strategy.md)
 - HA 兼容性矩阵 + 缩容 4 个隐藏雷 + 部署前 checklist → [`../runbook/ha-elastic-scaling.md`](../runbook/ha-elastic-scaling.md)
-- 千万级承载力评估 + Phase 改造路线 → [`scalability-assessment-2026-07-28.md`](../archive/audit/scalability-assessment-2026-07-28.md)
+- 容量规划、负载证据和准入边界 → [production-capacity-governance.md](../runbook/production-capacity-governance.md)
 
 ---
 
@@ -505,17 +263,9 @@ IMPORT、EXPORT、PROCESS、DISPATCH 四类文件 Worker 按固定阶段契约�
 ### 2.1 IMPORT — 6 stage
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  R0([task_payload<br/>含 content + templateCode])
-  R1[RECEIVE<br/>读取 rawPayload<br/>登记 file_record]
-  R2[PREPROCESS<br/>解码/解密/归一化<br/>load templateConfig]
-  R3["PARSE<br/>JSON/CSV/XML/<br/>FixedWidth → NDJSON"]
-  R4[VALIDATE<br/>field_mappings.required<br/>+ validation_rule_set]
-  R5[LOAD<br/>jdbc_mapped_import<br/>upsert biz 表]
-  R6[FEEDBACK<br/>写 file_record.metadata<br/>parsed/validated/loaded]
-  END([file_status=LOADED])
-
-  R0 --> R1 --> R2 --> R3 --> R4 --> R5 --> R6 --> END
+  A["RECEIVE"] --> B["PREPROCESS"] --> C["PARSE"] --> D["VALIDATE"] --> E["LOAD"] --> F["FEEDBACK"]
 ```
 
 | Stage | 关键动作 | 输入 | 输出 |
@@ -530,16 +280,9 @@ flowchart LR
 ### 2.2 EXPORT — 5 stage
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  R0([task_payload<br/>含 templateCode])
-  R1[PREPARE<br/>load templateConfig<br/>resolve fileName/path]
-  R2[GENERATE<br/>跑 default_query_sql<br/>SELECT 结果]
-  R3[STORE<br/>序列化 JSON/CSV<br/>+ gzip 上传 MinIO]
-  R4[REGISTER<br/>登记 file_record<br/>计算 checksum]
-  R5[COMPLETE<br/>file_status=GENERATED]
-  END([file_record id 可被 DISPATCH 引用])
-
-  R0 --> R1 --> R2 --> R3 --> R4 --> R5 --> END
+  A["PREPARE"] --> B["GENERATE"] --> C["STORE"] --> D["REGISTER"] --> E["COMPLETE"]
 ```
 
 | Stage | 关键动作 | 输入 | 输出 |
@@ -553,23 +296,15 @@ flowchart LR
 ### 2.3 DISPATCH — 6 stage（含异常路径）
 
 ```mermaid
-flowchart LR
-  R0([task_payload<br/>含 fileId + channelCode])
-  R1[PREPARE<br/>load file_record<br/>load channel_config]
-  R2[DISPATCH_DISPATCH<br/>实际投递<br/>LOCAL/SFTP/NAS/OSS/API]
-  R3[ACK<br/>等回执<br/>receipt_policy]
-  R4[COMPLETE<br/>file_status=DISPATCHED]
-  R5[RETRY<br/>backoff 退避]
-  R6[COMPENSATE<br/>清理本轮残留]
-  DL([dead_letter_task])
-
-  R0 --> R1 --> R2
-  R2 -- success --> R3 --> R4
-  R2 -- fail --> R5
-  R3 -- timeout/拒绝 --> R5
-  R5 --> R6
-  R6 -- "retry_count < max" --> R1
-  R6 -- "retry_count = max" --> DL
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  P["PREPARE"] --> D["DISPATCH"] -->|"已发送"| A["ACK"] -->|"确认完成"| C["COMPLETE"]
+  D -->|"明确可重试"| R["RETRY"]
+  A -->|"请求重试"| R
+  R -->|"重试成功"| A
+  R -->|"失败 / 不满足重试条件"| CP["COMPENSATE · 终止本轮"]
+  D -. "外部结果未知" .-> U["先核对外部结果 · 禁止盲目重投"]
+  R -. "外部结果未知" .-> U
 ```
 
 | Stage | 关键动作 | 触发条件 |
@@ -578,10 +313,10 @@ flowchart LR
 | DISPATCH | 调对应 channel adapter 投递（LOCAL=cp / SFTP=scp / OSS=PUT / API=POST 等） | PREPARE 后 |
 | ACK | 等回执（按 `receipt_policy`：NONE/SYNC/ASYNC） | DISPATCH 成功后 |
 | COMPLETE | 写 `file_dispatch_record.dispatch_status=ACKED`，`file_record.file_status=DISPATCHED` | ACK 成功后（happy path 终点）|
-| **RETRY** | 退避 + 准备重试；`DispatchChannelHealthService` 熔断不健康 channel | DISPATCH 或 ACK 失败 |
-| **COMPENSATE** | 清理本轮已派发的残留（删 channel 上的临时文件 / 通知对端撤销） | 每轮 RETRY 后必跑 |
+| **RETRY** | 明确允许时重新投递；成功转 ACK，失败按结果结束或转 COMPENSATE | DISPATCH 或 ACK 请求重试；未知外部结果先核对 |
+| **COMPENSATE** | 标记投递补偿结果、文件失败并记录审计；不承诺撤销外部副作用 | 重试失败或不满足重试条件时的分支；本轮终点 |
 
-> 单 partition 失败完整路径示例（`retry_max_count=2`）：
+> 以下示例展示 task 层重试产生的三次尝试（`retry_max_count=2`），不表示 COMPENSATE 在同一 Pipeline 内自动跳回 PREPARE：
 > ```
 > R1: PREPARE✓ → DISPATCH✗ → RETRY✗ → COMPENSATE✓
 > R2: PREPARE✓ → DISPATCH✗ → RETRY✗ → COMPENSATE✓
@@ -593,19 +328,12 @@ flowchart LR
 PROCESS 解决"系统内部加工"（聚合 / 清洗 / 状态推进），**Write-Audit-Publish** 模式：先把计算结果写到 staging 隔离区，校验通过后再原子发布到 target，避免异常数据落到生产表。`COMPUTE` 由插件分派（`sqlTransformCompute` 配置驱动 / `ProcessComputePlugin` 业务自定义）。
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  R0([task_payload<br/>含 bizDate + jobCode<br/>+ 命名参数])
-  R1[PREPARE<br/>解析 spec / 校验<br/>生成 batchKey<br/>清旧 staging]
-  R2["COMPUTE<br/>跑 sourceSql<br/>结果写 batch.process_staging<br/>(按 batchKey 隔离)"]
-  R3[VALIDATE<br/>跑 user validations<br/>SELECT bool_and ... AS pass]
-  R4["COMMIT<br/>staging → target<br/>(INSERT/UPSERT/INSERT_IGNORE)<br/>原子发布"]
-  R5[FEEDBACK<br/>清 staging<br/>上报 highWaterMarkOut]
-  END([target 表 + job_instance.high_water_mark_out])
-  STAGING([staging 保留<br/>供 forensics])
-
-  R0 --> R1 --> R2 --> R3
-  R3 -- pass --> R4 --> R5 --> END
-  R3 -- fail --> STAGING
+  A["PREPARE"] --> B["COMPUTE"] --> C["VALIDATE"] --> D["COMMIT"] --> E["FEEDBACK"]
+  B -. "JSONB 模式" .-> S[("业务 staging")]
+  D --> T[("业务 target")]
+  C -->|"失败"| F["失败报告 / 保留核查证据"]
 ```
 
 | Stage | 关键动作 | 输入 | 输出 |
@@ -628,14 +356,15 @@ flowchart LR
 ## 3. 配置如何驱动执行
 
 ```mermaid
-flowchart LR
-  WD["Workflow 定义：日程、日历、节点和边"] --> WR["冻结 WorkflowRun"]
-  JD["Job 定义：类型、参数、分片与执行策略"] --> NR["JOB 节点有效配置"]
-  WR --> NR
-  TP["文件模板 / 通道 / Secret版本"] --> NR
-  NR --> SC["SystemPipelineCatalog：类型到固定阶段/版本"]
-  SC --> WK["Worker插件/执行器"]
-  NR --> WK
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  WD["Workflow 定义"] --> WR["WorkflowRun · 冻结图"]
+  JD["Job 定义"] --> CFG["有效执行配置"]
+  TC["模板 / 通道 / Secret 版本"] --> CFG
+  WR -->|"JOB 节点快照"| CFG
+  CAT["SystemPipelineCatalog · 固定阶段"] -->|"四类文件 Job"| W["对应文件 Worker"]
+  CFG --> W
+  CFG --> A["ATOMIC Worker · 独立执行"]
 ```
 
 ### 3.1 关键映射
@@ -664,32 +393,29 @@ flowchart LR
 ### 4.1 EXPORT 全程 — `TC_EXPORT_RISK_ALERT`
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 sequenceDiagram
-    participant U as 用户
-    participant T as trigger
-    participant O as orchestrator
-    participant K as Kafka
-    participant E as worker-export
-    participant DB as batch_platform
-    participant BIZ as batch_business
-    participant M as MinIO
-
-    U->>T: POST /api/triggers/launch<br/>{tenantId:tc,<br/> workflowDefinitionId:managed-export-workflow-id}
-    T->>O: trigger_outbox_event → Kafka batch.trigger.launch.v1<br/>→ TriggerLaunchConsumer (ADR-010)
-    O->>DB: INSERT job_instance(415)<br/>+ partition + outbox_event<br/>(同一 tx)
-    O->>K: publish task 425
-    K->>E: consume task 425
-    E->>DB: claim partition (worker_code=export-node-1)
-    Note over E: PREPARE: load EXP-RISK-ALERT-JSON template
-    Note over E: GENERATE: SELECT id, alert_id, entity_id, ... FROM biz.risk_alert WHERE tenant_id='tc'
-    E->>BIZ: query → 5 rows
-    Note over E: STORE: gzip + PUT
-    E->>M: PUT outbound/.../risk_alerts__bizDate_.json.gz
-    Note over E: REGISTER: INSERT file_record
-    E->>DB: file_record(1065, GENERATED, 1073 bytes, recordCount=5)
-    Note over E: COMPLETE
-    E->>O: report SUCCESS
-    O->>DB: UPDATE job_instance.instance_status=SUCCESS
+  participant C as 调用方
+  participant T as Trigger
+  participant O as Orchestrator
+  participant K as Kafka
+  participant W as Export Worker
+  participant B as 业务资源 / 文件存储
+  C->>T: Workflow 目标与来源身份
+  T->>T: 保存请求 + Trigger Outbox
+  T->>K: Relay 发布 launch
+  K->>O: 消费请求
+  O->>O: WorkflowRun → JOB → JobInstance / Partition
+  O->>O: 状态与 Task Outbox 同事务
+  O->>K: Relay 发布任务
+  K->>W: 投递任务
+  W->>O: HTTP CLAIM
+  O-->>W: invocation / 租约 / 有效配置
+  W->>B: 读取业务数据，生成并存储文件
+  B-->>W: 业务结果
+  W->>W: 登记文件元数据
+  W->>O: HTTP REPORT
+  O->>O: 聚合 Job / Node / Workflow 状态
 ```
 
 `pipeline_step_run` 记录：
@@ -707,36 +433,29 @@ EXPORT_COMPLETE  SUCCESS  11ms
 注意 IMPORT 的输入不是 `biz` 表，而是 launch 时带在 `params.content` 里的 JSON 字符串（或 SFTP/上传到达的文件，由 ReceiveStep 转成 rawPayload）。
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 sequenceDiagram
-    participant U as 用户
-    participant T as trigger
-    participant O as orchestrator
-    participant K as Kafka
-    participant I as worker-import
-    participant DB as batch_platform
-    participant BIZ as batch_business
-    participant FS as 临时文件<br/>NDJSON
-
-    U->>T: POST /api/triggers/launch<br/>{tenantId:tc, workflowDefinitionId:managed-import-workflow-id,<br/> params:{templateCode, content:"[...5 行 JSON...]"}}
-    T->>O: trigger_outbox_event → Kafka batch.trigger.launch.v1<br/>→ TriggerLaunchConsumer (ADR-010)
-    O->>DB: INSERT job_instance(416) + partition + outbox<br/>(同一 tx)
-    O->>K: publish task 426
-    K->>I: consume task 426
-    I->>DB: claim partition (worker_code=import-node-1)
-    Note over I: RECEIVE: 写 file_record(1066, RECEIVED)
-    I->>DB: file_record 1066 RECEIVED
-    Note over I: PREPROCESS: 解码 content,<br/>load IMP-RISK-SCORE-JSON template
-    I->>FS: 写临时 normalizedPayload
-    Note over I: PARSE: JSON array → NDJSON 5 行
-    I->>FS: 写 parsedRecordsPath (5 行)
-    Note over I: VALIDATE: required 字段 + 业务规则
-    I->>FS: 写 validatedRecordsPath
-    Note over I: LOAD: jdbc upsert
-    I->>BIZ: INSERT INTO biz.risk_score<br/>ON CONFLICT (tenant_id,entity_id,score_date)<br/>DO UPDATE × 5
-    Note over I: FEEDBACK: 回写 metadata
-    I->>DB: file_record 1066 LOADED<br/>metadata: parsed=5,validated=5,loaded=5
-    I->>O: report SUCCESS
-    O->>DB: UPDATE job_instance.instance_status=SUCCESS
+  participant C as 调用方
+  participant T as Trigger
+  participant O as Orchestrator
+  participant K as Kafka
+  participant W as Import Worker
+  participant B as 业务资源 / 文件存储
+  C->>T: Workflow 目标与来源身份
+  T->>T: 保存请求 + Trigger Outbox
+  T->>K: Relay 发布 launch
+  K->>O: 消费请求
+  O->>O: WorkflowRun → JOB → JobInstance / Partition
+  O->>O: 状态与 Task Outbox 同事务
+  O->>K: Relay 发布任务
+  K->>W: 投递任务
+  W->>O: HTTP CLAIM
+  O-->>W: invocation / 租约 / 有效配置
+  W->>B: 读取输入文件，解析校验并写入业务库
+  B-->>W: 业务结果
+  W->>W: 登记导入结果
+  W->>O: HTTP REPORT
+  O->>O: 聚合 Job / Node / Workflow 状态
 ```
 
 `pipeline_step_run` 记录：
@@ -757,32 +476,29 @@ IMPORT_FEEDBACK    SUCCESS  22ms
 DISPATCH 的输入是已存在的 `file_record`（通常是上游 EXPORT 的产出），把它派发到一个外部通道。
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 sequenceDiagram
-    participant U as 用户
-    participant T as trigger
-    participant O as orchestrator
-    participant K as Kafka
-    participant D as worker-dispatch
-    participant DB as batch_platform
-    participant M as MinIO
-    participant LFS as LOCAL/SFTP/<br/>NAS/OSS/API
-
-    U->>T: POST /api/triggers/launch<br/>{tenantId:tc, workflowDefinitionId:managed-dispatch-workflow-id,<br/> params:{fileId:1065, channelCode:tc_local_archive}}
-    T->>O: trigger_outbox_event → Kafka batch.trigger.launch.v1<br/>→ TriggerLaunchConsumer (ADR-010)
-    O->>DB: INSERT job_instance(417) + partition + outbox
-    O->>K: publish task 427
-    K->>D: consume task 427
-    D->>DB: claim partition (worker_code=dispatch-node-1)
-    Note over D: PREPARE: load file_record(1065) + channel_config(tc_local_archive)
-    D->>DB: SELECT file_record / file_channel_config
-    Note over D: DISPATCH: 从 MinIO 拉对象 + 写到 channel target
-    D->>M: GET object outbound/...risk_alerts__bizDate_.json.gz
-    D->>LFS: cp → /tmp/batch/tc-risk-alert/<br/>tc_local_archive-688467a5-...json
-    Note over D: ACK: receipt_policy=NONE,<br/>本地写成功即 ACK
-    Note over D: COMPLETE: 写 file_dispatch_record
-    D->>DB: file_dispatch_record(13, ACKED)<br/>file_record 1065 → DISPATCHED
-    D->>O: report SUCCESS
-    O->>DB: UPDATE job_instance.instance_status=SUCCESS
+  participant C as 调用方
+  participant T as Trigger
+  participant O as Orchestrator
+  participant K as Kafka
+  participant W as Dispatch Worker
+  participant B as 业务资源 / 文件存储
+  C->>T: Workflow 目标与来源身份
+  T->>T: 保存请求 + Trigger Outbox
+  T->>K: Relay 发布 launch
+  K->>O: 消费请求
+  O->>O: WorkflowRun → JOB → JobInstance / Partition
+  O->>O: 状态与 Task Outbox 同事务
+  O->>K: Relay 发布任务
+  K->>W: 投递任务
+  W->>O: HTTP CLAIM
+  O-->>W: invocation / 租约 / 有效配置
+  W->>B: 读取文件与通道配置，投递并核对回执
+  B-->>W: 业务结果
+  W->>W: 登记投递结果
+  W->>O: HTTP REPORT
+  O->>O: 聚合 Job / Node / Workflow 状态
 ```
 
 `pipeline_step_run` 记录：
@@ -799,23 +515,32 @@ DISPATCH_COMPLETE  SUCCESS  8ms
 ### 4.4 三个例子的对比
 
 ```mermaid
-flowchart LR
-  subgraph EXPORT
-    EI([触发: 无外部输入]) --> EQ[查 biz 表] --> EF[生成文件]
-    EF --> EM[(MinIO)]
-    EF --> EFR[file_record GENERATED]
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  subgraph EXPORT["EXPORT · 生成文件"]
+    EB[("业务数据")] --> EW["Export Worker"]
+    EW --> ES["对象存储"]
+    EW --> EF[("文件元数据")]
   end
-  subgraph IMPORT
-    II([触发: 外部 content / 上传文件]) --> IP[parse + validate]
-    IP --> IL[upsert biz 表]
-    IP --> IFR[file_record LOADED]
+```
+
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  subgraph IMPORT["IMPORT · 消费文件"]
+    IS["输入文件"] --> IW["Import Worker"]
+    IW --> IB[("业务数据")]
+    IW --> IF[("文件元数据")]
   end
-  subgraph DISPATCH
-    DI([触发: 已有 file_record]) --> DG[拉文件]
-    DG --> DM[(MinIO)]
-    DG --> DD[投递 channel]
-    DD --> DT[(LOCAL/SFTP/<br/>OSS/API)]
-    DD --> DFR[file_record DISPATCHED]
+```
+
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  subgraph DISPATCH["DISPATCH · 投递文件"]
+    DS["对象存储"] --> DW["Dispatch Worker"]
+    DW --> DC["外部通道"]
+    DW --> DF[("投递元数据")]
   end
 ```
 
@@ -832,21 +557,25 @@ flowchart LR
 每个 partition 在生命周期里穿过这些状态：
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 stateDiagram-v2
-  [*] --> CREATED: 入库
-  CREATED --> WAITING: 等待资源/quota
-  WAITING --> READY: WaitingPartitionDispatchScheduler<br/>选到 worker
-  CREATED --> READY: 直接派
-  READY --> RUNNING: worker claim
-  RUNNING --> SUCCESS: 全 stage SUCCESS
-  RUNNING --> RETRYING: 某 stage 失败
-  RETRYING --> READY: 重试派发
-  RETRYING --> FAILED: 重试耗尽
-  FAILED --> [*]: 进 dead_letter_task
-  RUNNING --> CANCELLED: ops cancel
-  WAITING --> CANCELLED: ops cancel
+  [*] --> CREATED
+  CREATED --> WAITING: 等待准入
+  CREATED --> READY: 直接准入
+  WAITING --> READY: 条件满足
+  READY --> RUNNING: CLAIM
+  RUNNING --> SUCCESS: 执行成功
+  RUNNING --> RETRYING: 可重试失败
+  RETRYING --> READY: 到期再派发
+  RETRYING --> FAILED: 耗尽
+  RUNNING --> FAILED: 不可重试
+  WAITING --> CANCELLED: 取消
+  RUNNING --> CANCELLED: 取消生效
+  RUNNING --> TERMINATED: 强制终止
   SUCCESS --> [*]
+  FAILED --> [*]
   CANCELLED --> [*]
+  TERMINATED --> [*]
 ```
 
 job_instance 的状态聚合：
@@ -885,28 +614,24 @@ PostgreSQL + Kafka 没原生分布式事务。**先发 Kafka 后写 DB**：DB �
 **Outbox Pattern 的解法**：把"我要发的消息"也写到一张表 `outbox_event`，**和业务数据写在同一个 PG 事务里**；Kafka 投递解耦到独立 poller。
 
 ```mermaid
-%%{init: {'flowchart': {'curve': 'linear', 'htmlLabels': true}}}%%
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 sequenceDiagram
-    participant LS as LaunchService
-    participant PDB as batch_platform
-    participant OUT as OutboxPollScheduler
-    participant K as Kafka
-
-    Note over LS,PDB: 单事务: 业务表 + outbox_event 一起 commit
-    LS->>PDB: BEGIN
-    LS->>PDB: INSERT job_instance / partition
-    LS->>PDB: INSERT outbox_event<br/>(publish_status='NEW')
-    LS->>PDB: COMMIT
-    Note over LS,PDB: 业务一致性已保证
-
-    Note over OUT,K: 异步轮询，与业务事务解耦
-    loop 每个 poll tick
-        OUT->>PDB: SELECT outbox_event<br/>WHERE publish_status IN ('NEW','FAILED')<br/>LIMIT N
-        OUT->>PDB: UPDATE publish_status='PUBLISHING'
-        OUT->>K: producer.send(...)
-        K-->>OUT: ack
-        OUT->>PDB: UPDATE publish_status='PUBLISHED'<br/>(成功) 或 'FAILED' (失败)
-    end
+  participant A as 业务服务
+  participant DB as 平台数据库
+  participant R as Outbox Relay
+  participant K as Kafka
+  A->>DB: BEGIN
+  A->>DB: 更新状态 + 插入 NEW 事件
+  A->>DB: COMMIT
+  R->>DB: 读取到期事件并 CAS 认领
+  DB-->>R: PUBLISHING 事件
+  R->>K: 发送稳定 eventKey
+  alt 收到 Kafka ACK
+    K-->>R: ACK
+    R->>DB: 标记 PUBLISHED
+  else 发送失败
+    R->>DB: 标记 FAILED + 退避时间
+  end
 ```
 
 业务事务一旦 commit，事件就一定在 outbox 里；Kafka 暂挂、producer 重启、网络分区，业务不阻塞，最差只是延迟。
@@ -914,14 +639,14 @@ sequenceDiagram
 ### 7.2 publish_status 状态机
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 stateDiagram-v2
-  [*] --> NEW: LaunchService INSERT
-  NEW --> PUBLISHING: poller claim
-  PUBLISHING --> PUBLISHED: Kafka ack
-  PUBLISHING --> FAILED: Kafka 拒绝/超时
-  FAILED --> PUBLISHING: 下一轮 poll 重试
-  FAILED --> GIVE_UP: 重试耗尽
-  PUBLISHING --> FAILED: stale 超时重置<br/>(JVM 崩溃 / Kafka 长期停滞)
+  [*] --> NEW
+  NEW --> PUBLISHING: CAS 认领
+  FAILED --> PUBLISHING: 到期重试
+  PUBLISHING --> PUBLISHED: Kafka ACK
+  PUBLISHING --> FAILED: 失败 / 陈旧回收
+  FAILED --> GIVE_UP: 尝试耗尽
   PUBLISHED --> [*]
   GIVE_UP --> [*]
 ```
@@ -993,55 +718,17 @@ Outbox 是**业务事务和 Kafka 投递之间的桥**——双方完全解耦�
 
 ### 7.8.2 一张图看完整回路
 
-```
-┌───────────────────────────── Orchestrator (派发) ──────────────────────────┐
-│                                                                             │
-│  DefaultLaunchService.buildJobInstanceEntity                                │
-│   ├─ if execution_mode = 'INCREMENTAL':                                     │
-│   │     selectLastSuccessByJobDefinition(tenantId, jobDefId)                │
-│   │       ↓                                                                 │
-│   │     prev_instance.high_water_mark_out                                   │
-│   │       ↓                                                                 │
-│   │     job_instance.high_water_mark_in = prev.out                          │
-│   └─ else: high_water_mark_in = null                                        │
-│                                                                             │
-│  TaskDispatchOutboxService.writeDispatchEvent                               │
-│   └─ TaskDispatchMessage.highWaterMarkIn = jobInstance.highWaterMarkIn      │
-│                                                                             │
-└────────────────────────────────────┬────────────────────────────────────────┘
-                                     │ Kafka(batch.task.dispatch.*)
-                                     ▼
-┌─────────────────────────────── Worker (透传) ──────────────────────────────┐
-│                                                                             │
-│  AbstractTaskConsumer.doConsume                                             │
-│   └─ JsonUtils.fromJson → TaskDispatchMessage                               │
-│  TaskDispatchExecutor.execute                                               │
-│   └─ PulledTask.highWaterMarkIn = message.highWaterMarkIn                   │
-│  DefaultTaskExecutionWrapper.execute                                        │
-│   └─ executionContext.put(HIGH_WATER_MARK_IN, value)  ← 业务读取            │
-│                                                                             │
-│  ─── 业务 pipeline 跑 (IMPORT/EXPORT 业务侧自由实现) ───                    │
-│      e.g. SELECT … WHERE update_time > :HIGH_WATER_MARK_IN                  │
-│      e.g. attributes.put(HIGH_WATER_MARK_OUT, max(update_time))             │
-│                                                                             │
-│  DefaultTaskExecutionWrapper.execute                                        │
-│   └─ report.highWaterMarkOut = attributes.get(HIGH_WATER_MARK_OUT)          │
-│                                                                             │
-└────────────────────────────────────┬────────────────────────────────────────┘
-                                     │ HTTP POST /internal/tasks/{id}/report
-                                     ▼
-┌────────────────────────── Orchestrator (持久化) ──────────────────────────┐
-│                                                                             │
-│  TaskControllerApplicationService.report                                    │
-│   └─ TaskOutcomeCommand.highWaterMarkOut = dto.highWaterMarkOut             │
-│  DefaultTaskOutcomeService.applyTaskOutcome                                 │
-│   └─ if success && highWaterMarkOut.isNotBlank():                           │
-│        jobInstanceMapper.updateHighWaterMarkOut(out)                        │
-│   └─ else (failure / retry / null OUT): 不推进,保留旧值                     │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-下次同 (tenantId, jobDefinitionId) 启动 → IN 自动 = 上次的 OUT  ✓ 闭环
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  PREV["上次成功 Job · highWaterMarkOut"] -->|"INCREMENTAL"| IN["本次 highWaterMarkIn"]
+  IN --> O["Orchestrator · 有效任务配置"]
+  O --> TX[("Task Outbox")]
+  TX --> R["Relay"] --> K["Kafka"] --> W["Worker · 执行上下文"]
+  W --> B["业务插件 · 读取 IN / 生成 OUT"]
+  B -->|"成功 REPORT + 非空 OUT"| O2["Orchestrator · 受控持久化"]
+  O2 --> NEXT["Job highWaterMarkOut"]
+  NEXT -. "下次增量运行" .-> IN
 ```
 
 ### 7.8.3 关键不变量
@@ -1108,33 +795,20 @@ PROCESS 是 IMPORT/EXPORT/DISPATCH 之外的第四类文件 Worker,定位"系统
 ### 7.9.2 一张图看完整回路
 
 ```mermaid
-flowchart LR
-  CFG[("Job 冻结参数<br/>系统 Pipeline COMPUTE 配置<br/>(sourceSql/targetTable/columns/<br/>conflictColumns/validations/watermark)")]:::store
-  PR[PREPARE<br/>spec.parse + jsqlparser AST<br/>identifier + schema allowlist<br/>查 information_schema.tables]:::stage
-  CO["COMPUTE (Write)<br/>JSONB:写 staging<br/>DIRECT:登记快路径"]:::stage
-  VL["VALIDATE (Audit)<br/>JSONB:user validations checkSql<br/>DIRECT:跳过 staging 校验"]:::stage
-  CM["COMMIT (Publish)<br/>JSONB:jsonb_populate_record<br/>DIRECT:INSERT...SELECT<br/>ON CONFLICT"]:::stage
-  FB[FEEDBACK<br/>JSONB:DELETE staging<br/>DIRECT:跳过 staging 清理<br/>highWaterMarkOut 透传]:::stage
-  STG[("batch.process_staging<br/>(batch_key, payload jsonb,<br/>tenant_id, target_*, staged_at)")]:::store
-  TGT[("biz.target_table<br/>(业务目标表)")]:::store
-  JI[("job_instance.high_water_mark_out<br/>(orchestrator 回写)")]:::store
-  SRC[("biz.source_table*<br/>(业务源表)")]:::store
-
-  CFG ==>|"读 spec"| PR
-  PR ==>|"生成 batchKey<br/>缓存 spec 到 context"| CO
-  CO ==>|"SELECT FROM 源"| SRC
-  CO ==>|"JSONB:INSERT staging<br/>(JSONB 序列化)"| STG
-  CO ==>|"max(watermarkColumn)<br/>= highWaterMarkOut"| FB
-  VL ==>|"SELECT staging<br/>WHERE batch_key=:bk"| STG
-  CM ==>|"JSONB:INSERT FROM staging<br/>+ jsonb_populate_record<br/>+ ON CONFLICT"| TGT
-  CM ==>|"DIRECT:INSERT...SELECT<br/>FROM sourceSql<br/>+ ON CONFLICT"| TGT
-  FB ==>|"JSONB:DELETE staging<br/>WHERE batch_key=:bk"| STG
-  FB ==>|"worker report → orchestrator<br/>UPDATE job_instance"| JI
-
-  PR --> CO --> VL --> CM --> FB
-
-  classDef stage  fill:#fff3e0,stroke:#ef6c00,stroke-width:1.5px,color:#e65100;
-  classDef store  fill:#f3e5f5,stroke:#6a1b9a,stroke-width:1.5px,color:#4a148c;
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  CFG["Job 冻结参数 / 有效 spec"] --> A["PREPARE"]
+  A --> B["COMPUTE"] --> C["VALIDATE"] --> D["COMMIT"] --> E["FEEDBACK"]
+  SRC[("业务源表")] -->|"JSONB 读取"| B
+  B -->|"JSONB 写入"| ST[("业务 staging")]
+  ST --> C
+  ST --> D
+  SRC -->|"DIRECT 读取并发布"| D
+  D --> TGT[("业务目标表")]
+  C -->|"未通过"| F["失败与核查证据"]
+  E -->|"REPORT / 输出水位"| O["Orchestrator"]
+  O --> STATE[("平台运行状态")]
+  E -->|"JSONB 清理本批 staging"| ST
 ```
 
 ### 7.9.3 关键不变量

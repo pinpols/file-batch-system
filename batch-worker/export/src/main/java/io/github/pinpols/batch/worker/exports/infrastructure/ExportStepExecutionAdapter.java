@@ -98,8 +98,7 @@ public class ExportStepExecutionAdapter
 
   @Override
   public ReplayCapabilityDeclaration resolveReplayCapability(StepExecutionRequest request) {
-    if (EmptyChecks.isNull(request)
-        || !pipelineType().equalsIgnoreCase(request.stepCode())) {
+    if (EmptyChecks.isNull(request) || !pipelineType().equalsIgnoreCase(request.stepCode())) {
       return ReplayCapabilityDeclaration.unknown(ExportWorkerType.EXPORT);
     }
     Map<String, Object> requestContext = request.context();

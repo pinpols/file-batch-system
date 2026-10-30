@@ -14,6 +14,7 @@ import org.springframework.validation.annotation.Validated;
  *   <li>{@code
  *       WorkerTaskLeaseRenewer}:consecutive-failure-alert-threshold、circuit-half-open-tick-interval
  *   <li>{@code HttpTaskExecutionClient}:renew-batch-max-items
+ *   <li>{@code DefaultTaskExecutionWrapper}:renew-interval-millis
  * </ul>
  *
  * <p>都在 {@code batch.worker.lease.*} 命名空间下,集中。
@@ -22,6 +23,10 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @ConfigurationProperties(prefix = "batch.worker.lease")
 public class WorkerLeaseProperties {
+
+  /** 续租周期（毫秒）；执行包装器用同一周期判断租约是否过期。 */
+  @Min(value = 1, message = "worker lease renew interval must be positive")
+  private long renewIntervalMillis = 10_000L;
 
   /** 连续 renew 失败到该阈值时发告警(默认 3 次)。 */
   @Min(value = 1, message = "worker lease failure alert threshold must be positive")

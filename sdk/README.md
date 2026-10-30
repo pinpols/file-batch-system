@@ -6,6 +6,8 @@
 
 ## 选语言
 
+作业实际执行计时复用续租接口的 `details.executionStarted=true`，与非幂等副作用开始标记独立。Java、Go、Python、TypeScript 的默认派发器在业务入口提交；Rust 自定义执行桥使用 [`execute_after_start_confirmation`](rust/README.md#实际执行入口确认)。确认失败不进入业务、不伪造业务失败回报，明确取消走取消结果；协议及证据边界见 [通讯协议](../docs/sdk/wire-protocol.md#实际执行入口计时) 和 [SDK 对齐矩阵](../docs/sdk/sdk-parity-matrix.md#执行入口计时增量核对2026-10-25)。
+
 5 种语言行为对齐(同一套契约 fixture 跨语言验证,见 [§测试与验证](#测试与验证)):
 
 | 语言 | 包 / 坐标 | 安装 | 子目录 |

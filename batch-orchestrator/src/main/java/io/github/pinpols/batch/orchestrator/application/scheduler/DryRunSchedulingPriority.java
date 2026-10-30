@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.scheduler;
 
-/** Dry-run 只占用空闲执行容量，task/outbox 优先级固定低于正式任务。 */
+/** Dry-run task/outbox 使用最低优先级；容量准入由调度器决定。 */
 public final class DryRunSchedulingPriority {
 
   public static final int LOWEST_TASK_PRIORITY = 0;

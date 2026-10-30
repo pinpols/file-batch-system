@@ -18,7 +18,7 @@ import static io.gatling.javaapi.http.HttpDsl.*;
  * Production-level capacity baseline simulation.
  *
  * <p>Models realistic mixed traffic: 70 % read (console queries) + 30 % write (job launches).
- * Uses a stepped ramp to find the saturation point rather than a fixed user count.
+ * 采用阶梯式升压查找饱和点，而不是使用固定用户数。
  *
  * <p>Stepped ramp profile:
  * <pre>
@@ -30,7 +30,7 @@ import static io.gatling.javaapi.http.HttpDsl.*;
  * </pre>
  *
  * <p>The test passes only when the 100-user step meets all SLOs. Steps above 100 users
- * are used to characterise the degradation curve; failures there do not fail the build.
+ * 用于描绘性能退化曲线；这些阶段出现失败不会导致构建失败。
  *
  * <p>SLO assertions (applied globally across all steps):
  * <ul>

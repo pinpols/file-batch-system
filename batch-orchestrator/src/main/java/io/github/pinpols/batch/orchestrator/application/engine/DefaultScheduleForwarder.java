@@ -1,9 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.engine;
 
-import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkFailedBatchParam;
-import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkPublishingBatchParam;
-
-
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.enums.RetryScheduleStatus;
 import io.github.pinpols.batch.common.logging.BatchMdc;
@@ -16,6 +12,8 @@ import io.github.pinpols.batch.orchestrator.config.OutboxProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.EventOutboxRetryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkFailedBatchParam;
+import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkPublishingBatchParam;
 import io.github.pinpols.batch.orchestrator.domain.query.OutboxEventQuery;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
 import io.micrometer.core.annotation.Timed;
@@ -211,15 +209,15 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
     }
     Set<Long> wonIds = new HashSet<>();
     for (Map.Entry<String, List<Long>> entry : pendingIdsByTenant.entrySet()) {
-      OutboxEventMarkPublishingBatchParam outboxEventMarkPublishingBatchParam = OutboxEventMarkPublishingBatchParam.builder()
-          .tenantId(entry.getKey())
-          .ids(entry.getValue())
-          .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
-          .pendingStatus1(OutboxPublishStatus.NEW.code())
-          .pendingStatus2(OutboxPublishStatus.FAILED.code())
-          .build();
-      wonIds.addAll(outboxEventMapper.markPublishingBatch(
-          outboxEventMarkPublishingBatchParam));
+      OutboxEventMarkPublishingBatchParam outboxEventMarkPublishingBatchParam =
+          OutboxEventMarkPublishingBatchParam.builder()
+              .tenantId(entry.getKey())
+              .ids(entry.getValue())
+              .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+              .pendingStatus1(OutboxPublishStatus.NEW.code())
+              .pendingStatus2(OutboxPublishStatus.FAILED.code())
+              .build();
+      wonIds.addAll(outboxEventMapper.markPublishingBatch(outboxEventMarkPublishingBatchParam));
     }
     List<InFlight> inFlight = new ArrayList<>(pendingEvents.size());
     for (OutboxEventEntity event : pendingEvents) {
@@ -230,9 +228,8 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
         } catch (RuntimeException exception) {
           future = CompletableFuture.completedFuture(false);
         }
-        CompletableFuture<Boolean> publishFuture = EmptyChecks.isNotNull(future)
-            ? future
-            : CompletableFuture.completedFuture(false);
+        CompletableFuture<Boolean> publishFuture =
+            EmptyChecks.isNotNull(future) ? future : CompletableFuture.completedFuture(false);
         inFlight.add(new InFlight(event, publishFuture));
       }
     }
@@ -337,15 +334,15 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
     for (Map.Entry<FailedGroupKey, List<Long>> entry : groups.failedByGroup().entrySet()) {
       Instant nextRetryAt = computeNextRetryAt(entry.getKey().attemptNo(), governance.outbox());
       nextRetryAtByGroup.put(entry.getKey(), nextRetryAt);
-      OutboxEventMarkFailedBatchParam outboxEventMarkFailedBatchParam = OutboxEventMarkFailedBatchParam.builder()
-          .tenantId(entry.getKey().tenantId())
-          .ids(entry.getValue())
-          .status(OutboxPublishStatus.FAILED.code())
-          .nextPublishAt(nextRetryAt)
-          .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
-          .build();
-      int updated = outboxEventMapper.markFailedBatch(
-          outboxEventMarkFailedBatchParam);
+      OutboxEventMarkFailedBatchParam outboxEventMarkFailedBatchParam =
+          OutboxEventMarkFailedBatchParam.builder()
+              .tenantId(entry.getKey().tenantId())
+              .ids(entry.getValue())
+              .status(OutboxPublishStatus.FAILED.code())
+              .nextPublishAt(nextRetryAt)
+              .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+              .build();
+      int updated = outboxEventMapper.markFailedBatch(outboxEventMarkFailedBatchParam);
       warnOnPartialUpdate(
           "markFailed", entry.getKey().tenantId(), entry.getValue().size(), updated);
     }
@@ -364,8 +361,7 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
           recordRetry(event, retry.attemptNo(), null, "retry attempts exhausted");
         } else {
           FailedGroupKey groupKey = new FailedGroupKey(event.getTenantId(), retry.attemptNo());
-          Instant groupNextRetryAt =
-              nextRetryAtByGroup.get(groupKey);
+          Instant groupNextRetryAt = nextRetryAtByGroup.get(groupKey);
           recordRetry(event, retry.attemptNo(), groupNextRetryAt, "publish failed");
         }
       } finally {

@@ -69,8 +69,21 @@
         </if>
     </select>
 
-    <select id="selectByUniqueKey" resultType="map">
-        select *
+    <select id="selectByUniqueKey" resultMap="FileChannelConfigQueryViewResultMap">
+        select
+            id,
+            tenant_id,
+            channel_code,
+            channel_name,
+            channel_type,
+            target_endpoint,
+            auth_type,
+            config_json,
+            receipt_policy,
+            timeout_seconds,
+            enabled,
+            created_at,
+            updated_at
         from batch.file_channel_config
         where tenant_id = #{tenantId}
           and is_deleted = false
@@ -78,8 +91,22 @@
         limit 1
     </select>
 
-    <select id="selectById" resultType="map">
-        select * from batch.file_channel_config
+    <select id="selectById" resultMap="FileChannelConfigQueryViewResultMap">
+        select
+            id,
+            tenant_id,
+            channel_code,
+            channel_name,
+            channel_type,
+            target_endpoint,
+            auth_type,
+            config_json,
+            receipt_policy,
+            timeout_seconds,
+            enabled,
+            created_at,
+            updated_at
+        from batch.file_channel_config
         where tenant_id = #{tenantId} and id = #{id} and is_deleted = false
         limit 1
     </select>

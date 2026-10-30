@@ -1,14 +1,18 @@
 package io.github.pinpols.batch.console.domain.notification.application.contract.response;
 
-import lombok.Builder;
-
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.SecretMasking;
-import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
+import io.github.pinpols.batch.console.domain.notification.view.NotificationDeliveryLogRow;
 import java.time.Instant;
-import java.util.Map;
 import java.util.Set;
+import lombok.Builder;
+import org.springframework.web.util.HtmlUtils;
+
 /**
  * 通知投递日志行响应（{@code NotificationDeliveryLogMapper.selectByTenant} 投影）。
  *
@@ -36,39 +40,40 @@ public record ConsoleNotificationDeliveryLogResponse(
     Integer attempt,
     @JsonProperty("created_at") Instant createdAt) {
 
-  public static ConsoleNotificationDeliveryLogResponse from(Map<String, Object> row) {
-    if (row == null) {
+  public static ConsoleNotificationDeliveryLogResponse from(NotificationDeliveryLogRow row) {
+    if (EmptyChecks.isNull(row)) {
       return null;
     }
-    Long id = ConsoleResponseFieldReader.longValue(row, "id");
-    String tenantId = ConsoleResponseFieldReader.stringValue(row, "tenant_id");
-    Long ruleId = ConsoleResponseFieldReader.longValue(row, "rule_id");
-    String channelCode = ConsoleResponseFieldReader.stringValue(row, "channel_code");
-    String eventType = ConsoleResponseFieldReader.stringValue(row, "event_type");
-    Long alertEventId = ConsoleResponseFieldReader.longValue(row, "alert_event_id");
-    Object payloadJsonValue = ConsoleResponseFieldReader.value(row, "payload_json");
-    Object maskedPayloadJson = SecretMasking.maskSensitiveValue(payloadJsonValue, Set.of());
-    String deliveryStatus = ConsoleResponseFieldReader.stringValue(row, "delivery_status");
-    String errorMessage = ConsoleResponseFieldReader.stringValue(row, "error_message");
-    String errorKey = ConsoleResponseFieldReader.stringValue(row, "error_key");
-    Object errorArgsValue = ConsoleResponseFieldReader.value(row, "error_args");
-    Object maskedErrorArgs = SecretMasking.maskSensitiveValue(errorArgsValue, Set.of());
-    Integer attempt = ConsoleResponseFieldReader.integerValue(row, "attempt");
-    Instant createdAt = ConsoleResponseFieldReader.instantValue(row, "created_at");
     return ConsoleNotificationDeliveryLogResponse.builder()
-        .id(id)
-        .tenantId(tenantId)
-        .ruleId(ruleId)
-        .channelCode(channelCode)
-        .eventType(eventType)
-        .alertEventId(alertEventId)
-        .payloadJson(maskedPayloadJson)
-        .deliveryStatus(deliveryStatus)
-        .errorMessage(errorMessage)
-        .errorKey(errorKey)
-        .errorArgs(maskedErrorArgs)
-        .attempt(attempt)
-        .createdAt(createdAt)
+        .id(row.id())
+        .tenantId(row.tenantId())
+        .ruleId(row.ruleId())
+        .channelCode(row.channelCode())
+        .eventType(row.eventType())
+        .alertEventId(row.alertEventId())
+        .payloadJson(maskJsonValue(row.payloadJson()))
+        .deliveryStatus(row.deliveryStatus())
+        .errorMessage(safeErrorMessage(row.errorMessage()))
+        .errorKey(row.errorKey())
+        .errorArgs(maskJsonValue(row.errorArgs()))
+        .attempt(row.attempt())
+        .createdAt(row.createdAt())
         .build();
+  }
+
+  private static Object maskJsonValue(String json) {
+    return json == null
+        ? null
+        : SecretMasking.maskSensitiveValue(JsonUtils.fromJson(json, Object.class), Set.of());
+  }
+
+  private static String safeErrorMessage(String storedErrorMessage) {
+    if (EmptyChecks.isNull(storedErrorMessage)) {
+      return null;
+    }
+    String decoded = HtmlUtils.htmlUnescape(storedErrorMessage);
+    String normalized = ConsoleTextSanitizer.normalize(decoded);
+    String masked = SwallowedExceptionLogger.safeMessage(normalized, 1024);
+    return ConsoleTextSanitizer.safeDisplay(masked, 1024);
   }
 }

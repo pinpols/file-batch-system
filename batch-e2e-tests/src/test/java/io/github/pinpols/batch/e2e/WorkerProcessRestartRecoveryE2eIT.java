@@ -186,8 +186,8 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
           .atMost(Duration.ofSeconds(480))
           .pollInterval(Duration.ofMillis(200))
           .untilAsserted(() -> {
-            String status =
-            jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, tenantId, seed.dedupKey());
+            String status = jdbcTemplate.queryForObject(
+                selectTaskStatusSql, String.class, tenantId, seed.dedupKey());
             assertThat(status).isEqualTo("SUCCESS");
           });
 
@@ -247,10 +247,7 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
         )
         """;
 
-    jdbcTemplate.update(
-        deleteFileChannelConfigSql,
-        tenantId,
-        channelCode);
+    jdbcTemplate.update(deleteFileChannelConfigSql, tenantId, channelCode);
     jdbcTemplate.update(
         insertFileChannelConfigSql,
         tenantId,
@@ -289,16 +286,16 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
 
   private LaunchSeed seedDispatchJob(
       String tenantId, String workerGroup, TriggerType triggerType, String suffix) {
-        final String deleteTriggerRequestSql = """
+    final String deleteTriggerRequestSql = """
             delete from batch.trigger_request where tenant_id = ? and request_id = ?
         """;
-        final String deleteWorkflowDefinitionSql = """
+    final String deleteWorkflowDefinitionSql = """
             delete from batch.workflow_definition where tenant_id = ? and workflow_code = ?
         """;
-        final String deleteJobDefinitionSql = """
+    final String deleteJobDefinitionSql = """
             delete from batch.job_definition where tenant_id = ? and job_code = ?
         """;
-        final String insertJobDefinitionSql = """
+    final String insertJobDefinitionSql = """
         insert into batch.job_definition (
             tenant_id, job_code, job_name, job_type, biz_type, schedule_type, timezone,
             priority, queue_code, worker_group, trigger_mode, dag_enabled, shard_strategy,
@@ -308,13 +305,13 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
             'NONE', 0, 0, true, 1)
         returning id
         """;
-        final String insertBusinessCalendarSql = """
+    final String insertBusinessCalendarSql = """
         insert into batch.business_calendar (
             tenant_id, calendar_code, calendar_name, timezone, enabled
         ) values (?, 'E2E_CALENDAR', 'E2E business calendar', 'UTC', true)
         on conflict (tenant_id, calendar_code) do nothing
         """;
-        final String insertWorkflowDefinitionSql = """
+    final String insertWorkflowDefinitionSql = """
         insert into batch.workflow_definition (
             tenant_id, workflow_code, workflow_name, workflow_type, version, enabled,
             calendar_code, single_job_definition_id
@@ -347,16 +344,9 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
     String requestId = "restart-req-" + suffix;
     String dedupKey = "restart-dedup-" + suffix;
 
-        jdbcTemplate.update(
-        deleteTriggerRequestSql,
-        tenantId,
-        requestId);
-        jdbcTemplate.update(
-        deleteWorkflowDefinitionSql,
-        tenantId,
-        jobCode);
-        jdbcTemplate.update(
-        deleteJobDefinitionSql, tenantId, jobCode);
+    jdbcTemplate.update(deleteTriggerRequestSql, tenantId, requestId);
+    jdbcTemplate.update(deleteWorkflowDefinitionSql, tenantId, jobCode);
+    jdbcTemplate.update(deleteJobDefinitionSql, tenantId, jobCode);
 
     Long jobDefinitionId = jdbcTemplate.queryForObject(
         insertJobDefinitionSql,
@@ -366,10 +356,10 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
         "restart dispatch " + jobCode,
         CodeNormalizer.toUpperOrNull(workerGroup));
 
-        jdbcTemplate.update(insertBusinessCalendarSql, tenantId);
-    Long workflowDefinitionId =
-        jdbcTemplate.queryForObject(insertWorkflowDefinitionSql, Long.class, tenantId, jobCode, jobDefinitionId);
-        jdbcTemplate.update(
+    jdbcTemplate.update(insertBusinessCalendarSql, tenantId);
+    Long workflowDefinitionId = jdbcTemplate.queryForObject(
+        insertWorkflowDefinitionSql, Long.class, tenantId, jobCode, jobDefinitionId);
+    jdbcTemplate.update(
         insertWorkflowNodeSql,
         tenantId,
         workflowDefinitionId,
@@ -378,9 +368,10 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
         jobCode,
         tenantId,
         workflowDefinitionId);
-        jdbcTemplate.update(insertWorkflowEdgeSql, tenantId, workflowDefinitionId, tenantId, workflowDefinitionId);
+    jdbcTemplate.update(
+        insertWorkflowEdgeSql, tenantId, workflowDefinitionId, tenantId, workflowDefinitionId);
 
-        jdbcTemplate.update(
+    jdbcTemplate.update(
         insertTriggerRequestSql,
         tenantId,
         requestId,
@@ -517,7 +508,8 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(30))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          Integer count = jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId, workerCode);
+          Integer count =
+              jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId, workerCode);
           assertThat(count).isEqualTo(1);
         });
   }
@@ -582,9 +574,10 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
   private Path projectRoot() {
     Path current = Path.of(System.getProperty("user.dir")).toAbsolutePath().normalize();
     while (current != null) {
-      boolean currentDirectoryIsBackendRepositoryRoot = Files.isRegularFile(current.resolve("pom.xml"))
-          && Files.isRegularFile(current.resolve("batch-orchestrator/pom.xml"))
-          && Files.isRegularFile(current.resolve("batch-worker/dispatch/pom.xml"));
+      boolean currentDirectoryIsBackendRepositoryRoot =
+          Files.isRegularFile(current.resolve("pom.xml"))
+              && Files.isRegularFile(current.resolve("batch-orchestrator/pom.xml"))
+              && Files.isRegularFile(current.resolve("batch-worker/dispatch/pom.xml"));
       if (currentDirectoryIsBackendRepositoryRoot) {
         return current;
       }

@@ -196,8 +196,7 @@ public class HeartbeatScheduler implements AutoCloseable {
     }
     scheduler.shutdown();
     try {
-      long requestedTimeoutMillis =
-          EmptyChecks.isNull(timeout) ? 0L : timeout.toMillis();
+      long requestedTimeoutMillis = EmptyChecks.isNull(timeout) ? 0L : timeout.toMillis();
       long timeoutMillis = Math.max(0L, requestedTimeoutMillis);
       if (!scheduler.awaitTermination(timeoutMillis, TimeUnit.MILLISECONDS)) {
         scheduler.shutdownNow();

@@ -108,8 +108,7 @@ public class WorkflowRunResumeProgressor {
       WorkflowDagService.DagNodeResolution end,
       Map<String, WorkflowNodeRunEntity> latestRuns) {
     WorkflowNodeRunEntity existing = latestRuns.get(end.nodeCode());
-    boolean endNodeAlreadyActivated =
-        EmptyChecks.isNotNull(existing)
+    boolean endNodeAlreadyActivated = EmptyChecks.isNotNull(existing)
         && (WorkflowNodeRunStatus.READY.code().equals(existing.getNodeStatus())
             || WorkflowNodeRunStatus.RUNNING.code().equals(existing.getNodeStatus())
             || WorkflowNodeRunStatus.SUCCESS.code().equals(existing.getNodeStatus()));

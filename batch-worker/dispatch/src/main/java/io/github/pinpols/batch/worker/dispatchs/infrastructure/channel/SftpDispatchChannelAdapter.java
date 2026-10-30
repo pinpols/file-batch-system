@@ -20,9 +20,8 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -55,8 +54,15 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
 
   // D-1: 异步 disconnect 池。Spring 管理生命周期,@PreDestroy 关闭避免 JVM 退出阻塞。
   // 改为实例字段后 ThreadFactory 内计数器走 AtomicInteger,消除 newThread() 并发数据竞争。
-  private final ScheduledExecutorService disconnectExecutor =
-      Executors.newScheduledThreadPool(2, new DisconnectThreadFactory());
+  private final ScheduledThreadPoolExecutor disconnectExecutor = newDisconnectExecutor();
+
+  private static ScheduledThreadPoolExecutor newDisconnectExecutor() {
+    ScheduledThreadPoolExecutor executor =
+        new ScheduledThreadPoolExecutor(2, new DisconnectThreadFactory());
+    // 两条断连线程卡住时，超时取消的排队任务必须立即移除，避免无界延迟队列积压。
+    executor.setRemoveOnCancelPolicy(true);
+    return executor;
+  }
 
   private static final class DisconnectThreadFactory implements ThreadFactory {
     private final AtomicInteger counter = new AtomicInteger();
@@ -242,7 +248,8 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
           manifestTempRemotePath = manifestRemotePath + ".tmp-" + UUID.randomUUID();
           String manifestRef = "sftp://" + ctx.connConfig().host() + manifestRemotePath;
           DispatchManifestSupport.ManifestTarget manifestTarget =
-              new DispatchManifestSupport.ManifestTarget(evidence, ctx.remoteTarget().remoteName(), manifestRef);
+              new DispatchManifestSupport.ManifestTarget(
+                  evidence, ctx.remoteTarget().remoteName(), manifestRef);
           manifest = DispatchManifestSupport.manifestPayload(
               ctx.command(),
               manifestTarget,
@@ -286,15 +293,27 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
               ctx.externalRequestId(),
               ctx.receiptCode(),
               "EXTERNAL_OUTCOME_UNKNOWN: remote file publication may have completed: "
-                  + ex.getMessage());
+                  + SwallowedExceptionLogger.summary(ex));
         }
         return new DispatchResult(
-            false, ctx.externalRequestId(), ctx.receiptCode(), false, false, ex.getMessage(), null);
+            false,
+            ctx.externalRequestId(),
+            ctx.receiptCode(),
+            false,
+            false,
+            SwallowedExceptionLogger.summary(ex),
+            null);
       }
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(SftpDispatchChannelAdapter.class, "catch:Exception", ex);
       return new DispatchResult(
-          false, ctx.externalRequestId(), ctx.receiptCode(), false, false, ex.getMessage(), null);
+          false,
+          ctx.externalRequestId(),
+          ctx.receiptCode(),
+          false,
+          false,
+          SwallowedExceptionLogger.summary(ex),
+          null);
     }
   }
 
@@ -302,7 +321,10 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
     if (!(failure instanceof SftpException sftpFailure)) {
       return true;
     }
-    return sftpFailure.id == ChannelSftp.SSH_FX_NO_CONNECTION
+    // JSch 将等待 rename 响应时的 I/O 异常包装为带 cause 的 SSH_FX_FAILURE；远端可能已完成发布。
+    return (sftpFailure.id == ChannelSftp.SSH_FX_FAILURE
+            && EmptyChecks.isNotNull(sftpFailure.getCause()))
+        || sftpFailure.id == ChannelSftp.SSH_FX_NO_CONNECTION
         || sftpFailure.id == ChannelSftp.SSH_FX_CONNECTION_LOST;
   }
 
@@ -343,8 +365,12 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
       }
       session =
           jsch.getSession(ctx.connConfig().user(), connectHost, ctx.connConfig().port());
-      // 保留原始 hostname 用于 StrictHostKeyChecking 匹配 known_hosts
-      session.setConfig("HostKeyAlias", ctx.connConfig().host());
+      // JSch 使用 hostKeyAlias 字段匹配 known_hosts；非默认端口采用标准 [host]:port 格式。
+      String originalHost = ctx.connConfig().host();
+      String hostKeyAlias = ctx.connConfig().port() == 22
+          ? originalHost
+          : "[" + originalHost + "]:" + ctx.connConfig().port();
+      session.setHostKeyAlias(hostKeyAlias);
       // M-8: JSch API 仅支持 String 密码，无法使用 char[] + 显式擦除；生产环境建议改用密钥认证
       session.setPassword(ctx.connConfig().password());
       session.setConfig("StrictHostKeyChecking", strictMode ? "yes" : "no");
@@ -361,20 +387,8 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
 
   static void publishRemoteFile(ChannelSftp sftp, String tempRemotePath, String remotePath)
       throws SftpException {
-    try {
-      sftp.rename(tempRemotePath, remotePath);
-    } catch (SftpException firstFailure) {
-      boolean temporaryFileExists = remoteExists(sftp, tempRemotePath);
-      if (!temporaryFileExists) {
-        throw firstFailure;
-      }
-      boolean destinationFileExists = remoteExists(sftp, remotePath);
-      if (!destinationFileExists) {
-        throw firstFailure;
-      }
-      removeRemoteIfExists(sftp, remotePath);
-      sftp.rename(tempRemotePath, remotePath);
-    }
+    // 服务端不能安全替换时保留已有目标；删除后重命名失败会丢失旧文件。
+    sftp.rename(tempRemotePath, remotePath);
   }
 
   private static void cleanupRemoteTemp(ChannelSftp sftp, String remotePath) {
@@ -389,15 +403,6 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
       sftp.rm(remotePath);
     } catch (Exception ignored) {
       SwallowedExceptionLogger.info(SftpDispatchChannelAdapter.class, "catch:Exception", ignored);
-    }
-  }
-
-  private static boolean remoteExists(ChannelSftp sftp, String remotePath) {
-    try {
-      sftp.stat(remotePath);
-      return true;
-    } catch (Exception ignored) {
-      return false;
     }
   }
 

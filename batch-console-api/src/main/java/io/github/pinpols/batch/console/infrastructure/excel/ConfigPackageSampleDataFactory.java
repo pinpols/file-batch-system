@@ -2,9 +2,11 @@ package io.github.pinpols.batch.console.infrastructure.excel;
 
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelSchema.*;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -31,7 +33,7 @@ public final class ConfigPackageSampleDataFactory {
   private static final String SCENARIO_ATOMIC = "ATOMIC";
   private static final String SCENARIO_WORKFLOW = "WORKFLOW";
   private static final String SCENARIO_SCHEDULE = "SCHEDULE";
-  private static final int SHEET_COUNT = 10;
+  private static final int SHEET_COUNT = 11;
 
   private ConfigPackageSampleDataFactory() {}
 
@@ -313,14 +315,12 @@ public final class ConfigPackageSampleDataFactory {
       if (!job.equals(row.get(COL_JOB_CODE))) {
         continue;
       }
-      Map<String, Object> params = io.github.pinpols.batch.common.utils.JsonUtils.fromJson(
-          String.valueOf(row.get(COL_DEFAULT_PARAMS)),
-          new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-      Map<String, Object> stageParams = io.github.pinpols.batch.common.utils.JsonUtils.fromJson(
-          configuredParams,
-          new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+      Map<String, Object> params = JsonUtils.fromJson(
+          String.valueOf(row.get(COL_DEFAULT_PARAMS)), new TypeReference<Map<String, Object>>() {});
+      Map<String, Object> stageParams =
+          JsonUtils.fromJson(configuredParams, new TypeReference<Map<String, Object>>() {});
       params.put("systemPipelineStepParams", Map.of(configuredStage, stageParams));
-      row.put(COL_DEFAULT_PARAMS, io.github.pinpols.batch.common.utils.JsonUtils.toJson(params));
+      row.put(COL_DEFAULT_PARAMS, JsonUtils.toJson(params));
     }
   }
 

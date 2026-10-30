@@ -233,10 +233,10 @@ public abstract class AbstractWorkerLoop implements EnvironmentAware {
       workerRegistration.setRegisteredAt(now);
       workerRegistration.setLastHeartbeatAt(now);
       workerRegistration.setMaxConcurrent(maxConcurrentTasks);
-      List<String> effectiveCapabilityTags =
-          Stream.concat(cfg.capabilityTags().stream(), Stream.of(WorkerCapabilities.DRY_RUN_SAFE))
-              .distinct()
-              .toList();
+      List<String> effectiveCapabilityTags = Stream.concat(
+              cfg.capabilityTags().stream(), Stream.of(WorkerCapabilities.DRY_RUN_SAFE))
+          .distinct()
+          .toList();
       workerRegistration.setCapabilityTags(effectiveCapabilityTags);
       workerRegistration.setTaskCapabilities(taskCapabilities());
       workerRegistration.setReplayCapabilities(replayCapabilities());

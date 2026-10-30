@@ -15,7 +15,7 @@ import java.util.Map;
  * <ul>
  *   <li>不透明:用户不解读,FE 拿到原样回传
  *   <li>版本兼容:JSON 字段加减不破坏旧 token(decode 缺字段 → null,业务侧处理)
- *   <li>失效降级:无效 base64 / 损坏 JSON → 返回 empty map,**不抛异常**(对调用方意味着 WHERE 谓词命中 0 行,自然返回空列表)
+ *   <li>解码容错:无效 base64 / 损坏 JSON → 返回 empty map；调用方须按自己的分页契约决定拒绝或回退
  * </ul>
  *
  * <p><b>安全</b>:cursor 是用户可控输入,SQL 必须保证 tenant_id / 权限谓词在 cursor 谓词之前,绝不能让 cursor 解码出的 id 影响租户隔离。
@@ -40,8 +40,7 @@ public final class CursorCodec {
   /**
    * 解码 token。任何失败(null / blank / 非 base64 / 非 JSON / 非对象)都返回 empty map。
    *
-   * <p>调用方 mapper 用 OGNL 引用 {@code #{cursor.id}} 时,如果 key 不存在,MyBatis 会传 null;SQL 用 {@code where id
-   * < null} 自然返回 0 行,达到安全降级。
+   * <p>empty map 本身不保证 SQL 返回空列表；调用方不得将损坏 token 静默解释为有效首页游标。
    */
   public static Map<String, Object> decode(String token) {
     if (token == null || token.isBlank()) {

@@ -2,12 +2,15 @@ package io.github.pinpols.batch.console.domain.file.application;
 
 import io.github.pinpols.batch.console.application.contract.response.file.ConsolePresignDownloadResponse;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.ArchiveFileRequest;
+import io.github.pinpols.batch.console.domain.file.application.contract.request.ConsoleFileUploadBindingRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.DeleteFileRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.FileArrivalGroupActionRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.PresignDownloadFileRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.RedispatchFileRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileOperationResponse;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFilePresignUploadResponse;
+import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileUploadTargetResponse;
+import java.util.List;
 import org.springframework.web.multipart.MultipartFile;
 
 /** 控制台文件治理应用服务：归档、删除、重派、预签名下载及到达组操作。 */
@@ -32,7 +35,14 @@ public interface ConsoleFileApplicationService {
 
   /** 生成对象存储预签名上传 URL（租户主动上传文件）。 */
   ConsoleFilePresignUploadResponse presignUpload(
-      String tenantId, String channelCode, String fileName, String idempotencyKey);
+      String tenantId,
+      String channelCode,
+      String fileName,
+      ConsoleFileUploadBindingRequest binding,
+      String idempotencyKey);
+
+  /** 读取当前租户已启用的人工上传文件组目标。 */
+  List<ConsoleFileUploadTargetResponse> listManualUploadTargets(String tenantId);
 
   /** 上传文件内容到统一对象存储。 */
   ConsoleFileOperationResponse uploadContent(

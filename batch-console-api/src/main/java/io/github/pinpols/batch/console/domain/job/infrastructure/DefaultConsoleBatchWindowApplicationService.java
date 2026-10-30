@@ -12,10 +12,12 @@ import io.github.pinpols.batch.console.domain.job.application.contract.request.B
 import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchWindowUpdateRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchWindowResponse;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
+import io.github.pinpols.batch.console.domain.job.param.BatchWindowInsertParam;
+import io.github.pinpols.batch.console.domain.job.param.BatchWindowUpdateParam;
+import io.github.pinpols.batch.console.domain.job.support.BatchWindowRules;
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.BatchWindowRow;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -45,7 +47,7 @@ public class DefaultConsoleBatchWindowApplicationService
   @Override
   public ConsoleBatchWindowResponse create(BatchWindowCreateRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    Map<String, Object> existing =
+    BatchWindowRow existing =
         batchWindowMapper.selectByUniqueKey(tenantId, request.getWindowCode());
     if (existing != null) {
       throw BizException.of(
@@ -53,74 +55,83 @@ public class DefaultConsoleBatchWindowApplicationService
           ResultCode.CONFLICT.detailKey(),
           "window code already exists: " + request.getWindowCode());
     }
-    Map<String, Object> params = new HashMap<>();
-    params.put("tenant_id", tenantId);
-    params.put("window_code", request.getWindowCode());
-    params.put("window_name", request.getWindowName());
-    params.put("timezone", request.getTimezone());
-    params.put("start_time", request.getStartTime());
-    params.put("end_time", request.getEndTime());
-    params.put(
-        "end_strategy",
-        request.getEndStrategy() != null ? request.getEndStrategy() : "FINISH_RUNNING");
-    params.put(
-        "out_of_window_action",
-        request.getOutOfWindowAction() != null ? request.getOutOfWindowAction() : "WAIT");
-    params.put("allow_cross_day", request.getAllowCrossDay() != null && request.getAllowCrossDay());
-    params.put("enabled", request.getEnabled() == null || request.getEnabled());
-    params.put("description", request.getDescription());
+    BatchWindowInsertParam params = BatchWindowInsertParam.builder()
+        .tenantId(tenantId)
+        .windowCode(request.getWindowCode())
+        .windowName(request.getWindowName())
+        .timezone(request.getTimezone())
+        .startTime(request.getStartTime())
+        .endTime(request.getEndTime())
+        .endStrategy(
+            EmptyChecks.isNotNull(request.getEndStrategy())
+                ? request.getEndStrategy()
+                : "FINISH_RUNNING")
+        .outOfWindowAction(
+            EmptyChecks.isNotNull(request.getOutOfWindowAction())
+                ? request.getOutOfWindowAction()
+                : "WAIT")
+        .allowCrossDay(
+            EmptyChecks.isNotNull(request.getAllowCrossDay()) && request.getAllowCrossDay())
+        .enabled(EmptyChecks.isNull(request.getEnabled()) || request.getEnabled())
+        .description(request.getDescription())
+        .build();
+    BatchWindowRules.validate(
+        params.getTimezone(),
+        params.getStartTime(),
+        params.getEndTime(),
+        params.getAllowCrossDay());
     batchWindowMapper.insert(params);
     cacheInvalidationService.evictBatchWindow(tenantId, request.getWindowCode());
-    Long id = ((Number) params.get("id")).longValue();
-    Map<String, Object> createdWindow = batchWindowMapper.selectById(tenantId, id);
-    return ConsoleBatchWindowResponse.from(createdWindow);
+    long id = params.getId();
+    return ConsoleBatchWindowResponse.from(batchWindowMapper.selectById(tenantId, id));
   }
 
   @Override
   public ConsoleBatchWindowResponse update(Long id, BatchWindowUpdateRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    Map<String, Object> selectedWindow = batchWindowMapper.selectById(tenantId, id);
-    Map<String, Object> existing = Guard.requireFound(selectedWindow, "batch window not found");
-    Map<String, Object> params = new HashMap<>();
-    params.put("tenant_id", tenantId);
-    params.put("id", id);
-    params.put(
-        "window_name",
-        request.getWindowName() != null ? request.getWindowName() : existing.get("window_name"));
-    params.put(
-        "timezone",
-        request.getTimezone() != null ? request.getTimezone() : existing.get("timezone"));
+    BatchWindowRow selectedWindow = batchWindowMapper.selectById(tenantId, id);
+    BatchWindowRow existing = Guard.requireFound(selectedWindow, "batch window not found");
+    String windowName = EmptyChecks.isNotNull(request.getWindowName())
+        ? request.getWindowName()
+        : existing.windowName();
+    String timezone =
+        EmptyChecks.isNotNull(request.getTimezone()) ? request.getTimezone() : existing.timezone();
     String effectiveStartTime = EmptyChecks.isNotNull(request.getStartTime())
         ? request.getStartTime()
-        : String.valueOf(existing.get("start_time"));
-    String effectiveEndTime = EmptyChecks.isNotNull(request.getEndTime())
-        ? request.getEndTime()
-        : String.valueOf(existing.get("end_time"));
-    params.put("start_time", effectiveStartTime);
-    params.put("end_time", effectiveEndTime);
-    params.put(
-        "end_strategy",
-        request.getEndStrategy() != null ? request.getEndStrategy() : existing.get("end_strategy"));
-    params.put(
-        "out_of_window_action",
-        request.getOutOfWindowAction() != null
-            ? request.getOutOfWindowAction()
-            : existing.get("out_of_window_action"));
-    params.put(
-        "allow_cross_day",
-        request.getAllowCrossDay() != null
-            ? request.getAllowCrossDay()
-            : existing.get("allow_cross_day"));
-    params.put(
-        "enabled", request.getEnabled() != null ? request.getEnabled() : existing.get("enabled"));
-    params.put(
-        "description",
-        request.getDescription() != null ? request.getDescription() : existing.get("description"));
+        : existing.startTime();
+    String effectiveEndTime =
+        EmptyChecks.isNotNull(request.getEndTime()) ? request.getEndTime() : existing.endTime();
+    BatchWindowUpdateParam params = BatchWindowUpdateParam.builder()
+        .tenantId(tenantId)
+        .id(id)
+        .windowName(windowName)
+        .timezone(timezone)
+        .startTime(effectiveStartTime)
+        .endTime(effectiveEndTime)
+        .endStrategy(
+            EmptyChecks.isNotNull(request.getEndStrategy())
+                ? request.getEndStrategy()
+                : existing.endStrategy())
+        .outOfWindowAction(
+            EmptyChecks.isNotNull(request.getOutOfWindowAction())
+                ? request.getOutOfWindowAction()
+                : existing.outOfWindowAction())
+        .allowCrossDay(
+            EmptyChecks.isNotNull(request.getAllowCrossDay())
+                ? request.getAllowCrossDay()
+                : existing.allowCrossDay())
+        .enabled(
+            EmptyChecks.isNotNull(request.getEnabled()) ? request.getEnabled() : existing.enabled())
+        .description(
+            EmptyChecks.isNotNull(request.getDescription())
+                ? request.getDescription()
+                : existing.description())
+        .build();
+    BatchWindowRules.validate(
+        params.timezone(), params.startTime(), params.endTime(), params.allowCrossDay());
     batchWindowMapper.update(params);
-    cacheInvalidationService.evictBatchWindow(
-        tenantId, String.valueOf(existing.get("window_code")));
-    Map<String, Object> updatedWindow = batchWindowMapper.selectById(tenantId, id);
-    return ConsoleBatchWindowResponse.from(updatedWindow);
+    cacheInvalidationService.evictBatchWindow(tenantId, existing.windowCode());
+    return ConsoleBatchWindowResponse.from(batchWindowMapper.selectById(tenantId, id));
   }
 
   @Override
@@ -130,10 +141,9 @@ public class DefaultConsoleBatchWindowApplicationService
     if (rows == 0) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.batch_window.not_found");
     }
-    Map<String, Object> window = batchWindowMapper.selectById(resolved, id);
+    BatchWindowRow window = batchWindowMapper.selectById(resolved, id);
     if (window != null) {
-      cacheInvalidationService.evictBatchWindow(
-          resolved, String.valueOf(window.get("window_code")));
+      cacheInvalidationService.evictBatchWindow(resolved, window.windowCode());
     }
   }
 }

@@ -9,18 +9,25 @@ import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.console.domain.notification.service.WorkflowTerminalNotificationService;
 import java.time.Duration;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.kafka.support.Acknowledgment;
 
 @DisplayName("终态通知 Kafka 接纳:事务先于确认,租户绑定与失败重投")
+@ExtendWith(MockitoExtension.class)
 class JobTerminalNotificationConsumerTest {
-  private final WorkflowTerminalNotificationService service =
-      mock(WorkflowTerminalNotificationService.class);
-  private final Acknowledgment ack = mock(Acknowledgment.class);
-  private final JobTerminalNotificationConsumer consumer =
-      new JobTerminalNotificationConsumer(service, new BatchKafkaTopicNamespace(""));
+  @Mock
+  private WorkflowTerminalNotificationService service;
+
+  @Mock
+  private Acknowledgment ack;
+
+  private JobTerminalNotificationConsumer consumer;
   private static final String PAYLOAD = "{\"tenantId\":\"t1\"}";
 
   @Test
@@ -72,5 +79,10 @@ class JobTerminalNotificationConsumerTest {
 
   private static ConsumerRecord<String, String> record(String payload) {
     return new ConsumerRecord<>("batch.job.terminal.v1", 0, 0, "key", payload);
+  }
+
+  @BeforeEach
+  void initializeSubject() {
+    consumer = new JobTerminalNotificationConsumer(service, new BatchKafkaTopicNamespace(""));
   }
 }

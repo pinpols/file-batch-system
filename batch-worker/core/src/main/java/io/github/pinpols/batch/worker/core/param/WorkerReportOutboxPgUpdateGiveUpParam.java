@@ -2,11 +2,12 @@ package io.github.pinpols.batch.worker.core.param;
 
 import lombok.Builder;
 
-/** 绑定一次updateGiveUp操作；字段可空性、筛选与状态条件沿用原映射语句和上游校验。 */
+/** 仅将当前PG领取尝试标记为已放弃。 */
 @Builder
 public record WorkerReportOutboxPgUpdateGiveUpParam(
     long id,
     String publishStatus,
     int attemptCount,
     long updatedAt,
-    String statusPublishing) {}
+    String statusPublishing,
+    String claimToken) {}

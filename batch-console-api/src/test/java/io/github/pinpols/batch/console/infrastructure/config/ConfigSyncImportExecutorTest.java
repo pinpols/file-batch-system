@@ -27,8 +27,11 @@ import org.springframework.transaction.TransactionSystemException;
 @DisplayName("配置同步目标结果: 已确认回滚与提交未知必须分开处理")
 class ConfigSyncImportExecutorTest {
 
-  @Mock private ConfigSyncTargetExecutor targetExecutor;
-  @InjectMocks private ConfigSyncImportExecutor service;
+  @Mock
+  private ConfigSyncTargetExecutor targetExecutor;
+
+  @InjectMocks
+  private ConfigSyncImportExecutor service;
 
   @Test
   @DisplayName("目标事务主动回滚后独立保存失败收据并继续其它目标")

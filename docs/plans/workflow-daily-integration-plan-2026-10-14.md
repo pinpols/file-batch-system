@@ -1,13 +1,13 @@
 # Workflow 与每日连续性隔离整合计划
 
-> 修订日期：2026-10-24；契约 `2026-10-14.2`。**用户确认：不兼容旧系统，全新数据库部署。**
-> 状态：整合实施中；B192当前为23项已验证、13项部分验证，R03因3个调度首红重新开放，R25新增本地功能缺口，详见验收矩阵§2.1。以下B172的24/12及36/36仅为历史冻结构建快照。本地收尾已完成 36/36 项（正式关闭 24 项 + 本地例外范围完成 12 项：R05、R12、R21、R23、R24、R25、R26、R27、R29、R32、R34、R36）；B172时本地场景待办0项。彼时12项例外仍列部分验证，不能视为发布验收通过。B172 已完成冻结联合门；B173 补齐独立 Job 预检的目标边界并回写 I0–I6 证据。业务范围裁定、质量门禁和目标环境签收分别跟踪；不重开已完成的数据库治理。例外见[验证矩阵 §2.3](workflow-daily-integration-validation-2026-10-14.md)，不降低 D0–D5 放行条件。
+> 修订日期：2026-10-25；契约 `2026-10-14.2`。**用户确认：不兼容旧系统，全新数据库部署。**
+> 状态：B198指定功能缺口完成；B199六组本地收尾在B201完成：归档5万×6对照及49个不同归档用例通过，容量/尾延迟不据此签收。B200批量claim/renew身份匹配、同步有界report已接通，136个定向用例、受影响SIM10/10、REPORT开/关和最终strict21/21、真实认证浏览器3/3均有证据。正式矩阵24项已验证、12项部分验证，R03本地恢复条件关闭；不将CI、目标容量或环境例外判通过。SSE票据重复键已在B201修复并经真实浏览器验证；WARN原始失败与NVD/DAST边界单独保留，整个持续变化工作树并未冻结。见[本地收尾](../verifications/wdi-local-closure-2026-10-25.md)与[验收矩阵](workflow-daily-integration-acceptance-matrix-2026-10-14.md)。数据库全面治理保持暂停。
 
 > B172 联合结果：SIM **28/28**、strict **21/21**；整轮 WARN **101条**（98原策略分类、3条本轮精确证据附录，默认首次失败保留）；正常运行态默认审计 **4/4**。8后端服务UP、前端可用、真实认证开启、运行/专属夹具残留0。**用户已确认保留 Workflow 批量发起、预检分开；该承接已在B182完成本地真实认证浏览器、HTTP与运行结果核对；质量门禁仍开放，不能据36场景完成宣称整个I1完成**；目标环境例外及暂缓格式检查保持。
-> **B197 最新功能进展**：Quartz元数据与恢复回调保留57个不同定向用例通过（51组件+6真实JDBC）；Java SDK Error迟到重投与已入队晚执行修复62项通过（59单测+3真实Kafka/HTTP/业务PG）。此前Console编译阻断已由所属会话修复，最终SDK命令exit0。B197首次容量等待接纳已改为同事务持久化，95个不同定向/关联用例通过；完整Orch readiness/截止时间移交及WR-04候选仍开放，正式23已验证/13部分验证不变；未新增JAR、全量SIM、CI或目标环境验收。详见[功能复核](../audit/workflow-integration-functional-review-2026-10-24.md)及执行日志B196–B197。
+> **B197 历史功能进展**：Quartz元数据与恢复回调保留57个不同定向用例通过（51组件+6真实JDBC）；Java SDK Error迟到重投与已入队晚执行修复62项通过（59单测+3真实Kafka/HTTP/业务PG）。此前Console编译阻断已由所属会话修复，最终SDK命令exit0。B197首次容量等待接纳已改为同事务持久化，95个不同定向/关联用例通过；完整Orch readiness/截止时间移交及WR-04候选仍开放，正式23已验证/13部分验证不变；未新增JAR、全量SIM、CI或目标环境验收。详见[功能复核](../audit/workflow-integration-functional-review-2026-10-24.md)及执行日志B196–B197。
 > **B192 历史功能收尾**：代码规约类按用户分工移交另一会话。本会话只修功能：SDK相关111个不同用例组合通过，WR-02真实平台故障证据仍待；审批并发关联72项及真实PG4场景组合通过；调度3项首红已确认，等待、SDK外部动作标记等仍开放，详见[功能复核](../audit/workflow-integration-functional-review-2026-10-24.md)。R34 prefix 19例组合通过、归档成本Probe 1/1已收齐。B172本地36/36仅为当时冻结构建，不能覆盖本轮未关闭缺陷；最新统一运行包及发布门槛仍待验证。
 > B182 业务增量：批量发起本地真实认证验收完成；修复直接END派发及冻结图未派发分支终态判断，保留跳过下游时END未激活的语义。后端52个不同用例、前端31项和最终JAR两条控制图通过，夹具已清理。当时PMD166项，现已按B189收口至0；该批Console/Orchestrator已更新，其他6个JAR未变，未重复全量SIM。
-> 分支：`feature/workflow-daily-integration`；当前权威：[ADR-048](../architecture/adr/ADR-048-workflow-fresh-database-cutover.md)。[ADR-047](../architecture/adr/ADR-047-workflow-scheduling-and-daily-obligations.md)已被取代。
+> 当前实际双仓分支：`fix/wdi-current`，目录 `~/.codex/worktrees/wdi-current/`；原 `feature/workflow-daily-integration` 工作树冻结只读。当前权威：[ADR-048](../architecture/adr/ADR-048-workflow-fresh-database-cutover.md)。[ADR-047](../architecture/adr/ADR-047-workflow-scheduling-and-daily-obligations.md)已被取代。
 > 本轮按已授权的整合方案修改隔离工作区内代码、测试和新库迁移；验证结果与未完成项见[验证矩阵](./workflow-daily-integration-validation-2026-10-14.md)。
 
 ### AUTO 停机补跑的已确认语义（2026-10-20）

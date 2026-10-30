@@ -283,8 +283,7 @@ public class LaunchBatchDayService {
       updated = updated.withCutoffAt(ctx.cutoffAt(), ctx.now());
       changed = true;
     }
-    boolean shouldCloseAtCutoff =
-        shouldMoveToCutoff && !ctx.lateAccepted() && !ctx.catchUpLaunch();
+    boolean shouldCloseAtCutoff = shouldMoveToCutoff && !ctx.lateAccepted() && !ctx.catchUpLaunch();
     if (shouldCloseAtCutoff) {
       updated = updated.withDayStatus("CUTOFF", ctx.now());
       changed = true;
@@ -406,8 +405,7 @@ public class LaunchBatchDayService {
     if (cutoffAt == null) {
       return false;
     }
-    int lateArrivalToleranceMin =
-        resolveLateArrivalToleranceMin(batchDay.tenantId(), calendarCode);
+    int lateArrivalToleranceMin = resolveLateArrivalToleranceMin(batchDay.tenantId(), calendarCode);
     long lateArrivalToleranceSeconds = Math.max(0, lateArrivalToleranceMin) * 60L;
     Instant cutoffCloseAt = cutoffAt.plusSeconds(lateArrivalToleranceSeconds);
     return !dateTimeSupport.nowInstant().isAfter(cutoffCloseAt);

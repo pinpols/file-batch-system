@@ -25,9 +25,8 @@ class TriggerLaunchContinuityMetricsSchedulerTest {
     when(shutdown.isDraining()).thenReturn(false);
     when(mapper.selectLaunchContinuityMetrics(ArgumentMatchers.any(), ArgumentMatchers.any()))
         .thenReturn(new TriggerLaunchContinuityMetrics(2L, 3_600L, 50L, 4.25));
-    TriggerLaunchContinuityMetricsScheduler scheduler =
-        new TriggerLaunchContinuityMetricsScheduler(
-            mapper, registry, shutdown, new TriggerLaunchContinuityMetricsProperties());
+    TriggerLaunchContinuityMetricsScheduler scheduler = new TriggerLaunchContinuityMetricsScheduler(
+        mapper, registry, shutdown, new TriggerLaunchContinuityMetricsProperties());
     scheduler.initializeMeters();
 
     scheduler.sample();
@@ -62,9 +61,8 @@ class TriggerLaunchContinuityMetricsSchedulerTest {
     when(mapper.selectLaunchContinuityMetrics(ArgumentMatchers.any(), ArgumentMatchers.any()))
         .thenReturn(new TriggerLaunchContinuityMetrics(1L, 600L, 25L, 3.0))
         .thenThrow(new IllegalStateException("database unavailable"));
-    TriggerLaunchContinuityMetricsScheduler scheduler =
-        new TriggerLaunchContinuityMetricsScheduler(
-            mapper, registry, shutdown, new TriggerLaunchContinuityMetricsProperties());
+    TriggerLaunchContinuityMetricsScheduler scheduler = new TriggerLaunchContinuityMetricsScheduler(
+        mapper, registry, shutdown, new TriggerLaunchContinuityMetricsProperties());
     scheduler.initializeMeters();
 
     scheduler.sample();

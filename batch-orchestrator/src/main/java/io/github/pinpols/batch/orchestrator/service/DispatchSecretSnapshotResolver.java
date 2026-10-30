@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.orchestrator.application.plan.BundlePlanParams;
 import io.github.pinpols.batch.orchestrator.domain.entity.DispatchSecretBindingEntity;
 import io.github.pinpols.batch.orchestrator.mapper.DispatchSecretBindingMapper;
 import java.util.ArrayList;
@@ -33,11 +34,20 @@ public class DispatchSecretSnapshotResolver {
   public Map<String, Object> pin(
       String tenantId, String jobType, Map<String, Object> effectiveParams) {
     Map<String, Object> trustedParams = withoutCallerBindings(effectiveParams);
-    if (!JobType.DISPATCH.code().equals(jobType)) {
+    if (!JobType.DISPATCH.code().equals(jobType)
+        && !JobType.BUNDLE_DISPATCH.code().equals(jobType)) {
       return trustedParams;
     }
-    Set<String> channelCodes = new LinkedHashSet<>();
-    collectChannels(trustedParams, channelCodes);
+    boolean bundleDispatch = JobType.BUNDLE_DISPATCH.code().equals(jobType);
+    String selectedChannel =
+        bundleDispatch ? null : DispatchChannelSelection.explicitChannel(trustedParams);
+    Set<String> channelCodes;
+    if (bundleDispatch) {
+      channelCodes = BundlePlanParams.dispatchChannelCodes(trustedParams);
+    } else {
+      channelCodes = new LinkedHashSet<>();
+      collectChannels(trustedParams, channelCodes);
+    }
     if (EmptyChecks.isEmpty(channelCodes)) {
       return trustedParams;
     }
@@ -48,6 +58,12 @@ public class DispatchSecretSnapshotResolver {
         bindingMapper.selectCurrentByChannels(tenantId, new ArrayList<>(channelCodes))) {
       if (EmptyChecks.isNull(binding.secretVersionId())
           || EmptyChecks.isNull(binding.versionNo())) {
+        // 递归候选可能仅存在于业务元数据；仅明确目标或无明确目标时沿原语义阻断。
+        if (!bundleDispatch
+            && EmptyChecks.isNotNull(selectedChannel)
+            && !selectedChannel.equals(binding.channelCode())) {
+          continue;
+        }
         throw BizException.of(
             ResultCode.CREDENTIAL_REF_UNRESOLVED,
             ResultCode.CREDENTIAL_REF_UNRESOLVED.detailKey(),

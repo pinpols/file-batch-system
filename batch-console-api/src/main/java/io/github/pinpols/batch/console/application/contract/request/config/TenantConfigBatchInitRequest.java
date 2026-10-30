@@ -1,11 +1,14 @@
 package io.github.pinpols.batch.console.application.contract.request.config;
 
+import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDependencyRuleRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.LocalTime;
@@ -17,16 +20,16 @@ import lombok.Data;
 public class TenantConfigBatchInitRequest {
 
   /** 配置导入拒绝未知字段，避免已退役载荷被静默当作成功。 */
-  @com.fasterxml.jackson.annotation.JsonAnySetter
+  @JsonAnySetter
   public void rejectUnknownField(String fieldName, Object ignoredValue) {
     throw new IllegalArgumentException("Unsupported configuration field: " + fieldName);
   }
 
-  // CPD-OFF: Batch initialization exposes the same nested specs as file-template APIs by contract.
+  // CPD-OFF: 批量初始化按契约公开与文件模板 API 相同的嵌套规格。
 
   @NotEmpty(message = "targetTenantIds must not be empty")
   @Size(max = 50, message = "targetTenantIds must not exceed 50")
-  private List<@Size(min = 1, max = 64) String> targetTenantIds;
+  private List<@NotBlank @Size(min = 1, max = 64) String> targetTenantIds;
 
   private InitMode mode = InitMode.SKIP_EXISTING;
 
@@ -39,32 +42,32 @@ public class TenantConfigBatchInitRequest {
   private boolean strict;
 
   @Valid
-  private List<JobDefinitionSpec> jobDefinitions;
+  private List<@NotNull JobDefinitionSpec> jobDefinitions;
 
   @Valid
-  private List<WorkflowDefinitionSpec> workflowDefinitions;
+  private List<@NotNull WorkflowDefinitionSpec> workflowDefinitions;
 
   @Valid
-  private List<FileChannelSpec> fileChannels;
+  private List<@NotNull FileChannelSpec> fileChannels;
 
   @Valid
-  private List<FileTemplateSpec> fileTemplates;
+  private List<@NotNull FileTemplateSpec> fileTemplates;
   // CPD-ON
 
   @Valid
-  private List<ResourceQueueSpec> resourceQueues;
+  private List<@NotNull ResourceQueueSpec> resourceQueues;
 
   @Valid
-  private List<BatchWindowSpec> batchWindows;
+  private List<@NotNull BatchWindowSpec> batchWindows;
 
   @Valid
-  private List<BusinessCalendarSpec> businessCalendars;
+  private List<@NotNull BusinessCalendarSpec> businessCalendars;
 
   @Valid
-  private List<TenantQuotaPolicySpec> quotaPolicies;
+  private List<@NotNull TenantQuotaPolicySpec> quotaPolicies;
 
   @Valid
-  private List<AlertRoutingSpec> alertRoutings;
+  private List<@NotNull AlertRoutingSpec> alertRoutings;
 
   public enum InitMode {
     SKIP_EXISTING,
@@ -85,7 +88,7 @@ public class TenantConfigBatchInitRequest {
 
     @Valid
     @Size(max = 32)
-    private List<JobDependencyRuleRequest> dependencyRules;
+    private List<@NotNull JobDependencyRuleRequest> dependencyRules;
 
     @Size(max = 256)
     private String jobName;
@@ -163,8 +166,12 @@ public class TenantConfigBatchInitRequest {
     private String triggerMode;
     private String calendarCode;
     private String dependsOnJobCode;
-    private List<NodeSpec> nodes;
-    private List<EdgeSpec> edges;
+
+    @Valid
+    private List<@NotNull NodeSpec> nodes;
+
+    @Valid
+    private List<@NotNull EdgeSpec> edges;
 
     @Data
     public static class NodeSpec {
@@ -179,6 +186,13 @@ public class TenantConfigBatchInitRequest {
       private Integer retryMaxCount;
       private Integer timeoutSeconds;
       private String nodeParams;
+
+      /** 与普通 Workflow 保存共用 ADR-018 声明，配置包往返不能丢失跨日依赖。 */
+      private String crossDayDependencies;
+
+      /** 等待上限秒数；未传由 Mapper 取 86400，0 表示永久等待。 */
+      private Integer crossDayDependencyTimeoutSeconds;
+
       private Boolean enabled;
     }
 

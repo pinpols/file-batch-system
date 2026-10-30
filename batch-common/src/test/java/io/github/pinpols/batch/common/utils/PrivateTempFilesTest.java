@@ -19,6 +19,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 @DisplayName("私有临时文件工具: 私有根目录下的文件与目录创建, 权限收紧及异常路径")
 class PrivateTempFilesTest {
 
+  private static final String LOCK_OWNER_READY_FILE = "lock-owner-ready";
+
   @Test
   @DisplayName("私有根目录: 文件与目录均落在私有根下, 仅属主可读写, 目录可执行")
   void shouldCreateFileAndDirectoryWithOwnerOnlyPermissions_whenPrivateRootIsUsed()
@@ -143,9 +145,10 @@ class PrivateTempFilesTest {
 
   private static Path awaitOwnedFile(Path tempDirectory, Process owner) throws Exception {
     Path privateRoot = tempDirectory.resolve("file-batch-private");
+    Path readyFile = tempDirectory.resolve(LOCK_OWNER_READY_FILE);
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
     while (System.nanoTime() < deadline) {
-      if (Files.isDirectory(privateRoot)) {
+      if (Files.exists(readyFile) && Files.isDirectory(privateRoot)) {
         try (var files = Files.list(privateRoot)) {
           var payload = files
               .filter(path -> path.getFileName().toString().startsWith("lock-crash-review-"))
@@ -171,6 +174,8 @@ class PrivateTempFilesTest {
 
     public static void main(String[] args) throws Exception {
       try (var file = PrivateTempFiles.createLockedTempFile("lock-crash-review-", ".tmp")) {
+        Files.createFile(Path.of(System.getProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY))
+            .resolve(LOCK_OWNER_READY_FILE));
         System.in.read();
       }
     }

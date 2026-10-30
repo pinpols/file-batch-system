@@ -4,7 +4,7 @@ import io.github.pinpols.batch.console.domain.ops.entity.CustomTaskTypeEntity;
 import java.time.Instant;
 import lombok.Builder;
 
-/** Public console view of an SDK-declared custom task type. */
+/** SDK 声明的自定义任务类型的公开 Console 视图。 */
 @Builder
 public record CustomTaskTypeResponse(
     Long id,

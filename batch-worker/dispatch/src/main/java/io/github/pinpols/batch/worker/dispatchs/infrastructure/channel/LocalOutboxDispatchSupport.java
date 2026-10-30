@@ -62,8 +62,8 @@ final class LocalOutboxDispatchSupport {
       String channelCode = sanitizeFileSegment(configuredChannelCode);
       Path envelopePath = directory.resolve(channelCode + "-" + externalRequestId + ".json");
 
-      Map<String, Object> envelope = buildEnvelope(
-          command, channelConfig, receipt, transportStub, stubDetail);
+      Map<String, Object> envelope =
+          buildEnvelope(command, channelConfig, receipt, transportStub, stubDetail);
       String envelopeJson = JsonUtils.toJson(envelope);
       byte[] envelopeBytes = envelopeJson.getBytes(StandardCharsets.UTF_8);
       // 信封一旦开始写出，就可能已被目录消费者观察；后续失败不能证明没有副作用。
@@ -79,13 +79,10 @@ final class LocalOutboxDispatchSupport {
             DispatchManifestSupport.digest(envelopeBytes);
         String manifestPathText = manifestPath.toString();
         DispatchManifestSupport.ManifestTarget manifestTarget =
-            new DispatchManifestSupport.ManifestTarget(envelopePathText, envelopeFileName, manifestPathText);
+            new DispatchManifestSupport.ManifestTarget(
+                envelopePathText, envelopeFileName, manifestPathText);
         manifest = DispatchManifestSupport.manifestPayload(
-            command,
-            manifestTarget,
-            externalRequestId,
-            receiptCode,
-            envelopeDigest);
+            command, manifestTarget, externalRequestId, receiptCode, envelopeDigest);
         writeOutboxFile(manifestPath, manifest.bytes(), privateTarget);
       }
 
@@ -103,20 +100,22 @@ final class LocalOutboxDispatchSupport {
           manifest == null ? null : manifest.toRef());
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(LocalOutboxDispatchSupport.class, "catch:Exception", ex);
+      String failureSummary = SwallowedExceptionLogger.summary(ex);
       if (publicationAttempted) {
         return DispatchResult.externalOutcomeUnknown(
             externalRequestId,
             receiptCode,
             TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN
-                + ": local outbox publication may have completed: " + ex.getMessage());
+                + ": local outbox publication may have completed: " + failureSummary);
       }
-      return DispatchResult.failureWithoutReceipt(ex.getMessage());
+      return DispatchResult.failureWithoutReceipt(failureSummary);
     }
   }
 
   /** 先建立并核验目标目录，发布围栏只覆盖之后可能被消费者观察的文件写入。 */
   private static Path prepareLocalDirectory(
-      String endpoint, boolean privateTarget, DispatchRuntimeProperties properties) throws Exception {
+      String endpoint, boolean privateTarget, DispatchRuntimeProperties properties)
+      throws Exception {
     Path directory;
     if (privateTarget) {
       Path privateOutboxRoot = PrivateTempFiles.resolveUnderTempRoot("batch-dispatch-outbox");

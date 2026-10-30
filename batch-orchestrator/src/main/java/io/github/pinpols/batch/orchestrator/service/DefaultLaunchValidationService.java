@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.orchestrator.service;
 
-import io.github.pinpols.batch.orchestrator.domain.param.TriggerRequestIsValidParentWorkflowNodeLaunchParam;
-
-
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.ReplayExecutionGuard;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -18,6 +15,7 @@ import io.github.pinpols.batch.orchestrator.domain.context.TriggerLaunchPersiste
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.TriggerRequestIsValidParentWorkflowNodeLaunchParam;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
@@ -60,6 +58,10 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
           ResultCode.NOT_FOUND, "error.trigger.request_not_found", request.requestId());
     }
     TriggerRequestEntity triggerRequest = persistenceContext.getTriggerRequest();
+    if (!LaunchRequestIdentityGuard.matches(request, triggerRequest)) {
+      // 外部载荷不匹配时，不能代表原请求执行拒绝写入。
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.trigger_target_mismatch");
+    }
 
     boolean parentNodeLaunch = hasParentWorkflowNodeContext(triggerRequest);
     ParentWorkflowJobSnapshot parentJobSnapshot =
@@ -148,7 +150,8 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
     if (EmptyChecks.isNull(node)) {
       rejectInvalidExecutionSnapshot(request, triggerRequest);
     }
-    boolean nodeReferencesRequestedJob = Objects.equals(node.getRelatedJobCode(), request.jobCode());
+    boolean nodeReferencesRequestedJob =
+        Objects.equals(node.getRelatedJobCode(), request.jobCode());
     if (!nodeReferencesRequestedJob) {
       rejectInvalidExecutionSnapshot(request, triggerRequest);
     }
@@ -214,19 +217,22 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
       boolean frozenWorkflowSnapshot) {
     boolean parentWorkflowNodeIdentityIsIncomplete =
         EmptyChecks.isNull(triggerRequest.getParentWorkflowRunId())
-        || EmptyChecks.isNull(triggerRequest.getParentNodeCode())
-        || EmptyChecks.isBlank(triggerRequest.getParentNodeCode());
+            || EmptyChecks.isNull(triggerRequest.getParentNodeCode())
+            || EmptyChecks.isBlank(triggerRequest.getParentNodeCode());
     if (parentWorkflowNodeIdentityIsIncomplete) {
       return false;
     }
     JobInstanceEntity existingInstance = persistenceContext.getExistingInstance();
-    TriggerRequestIsValidParentWorkflowNodeLaunchParam triggerRequestIsValidParentWorkflowNodeLaunchParam = TriggerRequestIsValidParentWorkflowNodeLaunchParam.builder()
-        .tenantId(request.tenantId())
-        .parentWorkflowRunId(triggerRequest.getParentWorkflowRunId())
-        .parentNodeCode(triggerRequest.getParentNodeCode())
-        .existingChildJobInstanceId(EmptyChecks.isNull(existingInstance) ? null : existingInstance.getId())
-        .frozenWorkflowSnapshot(frozenWorkflowSnapshot)
-        .build();
+    TriggerRequestIsValidParentWorkflowNodeLaunchParam
+        triggerRequestIsValidParentWorkflowNodeLaunchParam =
+            TriggerRequestIsValidParentWorkflowNodeLaunchParam.builder()
+                .tenantId(request.tenantId())
+                .parentWorkflowRunId(triggerRequest.getParentWorkflowRunId())
+                .parentNodeCode(triggerRequest.getParentNodeCode())
+                .existingChildJobInstanceId(
+                    EmptyChecks.isNull(existingInstance) ? null : existingInstance.getId())
+                .frozenWorkflowSnapshot(frozenWorkflowSnapshot)
+                .build();
     return triggerRequestMapper.isValidParentWorkflowNodeLaunch(
         triggerRequestIsValidParentWorkflowNodeLaunchParam);
   }

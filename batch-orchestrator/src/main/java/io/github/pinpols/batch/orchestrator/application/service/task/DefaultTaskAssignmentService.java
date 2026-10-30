@@ -1,15 +1,18 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import io.github.pinpols.batch.common.dto.DependencyResultReference;
 import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import io.github.pinpols.batch.common.dto.ReplayExecutionGuard;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.SchedulingPriorityBand;
+import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.IdGenerator;
@@ -25,12 +28,14 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.AssignWorkerParam;
 import io.github.pinpols.batch.orchestrator.domain.param.ClaimPartitionParam;
+import io.github.pinpols.batch.orchestrator.domain.param.ExternalOutcomeResolutionConsumeParam;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkRunningParam;
 import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchItem;
 import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchRow;
 import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateTaskStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.query.JobExecutionLogQuery;
+import io.github.pinpols.batch.orchestrator.domain.query.JobTaskQuery;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -165,8 +170,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
   @Transactional
   public boolean markNonIdempotentExecutionStarted(
       String tenantId, Long taskId, String workerCode, String partitionInvocationId) {
-    boolean executionIdentityIsIncomplete =
-        EmptyChecks.isBlank(tenantId)
+    boolean executionIdentityIsIncomplete = EmptyChecks.isBlank(tenantId)
         || EmptyChecks.isNull(taskId)
         || EmptyChecks.isBlank(workerCode)
         || EmptyChecks.isBlank(partitionInvocationId);
@@ -190,6 +194,13 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         || !partitionInvocationId.equals(partition.getCurrentInvocationId())) {
       return false;
     }
+    if (EmptyChecks.isNotNull(current.getNonIdempotentStartedAt())) {
+      return true;
+    }
+    ExternalOutcomeAuthorization authorization = consumeExternalOutcomeAuthorization(current);
+    if (authorization == ExternalOutcomeAuthorization.REJECTED) {
+      return false;
+    }
     if (jobTaskMapper.markNonIdempotentExecutionStarted(
             tenantId, taskId, workerCode, partitionInvocationId)
         > 0) {
@@ -198,10 +209,64 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     // 同一任务中其他非幂等步骤重复写入标记时按幂等处理。
     current = jobTaskMapper.selectById(tenantId, taskId);
     partition = jobPartitionMapper.selectById(tenantId, current.getJobPartitionId());
-    return EmptyChecks.isNotNull(current.getNonIdempotentStartedAt())
+    boolean started = EmptyChecks.isNotNull(current.getNonIdempotentStartedAt())
         && isCurrentExecutionOwner(current, tenantId, workerCode, partitionInvocationId)
         && EmptyChecks.isNotNull(partition)
         && partitionInvocationId.equals(partition.getCurrentInvocationId());
+    if (!started && authorization == ExternalOutcomeAuthorization.CONSUMED) {
+      // 不允许开始标记失败却提交授权消费；调用方重试时仍须使用同一根请求。
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.claim_not_available");
+    }
+    return started;
+  }
+
+  private ExternalOutcomeAuthorization consumeExternalOutcomeAuthorization(JobTaskEntity task) {
+    JobInstanceEntity instance =
+        jobInstanceMapper.selectById(task.getTenantId(), task.getJobInstanceId());
+    if (EmptyChecks.isNull(instance)) {
+      return ExternalOutcomeAuthorization.REJECTED;
+    }
+    Map<String, Object> snapshot = parseInstanceSnapshot(instance);
+    Object parameters = snapshot.get("effectiveParams");
+    Map<?, ?> effective = parameters instanceof Map<?, ?> values ? values : Map.of();
+    Object sourceId = effective.get("_externalOutcomeResolutionTaskId");
+    Object sourceVersion = effective.get("_externalOutcomeResolutionVersion");
+    if (EmptyChecks.isNull(sourceId) && EmptyChecks.isNull(sourceVersion)) {
+      if (EmptyChecks.isNotNull(instance.getParentInstanceId())) {
+        JobTaskQuery query =
+            JobTaskQuery.ofJobInstance(task.getTenantId(), instance.getParentInstanceId());
+        boolean unknownParent = jobTaskMapper.selectByQuery(query).stream()
+            .anyMatch(
+                source -> TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN.equals(source.getErrorCode()));
+        if (unknownParent) return ExternalOutcomeAuthorization.REJECTED;
+      }
+      return ExternalOutcomeAuthorization.NOT_REQUIRED;
+    }
+    Long sourceTaskId;
+    Long version;
+    try {
+      sourceTaskId = longValue(sourceId);
+      version = longValue(sourceVersion);
+    } catch (IllegalArgumentException invalidIdentity) {
+      return ExternalOutcomeAuthorization.REJECTED;
+    }
+    if (EmptyChecks.isNull(sourceTaskId)
+        || sourceTaskId <= 0
+        || EmptyChecks.isNull(version)
+        || version < 0) {
+      return ExternalOutcomeAuthorization.REJECTED;
+    }
+    ExternalOutcomeResolutionConsumeParam consumption = new ExternalOutcomeResolutionConsumeParam(
+        task.getTenantId(), sourceTaskId, version, task.getId());
+    return jobTaskMapper.consumeExternalOutcomeResolution(consumption) == 1
+        ? ExternalOutcomeAuthorization.CONSUMED
+        : ExternalOutcomeAuthorization.REJECTED;
+  }
+
+  private enum ExternalOutcomeAuthorization {
+    NOT_REQUIRED,
+    CONSUMED,
+    REJECTED
   }
 
   private static boolean isCurrentExecutionOwner(
@@ -266,18 +331,48 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
       String workerCode,
       String partitionInvocationId,
       String detailsJson) {
-    // PERF(5.3): 一次 job_task selectById 同时服务续租校验与 cancelRequested 回读，删掉原先续租后的第二次
-    // selectById。cancel 是协作式（worker 下一拍即可感知），用续租前读到的标记读回可接受；租约 CAS 未改。
+    // 普通续租只读一次任务；进度与执行入口写入先取得实例锁，与 REPORT 保持一致的锁顺序。
     JobTaskEntity current = jobTaskMapper.selectById(tenantId, taskId);
+    boolean executionStarted = isExecutionStart(detailsJson);
+    if (executionStarted
+        && (EmptyChecks.isNull(current) || EmptyChecks.isNull(current.getJobInstanceId()))) {
+      return new TaskHeartbeatResult(false, false);
+    }
+    if (EmptyChecks.isNotBlank(detailsJson)
+        && EmptyChecks.isNotNull(current)
+        && EmptyChecks.isNotNull(current.getJobInstanceId())) {
+      Long instanceId = current.getJobInstanceId();
+      jobInstanceMapper.acquireInstanceAdvisoryLock(tenantId, instanceId);
+      current = jobTaskMapper.selectById(tenantId, taskId);
+      if (EmptyChecks.isNull(current) || !instanceId.equals(current.getJobInstanceId())) {
+        return new TaskHeartbeatResult(false, false);
+      }
+    }
     boolean renewed = renewTaskLease(current, tenantId, taskId, workerCode, partitionInvocationId);
     if (!renewed) {
       return new TaskHeartbeatResult(false, false);
     }
+    boolean cancelRequested = Boolean.TRUE.equals(current.getCancelRequested());
+    if (executionStarted && !cancelRequested) {
+      int marked = jobInstanceMapper.markExecutionStarted(tenantId, current.getJobInstanceId());
+      if (marked == 0) {
+        throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.claim_not_available");
+      }
+    }
     if (EmptyChecks.isNotBlank(detailsJson)) {
       jobTaskMapper.updateHeartbeatDetails(tenantId, taskId, detailsJson);
     }
-    boolean cancelRequested = Boolean.TRUE.equals(current.getCancelRequested());
     return new TaskHeartbeatResult(true, cancelRequested);
+  }
+
+  /** 保留任意进度载荷，只有明确的 JSON 布尔真值才能声明执行入口。 */
+  private static boolean isExecutionStart(String detailsJson) {
+    if (EmptyChecks.isBlank(detailsJson)) {
+      return false;
+    }
+    JsonNode details = JsonUtils.fromJson(detailsJson, JsonNode.class);
+    JsonNode marker = EmptyChecks.isNull(details) ? null : details.get("executionStarted");
+    return EmptyChecks.isNotNull(marker) && marker.isBoolean() && marker.booleanValue();
   }
 
   /**
@@ -304,8 +399,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     Instant leaseExpireAt = renewalTime.plusSeconds(leaseDurationSeconds);
     List<RenewLeaseBatchItem> sqlItems = new ArrayList<>(items.size());
     for (LeaseRenewCommand item : items) {
-      boolean leaseRenewItemIsIncomplete =
-          EmptyChecks.isNull(item)
+      boolean leaseRenewItemIsIncomplete = EmptyChecks.isNull(item)
           || EmptyChecks.isBlank(item.tenantId())
           || EmptyChecks.isNull(item.taskId())
           || EmptyChecks.isBlank(item.workerCode())
@@ -437,10 +531,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     String taskType = task.getTaskType();
     String taskTypeTag = EmptyChecks.isNull(taskType) ? "unknown" : task.getTaskType();
     Tags tags = Tags.of("tenant_id", tenantTag, "task_type", taskTypeTag);
-    timerBuilder.tags(tags)
-        .publishPercentileHistogram()
-        .register(meterRegistry)
-        .record(wait);
+    timerBuilder.tags(tags).publishPercentileHistogram().register(meterRegistry).record(wait);
   }
 
   @Override
@@ -514,9 +605,8 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     String partitionKey = EmptyChecks.isNull(partition) ? null : partition.getPartitionKey();
     Instant dataIntervalStart = instance.getDataIntervalStart();
     Instant dataIntervalEnd = instance.getDataIntervalEnd();
-    String partitionInvocationId = EmptyChecks.isNull(partition)
-        ? null
-        : partition.getCurrentInvocationId();
+    String partitionInvocationId =
+        EmptyChecks.isNull(partition) ? null : partition.getCurrentInvocationId();
     List<DependencyResultReference> dependencyResultSnapshot =
         dependencyResultSnapshot(instanceSnapshot);
     ReplayExecutionGuard replayExecutionGuard = replayExecutionGuard(instanceSnapshot);
@@ -609,7 +699,8 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
       throw new IllegalStateException(
           "job instance params_snapshot is malformed; refusing worker claim", badSnapshot);
     }
-    throw new IllegalStateException("job instance params_snapshot is not an object; refusing worker claim");
+    throw new IllegalStateException(
+        "job instance params_snapshot is not an object; refusing worker claim");
   }
 
   @SuppressWarnings("unchecked")
@@ -637,9 +728,9 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
       }
     } catch (IllegalArgumentException badSnapshot) {
       log.warn(
-          "partition input_snapshot parse failed, skip typed partition plan fields: partitionId={}",
+          "partition input_snapshot parse failed, skip typed partition plan fields: partitionId={}, cause={}",
           partition.getId(),
-          badSnapshot);
+          SwallowedExceptionLogger.summary(badSnapshot));
     }
     return Map.of();
   }
@@ -697,10 +788,8 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
       String tenantId, Long partitionId, String workerCode, JobPartitionEntity partition) {
     String invocationId = IdGenerator.newInvocationId();
     Instant invocationStartedAt = BatchDateTimeSupport.utcNow();
-    ClaimPartitionParam.ClaimPartitionParamBuilder claimBuilder = ClaimPartitionParam.builder()
-        .tenantId(tenantId)
-        .id(partitionId)
-        .workerCode(workerCode);
+    ClaimPartitionParam.ClaimPartitionParamBuilder claimBuilder =
+        ClaimPartitionParam.builder().tenantId(tenantId).id(partitionId).workerCode(workerCode);
     Instant leaseBaseTime = BatchDateTimeSupport.utcNow();
     long leaseDurationSeconds = partitionLeaseProperties.getExpireSeconds();
     Instant leaseExpiresAt = leaseBaseTime.plusSeconds(leaseDurationSeconds);

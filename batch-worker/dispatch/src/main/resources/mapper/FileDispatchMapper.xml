@@ -1,15 +1,75 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.worker.dispatchs.mapper.FileDispatchMapper">
-    <select id="selectFileRecord" resultType="map">
-        select *
+    <resultMap id="platformFileRecordViewMap"
+               type="io.github.pinpols.batch.worker.core.mapper.PlatformFileRecordView">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="file_code" javaType="java.lang.String"/>
+            <arg column="biz_type" javaType="java.lang.String"/>
+            <arg column="file_category" javaType="java.lang.String"/>
+            <arg column="file_name" javaType="java.lang.String"/>
+            <arg column="original_file_name" javaType="java.lang.String"/>
+            <arg column="file_ext" javaType="java.lang.String"/>
+            <arg column="file_format_type" javaType="java.lang.String"/>
+            <arg column="charset" javaType="java.lang.String"/>
+            <arg column="mime_type" javaType="java.lang.String"/>
+            <arg column="file_size_bytes" javaType="java.lang.Long"/>
+            <arg column="checksum_type" javaType="java.lang.String"/>
+            <arg column="checksum_value" javaType="java.lang.String"/>
+            <arg column="storage_type" javaType="java.lang.String"/>
+            <arg column="storage_path" javaType="java.lang.String"/>
+            <arg column="storage_bucket" javaType="java.lang.String"/>
+            <arg column="file_version" javaType="java.lang.String"/>
+            <arg column="file_generation_no" javaType="java.lang.Integer"/>
+            <arg column="is_latest" javaType="java.lang.Boolean"/>
+            <arg column="source_type" javaType="java.lang.String"/>
+            <arg column="source_ref" javaType="java.lang.String"/>
+            <arg column="file_status" javaType="java.lang.String"/>
+            <arg column="biz_date" javaType="java.time.LocalDate"/>
+            <arg column="trace_id" javaType="java.lang.String"/>
+            <arg column="metadata_json" javaType="java.lang.Object"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="dispatchChannelConfigViewMap"
+               type="io.github.pinpols.batch.worker.dispatchs.mapper.DispatchChannelConfigView">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="channel_code" javaType="java.lang.String"/>
+            <arg column="channel_name" javaType="java.lang.String"/>
+            <arg column="channel_type" javaType="java.lang.String"/>
+            <arg column="target_endpoint" javaType="java.lang.String"/>
+            <arg column="auth_type" javaType="java.lang.String"/>
+            <arg column="config_json" javaType="java.lang.Object"/>
+            <arg column="receipt_policy" javaType="java.lang.String"/>
+            <arg column="timeout_seconds" javaType="java.lang.Integer"/>
+            <arg column="enabled" javaType="java.lang.Boolean"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+            <arg column="is_deleted" javaType="java.lang.Boolean"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectFileRecord" resultMap="platformFileRecordViewMap">
+        select id, tenant_id, file_code, biz_type, file_category, file_name, original_file_name,
+               file_ext, file_format_type, charset, mime_type, file_size_bytes, checksum_type,
+               checksum_value, storage_type, storage_path, storage_bucket, file_version,
+               file_generation_no, is_latest, source_type, source_ref, file_status, biz_date,
+               trace_id, metadata_json, created_at, updated_at
         from batch.file_record
         where tenant_id = #{tenantId}
           and id = #{fileId}
     </select>
 
-    <select id="selectChannelConfig" resultType="map">
-        select *
+    <select id="selectChannelConfig" resultMap="dispatchChannelConfigViewMap">
+        select id, tenant_id, channel_code, channel_name, channel_type, target_endpoint,
+               auth_type, config_json, receipt_policy, timeout_seconds, enabled,
+               created_at, updated_at, is_deleted
         from batch.file_channel_config
         where tenant_id = #{tenantId}
           and channel_code = #{channelCode}

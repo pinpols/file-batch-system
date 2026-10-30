@@ -27,6 +27,8 @@
 
 pub mod checkpoint;
 pub mod consumer;
+#[cfg(feature = "serde")]
+pub mod execution_start;
 pub mod handler;
 pub mod lifecycle;
 pub mod resilience;
@@ -48,6 +50,10 @@ pub use checkpoint::{
     SdkCheckpointState, SdkTaskStopped,
 };
 pub use consumer::{Consumer, FakeConsumer, MessageOutcome, TaskRecord};
+#[cfg(feature = "serde")]
+pub use execution_start::{
+    execute_after_start_confirmation, ExecutionStartError, ExecutionStartOutcome,
+};
 pub use handler::{
     map_stopped_result, CancellationSignal, CommitError, NoopProgressReporter, ProgressReporter,
     RecordingProgressReporter, StoppableTaskHandler, TaskContext, TaskHandler, TaskResult,

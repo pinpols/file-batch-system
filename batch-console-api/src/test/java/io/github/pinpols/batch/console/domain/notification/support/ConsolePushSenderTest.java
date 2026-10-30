@@ -28,14 +28,19 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import nl.martijndwars.webpush.Notification;
 import org.asynchttpclient.Response;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
 
 @DisplayName("推送发送器: 开关判定, 初始化失败兜底与投递目标查找的生命周期")
+@ExtendWith(MockitoExtension.class)
 class ConsolePushSenderTest {
 
   @DisplayName("保留中断并停止向剩余设备发送")
@@ -163,7 +168,8 @@ class ConsolePushSenderTest {
   @DisplayName("提交前拒绝非法设备密钥")
   @Test
   void shouldRejectInvalidDeviceKeysBeforeSubmitting() throws Exception {
-    ManagedWebPushClient service = configuredService(201);
+    ManagedWebPushClient service = mock(ManagedWebPushClient.class);
+    pushServiceRef(sender).set(service);
     ConsolePushSubscriptionEntity sub = subscription();
     sub.setP256dhKey("invalid key");
     var result = sender.sendToSubscription(sub, new PushPayload("title", null, null, null));
@@ -201,11 +207,12 @@ class ConsolePushSenderTest {
   }
 
   private final ConsolePushProperties properties = new ConsolePushProperties();
-  private final ConsolePushSubscriptionMapper repository =
-      mock(ConsolePushSubscriptionMapper.class);
-  private final ObjectMapper objectMapper = new ObjectMapper();
-  private final ConsolePushSender sender =
-      new ConsolePushSender(properties, repository, objectMapper);
+
+  @Mock
+  private ConsolePushSubscriptionMapper repository;
+
+  private ObjectMapper objectMapper;
+  private ConsolePushSender sender;
 
   @Test
   @DisplayName("推送未开启时单发与广播都不访问订阅存储")
@@ -304,5 +311,11 @@ class ConsolePushSenderTest {
     Field field = ConsolePushSender.class.getDeclaredField("pushService");
     field.setAccessible(true);
     return (AtomicReference<ManagedWebPushClient>) field.get(sender);
+  }
+
+  @BeforeEach
+  void initializeSubject() {
+    objectMapper = new ObjectMapper();
+    sender = new ConsolePushSender(properties, repository, objectMapper);
   }
 }

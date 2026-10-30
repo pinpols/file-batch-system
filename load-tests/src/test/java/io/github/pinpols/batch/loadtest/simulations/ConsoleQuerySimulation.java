@@ -11,7 +11,7 @@ import static io.gatling.javaapi.core.CoreDsl.*;
 import static io.gatling.javaapi.http.HttpDsl.*;
 
 /**
- * Measures the query-side throughput and latency of the console API:
+ * 测量 Console API 查询侧的吞吐量和延迟：
  *   GET /api/console/queries/instances        (job instance list)
  *   GET /api/console/queries/workers          (worker registry)
  *   GET /api/console/queries/alerts           (alert events)
@@ -48,7 +48,7 @@ public class ConsoleQuerySimulation extends Simulation {
             .header("Authorization", AUTH_TOKEN)
             .shareConnections();
 
-    // ── Request chain: weighted mix of typical console queries ─────────────────
+    // ── 请求链：按权重混合典型 Console 查询 ─────────────────
 
     private final ChainBuilder queries = exec(
             http("GET /api/console/query/instances")

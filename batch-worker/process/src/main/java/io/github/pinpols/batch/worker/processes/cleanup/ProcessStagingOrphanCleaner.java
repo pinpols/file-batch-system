@@ -25,16 +25,9 @@ import org.springframework.stereotype.Component;
 /**
  * P1-7:`batch.process_staging` 孤儿清理调度器。
  *
- * <p>清理对象:
- *
- * <ul>
- *   <li>VALIDATE 失败保留的 staging 行(超过 {@code retentionHours} 仍未被下次 PREPARE 同 batchKey 覆盖)
- *   <li>worker 在 COMMIT 后崩溃 / FEEDBACK 失败导致的 staging 残留(本批已 publish 但 staging 没清)
- *   <li>历史人工补数 / 测试数据残留
- * </ul>
- *
- * <p>策略:每 {@code interval} 跑一次,删 {@code staged_at < now() - retentionHours} 的行,单次最多删 {@code
- * batchSize}。多 worker 实例并行用 ShedLock 互斥(只允许一个 worker 执行)。
+ * <p>按代际创建时间选出超过 {@code retentionHours} 的候选，持有平台实例围栏确认候选不再是任务当前代际，
+ * 再在业务库封存并分批删除该代际的暂存行，每次最多删除 {@code batchSize} 行。仅凭行的暂存时间不能判定可回收。
+ * 调度入口使用 ShedLock 协调多实例。
  *
  * <p>指标:
  *
@@ -170,17 +163,19 @@ public class ProcessStagingOrphanCleaner {
     }
     int retentionHours = Math.max(1, properties.getRetentionHours());
     int batchSize = Math.max(100, properties.getBatchSize());
-    boolean stagingCleanupDependenciesAreUnavailable =
-        EmptyChecks.isNull(platformMapper) || EmptyChecks.isNull(businessCleanup) || EmptyChecks.isNull(cleanupFence);
+    boolean stagingCleanupDependenciesAreUnavailable = EmptyChecks.isNull(platformMapper)
+        || EmptyChecks.isNull(businessCleanup)
+        || EmptyChecks.isNull(cleanupFence);
     if (stagingCleanupDependenciesAreUnavailable) {
       throw new IllegalStateException("PROCESS generation cleanup dependencies are not configured");
     }
     int deleted = 0;
-    int offset = 0;
     for (String tenantId : platformMapper.listCleanupTenants()) {
+      Instant cursorTime = null;
+      String cursorGenerationId = null;
       while (deleted < batchSize) {
-        List<ProcessStagingGenerationCandidate> candidates =
-            businessCleanup.listExpired(tenantId, retentionHours, batchSize, offset);
+        List<ProcessStagingGenerationCandidate> candidates = businessCleanup.listExpiredAfter(
+            tenantId, retentionHours, batchSize, cursorTime, cursorGenerationId);
         if (EmptyChecks.isEmpty(Objects.requireNonNull(candidates))) {
           break;
         }
@@ -199,7 +194,9 @@ public class ProcessStagingOrphanCleaner {
                 SwallowedExceptionLogger.summary(ex));
           }
         }
-        offset += candidates.size();
+        ProcessStagingGenerationCandidate lastCandidate = candidates.getLast();
+        cursorTime = Objects.requireNonNull(lastCandidate.getCreatedAt());
+        cursorGenerationId = Objects.requireNonNull(lastCandidate.getGenerationId());
         if (candidates.size() < batchSize) {
           break;
         }
@@ -207,7 +204,6 @@ public class ProcessStagingOrphanCleaner {
       if (deleted >= batchSize) {
         break;
       }
-      offset = 0;
     }
     if (deleted > 0) {
       log.info(
@@ -236,8 +232,8 @@ public class ProcessStagingOrphanCleaner {
       Instant oldest = null;
       for (String tenantId : platformMapper.listCleanupTenants()) {
         Instant tenantOldest = businessCleanup.selectOldestStagedAt(tenantId, 500);
-        boolean tenantHasEarlierStagedRow =
-            EmptyChecks.isNotNull(tenantOldest) && (EmptyChecks.isNull(oldest) || tenantOldest.isBefore(oldest));
+        boolean tenantHasEarlierStagedRow = EmptyChecks.isNotNull(tenantOldest)
+            && (EmptyChecks.isNull(oldest) || tenantOldest.isBefore(oldest));
         if (tenantHasEarlierStagedRow) {
           oldest = tenantOldest;
         }

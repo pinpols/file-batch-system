@@ -7,7 +7,9 @@ import io.github.pinpols.batch.common.enums.SystemPipelineTaskKeys;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.workflow.WorkflowParamResolver;
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.mapper.FileRecordLookupMapper;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,6 +22,28 @@ class WorkflowNodePayloadBuilderSystemPipelineTest {
       mock(OrchestratorWorkflowMappers.class),
       mock(WorkflowParamResolver.class),
       mock(FileRecordLookupMapper.class));
+
+  @Test
+  @DisplayName("节点默认参数仅填缺失键，保留请求明确传入的空值和非空值")
+  void shouldPreserveExplicitNullAndValuesWhenMergingNodeParams() {
+    WorkflowNodePayloadBuilder payloadBuilder = new WorkflowNodePayloadBuilder(
+        mock(OrchestratorJobMappers.class),
+        mock(OrchestratorWorkflowMappers.class),
+        new WorkflowParamResolver(),
+        mock(FileRecordLookupMapper.class));
+    WorkflowNodeEntity node = new WorkflowNodeEntity();
+    node.setNodeParams(
+        "{\"explicitNull\":\"default\",\"explicitValue\":\"default\",\"missing\":\"default\"}");
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("explicitNull", null);
+    payload.put("explicitValue", "request");
+
+    payloadBuilder.mergeNodeParams(payload, node, null);
+
+    assertThat(payload).containsEntry("explicitNull", null);
+    assertThat(payload).containsEntry("explicitValue", "request");
+    assertThat(payload).containsEntry("missing", "default");
+  }
 
   @DisplayName("文件 Worker 固定系统 Pipeline 编码与版本")
   @Test

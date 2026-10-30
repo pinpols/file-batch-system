@@ -57,8 +57,7 @@ class MapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTest {
         "ConsoleUserAccountMapper#deleteById", // 当前无 Java 调用方(死 SQL,保留守护待清理)
         // 假日子表:业务日历的子表,服务层先 calendarMapper.selectById(tenantId,id) 校验父日历归属,再按 calendar_id/id 改删
         "CalendarHolidayMapper#update",
-        "CalendarHolidayMapper#deleteById", // 当前无 Java 调用方(死 SQL,保留守护待清理)
-        "CalendarHolidayMapper#deleteByCalendarId", // 当前无 Java 调用方(死 SQL,保留守护待清理)
+        "CalendarHolidayMapper#deleteByCalendarId", // JSON初始化已按租户读取父日历后整体重建节假日
         "CalendarHolidayMapper#deleteByCalendarIdAndId",
         // Web Push:stale 为后台过期清理；provider 回执更新/失效清理必须匹配租户和原凭据版本。
         "ConsolePushSubscriptionMapper#deleteIfStaleSince",

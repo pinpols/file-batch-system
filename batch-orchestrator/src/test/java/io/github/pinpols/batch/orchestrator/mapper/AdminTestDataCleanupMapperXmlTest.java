@@ -26,11 +26,16 @@ class AdminTestDataCleanupMapperXmlTest {
     Configuration configuration = parseConfiguration();
     String namespace = AdminTestDataCleanupMapper.class.getName();
     assertThat(configuration.hasStatement(namespace + ".cleanupByPrefixTarget")).isTrue();
-    assertThat(configuration.hasStatement(namespace + ".cleanupByTenantIdsTarget")).isTrue();
-    assertThat(configuration.hasStatement(namespace + ".findWorkflowRunIdsByPrefix")).isTrue();
-    assertThat(configuration.hasStatement(namespace + ".findTriggerRequestIdsByPrefix")).isTrue();
-    assertThat(configuration.hasStatement(namespace + ".findOutboxEventsByPrefix")).isTrue();
-    assertThat(configuration.hasStatement(namespace + ".hasAmbiguousJobInstanceIds")).isTrue();
+    assertThat(configuration.hasStatement(namespace + ".cleanupByTenantIdsTarget"))
+        .isTrue();
+    assertThat(configuration.hasStatement(namespace + ".findWorkflowRunIdsByPrefix"))
+        .isTrue();
+    assertThat(configuration.hasStatement(namespace + ".findTriggerRequestIdsByPrefix"))
+        .isTrue();
+    assertThat(configuration.hasStatement(namespace + ".findOutboxEventsByPrefix"))
+        .isTrue();
+    assertThat(configuration.hasStatement(namespace + ".hasAmbiguousJobInstanceIds"))
+        .isTrue();
   }
 
   @Test
@@ -39,16 +44,22 @@ class AdminTestDataCleanupMapperXmlTest {
     Configuration configuration = parseConfiguration();
     String statementId = AdminTestDataCleanupMapper.class.getName() + ".cleanupByPrefixTarget";
     MappedStatement statement = configuration.getMappedStatement(statementId);
-    PrefixCleanupScope scope = new PrefixCleanupScope("owned-%", "op-owned-%", List.of(), List.of(), List.of());
+    PrefixCleanupScope scope =
+        new PrefixCleanupScope("owned-%", "op-owned-%", List.of(), List.of(), List.of());
     EnumSet<CleanupTarget> targets = EnumSet.allOf(CleanupTarget.class);
     targets.removeAll(EnumSet.of(
-        CleanupTarget.FILE_ERROR_RECORD, CleanupTarget.FILE_DISPATCH_RECORD, CleanupTarget.FILE_RECORD));
+        CleanupTarget.FILE_ERROR_RECORD,
+        CleanupTarget.FILE_DISPATCH_RECORD,
+        CleanupTarget.FILE_RECORD));
 
     for (CleanupTarget target : targets) {
       Map<String, Object> parameters = Map.of("target", target.name(), "scope", scope);
       BoundSql boundSql = statement.getBoundSql(parameters);
       String sql = boundSql.getSql().replaceAll("\\s+", " ").trim();
-      assertThat(sql).as(target.name()).contains("batch.").doesNotContain("select 1 where false", "in ()");
+      assertThat(sql)
+          .as(target.name())
+          .contains("batch.")
+          .doesNotContain("select 1 where false", "in ()");
     }
   }
 
@@ -57,9 +68,11 @@ class AdminTestDataCleanupMapperXmlTest {
   void shouldBindFullOutboxPartitionIdentity_whenDeletingDeliveryLog() {
     Configuration configuration = parseConfiguration();
     OffsetDateTime createdAt = OffsetDateTime.parse("2026-10-24T00:00:00Z");
-    OutboxEventIdentity event = new OutboxEventIdentity("owned-tenant", 301L, createdAt, "owned-event-key");
+    OutboxEventIdentity event =
+        new OutboxEventIdentity("owned-tenant", 301L, createdAt, "owned-event-key");
     List<OutboxEventIdentity> events = List.of(event);
-    PrefixCleanupScope scope = new PrefixCleanupScope("owned-%", "op-owned-%", List.of(), List.of(), events);
+    PrefixCleanupScope scope =
+        new PrefixCleanupScope("owned-%", "op-owned-%", List.of(), List.of(), events);
     Map<String, Object> parameters = Map.of("target", "EVENT_DELIVERY_LOG", "scope", scope);
     String statementId = AdminTestDataCleanupMapper.class.getName() + ".cleanupByPrefixTarget";
     MappedStatement statement = configuration.getMappedStatement(statementId);
@@ -77,28 +90,38 @@ class AdminTestDataCleanupMapperXmlTest {
   @DisplayName("歧义守护保留NULL三值逻辑,父表删除直接约束本行而不是投回数字ID集合")
   void shouldGuardNullOwnershipAndDeleteOnlyOwnedRows() {
     Configuration configuration = parseConfiguration();
-    PrefixCleanupScope scope = new PrefixCleanupScope("owned-%", "op-owned-%", List.of(), List.of(), List.of());
+    PrefixCleanupScope scope =
+        new PrefixCleanupScope("owned-%", "op-owned-%", List.of(), List.of(), List.of());
     String namespace = AdminTestDataCleanupMapper.class.getName();
-    MappedStatement guard = configuration.getMappedStatement(namespace + ".hasAmbiguousJobInstanceIds");
+    MappedStatement guard =
+        configuration.getMappedStatement(namespace + ".hasAmbiguousJobInstanceIds");
     Map<String, Object> guardParameters = Map.of("scope", scope);
     BoundSql guardSql = guard.getBoundSql(guardParameters);
-    assertThat(guardSql.getSql()).contains(
-        "is not true", "archive.job_instance_archive cold", "instance.tenant_id = cold.tenant_id",
-        "instance.id = cold.id", "instance.biz_date = cold.biz_date");
-    MappedStatement deletion = configuration.getMappedStatement(namespace + ".cleanupByPrefixTarget");
+    assertThat(guardSql.getSql())
+        .contains(
+            "is not true",
+            "archive.job_instance_archive cold",
+            "instance.tenant_id = cold.tenant_id",
+            "instance.id = cold.id",
+            "instance.biz_date = cold.biz_date");
+    MappedStatement deletion =
+        configuration.getMappedStatement(namespace + ".cleanupByPrefixTarget");
     Map<String, Object> deleteParameters = Map.of("target", "JOB_INSTANCE", "scope", scope);
     BoundSql deleteSql = deletion.getBoundSql(deleteParameters);
     String sql = deleteSql.getSql();
-    assertThat(sql).contains("delete from batch.job_instance instance", "instance.job_code like")
+    assertThat(sql)
+        .contains("delete from batch.job_instance instance", "instance.job_code like")
         .doesNotContain("where id in");
   }
 
   private Configuration parseConfiguration() {
     String resource = "mapper/AdminTestDataCleanupMapper.xml";
     Configuration configuration = new Configuration();
-    try (InputStream inputStream = Thread.currentThread().getContextClassLoader().getResourceAsStream(resource)) {
+    try (InputStream inputStream =
+        Thread.currentThread().getContextClassLoader().getResourceAsStream(resource)) {
       assertThat(inputStream).as(resource).isNotNull();
-      new XMLMapperBuilder(inputStream, configuration, resource, configuration.getSqlFragments()).parse();
+      new XMLMapperBuilder(inputStream, configuration, resource, configuration.getSqlFragments())
+          .parse();
       return configuration;
     } catch (Exception ex) {
       throw new AssertionError("failed to validate " + resource, ex);

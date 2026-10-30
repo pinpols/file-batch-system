@@ -205,17 +205,20 @@ class SqlTransformComputePluginIntegrationTest {
     String selectAccountAAmountSql = """
         select total_amount from biz.account_summary where account_id='A'
         """;
-    BigDecimal accountAAmount = jdbcTemplate.queryForObject(selectAccountAAmountSql, BigDecimal.class);
+    BigDecimal accountAAmount =
+        jdbcTemplate.queryForObject(selectAccountAAmountSql, BigDecimal.class);
     assertThat(accountAAmount).isEqualByComparingTo("20.00");
     String selectAccountBAmountSql = """
         select total_amount from biz.account_summary where account_id='B'
         """;
-    BigDecimal accountBAmount = jdbcTemplate.queryForObject(selectAccountBAmountSql, BigDecimal.class);
+    BigDecimal accountBAmount =
+        jdbcTemplate.queryForObject(selectAccountBAmountSql, BigDecimal.class);
     assertThat(accountBAmount).isEqualByComparingTo("7.00");
     String accountSummaryCountSql = """
             select count(*) from biz.account_summary
             """;
-    Integer accountSummaryCount = jdbcTemplate.queryForObject(accountSummaryCountSql, Integer.class);
+    Integer accountSummaryCount =
+        jdbcTemplate.queryForObject(accountSummaryCountSql, Integer.class);
     assertThat(accountSummaryCount).isEqualTo(2);
 
     // staging 已被 feedback 清空
@@ -247,12 +250,7 @@ class SqlTransformComputePluginIntegrationTest {
           and staging_generation_id = :stagingGenerationId
         """;
     spec.put(
-        "validations",
-        List.of(Map.of(
-            "name",
-            "non_negative_total",
-            "checkSql",
-            validationSql)));
+        "validations", List.of(Map.of("name", "non_negative_total", "checkSql", validationSql)));
 
     plugin.prepare(context);
     plugin.compute(context);
@@ -266,7 +264,8 @@ class SqlTransformComputePluginIntegrationTest {
     String accountSummaryCountSql = """
             select count(*) from biz.account_summary
             """;
-    Integer accountSummaryCount = jdbcTemplate.queryForObject(accountSummaryCountSql, Integer.class);
+    Integer accountSummaryCount =
+        jdbcTemplate.queryForObject(accountSummaryCountSql, Integer.class);
     assertThat(accountSummaryCount).isZero();
     // staging 仍有 2 行(留作 forensics,直到下次 prepare/feedback 才清)
     String stagingCountSql = """
@@ -299,7 +298,8 @@ class SqlTransformComputePluginIntegrationTest {
     String accountSummaryCountSql = """
             select count(*) from biz.account_summary
             """;
-    Integer accountSummaryCount = jdbcTemplate.queryForObject(accountSummaryCountSql, Integer.class);
+    Integer accountSummaryCount =
+        jdbcTemplate.queryForObject(accountSummaryCountSql, Integer.class);
     assertThat(accountSummaryCount).isZero();
   }
 
@@ -340,7 +340,8 @@ class SqlTransformComputePluginIntegrationTest {
     String otherTenantStagingCountSql = """
         select count(*) from batch.process_staging where tenant_id='t2'
         """;
-    Integer otherTenantStagingCount = jdbcTemplate.queryForObject(otherTenantStagingCountSql, Integer.class);
+    Integer otherTenantStagingCount =
+        jdbcTemplate.queryForObject(otherTenantStagingCountSql, Integer.class);
     assertThat(otherTenantStagingCount).isEqualTo(1);
   }
 
@@ -432,7 +433,8 @@ class SqlTransformComputePluginIntegrationTest {
         delete from batch.process_staging_generation
         where generation_id = cast(? as uuid)
         """;
-    assertThatThrownBy(() -> jdbcTemplate.update(deleteReferencedGenerationSql, context.getStagingGenerationId()))
+    assertThatThrownBy(() ->
+            jdbcTemplate.update(deleteReferencedGenerationSql, context.getStagingGenerationId()))
         .isInstanceOf(DataIntegrityViolationException.class);
 
     String deleteGenerationStagingSql = """
@@ -444,7 +446,8 @@ class SqlTransformComputePluginIntegrationTest {
         delete from batch.process_staging_generation
         where generation_id = cast(? as uuid)
         """;
-    Integer deletedGenerationCount = jdbcTemplate.update(deleteGenerationSql, context.getStagingGenerationId());
+    Integer deletedGenerationCount =
+        jdbcTemplate.update(deleteGenerationSql, context.getStagingGenerationId());
     assertThat(deletedGenerationCount).isEqualTo(1);
   }
 
@@ -560,7 +563,8 @@ class SqlTransformComputePluginIntegrationTest {
     String accountSummaryCountSql = """
             select count(*) from biz.account_summary
             """;
-    Integer accountSummaryCount = jdbcTemplate.queryForObject(accountSummaryCountSql, Integer.class);
+    Integer accountSummaryCount =
+        jdbcTemplate.queryForObject(accountSummaryCountSql, Integer.class);
     assertThat(accountSummaryCount).isZero();
   }
 
@@ -589,7 +593,8 @@ class SqlTransformComputePluginIntegrationTest {
     String accountSummaryCountSql = """
             select count(*) from biz.account_summary
             """;
-    Integer accountSummaryCount = jdbcTemplate.queryForObject(accountSummaryCountSql, Integer.class);
+    Integer accountSummaryCount =
+        jdbcTemplate.queryForObject(accountSummaryCountSql, Integer.class);
     assertThat(accountSummaryCount).isEqualTo(2);
     String selectAccountAAmountSql = """
         select total_amount from biz.account_summary where account_id='A'

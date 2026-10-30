@@ -78,21 +78,14 @@ class QuartzLaunchJobIntegrationTest extends AbstractIntegrationTest {
         delete from batch.tenant where tenant_id like 'quartz-fire-%'
     """;
 
-    jdbcTemplate.update(
-        deleteScheduledOccurrenceCatchUpAuditSql);
-    jdbcTemplate.update(
-        deleteScheduledOccurrenceSql);
-    jdbcTemplate.update(
-        deleteScheduledOccurrenceCoverageSql);
-    jdbcTemplate.update(
-        deleteTriggerMisfirePendingSql);
-    jdbcTemplate.update(
-        deleteTriggerOutboxEventSql);
+    jdbcTemplate.update(deleteScheduledOccurrenceCatchUpAuditSql);
+    jdbcTemplate.update(deleteScheduledOccurrenceSql);
+    jdbcTemplate.update(deleteScheduledOccurrenceCoverageSql);
+    jdbcTemplate.update(deleteTriggerMisfirePendingSql);
+    jdbcTemplate.update(deleteTriggerOutboxEventSql);
     jdbcTemplate.update(deleteTriggerRequestSql);
-    jdbcTemplate.update(
-        deleteWorkflowDefinitionSql);
-    jdbcTemplate.update(
-        deleteBatchDayCatchupControlSql);
+    jdbcTemplate.update(deleteWorkflowDefinitionSql);
+    jdbcTemplate.update(deleteBatchDayCatchupControlSql);
     jdbcTemplate.update(deleteBusinessCalendarSql);
     jdbcTemplate.update(deleteTenantSql);
   }
@@ -126,13 +119,10 @@ class QuartzLaunchJobIntegrationTest extends AbstractIntegrationTest {
     JobExecutionContext context = mock(JobExecutionContext.class);
     String tenantId = "quartz-fire-" + UUID.randomUUID();
     String workflowCode = "IMPORT_" + UUID.randomUUID().toString().replace("-", "");
-    jdbcTemplate.update(
-        insertTenantSql,
-        tenantId,
-        tenantId);
+    jdbcTemplate.update(insertTenantSql, tenantId, tenantId);
     jdbcTemplate.update(insertBusinessCalendarSql, tenantId, LocalTime.MIDNIGHT);
-    Long workflowDefinitionId =
-    jdbcTemplate.queryForObject(insertWorkflowDefinitionSql, Long.class, tenantId, workflowCode, workflowCode);
+    Long workflowDefinitionId = jdbcTemplate.queryForObject(
+        insertWorkflowDefinitionSql, Long.class, tenantId, workflowCode, workflowCode);
     JobDataMap jobDataMap = new JobDataMap();
     jobDataMap.put(QuartzLaunchJob.TENANT_ID, tenantId);
     jobDataMap.put(QuartzLaunchJob.WORKFLOW_DEFINITION_ID, workflowDefinitionId);
@@ -153,10 +143,7 @@ class QuartzLaunchJobIntegrationTest extends AbstractIntegrationTest {
     quartzLaunchJob.execute(context);
 
     // ADR-010: 异步路径写 trigger_outbox_event 而非调 HTTP adapter
-    Integer outboxCount = jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        tenantId);
+    Integer outboxCount = jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId);
     assertThat(outboxCount).as("Quartz fire should produce one outbox event").isEqualTo(1);
   }
 

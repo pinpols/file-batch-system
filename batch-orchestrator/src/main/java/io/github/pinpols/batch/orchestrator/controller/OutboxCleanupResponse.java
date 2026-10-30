@@ -1,4 +1,4 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
-/** Stable response contract for outbox cleanup operations. */
+/** Outbox 清理操作的稳定响应契约。 */
 public record OutboxCleanupResponse(int published, int giveUp) {}

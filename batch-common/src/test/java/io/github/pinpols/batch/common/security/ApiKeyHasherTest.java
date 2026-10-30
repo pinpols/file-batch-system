@@ -78,7 +78,7 @@ class ApiKeyHasherTest {
   void newSalt_isBase64_andNonEmpty() {
     String salt = ApiKeyHasher.newSalt();
     assertThat(salt).isNotBlank();
-    // base64 of 16B is 24 chars w/ padding
+    // 16 字节内容编码为 Base64 后，带填充时长度为 24 个字符。
     assertThat(salt).hasSize(24);
   }
 }

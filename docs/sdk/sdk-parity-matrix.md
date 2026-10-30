@@ -2,11 +2,23 @@
 
 > **本次 Workflow 改造的适用范围**：下表保留 2026-06-17 的基础协议核查证据，旧行号/通过记录不是当前版本实测。当前源码五语言 SDK 未声明/消费 `replayCapabilities` 和 `replayExecutionGuard`；平台 DTO 支持不等于 SDK 支持。普通 claim/report 与冻结依赖快照、分区参数、Replay 副作用能力应分别核对，不得以基础 conformance 推导“本次改造五语言全部对齐”。
 >
-> Replay 能力缺失保持 UNKNOWN/失败关闭。后续若开放通用 SDK Replay，先落实声明上报、执行前匹配、非幂等开始证据及结果未知恢复，再补充跨语言 fixture 与真实平台验证；本次仅修正文档，不修改 SDK 代码。
+> Replay 能力缺失保持 UNKNOWN/失败关闭。Java 的非幂等 HTTP 执行开始确认与通用 Replay 能力合同分开维护；后续开放通用 SDK Replay 仍需落实声明上报、执行前匹配和结果未知恢复。下述执行计时改造不替代该验收。
 
 > **用途**:回答"五语言 SDK 哪些对齐 / 哪些没对齐"。每格都附 `文件:行号` 证据,可复核。
 > **配套**:[`byo-sdk-guide.md`](byo-sdk-guide.md)(设计与定位)、[`byo-conformance-contract.md`](byo-conformance-contract.md)(契约用例)。
 > **核查日期**:2026-06-17(基于当时 `main`)。改动 SDK 协议/能力后请同步本表。
+
+## 执行入口计时增量核对（2026-10-25）
+
+| 语言 | 当前接入点 | 取消与失败边界 |
+|---|---|---|
+| Java | `TaskDispatcher` 在业务处理器前调用 `PlatformHttpClient.confirmExecutionStarted` | 确认失败不执行、不伪造失败回报；明确取消走取消结果 |
+| Go | `Worker.dispatch` 在业务协程内使用带 `details.executionStarted` 的 `RenewRequest` | 租约撤销或响应失败不执行、不回报；取消走既有取消结果 |
+| Python | `_confirm_execution_entry` 复用单次续租；`renew` 单独拒绝 409 | 不将 409 视为 CLAIM 幂等成功；确认失败不执行、不回报 |
+| TypeScript | `WorkerLifecycle` 在处理器前续租确认，优先使用 CLAIM 当前 invocation | 确认异常保留控制面失败口径；明确取消不进入处理器 |
+| Rust | `serde`/`http`/`kafka` 构建提供 `execute_after_start_confirmation` | 自定义执行桥必须包裹业务调用；错误不回报为业务失败，取消结果单独处理 |
+
+计时信号不设置非幂等副作用证据，不改变处理器参数或业务批处理逻辑。Rust 自定义 `MessageHandler` 没有统一自动派发器，因此公开保护入口通过真实 HTTP 用例验证，宿主仍需按 [Rust README](../../sdk/rust/README.md) 接入；不能把可调用能力等同于所有外部宿主已升级。其余旧矩阵保留历史证据边界。
 
 ## 0. 怎么读这张表 + 核查方法论(重要)
 

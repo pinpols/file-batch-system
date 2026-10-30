@@ -57,21 +57,17 @@ WHERE tenant_id = 'tenantA'
 
 ### 4.1 自动释放路径
 
-```
-Day-1 跑完最后一个 job
-   │
-   ▼
-BatchDaySettleScheduler(默认 60s 一次)
-   │ tx1: IN_FLIGHT → SETTLING
-   │ tx2: SETTLING → SETTLED + 写 batch_day_operation_audit
-   ▼
-BatchDayWaitingReleaseScheduler(默认 60s 一次)
-   │ 扫 batch_day_waiting_launch where wait_status='WAITING'
-   │ 按 (tenantId, calendarCode, bizDate-1) 去重
-   │ 探测前一日 day_status ∈ {SETTLED, SKIPPED, MANUAL_RELEASED}
-   │ 命中 → 委托 BatchDayOperationService.releaseWaitingLaunchesForBatchDay
-   ▼
-重投 LaunchService.launch + markReleased(operator='AUTO_RELEASE')
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  READY["前一业务日达到结算条件"] --> CLAIM["BatchDaySettleScheduler<br/>tx1：CAS 到 SETTLING"]
+  CLAIM --> FINAL["tx2：重读工作与指标"]
+  FINAL -->|"成功收敛"| SETTLED["SETTLED + 审计"]
+  FINAL -->|"仍有工作 / 失败"| HOLD["回到活动态或 FAILED<br/>继续等待 / 补救"]
+  SETTLED --> SCAN["BatchDayWaitingReleaseScheduler<br/>扫描 WAITING 并按前一日去重"]
+  MANUAL["SKIPPED / MANUAL_RELEASED"] --> SCAN
+  SCAN --> RELEASE["releaseWaitingLaunchesForBatchDay"]
+  RELEASE --> LAUNCH["重投 launch<br/>成功后标记 RELEASED / AUTO_RELEASE"]
 ```
 
 **释放延迟** ≈ settle 间隔 + waiting-release 间隔(默认上限约 2 分钟)。可调:
@@ -226,3 +222,26 @@ Content-Type: application/json
 - 设计文档:[`docs/design/batch-day-capability-design.md`](../design/batch-day-capability-design.md) — 能力总览
 - 时区/DST 配合:[`docs/design/batch-day-timezone-dst-optimized-design.md`](../design/batch-day-timezone-dst-optimized-design.md)
 - 部署模式:[`docs/design/worker-deployment-models.md`](../design/worker-deployment-models.md) §4.1.E
+
+
+## Console治理与状态回读
+
+失败批日的自动补跑重扫会复用已接纳请求保存的 Workflow 目标与启动载荷，不会因当前单作业 Workflow 关联变化改写原请求。首次创建补跑请求仍要求当前存在可用的受管 Workflow；实际启动仍由 Workflow 启动入口执行准入与状态校验，复用请求不表示执行成功。
+
+批日失败结算事务完成后才登记并启动补跑；若进程在两者之间退出，失败日扫描会继续恢复尚未终态的自动补跑请求。
+
+已派发、已拒绝、重复和 `GIVE_UP` 请求不由批日自动补跑重投；`GIVE_UP` 表示重试耗尽，需要人工核对处理。
+
+补跑恢复按根请求判断状态；子 Job 可继承相同去重键，其状态不代替根请求状态。
+
+批日补跑根请求通过租户和业务键唯一索引收敛并发接纳；未取得该键的执行器不启动，若已接纳请求未完成则由后续扫描恢复。V369 按空库部署基线执行，不自动处理既有重复数据。
+
+现有批次日列表和窗口提供治理抽屉。ADMIN可按当前状态执行FREEZE/RELEASE/SKIP/REOPEN/CLOSE/SETTLE_EMPTY，并暂停/恢复自动补扫；AUDITOR和TENANT_ADMIN仅读预览与历史缺口，普通租户用户仅读窗口。RELEASE置为MANUAL_RELEASED并尝试释放后一日等待启动，不是单纯解冻；服务端继续核对状态、依赖等待与未收敛义务。
+
+窗口查询 `GET /api/console/queries/batch-days/{bizDate}/window` 返回数据库 `frozen`，无批次日记录为null，不能当成false。前端写入后重新读取窗口确认。历史缺口查询最多90个自然日，结束日期不得晚于该日历当前业务日期；缺记录不证明漏跑。
+
+前端未知命令按当前用户/租户/日历在标签页保留原请求身份，刷新后只重试原幂等键。服务端幂等保留24小时，客户端23小时后阻止自动重试并要求人工核对审计；过期或损坏恢复记录不能生成替代命令。用户说明与本地证据见配对前端的批次日治理指南和同日实施报告。该控制台验收不替代Quartz、依赖释放后Worker执行或发布门禁。
+
+批次日窗口的自动 Catch-up 为每个作业冻结独立项目键：组合键不超过 Trigger 的 256 字符上限时保持原形式，超过时使用原请求键与作业编码生成的稳定摘要。提交结果不确定时以原批次状态和对端回执核验为准；摘要键不是执行成功证明，也不能用换键重发代替对账。
+
+管理员查询原补跑请求未找到时，可选择“放弃未建档请求”。服务端与首次冻结竞争同一租户和原键的唯一约束：若围栏获胜，返回 `ABANDONED`，该原键不能再建档；若批次已冻结，返回既有状态，按原请求继续查询或对账。只有确认 `ABANDONED` 或 `COMPLETE` 后，页面才允许清除本地原键。单次未查到、请求失败或围栏请求响应丢失都不能作为换键的依据。

@@ -27,12 +27,14 @@ class WorkflowMapResponseJacksonTest {
   @Test
   @DisplayName("运行动作回包仅保留编号与状态两键, 且整型编号归一为数值 42")
   void shouldKeepIdAndStatusKeys_whenRunActionRoundTrips() throws Exception {
-    // 编排 HTTP 回传 id 可能反序列化为 Integer；record longValue 归一为 Long。
+    // 编排 HTTP 回传数值 id，客户端按 Long 字段反序列化。
     Map<String, Object> row = new LinkedHashMap<>();
     row.put("id", 42);
     row.put("status", "TERMINATED");
 
-    Map<String, Object> back = roundTrip(ConsoleWorkflowRunActionResponse.from(row));
+    var response =
+        mapper.readValue(mapper.writeValueAsString(row), ConsoleWorkflowRunActionResponse.class);
+    Map<String, Object> back = roundTrip(response);
 
     assertThat(back).containsOnlyKeys("id", "status");
     assertThat(back).containsEntry("id", 42).containsEntry("status", "TERMINATED");
@@ -46,7 +48,9 @@ class WorkflowMapResponseJacksonTest {
     row.put("nodeCode", "N1");
     row.put("nodeStatus", "SKIPPED");
 
-    Map<String, Object> back = roundTrip(ConsoleWorkflowRunSkipNodeResponse.from(row));
+    var response =
+        mapper.readValue(mapper.writeValueAsString(row), ConsoleWorkflowRunSkipNodeResponse.class);
+    Map<String, Object> back = roundTrip(response);
 
     assertThat(back).containsOnlyKeys("id", "nodeCode", "nodeStatus");
     assertThat(back).containsEntry("nodeCode", "N1").containsEntry("nodeStatus", "SKIPPED");

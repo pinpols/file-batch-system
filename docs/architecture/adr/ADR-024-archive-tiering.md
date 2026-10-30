@@ -5,7 +5,7 @@
 - **Status**: Accepted（**第 3 阶段 / P2 暂缓**，数据量 / 备份 / 监管阈值到了再开工 — 见"实施触发条件"）
 - **Date**: 2026-05-06
 - **Supersedes**: 部分超越 §archive 冷表对齐基线（仍兼容）
-- **Related**: ADR-022（forensic 长保留）/ §archive 冷表对齐 / §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../archive/standards/worker-capability-priority-and-scope-2026-05-06.md)
+- **Related**: ADR-022（forensic 长保留）/ §archive 冷表对齐 / §14.3.2 / [系统职责范围](../system-scope-boundary.md)
 
 ## 范围边界（Scope Discipline）
 
@@ -80,13 +80,16 @@ batch.archive_storage_metadata
 
 `ArchiveTieringScheduler` 定期：
 
-```
-每月 1 日 03:00 (按 calendar)
-  ├── 找出 archive.* 中超过 WARM_RETENTION_MONTHS（默认 12）的最早 partition
-  ├── COPY ... TO PROGRAM 'parquet-tools' → OSS（流式，不进 worker 内存）
-  ├── 写 archive_storage_metadata + sha256 attestation
-  ├── DETACH PARTITION（保留物理表 30 天 grace 后 DROP，防回滚需求）
-  └── 写 audit log
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+%% 决策示意；实施范围以本文状态记录为准。
+flowchart TB
+  CAL["每月归档窗口"] --> P["选择超过温层保留期的分区"]
+  P --> COPY["流式导出 Parquet → 对象存储"]
+  COPY --> META["保存位置元数据 + SHA-256 证明"]
+  META --> DETACH["DETACH PARTITION"]
+  DETACH --> GRACE["宽限期后 DROP 物理表"]
+  GRACE --> AUDIT["记录审计日志"]
 ```
 
 3. **冷查询走"hybrid view"**：

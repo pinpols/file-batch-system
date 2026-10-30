@@ -17,7 +17,7 @@
 \connect batch_business
 
 CREATE SCHEMA IF NOT EXISTS batch;
-COMMENT ON SCHEMA batch IS 'Platform-shared schema reused in business DB for cross-DB staging tables.';
+COMMENT ON SCHEMA batch IS '平台共享 schema，在业务库中复用以存放跨库 staging 表。';
 
 CREATE TABLE IF NOT EXISTS batch.process_staging_generation (
     generation_id      UUID PRIMARY KEY,
@@ -88,4 +88,4 @@ ALTER TABLE batch.process_staging_default SET (
 );
 
 COMMENT ON TABLE batch.process_staging IS
-    'PROCESS WAP pipeline staging area; rows written at COMPUTE, validated at VALIDATE, published at COMMIT, cleaned at FEEDBACK. Lives in business DB to share transaction with biz.<target>.';
+    'PROCESS WAP 流水线暂存区；数据在 COMPUTE 阶段写入、VALIDATE 阶段校验、COMMIT 阶段发布、FEEDBACK 阶段清理。该表位于业务库，以便与 biz.<target> 共用事务。';

@@ -99,3 +99,7 @@ Verifier 失败默认**不**中止任务。调用方决定升级路径：
 - `batch-common` 多 3 个类 + 1 个测试；其它模块按需添加 verifier，零侵入
 - 告警面板可以围绕 `batch.verifier.failures{code, reason}` 建立 SLO
 - 后续若发现 verifier 跑太慢（unlikely，目前都是 in-memory 计算），可以加超时控制
+
+## 2026-10-27 致命失败事实与可空元数据
+
+硬中止以fatal校验失败事实裁决，不能用错误码是否非空代替该事实。首个致命失败的code/message可空，由适配器既有VERIFIER_FATAL/默认消息兜底；后续失败不能因前一错误码为空而覆盖首个失败。软失败继续仅记录证据。真实注册器及适配器回归验证失败响应与失败仓储调用，没有把错误元数据缺省当作产物成功；详见[当日验证](../../review/frontend-backend-bug-review-2026-10-27.md#backend-validation-后端定位与致命验收结果验证)。

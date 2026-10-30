@@ -23,7 +23,9 @@ public record ProcessInvocationIdentity(
     boolean hasCompleteClaimedIdentity = !tenantId.isBlank()
         && !workerId.isBlank()
         && !invocationId.isBlank()
-        && taskId > 0 && jobInstanceId > 0 && jobPartitionId > 0;
+        && taskId > 0
+        && jobInstanceId > 0
+        && jobPartitionId > 0;
     if (!hasCompleteClaimedIdentity) {
       throw new IllegalArgumentException("Claimed process invocation identity is incomplete");
     }

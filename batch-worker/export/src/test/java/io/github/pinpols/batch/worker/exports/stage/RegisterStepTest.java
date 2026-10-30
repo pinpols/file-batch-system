@@ -101,7 +101,8 @@ class RegisterStepTest {
     when(runtimeRepository.existsFileRecordByStoragePath("t1", "bucket-1", "obj.json"))
         .thenReturn(true);
     when(runtimeRepository.loadFileRecordByStoragePath("t1", "bucket-1", "obj.json"))
-        .thenReturn(Map.of("id", 1L, "checksum_value", "bbb", "metadata_json", Map.of("jobInstanceId", 101L)));
+        .thenReturn(Map.of(
+            "id", 1L, "checksum_value", "bbb", "metadata_json", Map.of("jobInstanceId", 101L)));
 
     var result = step.execute(ctx);
 
@@ -154,8 +155,15 @@ class RegisterStepTest {
     when(runtimeRepository.existsFileRecordByStoragePath("t1", "bucket-1", "obj.json"))
         .thenReturn(true);
     when(runtimeRepository.loadFileRecordByStoragePath("t1", "bucket-1", "obj.json"))
-        .thenReturn(Map.of("id", 1L, "checksum_value", "aaa", "file_generation_no", 2,
-            "metadata_json", Map.of("jobInstanceId", 101L)));
+        .thenReturn(Map.of(
+            "id",
+            1L,
+            "checksum_value",
+            "aaa",
+            "file_generation_no",
+            2,
+            "metadata_json",
+            Map.of("jobInstanceId", 101L)));
     when(exportDataPluginRegistry.require("jdbc_mapped_export")).thenReturn(exportDataPlugin);
 
     var result = step.execute(ctx);
@@ -259,8 +267,15 @@ class RegisterStepTest {
     when(runtimeRepository.existsFileRecordByStoragePath("t1", "bucket-1", "obj.json"))
         .thenReturn(true);
     when(runtimeRepository.loadFileRecordByStoragePath("t1", "bucket-1", "obj.json"))
-        .thenReturn(Map.of("id", 1L, "checksum_value", "aaa", "file_generation_no", 2,
-            "metadata_json", Map.of("jobInstanceId", 101L)));
+        .thenReturn(Map.of(
+            "id",
+            1L,
+            "checksum_value",
+            "aaa",
+            "file_generation_no",
+            2,
+            "metadata_json",
+            Map.of("jobInstanceId", 101L)));
     when(exportDataPluginRegistry.require("jdbc_mapped_export")).thenReturn(exportDataPlugin);
     return ctx;
   }

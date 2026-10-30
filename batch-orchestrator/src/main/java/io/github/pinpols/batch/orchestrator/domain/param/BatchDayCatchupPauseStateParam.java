@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.orchestrator.domain.param;
 
+import java.time.Instant;
 import java.util.Objects;
 import lombok.Builder;
-import java.time.Instant;
 
 /** 一次追平暂停状态写入，恢复时保留原暂停证据。 */
 @Builder

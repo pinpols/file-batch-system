@@ -17,13 +17,12 @@ import io.github.pinpols.batch.orchestrator.infrastructure.dryrun.JdbcDryRunSqlP
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import java.time.LocalDate;
 import java.time.Month;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 @DisplayName("试运行计划服务: 定义校验, 计划生成与执行探针拦截口径")
 class DefaultDryRunPlanServiceTest {
@@ -31,21 +30,16 @@ class DefaultDryRunPlanServiceTest {
   private OrchestratorConfigCacheService configCache;
   private SchedulePlanBuilder planBuilder;
   private DefaultDryRunPlanService service;
-  private JdbcTemplate jdbcTemplate;
 
   @BeforeEach
   void setUp() {
     configCache = mock(OrchestratorConfigCacheService.class);
     planBuilder = mock(SchedulePlanBuilder.class);
-    jdbcTemplate = mock(JdbcTemplate.class);
-    @SuppressWarnings("unchecked")
-    ObjectProvider<JdbcTemplate> jdbcTemplateProvider = mock(ObjectProvider.class);
-    when(jdbcTemplateProvider.getIfAvailable()).thenReturn(jdbcTemplate);
     DryRunObjectStorageProbe objectStorageProbe = mock(DryRunObjectStorageProbe.class);
     service = new DefaultDryRunPlanService(
         configCache,
         planBuilder,
-        new JdbcDryRunSqlProbe(jdbcTemplateProvider),
+        new JdbcDryRunSqlProbe(),
         objectStorageProbe,
         request -> new OutboundHttpResponse(200, ""));
   }
@@ -70,11 +64,8 @@ class DefaultDryRunPlanServiceTest {
   @Test
   @DisplayName("Job 预检不要求由 Workflow 所有的日程字段")
   void shouldValidateJob_whenScheduleOwnedByWorkflow() {
-    JobDefinitionEntity job = JobDefinitionEntity.builder()
-        .id(1L)
-        .tenantId("t1")
-        .jobCode("JOB_A")
-        .build();
+    JobDefinitionEntity job =
+        JobDefinitionEntity.builder().id(1L).tenantId("t1").jobCode("JOB_A").build();
     when(configCache.findEnabledJobDefinition("t1", "JOB_A")).thenReturn(job);
     DryRunPlanRequest request = DryRunPlanRequest.builder()
         .tenantId("t1")
@@ -280,6 +271,27 @@ class DefaultDryRunPlanServiceTest {
   }
 
   @Test
+  @DisplayName("SQL 拒绝提示描述静态校验，不暗示会执行数据库计划")
+  void shouldDescribeSqlRejectionsAsStaticValidation() {
+    var probe = new JdbcDryRunSqlProbe();
+    var findings = new ArrayList<DryRunFinding>();
+    probe.probe(Map.of("sql", "EXPLAIN SELECT 1"), findings);
+    probe.probe(Map.of("sql", "DELETE FROM batch.job_instance"), findings);
+    probe.probe(Map.of("sql", "SELECT 1; SELECT 2"), findings);
+    probe.probe(Map.of("sql", "SELECT ("), findings);
+
+    assertThat(findings).hasSize(4);
+    assertThat(findings)
+        .extracting(DryRunFinding::message)
+        .allMatch(message -> message.contains("static validation"));
+    assertThat(findings)
+        .extracting(DryRunFinding::code)
+        .containsExactly(
+            "EXEC_SQL_EXPLAIN_REJECTED", "EXEC_SQL_NON_SELECT_REJECTED",
+            "EXEC_SQL_MULTISTATEMENT_REJECTED", "EXEC_SQL_UNPARSEABLE_REJECTED");
+  }
+
+  @Test
   @DisplayName("探针语句包含多条语句时拒绝执行, 第二条语句不会下发数据库")
   void shouldRejectMultiStatement_whenProbingSql() {
     DryRunPlanResult result = probeExecutionSql("SELECT 1; DROP TABLE job_definition");
@@ -288,8 +300,6 @@ class DefaultDryRunPlanServiceTest {
         .extracting(DryRunFinding::code)
         .contains("EXEC_SQL_MULTISTATEMENT_REJECTED")
         .doesNotContain("EXEC_SQL_EXPLAIN_OK");
-    // 堆叠语句在进入 EXPLAIN 之前被拒 —— 第二条 DROP 绝不能触达 jdbcTemplate。
-    verify(jdbcTemplate, never()).execute(anyString());
   }
 
   @Test
@@ -300,7 +310,6 @@ class DefaultDryRunPlanServiceTest {
     assertThat(result.findings())
         .extracting(DryRunFinding::code)
         .contains("EXEC_SQL_MULTISTATEMENT_REJECTED");
-    verify(jdbcTemplate, never()).execute(anyString());
   }
 
   // ── S3: dry-run endpoint reachability 探针 SSRF 出口守卫 ─────────────────────
@@ -370,17 +379,14 @@ class DefaultDryRunPlanServiceTest {
   }
 
   @Test
-  @DisplayName("单条查询探针走执行计划校验并给出通过提示")
-  void shouldRunExplain_whenProbingSingleSelect() {
-    final String explainStatementSql = "EXPLAIN (ANALYZE FALSE, COSTS FALSE) SELECT count(*) FROM batch.job_instance";
-
+  @DisplayName("单条查询完成静态检查后明确提示数据库计划未执行")
+  void shouldReportUnavailablePlan_whenProbingSingleSelect() {
     DryRunPlanResult result = probeExecutionSql("SELECT count(*) FROM batch.job_instance");
 
+    assertThat(result.success()).isFalse();
     assertThat(result.findings())
         .extracting(DryRunFinding::code)
-        .contains("EXEC_SQL_EXPLAIN_OK")
+        .contains("EXEC_SQL_PLAN_UNAVAILABLE")
         .doesNotContain("EXEC_SQL_MULTISTATEMENT_REJECTED");
-    verify(jdbcTemplate)
-        .execute(explainStatementSql);
   }
 }

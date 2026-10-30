@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.param.AlertEventQueryParam;
 import io.github.pinpols.batch.common.enums.AlertStatus;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.AlertEventQueryParam;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -16,6 +16,22 @@ public interface AlertEventMapper {
       @Param("entity") AlertEventEntity entity, @Param("defaultStatus") String defaultStatus);
 
   List<AlertEventEntity> selectByQuery(AlertEventQueryParam param);
+
+  String bindReemitTenant(@Param("tenantId") String tenantId);
+
+  AlertEventEntity selectByFingerprint(
+      @Param("tenantId") String tenantId, @Param("fingerprint") String fingerprint);
+
+  List<AlertEventEntity> selectActiveForReemit(
+      @Param("tenantId") String tenantId, @Param("limit") int limit);
+
+  List<AlertEventEntity> selectClosedPendingNotify(
+      @Param("tenantId") String tenantId, @Param("limit") int limit);
+
+  int markReemitAttempt(AlertEventEntity entity);
+
+  AlertEventEntity closeEligibleMonitoringAlert(
+      @Param("entity") AlertEventEntity entity, @Param("closedStatus") String closedStatus);
 
   /**
    * 选出超过 ack-SLA 仍 OPEN 且未达最高 tier 的告警,供升级 sweep 处理。

@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.console.domain.notification.view.EnabledSubscriptionRuleRow;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -61,25 +62,25 @@ final class SubscriptionRuleDispatchPolicy {
     }
   }
 
-  boolean matches(Map<String, Object> rule, String eventType, Map<String, Object> dataMap) {
+  boolean matches(EnabledSubscriptionRuleRow rule, String eventType, Map<String, Object> dataMap) {
     return matchesRule(rule, eventType, dataMap);
   }
 
   static boolean matchesRule(
-      Map<String, Object> rule, String eventType, Map<String, Object> dataMap) {
-    String configuredEventTypes = stringValue(rule, "event_types");
+      EnabledSubscriptionRuleRow rule, String eventType, Map<String, Object> dataMap) {
+    String configuredEventTypes = rule.eventTypes();
     boolean eventTypeIsMatched = eventTypeMatches(configuredEventTypes, eventType);
     if (!eventTypeIsMatched) {
       return false;
     }
 
-    String severityFilter = stringValue(rule, "severity_filter");
+    String severityFilter = rule.severityFilter();
     boolean severityIsMatched = filterMatches(severityFilter, dataMap, SEVERITY_KEYS);
     if (!severityIsMatched) {
       return false;
     }
 
-    String jobCodeFilter = stringValue(rule, "job_code_filter");
+    String jobCodeFilter = rule.jobCodeFilter();
     return filterMatches(jobCodeFilter, dataMap, JOB_CODE_KEYS);
   }
 
@@ -139,11 +140,11 @@ final class SubscriptionRuleDispatchPolicy {
 
   boolean withinDestinationRateLimit(
       String tenantId,
-      Map<String, Object> rule,
+      EnabledSubscriptionRuleRow rule,
       String channelCode,
       String channelType,
       String eventType) {
-    Map<String, Object> config = parseConfig(stringValue(rule, "config_json"));
+    Map<String, Object> config = parseConfig(rule.configJson());
     String destination = firstNonBlank(
         stringValue(config, "url"), stringValue(config, "to"), stringValue(config, "phoneNumbers"));
     if (destination == null) {
@@ -152,8 +153,8 @@ final class SubscriptionRuleDispatchPolicy {
     try {
       String destinationFingerprint = Hashes.sha256Short(destination);
       String destinationRateLimitKey = "notify:dest:" + tenantId + ":" + destinationFingerprint;
-      boolean allowed = sendRateLimiter.tryAcquire(
-          destinationRateLimitKey, MAX_SENDS_PER_DESTINATION_PER_MINUTE);
+      boolean allowed =
+          sendRateLimiter.tryAcquire(destinationRateLimitKey, MAX_SENDS_PER_DESTINATION_PER_MINUTE);
       if (!allowed) {
         recordDrop("dest_ratelimit");
         log.warn(

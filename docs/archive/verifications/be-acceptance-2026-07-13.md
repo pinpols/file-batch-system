@@ -1,3 +1,5 @@
+> 历史原始记录：本轮恢复保留，正文中的结论、参数、状态和操作步骤仅适用于原日期/基线。提炼方法不替代原始证据；当前事实须按[文档治理](../../standards/document-governance.md)重新核实。本轮未执行原测试或扫描。
+
 # BE 验收 backlog — 2026-07-13
 
 > 由 `scripts/local/be-acceptance.sh` 自动生成。请补充失败明细后归档。

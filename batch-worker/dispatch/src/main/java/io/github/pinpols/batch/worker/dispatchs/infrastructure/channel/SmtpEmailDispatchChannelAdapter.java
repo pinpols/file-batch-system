@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
+import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
@@ -78,6 +79,7 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     return channelType != null && "EMAIL".equalsIgnoreCase(channelType);
   }
 
+  @Builder
   private record MailConfig(
       String host,
       int port,
@@ -128,7 +130,7 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
       return DispatchResult.externalOutcomeUnknown(
           receipt.externalRequestId(),
           receipt.receiptCode(),
-          "EXTERNAL_OUTCOME_UNKNOWN: " + ex.getMessage());
+          "EXTERNAL_OUTCOME_UNKNOWN: " + SwallowedExceptionLogger.summary(ex));
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(SmtpEmailDispatchChannelAdapter.class, "catch:Exception", ex);
 
@@ -138,7 +140,7 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
           receipt.receiptCode(),
           false,
           false,
-          ex.getMessage(),
+          SwallowedExceptionLogger.summary(ex),
           null);
     }
   }
@@ -171,17 +173,18 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     if (!Texts.hasText(from) || !Texts.hasText(to)) {
       return null;
     }
-    return new MailConfig(
-        host,
-        port,
-        smtpUser,
-        smtpPass,
-        startTls,
-        connectTimeoutMillis,
-        readTimeoutMillis,
-        writeTimeoutMillis,
-        from,
-        to);
+    return MailConfig.builder()
+        .host(host)
+        .port(port)
+        .smtpUser(smtpUser)
+        .smtpPass(smtpPass)
+        .startTls(startTls)
+        .connectTimeoutMillis(connectTimeoutMillis)
+        .readTimeoutMillis(readTimeoutMillis)
+        .writeTimeoutMillis(writeTimeoutMillis)
+        .from(from)
+        .to(to)
+        .build();
   }
 
   /** S-1.7：剥离 CR/LF 防 header 注入；长度截断到 RFC 5322 header 常见上限 998。 */

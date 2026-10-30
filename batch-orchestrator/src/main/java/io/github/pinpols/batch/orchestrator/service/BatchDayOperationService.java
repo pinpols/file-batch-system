@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.orchestrator.service;
 
-import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceTransitionStatusByGenerationParam;
-
-
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
@@ -17,6 +14,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayOperationAuditEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceTransitionStatusByGenerationParam;
 import io.github.pinpols.batch.orchestrator.domain.query.ExpectedWorkOccurrenceOverride;
 import io.github.pinpols.batch.orchestrator.domain.value.BatchDayManualOperation;
 import io.github.pinpols.batch.orchestrator.domain.view.BatchDayInstanceMetrics;
@@ -69,8 +67,7 @@ public class BatchDayOperationService {
    */
   @Transactional
   public BatchDayOperationResult operate(BatchDayOperateCommand command) {
-    boolean operationCommandIsInvalid =
-        EmptyChecks.isNull(command)
+    boolean operationCommandIsInvalid = EmptyChecks.isNull(command)
         || !Texts.hasText(command.tenantId())
         || !Texts.hasText(command.calendarCode())
         || command.bizDate() == null
@@ -138,18 +135,20 @@ public class BatchDayOperationService {
       return List.of();
     }
     for (ExpectedWorkOccurrenceOverride occurrence : occurrences) {
-      ExpectedWorkOccurrenceTransitionStatusByGenerationParam expectedWorkOccurrenceTransitionStatusByGenerationParam = ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
-          .tenantId(batchDay.tenantId())
-          .calendarCode(batchDay.calendarCode())
-          .workflowDefinitionId(occurrence.workflowDefinitionId())
-          .sourceType(occurrence.sourceType())
-          .sourceKey(occurrence.sourceKey())
-          .bizDate(occurrence.bizDate())
-          .generation(occurrence.generation())
-          .expectedStatus(occurrence.occurrenceStatus())
-          .newStatus("CANCELLED")
-          .triggerRequestId(null)
-          .build();
+      ExpectedWorkOccurrenceTransitionStatusByGenerationParam
+          expectedWorkOccurrenceTransitionStatusByGenerationParam =
+              ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
+                  .tenantId(batchDay.tenantId())
+                  .calendarCode(batchDay.calendarCode())
+                  .workflowDefinitionId(occurrence.workflowDefinitionId())
+                  .sourceType(occurrence.sourceType())
+                  .sourceKey(occurrence.sourceKey())
+                  .bizDate(occurrence.bizDate())
+                  .generation(occurrence.generation())
+                  .expectedStatus(occurrence.occurrenceStatus())
+                  .newStatus("CANCELLED")
+                  .triggerRequestId(null)
+                  .build();
       int updated = expectedWorkOccurrenceMapper.transitionStatus(
           expectedWorkOccurrenceTransitionStatusByGenerationParam);
       if (updated != 1) {
@@ -179,9 +178,7 @@ public class BatchDayOperationService {
     if (metricsMissing || hasJobs) {
       Object reportedTotalCount = metricsMissing ? "unknown" : value(metrics.getTotalCount());
       throw BizException.of(
-          ResultCode.STATE_CONFLICT,
-          "error.batch_day.empty_settle_has_jobs",
-          reportedTotalCount);
+          ResultCode.STATE_CONFLICT, "error.batch_day.empty_settle_has_jobs", reportedTotalCount);
     }
     List<BatchDayWaitingLaunchEntity> waitingLaunches =
         waitingLaunchMapper.selectWaitingByCalendarBizDate(
@@ -275,14 +272,18 @@ public class BatchDayOperationService {
     if (EmptyChecks.isNotEmpty(expectedWorkChanges.waivedExpectedWork())) {
       payload.put(
           "waivedExpectedWork",
-          expectedWorkChanges.waivedExpectedWork().stream().map(this::toExpectedWorkAudit).toList());
+          expectedWorkChanges.waivedExpectedWork().stream()
+              .map(this::toExpectedWorkAudit)
+              .toList());
     }
     if (command.action() == BatchDayOperation.REOPEN) {
       payload.put("reopenedExpectedWorkCount", expectedWorkChanges.reopenedExpectedWork());
       payload.put("preservedTerminalOccurrences", true);
       payload.put(
           "openExpectedWorkAfterReopen",
-          expectedWorkChanges.openExpectedWorkAfterReopen().stream().map(this::toExpectedWorkAudit).toList());
+          expectedWorkChanges.openExpectedWorkAfterReopen().stream()
+              .map(this::toExpectedWorkAudit)
+              .toList());
     }
     String auditReasonCode = command.action() == BatchDayOperation.SETTLE_EMPTY
         ? "EMPTY_DAY_CONFIRMED"
@@ -440,8 +441,7 @@ public class BatchDayOperationService {
     requestBuilder.requestId(requestId);
     String traceId = stringValue(payload.get("traceId"));
     requestBuilder.traceId(traceId);
-    Map<String, Object> params =
-        (Map<String, Object>) payload.getOrDefault("params", Map.of());
+    Map<String, Object> params = (Map<String, Object>) payload.getOrDefault("params", Map.of());
     requestBuilder.params(params);
     return requestBuilder.build();
   }

@@ -22,7 +22,7 @@ SDK 子进程的普通业务写入也复用 Spring JDBC；固定会话锁、显�
 只读检查示例：
 
 ```bash
-bash scripts/python.sh scripts/fix-fixture-xlsx.py --check
+bash scripts/python.sh scripts/sim/fix-fixture-xlsx.py --check
 python3 -m unittest scripts/ci/tests/test_config_package_fixture_generators.py
 python3 -m unittest scripts/ci/tests/test_detect_change_scope.py
 ```

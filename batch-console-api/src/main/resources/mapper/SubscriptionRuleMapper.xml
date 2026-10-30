@@ -2,7 +2,40 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper">
 
-    <select id="selectByTenant" resultType="map">
+    <resultMap id="SubscriptionRuleRowMap"
+               type="io.github.pinpols.batch.console.domain.notification.view.SubscriptionRuleRow">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="rule_name" javaType="java.lang.String"/>
+            <arg column="channel_code" javaType="java.lang.String"/>
+            <arg column="event_types" javaType="java.lang.String"/>
+            <arg column="severity_filter" javaType="java.lang.String"/>
+            <arg column="job_code_filter" javaType="java.lang.String"/>
+            <arg column="enabled" javaType="java.lang.Boolean"/>
+            <arg column="created_by" javaType="java.lang.String"/>
+            <arg column="updated_by" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="EnabledSubscriptionRuleRowMap"
+               type="io.github.pinpols.batch.console.domain.notification.view.EnabledSubscriptionRuleRow">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="rule_name" javaType="java.lang.String"/>
+            <arg column="channel_code" javaType="java.lang.String"/>
+            <arg column="event_types" javaType="java.lang.String"/>
+            <arg column="severity_filter" javaType="java.lang.String"/>
+            <arg column="job_code_filter" javaType="java.lang.String"/>
+            <arg column="channel_type" javaType="java.lang.String"/>
+            <arg column="config_json" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectByTenant" resultMap="SubscriptionRuleRowMap">
         SELECT id, tenant_id, rule_name, channel_code, event_types,
                severity_filter, job_code_filter, enabled,
                created_by, updated_by, created_at, updated_at
@@ -11,7 +44,7 @@
          ORDER BY created_at DESC
     </select>
 
-    <select id="selectEnabledByEventType" resultType="map">
+    <select id="selectEnabledByEventType" resultMap="EnabledSubscriptionRuleRowMap">
         SELECT r.id, r.tenant_id, r.rule_name, r.channel_code, r.event_types,
                r.severity_filter, r.job_code_filter,
                c.channel_type, c.config_json
@@ -19,10 +52,12 @@
           JOIN batch.notification_channel c ON c.tenant_id = r.tenant_id AND c.channel_code = r.channel_code AND c.enabled = TRUE AND c.is_deleted = FALSE
          WHERE r.tenant_id = #{tenantId}
            AND r.enabled = TRUE
-           AND r.event_types LIKE '%' || #{eventType} || '%'
+           <!-- 仅对常见大写 ASCII 编码做保守预筛选；其它编码由应用按原规则匹配。 -->
+           AND (r.event_types COLLATE "C" ~ '[^A-Z0-9_, -]'
+                OR r.event_types LIKE '%' || #{eventType} || '%')
     </select>
 
-    <select id="selectById" resultType="map">
+    <select id="selectById" resultMap="SubscriptionRuleRowMap">
         SELECT id, tenant_id, rule_name, channel_code, event_types,
                severity_filter, job_code_filter, enabled,
                created_by, updated_by, created_at, updated_at
@@ -30,14 +65,14 @@
          WHERE tenant_id = #{tenantId} AND id = #{id}
     </select>
 
-    <insert id="insert">
+    <insert id="insert" parameterType="io.github.pinpols.batch.console.domain.notification.param.SubscriptionRuleInsertParam">
         INSERT INTO batch.subscription_rule (tenant_id, rule_name, channel_code, event_types,
                                              severity_filter, job_code_filter, enabled, created_by, updated_by)
         VALUES (#{tenantId}, #{ruleName}, #{channelCode}, #{eventTypes},
                 #{severityFilter}, #{jobCodeFilter}, #{enabled}, #{createdBy}, #{updatedBy})
     </insert>
 
-    <update id="update">
+    <update id="update" parameterType="io.github.pinpols.batch.console.domain.notification.param.SubscriptionRuleUpdateParam">
         UPDATE batch.subscription_rule
            SET rule_name = #{ruleName},
                channel_code = #{channelCode},

@@ -35,9 +35,8 @@ public class DefaultDispatchAdmissionLimiter implements DispatchAdmissionLimiter
         && EmptyChecks.isNotNull(queue.maxQps())
         && queue.maxQps() > 0;
     if (queueRateLimitApplies) {
-      boolean queueTokenConsumed =
-          tokenBucketRateLimiter.tryConsumePerSecond(
-              request.getTenantId(), QUEUE_ACTION_PREFIX + queue.queueCode(), queue.maxQps());
+      boolean queueTokenConsumed = tokenBucketRateLimiter.tryConsumePerSecond(
+          request.getTenantId(), QUEUE_ACTION_PREFIX + queue.queueCode(), queue.maxQps());
       if (!queueTokenConsumed) {
         return ResourceCheck.waitForCapacity(
             "QUEUE_DISPATCH_QPS_LIMIT", "resource queue dispatch rate exceeds maxQps");
@@ -49,9 +48,8 @@ public class DefaultDispatchAdmissionLimiter implements DispatchAdmissionLimiter
         && EmptyChecks.isNotNull(policy.maxQpsPerTenant())
         && policy.maxQpsPerTenant() > 0;
     if (tenantRateLimitApplies) {
-      boolean tenantTokenConsumed =
-          tokenBucketRateLimiter.tryConsumePerSecond(
-              request.getTenantId(), TENANT_ACTION, policy.maxQpsPerTenant());
+      boolean tenantTokenConsumed = tokenBucketRateLimiter.tryConsumePerSecond(
+          request.getTenantId(), TENANT_ACTION, policy.maxQpsPerTenant());
       if (!tenantTokenConsumed) {
         return ResourceCheck.waitForCapacity(
             "TENANT_DISPATCH_QPS_LIMIT", "tenant dispatch rate exceeds maxQpsPerTenant");

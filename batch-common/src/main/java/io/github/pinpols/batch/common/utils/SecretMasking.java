@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import javax.annotation.Nullable;
 
@@ -137,10 +138,11 @@ public final class SecretMasking {
       @Nullable String submittedJson,
       @Nullable String storedJson,
       Set<String> additionalSensitiveKeys) {
-    boolean maskRestoreInputsAreIncomplete = submittedJson == null // empty-check: allow - Sonar S2259
-        || submittedJson.isBlank() // empty-check: allow - Sonar S2259
-        || storedJson == null // empty-check: allow - Sonar S2259
-        || storedJson.isBlank(); // empty-check: allow - Sonar S2259
+    boolean maskRestoreInputsAreIncomplete =
+        submittedJson == null // empty-check: allow - Sonar S2259
+            || submittedJson.isBlank() // empty-check: allow - Sonar S2259
+            || storedJson == null // empty-check: allow - Sonar S2259
+            || storedJson.isBlank(); // empty-check: allow - Sonar S2259
     if (maskRestoreInputsAreIncomplete) {
       return submittedJson;
     }
@@ -187,9 +189,8 @@ public final class SecretMasking {
       String authority = uri.getRawAuthority();
       if (EmptyChecks.isNotNull(uri.getRawUserInfo())) {
         String userInfo = uri.getRawUserInfo();
-        boolean shouldRestoreMaskedUserInfo = restore
-            && MASKED_VALUE.equals(userInfo)
-            && storedUri != null;
+        boolean shouldRestoreMaskedUserInfo =
+            restore && MASKED_VALUE.equals(userInfo) && EmptyChecks.isNotNull(storedUri);
         if (shouldRestoreMaskedUserInfo) { // empty-check: allow - Sonar S2259
           userInfo = storedUri.getRawUserInfo();
         } else if (!restore) {
@@ -204,6 +205,11 @@ public final class SecretMasking {
               ? null
               : storedUri.getRawQuery(),
           restore);
+      if (!restore
+          && EmptyChecks.isNull(uri.getRawUserInfo())
+          && Objects.equals(query, uri.getRawQuery())) {
+        return endpoint;
+      }
       return renderUri(uri, authority, query);
     } catch (IllegalArgumentException ignored) {
       return endpoint.matches("(?i)^[a-z][a-z0-9+.-]*://.*") ? MASKED_VALUE : endpoint;
@@ -298,9 +304,10 @@ public final class SecretMasking {
       for (Map.Entry<?, ?> entry : source.entrySet()) {
         String key = String.valueOf(entry.getKey());
         Object nested = entry.getValue();
-        Object maskedValue = isSensitive(key, additionalSensitiveKeys) && EmptyChecks.isNotNull(nested)
-            ? MASKED_VALUE
-            : maskNestedValue(nested, additionalSensitiveKeys);
+        Object maskedValue =
+            isSensitive(key, additionalSensitiveKeys) && EmptyChecks.isNotNull(nested)
+                ? MASKED_VALUE
+                : maskNestedValue(nested, additionalSensitiveKeys);
         masked.put(key, maskedValue);
       }
       return masked;

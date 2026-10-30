@@ -1,3 +1,5 @@
+> 历史证据（2026-10-25 存量核对）：含六类工具实际执行结果及 dependency-check 精确误报来源。正文仅表示原日期/基线；当前规则与状态见[现行入口](../../runbook/security-scan.md)及 TODO，本轮没有重新执行原测试或扫描。
+
 # 全栈安全扫描报告 — 2026-05-16
 
 > 6 类全套扫描结果，`bash scripts/ci/security-scan.sh -- --mode={secret,deps,sast,filesystem,image,dast}` 逐一执行（每类单跑、不连锁阻断）。本次扫描发生在 R7 OSS 漏洞修复（SB 4.0.6 升级 commit `9df1d1a8`）之后、日志审计修复（commit `8373de94`）之后。

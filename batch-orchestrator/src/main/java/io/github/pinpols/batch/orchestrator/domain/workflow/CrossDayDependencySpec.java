@@ -47,7 +47,8 @@ public record CrossDayDependencySpec(
 
   /** EFFECTIVE_ONLY 是默认策略（未声明等价 EFFECTIVE_ONLY）。 */
   public String resolvedStrategy() {
-    if (EmptyChecks.isNull(consumeVersionStrategy) || EmptyChecks.isBlank(Objects.requireNonNull(consumeVersionStrategy))) {
+    if (EmptyChecks.isNull(consumeVersionStrategy)
+        || EmptyChecks.isBlank(Objects.requireNonNull(consumeVersionStrategy))) {
       return STRATEGY_EFFECTIVE_ONLY;
     }
     String trimmedStrategy = consumeVersionStrategy.trim();

@@ -8,9 +8,11 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.i18n.BizMessageResolver;
-import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
+import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.mq.MqMessage;
 import io.github.pinpols.batch.common.mq.MqMessagePublisher;
@@ -26,6 +28,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.EventDeliveryLogEntity
 import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
 import io.opentelemetry.api.trace.Span;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,11 +57,8 @@ class KafkaOutboxPublisherTest {
         mock(BatchOrchestratorGovernanceProperties.class);
     when(governance.mqTopics()).thenReturn(batchMqTopicsProperties);
     when(governance.outbox()).thenReturn(outboxProperties);
-    BatchTopicResolver topicResolver =
-        new BatchTopicResolver(
-            batchMqTopicsProperties,
-            new MqRoutingProperties(),
-            new BatchKafkaTopicNamespace(""));
+    BatchTopicResolver topicResolver = new BatchTopicResolver(
+        batchMqTopicsProperties, new MqRoutingProperties(), new BatchKafkaTopicNamespace(""));
     publisher = new KafkaOutboxPublisher(
         mqMessagePublisher,
         governance,
@@ -94,6 +94,75 @@ class KafkaOutboxPublisherTest {
     assertThat(log.getTargetTopic()).isEqualTo("batch.task.dispatch.import");
     assertThat(log.getErrorMessage()).contains("kafka down");
     assertThat(log.getDeliveryAttempt()).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("发送失败时投递记录不保存异常消息中的凭据")
+  void shouldMaskCredentials_whenRecordingFailedDelivery() {
+    batchMqTopicsProperties.setImportDispatch("batch.task.dispatch.import");
+    OutboxEventEntity event = dispatchEvent("IMPORT", "redaction-key");
+    when(mqMessagePublisher.publish(any(MqMessage.class)))
+        .thenReturn(
+            CompletableFuture.failedFuture(new RuntimeException("broker password=probe-secret")));
+    assertThat(publisher.publish(event)).isCompletedExceptionally();
+    ArgumentCaptor<EventDeliveryLogEntity> captor =
+        ArgumentCaptor.forClass(EventDeliveryLogEntity.class);
+    verify(outboxChildRecordService).recordDelivery(captor.capture());
+    assertThat(captor.getValue().getErrorMessage())
+        .contains("password=")
+        .doesNotContain("probe-secret");
+  }
+
+  @Test
+  @DisplayName("本地化投递异常的参数不保存内嵌凭据")
+  void shouldMaskCredentials_whenRecordingLocalizedDeliveryArgs() {
+    batchMqTopicsProperties.setImportDispatch("batch.task.dispatch.import");
+    OutboxEventEntity event = dispatchEvent("IMPORT", "redaction-args");
+    BizException failure = BizException.of(
+        ResultCode.INVALID_ARGUMENT,
+        "error.common.invalid_argument_detail",
+        "token=probe-arg-secret",
+        Map.of("password", "probe-map-secret", "trace", "safe-trace"));
+    when(mqMessagePublisher.publish(any(MqMessage.class)))
+        .thenReturn(CompletableFuture.failedFuture(failure));
+    assertThat(publisher.publish(event)).isCompletedExceptionally();
+    ArgumentCaptor<EventDeliveryLogEntity> captor =
+        ArgumentCaptor.forClass(EventDeliveryLogEntity.class);
+    verify(outboxChildRecordService).recordDelivery(captor.capture());
+    assertThat(captor.getValue().getErrorArgs())
+        .contains("token=", "safe-trace")
+        .doesNotContain("probe-arg-secret", "probe-map-secret");
+    assertThat(JsonUtils.fromJson(captor.getValue().getErrorArgs(), Object.class))
+        .isNotNull();
+  }
+
+  @Test
+  @DisplayName("本地化参数遮蔽规范化字段和转义赋值, 保留普通内容")
+  void shouldMaskEncodedCredentials_whenRecordingLocalizedDeliveryArgs() throws Exception {
+    batchMqTopicsProperties.setImportDispatch("batch.task.dispatch.import");
+    OutboxEventEntity event = dispatchEvent("IMPORT", "encoded-args");
+    BizException failure = BizException.of(
+        ResultCode.INVALID_ARGUMENT,
+        "error.common.invalid_argument_detail",
+        Map.of(
+            "ｐａｓｓｗｏｒｄ",
+            "probe-unicode-secret",
+            "message",
+            "token&#61;probe-html-secret",
+            "safe",
+            "left <right>"));
+    when(mqMessagePublisher.publish(any(MqMessage.class)))
+        .thenReturn(CompletableFuture.failedFuture(failure));
+    assertThat(publisher.publish(event)).isCompletedExceptionally();
+    ArgumentCaptor<EventDeliveryLogEntity> captor =
+        ArgumentCaptor.forClass(EventDeliveryLogEntity.class);
+    verify(outboxChildRecordService).recordDelivery(captor.capture());
+    String args = captor.getValue().getErrorArgs();
+    assertThat(args).doesNotContain("probe-unicode-secret", "probe-html-secret");
+    var item = new ObjectMapper().readTree(args).get(0);
+    assertThat(item.path("safe").asText()).isEqualTo("left <right>");
+    assertThat(item.path("ｐａｓｓｗｏｒｄ").asText()).isEqualTo("****");
+    assertThat(item.path("message").asText()).contains("token=");
   }
 
   @Test
@@ -235,8 +304,8 @@ class KafkaOutboxPublisherTest {
   @DisplayName("命名空间应用于 Outbox 专用终态主题")
   void shouldNamespaceDedicatedTopic() {
     BatchKafkaTopicNamespace namespace = new BatchKafkaTopicNamespace("run-a");
-    BatchTopicResolver namespacedResolver = new BatchTopicResolver(
-        batchMqTopicsProperties, new MqRoutingProperties(), namespace);
+    BatchTopicResolver namespacedResolver =
+        new BatchTopicResolver(batchMqTopicsProperties, new MqRoutingProperties(), namespace);
     publisher = new KafkaOutboxPublisher(
         mqMessagePublisher,
         mockGovernance(),
@@ -257,7 +326,8 @@ class KafkaOutboxPublisherTest {
   }
 
   private BatchOrchestratorGovernanceProperties mockGovernance() {
-    BatchOrchestratorGovernanceProperties governance = mock(BatchOrchestratorGovernanceProperties.class);
+    BatchOrchestratorGovernanceProperties governance =
+        mock(BatchOrchestratorGovernanceProperties.class);
     when(governance.mqTopics()).thenReturn(batchMqTopicsProperties);
     when(governance.outbox()).thenReturn(outboxProperties);
     return governance;

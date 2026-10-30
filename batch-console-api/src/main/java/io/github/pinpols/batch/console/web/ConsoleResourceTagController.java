@@ -43,7 +43,8 @@ public class ConsoleResourceTagController {
       @RequestParam("tenantId") String tenantId,
       @RequestParam("resourceType") @NotBlank String resourceType,
       @RequestParam("resourceCode") @NotBlank String resourceCode) {
-    List<ResourceTagEntity> resourceTags = tagService.listByResource(tenantId, resourceType, resourceCode);
+    List<ResourceTagEntity> resourceTags =
+        tagService.listByResource(tenantId, resourceType, resourceCode);
     List<ResourceTagResponse> responses =
         resourceTags.stream().map(ResourceTagResponse::from).toList();
     return responseFactory.success(responses);

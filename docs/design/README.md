@@ -1,9 +1,8 @@
 # 设计文档索引
 
-业务与能力设计、数据库逻辑模型。系统原语、运行主链与 ADR 见 architecture；当前设计原位维护，历史能力评估须保留原时点边界。
-原 mega 版已**清空为存根** [`../archive/design/system-design-2026-03-21.md`](../archive/design/system-design-2026-03-21.md)（仅保留 20 章+95 子节标题供 §X.Y 兼容历史链接；正文需 git 历史回溯）。
+业务与能力设计、数据库逻辑模型。系统原语、运行主链与 ADR 见 architecture；当前设计原位维护，历史能力评估须保留原时点边界。原 mega 设计稿已拆分到本目录、architecture 和 runbook；章节导航见 [legacy-design-chapter-map.md](legacy-design-chapter-map.md)。
 
-> **2026-04-26 拆分完成**：mega 文档原 20 章中"独立设计"的 3 章（技术栈 / SLA / 多租户与安全）已抽出为单文件。其余 5 章（5/7/8/10/13）以**散落在多个子文件 + ADR + runbook** 的形式覆盖，详见 [`../archive/design/legacy-design-chapter-map.md`](legacy-design-chapter-map.md) 章号导航表。
+> **2026-04-26 拆分完成**：mega 文档原 20 章中"独立设计"的 3 章（技术栈 / SLA / 多租户与安全）已抽出为单文件。其余 5 章（5/7/8/10/13）以**散落在多个子文件 + ADR + runbook** 的形式覆盖，详见[章节导航表](legacy-design-chapter-map.md)。
 
 ## 文件清单（编号即推荐阅读顺序）
 
@@ -42,15 +41,14 @@
 | 文件与存储 | [对象存储抽象](./object-storage-abstraction.md)、[文件完整性 sidecar](file-integrity-sidecar-manifest-design.md)、[文件完整性与恢复](./file-integrity-recovery.md)、[字段映射推断](import-export-column-mapping-default-inference.md) |
 | Pipeline / Workflow | [边界定义](./pipeline-vs-workflow-definition.md)、[DAG 设计器](./workflow-dag-designer.md)、[动态 fan-out](./workflow-dynamic-fanout.md)、[状态机](./status-state-machines.md) |
 | 幂等与 readiness | [分区幂等](./partition-idempotency-decision.md)、[资产分区 readiness](./asset-partition-readiness.md) |
-| Worker / SDK | [Task SPI](./task-spi-design.md)、[部署模型](./worker-deployment-models.md)、[task type 配置](./sdk-task-type-configuration.md)、[行业对标历史分析](../archive/audit/sdk-industry-benchmark-2026-05-31.md) |
+| Worker / SDK | [Task SPI](./task-spi-design.md)、[部署模型](./worker-deployment-models.md)、[task type 配置](./sdk-task-type-configuration.md)、[自托管 SDK 接入](../sdk/byo-sdk-guide.md) |
 | 账户与权限 | [批量账号开户后端设计](./bulk-user-provisioning.md)：Preview/Apply、租户与角色边界、事务、幂等和凭据交付 |
 
-[legacy-design-chapter-map.md](legacy-design-chapter-map.md) 持续维护原 mega 设计稿章节与当前资产的映射；原稿快照留在归档目录。
+[legacy-design-chapter-map.md](legacy-design-chapter-map.md) 持续维护原 mega 设计稿章节与当前资产的映射；原稿正文可通过 Git 历史追溯，不维护重复存根。
 
 ## 历史设计与问题快照
 
-- [早期模块与 POM 设计稿](../archive/design/project-structure-pom-2026-03-21.md)，日期表示原 mega 设计稿来源；当前模块结构见 [项目结构](../architecture/project-structure.md)。
-- [API 缺口（2026-04-10）](../archive/audit/api-gap-analysis-2026-04-10.md)、[PROCESS 问题（2026-04-28）](../archive/audit/process-worker-known-issues-2026-04-28.md)；当前待办见 [TODO Master](../plans/todo-master.md)。
+- 当前接口范围见[Console API 协议](../api/console-api-protocol.md)；[PROCESS 原始问题证据（2026-04-28）](../archive/audit/process-worker-known-issues-2026-04-28.md)仅表示当时发现，当前待办见 [TODO Master](../plans/todo-master.md)。
 
 [五类资产逐文件核查](../audit/architecture-and-contract-assets-review-2026-10-24.md)列出本次 Workflow 改造需要更新的原文档及保留的历史基线；目录中的历史 SQL/实施排期不得作为当前部署或待办清单。
 

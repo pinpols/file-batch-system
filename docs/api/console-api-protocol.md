@@ -7,12 +7,22 @@ API 契约发生变化时，请同步更新本文档与 [console-api.openapi.yam
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-10-28 | Dry-run L3 的 SQL 参数只做静态检查；数据库执行计划因规划阶段可能产生副作用而停用，合法 SQL 返回 `EXEC_SQL_PLAN_UNAVAILABLE`，不报告计划通过。对象存储与 HTTP 探测按各自规则执行。 |
+| 2026-10-27 | 复制在读写前拒绝源目标重合；复制/预览/矩阵拒绝空集合元素，类型解析使用固定Locale。Workflow导入使用精确编码，升版后仍拒绝同码创建，配置包每编码仅含当前最高版本及图。 |
+| 2026-10-27 | 配置包复制/导出/差异按完整集合读取，普通列表200条上限不变；作业矩阵支持展示范围外显式基准并保持响应展示范围。同步原请求/收据、日志分页、初始化必填目标及九类配置说明按当前实现修正。 |
+| 2026-10-26 | **配置同步原请求核对与目标校验**：新增管理员专用 `GET /api/console/config/sync/requests/status?tenantId=`，请求头携带原导入的 `Idempotency-Key`，返回 `{found,audit}`；未找到仅表示尚未观察到，不能推断未执行。RUNNING 审计仍通过原 `/logs/{logId}/reconcile` 核对目标回执，不重新导入。配置同步和批量初始化的目标列表拒绝 null、空串与空白，HTTP 400，校验发生在审计和目标写入之前。 |
+| 2026-10-26 | **Workflow 集合参数错误**：创建请求与 `/full` 嵌套定义的 `nodes`、`edges` 元素不允许为 null，按现有参数校验返回 HTTP 400，写服务不执行；缺省列表、合法图、版本和编辑锁契约不变。 |
+| 2026-10-26 | **旧 Pipeline 定义 API 退役与 Worker 认领结果安全投影**：按 ADR-048 的全新数据库协调切换，移除旧 `/pipeline-definitions` 与查询路由，统一使用 Workflow 定义契约。`GET /api/console/workers/{workerCode}/claimed-tasks` 仅返回任务运行摘要，响应不再包含 `taskPayload`、`resultSummary`、`errorMessage` 或 `tenantId`；租户授权、任务状态和现有摘要字段保持原口径。 |
+| 2026-10-25 | **Job 时限策略按运行资格评估**：MANUAL 定义也可预先保存启动宽限和完成规则；绝对钟点与相对窗口互斥，取消钟点时显式 `completionDeadlineEnabled=false`。保存/导入不以旧调度类型限制资格；独立手工运行无计划/就绪依据时不判断迟到。列表完成启用标记反映已配置规则，`DEPENDENCY` 分类纳入非 Cron 且配置了就绪规则的定义，列表与计数保持一致。 |
+| 2026-10-25 | **Workflow 根级时限策略**：新增 `GET/PUT /api/console/workflow-definitions/{id}/monitoring-policy`。根级三类阈值与 Job 策略独立；读取沿用 Console 角色，写入限管理员或租户管理员。PUT 完整替换；零阈值/空完成钟点关闭对应规则，返回策略生效时刻。完整通知及解除验收进度见[专项计划](../plans/job-workflow-sla-completion-plan-2026-10-25.md)。 |
 | 2026-10-16 | **统一 Workflow 图写入契约**：移除无版本、无设计锁的 `PUT /api/console/workflow-definitions/{id}`；创建仍走 POST，所有图更新统一走 `/full`，必须取得设计锁并提交 `expectedVersion`，服务端按租户和原版本 CAS 更新并追加版本快照。schedule-only 更新仍使用独立版本 CAS。 |
 | 2026-10-14 | **Workflow 调度配置进入定义契约**：Workflow create/full update/detail 增加 `scheduleType`、`scheduleExpr`、`timezone`、`triggerMode`、`calendarCode` 和 `dependsOnJobCode`。字段缺省时更新保留已存调度；显式 `MANUAL` 可清除表达式。版本历史快照同时保存新调度字段，V241 前的快照保留 null，不伪造历史调度。Trigger 权威数据源仍未切换，Job 调度字段暂作兼容来源。 |
 | 2026-10-12 | **维护冻结与实例排空收口**：全冻结期间 `ROLE_ADMIN` 仅保留非写诊断旁路，普通业务写请求仍返回 503；Orchestrator `/internal/orchestrator/drain/enable` 暂停当前实例的 Trigger Launch Kafka listener，`disable` 恢复消费，不影响 OpenLineage listener。 |
 | 2026-10-11 | **控制台管理列表分页补齐**：告警路由、资产新鲜度策略和配置同步日志列表统一支持分页查询，响应使用既有 `PageResponse` envelope；筛选参数与租户隔离语义保持不变。 |
 | 2026-10-11 | **租户配置包 Excel 场景化导入**：增加场景模板、上传、预览、逐行修订、授权应用与幂等写入契约；平台资源分配和运行监控阈值不由租户配置包控制，配置快照在实例创建时固定。预览返回的一次性 `previewToken` 绑定预览内容和内部租户配置修订号；逐行修订必须提交当前 token 并取得新 token，Apply 必须提交最新 token。配置在预览后发生变化时 Apply 返回冲突，用户需重新预览；内部修订号不作为租户填写或维护的配置字段。 |
 | 2026-10-09 | **Console OIDC 单点登录与身份绑定**：新增 provider 能力查询和管理员维护 OIDC subject 到本地账号的绑定端点；登录采用授权码 + PKCE，身份映射后仍按本地账号状态、租户和角色签发平台 JWT Cookie，不直接信任 IdP 角色。OIDC 按部署配置启用，既有本地登录路径保持不变。 |
+| 2026-10-29 | **文件详情与投递查询敏感值脱敏**：文件详情的存储路径、JSON 元数据，以及派发列表和回执别名的投递目标与错误消息，在只读响应中遮蔽已识别凭据；存储记录及上传下载所用原始路径不变。 |
+| 2026-10-29 | **血缘证据敏感值脱敏**：两个 lineage 查询的文件存储路径、投递目标、错误消息及嵌套元数据中的已识别凭据在响应中脱敏；数据库原始记录不变。字段名、数据类型与租户范围不变，不能将展示值作为原始凭据使用。 |
 | 2026-10-07 | **固定契约与有限域治理**：普通 `POST /api/console/jobs/trigger` 继续返回实例号字符串，`dryRun=true` 继续返回校验对象；OpenAPI 补录这两个既有分支，Java 使用封闭类型而不是 `Object`。Trigger 列表与操作改为固定 DTO，列表租户范围由登录权限决定，移除 spec 中实现不接收的必填查询参数。Pipeline 列表字段与 Lineage 的 snake_case 证据行、camelCase 结果版本和空值规则保持不变；文件 `metadata_json` 规范为动态 JSON 对象，不再暴露 JDBC 驱动封装。路径、权限、状态机和错误码不变。 |
 | 2026-10-07 | **弃用 `GET /api/console/my-workers/count`**：前端已停止调用，后端与 OpenAPI 暂保留兼容并标记 deprecated；`GET /api/console/my-workers` 列表端点、权限和租户隔离保持不变。 |
 | 2026-10-04 | **Pipeline 实时进度并发语义修复（公开契约不变）**：内置 Worker 心跳增加可选 `pipelineProgress[]`，按 task/pipeline/stage 隔离并发任务；orchestrator 新增内部 pipeline 聚合查询，Console 公开 `GET /api/console/queries/pipeline-progress?pipelineInstanceId=` 的路径与响应外形不变。移除旧 SDK 标量字段及 Console/internal 的 workerCode 查询入口；前端现有 pipelineInstanceId 查询不变。 |
@@ -60,6 +70,7 @@ API 契约发生变化时，请同步更新本文档与 [console-api.openapi.yam
 | 2026-07-02 | **API Key 撤销授权对称化**:`DELETE /api/console/api-keys/{id}` 由仅 `ROLE_ADMIN` 放宽为 `ROLE_ADMIN`+`ROLE_TENANT_USER`(与创建对称),path/请求/响应外形不变,仅授权矩阵变化。租户隔离由 mapper `WHERE tenant_id` 保证。修复"能建 key 不能撤销"的不对称安全洞。 |
 | 2026-07-01 | **JOB asset freshness policy Console 管理闭环**:新增 `/api/console/asset-freshness-policies` 最小 CRUD: `GET` 列表、`POST` 按 `(tenantId,assetCode,assetType)` upsert、`GET /{id}` 查询、`PUT /{id}` 按 id 更新、`PATCH /{id}/enabled` 启停。当前只支持 `assetType=JOB`，字段与 `batch.asset_freshness_policy` 对齐:`assetCode/expectedByLocalTime/timezone/staleAfterSeconds/lookbackDays/severity/enabled`。该接口只管理 orchestrator freshness 扫描策略,用于产生 `ASSET_FRESHNESS_MISSING/STALE` 告警;明确不扩展为数据目录、字段级 lineage、MDM 或业务正确性裁定。 |
 | 2026-06-30 | **BFS lineage file_record archive mirror**:`GET /api/console/lineage/result-versions/{id}` 的 path/响应外形不变，但文件证据在 `batch.file_record` 热表未命中时会回退查询 `archive.file_record_archive`。`coverage.sources.fileRecords` 可为 `ARCHIVE`，`knownGaps` 改为声明 hot/archive 均未命中；范围仅限 BFS 文件证据冷表，不处理对象存储生命周期、字段级 lineage 或记录级 lineage。 |
+| 2026-10-29 | **BFS lineage 冷热文件和投递合并**：文件证据及投递回执合并热表与归档表并按 ID 去重。作业已归档时，同一文件优先展示归档快照；否则优先热文件；同一投递优先热记录。`coverage.sources.fileRecords` 和 `dispatchRecords` 在结果同时包含两处不同记录时为 `HOT_AND_ARCHIVE`；投递记录按 ID 降序保留最多 100 条。此项不改变对象存储生命周期或 Pipeline 列表回退逻辑。 |
 | 2026-06-30 | **BFS lineage archive 冷表补证**:`GET /api/console/lineage/result-versions/{id}` 的 path/响应外形不变，但 orchestrator 证据链在热表未命中时会回退查询 `archive.result_version_archive`、`archive.job_instance_archive`、`archive.pipeline_instance_archive`、`archive.file_dispatch_record_archive`。`coverage.scope` 可能从 `BFS_HOT_TABLES` 升为 `BFS_HOT_AND_ARCHIVE`，并新增 `coverage.sources` 标明 `resultVersion/jobInstance/pipelineInstances/fileRecords/dispatchRecords` 来自 `HOT/ARCHIVE/NONE`。 |
 | 2026-06-30 | **P2 容量画像 / cost profile**:新增只读 `GET /api/console/capacity-profile?tenantId&from&to&groupBy&limit`，Console 转发 orchestrator `GET /internal/orchestrator/capacity-profile`。`groupBy` 支持 `TENANT/JOB/WORKER`，返回 `rows/totals/coverage`，指标来自 `job_instance/job_task/file_record/pipeline_instance/pipeline_progress` 热表聚合，覆盖耗时、任务数、成功/失败数、关联文件大小、processedRecords、records/s、MB/s。2026-09-14 起新增 `wallClockDurationMs`，并行吞吐以“最早开始到最晚结束”的墙钟时间为分母；`totalDurationMs` 只保留为累计资源成本口径。接口明确 `scope=BFS_HOT_TABLES`，`coverage.knownGaps` 标注历史任务无 checkpoint、DB CPU/IO/WAL 仍以 benchmark/数据库监控为准；`coverage.rejectedScopes` 明确不做云账单分摊、跨平台 FinOps、业务金额成本裁定。 |
 | 2026-06-30 | **批次日重放影响预览(P1-1)**:新增只读 `POST /api/console/ops/batch-day-replay/sessions/preview`，请求体复用 `BatchDayReplaySubmitRequest`，由 Console 转发 orchestrator preview；返回 `scope/totalCount/entries/resultVersionImpacts/warnings`，用于提交前确认会重跑哪些 job、会创建新 result_version 还是 promote 既有版本。preview 不创建 `batch_day_replay_session/entry`、不触发审批。同步修正 `batch_day_replay_entry` 唯一键:从旧 `(session_id,tenant_id,job_code)` 改为 source/result 级 partial unique，避免同 session 同 jobCode 多来源 entry 被 `ON CONFLICT` 吞掉，保证 preview 与实际执行影响范围一致。 |
@@ -279,6 +290,8 @@ API 契约发生变化时，请同步更新本文档与 [console-api.openapi.yam
 
 - All write APIs require `Idempotency-Key`.
 - The key must be stable for the same business action and unique across distinct actions.
+- `POST /api/console/auth/stream/ticket`每次独立发行一次性票据属于新动作，必须使用新幂等键；同一次HTTP传输重试仍保留该请求原键。不能由通用短时请求缓存把已消费票据的发行键套给下一次连接。
+- Workflow启动/重放的原请求重试仍保持原键并核对原回执；不能将票据发行的新键规则套到业务重试上。
 - Duplicate write requests must be safe to retry.
 - If idempotency handling is missing, the request should fail with `MISSING_IDEMPOTENCY_KEY`.
 
@@ -370,16 +383,15 @@ API 契约发生变化时，请同步更新本文档与 [console-api.openapi.yam
 | Method | Semantics | Typical usage |
 |--------|-----------|---------------|
 | `GET` | Read, never mutates state | Query, detail, list, export |
-| `POST` | Create a resource **or** trigger a command/action | Create, trigger, approve, cancel, toggle |
+| `POST` | Create a resource **or** trigger a command/action | Create, trigger, approve, cancel |
 | `PUT` | Idempotent full replacement of an existing resource | Update resource definition (replaces the whole record) |
 | `DELETE` | Remove a resource | Hard delete |
 
-`PATCH` is used exclusively for **enable/disable** operations:
-- `PATCH /{id}` — single resource toggle, body: `EnabledPatchRequest { tenantId, enabled }`
-- `PATCH /batch` — batch toggle (up to 200 ids), body: `BatchEnabledPatchRequest`
+`PATCH` 用于显式设置资源的目标状态。请求体包含 `enabled` 目标值，重复设置相同目标值不得变成反转操作。
 
-Currently applies to: `job-definitions`, `workflow-definitions`, `file-channels`, `file-templates`.  
-All other partial updates are handled by a dedicated `PUT` endpoint or an action endpoint (see below).
+- 现有 Job/Workflow/File Channel/File Template 沿用 `PATCH /{id}`；批量设置沿用对应 `PATCH /batch`。
+- 队列、批量窗口、日历、配额和告警路由沿用 `PATCH /{id}/enabled`。具体 body、租户和权限以 OpenAPI 为准。
+- 不重新增加 `POST .../toggle?enabled=` 或无目标值的反转接口；租户 Pipeline 定义写入已退役，不能因旧迁移清单仍列有该资源而重新开放。
 
 ### Resource URL Naming
 
@@ -396,18 +408,17 @@ All other partial updates are handled by a dedicated `PUT` endpoint or an action
 
 ### Action (Command) Endpoints
 
-For state-change operations that are not a simple CRUD (toggle, cancel, approve, drain, rerun, replay, etc.) use the **action suffix pattern**:
+For business commands such as cancel, approve, drain, rerun and replay use the **action suffix pattern**:
 
 ```
 POST /api/console/{resources}/{id}/{action}
 ```
 
 Examples:
-- `POST /api/console/job-definitions/{id}/toggle`
 - `POST /api/console/workers/{workerCode}/drain`
 - `POST /api/console/approvals/{approvalNo}/approve`
 
-Rationale: these commands are not idempotent replacements of a resource (which would be `PUT`). They represent an intent/event. GitHub API, Stripe API and similar industry APIs follow the same convention.
+这些端点表达触发、审批或运行控制意图；重试和幂等键按具体命令契约处理。不能把启停目标字段的设置混作无目标值的反转命令，也不因采用 POST 就取消幂等与审计要求。
 
 ### Batch Action Endpoints
 
@@ -420,7 +431,6 @@ POST /api/console/{resources}/batch-{action}
 Examples:
 - `POST /api/console/approvals/batch-approve`
 - `POST /api/console/approvals/batch-reject`
-- `POST /api/console/job-definitions/batch-toggle`
 
 **Do not** use a path-separator style (`/batch/approve`). All batch endpoints must use the hyphenated form.
 
@@ -433,7 +443,8 @@ Examples:
 | Create resource | `POST /api/console/job-definitions` | ✅ |
 | Update resource | `PUT /api/console/job-definitions/{id}` | ✅ full replacement |
 | Delete resource | `DELETE /api/console/job-definitions/{id}` | ✅ |
-| Action on resource | `POST /api/console/job-definitions/{id}/toggle` | ✅ verb suffix |
+| Set enabled state | `PATCH /api/console/job-definitions/{id}` | ✅ explicit target value |
+| Action on resource | `POST /api/console/workers/{workerCode}/drain` | ✅ business command |
 | Batch action | `POST /api/console/approvals/batch-approve` | ✅ hyphenated |
 | Query namespace | `/api/console/queries/instances` | ✅ plural |
 | Meta namespace | `/api/console/meta/enums` | ✅ singular namespace exception |
@@ -756,7 +767,7 @@ Deployment note:
 - `GET /api/console/dashboard/worker-load`
 - `GET /api/console/dashboard/alert-trend`
 - `GET /api/console/dashboard/sla-compliance`
-- `GET /api/console/dashboard/sla-report` — per-job SLA breakdown: avg/max duration, success/failure/breach counts
+- `GET /api/console/dashboard/sla-report` — per-job SLA breakdown: avg/max duration, success/failure/breach counts and `slaTotalWithSla` denominator
 - `GET /api/console/dashboard/execution-progress` — execution progress by `jobCode` + `bizDate`, returns instance partition completion percentage
 - `GET /api/console/dashboard/tenant-usage` — tenant resource usage: job/workflow/channel/template definition counts + recent instance/file counts (`days` defaults to `30`)
 - All endpoints require `tenantId` query param. `days` defaults to `7` where applicable (except `tenant-usage` which defaults to `30`).
@@ -764,7 +775,7 @@ Deployment note:
 - `trigger-stats`: trigger type distribution + daily trend.
 - `worker-load`: worker status/group distribution + active partition breakdown.
 - `alert-trend`: alert severity distribution + daily trend.
-- `sla-compliance`: violation/on-time counts + average duration + daily trend.
+- `sla-compliance`: violation/on-time counts + `totalWithSla` denominator + average duration + daily trend. A formal terminal instance with an SLA deadline but no finish time stays in the denominator and neither classified count.
 - Allow `ROLE_ADMIN`, `ROLE_AUDITOR`, `ROLE_TENANT_ADMIN`, and `ROLE_TENANT_USER`.
 
 ### File Channels
@@ -939,44 +950,48 @@ Deployment note:
 - Create request fields: `tenantId` (required), `username` (required), `displayName`, `password` (required, min 8), `authoritiesCsv`.
 - The seeded default accounts (see Ops section) are `admin`, `auditor`, `config-admin`, `tenant-user` under `default-tenant`.
 
-### Tenant Config Init
+### 作业包权限与事务
 
-- `POST /api/console/config/tenant-init`
-- Batch-initializes or updates configuration for multiple tenants in one request.
-- `targetTenantIds` is resolved from `batch.tenant WHERE status = 'ACTIVE'` when omitted (broadcast to all active tenants).
-- Supports two modes: `SKIP_EXISTING` (default, create missing only) and `UPSERT` (create or update).
-- Supports `dryRun` mode: when `true`, performs read and validation only without executing writes.
-- Covers all 10 config types: job definitions, workflow definitions, pipeline definitions, file channels, file templates, resource queues, batch windows, business calendars, quota policies, alert routings.
-- Response includes `batchOperationId` for audit correlation, per-tenant results with per-item details (code, action, errorMessage) for each selected config type.
-- Requires `ROLE_ADMIN`.
-- Requires `Idempotency-Key` header.
+- `POST /api/console/jobs/bundle/create`、`POST /api/console/jobs/bundle/import`及`GET /api/console/jobs/bundle/export`均受现有`ROLE_ADMIN`服务端权限约束；前端打包向导、导入与导出入口遵循同一边界。
+- 租户管理员仍可使用普通作业定义新建/编辑入口；不能将其权限外推到包含其他配置类别的作业包。
+- 打包新建只处理当前目标，导入按目标租户独立严格事务；前端上下文改变只使旧反馈失效，不取消已经发送的业务操作。
 
-### Tenant Config Copy
+### 租户配置初始化
 
-- `POST /api/console/config/tenant-copy`
-- Reads configuration from a source tenant and pushes it to one or more target tenants.
-- Request body: `sourceTenantId`, `targetTenantIds` (max 50), optional `configTypes` (subset of `JOB_DEFINITION`, `WORKFLOW_DEFINITION`, `FILE_CHANNEL`, `FILE_TEMPLATE`, `RESOURCE_QUEUE`, `BATCH_WINDOW`, `BUSINESS_CALENDAR`, `QUOTA_POLICY`, `ALERT_ROUTING`; empty means all 9), optional `jobCodes` (dependency-aware minimal job bundle), `mode` (default `SKIP_EXISTING`), `dryRun`.
-- Internally reads source tenant's configs and delegates to the tenant-init logic.
-- Response format is identical to `tenant-init`.
-- Requires `ROLE_ADMIN`.
-- Requires `Idempotency-Key` header.
+- `POST /api/console/config/tenant-init`，需要 `ROLE_ADMIN` 和 `Idempotency-Key`。
+- `targetTenantIds` 必填、最多50个，元素不得为null或空白；不会在省略时广播到全部活跃租户。
+- `SKIP_EXISTING` 默认只创建缺失项；`UPSERT` 更新已有项并创建缺失项；`dryRun=true` 只预判，不写配置或创建托管Workflow。
+- 创建或覆盖 Workflow 时，提交的节点必须包含非 null 的 `nodeName`；正式执行和 `dryRun` 均按逐项结果报告缺失名称，跳过已存在项时不校验未执行的配置。
+- 支持九类配置：作业、Workflow、文件渠道、文件模板、资源队列、批量窗口、业务日历、配额和告警路由；历史Pipeline定义不再作为配置资源接收。
+- 初始化与作业包导入在首个目标事务前检查全部目标身份；目标元素非法返回HTTP400，先前合法目标也不得写入。
+- 每个目标租户独立事务；严格包已确认回滚记为该租户失败，事务提交或连接结果未知则向上传播并停止后续目标，不能把错误当作未执行后重做整批。
+- Workflow实际替换图时，`nodeParams` 中的敏感字段掩码仅从目标租户同一定义、同一节点编码和字段恢复；新图无法恢复时按条目失败处理。旧图在同一事务内替换，版本快照读取已保存图。未提交节点列表时保留原图；提交列表但节点省略参数仍按完整图语义清空。
+- Workflow节点配置包保留 `crossDayDependencies`（ADR-018 JSON数组字符串）和 `crossDayDependencyTimeoutSeconds`，导出、JSON导入、节点落库与版本快照使用同一声明。超时0表示永久等待，未传取86400秒；完整图替换时省略跨日声明会清空该声明。
+- 响应包含 `batchOperationId`、逐租户及逐条目结果。HTTP成功或租户级成功不替代条目失败计数，完整成功后界面才提示完成。
+- 实际应用 Job `defaultParams` 时，`UPSERT` 中敏感字段的 `****` 掩码只恢复目标租户同一字段已有值；新建或无法恢复时，该项以 `error.config.masked_secret_requires_value` 失败。非严格请求保留其它成功项，严格请求回滚同租户整包。更新省略该字段保持原值；`dryRun` 仍只预判，不证明掩码能够恢复。
 
-### Tenant Config Preview / Overlay / Matrix
+### 租户配置复制
 
-- `POST /api/console/config/tenant-copy/preview`
-- `POST /api/console/config/tenant-overlay/preview`
-- `POST /api/console/config/tenant-config-matrix`
-- `tenant-copy/preview` is read-only and returns add/update/unchanged/delete-candidate items plus impact hints before executing a copy.
-- `tenant-overlay/preview` treats `sourceTenantId` as the base package tenant and returns an `overlayBundle` for each target tenant; only add/update items enter the overlay, delete candidates are advisory.
-- `tenant-config-matrix` compares the same `jobCode` across tenants and highlights schedule, queue, window, calendar, worker group, template and channel drift against `baselineTenantId` (or the first tenant).
-- Job-scoped previews resolve dependencies from explicit JSON refs in job default params, pipeline step params and workflow node params (`templateCode` / `fileTemplateCode` / `channelCode` / `fileChannelCode` variants). `bizType` template/channel matching remains only as a backward-compatible fallback when no explicit ref exists.
-- Requires `ROLE_ADMIN`; no `Idempotency-Key` header because these endpoints do not write.
+- `POST /api/console/config/tenant-copy`，需要 `ROLE_ADMIN` 和 `Idempotency-Key`。
+- 请求包含 `sourceTenantId`、`targetTenantIds`（最多50个），可选 `configTypes`、`jobCodes`、`mode` 和 `dryRun`。
+- `configTypes` 为空时包含全部九类；可用值为 `JOB_DEFINITION`、`WORKFLOW_DEFINITION`、`FILE_CHANNEL`、`FILE_TEMPLATE`、`RESOURCE_QUEUE`、`BATCH_WINDOW`、`BUSINESS_CALENDAR`、`QUOTA_POLICY`、`ALERT_ROUTING`。
+- 指定 `jobCodes` 时构建所列作业的依赖配置包；复制通过严格初始化按目标租户执行，响应结构与初始化相同。租户/作业元素不得为null或空白，配置类型元素不得为null；可选空集合仍表示原先的全部范围。
+- 源租户不能同时作为目标；重合返回HTTP400，读取和写入目标配置均不执行。类型兼容解析使用固定Locale，不随部署主机语言变化。
+- 配置包读取当前配置完整集合，Workflow每编码只带最高版本及其节点/边，停用状态保留；不能套用普通列表的200条分页。导入按精确编码定位，不使用列表模糊搜索选择写入对象。渠道复制去除环境端点和凭据，目标环境信息需要单独核对。
+
+### 租户配置差异、Overlay与作业矩阵
+
+- 只读端点为 `POST /api/console/config/tenant-copy/preview`、`POST /api/console/config/tenant-overlay/preview` 和 `POST /api/console/config/tenant-config-matrix`，需要 `ROLE_ADMIN`，不需要写入幂等键。
+- 差异预览返回新增、更新、未变和候选删除项及影响提示；Overlay以源租户为基础包，只将新增和更新项放入 `overlayBundle`，候选删除不自动执行。
+- 矩阵按同一 `jobCode` 比较调度、队列、窗口、日历、Worker分组、模板和渠道。`baselineTenantId` 缺省时使用首个租户，可显式指向展示列表之外；服务仍读取其事实，响应行只属于请求的 `tenantIds`。
+- 作业依赖优先解析参数中的显式模板/渠道引用，无显式引用时才保留 `bizType` 兼容兜底。历史执行参数键不是可新建的Pipeline配置资源。
+- 预览与矩阵读取完整集合；输入、账号或面板变化后，旧预览失效，不可用于确认另一组目标。
 
 ### Files
 
 - `POST /api/console/files/archive`
 - `DELETE /api/console/files/{fileId}` — delete a file record
-- `POST /api/console/files/redispatch`
+- `POST /api/console/files/redispatch` — 仅关联任务为 FAILED 且父作业及 Workflow 允许派发时受理；外部结果未知须先核对。须根据 DISPATCH 任务步骤的文件关联及任务载荷中的渠道确定唯一目标；关联缺失、目标不一致或存在多个匹配任务时返回状态冲突。一次失败尝试只能复位一次，后续明确失败后再次重派使用新事件身份。
 - `POST /api/console/files/presign-download`
 - `POST /api/console/files/arrival-groups/action`
 - `POST /api/console/files/presign-upload`
@@ -1054,7 +1069,9 @@ Deployment note:
 
 - `GET /api/console/ops/outbox/stats` — outbox event statistics (pending / failed / delivered counts)
 - `POST /api/console/ops/outbox/cleanup` — clean up delivered/expired outbox events
-- `POST /api/console/ops/outbox/republish` — republish failed outbox events
+- `POST /api/console/ops/outbox/republish` — 人工重投 FAILED / GIVE_UP 事件；仅 ADMIN / TENANT_ADMIN 可写，租户管理员受自身租户约束。
+
+Outbox cleanup 同样只允许 ADMIN / TENANT_ADMIN；AUDITOR 仅保留统计读取。重投返回 `tenantId`、`requestedCount` 和 `resetCount`，成功受理数以 `resetCount` 为准。记录在请求前已转为发布中/已发布时，可以 HTTP 成功但重置数为零；界面不能将其显示为实际重投成功。
 
 ### Archive Policies
 
@@ -1111,12 +1128,12 @@ Notes:
 - `GET /api/console/queries/outbox-retries`
 - `GET /api/console/queries/outbox-deliveries`
 - `GET /api/console/queries/file-pipelines`
-- `GET /api/console/queries/file-pipeline-steps`
+- `GET /api/console/queries/file-pipeline-steps` — 步骤输入、输出摘要及错误消息在展示时遮蔽可识别的敏感字段和凭据形式
 - `GET /api/console/queries/file-dispatches`
 - `GET /api/console/queries/channel-receipts`
 - `GET /api/console/queries/file-channels`
 - `GET /api/console/queries/file-arrival-groups`
-- `GET /api/console/queries/file-errors`
+- `GET /api/console/queries/file-errors` — 错误消息遮蔽可识别的凭据形式；原始记录按文件模板配置的内容脱敏策略展示
 - `GET /api/console/queries/file-templates`
 - `GET /api/console/queries/instances` — supports `sortBy=duration` and `minDurationSeconds` for slow task diagnosis
 - `GET /api/console/queries/instances/{id}`
@@ -1204,16 +1221,14 @@ Notes:
 - State machine: `DRAFT → PENDING_APPROVAL → PUBLISHED` (approve) or `DRAFT → PENDING_APPROVAL → DRAFT` (reject).
 - Database table: `config_approval` (V49 migration). Enum `ConfigLifecycleStatus.PENDING_APPROVAL` added.
 
-### Cross-Environment Config Sync
+### 跨环境配置同步
 
-- `POST /api/console/config/sync/export` — export config bundle from source tenant/environment
-- `POST /api/console/config/sync/preview` — preview import impact without executing
-- `POST /api/console/config/sync/import` — import config bundle into target tenants
-- `GET /api/console/config/sync/logs` — list sync operation logs (param: `tenantId`, `limit`)
-- All endpoints require `ROLE_ADMIN`.
-- Export returns a `ConfigSyncBundlePayload` containing job definitions, workflow definitions, pipeline definitions, file channels, and file templates.
-- Import delegates to `ConsoleTenantConfigInitApplicationService.batchInit()` and records sync log with RUNNING → SUCCESS / PARTIAL_FAILED / FAILED status.
-- Database table: `config_sync_log` (V49 migration).
+- `POST /api/console/config/sync/export` 导出源租户/环境配置包，`POST /api/console/config/sync/preview` 只读预判，`POST /api/console/config/sync/import` 导入目标集合，均需要 `ROLE_ADMIN`。
+- `ConfigSyncBundlePayload` 包含上述九类配置，采用完整集合读取，不包含可新建的Pipeline定义。
+- 导入逐目标事务执行，目标收据与该目标配置同事务提交。审计使用 RUNNING、SUCCESS、PARTIAL_FAILED、FAILED；提交结果未知时保留RUNNING并按原身份核对，不直接推断失败。
+- `GET /api/console/config/sync/logs` 通过 `tenantId`、`pageNo`、`pageSize` 分页查询；`GET /api/console/config/sync/requests/status` 以审计租户和原 `Idempotency-Key` 读取原审计，未找到不证明未执行。
+- `POST /api/console/config/sync/logs/{logId}/reconcile` 只核对持久目标收据，不重新应用配置。原请求恢复与未知结果处置见[配置治理手册](../runbook/config-governance.md#配置同步响应丢失与原请求恢复)。
+- 持久事实为 `config_sync_log` 与 `config_sync_target_receipt`；普通初始化/复制入口不能直接套用同步导入的收据恢复保证。
 
 ### Alert Routing / Notification Policy Status
 
@@ -1294,7 +1309,7 @@ All console APIs support versioned paths via URL prefix:
 
 ### Frontend Telemetry
 
-- `POST /api/console/telemetry/events` — receive frontend telemetry events in batch
+- `POST /api/console/telemetry/events` — 批量接收前端遥测；数组必须有 1–50 个非空事件，空元素按参数错误返回 400。
 - Request body structure:
 
 ```json
@@ -1317,10 +1332,10 @@ All console APIs support versioned paths via URL prefix:
 - `type`: event category — `route` / `click` / `api` / `error`
 - `name`: event name or description
 - `ts`: ISO 8601 timestamp string
-- `props`: arbitrary key-value object, backend serializes to JSON for logging
+- `props`：受键数、字节数、深度及数组长度限制的属性对象；只用于校验，不将原文写入遥测日志。
 - Outer `app` / `userId` / `sessionId` provide session context without repeating per event
 - Max 50 events per batch
-- Backend logs each event via slf4j with MDC fields (`frontendApp`, `frontendUserId`, `frontendEventType`, `frontendPage`), then the OpenTelemetry pipeline exports it to Loki
+- 服务端通过 slf4j 记录安全类型、名称长度、页面是否存在及属性键数，不写入调用方控制的事件正文、页面值或 props 原文；后续导出沿既有 OpenTelemetry 管道。
 - `error` type events are logged at ERROR level; all others at INFO level
 - Requires JWT authentication (any authenticated console user)
 - Frontend should batch non-critical events (click, route) and report errors immediately

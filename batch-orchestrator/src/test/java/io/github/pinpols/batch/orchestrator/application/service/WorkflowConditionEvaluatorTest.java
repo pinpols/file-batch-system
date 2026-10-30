@@ -126,7 +126,7 @@ class WorkflowConditionEvaluatorTest {
     assertThat(evaluator.matches("!flag", "{\"flag\":true}")).isFalse();
   }
 
-  // --- in / not in ---
+  // --- 包含 / 不包含 ---
 
   @Test
   @DisplayName("集合包含运算在取值属于集合时命中")
@@ -202,7 +202,7 @@ class WorkflowConditionEvaluatorTest {
         .isFalse();
   }
 
-  // --- literal boolean and null ---
+  // --- 布尔字面值和空值 ---
 
   @Test
   @DisplayName("布尔字面量比较按取值命中或不命中")

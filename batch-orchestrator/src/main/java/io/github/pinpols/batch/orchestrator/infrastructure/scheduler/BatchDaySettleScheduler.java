@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
-import io.github.pinpols.batch.orchestrator.domain.query.ExpectedWorkOccurrenceDueExpectedWithoutMissingAlertQuery;
-
-
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
@@ -25,6 +22,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.query.ExpectedWorkOccurrenceDueExpectedWithoutMissingAlertQuery;
 import io.github.pinpols.batch.orchestrator.domain.query.ExpectedWorkOccurrenceOverride;
 import io.github.pinpols.batch.orchestrator.domain.view.BatchDayInstanceMetrics;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
@@ -52,8 +50,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -183,10 +179,14 @@ public class BatchDaySettleScheduler {
 
   private void finalizeInNewTransaction(
       String tenantId, String calendarCode, LocalDate bizDate, Instant now) {
-    newSettlementTransaction().executeWithoutResult(transactionStatus -> {
+    BatchDayInstanceEntity failed = newSettlementTransaction().execute(transactionStatus -> {
       expectedWorkOccurrenceMapper.setTenantContext(tenantId);
-      finalizeSettling(tenantId, calendarCode, bizDate, now);
+      return finalizeSettling(tenantId, calendarCode, bizDate, now);
     });
+    if (EmptyChecks.isNotNull(failed)) {
+      // 事务及其连接已清理；补跑请求必须先提交，才能被启动事务读取。
+      driveCatchUp(failed, now);
+    }
   }
 
   private TransactionTemplate newSettlementTransaction() {
@@ -237,8 +237,7 @@ public class BatchDaySettleScheduler {
       return false;
     }
     if (totalCount <= 0L) {
-      boolean emptyCutoffDayCanSettle =
-          "CUTOFF".equals(candidate.dayStatus()) && !unresolvedWork;
+      boolean emptyCutoffDayCanSettle = "CUTOFF".equals(candidate.dayStatus()) && !unresolvedWork;
       if (emptyCutoffDayCanSettle) {
         BatchDayInstanceEntity settled = candidate.withSettled("SETTLED", now, now);
         casUpdate(settled);
@@ -264,19 +263,19 @@ public class BatchDaySettleScheduler {
    * tx2：从 SETTLING 落到终态（SETTLED / FAILED）；并发期间 active 又起来则回 IN_FLIGHT。 入口重读 DB 拿到 tx1 之后的 version 与
    * dayStatus，进程在 tx2 之前崩溃时下一轮重做也走同一路径。
    */
-  private void finalizeSettling(
+  private BatchDayInstanceEntity finalizeSettling(
       String tenantId, String calendarCode, LocalDate bizDate, Instant now) {
     batchDayInstanceMapper.acquireSettlementFence(tenantId, calendarCode, bizDate);
     BatchDayInstanceEntity claimed =
         batchDayInstanceMapper.selectByTenantCalendarBizDate(tenantId, calendarCode, bizDate);
     if (claimed == null || !STATUS_SETTLING.equals(claimed.dayStatus())) {
-      return;
+      return null;
     }
     alertOverdueExpectedWork(claimed, now);
     BatchDayInstanceMetrics metrics =
         jobInstanceMapper.selectBatchDayMetrics(tenantId, calendarCode, bizDate);
     if (metrics == null) {
-      return;
+      return null;
     }
     long activeCount = value(metrics.getActiveCount());
     long failedCount = value(metrics.getFailedCount());
@@ -287,49 +286,30 @@ public class BatchDaySettleScheduler {
       BatchDayInstanceEntity to = claimed.withDayStatus(STATUS_IN_FLIGHT, now);
       casUpdate(to);
       appendBatchDayAuditLog(claimed, to, "SETTLING_REVERTED_TO_IN_FLIGHT");
-      return;
+      return null;
     }
     if (totalCount <= 0L) {
       BatchDayInstanceEntity to = claimed.withDayStatus("CUTOFF", now);
       casUpdate(to);
       appendBatchDayAuditLog(claimed, to, "SETTLING_REVERTED_TO_CUTOFF");
-      return;
+      return null;
     }
     if (unresolvedWork) {
       BatchDayInstanceEntity to = claimed.withDayStatus(STATUS_IN_FLIGHT, now);
       casUpdate(to);
       appendBatchDayAuditLog(claimed, to, "SETTLING_REVERTED_BECAUSE_EXPECTED_WORK_REMAINS");
-      return;
+      return null;
     }
     if (failedCount > 0L) {
       BatchDayInstanceEntity to = claimed.withSettled("FAILED", now, now);
       casUpdate(to);
       appendBatchDayAuditLog(claimed, to, "BATCH_DAY_FAILED");
-      // driveCatchUp 写 job_instance / outbox 等副作用,**必须等当前 REQUIRES_NEW 事务提交后**才执行;
-      // 否则:本事务回滚会留下"batch_day 仍 SETTLING + catch-up job_instance 已写"的不一致,
-      // 下一轮重做 finalizeSettling 再次触发 catch-up,造成同 candidate 重复 launch。
-      // afterCommit 钩子保证只在 batch_day 真正落到 FAILED 后才发起 catch-up。
-      final BatchDayInstanceEntity finalClaimed = claimed;
-      final Instant finalNow = now;
-      if (TransactionSynchronizationManager.isSynchronizationActive()) {
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-          @Override
-          public void afterCommit() {
-            driveCatchUp(finalClaimed, finalNow);
-          }
-        });
-      } else {
-        // 无 tx 上下文(单测 / 手动直调),退化为内联;生产路径不应走这里(@Transactional 保证有 tx)
-        log.warn(
-            "finalizeSettling invoked outside transaction context; running driveCatchUp inline");
-        driveCatchUp(finalClaimed, finalNow);
-      }
       log.info(
           "batch day settled as FAILED: tenantId={}, calendarCode={}, bizDate={}",
           claimed.tenantId(),
           claimed.calendarCode(),
           claimed.bizDate());
-      return;
+      return claimed;
     }
     BatchDayInstanceEntity to = claimed.withSettled("SETTLED", now, now);
     casUpdate(to);
@@ -339,6 +319,7 @@ public class BatchDaySettleScheduler {
         claimed.tenantId(),
         claimed.calendarCode(),
         claimed.bizDate());
+    return null;
   }
 
   private boolean hasExpectedOrUnresolvedWork(
@@ -369,13 +350,15 @@ public class BatchDaySettleScheduler {
   }
 
   private void alertOverdueExpectedWork(BatchDayInstanceEntity batchDay, Instant now) {
-    ExpectedWorkOccurrenceDueExpectedWithoutMissingAlertQuery expectedWorkOccurrenceDueExpectedWithoutMissingAlertQuery = ExpectedWorkOccurrenceDueExpectedWithoutMissingAlertQuery.builder()
-        .tenantId(batchDay.tenantId())
-        .calendarCode(batchDay.calendarCode())
-        .bizDate(batchDay.bizDate())
-        .now(now)
-        .limit(100)
-        .build();
+    ExpectedWorkOccurrenceDueExpectedWithoutMissingAlertQuery
+        expectedWorkOccurrenceDueExpectedWithoutMissingAlertQuery =
+            ExpectedWorkOccurrenceDueExpectedWithoutMissingAlertQuery.builder()
+                .tenantId(batchDay.tenantId())
+                .calendarCode(batchDay.calendarCode())
+                .bizDate(batchDay.bizDate())
+                .now(now)
+                .limit(100)
+                .build();
     List<ExpectedWorkOccurrenceOverride> overdue =
         expectedWorkOccurrenceMapper.selectDueExpectedWithoutMissingAlert(
             expectedWorkOccurrenceDueExpectedWithoutMissingAlertQuery);
@@ -396,7 +379,11 @@ public class BatchDaySettleScheduler {
       detail.put("sourceType", occurrence.sourceType());
       detail.put("sourceKey", occurrence.sourceKey());
       detail.put("generation", occurrence.generation());
-      detail.put("expectedAt", EmptyChecks.isNull(occurrence.expectedAt()) ? null : occurrence.expectedAt().toString());
+      detail.put(
+          "expectedAt",
+          EmptyChecks.isNull(occurrence.expectedAt())
+              ? null
+              : occurrence.expectedAt().toString());
       detail.put("dueAt", occurrence.dueAt().toString());
       detail.put("triggerRequestId", occurrence.triggerRequestId());
       String detailJson = JsonUtils.toJson(detail);
@@ -449,30 +436,31 @@ public class BatchDaySettleScheduler {
           || candidate.getJobCode().isBlank()) {
         continue;
       }
-      JobDefinitionEntity jobDefinition =
-          configCacheService.findEnabledJobDefinition(batchDay.tenantId(), candidate.getJobCode());
-      WorkflowDefinitionEntity workflow =
-          EmptyChecks.isNull(jobDefinition) || EmptyChecks.isNull(jobDefinition.id())
-              ? null
-              : workflowDefinitionMapper.selectFirstByTenantAndSingleJobDefinitionIdAndEnabled(
-                  batchDay.tenantId(), jobDefinition.id(), true);
-      if (EmptyChecks.isNull(workflow) || EmptyChecks.isNull(workflow.id())) {
-        persistUnlinkedCatchUpRequest(batchDay, candidate);
-        log.error(
-            "batch day catch-up rejected because managed single-job Workflow is missing:"
-                + " tenantId={}, calendarCode={}, bizDate={}, jobCode={}, jobDefinitionId={}",
-            batchDay.tenantId(),
-            batchDay.calendarCode(),
-            batchDay.bizDate(),
-            candidate.getJobCode(),
-            EmptyChecks.isNull(jobDefinition) ? null : jobDefinition.id());
-        continue;
-      }
       String dedupKey = buildCatchUpDedupKey(batchDay, candidate);
       TriggerRequestEntity existing =
-          triggerRequestMapper.selectByTenantAndDedupKey(batchDay.tenantId(), dedupKey);
+          triggerRequestMapper.selectCatchUpRootByDedupKey(batchDay.tenantId(), dedupKey);
       TriggerRequestEntity request = existing;
       if (request == null) {
+        JobDefinitionEntity jobDefinition = configCacheService.findEnabledJobDefinition(
+            batchDay.tenantId(), candidate.getJobCode());
+        WorkflowDefinitionEntity workflow =
+            EmptyChecks.isNull(jobDefinition) || EmptyChecks.isNull(jobDefinition.id())
+                ? null
+                : workflowDefinitionMapper.selectFirstByTenantAndSingleJobDefinitionIdAndEnabled(
+                    batchDay.tenantId(), jobDefinition.id(), true);
+        if (EmptyChecks.isNull(workflow) || EmptyChecks.isNull(workflow.id())) {
+          if (persistUnlinkedCatchUpRequest(batchDay, candidate)) {
+            log.error(
+                "batch day catch-up rejected because managed single-job Workflow is missing:"
+                    + " tenantId={}, calendarCode={}, bizDate={}, jobCode={}, jobDefinitionId={}",
+                batchDay.tenantId(),
+                batchDay.calendarCode(),
+                batchDay.bizDate(),
+                candidate.getJobCode(),
+                EmptyChecks.isNull(jobDefinition) ? null : jobDefinition.id());
+          }
+          continue;
+        }
         request = new TriggerRequestEntity();
         request.setTenantId(batchDay.tenantId());
         request.setRequestId(IdGenerator.newBusinessNo("catchup"));
@@ -496,22 +484,10 @@ public class BatchDaySettleScheduler {
             .params(params)
             .build();
         request.setLaunchPayload(JsonUtils.toJson(acceptedLaunch));
-        triggerRequestMapper.insert(request);
-      }
-      if (!workflow.id().equals(request.getWorkflowDefinitionId())) {
-        triggerRequestMapper.updateAcceptance(
-            request.getTenantId(),
-            request.getRequestId(),
-            TriggerRequestStatus.REJECTED.code(),
-            null);
-        log.error(
-            "batch day catch-up rejected because existing request is not pinned to the managed"
-                + " single-job Workflow: tenantId={}, requestId={}, jobCode={}, workflowDefinitionId={}",
-            batchDay.tenantId(),
-            request.getRequestId(),
-            candidate.getJobCode(),
-            request.getWorkflowDefinitionId());
-        continue;
+        if (triggerRequestMapper.insertBatchDayCatchUpIfAbsent(request) != 1) {
+          // 另一执行器已接纳同键；其后续失败由失败日扫描恢复。
+          continue;
+        }
       }
       if ("AUTO".equalsIgnoreCase(calendar.catchUpPolicy()) && isLaunchable(request)) {
         // 重复扫描复用首次接受时冻结的快照，包括原始 interval。
@@ -563,18 +539,14 @@ public class BatchDaySettleScheduler {
   }
 
   /** 记录可见的拒绝结果，不得绕过规范的 Workflow 关联。 */
-  private void persistUnlinkedCatchUpRequest(
+  private boolean persistUnlinkedCatchUpRequest(
       BatchDayInstanceEntity batchDay, JobInstanceEntity candidate) {
     String dedupKey = buildCatchUpDedupKey(batchDay, candidate);
     TriggerRequestEntity existing =
-        triggerRequestMapper.selectByTenantAndDedupKey(batchDay.tenantId(), dedupKey);
+        triggerRequestMapper.selectCatchUpRootByDedupKey(batchDay.tenantId(), dedupKey);
     if (EmptyChecks.isNotNull(existing)) {
-      triggerRequestMapper.updateAcceptance(
-          existing.getTenantId(),
-          existing.getRequestId(),
-          TriggerRequestStatus.REJECTED.code(),
-          null);
-      return;
+      // 并发接纳成功后，应保留其冻结请求而非按当前配置拒绝。
+      return false;
     }
     TriggerRequestEntity request = new TriggerRequestEntity();
     request.setTenantId(batchDay.tenantId());
@@ -585,7 +557,7 @@ public class BatchDaySettleScheduler {
     request.setDedupKey(dedupKey);
     request.setRequestStatus(TriggerRequestStatus.REJECTED.code());
     request.setTraceId(IdGenerator.newTraceId());
-    triggerRequestMapper.insert(request);
+    return triggerRequestMapper.insertBatchDayCatchUpIfAbsent(request) == 1;
   }
 
   private void appendBatchDayAuditLog(
@@ -621,7 +593,9 @@ public class BatchDaySettleScheduler {
     String status = request.getRequestStatus();
     return status == null
         || (!TriggerRequestStatus.LAUNCHED.code().equalsIgnoreCase(status)
-            && !TriggerRequestStatus.REJECTED.code().equalsIgnoreCase(status));
+            && !TriggerRequestStatus.REJECTED.code().equalsIgnoreCase(status)
+            && !TriggerRequestStatus.DUPLICATE.code().equalsIgnoreCase(status)
+            && !TriggerRequestStatus.GIVE_UP.code().equalsIgnoreCase(status));
   }
 
   private String buildCatchUpDedupKey(

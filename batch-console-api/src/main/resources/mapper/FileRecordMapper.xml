@@ -50,6 +50,27 @@
         <if test="traceId != null and traceId != ''">
             and trace_id = #{traceId}
         </if>
+        <if test="jobCode != null and jobCode != ''">
+            and (
+                exists (select 1 from batch.pipeline_instance pi
+                        where pi.tenant_id = file_record.tenant_id
+                          and pi.file_id = file_record.id and pi.job_code = #{jobCode})
+                or exists (select 1 from batch.job_instance ji
+                           where ji.tenant_id = file_record.tenant_id
+                             and ji.related_file_id = file_record.id and ji.job_code = #{jobCode})
+                or exists (select 1 from batch.job_partition jp
+                           join batch.job_instance ji on ji.tenant_id = jp.tenant_id
+                             and ji.id = jp.job_instance_id and ji.biz_date = jp.job_instance_biz_date
+                           where jp.tenant_id = file_record.tenant_id
+                             and jp.source_file_id = file_record.id and ji.job_code = #{jobCode})
+            )
+        </if>
+        <if test="startDate != null">
+            and biz_date &gt;= #{startDate}
+        </if>
+        <if test="endDate != null">
+            and biz_date &lt;= #{endDate}
+        </if>
         <if test="fromTime != null">
             and created_at &gt;= #{fromTime}
         </if>
@@ -86,6 +107,26 @@
         </if>
         <if test="traceId != null and traceId != ''">
             and trace_id = #{traceId}
+        </if>
+        <if test="jobCode != null and jobCode != ''">
+            and id in (
+                select pi.file_id from batch.pipeline_instance pi
+                where pi.tenant_id = #{tenantId} and pi.job_code = #{jobCode}
+                union
+                select ji.related_file_id from batch.job_instance ji
+                where ji.tenant_id = #{tenantId} and ji.job_code = #{jobCode}
+                union
+                select jp.source_file_id from batch.job_partition jp
+                join batch.job_instance ji on ji.tenant_id = jp.tenant_id
+                  and ji.id = jp.job_instance_id and ji.biz_date = jp.job_instance_biz_date
+                where ji.tenant_id = #{tenantId} and ji.job_code = #{jobCode}
+            )
+        </if>
+        <if test="startDate != null">
+            and biz_date &gt;= #{startDate}
+        </if>
+        <if test="endDate != null">
+            and biz_date &lt;= #{endDate}
         </if>
         <if test="fromTime != null">
             and created_at &gt;= #{fromTime}

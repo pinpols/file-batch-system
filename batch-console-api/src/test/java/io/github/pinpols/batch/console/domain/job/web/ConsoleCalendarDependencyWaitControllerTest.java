@@ -1,9 +1,5 @@
 package io.github.pinpols.batch.console.domain.job.web;
 
-import java.util.Objects;
-import io.github.pinpols.batch.console.application.ops.command.CalendarDependencyActionCommand;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -20,18 +16,27 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 @DisplayName("Console 日历依赖等待的租户与操作身份边界")
+@ExtendWith(MockitoExtension.class)
 class ConsoleCalendarDependencyWaitControllerTest {
 
-  private final ConsoleOrchestratorPort orchestrator = mock(ConsoleOrchestratorPort.class);
-  private final ConsoleRequestMetadataResolver metadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleOrchestratorPort orchestrator;
+
+  @Mock
+  private ConsoleRequestMetadataResolver metadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -74,7 +79,13 @@ class ConsoleCalendarDependencyWaitControllerTest {
                 """))
         .andExpect(status().isOk());
     verify(orchestrator)
-        .requestCalendarDependencyWaitAction(org.mockito.ArgumentMatchers.argThat(command -> command != null && Objects.equals(command.tenantId(), "tenant-a") && Objects.equals(command.calendarCode(), "CAL_A") && Objects.equals(command.bizDate(), LocalDate.parse("2026-10-13")) && Objects.equals(command.action(), "SKIP") && Objects.equals(command.operatorId(), "admin-user") && Objects.equals(command.reason(), "source cancelled")));
+        .requestCalendarDependencyWaitAction(ArgumentMatchers.argThat(command -> command != null
+            && Objects.equals(command.tenantId(), "tenant-a")
+            && Objects.equals(command.calendarCode(), "CAL_A")
+            && Objects.equals(command.bizDate(), LocalDate.parse("2026-10-13"))
+            && Objects.equals(command.action(), "SKIP")
+            && Objects.equals(command.operatorId(), "admin-user")
+            && Objects.equals(command.reason(), "source cancelled")));
   }
 
   @DisplayName("拒绝不支持的人工处置动作")

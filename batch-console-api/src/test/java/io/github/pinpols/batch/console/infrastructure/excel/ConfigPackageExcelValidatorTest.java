@@ -2,15 +2,20 @@ package io.github.pinpols.batch.console.infrastructure.excel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.BatchWindowRow;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore.PackageExcelSession;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,9 +24,79 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @DisplayName("配置包 Excel 校验器:模板取值、跨表引用与字段规则校验")
 class ConfigPackageExcelValidatorTest {
+
+  @Test
+  @DisplayName("配置包作业编码遵循普通创建接口的字符和长度约束")
+  void shouldValidateJobCodeAgainstResourceCodeContract() {
+    for (String code : List.of("A:B", "1JOB", "A".repeat(129))) {
+      List<String> issues = new ArrayList<>();
+      Map<String, String> row = Map.of(
+          "job_code", code, "job_name", "test", "job_type", "IMPORT", "schedule_type", "MANUAL");
+      ConfigPackageExcelRowValidators.validateJobRow("t1", row, new HashSet<>(), issues);
+      assertThat(issues).as("非法作业编码 %s", code).anyMatch(issue -> issue.contains("job_code"));
+    }
+    for (String code : List.of("A-b_9", "A".repeat(128))) {
+      List<String> issues = new ArrayList<>();
+      Map<String, String> row = Map.of(
+          "job_code", code, "job_name", "test", "job_type", "IMPORT", "schedule_type", "MANUAL");
+      ConfigPackageExcelRowValidators.validateJobRow("t1", row, new HashSet<>(), issues);
+      assertThat(issues).as("合法作业编码 %s", code).isEmpty();
+    }
+  }
+
+  @Test
+  @DisplayName("配置包校验将非法作业编码排除在可应用行之外")
+  void shouldExcludeInvalidJobCodeFromApplicableRows() {
+    Map<String, String> invalid = Map.of(
+        "tenant_id",
+        "t1",
+        "job_code",
+        "A:B",
+        "job_name",
+        "invalid",
+        "job_type",
+        "IMPORT",
+        "schedule_type",
+        "MANUAL");
+    Map<String, String> valid = Map.of(
+        "tenant_id",
+        "t1",
+        "job_code",
+        "A_B",
+        "job_name",
+        "valid",
+        "job_type",
+        "IMPORT",
+        "schedule_type",
+        "MANUAL");
+    PackageExcelSession session = new PackageExcelSession(
+        "package.xlsx",
+        "t1",
+        Instant.EPOCH,
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(invalid, valid),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of());
+
+    var result = validator().validate(session);
+
+    assertThat(result.jobs().invalid()).isEqualTo(1);
+    assertThat(result.validJobs()).extracting(row -> row.get("job_code")).containsExactly("A_B");
+  }
 
   @Test
   @DisplayName("PROCESS 流水线:允许准备、计算、校验、提交、反馈五类阶段")
@@ -464,6 +539,20 @@ class ConfigPackageExcelValidatorTest {
     assertThat(result.allIssues()).isEmpty();
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"12", "true"})
+  @DisplayName("固定宽度导入映射:目标字段必须是字符串")
+  void shouldRejectNonTextFixedWidthTarget(String target) {
+    Map<String, String> row = new LinkedHashMap<>(fileTemplateRow("TPL", "1"));
+    row.put("file_format_type", "FIXED_WIDTH");
+    row.put("field_mappings", "[{\"start\":0,\"length\":12,\"target\":" + target + "}]");
+
+    ConfigPackageExcelValidator.PackageValidationResult result =
+        validator().validate(session(List.of(row), List.of()));
+
+    assertThat(result.fileTemplates().invalid()).isEqualTo(1);
+  }
+
   @Test
   @DisplayName("固定宽度导入映射:缺少 Worker 必需字段时被标记为问题")
   void shouldFlagInvalidFixedWidthMapping_whenTargetOrBoundsAreMissing() {
@@ -580,6 +669,71 @@ class ConfigPackageExcelValidatorTest {
           .anySatisfy(issue -> assertThat(issue.message())
               .contains("default_query_sql must be a single SELECT/WITH query"));
     }
+  }
+
+  @Test
+  @DisplayName("省略跨日列的普通合法窗口不增加已有窗口查询")
+  void shouldAvoidWindowLookup_whenOmittedCrossDayAlreadyValid() {
+    BatchWindowMapper windows = mock(BatchWindowMapper.class);
+    ConfigPackageExcelValidator validator = validatorWithWindows(windows);
+    PackageExcelSession session = sessionWithDependencies(
+        List.of(), List.of(), List.of(windowRow("ordinary_window")), List.of());
+    assertThat(validator.validate(session).batchWindows().invalid()).isZero();
+    verifyNoInteractions(windows);
+  }
+
+  @Test
+  @DisplayName("省略跨日列的反向窗口仅回查同租户同编码，并允许目标已有true")
+  void shouldUseExistingCrossDay_onlyForAmbiguousOmittedFlag() {
+    BatchWindowMapper windows = mock(BatchWindowMapper.class);
+    when(windows.selectByUniqueKey("t1", "overnight_window"))
+        .thenReturn(new BatchWindowRow(
+            1L,
+            "t1",
+            "overnight_window",
+            "跨日窗口",
+            "UTC",
+            "22:00:00",
+            "02:00:00",
+            "FINISH_RUNNING",
+            "WAIT",
+            true,
+            true,
+            null,
+            null,
+            null));
+    Map<String, String> row = windowRow("overnight_window");
+    row.put("start_time", "22:00");
+    row.put("end_time", "02:00");
+    PackageExcelSession session =
+        sessionWithDependencies(List.of(), List.of(), List.of(row), List.of());
+    assertThat(validatorWithWindows(windows).validate(session).batchWindows().invalid())
+        .isZero();
+    verify(windows).selectByUniqueKey("t1", "overnight_window");
+  }
+
+  @Test
+  @DisplayName("显式false的反向窗口直接拒绝，不查询旧策略来覆盖请求")
+  void shouldRejectExplicitFalse_withoutLookingUpExistingPolicy() {
+    BatchWindowMapper windows = mock(BatchWindowMapper.class);
+    Map<String, String> row = windowRow("overnight_window");
+    row.put("start_time", "22:00");
+    row.put("end_time", "02:00");
+    row.put("allow_cross_day", "false");
+    PackageExcelSession session =
+        sessionWithDependencies(List.of(), List.of(), List.of(row), List.of());
+    assertThat(validatorWithWindows(windows).validate(session).batchWindows().invalid())
+        .isEqualTo(1);
+    verifyNoInteractions(windows);
+  }
+
+  private static ConfigPackageExcelValidator validatorWithWindows(BatchWindowMapper windows) {
+    return new ConfigPackageExcelValidator(
+        mock(JobDefinitionMapper.class),
+        mock(FileTemplateConfigMapper.class),
+        mock(ResourceQueueMapper.class),
+        mock(BusinessCalendarMapper.class),
+        windows);
   }
 
   private static ConfigPackageExcelValidator validator() {

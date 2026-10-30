@@ -9,12 +9,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
+import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
-import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
-import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.service.governance.WorkflowNodeReplayTargetResolver;
@@ -74,10 +74,12 @@ class WorkflowNodeReplayOperationServiceTest {
     assertThat(preview.bizDate()).isEqualTo(LocalDate.of(2026, 1, 15));
     assertThat(preview.resultPolicy()).isEqualTo("CREATE_NEW_VERSION");
     assertThat(preview.configVersionPolicy()).isEqualTo("USE_ORIGINAL_CONFIG");
-    assertThat(preview.warnings()).containsExactly(
-        "Only the selected failed JOB node is replayed; its external side effects may run again.");
+    assertThat(preview.warnings())
+        .containsExactly(
+            "Only the selected failed JOB node is replayed; its external side effects may run again.");
     assertThat(insertedToken.get().tokenHash()).isNotEqualTo(preview.previewToken());
-    assertThat(insertedToken.get().operationKey()).isEqualTo(preview.operationKey().toString());
+    assertThat(insertedToken.get().operationKey())
+        .isEqualTo(preview.operationKey().toString());
     assertThat(insertedToken.get().snapshotPayload()).contains("sourceExecutionSnapshot");
   }
 
@@ -90,8 +92,7 @@ class WorkflowNodeReplayOperationServiceTest {
       return 1;
     });
     WorkflowNodeReplayPreviewResponse preview = service.preview(command());
-    when(tokenMapper.selectForUpdate(eq("tenant-a"), any()))
-        .thenReturn(insertedToken.get());
+    when(tokenMapper.selectForUpdate(eq("tenant-a"), any())).thenReturn(insertedToken.get());
     source.sourceRun().setExecutionSnapshot("changed-execution-snapshot");
 
     assertThatThrownBy(() -> service.submitForApproval(command(preview)))
@@ -128,7 +129,8 @@ class WorkflowNodeReplayOperationServiceTest {
       insertedOperation.set(invocation.getArgument(0));
       return 1;
     });
-    when(operationMapper.selectByIdentity(eq("tenant-a"), eq(preview.operationKey().toString())))
+    when(operationMapper.selectByIdentity(
+            eq("tenant-a"), eq(preview.operationKey().toString())))
         .thenAnswer(invocation -> insertedOperation.get() == null
             ? null
             : insertedOperation.get().toBuilder().id(101L).build());
@@ -149,15 +151,35 @@ class WorkflowNodeReplayOperationServiceTest {
   }
 
   private WorkflowNodeReplayCommand command() {
-    return new WorkflowNodeReplayCommand(
-        "tenant-a", 41L, 73L, "replay after fixing source", "operator-a", null, null,
-        null, "trace-a", null, null);
+    return WorkflowNodeReplayCommand.builder()
+        .tenantId("tenant-a")
+        .workflowRunId(41L)
+        .workflowNodeRunId(73L)
+        .reason("replay after fixing source")
+        .requestedBy("operator-a")
+        .resultPolicy(null)
+        .configVersionPolicy(null)
+        .configVersion(null)
+        .traceId("trace-a")
+        .operationKey(null)
+        .previewToken(null)
+        .build();
   }
 
   private WorkflowNodeReplayCommand command(WorkflowNodeReplayPreviewResponse preview) {
-    return new WorkflowNodeReplayCommand(
-        "tenant-a", 41L, 73L, "replay after fixing source", "operator-a", null, null,
-        null, "trace-b", preview.operationKey(), preview.previewToken());
+    return WorkflowNodeReplayCommand.builder()
+        .tenantId("tenant-a")
+        .workflowRunId(41L)
+        .workflowNodeRunId(73L)
+        .reason("replay after fixing source")
+        .requestedBy("operator-a")
+        .resultPolicy(null)
+        .configVersionPolicy(null)
+        .configVersion(null)
+        .traceId("trace-b")
+        .operationKey(preview.operationKey())
+        .previewToken(preview.previewToken())
+        .build();
   }
 
   private static WorkflowNodeReplayTarget source() {

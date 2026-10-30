@@ -12,7 +12,7 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.util.Map;
 
-/** Parses JSON payloads (array, envelope, single object) into NDJSON records. */
+/** 将 JSON 载荷（数组、信封对象或单个对象）解析为 NDJSON 记录。 */
 public class JsonFormatParser implements FormatParser {
 
   private static final String KEY_RECORDS = "records";

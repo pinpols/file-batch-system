@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -67,6 +68,54 @@ class ConsoleAtomicTaskConfigMutationIntegrationTest extends AbstractMutationInt
         delete from batch.atomic_task_config where tenant_id = ? and name = ?
     """;
     jdbcTemplate.update(deleteAtomicTaskConfigSql, TENANT, name);
+  }
+
+  @Test
+  @DisplayName("无效任务超时经 HTTP 拒绝且不入库，合法整数配置仍能保存")
+  void shouldRejectInvalidTimeoutWithoutPersisting() {
+    String prefix = "it_timeout_" + Long.toUnsignedString(System.nanoTime());
+    List<String> types = List.of("sql", "stored_proc", "shell", "http");
+    List<String> parameters = List.of(
+        "{\"sql\":\"select 1\",\"statementTimeoutSeconds\":1.5}",
+        "{\"procedureName\":\"batch.p\",\"statementTimeoutSeconds\":0}",
+        "{\"command\":\"echo\",\"timeoutSeconds\":-1}",
+        "{\"url\":\"https://example.com\",\"timeoutSeconds\":18446744073709551617}");
+    String countSql =
+        "select count(*) from batch.atomic_task_config where tenant_id = ? and name = ?";
+    String deleteSql = "delete from batch.atomic_task_config where tenant_id = ? and name = ?";
+    for (int i = 0; i < types.size(); i++) {
+      String name = prefix + "_invalid_" + i;
+      try {
+        client
+            .post()
+            .uri("/api/console/ops/atomic-task-configs")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(body(types.get(i), name, parameters.get(i)))
+            .exchange()
+            .expectStatus()
+            .isBadRequest();
+        Long count = jdbcTemplate.queryForObject(countSql, Long.class, TENANT, name);
+        assertThat(count).as(name).isZero();
+      } finally {
+        jdbcTemplate.update(deleteSql, TENANT, name);
+      }
+    }
+
+    String validName = prefix + "_valid";
+    try {
+      client
+          .post()
+          .uri("/api/console/ops/atomic-task-configs")
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(body("sql", validName, "{\"sql\":\"select 1\",\"statementTimeoutSeconds\":1}"))
+          .exchange()
+          .expectStatus()
+          .isOk();
+      Long count = jdbcTemplate.queryForObject(countSql, Long.class, TENANT, validName);
+      assertThat(count).isEqualTo(1);
+    } finally {
+      jdbcTemplate.update(deleteSql, TENANT, validName);
+    }
   }
 
   @Test

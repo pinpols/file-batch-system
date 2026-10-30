@@ -139,7 +139,7 @@ type HeartbeatRequest struct {
 
 // ClaimResult carries the EffectiveTaskConfig snapshot + lease bound.
 type ClaimResult struct {
-	// Payload is the authoritative business-parameter JSON read from the persisted task at claim time.
+	// Payload 是任务认领时从持久化任务中读取的权威业务参数 JSON。
 	Payload               string         `json:"payload"`
 	EffectiveConfig       map[string]any `json:"effectiveConfig"`
 	LeaseUntil            string         `json:"leaseUntil"`
@@ -158,6 +158,8 @@ type RenewRequest struct {
 	// it the platform's CAS renew fails → renewLease=false → 409 → the task is
 	// dropped + redispatched → double-run. Empty for non-partition tasks.
 	PartitionInvocationID string `json:"partitionInvocationId,omitempty"`
+	// 执行入口标记与普通周期续租独立；为空时不改变原续租报文。
+	Details map[string]any `json:"details,omitempty"`
 }
 
 // ---------------------------------------------------------------------------

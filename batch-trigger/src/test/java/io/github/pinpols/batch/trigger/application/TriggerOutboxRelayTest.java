@@ -1,22 +1,22 @@
 package io.github.pinpols.batch.trigger.application;
 
-import io.github.pinpols.batch.trigger.domain.param.TriggerOutboxEventMarkFailedParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
@@ -26,15 +26,17 @@ import io.github.pinpols.batch.common.persistence.entity.TriggerOutboxEventEntit
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
+import io.github.pinpols.batch.trigger.domain.param.TriggerOutboxEventMarkFailedParam;
+import io.github.pinpols.batch.trigger.domain.param.TriggerOutboxEventMarkPublishingBatchParam;
 import io.github.pinpols.batch.trigger.mapper.TriggerOutboxEventMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import net.javacrumbs.shedlock.core.LockConfiguration;
@@ -45,10 +47,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.support.StaticApplicationContext;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
@@ -77,6 +81,7 @@ class TriggerOutboxRelayTest {
   private TriggerOutboxRelay relay;
   private TriggerOutboxRelayProperties relayProperties;
   private ThreadPoolTaskScheduler scheduler;
+  private SimpleMeterRegistry meterRegistry;
 
   @BeforeEach
   void setUp() throws Throwable {
@@ -85,11 +90,12 @@ class TriggerOutboxRelayTest {
     scheduler.setPoolSize(1);
     scheduler.setThreadNamePrefix("trigger-outbox-relay-test-");
     scheduler.initialize();
+    meterRegistry = new SimpleMeterRegistry();
     relay = new TriggerOutboxRelay(
         mapper,
         publisher,
         lockingTaskExecutor,
-        new SimpleMeterRegistry(),
+        meterRegistry,
         relayProperties,
         lagMonitor,
         scheduler);
@@ -98,11 +104,18 @@ class TriggerOutboxRelayTest {
         .thenReturn(0);
     when(mapper.countByStatuses(any())).thenReturn(0L);
     when(mapper.countStalePublishing(anyString(), anyLong())).thenReturn(0L);
-    when(mapper.markPublishingBatch(anyList(), anyString(), anyString(), anyString()))
-        .thenAnswer(invocation -> invocation.getArgument(0));
-    when(mapper.markPublishedBatch(anyList(), anyString(), anyString()))
+    when(mapper.markPublishingBatch(any(TriggerOutboxEventMarkPublishingBatchParam.class)))
+        .thenAnswer(invocation -> {
+          TriggerOutboxEventMarkPublishingBatchParam claim = invocation.getArgument(0);
+          return claim.ids();
+        });
+    when(mapper.markPublishedBatch(anyList(), anyString(), anyString(), anyString()))
         .thenAnswer(invocation -> ((List<?>) invocation.getArgument(0)).size());
-    when(mapper.markFailed(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.status() != null && parameters.lastError() != null && parameters.publishingStatus() != null)))
+    when(mapper.markFailed(ArgumentMatchers.argThat(parameters -> parameters != null
+            && parameters.status() != null
+            && parameters.lastError() != null
+            && parameters.publishingStatus() != null
+            && parameters.claimToken() != null)))
         .thenReturn(1);
     // executeWithLock(Task,LockConfiguration) 返回 void → 必须用 doAnswer 而非 when
     doAnswer(inv -> {
@@ -130,7 +143,8 @@ class TriggerOutboxRelayTest {
 
     verify(mapper).resetStalePublishing(anyString(), anyString(), anyString(), anyLong());
     verify(publisher, never()).publishAsync(any(), any(), any(), any());
-    verify(mapper, never()).markPublishingBatch(anyList(), anyString(), anyString(), anyString());
+    verify(mapper, never())
+        .markPublishingBatch(any(TriggerOutboxEventMarkPublishingBatchParam.class));
   }
 
   @Test
@@ -233,12 +247,23 @@ class TriggerOutboxRelayTest {
             eq("tenant-a:req-1"),
             any(LaunchEnvelope.class),
             eq("trace-1"));
+    ArgumentCaptor<TriggerOutboxEventMarkPublishingBatchParam> claim =
+        ArgumentCaptor.forClass(TriggerOutboxEventMarkPublishingBatchParam.class);
+    verify(mapper).markPublishingBatch(claim.capture());
+    assertThat(claim.getValue().ids()).containsExactly(101L);
+    assertThat(claim.getValue().publishingStatus())
+        .isEqualTo(OutboxPublishStatus.PUBLISHING.code());
     verify(mapper)
         .markPublishedBatch(
             eq(List.of(101L)),
             eq(OutboxPublishStatus.PUBLISHED.code()),
-            eq(OutboxPublishStatus.PUBLISHING.code()));
-    verify(mapper, never()).markFailed(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.status() != null && parameters.lastError() != null && parameters.publishingStatus() != null));
+            eq(OutboxPublishStatus.PUBLISHING.code()),
+            eq(claim.getValue().claimToken()));
+    verify(mapper, never())
+        .markFailed(ArgumentMatchers.argThat(parameters -> parameters != null
+            && parameters.status() != null
+            && parameters.lastError() != null
+            && parameters.publishingStatus() != null));
   }
 
   @Test
@@ -255,9 +280,14 @@ class TriggerOutboxRelayTest {
     relay.poll();
 
     verify(mapper)
-        .markFailed(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.id(), 102L) && java.util.Objects.equals(parameters.status(), OutboxPublishStatus.FAILED.code()) && java.util.Objects.equals(parameters.lastError(), "kafka broker not reachable") && parameters.nextPublishAt() != null && java.util.Objects.equals(parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())));
-    verify(mapper, never()).markPublishedBatch(anyList(), anyString(), anyString());
+        .markFailed(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.id(), 102L)
+            && Objects.equals(parameters.status(), OutboxPublishStatus.FAILED.code())
+            && Objects.equals(parameters.lastError(), "kafka broker not reachable")
+            && parameters.nextPublishAt() != null
+            && Objects.equals(
+                parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())));
+    verify(mapper, never()).markPublishedBatch(anyList(), anyString(), anyString(), anyString());
   }
 
   @Test
@@ -273,9 +303,14 @@ class TriggerOutboxRelayTest {
     relay.poll();
 
     verify(mapper)
-        .markFailed(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.id(), 108L) && java.util.Objects.equals(parameters.status(), OutboxPublishStatus.FAILED.code()) && (parameters.lastError() != null && parameters.lastError().contains("future failed")) && parameters.nextPublishAt() != null && java.util.Objects.equals(parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())));
-    verify(mapper, never()).markPublishedBatch(anyList(), anyString(), anyString());
+        .markFailed(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.id(), 108L)
+            && Objects.equals(parameters.status(), OutboxPublishStatus.FAILED.code())
+            && (parameters.lastError() != null && parameters.lastError().contains("future failed"))
+            && parameters.nextPublishAt() != null
+            && Objects.equals(
+                parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())));
+    verify(mapper, never()).markPublishedBatch(anyList(), anyString(), anyString(), anyString());
   }
 
   @Test
@@ -290,9 +325,14 @@ class TriggerOutboxRelayTest {
     relay.poll();
 
     verify(mapper)
-        .markFailed(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.id(), 109L) && java.util.Objects.equals(parameters.status(), OutboxPublishStatus.FAILED.code()) && (parameters.lastError() != null && parameters.lastError().contains("future failed")) && parameters.nextPublishAt() != null && java.util.Objects.equals(parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())));
-    verify(mapper, never()).markPublishedBatch(anyList(), anyString(), anyString());
+        .markFailed(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.id(), 109L)
+            && Objects.equals(parameters.status(), OutboxPublishStatus.FAILED.code())
+            && (parameters.lastError() != null && parameters.lastError().contains("future failed"))
+            && parameters.nextPublishAt() != null
+            && Objects.equals(
+                parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())));
+    verify(mapper, never()).markPublishedBatch(anyList(), anyString(), anyString(), anyString());
   }
 
   @Test
@@ -310,9 +350,14 @@ class TriggerOutboxRelayTest {
     relay.poll();
 
     verify(mapper)
-        .markFailed(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.id(), 107L) && java.util.Objects.equals(parameters.status(), OutboxPublishStatus.GIVE_UP.code()) && java.util.Objects.equals(parameters.lastError(), "kafka still down") && parameters.nextPublishAt() != null && java.util.Objects.equals(parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())));
-    verify(mapper, never()).markPublishedBatch(anyList(), anyString(), anyString());
+        .markFailed(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.id(), 107L)
+            && Objects.equals(parameters.status(), OutboxPublishStatus.GIVE_UP.code())
+            && Objects.equals(parameters.lastError(), "kafka still down")
+            && parameters.nextPublishAt() != null
+            && Objects.equals(
+                parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())));
+    verify(mapper, never()).markPublishedBatch(anyList(), anyString(), anyString(), anyString());
   }
 
   @Test
@@ -325,8 +370,14 @@ class TriggerOutboxRelayTest {
     relay.poll();
 
     verify(mapper)
-        .markFailed(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.id(), 103L) && java.util.Objects.equals(parameters.status(), OutboxPublishStatus.GIVE_UP.code()) && (parameters.lastError() != null && parameters.lastError().contains("payload deserialize")) && parameters.nextPublishAt() != null && java.util.Objects.equals(parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())));
+        .markFailed(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.id(), 103L)
+            && Objects.equals(parameters.status(), OutboxPublishStatus.GIVE_UP.code())
+            && (parameters.lastError() != null
+                && parameters.lastError().contains("payload deserialize"))
+            && parameters.nextPublishAt() != null
+            && Objects.equals(
+                parameters.publishingStatus(), OutboxPublishStatus.PUBLISHING.code())));
     verify(publisher, never()).publishAsync(any(), any(), any(), any());
   }
 
@@ -336,14 +387,18 @@ class TriggerOutboxRelayTest {
     TriggerOutboxEventEntity event = buildPendingEvent(104L, validEnvelopePayload());
     when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
         .thenReturn(List.of(event));
-    when(mapper.markPublishingBatch(anyList(), anyString(), anyString(), anyString()))
+    when(mapper.markPublishingBatch(any(TriggerOutboxEventMarkPublishingBatchParam.class)))
         .thenReturn(List.of());
 
     relay.poll();
 
     verify(publisher, never()).publishAsync(any(), any(), any(), any());
-    verify(mapper, never()).markPublishedBatch(anyList(), anyString(), anyString());
-    verify(mapper, never()).markFailed(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.status() != null && parameters.lastError() != null && parameters.publishingStatus() != null));
+    verify(mapper, never()).markPublishedBatch(anyList(), anyString(), anyString(), anyString());
+    verify(mapper, never())
+        .markFailed(ArgumentMatchers.argThat(parameters -> parameters != null
+            && parameters.status() != null
+            && parameters.lastError() != null
+            && parameters.publishingStatus() != null));
   }
 
   @Test
@@ -368,8 +423,111 @@ class TriggerOutboxRelayTest {
         .markPublishedBatch(
             eq(List.of(106L)),
             eq(OutboxPublishStatus.PUBLISHED.code()),
-            eq(OutboxPublishStatus.PUBLISHING.code()));
+            eq(OutboxPublishStatus.PUBLISHING.code()),
+            anyString());
     verify(publisher, times(2)).publishAsync(any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("投递初始化异常中的凭据不进入日志和 Outbox 失败原因")
+  void shouldMaskPublisherInitializationFailureInLogAndLastError() {
+    relayProperties.setMaxPublishAttempts(1);
+    TriggerOutboxEventEntity event = buildPendingEvent(110L, validEnvelopePayload());
+    when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
+        .thenReturn(List.of(event));
+    when(publisher.publishAsync(any(), any(), any(), any()))
+        .thenThrow(new IllegalStateException("token=probe-secret"));
+    Logger logger = (Logger) LoggerFactory.getLogger(TriggerOutboxRelay.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      relay.poll();
+    } finally {
+      logger.detachAppender(appender);
+      appender.stop();
+    }
+
+    ArgumentCaptor<TriggerOutboxEventMarkFailedParam> failed =
+        ArgumentCaptor.forClass(TriggerOutboxEventMarkFailedParam.class);
+    verify(mapper).markFailed(failed.capture());
+    assertThat(failed.getValue().status()).isEqualTo(OutboxPublishStatus.GIVE_UP.code());
+    assertThat(failed.getValue().lastError()).contains("token=****").doesNotContain("probe-secret");
+    assertThat(appender.list).isNotEmpty().allSatisfy(logEvent -> {
+      assertThat(logEvent.getFormattedMessage()).doesNotContain("probe-secret");
+      assertThat(logEvent.getThrowableProxy()).isNull();
+    });
+  }
+
+  @Test
+  @DisplayName("异步投递失败中的凭据不进入重试记录")
+  void shouldMaskAsyncPublisherFailureInRetryLastError() {
+    relayProperties.setMaxPublishAttempts(2);
+    TriggerOutboxEventEntity event = buildPendingEvent(111L, validEnvelopePayload());
+    when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
+        .thenReturn(List.of(event));
+    TriggerEventPublisher.PublishResult failedResult =
+        TriggerEventPublisher.PublishResult.fail("password=probe-secret");
+    when(publisher.publishAsync(any(), any(), any(), any()))
+        .thenReturn(CompletableFuture.completedFuture(failedResult));
+
+    relay.poll();
+
+    ArgumentCaptor<TriggerOutboxEventMarkFailedParam> failed =
+        ArgumentCaptor.forClass(TriggerOutboxEventMarkFailedParam.class);
+    verify(mapper).markFailed(failed.capture());
+    assertThat(failed.getValue().status()).isEqualTo(OutboxPublishStatus.FAILED.code());
+    assertThat(failed.getValue().lastError()).isEqualTo("password=****");
+    assertThat(failed.getValue().nextPublishAt()).isNotNull();
+  }
+
+  @Test
+  @DisplayName("GIVE_UP 计数只统计成功更新的事件")
+  void shouldCountOnlyPersistedGiveUpTransitions() {
+    startRelayWithoutScheduledPoll();
+    TriggerOutboxEventEntity staleClaim = buildPendingEvent(112L, "{invalid-json");
+    TriggerOutboxEventEntity currentClaim = buildPendingEvent(113L, "{invalid-json");
+    when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
+        .thenReturn(List.of(staleClaim, currentClaim));
+    when(mapper.markFailed(any(TriggerOutboxEventMarkFailedParam.class))).thenReturn(0, 1);
+
+    relay.poll();
+
+    assertThat(meterRegistry.get("batch.trigger.outbox.give_up.total").counter().count())
+        .isEqualTo(1.0);
+    verify(mapper, times(2)).markFailed(any(TriggerOutboxEventMarkFailedParam.class));
+  }
+
+  @Test
+  @DisplayName("并发接管导致放弃回写未生效时不记录已放弃错误")
+  void shouldNotLogGiveUpWhenClaimWasTakenOver() {
+    startRelayWithoutScheduledPoll();
+    relayProperties.setMaxPublishAttempts(1);
+    TriggerOutboxEventEntity event = buildPendingEvent(114L, validEnvelopePayload());
+    when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
+        .thenReturn(List.of(event));
+    TriggerEventPublisher.PublishResult failedResult =
+        TriggerEventPublisher.PublishResult.fail("broker unavailable");
+    when(publisher.publishAsync(any(), any(), any(), any()))
+        .thenReturn(CompletableFuture.completedFuture(failedResult));
+    when(mapper.markFailed(any(TriggerOutboxEventMarkFailedParam.class))).thenReturn(0);
+    Logger logger = (Logger) LoggerFactory.getLogger(TriggerOutboxRelay.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      relay.poll();
+    } finally {
+      logger.detachAppender(appender);
+      appender.stop();
+    }
+
+    assertThat(meterRegistry.get("batch.trigger.outbox.give_up.total").counter().count())
+        .isZero();
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .noneMatch(message -> message.contains("GIVE_UP after"));
+    verify(mapper).markFailed(any(TriggerOutboxEventMarkFailedParam.class));
   }
 
   @Test
@@ -381,7 +539,7 @@ class TriggerOutboxRelayTest {
     assertThat(TriggerOutboxRelay.backoffSeconds(3)).isEqualTo(8);
     assertThat(TriggerOutboxRelay.backoffSeconds(4)).isEqualTo(16);
     assertThat(TriggerOutboxRelay.backoffSeconds(5)).isEqualTo(32);
-    // 2^6 = 64, capped to MAX 60
+    // 2 的 6 次方等于 64，计数上限为 MAX 60。
     assertThat(TriggerOutboxRelay.backoffSeconds(6)).isEqualTo(60);
     assertThat(TriggerOutboxRelay.backoffSeconds(10)).isEqualTo(60);
   }
@@ -414,6 +572,19 @@ class TriggerOutboxRelayTest {
   }
 
   // ---------- helpers ----------
+
+  private void startRelayWithoutScheduledPoll() {
+    ThreadPoolTaskScheduler controlledScheduler = mock(ThreadPoolTaskScheduler.class);
+    relay = new TriggerOutboxRelay(
+        mapper,
+        publisher,
+        lockingTaskExecutor,
+        meterRegistry,
+        relayProperties,
+        lagMonitor,
+        controlledScheduler);
+    relay.start();
+  }
 
   private static TriggerOutboxEventEntity buildPendingEvent(Long id, String payload) {
     TriggerOutboxEventEntity event = new TriggerOutboxEventEntity();

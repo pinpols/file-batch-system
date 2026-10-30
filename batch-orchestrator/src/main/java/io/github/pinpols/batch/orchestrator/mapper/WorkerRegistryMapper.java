@@ -1,15 +1,13 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.param.WorkerRegistryStartDrainTransitionParam;
-
-
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.InvalidCapabilityTagsParam;
 import io.github.pinpols.batch.orchestrator.domain.param.TouchHeartbeatParam;
+import io.github.pinpols.batch.orchestrator.domain.param.WorkerRegistryStartDrainTransitionParam;
+import io.github.pinpols.batch.orchestrator.domain.view.TenantWorkerCountView;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 public interface WorkerRegistryMapper {
@@ -94,9 +92,9 @@ public interface WorkerRegistryMapper {
   /**
    * 批量聚合：一次返回多租户在指定状态下的 worker 数量（{@code GROUP BY tenant_id}），避免 N 次 round-trip。
    *
-   * @return 行结构 {@code {tenant_id: String, cnt: Long}};未出现的 tenant 表示该 status 下计数为 0
+   * @return 固定计数投影；未出现的 tenant 表示该 status 下计数为 0
    */
-  List<Map<String, Object>> countByTenantsAndStatus(
+  List<TenantWorkerCountView> countByTenantsAndStatus(
       @Param("tenantIds") Collection<String> tenantIds, @Param("status") String status);
 
   long countByTenantAndWorkerGroupAndStatus(
@@ -150,19 +148,18 @@ public interface WorkerRegistryMapper {
   /** 开始排空并使用数据库时间设置窗口；返回 0 表示并发状态冲突。 */
   default int startDrainIfCurrent(
       String tenantId, String workerCode, String expectedStatus, int timeoutSeconds) {
-    WorkerRegistryStartDrainTransitionParam workerRegistryStartDrainTransitionParam = WorkerRegistryStartDrainTransitionParam.builder()
-        .tenantId(tenantId)
-        .workerCode(workerCode)
-        .expectedStatus(expectedStatus)
-        .nextStatus(WorkerRegistryStatus.DRAINING.code())
-        .timeoutSeconds(timeoutSeconds)
-        .build();
-    return startDrainTransition(
-        workerRegistryStartDrainTransitionParam);
+    WorkerRegistryStartDrainTransitionParam workerRegistryStartDrainTransitionParam =
+        WorkerRegistryStartDrainTransitionParam.builder()
+            .tenantId(tenantId)
+            .workerCode(workerCode)
+            .expectedStatus(expectedStatus)
+            .nextStatus(WorkerRegistryStatus.DRAINING.code())
+            .timeoutSeconds(timeoutSeconds)
+            .build();
+    return startDrainTransition(workerRegistryStartDrainTransitionParam);
   }
 
-  int startDrainTransition(
-      WorkerRegistryStartDrainTransitionParam parameters);
+  int startDrainTransition(WorkerRegistryStartDrainTransitionParam parameters);
 
   /** 仅允许 OFFLINE 转为 ONLINE；返回 0 表示状态已被并发修改。 */
   default int warmupIfOffline(String tenantId, String workerCode) {

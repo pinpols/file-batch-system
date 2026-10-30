@@ -83,8 +83,8 @@ class LaunchT2FailureIntegrationTest extends AbstractIntegrationTest {
         select count(*) from batch.job_instance where tenant_id = ? and job_code = ?
         """;
     // 用于外部 EVENT 启动认证的最小只读投影，验证租户 API key。
-    Long jobInstanceCountAfterDispatchFailure = jdbcTemplate.queryForObject(
-        jobInstanceCountSql, Long.class, TENANT, seed.jobCode());
+    Long jobInstanceCountAfterDispatchFailure =
+        jdbcTemplate.queryForObject(jobInstanceCountSql, Long.class, TENANT, seed.jobCode());
     assertThat(jobInstanceCountAfterDispatchFailure)
         .as("failed node launch should roll back the Job instance")
         .isZero();
@@ -112,9 +112,8 @@ class LaunchT2FailureIntegrationTest extends AbstractIntegrationTest {
     Long retryJobInstanceId = jdbcTemplate.queryForObject(
         retryJobInstanceIdSql, Long.class, TENANT, retriedWorkflowRunId);
     assertThat(retryJobInstanceId).isNotNull();
-    Long jobInstanceCountAfterRetry = jdbcTemplate.queryForObject(
-        jobInstanceCountSql, Long.class, TENANT, seed.jobCode());
-    assertThat(jobInstanceCountAfterRetry)
-        .isEqualTo(1L);
+    Long jobInstanceCountAfterRetry =
+        jdbcTemplate.queryForObject(jobInstanceCountSql, Long.class, TENANT, seed.jobCode());
+    assertThat(jobInstanceCountAfterRetry).isEqualTo(1L);
   }
 }

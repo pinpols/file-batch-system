@@ -99,7 +99,8 @@ public class ConsoleDashboardController {
       @RequestParam("tenantId") String tenantId,
       @RequestParam("jobCode") String jobCode,
       @RequestParam("bizDate") String bizDate) {
-    List<ExecutionProgressView> progress = queryService.executionProgress(tenantId, jobCode, bizDate);
+    List<ExecutionProgressView> progress =
+        queryService.executionProgress(tenantId, jobCode, bizDate);
     List<ConsoleExecutionProgressResponse> responses =
         progress.stream().map(ConsoleExecutionProgressResponse::from).toList();
     return responseFactory.success(responses);

@@ -228,6 +228,10 @@ final class FileGovernanceStorageMaintenance {
     if (objectIsMissingOrCompletionMarker) {
       return;
     }
+    // 平台托管上传由会话创建和到达确认登记，不能在默认租户重新补录或提前确认。
+    if (object.objectName().startsWith("uploads/")) {
+      return;
+    }
     String tenantId = properties.getReconcile().getDefaultTenantId();
     if (repository.existsFileRecordByStoragePath(tenantId, object.bucket(), object.objectName())) {
       return;
@@ -239,8 +243,8 @@ final class FileGovernanceStorageMaintenance {
     String fileStatus = resolveFileStatus(fileCategory);
     String traceId = "reconcile-" + sanitizeTrace(fileName);
     String fileFormatType = resolveFileFormatType(fileName);
-    FileGovernanceRepository.FileIdentity fileIdentity = new FileGovernanceRepository.FileIdentity(
-        tenantId, fileCategory, fileName, fileFormatType);
+    FileGovernanceRepository.FileIdentity fileIdentity =
+        new FileGovernanceRepository.FileIdentity(tenantId, fileCategory, fileName, fileFormatType);
     FileGovernanceRepository.FileStorage fileStorage =
         new FileGovernanceRepository.FileStorage("S3", object.objectName(), object.bucket());
     Map<String, Object> reconcileMetadata = buildReconcileMetadata(object);

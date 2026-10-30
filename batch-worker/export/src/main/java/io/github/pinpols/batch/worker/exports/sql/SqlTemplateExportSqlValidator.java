@@ -63,18 +63,16 @@ public class SqlTemplateExportSqlValidator {
       checkNoSelectStar(select);
     }
 
-    boolean schemaAllowlistIsConfigured =
-        EmptyChecks.isNotNull(security)
-            && EmptyChecks.isNotNull(security.getAllowedSchemas())
-            && !EmptyChecks.isEmpty(Objects.requireNonNull(security.getAllowedSchemas()));
+    boolean schemaAllowlistIsConfigured = EmptyChecks.isNotNull(security)
+        && EmptyChecks.isNotNull(security.getAllowedSchemas())
+        && !EmptyChecks.isEmpty(Objects.requireNonNull(security.getAllowedSchemas()));
     if (schemaAllowlistIsConfigured) {
       checkAllowedSchemas(statement, security.getAllowedSchemas());
     }
 
-    boolean forbiddenFunctionsAreConfigured =
-        EmptyChecks.isNotNull(security)
-            && EmptyChecks.isNotNull(security.getForbiddenFunctions())
-            && !EmptyChecks.isEmpty(Objects.requireNonNull(security.getForbiddenFunctions()));
+    boolean forbiddenFunctionsAreConfigured = EmptyChecks.isNotNull(security)
+        && EmptyChecks.isNotNull(security.getForbiddenFunctions())
+        && !EmptyChecks.isEmpty(Objects.requireNonNull(security.getForbiddenFunctions()));
     if (forbiddenFunctionsAreConfigured) {
       checkNoForbiddenFunctions(statement, security.getForbiddenFunctions());
     }
@@ -208,12 +206,11 @@ public class SqlTemplateExportSqlValidator {
   }
 
   private static int captureNamedParameter(String sql, int start, Set<String> names) {
-    boolean isNotNamedParameterStart =
-        sql.charAt(start) != ':'
-            || start + 1 >= sql.length()
-            || !isParameterStart(sql.charAt(start + 1))
-            || (start > 0 && sql.charAt(start - 1) == ':')
-            || sql.charAt(start + 1) == ':';
+    boolean isNotNamedParameterStart = sql.charAt(start) != ':'
+        || start + 1 >= sql.length()
+        || !isParameterStart(sql.charAt(start + 1))
+        || (start > 0 && sql.charAt(start - 1) == ':')
+        || sql.charAt(start + 1) == ':';
     if (isNotNamedParameterStart) {
       return start;
     }

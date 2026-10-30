@@ -17,7 +17,7 @@ import java.util.stream.Stream;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-/** 路由到上一次尝试中的失效 Worker 实例。 */
+/** 按租户校验触发 API 密钥及事件来源作用域，并缓存有界时效的认证结果。 */
 @Component
 public class TriggerApiKeyVerifier {
 
@@ -69,12 +69,11 @@ public class TriggerApiKeyVerifier {
       return Optional.empty();
     }
     for (TriggerApiKeyCredential candidate : candidates) {
-      boolean candidateIsInvalid =
-          !Boolean.TRUE.equals(candidate.enabled())
-              || isExpired(candidate.expiresAt())
-              || !tenantId.equals(candidate.tenantId())
-              || !ApiKeyHasher.verify(
-                  rawKey, candidate.keyHash(), candidate.salt(), candidate.keyHashAlgo());
+      boolean candidateIsInvalid = !Boolean.TRUE.equals(candidate.enabled())
+          || isExpired(candidate.expiresAt())
+          || !tenantId.equals(candidate.tenantId())
+          || !ApiKeyHasher.verify(
+              rawKey, candidate.keyHash(), candidate.salt(), candidate.keyHashAlgo());
       if (candidateIsInvalid) {
         continue;
       }
@@ -93,13 +92,12 @@ public class TriggerApiKeyVerifier {
 
   public boolean authorizesExternalEvent(
       TriggerApiKeyPrincipal principal, String tenantId, String externalEventSource) {
-    boolean principalCanAuthorizeExternalEvent =
-        EmptyChecks.isNotNull(principal)
-            && EmptyChecks.isNotNull(tenantId)
-            && EmptyChecks.isNotNull(externalEventSource)
-            && tenantId.equals(principal.tenantId())
-            && externalEventSource.equals(principal.keyName())
-            && !isExpired(principal.expiresAt());
+    boolean principalCanAuthorizeExternalEvent = EmptyChecks.isNotNull(principal)
+        && EmptyChecks.isNotNull(tenantId)
+        && EmptyChecks.isNotNull(externalEventSource)
+        && tenantId.equals(principal.tenantId())
+        && externalEventSource.equals(principal.keyName())
+        && !isExpired(principal.expiresAt());
     if (!principalCanAuthorizeExternalEvent) {
       return false;
     }
@@ -123,7 +121,7 @@ public class TriggerApiKeyVerifier {
     long previous = last.get();
     boolean apiKeyTouchIntervalWasAcquired =
         (previous == Long.MIN_VALUE || now - previous >= TOUCH_INTERVAL_NANOS)
-        && last.compareAndSet(previous, now);
+            && last.compareAndSet(previous, now);
     if (apiKeyTouchIntervalWasAcquired) {
       mapper.touchLastUsedAt(id, tenantId);
     }

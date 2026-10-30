@@ -11,6 +11,7 @@ public record SlaJobReportView(
     Long failedCount,
     Long slaBreached,
     Long slaOnTime,
+    Long slaTotalWithSla,
     BigDecimal avgDurationSeconds,
     BigDecimal maxDurationSeconds,
     Long totalPartitions) {}

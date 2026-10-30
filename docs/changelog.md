@@ -1,5 +1,486 @@
 # 工程基线规范条款变化日志
 
+## 2026-10-30 Flyway 连续性与临时例外
+
+- Flyway 版本缺号改为阻断，并以连续、缺号和重复版本正反例守护。
+- 修正迁移危险 SQL 扫描范围，纯注释改动的历史迁移不再与新增迁移一起误扫。
+- 本仓 `fix/wdi-current` PR 临时放开已有迁移有效 SQL 漂移阻断，仅限新建空库；合并后移除例外，其他分支及 merge queue 保持严格检查。
+
+## 2026-10-30 Workflow 节点名称校验
+
+- 创建与全量保存 Workflow 时，缺少数据库必填的节点名称会返回参数错误；OpenAPI 和前端生成类型同步标记必填。
+- 配置初始化创建或覆盖 Workflow 时，正式执行和演练都按逐项结果拒绝缺失节点名称，保留跳过现有项的语义。
+
+## 2026-10-30 Import 到达事件扫描状态
+
+- 扫描总开关关闭时，到达事件返回未触发及 `scanner-disabled`，保留通知计数，不计入即时扫描调用数。
+
+## 2026-10-30 Import 位点完成后恢复
+
+- 同步 ADR、阶段规划和位点模型说明，标明文件指纹及已完成位点的字段语义。
+
+- 修正 LOAD 已完成位点恢复时的成功数，并在文件状态更新成功后清理暂存文件。
+- 正式 LOAD 拒绝丢失、异常空文件及校验数量不匹配的暂存文件；续跑位点绑定文件 SHA-256，避免按旧行号跳过变更后的数据。
+- LOAD 插件须确认整个输入分块；返回数不一致时失败并保留位点和暂存文件，防止未写入记录被跳过。
+
+## 2026-10-30 业务库结构快照说明
+
+- 明确 Import Worker 的业务库结构快照目前没有接入 Console 目标列校验，快照失败时可能保留旧数据。
+
+## 2026-10-29 Outbox 运维补救入口
+
+- 桌面和移动重试日志按重试状态识别耗尽记录，实际能否重投仍由事件当前状态决定。
+- 移动端重投使用实际 Outbox 事件 ID 和服务端重置结果，切换租户时防止旧列表和旧回执误导操作。
+- 清理与重投入口依据后端支持的事件状态启用；切换租户时清除旧诊断数据，确认期间租户变化则取消操作。
+- 重投按服务端实际重置数量提示；合法 64 位事件 ID 按原始精度发送，拒绝越界或已失去精度的输入，避免操作到错误事件。
+
+## 2026-10-29 Kafka 积压诊断
+
+- 消费组查询失败或结果缺失时显示错误或数据不可用，避免误报零积压。
+- Kafka 诊断异常响应及缓存回读时净化常见凭据，列表查询失败日志不再输出完整异常。
+
+## 2026-10-29 Worker 可用性诊断
+
+- 运维诊断在没有在线 Worker 但仍有运行实例时显示异常，保持与后端健康判定一致。
+
+## 2026-10-29 运维诊断摘要
+
+- Outbox 统计按接口发布状态与计数字段汇总，分别显示待发/发送中及失败/放弃，避免错误显示零积压。
+
+## 2026-10-29 调度锁诊断计数
+
+- 集群诊断按数据库 UTC 时间区分活跃和过期的 JDBC ShedLock 租约，不再把所有历史锁行计为活跃。
+
+## 2026-10-29 文件束文件身份精度
+
+- 文件束文件 ID 不再截断小数或溢出数值，也不接受可能已被 JSON 解析器舍入的浮点表示。
+
+## 2026-10-29 文件束分区绑定来源
+
+- 启动参数不能伪造文件束文件或目标渠道；任务载荷只从实际分区绑定生成束字段。
+
+## 2026-10-29 Dispatch 渠道参数一致性
+
+- Dispatch Worker 与调度侧使用相同的渠道字段优先级，确保已准入任务读取正确目标；文件束分区目标继续优先。
+
+## 2026-10-29 文件束分发配置快照
+
+- 文件束分发创建实例时按现有 Dispatch 快照规则捕获目标渠道配置和密钥版本，修复该类型未进入快照流程的问题。
+- 文件束实际目标渠道缺失时拒绝创建不完整快照，渠道识别与分区清单一致，不再递归误取业务元数据。
+- 普通分发部分渠道可捕获时保留已有渠道快照，避免其他识别结果缺失导致已有目标回退最新配置。
+- 普通分发明确指定的目标渠道不存在时拒绝创建实例，避免后来创建渠道后读取未冻结的配置。
+- 普通分发有明确目标时，不让业务元数据中无关渠道的缺失密钥阻断该目标；实际使用未绑定凭据的渠道仍失败关闭。
+
+## 2026-10-28 SFTP 重命名连接异常结果分类
+
+- SFTP 重命名回复发生传输异常时标记外部结果不明，避免把可能已完成的远端发布当作确定失败重试。
+
+## 2026-10-28 SFTP 发布与主机密钥保护
+
+- SFTP 安全重命名失败时保留已有目标；严格主机校验使用原始主机名及对应端口的 known_hosts 标识。
+
+## 2026-10-28 硬超时扫描与回收竞态
+
+- 硬超时终结在实例锁内复核运行中任务，避免扫描后租约回收已完成却仍按旧快照终止实例。
+
+## 2026-10-28 作业硬超时执行起点
+
+- 作业硬超时从首次真实执行入口计时，避免长时间排队后刚开始执行即被误判超时；缺少入口时间不作推断。
+
+## 2026-10-28 重试扫描终态优先
+
+- 修复暂停作业关联的 Workflow 已终态时重试被永久跳过的问题，保持消费端终态优先的收口语义。
+
+## 2026-10-28 暂停任务的到期重试扫描
+
+- 到期重试调度跳过暂停的作业及关联暂停 Workflow，避免暂停项占满扫描批次；普通重试查询保留原口径。
+
+## 2026-10-28 嵌套事务补偿失败记录
+
+- 补偿参与调用方事务时，在外层回滚并释放锁后记录失败；处理 handler 失败和外层后续回滚，避免自锁与命令遗留运行中。
+
+## 2026-10-28 补偿命令超时对账互斥
+
+- 执行中的补偿命令在业务事务持锁，对账跳过活跃命令；终态写入要求原状态仍为 RUNNING，避免并发对账后状态复活。
+
+## 2026-10-28 Atomic HTTP 显式期望状态
+
+- 明确配置且匹配的 HTTP 5xx 作为成功结果，不再错误重试；未配置期望状态时保留原重试策略。
+
+## 2026-10-28 Atomic HTTP 期望状态重试
+
+- 修复显式配置期望状态时幂等 HTTP 请求遇到 5xx 未重试的问题，失败结果继续只返回原有错误码。
+
+## 2026-10-28 Worker 演练模式来源
+
+- 派发时以作业实例的演练状态覆盖任务载荷中的同名业务参数，避免正式任务误按演练执行。
+
+## 2026-10-28 导入演练文件副作用保护
+
+- 导入演练不创建或更新正式文件记录，坏记录只留在演练上下文，不持久化正式错误记录或输出错误文件；Worker 失败回写不改变演练关联的正式文件状态。
+
+## 2026-10-28 导出演练 SQL 模板保护
+
+- SQL 模板导出在演练生成阶段明确返回不可用，避免查询规划执行函数产生业务数据库副作用；正式导出保持原行为。
+
+## 2026-10-28 L3 SQL 计划探测安全边界
+
+- L3 SQL 参数仅做静态检查；数据库 EXPLAIN 因规划阶段可能产生副作用而停用，合法 SQL 返回 `EXEC_SQL_PLAN_UNAVAILABLE`，不再报告计划通过。
+
+## 2026-10-28 智能体实现原则
+
+- 在协作说明中补充按真实边界校验、避免假设性防御和无收益抽象、维护生成物来源及测试真实行为的原则。
+
+## 2026-10-28 正式与演练分片扫描顺序
+
+- 新增 V365 扫描阶段与 V366 复合索引，记录跨批次优先级、回退和查询计划验证。
+
+## 2026-10-28 调度公平分老化边界
+
+- 消除极端配置导致的老化加分溢出，并使非正步长回退与配置说明一致。
+
+## 2026-10-28 等待分片扫描周期
+
+- 新增 V364 周期上界，记录持续新增、共享水位和迁移升级验证。
+
+## 2026-10-28 等待分片共享扫描水位
+
+- 新增 V363 共享扫描水位和版本条件更新，记录切换及并发验证。
+
+## 2026-10-28 等待分片扫描轮转
+
+- 等待派发按 ID 在批次间轮转并回绕，记录跨租户饥饿及暂停恢复的定向验证。
+
+## 2026-10-28 Workflow 暂停期间等待派发
+
+- 等待分片释放时锁定并复核所属 Workflow 状态，记录暂停、恢复及并发提交验证。
+
+## 2026-10-28 普通节点汇聚规则
+
+- 对齐普通节点的汇聚参数校验、运行语义和前端反馈，并保留合法默认配置。
+
+## 2026-10-28 网关汇聚模式
+
+- 对齐分支网关保存、前端校验和启动图校验的汇聚模式约束。
+
+## 2026-10-28 Workflow 汇聚阈值
+
+- 统一 N_OF 汇聚阈值的精确解析和校验，记录保存与运行验证。
+
+## 2026-10-28 Kafka 等待数值校验
+
+- 精确校验传感器分区和偏移，阻止溢出截断与负数误命中，并记录真实 Kafka 证据。
+
+## 2026-10-28 错误消息语言回退
+
+- 在共享配置关闭系统语言回退，验证 Console 中英文查询并保留应用覆盖能力。
+
+## 2026-10-28 等待传感器错误参数
+
+- 在传感结果边界净化错误参数，保留稳定错误键并记录验证范围。
+
+## 2026-10-28 文件到达规则
+
+- 修复文件到达模式中的 SQL 通配符误匹配，明确字面字符语义并记录数据库验证。
+
+## 2026-10-28 作业关联文件查询容量
+
+- 按关联 ID 收窄文件总数查询，保留原列表分页路径，并记录合成计划与目标环境限制。
+
+## 2026-10-28 关联文件错误状态与时间边界
+
+- 区分文件查询失败与空结果，说明归档范围，并补充夏令时自然日边界验证。
+
+## 2026-10-28 作业关联文件
+
+- 修复作业文件筛选和切换作业时的请求竞态，记录关联范围与验证边界。
+
+## 2026-10-28 文件日期筛选
+
+- 修复文件业务日期筛选和今日到达口径，记录跨层契约与验证范围。
+
+## 2026-10-28 出箱重试事件类型
+
+- 从完整租户与事件身份读取出箱事件类型，贯通筛选、计数及分页并记录验证范围。
+
+## 2026-10-28 出箱投递主题筛选
+
+- 将目标主题筛选贯通请求、列表和计数，记录真实数据库分页、字面匹配及长度验证。
+
+## 2026-10-28 出箱投递错误脱敏
+
+- 保护新投递记录及历史错误回查，保留本地化参数结构与普通错误，并记录验证和历史数据边界。
+
+## 2026-10-28 补跑审批列表分页
+
+- 按请求分页后关联最新审批并增量增加索引，记录数据库、HTTP、Flyway 和本地查询计划证据。
+
+
+## 2026-10-28 审批详情固定 Map 治理
+
+- 审批查询行直接映射至具名响应，记录字段、空值、时间和控制器回归证据。
+
+
+## 2026-10-28 作业分区和 Workflow 节点游标排序
+
+- 修复两条查询的游标首屏排序，记录真实数据库漏数反例、普通分页与租户隔离验证，补齐接口契约。
+
+
+## 2026-10-28 告警和重试游标排序
+
+- 两条游标查询首页与后续页统一排序，记录真实数据库漏数反例、普通分页和租户控制及剩余候选。
+
+
+## 2026-10-28 操作审计游标排序
+
+- 修复游标首屏与后续排序不一致，记录真实数据库反例、冷热与租户边界，以及其他查询的待核查候选。
+
+
+## 2026-10-28 Console 游标整数边界与 Common Map 复核
+
+- 非整数或越界数值游标不再截断或溢出，记录首红、HTTP与合法边界验证；复核 Common 动态 Map 所有权并保留实际扩展契约。
+
+
+## 2026-10-28 业务日历时区校验
+
+- 日历维护、初始化预演/应用和配置包行解析统一校验实际时区；保留省略默认值和跳过已有项语义，记录验证与目标环境缺口。
+
+
+## 2026-10-27 订阅规则候选容量复核
+
+- 合成数据比较全候选与保守预筛选，记录候选量、执行计划和目标环境缺口；保留通配符、大小写与自定义事件匹配。
+
+
+## 2026-10-27 订阅规则候选筛选
+
+- 修复数据库预筛选漏掉通配符和小写事件，保留应用精确匹配与租户、启用条件；记录验证及候选集容量待测项。
+
+
+## 2026-10-27 订阅规则清洗后校验
+
+- 对创建和更新规则的名称、事件类型在清洗后校验非空；记录四个首红和通过案例、受影响测试及契约同步。
+
+
+## 2026-10-27 通知投递参数必填约束
+
+- 对投递日志参数7个数据库必填字段在构造边界校验，保留可空字段；记录8项负例先红后绿、8项受影响验证及其余参数候选，不改历史归档。
+
+
+## 2026-10-27 文件配置旧投影清理
+
+- 按实际调用方退役文件渠道/模板旧Map投影及专属辅助方法；保留具名视图、脱敏和Excel/复制边界，记录方法对照与新增定向单测，不改历史归档。
+
+
+## 2026-10-27 通知投递日志入参治理
+
+- 三条投递审计调用改为具名Mapper入参，保留原JSON、异常及脱敏语义；记录真实PG和单测共14项证据，以及投影和构造校验缺口，不改历史归档。
+
+
+## 2026-10-27 订阅规则入参治理
+
+- 订阅规则创建和更新改用具名Mapper入参，保持租户、渠道、事件类型与启用语义；记录3项受影响测试及余项，不改历史归档。
+
+
+## 2026-10-27 通知渠道入参治理
+
+- 渠道创建与更新改为具名Mapper入参，保持活动冲突保护、软删除恢复及掩码配置语义；记录10项受影响验证、剩余候选与构造校验缺口，不改历史归档。
+
+
+## 2026-10-27 投递日志无调用方入口清理
+
+- 退役无调用方的通知投递日志状态更新接口和SQL，保留现有插入与热冷查询；按实际调用、XML对照和定向租户写入守卫记录证据，更新剩余Map候选。
+
+
+## 2026-10-27 配置同步审计入参治理
+
+- 配置同步审计创建/结果写入改具名Mapper入参，保留生成主键、租户与状态保护、JSON合并及事务顺序；17项受影响验证通过。更新25包台账与剩余候选，并保留参数对象必填构造校验的后续复核，不改历史归档。
+
+
+## 2026-10-27 通知渠道创建完整性修复
+
+- 更新通知职责边界、配置手册、OpenAPI及治理/TODO记录：规范化后的编码统一查重和写入，创建只可恢复软删除渠道，活动冲突返回409。记录别名/受控并发真实HTTP首红与8个不同定向用例成功证据，区分6个通知与2个配置同步Map剩余入口；配对生成及类型检查同步，不重复无关成功项或改归档正文。
+
+
+## 2026-10-27 日历说明修复与固定入参治理
+
+- 更新25工作包台账、TODO及配置手册：日历HTTP保存保留既有说明，5个具名参数及3个无调用方入口退役分别记录缺陷与规约证据。12个不同定向用例分段成功，首次11项通过后只修正并重跑夹具失败的1项；记录原SQL/字段/日期语义、证据复用及未验边界，归档正文不改。
+
+
+## 2026-10-27 审查证据合并与定向复核
+
+- 三份当日前后端审查/验证记录合为一份报告，迁移章节和跨仓引用后删除原文件，不以归档副本保留；历史首红、命令及边界继续可查。记录原14项风险片段源码核查与3项新变化，未修改业务代码或新增运行通过结论。
+
+
+## 2026-10-27 审查范围收缩
+
+- 当前待办改为已有Bug修复、直接影响及必要验证六项清单；停止全工程逐文件执行方式，保留原覆盖台账、历史失败与验证证据。配对前端及后端日期报告指向同一清单；本次只修改文档，代码审查仍暂停。
+
+## 2026-10-27 后端定位与产物验收Bug续审
+
+- 原审查/验证续记资源大小写切换、Redis生效配置漏读和致命失败被可空错误码软化三项，扩展13号语言根因到对象存储/Quota守卫；保留独立首红、真实PG拒绝与真实Redis配额证据。同步有状态切换手册、配置读取事实来源与ADR-030；不把局部运行结果写作全工程或发布验收。
+
+## 2026-10-27 回报队列身份与领取Bug续审
+
+- 原任务续记两种存储的执行报告覆盖、旧领取迟到确认/失败风险及指标修复；同步ADR-015、结构指南、Outbox职责和Worker运维手册。V360限定全新数据库停旧启新，SQLite不升级旧队列；保留真实PG/SQLite首红、后端语言首红、全模块397项和全新迁移4项、快照三类别变化与环境未验边界。
+
+## 2026-10-27 Worker生命周期Bug续审
+
+- 原审查/验证记录续记强停Future与迟到心跳两项确认问题，保留四个首红场景和Worker Core370项、上游环境跳过的真实范围；维护现有滚动升级手册、部署模型与接口注释，未扩大重试、业务重放或停机成功结论。
+
+## 2026-10-27 作业包与向导Bug续审
+
+- 原任务续记FE-BUG-43至47及组件/路由首红和回归；同步现有管理员作业包契约、普通作业入口区别、异步响应归属及关联/步骤语义。前端原用户指南与角色矩阵更新，原逐文件清单保持内容摘要与部分审查边界。
+
+## 2026-10-27 配置复制与Workflow身份续审
+
+- 原当日报告续记六项确认问题及FE-BUG-42，保留源渠道真实破坏、集合元素及默认语言首红、精确编码/升版去重/旧版本导出证据；补齐作业包整组目标校验与零写入回归，维护API、Workflow设计、运行手册、OpenAPI说明及用户文档，未删除历史快照或扩大维护旁路。
+
+## 2026-10-27 配置复制与矩阵Bug续审
+
+- 新增当日审查/验证及配对前端报告，保留26日原始证据；原API协议、运行手册、用户说明与OpenAPI基准语义同步。纠正初始化省略目标会广播、已退役Pipeline配置资源、同步日志分页及收据执行链的过期描述。普通分页和DAG节点上限保持现有契约，逐文件任务继续记录剩余范围。
+
+## 2026-10-27 初始化异步边界续审
+
+- 原Bug审查任务继续核对初始化面板的校验、重复点击、操作者/权限和关闭重开边界，修复及首红/回归写入原任务记录，当前用户与运维说明同步；未新增规约或改变范围。
+
+## 2026-10-26 Bug续审证据与范围更新
+
+- 维护原日期Bug报告、验证记录和TODO，补齐代码清单漏盘入口，按内容摘要保留已审/部分/待审边界；配置同步原键恢复、目标校验、事件冻结集合和旧初始化提交结果修复同步现行运维与用户文档。规约条款不变，首红与工具错误保留。
+
+## 2026-10-26 前后端CI结果契约统一
+
+- 前后端共享执行器统一五种状态、原因、参数错误和失败汇总；旧失败诊断保留，结果字段单行编码。保持阻断退出码、分组/模式控制及required checks边界，验证复用既有门禁自测入口，不跑业务全量测试。
+
+## 2026-10-26 SIM配置包脚本归位
+
+- 将 `scripts/fix-fixture-xlsx.py` 移至 `scripts/sim/fix-fixture-xlsx.py`，同步仓库根目录定位、动态加载测试、SIM/提交检查/CI入口及现行文档；旧验证记录和统计快照保留原历史路径。工作簿内容及业务行为不变。
+
+## 2026-10-26 Skill元数据与条件参考整理
+
+- 复核现行Skill界面元数据，保留已有中文名称、短说明、调用策略和依赖；明确界面显示与`SKILL.md`任务匹配的不同职责。个人偏好不复制到各技能，不机械创建references。
+- 文档治理中历史证据保留及全量提炼方法原文移至按需参考，原入口标题与DOC-1／DOC-2锚点保留并说明何时加载；原始方法和反例无删减。详细结果见[复核记录](audit/document-script-skill-review-2026-10-25.md)。
+
+## 2026-10-26 Bug 续审与验证补证
+
+- 增加配置同步原请求核对契约和前端恢复状态；保留目标身份真实 HTTP/审计首红、70 项同步关联及 36 项事件关联验证，记录数字 JSON 目标成员查询修复。原未知状态与部分事务边界保持不变。
+
+- Trigger 准入与排水补充三入口真实队列交错首红及 45 项回归，记录合法请求夹具修正和 MockMvc/真实服务验证边界。
+
+- 批量日生命周期收敛到既有 Orchestrator 所有权，移除 Trigger 重复状态写入；记录真实组件扫描首红、14 项定向验证及 7 份退役来源摘要，更新设计和运维说明。
+
+- Dispatch 完整模块测试先在 `batch-test-support` 的 Mapper 状态写入约定失败，定位到 Orchestrator 终态收尾 SQL 写死 `FAILED`；改由 `StepInstanceStatus.FAILED` 经具名参数传入。约定测试 2 项、收尾单测 10 项和真实 PostgreSQL 集成 1 项通过。一次集成重跑因本机 Python 监听端口与 MinIO 动态映射端口冲突失败，重新分配端口后通过。随后完整测试暴露 `PrivateTempFilesTest` 在子进程尚未建锁文件时抢先修改其时间戳，现由子进程持锁后创建就绪标记；该测试 7 项通过，Dispatch 及依赖模块完整测试最终退出 0。
+
+- SFTP 断连池启用取消即移除排队任务；两条线程不响应中断、20 个任务取消的回归先红后绿，目标服务挂起与恢复仍需环境验证。
+
+- Pipeline 进度 dirty 发布器补成功后登记、同时间戳稳定分页和节流保留游标；发布异常日志净化。单测与真实 PostgreSQL Mapper 回归先红后绿，目标环境高并发与真实 SSE 收件仍按专项范围验收。
+
+- 前端认证资料绑定请求代次和会话切换，保留退出/新登录/租户往返首红及 43 项回归；快速入门同步当前资料边界。
+
+- Workflow 空节点/边增加输入拒绝契约，记录 101 项后端关联回归；前端共享确认、Workflow 详情、Worker 与快照补 46 项证据和现行运行边界。
+
+- 前端审批、分区与依赖等待补充确认上下文守卫和 19 项正反例，运行指引、日期证据与逐文件状态同步。
+
+- 补充日历夏令时回拨缺陷的首红、14 项定向回归及现行日切运行规则，保留首次重叠与缺失时刻的既有边界。
+
+- 更新 Worker 批次退出、遥测输入、前端实例/告警/Workflow 上下文的现行协议和运行说明；记录真实失败、94 项后端定向证据、17 模块编译和前端最新统一回归。全局命名阻断现已解除，覆盖清单继续保留未审状态，不把已确认缺陷关闭写成全工程逐文件审查完成。
+
+## 2026-10-26 全工程 Bug 续审证据
+
+- 双仓新增逐文件范围、内容摘要与审查状态，区分已审、部分审查和未审；本轮补偿/死信与 Outbox 权限修复、前端状态/设计器及重投修复均保留日期证据。覆盖进度回 TODO Master，不把盘点或回归通过写成全工程审查完成。
+- ADR-006 保留原始论证并修正 REQUIRES_NEW 不释放外层锁的事实；补偿 Runbook、Console 协议和配对前端当前使用/架构说明更新实际边界。
+
+## 2026-10-26 后端 Bug 运行复现与修复
+
+- 修复 9 项专项审查发现, 同步 SDK 消费确认、Worker 发件箱恢复、readiness 超时/轮转、Workflow 冷热监控、渠道停用与配置包说明字段的权威文档。V359 仅增加等待扫描部分索引。
+- 定向运行验证、失败首因、隔离依赖与清理边界见[整改验证记录](verifications/backend-bug-remediation-2026-10-26.md)。审查原始证据保留, TODO Master 追踪当前状态; 未部署或提交。
+
+## 2026-10-26 后端 Bug 专项审查
+
+- 在 `fix/wdi-current` 对完整本地变更清单及高风险链路执行 Skill 审查，确认 9 项当前缺陷并登记 TODO Master；未修业务代码，未编译或执行应用测试。
+- [审查报告](review/backend-bug-review-2026-10-26.md)区分存量缺陷、新增回归、源码证据、Helm 双 Release 渲染复现和未覆盖范围，包含逐项修复验收条件。
+
+## 2026-10-26 维护窗口定向通知抑制
+
+- 共享维护状态联动 Alertmanager 有限时长控制信号；只抑制同部署、指定服务的可用性通知，提前结束与到期解除，不关闭告警计算或修改业务恢复事实。
+- Docker/Helm 对齐部署范围，补未确认/超时告警；仅将已确认维护拒绝标记为 `maintenance=planned`，HTTP 错误率排除预期请求并保留真实 500、状态失联 503。前端同步窗口和服务编码提示，详见[维护 SOP](runbook/maintenance-mode.md#10-维护期通知抑制2026-10-26)与[验证记录](plans/maintenance-degradation-hardening-plan-2026-09-29.md#2026-10-26-维护通知联动补齐)。
+
+## 2026-10-26 Compose 应用停机宽限
+
+- 8 个应用服务统一配置 `stop_grace_period`，默认 `300s`，由 `BATCH_APP_STOP_GRACE_PERIOD` 覆盖；部署 overlay 继承该配置，同步环境模板和[部署手册](runbook/docker-deployment.md#应用容器停机宽限)。
+- 本地 `stop-all.sh` 的 30 秒等待保留为开发便利例外，明确其长任务中断边界。`docker compose config --format json` 验证默认值、覆盖值及部署叠加共 7 组、56 个应用服务配置通过；配置默认值同步、环境变量治理、env Shell 安全、文档结构及差异空白检查通过。未编译、未运行应用测试或真实启停验收，现有容器未重建。
+
+## 2026-10-26 审查与治理技能职责收敛
+
+- 保留四个既有主入口：[双仓治理总控](../.agents/skills/cross-repo-governance-review/SKILL.md)、[后端工程与规约治理](../.agents/skills/project-engineering-review/SKILL.md)、[代码Bug与变更审查](../.agents/skills/code-review-and-gates/SKILL.md)、[对抗式安全与故障审查](../.agents/skills/adversarial-system-review/SKILL.md)。一次请求选一个主入口，专项按需加载；同基线结果直接复用。
+- 用户完整清单按两个3分为3a/3b，保留[25工作包及规范补充](../.agents/skills/project-engineering-review/references/backend-convention-coverage.md)；[Bug确认与失效机制](../.agents/skills/code-review-and-gates/references/bug-mechanisms.md)统一归代码审查。撤回本轮两个重复入口，保留有效方法及原始历史证据。
+- 补充测试SQL/JDBC、实体映射、条件/嵌套调用、对象引用、i18n key与环境切换、数据结构/策略/工厂等细项，同步AGENTS、指南和[覆盖复核](audit/backend-convention-skill-coverage-review-2026-10-26.md)。技能/文档验证与实际Bug扫描、业务验收分别记录。
+
+## 2026-10-26 旧实例级作业 SLA 终态补报与监控缺口复核
+
+- Job SLA 扫描补查扫描间隙内已结束的非演练终态实例；对旧 `deadline_at` 和 `expected_duration_seconds` 使用真实 `finished_at` 判定，并在 CAS 标记后重读实例，以处理扫描期间从运行态提交为终态的竞争。真实 PostgreSQL Mapper 与扫描恢复测试共 47 项通过，详见[专项计划](plans/job-workflow-sla-completion-plan-2026-10-25.md)。
+- 事件与可用性静态审查新增 OBS-ENV-05/06：Import 到达事件缺少执行结果/新鲜度监控且存在扫描器关闭时误报触发成功；HTTP 5xx 规则不构成用户路径 SLO，尚无黑盒探测、通用 HTTP 延迟告警或量化目标。未运行 promtool、监控栈或目标环境探测，详见[SLO/SLI 目录](runbook/slo-sli-catalog.md#2026-10-26-事件与用户路径可用性静态复核)。
+
+## 2026-10-26 Workflow 根级监控配置闭环
+
+- 在租户配置包中加入 Workflow 根级监控策略 sheet，并同步更新配置包设计和 SLA 权威说明；配置包校验/应用定向 23 项通过。
+- 策略 Mapper 改为显式列映射；真实 HTTP 集成发现并修复 MyBatis 默认未启用下划线转驼峰导致策略 GET 返回默认值的问题。Service/Mapper 9 项、Console API/RBAC PostgreSQL 集成 10 项通过，迁移到 V358。
+- TODO Master 更新事件/可用性环境验收责任，明确栈外监控、Kubernetes 目标清单、Kafka 部分 Broker 阈值及 Docker/Helm 最终收件演练仍开放。
+
+
+
+## 2026-10-26 告警最终收件幂等与发生/恢复联验
+
+- Alertmanager 告警经 Webhook 投递时，将按实体、接收端和发生/恢复阶段形成的稳定 cursor 编码为 `Idempotency-Key`；失败后重试保持该键，恢复通知使用独立键。
+- 新增真实 PostgreSQL 与本地 HTTP 收件端集成测试，验证 Console 接入返回 503 后不写成功回执、重试成功后分别写入发生/恢复回执，投递日志保留失败与成功结果。该证据不替代真实 Alertmanager/Orchestrator 联合发送或目标环境验收。
+
+## 2026-10-26 Workflow 子作业事件监控补漏
+
+- 开始/完成时限扫描现在覆盖尚未创建 `job_instance` 的 Workflow 子作业触发请求；等待门禁不计时，释放时间参与资格计算，实例创建前后沿用稳定请求告警身份。自动解除按实际执行起点、作业终态或明确机会关闭事实判定。
+- Job/Workflow 候选、发射、调度与恢复定向验证 42 项通过，其中 29 项真实 PostgreSQL；未启动观测栈或发送真实通知。外部最终收件及 Docker/Helm 故障验收仍待执行。
+
+## 2026-10-26 事件与可用性监控补充
+
+- 更新 SLO/SLI 目录和观测栈 Runbook，补录 Prometheus 自监控、Alertmanager 目标缺失、Docker 固定依赖与遥测后端目标缺失检测，以及 Job/Workflow 监控调度静默停摆告警的口径与验证边界；持续保留栈外监控、Kubernetes 动态目标清单、Kafka 拓扑阈值和最终收件验收为环境责任。
+
+## 2026-10-25 WDI本地收尾补证
+
+- B201更新[本地收尾证据](verifications/wdi-local-closure-2026-10-25.md)、TODO、总计划与矩阵：SSE票据修复、共享Worker相同源码证据复用、5万条六臂归档对照及49个不同归档用例通过。保留原失败、共享环境与容量/安全工具边界，不重复全量SIM；数据库目录和探针README同步局部JIT设置。
+
+## 2026-10-25 全量文档与脚本方法复核
+
+- 对后端及配对前端2157个去重来源进行全文静态盘点并逐域人工交叉；保留原始文档与脚本，生成[逐文件覆盖](audit/document-script-skill-coverage-2026-10-25.csv)和[范围/验证记录](audit/document-script-skill-review-2026-10-25.md)，不把资料盘点宣称为脚本实跑或逐行业务验收。
+- 新增应用发布晋级与观测实施治理两个项目技能，补充既有领域的运行时、快照、恢复与验证方法；同步AGENTS与技能使用指南，保持按需加载和实际操作授权边界。
+
+
+## 2026-10-25 历史经验原文恢复与技能提炼
+
+- 撤回前两批120篇历史正文的删除决定，按原路径恢复并标明原日期/基线；恢复7个分类索引。当前规范更新继续保留，历史原文不因摘要承接而删除。
+- 将可复用调查、反例和验证方法写入既有领域技能的按需参考页，补充文档技能的原始证据保留规则；[逐篇映射](audit/archive-experience-skill-extraction-2026-10-25.csv)记录来源、哈希和方法去向。旧数值、缺陷状态和历史PASS不继承。
+- 恢复2条原始手册原有危险操作预算，数值与删除前相同；不新增运行操作、迁移或编译/应用测试。
+
+
+## 2026-10-25 现行文档图整理
+
+- 双仓图块统一分组、短标签及明暗主题，转换 ASCII 流程并拆分宽图；核对根运行、Worker/SDK、Outbox 与 Pipeline 等图义，归档写入范围为空。
+- 新增[逐文件记录](audit/document-diagram-refresh-2026-10-25.md)并固化图表维护约定；渲染、静态检查和未通过的体积门禁分别记录，不提升为产品验收。
+
+
+## 2026-10-25 剩余归档全量核对
+
+- 核对149个归档文件，删除110篇重复/失效正文和4个空分类索引；31份原始审计、代码来源或实际执行证据保留日期与适用性。有效规则、操作边界、测试方法和历史统计直接更新既有文档；逐文件理由与原字节哈希见[处置清单](audit/archive-document-disposition-2026-10-25.csv)。
+- 按当前源码纠正批量传输的CLAIM/REPORT、逐项事务和配置开关描述；服务端灰度字段未消费登记TODO，未改运行行为。仅缩减被删除手册对应的2条破坏性命令基线记录，不扩大豁免。
+
+
+## 2026-10-25 功能收尾验证证据
+
+- 更新 readiness 持久等待和 UNKNOWN 恢复的运行说明，区分请求登记、根请求绑定与 Worker 实际开始时的授权消费。
+- 配置导入补齐编译、事务、缓存失效和 dry-run 的 70 项定向证据；新增 [功能收尾验证](verifications/wdi-functional-closure-2026-10-25.md)，保留首红、共享构建冲突和最终 78 项受影响回归的实际边界。正式验收矩阵数量保持原口径。
+
+## 2026-10-25 现行文档归位
+
+- 将仍然有效的扩容与租户路由、到达组坏数据处理、Worker 职责范围和 Workflow 编辑器设计收敛到现行 Runbook、ADR、架构边界与设计文档；已撤销、重复或仅剩章节存根的历史副本直接删除，不再维护 `docs/archive/architecture`、`docs/archive/design`、`docs/archive/standards` 三个空分类。
+- 统一修复现行文档、ADR、TODO、审计索引和 Runbook 对上述旧路径的引用。一次性容量与审计证据仍保留在相应日期化验证/审计记录中。
+
 ## 2026-10-24 固定字段响应构造可读性
 
 - 将 Console 审批、审计、Outbox、批次日、告警、死信、补跑、Worker、作业实例/分区/步骤、配置发布/密钥/变更、文件、通知及 Workflow 查询的固定字段响应映射改为具名 Builder；相关测试夹具同步具名赋值。
@@ -494,7 +975,7 @@
 
 ### 2026-06-10
 - **docs/agent-baseline.md §架构硬约束 新增「UNIQUE = upsert 幂等契约关键约束」**:全仓 56 处 `ON CONFLICT` 把幂等承重在全局 UNIQUE 上,改任何 UNIQUE 列集(分区/分片/重建/迁移)= 语义变更而非运维操作,动手前必须 `grep 'on conflict'` 全量核对 + 幂等语义评审。背景:2026-06-10 分区脚本实跑,分区键被迫进 UNIQUE 打破 `ON CONFLICT (tenant_id,event_key)`,orchestrator outbox 写入全失败、主链中断后回滚(PR #448)。此前该假设是隐性的——本条款将其显式化为权威约束。
-- **docs/agent-baseline.md §多租隔离 新增「新表 PK 前瞻」**:新建多租大表 PK 一律复合 `(tenant_id, id)`(或含分区键),禁单列 `id` PK。理由:Citus 可行性实扫(`docs/archive/architecture/scaling-state-and-biz-path-2026-06-14.md` §2,2026-06-10 复核仍成立)确认存量 23 张表单列 PK 是最大迁移阻塞(复合化重构估 12-20 周,`useGeneratedKeys` 已从 43 涨到 49 处),新表收敛控制阻塞面增速。小字典/配置/系统表豁免。存量表**不迁移**(等 Citus 触发门槛满足后按 POC 推进)。
+- **docs/agent-baseline.md §多租隔离 新增「新表 PK 前瞻」**:新建多租大表 PK 一律复合 `(tenant_id, id)`(或含分区键),禁单列 `id` PK。理由:Citus 可行性实扫确认存量单列主键会提高未来分片迁移成本；单机容量测量见 [多租户峰值实测](verifications/multitenant-peak-single-node-ceiling-2026-06-13.md)。小字典/配置/系统表豁免。存量表不因未来分片可能性预先迁移。
 
 ### 2026-06-07
 - **docs/agent-baseline.md §多租隔离**：明确租户子表可以在满足父表租户约束、外键/查询链路绑定和审计覆盖的前提下采用继承租户上下文的例外；例外必须登记，不能据此放宽业务入口的 `tenant_id` 校验。
@@ -525,7 +1006,7 @@
 
 ### 2026-05-07
 - **docs/agent-baseline.md §版本管理重写**：从"默认 1.0.0 非 SNAPSHOT"改为完整 SemVer 2.0.0 + `${revision}` 模型；约定 `MAJOR.MINOR.PATCH[-PRERELEASE]` / `-SNAPSHOT` 是 main 分支默认形态 / git tag 用 annotated `v<version>` / 描述性 tag 与版本 tag 共存。新增 [`docs/runbook/releasing.md`](runbook/releasing.md) 落地完整 release flow（标准 / hotfix / RC / patch / Maven 命令速查 / SemVer 判定提问 / FAQ）。明确**不抄 Spring Cloud Release Train / CalVer**：单 repo 单 PR 单部署 → 9 模块共 `${revision}` 已是主流；BOM 模块也不引入。当前 GA = `v1.0.0` @ commit `525e60f0`，main 默认 `1.1.0-SNAPSHOT`。
-- **docs/agent-baseline.md 新增 §ADR 实施范围纪律（防越界）**：固化系统定位"批量运行控制面 + 文件 / 任务交付闭环"，**不**扩张为数据治理 / K8s scheduler / 合规审计平台；列三阶段优先级（P0 ADR-012/023/025；P1 ADR-021/022/026；P2 ADR-024/027 暂缓）；列 4 个最高越界风险 ADR（021/022/026/027）的判定提问 + 一句话越界红线；PR 评审硬规则要求实施方答判定提问 + 引用「不做清单」。权威源 = 各 ADR 顶部"范围边界（Scope Discipline）"小节 + `docs/archive/standards/worker-capability-priority-and-scope-2026-05-06.md` §5。
+- **docs/agent-baseline.md 新增 §ADR 实施范围纪律（防越界）**：固化系统定位"批量运行控制面 + 文件 / 任务交付闭环"，**不**扩张为数据治理 / K8s scheduler / 合规审计平台；列三阶段优先级（P0 ADR-012/023/025；P1 ADR-021/022/026；P2 ADR-024/027 暂缓）；列 4 个最高越界风险 ADR（021/022/026/027）的判定提问 + 一句话越界红线；PR 评审硬规则要求实施方答判定提问 + 引用「不做清单」。当前入口为 [系统职责范围](architecture/system-scope-boundary.md) 与各 ADR 范围章节。
 - **docs/agent-baseline.md §archive 冷表对齐**：覆盖范围由 "14 张" 修正为 17 张（V108 加 result_version；V110 加 batch_day_replay_session + batch_day_replay_entry）；新增 V116 forensic_export_log / V118 data_quality_rule / V118 data_quality_check 暂未入 `ArchiveSchemaDriftCheck.ARCHIVED_TABLES` 的事实说明（运维域 + 时间点决定是否归档）。
 
 ### 2026-05-04
@@ -542,16 +1023,16 @@
 - **docs/agent-baseline.md 配置开关规范移除 `batch.trigger.async-launch.enabled`**（ADR-010 异步链路固化）：同步 HTTP 桥（`HttpOrchestratorTriggerAdapter`、`OrchestratorTriggerAdapter` 接口、`TriggerForwardRetryScheduler`）已删除，异步路径成为唯一链路，开关下线。docs/agent-baseline.md "配置开关规范" 段落更新为"ADR-010 trigger 异步链路（已固化，无开关）"。
 
 ### 2026-05-02
-- **全平台移除 Spring Data JDBC + docs/agent-baseline.md 架构硬约束同步**：所有业务模块（含 `batch-orchestrator`）禁止 `spring-boot-starter-data-jdbc` 与 `@EnableJdbcRepositories`；orchestrator 删除 `WorkerRegistryJdbcConfiguration` 及实体上 SDJ 映射注解，配置表与运行态一律 MyBatis；E2E 入口去掉 JDBC 仓库扫描；CI `check-dependency-boundaries.py` 将 orchestrator 纳入禁止 data-jdbc 列表。ADR-001 改为「仅 MyBatis + JdbcTemplate」。**追加**：docs/agent-baseline.md 明确 `domain/entity` 统一 `*Entity`、禁止 `*Record` 栈分工与同表双写；README / `docs/coding-conventions.md` §9 / `docs/design/tech-stack-and-principles.md` / `docs/architecture/architecture-truth.md` / `docs/agent-baseline.md` §7 / `docs/archive/design/project-structure-pom-2026-03-21.md` / `scripts/ci/README.md` / `docs/design/README.md` / `docs/design/capability-assessment.md` / `docs/archive/plans/rework-classification-2026-04-25.md` / `docs/compliance/THIRD-PARTY-LICENSES.md` / 根 `CHANGELOG.md` 与 `docs/changelog.md` 历史条勘误等活文档同步剔除双 ORM 与 `*Record` 规约。
+- **全平台移除 Spring Data JDBC + docs/agent-baseline.md 架构硬约束同步**：所有业务模块（含 `batch-orchestrator`）禁止 `spring-boot-starter-data-jdbc` 与 `@EnableJdbcRepositories`；orchestrator 删除 `WorkerRegistryJdbcConfiguration` 及实体上 SDJ 映射注解，配置表与运行态一律 MyBatis；E2E 入口去掉 JDBC 仓库扫描；CI `check-dependency-boundaries.py` 将 orchestrator 纳入禁止 data-jdbc 列表。ADR-001 改为「仅 MyBatis + JdbcTemplate」。**追加**：docs/agent-baseline.md 明确 `domain/entity` 统一 `*Entity`、禁止 `*Record` 栈分工与同表双写；README / `docs/coding-conventions.md` §9 / `docs/design/tech-stack-and-principles.md` / `docs/architecture/architecture-truth.md` / `docs/agent-baseline.md` §7 / `docs/architecture/project-structure.md` / `scripts/ci/README.md` / `docs/design/README.md` / `docs/design/capability-assessment.md` / `docs/runbook/production-capacity-governance.md` / `docs/compliance/THIRD-PARTY-LICENSES.md` / 根 `CHANGELOG.md` 与 `docs/changelog.md` 历史条勘误等文档同步剔除双 ORM 与 `*Record` 规约。
 
 ### 2026-05-01
-- **docs/agent-baseline.md §方法参数约束 追加"调用方约束"子节**（V6-P2-POSITIONAL-ARGS 治理方案 v3）。第一阶段"方法参数 ≥7 必须封装"落地后，参数臃肿从方法签名搬到 `new XxxParam(a,b,...,n)` inline 调用，main 遗留 61 处反例（① 方法签名 argc=7 共 7 处 / ② inline argc>6 共 54 处）。新增 2 条规约 + 2 条豁免：(1) 调用方按构造参数数 `argc` 分档治理——`argc>6` 必须 `@Builder` + 提取引用变量 + 默认值不显式 set；`argc≤6` **不约束**（业界无依据：Effective Java / Google Style / Oracle Conventions 都未禁止 `f(new Foo(a,b,c,d,e,f))`）。(2) 加 `@Builder` 时**禁止降级**到"仅提取引用"——class 隐式空参用 `@NoArgsConstructor` + `@AllArgsConstructor` 三连或 `@Tolerate` 注解回退，不破坏反射构造路径（Jackson / MyBatis / Spring `@ModelAttribute`）；Spring Data JDBC entity / `@Entity` / `@Table` 持久化类一律不加 `@Builder`。(3) **豁免 1**：声明式注册类（`*Registry` / `*SchemaRegistry` / Spring `@Configuration` 列表 / `List.of(new Foo(...))` 等）的 inline new 是业界鼓励的可读写法，不算反例。(4) **豁免 2**：**Spring Data JDBC / JPA `@Modifying @Query` 接口方法多 `@Param`** 是框架契约（`:paramName` 命名参数解析依赖位置 `@Param`，bean property 引用未原生支持），保留多 `@Param` 形式即可；MyBatis mapper 可封装（原生支持 `#{p.field}`），但不强制。配套：`docs/archive/plans/positional-args-cleanup-plan-2026-05-01.md` v3 治理方案 + `PositionalArgsConventionTest` 守护测试白名单方式拦回潮 + hardening-backlog `V6-P2-POSITIONAL-ARGS` 索引同步。
+- **docs/agent-baseline.md §方法参数约束 追加"调用方约束"子节**（V6-P2-POSITIONAL-ARGS 治理方案 v3）。第一阶段"方法参数 ≥7 必须封装"落地后，参数臃肿从方法签名搬到 `new XxxParam(a,b,...,n)` inline 调用，main 遗留 61 处反例（① 方法签名 argc=7 共 7 处 / ② inline argc>6 共 54 处）。新增 2 条规约 + 2 条豁免：(1) 调用方按构造参数数 `argc` 分档治理——`argc>6` 必须 `@Builder` + 提取引用变量 + 默认值不显式 set；`argc≤6` **不约束**（业界无依据：Effective Java / Google Style / Oracle Conventions 都未禁止 `f(new Foo(a,b,c,d,e,f))`）。(2) 加 `@Builder` 时**禁止降级**到"仅提取引用"——class 隐式空参用 `@NoArgsConstructor` + `@AllArgsConstructor` 三连或 `@Tolerate` 注解回退，不破坏反射构造路径（Jackson / MyBatis / Spring `@ModelAttribute`）；Spring Data JDBC entity / `@Entity` / `@Table` 持久化类一律不加 `@Builder`。(3) **豁免 1**：声明式注册类（`*Registry` / `*SchemaRegistry` / Spring `@Configuration` 列表 / `List.of(new Foo(...))` 等）的 inline new 是业界鼓励的可读写法，不算反例。(4) **豁免 2**：**Spring Data JDBC / JPA `@Modifying @Query` 接口方法多 `@Param`** 是框架契约（`:paramName` 命名参数解析依赖位置 `@Param`，bean property 引用未原生支持），保留多 `@Param` 形式即可；MyBatis mapper 可封装（原生支持 `#{p.field}`），但不强制。配套：`docs/coding-conventions.md` v3 治理方案 + `PositionalArgsConventionTest` 守护测试白名单方式拦回潮 + hardening-backlog `V6-P2-POSITIONAL-ARGS` 索引同步。
 
 ### 2026-04-30
 - **`batch.trigger.async-launch.enabled` 默认从 `false` 切换为 `true`**（docs/agent-baseline.md "配置开关规范" 同步）。新部署默认走 ADR-010 trigger → outbox → Kafka → orchestrator 异步链路，不再走同步 HTTP 桥。配套：`DefaultTriggerService.java` `@Value` fallback 改 `true`；trigger / orchestrator 5 处 `@ConditionalOnProperty` 加 `matchIfMissing=true`；`deploy/docker/compose/app.yml` trigger 服务加 `BATCH_KAFKA_BOOTSTRAP_SERVERS=kafka:29092` env + `depends_on: kafka`；`.env.local` / `.env.example` / `init-kafka-topics.sh` 默认 `KAFKA_TOPICS` 加 `batch.trigger.launch.v1`。**回退路径**：显式 `BATCH_TRIGGER_ASYNC_LAUNCH_ENABLED=false` 重启 trigger + orchestrator（必须两侧一致）。**容器 smoke 发现的关键 bug**：原 docker-compose trigger 段没有 `BATCH_KAFKA_BOOTSTRAP_SERVERS` env，trigger 用 batch-defaults.yml fallback `localhost:19092` 在容器网络里连不到 Kafka — 已修复。
 - **docs/agent-baseline.md 加 i18n 错误码规范**：业务异常一律走 `BizException.of(ResultCode.XXX, "error.<scope>.<reason>", args...)`，旧 literal 构造器 `new BizException(code, message)` 仅 Guard 等工具类签名豁免；key 命名 `error.<scope>.<reason>` 全小写 snake_case；占位符 `{0}`/`{1}` 与 args 顺序一一对应；双语强制（`messages.properties` + `messages_zh_CN.properties` 1:1 对齐）；持久化层实体实现 `LocalizedErrorCarrier` 接口，11 表的 `error_key`/`error_args` 列由 `BizExceptionUtils.toLocalizedError` 自动填充，console 读路径过 `LocalizedErrorRenderer` 按 Locale 重渲染。配套：worker step plugin 73 处 failure 迁三元组（`c74a9644`），V78 八表的 errorKey/errorArgs 列在 step 失败路径上真正生效；business 路径 56 文件横扫迁 i18n key（`23137b2c`）。详见 `docs/design/i18n.md` §5.1 落地阶段历史 + §6 已知 gap。
 - **docs/agent-baseline.md 加 Workflow 节点参数 DSL 规范**（ADR-009）：`workflow_node.node_params` JSONB value 支持受限 JSONPath 引用上游节点产出，由 `WorkflowParamResolver` 在派发前解析。语法白名单仅 `$.nodes.<nodeCode>.output.<key>`（嵌套 `.` 下钻）+ `$.workflowRun.<key>`，**不支持** 通配符 `*` / 过滤 `[?]` / 函数 / 表达式。Worker 暴露 output key 按业务领域固定（IMPORT: fileId/recordCount/...; EXPORT: fileId/objectName/...; PROCESS: processedCount/batchKey/...; DISPATCH: receiptCode/channelCode/...）。Fail-mode：未知 nodeCode / 路径语法非法 → `BizException(error.workflow.param_ref_invalid)` 拒绝节点启动；output 字段缺失 → null fallback。配套 schema：V72 `workflow_node_run.output JSONB` 列。详见 `docs/architecture/workflow-dependency-guide.md §10` + ADR-009。
-- **docs/agent-baseline.md 配置开关规范加 `batch.trigger.async-launch.enabled`**（ADR-010，历史记录）：当时描述了同步 HTTP 与异步 Kafka 双路径及灰度步骤。该开关、同步适配器和对应灰度流程后续均已移除；历史流程见 `docs/archive/runbook/trigger-async-launch-rollout-2026-05-02.md`。当前运行状态见 ADR-010 实施后记和 Trigger 运维手册。
+- **docs/agent-baseline.md 配置开关规范加 `batch.trigger.async-launch.enabled`**（ADR-010，历史记录）：当时描述了同步 HTTP 与异步 Kafka 双路径及灰度步骤。该开关、同步适配器和对应灰度流程后续均已移除；历史流程见 `docs/runbook/trigger-async-launch-rollout.md`。当前运行状态见 ADR-010 实施后记和 Trigger 运维手册。
 
 ### 2026-04-28
 - **模块边界新增 `batch-worker-process`**(docs/agent-baseline.md "## 模块边界" 同步加)。配合 P2 PROCESS 一等公民化:`JobType`/`PipelineType` 各加 `PROCESS` 枚举值,新增独立 worker 模块,与 import/export/dispatch 完全对称。
@@ -660,7 +1141,7 @@
   - 3 个 worker 的 `application-local.yml` 声明具体 tag（import=`[ingest]` / export=`[report, workflow]` / dispatch=`[delivery]`）
   - 遇到问题提示：只改 `batch-worker-core` 源码后，直接 `mvn package` 下游 worker 模块会用本地 m2 缓存的旧 jar 打包。必须先 `mvn -pl batch-worker-core install -DskipTests`，否则下游 jar 里没有新的 setter 调用。
   - 恢复 `default-tenant` 2 条 queue 的 `resource_tag`（`export_queue=report` / `workflow_queue=workflow`），之前 V4-P0-1 临时清空的状态回滚为正常。
-- **多租户业务链路验证批次 v4**：详见 `docs/analysis/fix-report-v4.md` / `docs/archive/plans/hardening-backlog-v4-2026-04-21.md`。修了 2 条代码 bug：
+- **多租户业务链路验证批次 v4**：详见 `docs/analysis/fix-report-v4.md` / `docs/plans/hardening-backlog.md`。修了 2 条代码 bug：
   - `TriggerSecurityConfiguration.InternalSecretFilter.setAuthenticated` 用 `AnonymousAuthenticationToken` 被 Spring Security `.authenticated()` 拒绝（trustResolver 判 anonymous）→ 换 `UsernamePasswordAuthenticationToken.authenticated(...)`。原因：`/api/triggers/management/*` 全线 403 / bypass-mode 失效。
   - `DefaultWorkerSelector.matchesResourceTag` 只比对 `worker.resource_tag` 单值，忽略 `capability_tags` JSONB 数组 → 扩展为"单值等于 OR 数组命中"，同时畸形 JSON 降级为 WARN 不抛。新增 `DefaultWorkerSelectorTest` 6 case。
 - **worker-import `business` 数据源 URL 加 `?stringtype=unspecified`**（`application-local.yml`）：`GenericJdbcMappedImportLoadPlugin.setObject(String)` 绑定到 NUMERIC/DATE 列时 Postgres 不隐式 cast，导致 tb TRANSACTION / tc RISK_SCORE 批 LOAD 失败。加参数后服务端按列类型自动转换。

@@ -1,17 +1,15 @@
 package io.github.pinpols.batch.orchestrator.integration;
 
-import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkPublishingBatchParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.enums.TriggerType;
-import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
-import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowChildTriggerSeed;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkPublishingBatchParam;
 import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchItem;
 import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchRow;
+import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
+import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowChildTriggerSeed;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
@@ -63,7 +61,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @DisplayName("真实数据库上的批量语句机制,验证多行插入的主键按序回填,批量续租的命中集合与调用标识比较,以及事件抢占与后续标记的守卫语义")
 class BatchInsertGeneratedKeysIntegrationTest {
 
-  private static final String TENANT_ID = "batch-insert-" + Long.toUnsignedString(System.nanoTime());
+  private static final String TENANT_ID =
+      "batch-insert-" + Long.toUnsignedString(System.nanoTime());
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 10, 14);
 
   @Container
@@ -124,8 +123,14 @@ class BatchInsertGeneratedKeysIntegrationTest {
     jdbc.update(deleteChildTriggerRequestsSql, TENANT_ID);
     deleteOwnedRows("workflow_run");
     for (String table : List.of(
-        "trigger_request", "workflow_edge", "workflow_node", "workflow_definition_version",
-        "workflow_definition", "job_definition", "business_calendar", "tenant_configuration_revision")) {
+        "trigger_request",
+        "workflow_edge",
+        "workflow_node",
+        "workflow_definition_version",
+        "workflow_definition",
+        "job_definition",
+        "business_calendar",
+        "tenant_configuration_revision")) {
       deleteOwnedRows(table);
     }
   }
@@ -173,11 +178,7 @@ class BatchInsertGeneratedKeysIntegrationTest {
       // 回填的 id 与 DB 行一一对应(按 partition_no 反查)
       for (JobPartitionEntity p : partitions) {
         Long dbId = jdbc.queryForObject(
-            selectIdSql,
-            Long.class,
-            p.getTenantId(),
-            p.getJobInstanceId(),
-            p.getPartitionNo());
+            selectIdSql, Long.class, p.getTenantId(), p.getJobInstanceId(), p.getPartitionNo());
         assertThat(p.getId()).isEqualTo(dbId);
       }
 
@@ -242,9 +243,8 @@ class BatchInsertGeneratedKeysIntegrationTest {
           .orElseThrow();
       assertThat(rowT2.getCancelRequested()).isTrue();
       // lease 确实写进去了
-      Integer renewedCount = jdbc.queryForObject(
-          selectCountSql,
-          Integer.class, TENANT_ID, instanceId);
+      Integer renewedCount =
+          jdbc.queryForObject(selectCountSql, Integer.class, TENANT_ID, instanceId);
       assertThat(renewedCount).isEqualTo(2);
     }
   }
@@ -267,18 +267,17 @@ class BatchInsertGeneratedKeysIntegrationTest {
 
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
       OutboxEventMapper outboxMapper = session.getMapper(OutboxEventMapper.class);
-      jdbc.update(
-          insertOutboxEventSql, TENANT_ID, TENANT_ID, TENANT_ID);
-      List<Long> ids = jdbc.queryForList(
-          selectIdSql, Long.class, TENANT_ID);
+      jdbc.update(insertOutboxEventSql, TENANT_ID, TENANT_ID, TENANT_ID);
+      List<Long> ids = jdbc.queryForList(selectIdSql, Long.class, TENANT_ID);
 
-      List<Long> won = outboxMapper.markPublishingBatch(OutboxEventMarkPublishingBatchParam.builder()
-          .tenantId(TENANT_ID)
-          .ids(ids)
-          .publishingStatus("PUBLISHING")
-          .pendingStatus1("NEW")
-          .pendingStatus2("FAILED")
-          .build());
+      List<Long> won =
+          outboxMapper.markPublishingBatch(OutboxEventMarkPublishingBatchParam.builder()
+              .tenantId(TENANT_ID)
+              .ids(ids)
+              .publishingStatus("PUBLISHING")
+              .pendingStatus1("NEW")
+              .pendingStatus2("FAILED")
+              .build());
 
       // 只有 NEW/FAILED 两行被抢占;PUBLISHED 行不动(可重入集 CAS 与单条 markPublishing 一致)
       assertThat(won).containsExactlyInAnyOrder(ids.get(0), ids.get(1));
@@ -305,14 +304,21 @@ class BatchInsertGeneratedKeysIntegrationTest {
         ) values (?, ?, ?, ?, ?, 'EVENT', 'RUNNING', ?, ?) returning id
         """;
     String jobCode = "BATCH_SQL_" + suffix;
-    Long jobDefinitionId = jdbc.queryForObject(
-        insertJobDefinitionSql, Long.class, TENANT_ID, jobCode, jobCode);
+    Long jobDefinitionId =
+        jdbc.queryForObject(insertJobDefinitionSql, Long.class, TENANT_ID, jobCode, jobCode);
     WorkflowChildTriggerSeed child =
         LaunchIntegrationFixture.prepareWorkflowChildTriggerRequestForDefinition(
             jdbc, TENANT_ID, jobDefinitionId, jobCode, suffix, BIZ_DATE, TriggerType.API);
     return jdbc.queryForObject(
-        insertJobInstanceSql, Long.class, TENANT_ID, jobDefinitionId, child.triggerRequestId(),
-        jobCode, "INSTANCE_" + suffix, "DEDUP_" + suffix, BIZ_DATE);
+        insertJobInstanceSql,
+        Long.class,
+        TENANT_ID,
+        jobDefinitionId,
+        child.triggerRequestId(),
+        jobCode,
+        "INSTANCE_" + suffix,
+        "DEDUP_" + suffix,
+        BIZ_DATE);
   }
 
   private static JobPartitionEntity partition(String tenantId, Long instanceId, int no) {

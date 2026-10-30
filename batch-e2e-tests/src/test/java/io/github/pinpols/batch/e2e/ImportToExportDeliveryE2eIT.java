@@ -16,8 +16,6 @@ import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
 import io.github.pinpols.batch.e2e.support.E2eTestSql;
 import io.github.pinpols.batch.e2e.support.verifier.DispatchReceiptVerifier;
-import io.github.pinpols.batch.orchestrator.application.service.task.InstanceManagementApplicationService;
-import io.github.pinpols.batch.orchestrator.application.service.task.InstanceManagementResults.RetryFailedPartitions;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.nio.charset.StandardCharsets;
@@ -64,7 +62,6 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
   private final WorkflowRunLaunchService launchService;
   private final JdbcTemplate jdbcTemplate;
   private final E2eOutboxPublishSupport outboxPublishSupport;
-  private final InstanceManagementApplicationService instanceManagementService;
   private final Environment environment;
   private final DataSource businessDataSource;
 
@@ -72,13 +69,11 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
       WorkflowRunLaunchService launchService,
       JdbcTemplate jdbcTemplate,
       E2eOutboxPublishSupport outboxPublishSupport,
-      InstanceManagementApplicationService instanceManagementService,
       Environment environment,
       @Qualifier("importBusinessDataSource") DataSource businessDataSource) {
     this.launchService = launchService;
     this.jdbcTemplate = jdbcTemplate;
     this.outboxPublishSupport = outboxPublishSupport;
-    this.instanceManagementService = instanceManagementService;
     this.environment = environment;
     this.businessDataSource = businessDataSource;
   }
@@ -134,11 +129,8 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
     awaitTaskSuccess(importSeed.dedupKey());
 
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
-    Integer importedRows = businessJdbc.queryForObject(
-        selectCountSql,
-        Integer.class,
-        TENANT,
-        customerNo);
+    Integer importedRows =
+        businessJdbc.queryForObject(selectCountSql, Integer.class, TENANT, customerNo);
     assertThat(importedRows).isEqualTo(1);
 
     String exportSql = """
@@ -172,10 +164,8 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
       outboxPublishSupport.publishAllPending(TENANT);
       awaitTaskSuccess(exportSeed.dedupKey());
 
-      List<Map<String, Object>> exportedFiles = jdbcTemplate.queryForList(
-          selectIdSql,
-          TENANT,
-          "e2e-journey-" + unique);
+      List<Map<String, Object>> exportedFiles =
+          jdbcTemplate.queryForList(selectIdSql, TENANT, "e2e-journey-" + unique);
       assertThat(exportedFiles).hasSize(1);
       Long outputFileId = ((Number) exportedFiles.get(0).get("id")).longValue();
       String storagePath = String.valueOf(exportedFiles.get(0).get("storage_path"));
@@ -217,9 +207,18 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
         set target_endpoint = ?, config_json = jsonb_set(config_json, '{target_endpoint}', to_jsonb(?::text),\s\
         true) where tenant_id = ? and channel_code = ?\
         """;
-    final String selectIdSql = """
-        select id from batch.job_instance where tenant_id = ? and dedup_key = ?
-    """;
+    final String selectWorkflowStatusSql = """
+        select wr.run_status from batch.workflow_run wr
+        join batch.trigger_request tr
+          on tr.tenant_id = wr.tenant_id and tr.id = wr.trigger_request_id
+        where wr.tenant_id = ? and tr.request_id = ?
+        """;
+    final String insertRetryRequestSql = """
+        insert into batch.trigger_request (
+            tenant_id, request_id, trigger_type, workflow_definition_id, biz_date,
+            dedup_key, request_status, trace_id, dry_run
+        ) values (?, ?, ?, ?, date '2026-01-15', ?, 'ACCEPTED', ?, false)
+        """;
 
     String channelCode = "journey-local-" + unique;
     String receiptCode = "R-" + unique;
@@ -266,8 +265,13 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
       outboxPublishSupport.publishAllPending(TENANT);
 
       awaitTaskStatus(dispatchSeed.dedupKey(), "FAILED");
-      String failedFileStatus = jdbcTemplate.queryForObject(
-          selectFileStatusSql, String.class, fileId);
+      await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+        String workflowStatus = jdbcTemplate.queryForObject(
+            selectWorkflowStatusSql, String.class, TENANT, dispatchSeed.requestId());
+        assertThat(workflowStatus).isEqualTo("FAILED");
+      });
+      String failedFileStatus =
+          jdbcTemplate.queryForObject(selectFileStatusSql, String.class, fileId);
       assertThat(failedFileStatus).isNotEqualTo(FileStatus.DISPATCHED.code());
 
       jdbcTemplate.update(
@@ -276,19 +280,28 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
           outboxDirectory.toString(),
           TENANT,
           channelCode);
-      Long dispatchInstanceId = jdbcTemplate.queryForObject(
-          selectIdSql,
-          Long.class,
+      // 终态作业不可原地重排；修正渠道后，以同一 Workflow 定义发起新的受管运行。
+      String retryRequestId = "journey-retry-" + unique;
+      String retryDedupKey = "journey-retry-dedup-" + unique;
+      jdbcTemplate.update(
+          insertRetryRequestSql,
           TENANT,
-          dispatchSeed.dedupKey());
-      RetryFailedPartitions retry =
-          instanceManagementService.retryFailedPartitions(TENANT, dispatchInstanceId);
-      assertThat(retry.requested()).isEqualTo(1);
-      assertThat(retry.retried()).isEqualTo(1);
-      assertThat(retry.conflicts()).isZero();
-
+          retryRequestId,
+          TriggerType.API.code(),
+          dispatchSeed.workflowDefinitionId(),
+          retryDedupKey,
+          "e2e-tr-import-export-dispatch-retry");
+      launchService.launch(new LaunchRequest(
+          TENANT,
+          dispatchSeed.workflowDefinitionId(),
+          LocalDate.of(2026, 1, 15),
+          TriggerType.API,
+          retryRequestId,
+          "e2e-tr-import-export-dispatch-retry",
+          dispatchParams));
       outboxPublishSupport.publishAllPending(TENANT);
-      awaitTaskSuccess(dispatchSeed.dedupKey());
+      awaitTaskSuccess(retryDedupKey);
+      awaitTaskStatus(dispatchSeed.dedupKey(), "FAILED");
 
       DispatchReceiptVerifier.forTenant(TENANT)
           .fileId(fileId)
@@ -436,7 +449,8 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String status = jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, dedupKey);
+          String status =
+              jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, dedupKey);
           assertThat(status).isEqualTo(expectedStatus);
         });
   }

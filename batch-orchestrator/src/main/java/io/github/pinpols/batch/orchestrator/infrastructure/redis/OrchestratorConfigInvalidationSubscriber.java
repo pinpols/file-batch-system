@@ -125,9 +125,7 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
     listenerContainer.addMessageListener(this, new ChannelTopic(redisChannel));
     listenerContainer.afterPropertiesSet();
     listenerContainer.start();
-    log.info(
-        "orchestrator config invalidation subscriber started: channel={}",
-        redisChannel);
+    log.info("orchestrator config invalidation subscriber started: channel={}", redisChannel);
   }
 
   @Override

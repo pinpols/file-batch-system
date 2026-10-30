@@ -53,13 +53,7 @@ public final class ProcessE2eFixture {
         """;
 
     jdbcTemplate.update(
-        insertProcessOrderEventSql,
-        tenantId,
-        bizDate,
-        tenantId,
-        bizDate,
-        tenantId,
-        bizDate);
+        insertProcessOrderEventSql, tenantId, bizDate, tenantId, bizDate, tenantId, bizDate);
   }
 
   /** 配置系统 PROCESS Pipeline 的 SQL transform 运行参数。 */
@@ -141,8 +135,8 @@ public final class ProcessE2eFixture {
          where tenant_id = ? and job_code = ?
         """;
 
-    int updated =
-        jdbcTemplate.update(updateJobDefinitionSql, objectMapper.writeValueAsString(parameters), tenantId, jobCode);
+    int updated = jdbcTemplate.update(
+        updateJobDefinitionSql, objectMapper.writeValueAsString(parameters), tenantId, jobCode);
     if (updated != 1) {
       throw new IllegalStateException("Expected one PROCESS Job definition to update");
     }

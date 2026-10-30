@@ -22,7 +22,8 @@ class ConsoleKafkaConfiguration {
   ConcurrentKafkaListenerContainerFactory<String, String> terminalNotificationKafkaFactory(
       @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers,
       @Value("${spring.kafka.listener.auto-startup:true}") boolean autoStartup) {
-    ConcurrentKafkaListenerContainerFactory<String, String> factory = new ConcurrentKafkaListenerContainerFactory<String, String>();
+    ConcurrentKafkaListenerContainerFactory<String, String> factory =
+        new ConcurrentKafkaListenerContainerFactory<String, String>();
     factory.setConsumerFactory(new DefaultKafkaConsumerFactory<>(Map.of(
         ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
         bootstrapServers,

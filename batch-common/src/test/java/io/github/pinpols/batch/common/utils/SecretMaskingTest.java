@@ -85,6 +85,13 @@ class SecretMaskingTest {
   }
 
   @Test
+  @DisplayName("无凭据的本地文件 URI 保留原始三斜杠格式")
+  void shouldPreserveLocalFileUriWithoutCredentials() {
+    assertThat(SecretMasking.maskEndpoint("file:///tmp/r25-warehouse"))
+        .isEqualTo("file:///tmp/r25-warehouse");
+  }
+
+  @Test
   @DisplayName("更新端点回传掩码时恢复原 userinfo 和查询凭据")
   void shouldRestoreCredentialsInMaskedEndpointUri() {
     assertThat(SecretMasking.preserveMaskedEndpoint(

@@ -2,8 +2,8 @@ package io.github.pinpols.batch.orchestrator.mapper;
 
 import io.github.pinpols.batch.common.enums.ReplayOperationStatus;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
-import io.github.pinpols.batch.orchestrator.domain.param.ReplayOperationWorkflowOutcomeParam;
 import io.github.pinpols.batch.orchestrator.domain.param.ReplayOperationStartParam;
+import io.github.pinpols.batch.orchestrator.domain.param.ReplayOperationWorkflowOutcomeParam;
 import java.time.Instant;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -15,8 +15,7 @@ public interface ReplayOperationMapper {
 
   int insert(ReplayOperationEntity operation);
 
-  ReplayOperationEntity selectById(
-      @Param("tenantId") String tenantId, @Param("id") Long id);
+  ReplayOperationEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
   ReplayOperationEntity selectByIdentity(
       @Param("tenantId") String tenantId, @Param("operationKey") String operationKey);
@@ -27,8 +26,7 @@ public interface ReplayOperationMapper {
   List<ReplayOperationEntity> selectRecentByTenant(
       @Param("tenantId") String tenantId, @Param("limit") int limit);
 
-  ReplayOperationEntity selectForUpdate(
-      @Param("tenantId") String tenantId, @Param("id") Long id);
+  ReplayOperationEntity selectForUpdate(@Param("tenantId") String tenantId, @Param("id") Long id);
 
   List<ReplayOperationEntity> selectByStatus(
       @Param("status") String status, @Param("limit") int limit);
@@ -72,6 +70,5 @@ public interface ReplayOperationMapper {
       @Param("workflowRunId") Long workflowRunId,
       @Param("now") Instant now);
 
-  int updateWorkflowTargetOutcome(
-      @Param("param") ReplayOperationWorkflowOutcomeParam param);
+  int updateWorkflowTargetOutcome(@Param("param") ReplayOperationWorkflowOutcomeParam param);
 }

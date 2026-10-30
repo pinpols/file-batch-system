@@ -88,9 +88,7 @@ public class CrossDayDependencyResolver {
       String crossDayDependenciesJson,
       boolean dryRun,
       Map<String, List<Long>> pinnedResultIdsByAlias) {
-    if (!Texts.hasText(tenantId)
-        || workflowBizDate == null
-        || !Texts.hasText(crossDayDependenciesJson)) {
+    if (!Texts.hasText(crossDayDependenciesJson)) {
       return ResolutionResult.resolvedPayload(Map.of(), Map.of());
     }
     List<CrossDayDependencySpec> specs;
@@ -106,6 +104,9 @@ public class CrossDayDependencyResolver {
     }
     if (specs == null || specs.isEmpty()) {
       return ResolutionResult.resolvedPayload(Map.of(), Map.of());
+    }
+    if (!Texts.hasText(tenantId) || EmptyChecks.isNull(workflowBizDate)) {
+      return ResolutionResult.failed("CROSS_DAY_DEP_INVALID_CONTEXT");
     }
 
     Map<String, Object> resolved = new LinkedHashMap<>();
@@ -124,7 +125,8 @@ public class CrossDayDependencyResolver {
         .build();
 
     for (CrossDayDependencySpec spec : specs) {
-      boolean specIsMissingOrHasNoJobCode = EmptyChecks.isNull(spec) || !Texts.hasText(spec.jobCode());
+      boolean specIsMissingOrHasNoJobCode =
+          EmptyChecks.isNull(spec) || !Texts.hasText(spec.jobCode());
       if (specIsMissingOrHasNoJobCode) {
         return ResolutionResult.failed("CROSS_DAY_DEP_INVALID_SPEC");
       }
@@ -141,7 +143,8 @@ public class CrossDayDependencyResolver {
       if (!aliases.add(alias)) {
         return ResolutionResult.failed("CROSS_DAY_DEP_DUPLICATE_ALIAS");
       }
-      if (EmptyChecks.isNotNull(pinnedResultIdsByAlias) && !pinnedResultIdsByAlias.containsKey(alias)) {
+      if (EmptyChecks.isNotNull(pinnedResultIdsByAlias)
+          && !pinnedResultIdsByAlias.containsKey(alias)) {
         return ResolutionResult.failed("CROSS_DAY_DEP_SNAPSHOT_INVALID");
       }
 
@@ -151,7 +154,8 @@ public class CrossDayDependencyResolver {
       }
     }
 
-    if (EmptyChecks.isNotNull(pinnedResultIdsByAlias) && !aliases.equals(pinnedResultIdsByAlias.keySet())) {
+    if (EmptyChecks.isNotNull(pinnedResultIdsByAlias)
+        && !aliases.equals(pinnedResultIdsByAlias.keySet())) {
       return ResolutionResult.failed("CROSS_DAY_DEP_SNAPSHOT_INVALID");
     }
 
@@ -186,7 +190,8 @@ public class CrossDayDependencyResolver {
             return ResolutionResult.failed("CROSS_DAY_DEP_INVALID_RANGE");
           }
           rangeOutputs = rangeResolution.outputs();
-          if (spec.isRequired() && !EmptyChecks.isEmpty(Objects.requireNonNull(rangeResolution.missingDates()))) {
+          if (spec.isRequired()
+              && !EmptyChecks.isEmpty(Objects.requireNonNull(rangeResolution.missingDates()))) {
             String missingDateList = String.join(",", rangeResolution.missingDates());
             String missingRangeReason = "RANGE_MISSING:" + missingDateList;
             context.waitingReasons().add(missingReason(alias, spec, missingRangeReason));
@@ -215,7 +220,11 @@ public class CrossDayDependencyResolver {
           hit = lookup(context.tenantId(), spec, target, context.dryRun());
         } else {
           hit = resolvePinnedSingle(
-              context.tenantId(), spec, target, context.dryRun(), context.pinnedResultIdsByAlias().get(alias));
+              context.tenantId(),
+              spec,
+              target,
+              context.dryRun(),
+              context.pinnedResultIdsByAlias().get(alias));
         }
         if (!hit.isPresent()) {
           context.resultVersionIdsByAlias().put(alias, List.of());
@@ -297,16 +306,14 @@ public class CrossDayDependencyResolver {
       if (EmptyChecks.isNull(resultVersionId) || resultVersionId <= 0) {
         return null;
       }
-      ResultVersionEntity selected = resultVersionQueryService
-          .findById(tenantId, resultVersionId)
-          .orElse(null);
+      ResultVersionEntity selected =
+          resultVersionQueryService.findById(tenantId, resultVersionId).orElse(null);
       if (!isPinnedVersionUsable(selected, dryRun)) {
         return null;
       }
       String selectedBusinessKey = selected.businessKey();
-      boolean selectedBusinessKeyIsOutsideRange =
-          dates.stream()
-              .noneMatch(date -> businessKey(spec.jobCode(), date).equals(selectedBusinessKey));
+      boolean selectedBusinessKeyIsOutsideRange = dates.stream()
+          .noneMatch(date -> businessKey(spec.jobCode(), date).equals(selectedBusinessKey));
       if (selectedBusinessKeyIsOutsideRange) {
         return null;
       }
@@ -348,9 +355,8 @@ public class CrossDayDependencyResolver {
     if (EmptyChecks.isNull(resultVersionId) || resultVersionId <= 0) {
       return Optional.empty();
     }
-    ResultVersionEntity selected = resultVersionQueryService
-        .findById(tenantId, resultVersionId)
-        .orElse(null);
+    ResultVersionEntity selected =
+        resultVersionQueryService.findById(tenantId, resultVersionId).orElse(null);
     if (!isPinnedVersionUsable(selected, dryRun)
         || !businessKey(spec.jobCode(), targetDate).equals(selected.businessKey())) {
       return Optional.empty();
@@ -536,8 +542,8 @@ public class CrossDayDependencyResolver {
     private static Map<String, List<Long>> immutableResultVersionIds(
         Map<String, List<Long>> resultVersionIdsByAlias) {
       Map<String, List<Long>> immutableIdsByAlias = new LinkedHashMap<>();
-      resultVersionIdsByAlias.forEach(
-          (alias, resultVersionIds) -> immutableIdsByAlias.put(alias, List.copyOf(resultVersionIds)));
+      resultVersionIdsByAlias.forEach((alias, resultVersionIds) ->
+          immutableIdsByAlias.put(alias, List.copyOf(resultVersionIds)));
       return Collections.unmodifiableMap(immutableIdsByAlias);
     }
   }

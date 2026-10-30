@@ -1,21 +1,22 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
-import io.github.pinpols.batch.console.domain.notification.param.WorkflowTerminalNotificationClaimParam;
-import io.github.pinpols.batch.console.domain.notification.param.WorkflowTerminalNotificationFinishParam;
-
-
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.config.WebhookRelayProperties;
-import io.github.pinpols.batch.console.domain.notification.view.TerminalNotificationDelivery;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookSubscriptionMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationChannelMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.WorkflowTerminalNotificationMapper;
+import io.github.pinpols.batch.console.domain.notification.param.WorkflowTerminalNotificationClaimParam;
+import io.github.pinpols.batch.console.domain.notification.param.WorkflowTerminalNotificationFinishParam;
+import io.github.pinpols.batch.console.domain.notification.view.NotificationChannelRow;
+import io.github.pinpols.batch.console.domain.notification.view.SubscriptionRuleRow;
+import io.github.pinpols.batch.console.domain.notification.view.TerminalNotificationDelivery;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -28,6 +29,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.util.HtmlUtils;
 
 /** 持久化终态投递；由现有 Webhook 中继在调度锁下调用。 */
 @Service
@@ -71,8 +73,7 @@ public class TerminalNotificationDeliveryService {
     }
     Instant pollTime = BatchDateTimeSupport.utcNow();
     int effectiveBatchSize = Math.max(1, properties.getBatchSize());
-    for (TerminalNotificationDelivery row :
-        deliveries.pending(pollTime, effectiveBatchSize)) {
+    for (TerminalNotificationDelivery row : deliveries.pending(pollTime, effectiveBatchSize)) {
       if (stopping.getAsBoolean() || Thread.currentThread().isInterrupted()) {
         return;
       }
@@ -85,7 +86,7 @@ public class TerminalNotificationDeliveryService {
             row.tenantId(),
             row.id(),
             row.source(),
-            SwallowedExceptionLogger.summary(failure));
+            safeDeliveryError(SwallowedExceptionLogger.summary(failure)));
       }
     }
   }
@@ -98,49 +99,46 @@ public class TerminalNotificationDeliveryService {
     String tenantId = row.tenantId();
     Integer claimResult = inTenant(tenantId, () -> {
       Instant leaseExpiresAt = now.plus(Duration.ofMinutes(2));
-      WorkflowTerminalNotificationClaimParam workflowTerminalNotificationClaimParam = WorkflowTerminalNotificationClaimParam.builder()
-          .row(row)
-          .token(token)
-          .now(now)
-          .until(leaseExpiresAt)
-          .maxAttempts(maxAttempts)
-          .build();
+      WorkflowTerminalNotificationClaimParam workflowTerminalNotificationClaimParam =
+          WorkflowTerminalNotificationClaimParam.builder()
+              .row(row)
+              .token(token)
+              .now(now)
+              .until(leaseExpiresAt)
+              .maxAttempts(maxAttempts)
+              .build();
       return deliveries.claim(workflowTerminalNotificationClaimParam);
     });
     if (!Integer.valueOf(1).equals(claimResult)) {
       return;
     }
     if (row.attempt() >= maxAttempts) {
-      inTenant(
-          row.tenantId(),
-          () -> {
-            WorkflowTerminalNotificationFinishParam workflowTerminalNotificationFinishParam = WorkflowTerminalNotificationFinishParam.builder()
+      inTenant(row.tenantId(), () -> {
+        WorkflowTerminalNotificationFinishParam workflowTerminalNotificationFinishParam =
+            WorkflowTerminalNotificationFinishParam.builder()
                 .row(row)
                 .token(token)
                 .status("EXHAUSTED")
                 .error("delivery attempt budget exhausted; manual reconciliation required")
                 .nextRetry(null)
                 .build();
-            return deliveries.finish(
-              workflowTerminalNotificationFinishParam);
-          });
+        return deliveries.finish(workflowTerminalNotificationFinishParam);
+      });
       return;
     }
     Destination destination = inTenant(row.tenantId(), () -> destination(row));
     if (row.attempt() > 0 && EmptyChecks.isNotNull(destination.message())) {
-      inTenant(
-          row.tenantId(),
-          () -> {
-            WorkflowTerminalNotificationFinishParam workflowTerminalNotificationFinishParam2 = WorkflowTerminalNotificationFinishParam.builder()
+      inTenant(row.tenantId(), () -> {
+        WorkflowTerminalNotificationFinishParam workflowTerminalNotificationFinishParam2 =
+            WorkflowTerminalNotificationFinishParam.builder()
                 .row(row)
                 .token(token)
                 .status("EXHAUSTED")
                 .error("previous provider delivery outcome unknown; manual reconciliation required")
                 .nextRetry(null)
                 .build();
-            return deliveries.finish(
-              workflowTerminalNotificationFinishParam2);
-          });
+        return deliveries.finish(workflowTerminalNotificationFinishParam2);
+      });
       return;
     }
     WebhookDeliveryResult result;
@@ -171,28 +169,19 @@ public class TerminalNotificationDeliveryService {
       long retryDelaySeconds = Math.min(1800L, 5L << boundedBackoffExponent);
       nextRetry = retryScheduledAt.plusSeconds(retryDelaySeconds);
     }
-    String error = result.errorSummary();
-    String boundedError;
-    if (EmptyChecks.isNull(error)) {
-      boundedError = null;
-    } else {
-      int boundedErrorLength = Math.min(1024, error.length());
-      boundedError = error.substring(0, boundedErrorLength);
-    }
+    String boundedError = safeDeliveryError(result.errorSummary());
     Instant retryAt = nextRetry;
-    int completed = inTenant(
-        row.tenantId(),
-        () -> {
-          WorkflowTerminalNotificationFinishParam workflowTerminalNotificationFinishParam3 = WorkflowTerminalNotificationFinishParam.builder()
+    int completed = inTenant(row.tenantId(), () -> {
+      WorkflowTerminalNotificationFinishParam workflowTerminalNotificationFinishParam3 =
+          WorkflowTerminalNotificationFinishParam.builder()
               .row(row)
               .token(token)
               .status(success ? "SUCCESS" : "EXHAUSTED")
               .error(boundedError)
               .nextRetry(retryAt)
               .build();
-          return deliveries.finish(
-            workflowTerminalNotificationFinishParam3);
-        });
+      return deliveries.finish(workflowTerminalNotificationFinishParam3);
+    });
     if (completed == 0) {
       log.info(
           "Terminal notification completion fenced: tenant={} id={} source={}",
@@ -210,6 +199,14 @@ public class TerminalNotificationDeliveryService {
     }
   }
 
+  private static String safeDeliveryError(String error) {
+    if (EmptyChecks.isNull(error)) {
+      return null;
+    }
+    String normalized = ConsoleTextSanitizer.normalize(HtmlUtils.htmlUnescape(error));
+    return SwallowedExceptionLogger.safeMessage(normalized, 1024);
+  }
+
   private Destination destination(TerminalNotificationDelivery row) {
     WebhookEventPayload payload = JsonUtils.fromJson(row.payloadJson(), WebhookEventPayload.class);
     if ("WEBHOOK".equals(row.source())) {
@@ -218,22 +215,21 @@ public class TerminalNotificationDeliveryService {
       return subscription
           .filter(s -> Boolean.TRUE.equals(s.getEnabled()))
           .map(s -> Destination.webhook(s, payload))
-          .orElseGet(
-              () -> Destination.unavailable(payload, "subscription disabled or deleted"));
+          .orElseGet(() -> Destination.unavailable(payload, "subscription disabled or deleted"));
     }
-    Map<String, Object> rule = rules.selectById(row.tenantId(), row.recipientId());
-    Map<String, Object> channel = channels.selectByCode(row.tenantId(), row.channelCode());
+    SubscriptionRuleRow rule = rules.selectById(row.tenantId(), row.recipientId());
+    NotificationChannelRow channel = channels.selectByCode(row.tenantId(), row.channelCode());
     boolean ruleOrChannelIsUnavailableForDelivery = EmptyChecks.isNull(rule)
-        || !Boolean.TRUE.equals(rule.get("enabled"))
-        || !row.channelCode().equals(rule.get("channel_code"))
+        || !Boolean.TRUE.equals(rule.enabled())
+        || !row.channelCode().equals(rule.channelCode())
         || EmptyChecks.isNull(channel)
-        || !Boolean.TRUE.equals(channel.get("enabled"));
+        || !Boolean.TRUE.equals(channel.enabled());
     if (ruleOrChannelIsUnavailableForDelivery) {
       return Destination.unavailable(
           payload, "selected rule or channel disabled, deleted or reassigned");
     }
-    String type = String.valueOf(channel.get("channel_type"));
-    String configJson = String.valueOf(channel.get("config_json"));
+    String type = channel.channelType();
+    String configJson = channel.configJson();
     if ("WEBHOOK".equals(type)) {
       Map<?, ?> config = JsonUtils.fromJson(configJson, Map.class);
       if (EmptyChecks.isNull(config)

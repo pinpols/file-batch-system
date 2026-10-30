@@ -61,7 +61,9 @@ import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.validation.ValidResourceCode;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
+import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateSecurityFlagsView;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -98,6 +100,10 @@ final class ConfigPackageExcelRowValidators {
       String tenantId, Map<String, String> row, Set<String> seen, List<String> ri) {
     String jobCode = normalize(row.get(COL_JOB_CODE));
     requireField(ri, jobCode, COL_JOB_CODE);
+    if (hasText(jobCode) && !jobCode.matches(ValidResourceCode.REGEX)) {
+      ri.add(
+          "job_code must start with a letter and contain only letters, digits, underscore or hyphen, max 128");
+    }
     requireField(ri, normalize(row.get(COL_JOB_NAME)), COL_JOB_NAME);
     requiredEnum(normalizeEnum(row.get(COL_JOB_TYPE)), COL_JOB_TYPE, JOB_TYPES, ri);
     requiredEnum(normalizeEnum(row.get(COL_SCHEDULE_TYPE)), COL_SCHEDULE_TYPE, SCHEDULE_TYPES, ri);
@@ -288,9 +294,11 @@ final class ConfigPackageExcelRowValidators {
       return;
     }
     for (JsonNode entry : mappings) {
+      JsonNode target = entry.path("target");
       JsonNode start = entry.path("start");
       JsonNode length = entry.path("length");
-      boolean mappingIsInvalid = !hasText(firstText(entry, "target"))
+      boolean mappingIsInvalid = !target.isTextual()
+          || !hasText(target.textValue())
           || !start.isIntegralNumber()
           || !start.canConvertToInt()
           || start.intValue() < 0
@@ -474,9 +482,9 @@ final class ConfigPackageExcelRowValidators {
 
   boolean fileTemplateExists(String tenantId, TemplateRef ref) {
     if (ref.version() != null) {
-      Map<String, Object> found =
+      FileTemplateConfigQueryView found =
           fileTemplateConfigMapper.selectByUniqueKey(tenantId, ref.templateCode(), ref.version());
-      return EmptyChecks.isNotEmpty(found);
+      return EmptyChecks.isNotNull(found);
     }
     FileTemplateSecurityFlagsView found =
         fileTemplateConfigMapper.selectSecurityFlagsByTemplateCode(tenantId, ref.templateCode());

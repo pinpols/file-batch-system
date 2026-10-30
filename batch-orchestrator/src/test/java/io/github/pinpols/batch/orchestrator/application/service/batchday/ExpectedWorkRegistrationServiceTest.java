@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service.batchday;
 
-import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceInsertIfAbsentParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -11,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceInsertIfAbsentParam;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ExpectedWorkOccurrenceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowDefinitionMapper;
@@ -19,6 +17,7 @@ import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.web.server.ResponseStatusException;
@@ -48,7 +47,8 @@ class ExpectedWorkRegistrationServiceTest {
   @DisplayName("日历匹配作业时幂等登记文件组预期")
   @Test
   void shouldRegisterExpectedGroupIdempotentlyWhenCalendarMatchesJob() {
-    when(occurrenceMapper.insertIfAbsent(org.mockito.ArgumentMatchers.any(ExpectedWorkOccurrenceInsertIfAbsentParam.class)))
+    when(occurrenceMapper.insertIfAbsent(
+            ArgumentMatchers.any(ExpectedWorkOccurrenceInsertIfAbsentParam.class)))
         .thenReturn(1);
 
     var result = service.register(request());
@@ -56,17 +56,16 @@ class ExpectedWorkRegistrationServiceTest {
     assertThat(result.inserted()).isTrue();
     assertThat(result.fileGroupCode()).isEqualTo("ORDER_DAILY");
     verify(occurrenceMapper)
-        .insertIfAbsent(
-            ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
-                .tenantId("tenant-a")
-                .calendarCode("CAL_A")
-                .bizDate(LocalDate.of(2026, 10, 14))
-                .workflowDefinitionId(91L)
-                .sourceType("FILE_GROUP")
-                .sourceKey("ORDER_DAILY")
-                .expectedAt(Instant.parse("2026-10-14T01:00:00Z"))
-                .dueAt(Instant.parse("2026-10-14T03:00:00Z"))
-                .build());
+        .insertIfAbsent(ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
+            .tenantId("tenant-a")
+            .calendarCode("CAL_A")
+            .bizDate(LocalDate.of(2026, 10, 14))
+            .workflowDefinitionId(91L)
+            .sourceType("FILE_GROUP")
+            .sourceKey("ORDER_DAILY")
+            .expectedAt(Instant.parse("2026-10-14T01:00:00Z"))
+            .dueAt(Instant.parse("2026-10-14T03:00:00Z"))
+            .build());
     verify(batchDayInstanceMapper)
         .acquireSettlementFence("tenant-a", "CAL_A", LocalDate.of(2026, 10, 14));
   }

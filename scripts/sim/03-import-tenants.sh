@@ -19,6 +19,18 @@ AUTH_HEADER=()
 [[ -n "${CONSOLE_TOKEN:-}" ]] && AUTH_HEADER=(-H "Cookie: batch_console_token=$CONSOLE_TOKEN")
 COOKIE_JAR=""
 CURL_AUTH_ARGS=("${AUTH_HEADER[@]}")
+FIXTURE_WORK_DIR="$(mktemp -d -t sim-tenant-fixtures.XXXXXX)"
+
+cleanup_import_artifacts() {
+  local tenant
+  for tenant in ta tb tc; do
+    rm -f -- "$FIXTURE_WORK_DIR/${tenant}-tenant-config-package-test.xlsx" || return 1
+  done
+  rmdir -- "$FIXTURE_WORK_DIR"
+}
+trap 'cleanup_import_artifacts || exit 1' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 ensure_console_auth() {
   if [[ -n "${CONSOLE_TOKEN:-}" ]]; then
@@ -48,8 +60,14 @@ ensure_console_auth() {
 
 import_one() {
   local tenant="$1"
-  local file="$FIXTURE_DIR/${tenant}-tenant-config-package-test.xlsx"
-  [[ -f "$file" ]] || { echo "  ✗ 文件不存在:$file" >&2; return 1; }
+  local template="$FIXTURE_DIR/${tenant}-tenant-config-package-test.xlsx"
+  local file="$FIXTURE_WORK_DIR/${tenant}-tenant-config-package-test.xlsx"
+  [[ -f "$template" ]] || { echo "  ✗ 文件不存在:$template" >&2; return 1; }
+  # 在 Apply 前一次性固定当前运行方式的地址，防止探针读取尚未 bootstrap 的容器地址。
+  local mockserver_base_url
+  mockserver_base_url="$(sim_mockserver_base_url)"
+  "$PYTHON_BIN" "$ROOT/scripts/sim/prepare-tenant-fixture.py" \
+    --source "$template" --output "$file" --mockserver-base-url "$mockserver_base_url"
 
   echo "── tenant $tenant"
   local fixture_sha256 recorded_sha256 has_package_data

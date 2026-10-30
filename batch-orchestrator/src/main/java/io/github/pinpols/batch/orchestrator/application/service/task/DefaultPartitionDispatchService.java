@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
-import io.github.pinpols.batch.orchestrator.domain.param.WorkflowRunMarkRunningParam;
-
-
 import io.github.pinpols.batch.common.dto.FrozenFileTemplateSnapshot;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
@@ -32,6 +29,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkInstanceRunningParam;
+import io.github.pinpols.batch.orchestrator.domain.param.WorkflowRunMarkRunningParam;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceAdmissionAction;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleEventMapper;
@@ -250,15 +248,15 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
       String workflowRunningStatus =
           lifecycleEventMapper.map(workflowRun, "START").toState();
       String currentNodeCode = workflowRun.getCurrentNodeCode();
-      WorkflowRunMarkRunningParam workflowRunMarkRunningParam = WorkflowRunMarkRunningParam.builder()
-          .tenantId(tenantId)
-          .id(workflowRunId)
-          .runStatus(workflowRunningStatus)
-          .currentNodeCode(currentNodeCode)
-          .startedAt(startedAt)
-          .build();
-      workflowRunMapper.markRunning(
-          workflowRunMarkRunningParam);
+      WorkflowRunMarkRunningParam workflowRunMarkRunningParam =
+          WorkflowRunMarkRunningParam.builder()
+              .tenantId(tenantId)
+              .id(workflowRunId)
+              .runStatus(workflowRunningStatus)
+              .currentNodeCode(currentNodeCode)
+              .startedAt(startedAt)
+              .build();
+      workflowRunMapper.markRunning(workflowRunMarkRunningParam);
     }
   }
 
@@ -279,15 +277,15 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     jobInstance.setVersion(
         (EmptyChecks.isNull(jobInstance.getVersion()) ? 0L : jobInstance.getVersion()) + 1);
     if (EmptyChecks.isNotNull(workflowRun)) {
-      WorkflowRunMarkRunningParam workflowRunMarkRunningParam2 = WorkflowRunMarkRunningParam.builder()
-          .tenantId(jobInstance.getTenantId())
-          .id(workflowRun.getId())
-          .runStatus(WorkflowRunStatus.CREATED.code())
-          .currentNodeCode(workflowRun.getCurrentNodeCode())
-          .startedAt(null)
-          .build();
-      workflowRunMapper.markRunning(
-          workflowRunMarkRunningParam2);
+      WorkflowRunMarkRunningParam workflowRunMarkRunningParam2 =
+          WorkflowRunMarkRunningParam.builder()
+              .tenantId(jobInstance.getTenantId())
+              .id(workflowRun.getId())
+              .runStatus(WorkflowRunStatus.CREATED.code())
+              .currentNodeCode(workflowRun.getCurrentNodeCode())
+              .startedAt(null)
+              .build();
+      workflowRunMapper.markRunning(workflowRunMarkRunningParam2);
     }
   }
 
@@ -349,7 +347,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     }
     task.setTaskStatus(taskStatus);
     task.setVersion(0L);
-    // 演练任务保留完整控制面链路，但排在所有正式任务之后，避免大规模 dry-run 挤占生产批窗口。
+    // 演练任务保留控制面链路，并使用最低 task/outbox 优先级。
     boolean dryRun = Boolean.TRUE.equals(execution.jobInstance().getDryRun());
     Integer priority =
         DryRunSchedulingPriority.resolve(dryRun, scheduling.plan().getPriority());
@@ -367,8 +365,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
   }
 
   private String resolveTaskType(SchedulePlan plan, JobPartitionEntity partition) {
-    boolean partitionHasWorkerGroupAndDefaultRoute =
-        EmptyChecks.isNotNull(partition)
+    boolean partitionHasWorkerGroupAndDefaultRoute = EmptyChecks.isNotNull(partition)
         && EmptyChecks.isNotNull(partition.getWorkerGroup())
         && hasDefaultRoute(plan)
         && EmptyChecks.isNotNull(plan.getDefaultWorkerRoute().getWorkerType());
@@ -428,9 +425,9 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
         payload.put("jobCode", jobCode);
       }
     }
-    // ADR-026: 把 dry_run 注入 task payload，worker 端通过 PipelineRuntimeKeys.DRY_RUN 读取
-    if (EmptyChecks.isNotNull(jobInstance) && Boolean.TRUE.equals(jobInstance.getDryRun())) {
-      payload.put("dryRun", true);
+    // 实例是演练模式权威来源；业务参数不得让正式任务以演练方式执行。
+    if (EmptyChecks.isNotNull(jobInstance)) {
+      payload.put("dryRun", Boolean.TRUE.equals(jobInstance.getDryRun()));
     }
     return payload;
   }
@@ -461,11 +458,13 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
    * {@code @JsonAlias} 歧义。{@code templateCode} 是 Import/ExportPayload 的真字段,保持原名(束有意复用)。
    */
   static void enrichBundleBinding(Map<String, Object> payload, JobPartitionEntity partition) {
+    // 清除上游输入，仅实际分区绑定可赋予文件束身份。
+    payload.remove("bundleSourceFileId");
+    payload.remove("bundleTargetRef");
     if (EmptyChecks.isNull(partition)) {
       return;
     }
-    if (EmptyChecks.isNotNull(partition.getSourceFileId())
-        && !payload.containsKey("bundleSourceFileId")) {
+    if (EmptyChecks.isNotNull(partition.getSourceFileId())) {
       payload.put("bundleSourceFileId", partition.getSourceFileId());
     }
     String templateCode = partition.getTemplateCode();
@@ -483,7 +482,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
       }
     }
     String targetRef = partition.getTargetRef();
-    if (EmptyChecks.isNotBlank(targetRef) && !payload.containsKey("bundleTargetRef")) {
+    if (EmptyChecks.isNotBlank(targetRef)) {
       payload.put("bundleTargetRef", targetRef);
     }
   }

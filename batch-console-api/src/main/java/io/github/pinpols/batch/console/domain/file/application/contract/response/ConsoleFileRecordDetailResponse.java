@@ -2,9 +2,15 @@ package io.github.pinpols.batch.console.domain.file.application.contract.respons
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
+import io.github.pinpols.batch.common.utils.SensitiveEvidenceMasking;
 import io.github.pinpols.batch.console.domain.file.view.FileRecordStorageView;
+import java.util.List;
+import java.util.Map;
 
-/** 文件详情的固定存储投影；{@code metadataJson} 保留原始 JSONB 扩展数据。 */
+/** 文件详情只读投影；存储路径和扩展元数据中的凭据在响应边界脱敏。 */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ConsoleFileRecordDetailResponse(
     Long id,
@@ -23,8 +29,24 @@ public record ConsoleFileRecordDetailResponse(
         row.fileName(),
         row.mimeType(),
         row.storageType(),
-        row.storagePath(),
+        SensitiveEvidenceMasking.maskText(row.storagePath()),
         row.storageBucket(),
-        row.metadataJson());
+        SensitiveEvidenceMasking.maskJsonValue(normalizeMetadata(row.metadataJson())));
+  }
+
+  private static Object normalizeMetadata(Object metadata) {
+    if (EmptyChecks.isNull(metadata)
+        || metadata instanceof Map<?, ?>
+        || metadata instanceof List<?>
+        || metadata instanceof String
+        || metadata instanceof Number
+        || metadata instanceof Boolean) {
+      return metadata;
+    }
+    String json = PostgresqlJsonbTexts.tryExtract(metadata);
+    if (EmptyChecks.isNull(json)) {
+      throw new IllegalStateException("Unsupported file metadata representation");
+    }
+    return JsonUtils.fromJson(json, Object.class);
   }
 }

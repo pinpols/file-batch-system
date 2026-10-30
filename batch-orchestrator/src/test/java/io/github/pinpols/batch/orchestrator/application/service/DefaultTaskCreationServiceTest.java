@@ -160,9 +160,25 @@ class DefaultTaskCreationServiceTest {
 
     service.createTask(task);
 
-    // just verify insert is called, relatedFileId resolution is an internal detail
+    // 只需验证 insert 已调用；relatedFileId 的解析属于内部实现细节。
     verify(jobStepInstanceMapper).insert(any(JobStepInstanceEntity.class));
     verify(relatedFileReferenceValidator).validate("t1", 42L);
+  }
+
+  @Test
+  @DisplayName("分数文件标识不会关联到其他文件")
+  void createTask_doesNotAssociateFractionalFileId() {
+    JobTaskEntity task = buildTask(302L, "t1", "DISPATCH", 1);
+    task.setTaskPayload("{\"fileId\":42.9}");
+    when(jobStepInstanceMapper.selectByJobTaskId("t1", 302L)).thenReturn(null);
+
+    service.createTask(task);
+
+    ArgumentCaptor<JobStepInstanceEntity> step =
+        ArgumentCaptor.forClass(JobStepInstanceEntity.class);
+    verify(jobStepInstanceMapper).insert(step.capture());
+    assertThat(step.getValue().getRelatedFileId()).isNull();
+    verify(relatedFileReferenceValidator).validate("t1", null);
   }
 
   @Test

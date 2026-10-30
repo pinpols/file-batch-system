@@ -62,16 +62,9 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
     tenantId = "mfp-it-" + System.nanoTime();
     jobCode = "job-" + System.nanoTime();
     workflowCode = "wf-" + System.nanoTime();
-    jdbcTemplate.update(
-        insertTenantSql,
-        tenantId,
-        tenantId);
+    jdbcTemplate.update(insertTenantSql, tenantId, tenantId);
     workflowDefinitionId = jdbcTemplate.queryForObject(
-        insertWorkflowDefinitionSql,
-        Long.class,
-        tenantId,
-        workflowCode,
-        workflowCode);
+        insertWorkflowDefinitionSql, Long.class, tenantId, workflowCode, workflowCode);
   }
 
   @Test
@@ -191,10 +184,7 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
 
     long requestRowId = insertCatchUpRequest("protected-request");
     mapper.linkCatchUpRequest(e.getId(), requestRowId);
-    assertThatThrownBy(() -> jdbcTemplate.update(
-            deleteTriggerRequestSql,
-            tenantId,
-            requestRowId))
+    assertThatThrownBy(() -> jdbcTemplate.update(deleteTriggerRequestSql, tenantId, requestRowId))
         .hasMessageContaining("fk_trigger_misfire_pending_catch_up_request");
   }
 
@@ -209,9 +199,7 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
     mapper.insertPending(e);
 
     // 把 expires_at 改成 1 小时前
-    jdbcTemplate.update(
-        updateTriggerMisfirePendingSql,
-        e.getId());
+    jdbcTemplate.update(updateTriggerMisfirePendingSql, e.getId());
 
     int expired = mapper.markExpired(BatchDateTimeSupport.utcNow());
     assertThat(expired).isGreaterThanOrEqualTo(1);
@@ -229,9 +217,7 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
     mapper.insertPending(e);
     mapper.approve(e.getId(), "ops-user");
 
-    jdbcTemplate.update(
-        updateTriggerMisfirePendingSql,
-        e.getId());
+    jdbcTemplate.update(updateTriggerMisfirePendingSql, e.getId());
 
     mapper.markExpired(BatchDateTimeSupport.utcNow());
     assertThat(mapper.selectById(e.getId()).getStatus()).isEqualTo("APPROVED"); // 不变
@@ -250,9 +236,7 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
     long requestRowId = insertCatchUpRequest("expired-request");
     mapper.linkCatchUpRequest(pending.getId(), requestRowId);
     insertOccurrence(fireTime, "MISFIRE_PENDING", "expired-request");
-    jdbcTemplate.update(
-        updateTriggerMisfirePendingSql,
-        pending.getId());
+    jdbcTemplate.update(updateTriggerMisfirePendingSql, pending.getId());
 
     int changed = mapper.expireAndCloseUnlaunched(BatchDateTimeSupport.utcNow());
 
@@ -394,9 +378,7 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
     long deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos();
     while (System.nanoTime() < deadline) {
       Boolean available = jdbcTemplate.queryForObject(
-          selectNotSql,
-          Boolean.class,
-          "trigger_misfire_pending_reconciler");
+          selectNotSql, Boolean.class, "trigger_misfire_pending_reconciler");
       if (Boolean.TRUE.equals(available)) {
         return;
       }
@@ -451,10 +433,7 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
         select request_status from batch.trigger_request where id = ?
     """;
 
-    return jdbcTemplate.queryForObject(
-        selectRequestStatusSql,
-        String.class,
-        requestRowId);
+    return jdbcTemplate.queryForObject(selectRequestStatusSql, String.class, requestRowId);
   }
 
   private String occurrenceStatus(Instant fireTime) {

@@ -129,11 +129,10 @@ public class AtomicExecutorProductionGuard {
           + " 限定可调用的 schema(默认空=允许全部,prod 风险过大)");
     }
     HttpExecutorProperties http = httpProps.getIfAvailable();
-    boolean httpEnabledWithEmptyUnenforcedAllowlist =
-        EmptyChecks.isNotNull(http)
-            && http.isEnabled()
-            && EmptyChecks.isEmpty(Objects.requireNonNull(http.getAllowedHostPatterns()))
-            && !http.isEnforceAllowlist();
+    boolean httpEnabledWithEmptyUnenforcedAllowlist = EmptyChecks.isNotNull(http)
+        && http.isEnabled()
+        && EmptyChecks.isEmpty(Objects.requireNonNull(http.getAllowedHostPatterns()))
+        && !http.isEnforceAllowlist();
     if (httpEnabledWithEmptyUnenforcedAllowlist) {
       violations.add("batch.worker.executors.http.enabled=true 但 allowedHostPatterns 为空且"
           + " enforceAllowlist=false — prod profile 必须二选一:"

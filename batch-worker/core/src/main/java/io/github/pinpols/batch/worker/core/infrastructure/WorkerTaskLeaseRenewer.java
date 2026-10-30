@@ -113,6 +113,11 @@ public class WorkerTaskLeaseRenewer {
       consecutiveFailures.keySet().removeIf(lease -> !activeLeases.contains(lease));
     }
     if (active.isEmpty()) {
+      // 没有待续租任务时不再用租约熔断阻断回报; 发件箱按自身有界重试策略探测恢复。
+      if (circuitOpen.compareAndSet(true, false)) {
+        ticksSinceOpen.set(0);
+        log.info("renew circuit released: no active leases; report outbox may retry independently");
+      }
       return;
     }
     List<ActiveTaskLeaseRegistry.ActiveTaskLease> leaseList = new ArrayList<>(active);

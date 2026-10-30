@@ -4,7 +4,7 @@ import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscri
 import java.time.Instant;
 import lombok.Builder;
 
-/** Public webhook view; callback secrets are never returned by the API. */
+/** 公开 Webhook 视图；API 不会返回回调密钥。 */
 @Builder
 public record WebhookSubscriptionResponse(
     Long id,

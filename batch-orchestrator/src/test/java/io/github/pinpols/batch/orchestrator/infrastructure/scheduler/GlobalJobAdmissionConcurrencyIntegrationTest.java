@@ -114,8 +114,7 @@ class GlobalJobAdmissionConcurrencyIntegrationTest extends AbstractIntegrationTe
           .isTrue();
       boolean accepted = admissionGuard.hasCapacity();
       if (accepted) {
-        String activateJobInstanceSql =
-            """
+        String activateJobInstanceSql = """
             UPDATE batch.job_instance SET instance_status = 'RUNNING' WHERE id = ?
         """;
         jdbcTemplate.update(activateJobInstanceSql, instanceId);
@@ -125,15 +124,10 @@ class GlobalJobAdmissionConcurrencyIntegrationTest extends AbstractIntegrationTe
   }
 
   private List<String> statuses(long firstId, long secondId) {
-    String selectJobInstanceStatusesSql =
-        """
+    String selectJobInstanceStatusesSql = """
         SELECT instance_status FROM batch.job_instance WHERE id IN (?, ?)
     """;
-    return jdbcTemplate.queryForList(
-        selectJobInstanceStatusesSql,
-        String.class,
-        firstId,
-        secondId);
+    return jdbcTemplate.queryForList(selectJobInstanceStatusesSql, String.class, firstId, secondId);
   }
 
   private SeededInstance seedCreatedInstance(String suffix) {
@@ -144,8 +138,8 @@ class GlobalJobAdmissionConcurrencyIntegrationTest extends AbstractIntegrationTe
         ) VALUES (?, ?, ?, 'GENERAL', 'MANUAL', 'UTC', 'API')
         RETURNING id
         """;
-    Long jobDefinitionId =
-    jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, TENANT_ID, jobCode, jobCode);
+    Long jobDefinitionId = jdbcTemplate.queryForObject(
+        insertJobDefinitionSql, Long.class, TENANT_ID, jobCode, jobCode);
     WorkflowChildTriggerSeed child =
         LaunchIntegrationFixture.prepareWorkflowChildTriggerRequestForDefinition(
             jdbcTemplate, TENANT_ID, jobDefinitionId, jobCode, suffix, BIZ_DATE, TriggerType.API);
@@ -175,22 +169,16 @@ class GlobalJobAdmissionConcurrencyIntegrationTest extends AbstractIntegrationTe
         DELETE FROM batch.job_instance WHERE id = ?
     """;
     jdbcTemplate.update(deleteJobInstanceSql, seeded.instanceId());
-    String selectParentWorkflowRunIdSql =
-        """
+    String selectParentWorkflowRunIdSql = """
         SELECT parent_workflow_run_id FROM batch.trigger_request WHERE id = ?
     """;
     Long workflowRunId = jdbcTemplate.queryForObject(
-        selectParentWorkflowRunIdSql,
-        Long.class,
-        seeded.triggerRequestId());
-    String selectRootTriggerRequestIdSql =
-        """
+        selectParentWorkflowRunIdSql, Long.class, seeded.triggerRequestId());
+    String selectRootTriggerRequestIdSql = """
         SELECT trigger_request_id FROM batch.workflow_run WHERE id = ?
     """;
-    Long rootTriggerRequestId = jdbcTemplate.queryForObject(
-        selectRootTriggerRequestIdSql,
-        Long.class,
-        workflowRunId);
+    Long rootTriggerRequestId =
+        jdbcTemplate.queryForObject(selectRootTriggerRequestIdSql, Long.class, workflowRunId);
     String deleteTriggerRequestSql = """
         DELETE FROM batch.trigger_request WHERE id = ?
     """;

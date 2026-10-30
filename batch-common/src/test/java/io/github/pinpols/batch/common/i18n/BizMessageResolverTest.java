@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.common.i18n;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.security.SensitiveDataValidator;
 import java.util.Locale;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.support.ResourceBundleMessageSource;
@@ -16,12 +19,63 @@ class BizMessageResolverTest {
   private final BizMessageResolver resolver = new BizMessageResolver(messageSource());
 
   @Test
+  @DisplayName("普通节点汇聚错误在中英文中均按节点而非网关描述")
+  void shouldLocalizeJoinErrorsForAnyNode() {
+    BizException mode = BizException.of(
+        ResultCode.VALIDATION_ERROR, "error.workflow.dag.gateway_join_mode_missing", "JOB_A");
+    BizException threshold = BizException.of(
+        ResultCode.VALIDATION_ERROR,
+        "error.workflow.dag.gateway_join_threshold_invalid",
+        "JOB_A",
+        3,
+        2);
+    assertThat(resolver.resolve(mode, Locale.ENGLISH))
+        .contains("Node JOB_A", "ALL")
+        .doesNotContain("GATEWAY");
+    assertThat(resolver.resolve(mode, Locale.SIMPLIFIED_CHINESE))
+        .contains("节点 JOB_A", "ALL")
+        .doesNotContain("GATEWAY");
+    assertThat(resolver.resolve(threshold, Locale.ENGLISH))
+        .contains("Node JOB_A", "3", "2")
+        .doesNotContain("GATEWAY");
+    assertThat(resolver.resolve(threshold, Locale.SIMPLIFIED_CHINESE))
+        .contains("节点 JOB_A", "3", "2")
+        .doesNotContain("GATEWAY");
+  }
+
+  @Test
+  @DisplayName("复制源目标重合使用对应语言资源，不回退到通用错误")
+  void shouldLocalizeOverlappingConfigurationCopyTargets() {
+    BizException failure =
+        BizException.of(ResultCode.INVALID_ARGUMENT, "error.config_copy.source_target_overlap");
+    assertThat(resolver.resolve(failure, Locale.SIMPLIFIED_CHINESE)).isEqualTo("源租户不能同时作为复制目标。");
+    assertThat(resolver.resolve(failure, Locale.ENGLISH))
+        .isEqualTo("The source tenant cannot also be a copy target.");
+  }
+
+  @Test
   @DisplayName("消息键命中资源文件:按语言返回对应译文并填充参数")
   void resolve_messageKey_hits_resource() {
     BizException ex = BizException.of(ResultCode.NOT_FOUND, "error.tenant.already_exists", "acme");
 
     assertThat(resolver.resolve(ex, Locale.SIMPLIFIED_CHINESE)).isEqualTo("租户已存在:acme");
     assertThat(resolver.resolve(ex, Locale.ENGLISH)).isEqualTo("tenant already exists: acme");
+  }
+
+  @Test
+  @DisplayName("敏感字段名含凭据时，中英文错误文案均不回显原字段名")
+  void shouldNotRenderCredentialEmbeddedInSensitiveKey() {
+    assertThatExceptionOfType(BizException.class)
+        .isThrownBy(() -> SensitiveDataValidator.rejectIfContainsSensitiveKeys(
+            Map.of("token=probe-secret", "value"), "ctx.scope"))
+        .satisfies(error -> {
+          assertThat(resolver.resolve(error, Locale.SIMPLIFIED_CHINESE))
+              .contains("ctx.scope")
+              .doesNotContain("probe-secret");
+          assertThat(resolver.resolve(error, Locale.ENGLISH))
+              .contains("ctx.scope")
+              .doesNotContain("probe-secret");
+        });
   }
 
   @Test

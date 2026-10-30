@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.domain.observability.view.dashboard;
 
 import java.time.Instant;
+import lombok.Builder;
 
 /** dashboard 单 job + bizDate 的执行进度投影 (job_instance 行级状态 + partition 计数)。 */
+@Builder(toBuilder = true)
 @SuppressWarnings("PMD.ExcessiveParameterList") // MyBatis 投影与响应派生字段必须保持同一 typed view
 public record ExecutionProgressView(
     Long id,
@@ -48,17 +50,12 @@ public record ExecutionProgressView(
     int failed = failedPartitions == null ? 0 : failedPartitions;
     int completed = success + failed;
     long percent = expected > 0 ? Math.round(completed * 100.0 / expected) : 0L;
-    return new ExecutionProgressView(
-        id,
-        jobCode,
-        instanceNo,
-        instanceStatus,
-        expected,
-        success,
-        failed,
-        startedAt,
-        finishedAt,
-        completed,
-        percent);
+    return toBuilder()
+        .expectedPartitions(expected)
+        .successPartitions(success)
+        .failedPartitions(failed)
+        .completedPartitions(completed)
+        .progressPercent(percent)
+        .build();
   }
 }

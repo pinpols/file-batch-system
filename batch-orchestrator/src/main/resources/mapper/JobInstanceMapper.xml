@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper">
+    <resultMap id="fairShareGroupActiveCountView" type="io.github.pinpols.batch.orchestrator.domain.view.FairShareGroupActiveCountView">
+        <constructor>
+            <arg column="fairShareGroup" javaType="java.lang.String"/>
+            <arg column="cnt" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+    <resultMap id="queueActiveCountView" type="io.github.pinpols.batch.orchestrator.domain.view.QueueActiveCountView">
+        <constructor>
+            <arg column="queueCode" javaType="java.lang.String"/>
+            <arg column="cnt" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
     <!--
       防终态复活守护谓词(2026-06 加固):job_instance 的终态集与 DefaultStateMachine.TERMINAL_STATES /
       DefaultTaskOutcomeService.isTerminalJobInstanceStatus 严格一致——
@@ -87,6 +99,7 @@
         <result column="expected_duration_seconds" property="expectedDurationSeconds"/>
         <result column="sla_alerted_at" property="slaAlertedAt"/>
         <result column="started_at" property="startedAt"/>
+        <result column="execution_started_at" property="executionStartedAt"/>
         <result column="finished_at" property="finishedAt"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
@@ -304,6 +317,15 @@
           <include refid="NotFromTerminalAllowSelfForProgress"/>
     </update>
 
+    <update id="markExecutionStarted">
+        UPDATE batch.job_instance
+        SET execution_started_at = COALESCE(execution_started_at, CURRENT_TIMESTAMP),
+            updated_at = CASE WHEN execution_started_at IS NULL THEN CURRENT_TIMESTAMP ELSE updated_at END
+        WHERE tenant_id = #{tenantId} AND id = #{id}
+          AND finished_at IS NULL
+          AND instance_status IN ('CREATED', 'WAITING', 'READY', 'RUNNING', 'PAUSED')
+    </update>
+
     <update id="markRunning">
         update batch.job_instance
         set instance_status = #{instanceStatus},
@@ -328,6 +350,13 @@
           <include refid="NotFromTerminal"/>
     </update>
 
+    <!-- 新实例使用启动时冻结策略；无 executionPolicy 的旧快照沿用定义回退语义。 -->
+    <sql id="EffectiveTimeoutSeconds">
+        (case when jsonb_exists(ji.params_snapshot, 'executionPolicy')
+              then (ji.params_snapshot #&gt;&gt; '{executionPolicy,timeoutSeconds}')::integer
+              else jd.timeout_seconds end)
+    </sql>
+
     <select id="selectTimedOutCandidates" resultMap="JobInstanceResultMap">
         select ji.*
         from batch.job_instance ji
@@ -335,11 +364,10 @@
           on jd.id = ji.job_definition_id
          and jd.tenant_id = ji.tenant_id
         where ji.instance_status = 'RUNNING'
-          and ji.started_at is not null
-          and jd.timeout_seconds &gt; 0
-          and ji.started_at &lt; current_timestamp - (jd.timeout_seconds * interval '1 second')
-          -- RUNNING instance 只是 T2 派发完成；只有 worker 已 claim 并开始运行子任务后，
-          -- 才允许业务级硬 timeout 终止整个实例。避免高压队列等待被误判为执行超时。
+          and ji.execution_started_at is not null
+          and <include refid="EffectiveTimeoutSeconds"/> &gt; 0
+          and ji.execution_started_at &lt; current_timestamp - (<include refid="EffectiveTimeoutSeconds"/> * interval '1 second')
+          -- 首次实际执行入口才是超时起点；已派发或已认领但未进入执行的等待不计时。
           and exists (
               select 1
               from batch.job_task jt
@@ -347,7 +375,7 @@
                 and jt.job_instance_id = ji.id
                 and jt.task_status = 'RUNNING'
           )
-        order by ji.started_at asc, ji.id asc
+        order by ji.execution_started_at asc, ji.id asc
         limit #{limit}
     </select>
 
@@ -451,7 +479,7 @@
     </select>
 
     <!-- R7-A3-P1: 批量预聚合 group → count，替代 service 层 N+1 单条查询。 -->
-    <select id="countActiveByFairShareGroups" resultType="java.util.Map">
+    <select id="countActiveByFairShareGroups" resultMap="fairShareGroupActiveCountView">
         select tqp.fair_share_group as "fairShareGroup",
                count(1) as "cnt"
         from batch.job_instance ji
@@ -467,7 +495,7 @@
     </select>
 
     <!-- R7-A3-P1: 批量预聚合 (tenant, queueCode) → count；替代 buildQueueSnapshot 循环单查。 -->
-    <select id="countActiveByTenantAndQueueCodes" resultType="java.util.Map">
+    <select id="countActiveByTenantAndQueueCodes" resultMap="queueActiveCountView">
         select queue_code as "queueCode",
                count(1) as "cnt"
         from batch.job_instance
@@ -542,6 +570,7 @@
         where ji.tenant_id = #{tenantId}
           and ji.calendar_code = #{calendarCode}
           and ji.biz_date = #{bizDate}
+          and ji.dry_run = false
           and ji.instance_status in ('FAILED', 'PARTIAL_FAILED')
         order by ji.job_code, ji.id desc
     </select>
@@ -552,6 +581,7 @@
         where ji.tenant_id = #{tenantId}
           and ji.calendar_code = #{calendarCode}
           and ji.biz_date = #{bizDate}
+          and ji.dry_run = false
         <if test="statuses != null and !statuses.isEmpty()">
             and ji.instance_status in
             <foreach collection="statuses" item="s" open="(" separator="," close=")">
@@ -576,6 +606,32 @@
           and id = #{id}
           and version = #{expectedVersion}
           <include refid="NotFromTerminalAllowSelf"/>
+    </update>
+
+    <update id="updateStatusWhenTaskRunning">
+        update batch.job_instance ji
+        set instance_status = #{instanceStatus},
+            finished_at = coalesce(#{finishedAt}, finished_at),
+            version = version + 1,
+            updated_at = current_timestamp
+        where ji.tenant_id = #{tenantId}
+          and ji.id = #{id}
+          and ji.version = #{expectedVersion}
+          and ji.instance_status = 'RUNNING'
+          and ji.execution_started_at is not null
+          and exists (
+              select 1 from batch.job_definition jd
+              where jd.id = ji.job_definition_id
+                and jd.tenant_id = ji.tenant_id
+                and <include refid="EffectiveTimeoutSeconds"/> &gt; 0
+                and ji.execution_started_at &lt; current_timestamp - (<include refid="EffectiveTimeoutSeconds"/> * interval '1 second')
+          )
+          and exists (
+              select 1 from batch.job_task task
+              where task.tenant_id = #{tenantId}
+                and task.job_instance_id = #{id}
+                and task.task_status = 'RUNNING'
+          )
     </update>
 
     <update id="updateLifecycleStatus">
@@ -682,4 +738,29 @@
          order by biz_date asc, id asc
          limit #{limit}
     </select>
+    <!-- Job 终态已在同事务裁决；历史中断尝试不能随着最新尝试成功继续显示 RUNNING。 -->
+    <update id="closeRunningPipelineStepsForTerminalInstance">
+        update batch.pipeline_step_run step
+           set step_status = #{interruptedStepStatus},
+               error_code = 'PIPELINE_ATTEMPT_INTERRUPTED',
+               error_message = 'Step attempt did not finish before its Job reached a terminal state',
+               error_key = 'error.pipeline.attempt_interrupted',
+               error_args = null,
+               finished_at = current_timestamp,
+               duration_ms = greatest(0, extract(epoch from
+                   (current_timestamp - coalesce(step.started_at, current_timestamp))) * 1000)::bigint
+          from batch.pipeline_instance pipeline
+          join batch.job_instance job
+            on job.tenant_id = pipeline.tenant_id
+           and job.id = pipeline.related_job_instance_id
+         where step.pipeline_instance_id = pipeline.id
+           and pipeline.tenant_id = #{tenantId}
+           and job.id = #{id}
+           and job.instance_status = #{terminalInstanceStatus}
+           and job.instance_status in
+           <foreach collection="terminalStatusCodes" item="status" open="(" close=")" separator=",">
+               #{status}
+           </foreach>
+           and step.step_status in ('RUNNING', 'RETRYING')
+    </update>
 </mapper>

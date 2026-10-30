@@ -4,13 +4,9 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * P3-3 archive 系列：SUCCESS / PARTIAL_FAILED job_instance 自动归档配置 （{@code
- * batch.job-instance.archive}）。
+ * Job 实例运行树自动归档配置（{@code batch.job-instance.archive}）。
  *
- * <p>对应人工回退脚本 {@code scripts/db/cleanup-success-instances.sql}（同删除语义、同级联顺序）。
- *
- * <p>注：FAILED / CANCELLED / TERMINATED 实例由 {@code cleanup-historical-failures.sql}（手工脚本）
- * 处理；调度器自动化暂只覆盖 SUCCESS / PARTIAL_FAILED（保留 30 天的长归档场景）。
+ * <p>对到期终态实例先复制冷表并检查，再按依赖清理热表；独立的历史清理脚本不复制冷表。
  */
 @Data
 @ConfigurationProperties(prefix = "batch.job-instance.archive")
@@ -18,7 +14,7 @@ public class SuccessInstanceArchiveProperties {
 
   private boolean enabled = true;
 
-  /** SUCCESS / PARTIAL_FAILED 实例保留天数。默认 30 天。 */
+  /** 终态实例热表保留天数。默认 30 天。 */
   private int retentionDays = 30;
 
   /**

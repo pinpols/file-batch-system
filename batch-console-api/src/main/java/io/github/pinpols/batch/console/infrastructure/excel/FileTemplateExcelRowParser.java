@@ -9,8 +9,6 @@ import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingl
 import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.requireText;
 import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.resolveTenantField;
 
-import lombok.Builder;
-
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.FileChecksumType;
 import io.github.pinpols.batch.common.enums.FileCompressType;

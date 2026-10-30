@@ -1146,7 +1146,7 @@ trigger 本地计划审计 / 独立审计表 / SAME_JOB_GROUP / rerun policy 显
 | [026](../architecture/adr/ADR-026-dry-run-mode.md) | dry_run 一等字段 + DryRunGuard + DRY_RUN result_version + SUCCESS_DRY_RUN 终态 | 大版本 / 灾备演练触发 | ~17 人天 |
 | [027](../architecture/adr/ADR-027-resource-affinity.md) | worker label / taint / job affinity_json（K8s 风格） | 多机房 / 异构硬件 / 合规隔离触发 | ~18 人天 |
 
-**建议优先级**（2026-05-07 update — priority-scope 三阶段已固化，详见 `docs/archive/standards/worker-capability-priority-and-scope-2026-05-06.md`）：
+**建议优先级**（2026-05-07 update — 三阶段范围纪律见 `docs/architecture/system-scope-boundary.md`）：
 - **第 1 阶段必做（已落）**：ADR-012 失败分类（V111）、ADR-025 Workflow 静态校验（15 条规则全员到齐）、ADR-023 多日历联动（V112-V114）；
 - **第 2 阶段已落 backend**：ADR-021 数据对账 v1.0（V118 + DataQualityCheckExecutor + EFFECTIVE gate）、ADR-022 Forensic v0.1（V116 + 同步 bundle + SHA-256）、ADR-026 dry-run（V115/V117 + DryRunGuard SPI + L1/L2/L3 service + SUCCESS_DRY_RUN/FAILED_DRY_RUN 终态，**全链路落地**）；
 - **第 3 阶段暂缓**：ADR-024 archive 分层（数据量到 5 亿行触发）、ADR-027 资源亲和（多机房 / 异构硬件触发，priority-scope §5 最高越界风险）；

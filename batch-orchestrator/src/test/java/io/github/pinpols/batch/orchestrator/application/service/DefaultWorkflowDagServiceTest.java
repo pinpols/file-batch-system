@@ -356,6 +356,21 @@ class DefaultWorkflowDagServiceTest {
   }
 
   @Test
+  @DisplayName("数学整数阈值 1.0 与阈值 1 按相同语义汇聚")
+  void shouldTreatIntegralDecimalJoinThresholdAsInteger() {
+    WorkflowEdgeEntity e1 = edge("P1", "NODE_A", Edge.SUCCESS, null);
+    WorkflowEdgeEntity e2 = edge("P2", "NODE_A", Edge.SUCCESS, null);
+    when(edgeMapper.selectIncomingEdges(1L, "NODE_A")).thenReturn(List.of(e1, e2));
+    WorkflowNodeEntity joinNode = node("NODE_A", WorkflowNodeType.TASK.code());
+    joinNode.setNodeParams("{\"joinMode\":\"N_OF\",\"joinThreshold\":1.0}");
+    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_A")).thenReturn(joinNode);
+    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P1"))
+        .thenReturn(nodeRun("P1", Workflow.SUCCESS));
+    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P2")).thenReturn(null);
+    assertThat(dagService.isNodeReadyForDispatch(10L, 1L, "NODE_A", null)).isTrue();
+  }
+
+  @Test
   @DisplayName("按数量汇聚模式下命中数未达阈值时判定不可派发")
   void shouldReturnFalseForNOfJoinWhenThresholdNotMet() {
     WorkflowEdgeEntity e1 = edge("P1", "NODE_A", Edge.SUCCESS, null);

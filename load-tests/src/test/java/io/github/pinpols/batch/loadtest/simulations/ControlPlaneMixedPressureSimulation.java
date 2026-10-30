@@ -24,11 +24,11 @@ import static io.gatling.javaapi.core.CoreDsl.*;
 import static io.gatling.javaapi.http.HttpDsl.*;
 
 /**
- * Mixed control-plane pressure for process / dispatch / atomic / trigger.
+ * 混合控制面压力场景，覆盖 process、dispatch、atomic 和 trigger。
  *
  * <p>This scenario intentionally launches all selected modules inside one Gatling run so the target
- * system sees real cross-module pressure. Completion is measured by the wrapper script through DB
- * terminal-state polling; Gatling owns launch/read latency and error curves.
+ * 系统承受真实的跨模块压力。完成情况由包装脚本通过数据库
+ * 轮询终态来衡量；Gatling 负责统计发起和读取的延迟及错误曲线。
  */
 public class ControlPlaneMixedPressureSimulation extends Simulation {
 

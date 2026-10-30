@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.atomic.shell;
 
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.SensitiveDataValidator;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
@@ -11,6 +12,7 @@ import io.github.pinpols.batch.common.spi.task.TaskResult;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
+import io.github.pinpols.batch.worker.atomic.runtime.AtomicParameterNumbers;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -91,7 +93,7 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
 
   private final ShellExecutorProperties props;
 
-  /** taskInstanceId -> running process, used by the cooperative cancel contract. */
+  /** taskInstanceId 对应正在运行的进程，用于实现协作式取消契约。 */
   private final Map<String, Process> running = new ConcurrentHashMap<>();
 
   /** 包私有测试钩子:value 是否包含真正的 {@code ..} 父目录段。 */
@@ -146,8 +148,13 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
         Map<String, Object> planned = new LinkedHashMap<>();
         planned.put(PipelineRuntimeKeys.DRY_RUN, true);
         planned.put("plannedAction", "shell");
-        planned.put(PARAM_COMMAND, inv.command);
-        planned.put(PARAM_ARGS, inv.args);
+        String visibleCommand = SwallowedExceptionLogger.safeMessage(inv.command, 4096);
+        planned.put(PARAM_COMMAND, visibleCommand);
+        planned.put(
+            PARAM_ARGS,
+            inv.args.stream()
+                .map(arg -> SwallowedExceptionLogger.safeMessage(arg, 4096))
+                .toList());
         planned.put(PARAM_TIMEOUT_SECONDS, inv.timeout.toSeconds());
         // env 只暴露 key(白名单过滤过),value 不出库以防泄密
         planned.put("envKeys", List.copyOf(inv.env.keySet()));
@@ -155,8 +162,8 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
             "shell executor dry-run skipped real fork: tenantId={}, jobCode={}, command={}",
             ctx.tenantId(),
             ctx.jobCode(),
-            inv.command);
-        return TaskResult.ok("dry-run: command parsed (not forked): " + inv.command, planned);
+            visibleCommand);
+        return TaskResult.ok("dry-run: command parsed (not forked): " + visibleCommand, planned);
       }
       Path workdir = createIsolatedWorkdir(ctx);
       try {
@@ -181,10 +188,10 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
           AtomicErrorCode.SECURITY_REJECTED, "SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
     } catch (RuntimeException ex) {
       log.error(
-          "shell executor unexpected error: tenantId={}, jobCode={}",
-          ctx.tenantId(),
-          ctx.jobCode(),
-          ex);
+          "shell executor unexpected error: tenantId={}, jobCode={}, cause={}",
+          LogSanitizer.value(ctx.tenantId()),
+          LogSanitizer.value(ctx.jobCode()),
+          SwallowedExceptionLogger.summary(ex));
       String exceptionMessage = ex.getMessage();
       String failureMessage =
           EmptyChecks.isNull(exceptionMessage) ? ex.getClass().getSimpleName() : ex.getMessage();
@@ -202,6 +209,7 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
       throw new ShellValidationException("parameters.command required (non-blank string)");
     }
     String command = commandString.trim();
+    SensitiveDataValidator.rejectIfContainsInlineCredential(command, "atomic.shell.command");
 
     // 白名单
     if (!props.getCommandWhitelist().isEmpty() && !props.getCommandWhitelist().contains(command)) {
@@ -213,6 +221,7 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
 
     // args
     List<String> args = parseArgs(params.get(PARAM_ARGS));
+    SensitiveDataValidator.rejectIfContainsInlineCredentials(args, "atomic.shell.args");
     if (args.size() > props.getMaxArgs()) {
       throw new ShellValidationException(
           "too many args: " + args.size() + " > maxArgs=" + props.getMaxArgs());
@@ -225,10 +234,10 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
     // timeout(只能缩短)
     Duration timeout = props.getDefaultTimeout();
     Object timeoutObj = params.get(PARAM_TIMEOUT_SECONDS);
-    if (timeoutObj instanceof Number number) {
-      long sec = number.longValue();
-      if (sec <= 0) {
-        throw new ShellValidationException("timeoutSeconds must be positive");
+    if (EmptyChecks.isNotNull(timeoutObj)) {
+      Long sec = AtomicParameterNumbers.positiveLong(timeoutObj);
+      if (EmptyChecks.isNull(sec)) {
+        throw new ShellValidationException("timeoutSeconds must be positive integer");
       }
       Duration requested = Duration.ofSeconds(sec);
       // 只允许缩短;请求 > default → 取 default(防业务越权拉长)
@@ -253,7 +262,10 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
         if (o == null) {
           throw new ShellValidationException("args contains null element");
         }
-        out.add(String.valueOf(o));
+        if (!(o instanceof String arg)) {
+          throw new ShellValidationException("parameters.args must be a list of strings");
+        }
+        out.add(arg);
       }
       return out;
     }
@@ -334,11 +346,11 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
         try {
           Files.deleteIfExists(p);
         } catch (IOException e) {
-          log.warn("cleanup workdir failed: {}", p, e);
+          log.warn("cleanup workdir failed: {}", SwallowedExceptionLogger.summary(e));
         }
       });
     } catch (IOException e) {
-      log.warn("cleanup workdir walk failed: {}", workdir, e);
+      log.warn("cleanup workdir walk failed: {}", SwallowedExceptionLogger.summary(e));
     }
   }
 

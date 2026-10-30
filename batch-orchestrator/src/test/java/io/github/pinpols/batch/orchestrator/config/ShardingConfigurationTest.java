@@ -2,19 +2,24 @@ package io.github.pinpols.batch.orchestrator.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
-import static org.mockito.Mockito.mock;
 
 import io.github.pinpols.batch.orchestrator.infrastructure.sharding.RedisShardAssignmentProvider;
 import io.github.pinpols.batch.orchestrator.infrastructure.sharding.ShardAssignmentProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 @DisplayName("动态分片模式下的分片提供者装配:心跳间隔,成员租约时长与成员键的合法性校验")
+@ExtendWith(MockitoExtension.class)
 class ShardingConfigurationTest {
 
   private final ShardingConfiguration configuration = new ShardingConfiguration();
-  private final StringRedisTemplate redis = mock(StringRedisTemplate.class);
+
+  @Mock
+  private StringRedisTemplate redis;
 
   @Test
   @DisplayName("动态分片模式且心跳与租约窗口合法时,装配基于 Redis 的分片提供者")

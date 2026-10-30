@@ -16,6 +16,13 @@ public interface WorkflowDefinitionMapper {
 
   WorkflowDefinitionEntity selectByUniqueKey(String tenantId, String workflowCode, Integer version);
 
+  /** 按精确编码读取当前最高版本，供配置写入和创建去重定位稳定身份。 */
+  WorkflowDefinitionEntity selectLatestByCode(
+      @Param("tenantId") String tenantId, @Param("workflowCode") String workflowCode);
+
+  /** 配置包按编码只读取当前版本，不将旧定义重复带入目标应用集合。 */
+  List<WorkflowDefinitionEntity> selectLatestByTenant(@Param("tenantId") String tenantId);
+
   WorkflowDefinitionEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
   /** 当 Workflow 日历变更会使周期性业务日预期脱离时返回 true。 */

@@ -8,7 +8,7 @@ import java.util.Map;
  * 文件治理延迟指标的固定输出契约。
  *
  * <p>Redis 缓存内部仍允许使用 Map，因为缓存数据需要兼容历史字段和 JSON 样本；但 Controller 和
- * 调度器只接收这个固定视图，避免把稳定字段名散落到业务代码中。样本行本身来自动态 SQL 诊断结果，继续保留 Map。
+ * 调度器只接收这个固定视图，避免把稳定字段名散落到业务代码中。样本行来自固定的 Mapper 投影，当前在缓存和响应边界使用 Map 保留既有字段形状。
  */
 public record FileGovernanceLatencyMetrics(
     String tenantId,

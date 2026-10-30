@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.domain.job.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -23,10 +22,14 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -35,11 +38,14 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  * BatchDayReplaySubmitCommand 一致),控制器只将类型化请求委托给应用端口。
  */
 @DisplayName("批量日重放控制器: 提交与预览的报文绑定及必填字段校验")
+@ExtendWith(MockitoExtension.class)
 class ConsoleBatchDayReplayControllerTest {
 
-  private final ConsoleOrchestratorPort orchestratorProxy = mock(ConsoleOrchestratorPort.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleOrchestratorPort orchestratorProxy;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
 
   private MockMvc mockMvc;
 
@@ -50,18 +56,6 @@ class ConsoleBatchDayReplayControllerTest {
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(requestMetadataResolver.current())
-        .thenReturn(new ConsoleRequestMetadata(
-            "req-1", "trace-1", "tenant-a", "operator-a", "idem-retry", "127.0.0.1"));
-
-    when(orchestratorProxy.batchDayReplaySubmit(any(BatchDayReplaySubmitRequest.class)))
-        .thenReturn(CommonResponse.success(null));
-    when(orchestratorProxy.batchDayReplayPreview(any(BatchDayReplaySubmitRequest.class)))
-        .thenReturn(CommonResponse.success(null));
-    when(orchestratorProxy.replayOperationList(any(), anyInt()))
-        .thenReturn(CommonResponse.success(java.util.List.of()));
-    when(orchestratorProxy.replayOperationSessions(any(), any()))
-        .thenReturn(CommonResponse.success(java.util.List.of()));
 
     mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleBatchDayReplayController(
             orchestratorProxy, responseFactory, requestMetadataResolver))
@@ -72,6 +66,8 @@ class ConsoleBatchDayReplayControllerTest {
   @Test
   @DisplayName("提交报文完整绑定为类型化请求后委托下游, 各字段取值与报文一致")
   void shouldDeserializeTypedBodyAndDelegate_whenSubmitRequestComplete() throws Exception {
+    when(orchestratorProxy.batchDayReplaySubmit(any(BatchDayReplaySubmitRequest.class)))
+        .thenReturn(CommonResponse.success(null));
     mockMvc
         .perform(post("/api/console/ops/batch-day-replay/sessions")
             .header("Idempotency-Key", "idem-1")
@@ -110,6 +106,9 @@ class ConsoleBatchDayReplayControllerTest {
   @Test
   @DisplayName("entry 恢复使用已认证操作者并转发租户、原因")
   void shouldForwardFailedSubmissionRetryWithAuthenticatedOperator() throws Exception {
+    when(requestMetadataResolver.current())
+        .thenReturn(new ConsoleRequestMetadata(
+            "req-1", "trace-1", "tenant-a", "operator-a", "idem-retry", "127.0.0.1"));
     when(orchestratorProxy.batchDayReplayRetryFailedSubmission(
             31L, 77L, "tenant-a", "operator-a", "confirmed no request was created"))
         .thenReturn(CommonResponse.success(null));
@@ -142,6 +141,8 @@ class ConsoleBatchDayReplayControllerTest {
   @Test
   @DisplayName("预览报文绑定后委托下游, 返回成功响应")
   void shouldDelegatePreviewRequest_whenBodyTyped() throws Exception {
+    when(orchestratorProxy.batchDayReplayPreview(any(BatchDayReplaySubmitRequest.class)))
+        .thenReturn(CommonResponse.success(null));
     mockMvc
         .perform(post("/api/console/ops/batch-day-replay/sessions/preview")
             .contentType(APPLICATION_JSON)
@@ -193,6 +194,8 @@ class ConsoleBatchDayReplayControllerTest {
   @Test
   @DisplayName("区间操作历史使用显式租户和条数委托下游")
   void shouldDelegateOperationHistory_whenTenantAndLimitProvided() throws Exception {
+    when(orchestratorProxy.replayOperationList(any(), anyInt()))
+        .thenReturn(CommonResponse.success(List.of()));
     mockMvc
         .perform(get("/api/console/ops/batch-day-replay/operations")
             .param("tenantId", "tenant-a")
@@ -206,6 +209,8 @@ class ConsoleBatchDayReplayControllerTest {
   @Test
   @DisplayName("区间操作详情读取每日子 session 并按租户委托下游")
   void shouldDelegateOperationSessions_whenOperationAndTenantProvided() throws Exception {
+    when(orchestratorProxy.replayOperationSessions(any(), any()))
+        .thenReturn(CommonResponse.success(List.of()));
     mockMvc
         .perform(get("/api/console/ops/batch-day-replay/operations/70/sessions")
             .param("tenantId", "tenant-a"))

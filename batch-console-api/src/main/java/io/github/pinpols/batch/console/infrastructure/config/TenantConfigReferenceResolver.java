@@ -14,7 +14,7 @@ import java.util.Set;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-/** Resolves job-level config dependencies from explicit JSON references. */
+/** 根据显式 JSON 引用解析作业级配置依赖。 */
 @Component
 public class TenantConfigReferenceResolver {
 
@@ -128,7 +128,7 @@ public class TenantConfigReferenceResolver {
       Object parsed = JsonUtils.fromJson(raw, Object.class);
       scanValue(parsed, templateCodes, channelCodes);
     } catch (IllegalArgumentException ignored) {
-      // Legacy free-text expressions are not config references.
+      // 旧版自由文本表达式不属于配置引用。
     }
   }
 

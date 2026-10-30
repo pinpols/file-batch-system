@@ -2,9 +2,6 @@ package io.github.pinpols.batch.console.domain.audit.mapper;
 
 import io.github.pinpols.batch.console.domain.audit.query.OperationAuditCountQuery;
 import io.github.pinpols.batch.console.domain.audit.query.OperationAuditQuery;
-
-
-import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.console.domain.audit.support.OperationAuditEvent;
 import java.time.Instant;
 import java.util.List;
@@ -28,15 +25,12 @@ public interface OperationAuditMapper {
    * <p>**注意**:offset 大时性能差;UI 默认 pageSize=15,且 console_operation_audit 量级不会超 千万,常规分页够用。后续真有热查询场景再加
    * (action, created_at DESC) 复合索引并改 keyset pagination。
    */
-
-  List<AuditRow> query(
-      OperationAuditQuery parameters);
+  List<AuditRow> query(OperationAuditQuery parameters);
 
   /** 跟 query 同条件,只数总数。给 UI 算总页数用。 */
   // 同 query 的参数集（共 9 个),用同一组 @Param 实现 count 查询,不可包装。
 
-  long count(
-      OperationAuditCountQuery parameters);
+  long count(OperationAuditCountQuery parameters);
 
   /**
    * 查询行,DTO 直接对应表结构。这里**不**复用 OperationAuditEvent,因为:

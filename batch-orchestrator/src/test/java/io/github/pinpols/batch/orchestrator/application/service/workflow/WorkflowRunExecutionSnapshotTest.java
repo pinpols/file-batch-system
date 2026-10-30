@@ -305,12 +305,14 @@ class WorkflowRunExecutionSnapshotTest {
   }
 
   private Map<String, Object> executionSnapshotMap(WorkflowRunEntity run) {
-    return JsonUtils.fromJson(run.getExecutionSnapshot(), new TypeReference<Map<String, Object>>() {});
+    return JsonUtils.fromJson(
+        run.getExecutionSnapshot(), new TypeReference<Map<String, Object>>() {});
   }
 
   private Map<String, Object> firstNode(Map<String, Object> executionSnapshot) {
     Object firstNode = ((List<?>) executionSnapshot.get("nodes")).getFirst();
-    return JsonUtils.fromJson(JsonUtils.toJson(firstNode), new TypeReference<Map<String, Object>>() {});
+    return JsonUtils.fromJson(
+        JsonUtils.toJson(firstNode), new TypeReference<Map<String, Object>>() {});
   }
 
   private Map<String, Object> jobDefinitionMetadata() {

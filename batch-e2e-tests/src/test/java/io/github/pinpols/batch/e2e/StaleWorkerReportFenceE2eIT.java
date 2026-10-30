@@ -125,10 +125,7 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
     String oldInvocation = claimed.invocationId();
     assertThat(oldInvocation).isNotBlank();
 
-        jdbcTemplate.update(
-        updateJobPartitionSql,
-        TENANT,
-        partitionId);
+    jdbcTemplate.update(updateJobPartitionSql, TENANT, partitionId);
     partitionReclaimUnit.reclaim(jobPartitionMapper.selectById(TENANT, partitionId));
     assertThat(jobTaskMapper.selectById(TENANT, taskId).getTaskStatus())
         .isEqualTo(TaskStatus.READY.code());
@@ -208,10 +205,7 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
         """;
 
     ClaimedTask firstAttempt = launchAndClaim("reclaim-cancel-noop-i2-ordinary-failure");
-    jdbcTemplate.update(
-        updateJobPartitionSql,
-        TENANT,
-        firstAttempt.partitionId());
+    jdbcTemplate.update(updateJobPartitionSql, TENANT, firstAttempt.partitionId());
     partitionReclaimUnit.reclaim(jobPartitionMapper.selectById(TENANT, firstAttempt.partitionId()));
     assertThat(jobTaskMapper.selectById(TENANT, firstAttempt.taskId()).getTaskStatus())
         .isEqualTo(TaskStatus.READY.code());
@@ -238,11 +232,8 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
     assertThat(renewResponse.statusCode()).isEqualTo(200);
     assertThat(renewResponse.body()).contains("\"cancelRequested\":false");
 
-    int dispatchOutboxBeforeFailure = jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        TENANT,
-        firstAttempt.taskId());
+    int dispatchOutboxBeforeFailure =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, firstAttempt.taskId());
     HttpResponse<String> currentFailure = postJson(
         "/internal/tasks/" + firstAttempt.taskId() + "/report",
         Map.of(
@@ -341,14 +332,8 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
 
     ClaimedTask firstAttempt = launchAndClaim("late-stale-failure-after-i2-success");
     Long workflowRunId = jdbcTemplate.queryForObject(
-        selectWorkflowRunIdSql,
-        Long.class,
-        TENANT,
-        firstAttempt.jobInstanceId());
-    jdbcTemplate.update(
-        updateJobPartitionSql,
-        TENANT,
-        firstAttempt.partitionId());
+        selectWorkflowRunIdSql, Long.class, TENANT, firstAttempt.jobInstanceId());
+    jdbcTemplate.update(updateJobPartitionSql, TENANT, firstAttempt.partitionId());
     partitionReclaimUnit.reclaim(jobPartitionMapper.selectById(TENANT, firstAttempt.partitionId()));
 
     JobTaskEntity secondAttempt = awaitClaim(firstAttempt.taskId());
@@ -361,10 +346,7 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
         .isEqualTo(200);
 
     String winningTaskResult = jdbcTemplate.queryForObject(
-        selectResultSummarySql,
-        String.class,
-        TENANT,
-        firstAttempt.taskId());
+        selectResultSummarySql, String.class, TENANT, firstAttempt.taskId());
     HttpResponse<String> staleFailure = postJson(
         "/internal/tasks/" + firstAttempt.taskId() + "/report",
         Map.of(
@@ -413,15 +395,15 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
   @DisplayName("成功 REPORT 后的迟到 cancel 与 lease reclaim 不得复活终态或重派")
   void successfulReportBeforeCancelAndLeaseReclaim_keepsTerminalStateAndDispatchCount()
       throws Exception {
-        final String selectCountSql = """
+    final String selectCountSql = """
             select count(*) from batch.outbox_event where tenant_id = ? and aggregate_type = 'JOB_TASK'\s\
             and aggregate_id = ?\
             """;
-        final String updateJobPartitionSql = """
+    final String updateJobPartitionSql = """
             update batch.job_partition set lease_expire_at = current_timestamp - interval '1 minute'\s\
             where tenant_id = ? and id = ?\
             """;
-        final String selectCountSql2 = """
+    final String selectCountSql2 = """
             select count(*) from batch.outbox_event where tenant_id = ? and aggregate_type = 'JOB_TASK'\s\
             and aggregate_id = ?\
             """;
@@ -438,15 +420,9 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
     assertThat(jobPartitionMapper.selectById(TENANT, claimed.partitionId()).getPartitionStatus())
         .isEqualTo(PartitionStatus.SUCCESS.code());
 
-    int dispatchOutboxBeforeLateOperations = jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        TENANT,
-        claimed.taskId());
-        jdbcTemplate.update(
-        updateJobPartitionSql,
-        TENANT,
-        claimed.partitionId());
+    int dispatchOutboxBeforeLateOperations =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, claimed.taskId());
+    jdbcTemplate.update(updateJobPartitionSql, TENANT, claimed.partitionId());
     assertThat(jobPartitionMapper.selectExpiredLeasesGlobal(
             PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), 100))
         .noneMatch(candidate -> claimed.partitionId().equals(candidate.getId()));
@@ -467,27 +443,27 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
         .isFalse();
     assertThat(jobPartitionMapper.selectById(TENANT, claimed.partitionId()).getPartitionStatus())
         .isEqualTo(PartitionStatus.SUCCESS.code());
-        Integer selectedOutboxEventCount =
-            jdbcTemplate.queryForObject(selectCountSql2, Integer.class, TENANT, claimed.taskId());
-        assertThat(selectedOutboxEventCount).isEqualTo(dispatchOutboxBeforeLateOperations);
-        String selectedInstanceStatus = jdbcTemplate.queryForObject(
-            selectInstanceStatusSql, String.class, TENANT, claimed.jobInstanceId());
-        assertThat(selectedInstanceStatus).isEqualTo("SUCCESS");
+    Integer selectedOutboxEventCount =
+        jdbcTemplate.queryForObject(selectCountSql2, Integer.class, TENANT, claimed.taskId());
+    assertThat(selectedOutboxEventCount).isEqualTo(dispatchOutboxBeforeLateOperations);
+    String selectedInstanceStatus = jdbcTemplate.queryForObject(
+        selectInstanceStatusSql, String.class, TENANT, claimed.jobInstanceId());
+    assertThat(selectedInstanceStatus).isEqualTo("SUCCESS");
   }
 
   @Test
   @DisplayName("取消先被接受后 Worker 成功 REPORT,终态成功且 lease 扫描不重派")
   void acceptedCancellationBeforeSuccessReport_andLeaseScan_keepsSuccessTerminal()
       throws Exception {
-        final String selectCountSql = """
+    final String selectCountSql = """
             select count(*) from batch.outbox_event where tenant_id = ? and aggregate_type = 'JOB_TASK'\s\
             and aggregate_id = ?\
             """;
-        final String updateJobPartitionSql = """
+    final String updateJobPartitionSql = """
             update batch.job_partition set lease_expire_at = current_timestamp - interval '1 minute'\s\
             where tenant_id = ? and id = ?\
             """;
-        final String selectCountSql2 = """
+    final String selectCountSql2 = """
             select count(*) from batch.outbox_event where tenant_id = ? and aggregate_type = 'JOB_TASK'\s\
             and aggregate_id = ?\
             """;
@@ -503,11 +479,8 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
     assertThat(jobTaskMapper.selectById(TENANT, claimed.taskId()).getCancelRequested())
         .isTrue();
 
-    int dispatchOutboxBeforeReport = jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        TENANT,
-        claimed.taskId());
+    int dispatchOutboxBeforeReport =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, claimed.taskId());
     HttpResponse<String> reportResponse =
         postReport(claimed.taskId(), claimed.invocationId(), "success after cancellation request");
     assertThat(reportResponse.statusCode()).isEqualTo(200);
@@ -516,54 +489,51 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
     assertThat(jobPartitionMapper.selectById(TENANT, claimed.partitionId()).getPartitionStatus())
         .isEqualTo(PartitionStatus.SUCCESS.code());
 
-        jdbcTemplate.update(
-        updateJobPartitionSql,
-        TENANT,
-        claimed.partitionId());
+    jdbcTemplate.update(updateJobPartitionSql, TENANT, claimed.partitionId());
     assertThat(jobPartitionMapper.selectExpiredLeasesGlobal(
             PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), 100))
         .noneMatch(candidate -> claimed.partitionId().equals(candidate.getId()));
-        Integer selectedOutboxEventCount =
-            jdbcTemplate.queryForObject(selectCountSql2, Integer.class, TENANT, claimed.taskId());
-        assertThat(selectedOutboxEventCount).isEqualTo(dispatchOutboxBeforeReport);
-        String selectedInstanceStatus = jdbcTemplate.queryForObject(
-            selectInstanceStatusSql, String.class, TENANT, claimed.jobInstanceId());
-        assertThat(selectedInstanceStatus).isEqualTo("SUCCESS");
+    Integer selectedOutboxEventCount =
+        jdbcTemplate.queryForObject(selectCountSql2, Integer.class, TENANT, claimed.taskId());
+    assertThat(selectedOutboxEventCount).isEqualTo(dispatchOutboxBeforeReport);
+    String selectedInstanceStatus = jdbcTemplate.queryForObject(
+        selectInstanceStatusSql, String.class, TENANT, claimed.jobInstanceId());
+    assertThat(selectedInstanceStatus).isEqualTo("SUCCESS");
   }
 
   @Test
   @DisplayName("取消先被接受后普通失败 REPORT 仍按 RetryPolicy 终结且 lease 扫描不重派")
   void acceptedCancellationBeforeOrdinaryFailureAndLeaseScan_keepsFailureTerminal()
       throws Exception {
-        final String selectCountSql = """
+    final String selectCountSql = """
             select count(*) from batch.outbox_event where tenant_id = ? and aggregate_type = 'JOB_TASK'\s\
             and aggregate_id = ?\
             """;
-        final String selectErrorCodeSql = """
+    final String selectErrorCodeSql = """
             select error_code from batch.job_task where tenant_id = ? and id = ?
         """;
-        final String selectRetryCountSql = """
+    final String selectRetryCountSql = """
             select retry_count from batch.job_partition where tenant_id = ? and id = ?
         """;
-        final String selectCountSql2 = """
+    final String selectCountSql2 = """
             select count(*) from batch.retry_schedule where tenant_id = ? and related_type = 'JOB_PARTITION'\s\
             and related_id = ?\
             """;
-        final String selectCountSql3 = """
+    final String selectCountSql3 = """
             select count(*) from batch.dead_letter_task where tenant_id = ? and source_type = 'JOB_PARTITION'\s\
             and source_id = ? and replay_status = 'NEW' and max_replay_count = 0 and next_replay_at is null\
             """;
-        final String selectFailedPartitionCountSql = """
+    final String selectFailedPartitionCountSql = """
             select failed_partition_count from batch.job_instance where tenant_id = ? and id = ?
         """;
-        final String selectCancelledPartitionCountSql = """
+    final String selectCancelledPartitionCountSql = """
             select cancelled_partition_count from batch.job_instance where tenant_id = ? and id = ?\
             """;
-        final String updateJobPartitionSql = """
+    final String updateJobPartitionSql = """
             update batch.job_partition set lease_expire_at = current_timestamp - interval '1 minute'\s\
             where tenant_id = ? and id = ?\
             """;
-        final String selectCountSql4 = """
+    final String selectCountSql4 = """
             select count(*) from batch.outbox_event where tenant_id = ? and aggregate_type = 'JOB_TASK'\s\
             and aggregate_id = ?\
             """;
@@ -579,11 +549,8 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
     assertThat(jobTaskMapper.selectById(TENANT, claimed.taskId()).getCancelRequested())
         .isTrue();
 
-    int dispatchOutboxBeforeFailure = jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        TENANT,
-        claimed.taskId());
+    int dispatchOutboxBeforeFailure =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, claimed.taskId());
     HttpResponse<String> failureResponse = postJson(
         "/internal/tasks/" + claimed.taskId() + "/report",
         Map.of(
@@ -605,40 +572,37 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
         .isEqualTo(TaskStatus.FAILED.code());
     assertThat(jobTaskMapper.selectById(TENANT, claimed.taskId()).getCancelRequested())
         .isTrue();
-        String selectedErrorCode =
-            jdbcTemplate.queryForObject(selectErrorCodeSql, String.class, TENANT, claimed.taskId());
-        assertThat(selectedErrorCode).isEqualTo("E2E_ORDINARY_FAILURE");
+    String selectedErrorCode =
+        jdbcTemplate.queryForObject(selectErrorCodeSql, String.class, TENANT, claimed.taskId());
+    assertThat(selectedErrorCode).isEqualTo("E2E_ORDINARY_FAILURE");
     assertThat(jobPartitionMapper.selectById(TENANT, claimed.partitionId()).getPartitionStatus())
         .isEqualTo(PartitionStatus.FAILED.code());
-        Integer selectedRetryCount = jdbcTemplate.queryForObject(
-            selectRetryCountSql, Integer.class, TENANT, claimed.partitionId());
-        assertThat(selectedRetryCount).isZero();
-        Integer selectedRetryScheduleCount =
-            jdbcTemplate.queryForObject(selectCountSql2, Integer.class, TENANT, claimed.partitionId());
-        assertThat(selectedRetryScheduleCount).isZero();
-        Integer selectedDeadLetterTaskCount =
-            jdbcTemplate.queryForObject(selectCountSql3, Integer.class, TENANT, claimed.partitionId());
-        assertThat(selectedDeadLetterTaskCount).isEqualTo(1);
-        Integer selectedFailedPartitionCount = jdbcTemplate.queryForObject(
-            selectFailedPartitionCountSql, Integer.class, TENANT, claimed.jobInstanceId());
-        assertThat(selectedFailedPartitionCount).isEqualTo(1);
-        Integer selectedCancelledPartitionCount = jdbcTemplate.queryForObject(
-            selectCancelledPartitionCountSql, Integer.class, TENANT, claimed.jobInstanceId());
-        assertThat(selectedCancelledPartitionCount).isZero();
+    Integer selectedRetryCount = jdbcTemplate.queryForObject(
+        selectRetryCountSql, Integer.class, TENANT, claimed.partitionId());
+    assertThat(selectedRetryCount).isZero();
+    Integer selectedRetryScheduleCount =
+        jdbcTemplate.queryForObject(selectCountSql2, Integer.class, TENANT, claimed.partitionId());
+    assertThat(selectedRetryScheduleCount).isZero();
+    Integer selectedDeadLetterTaskCount =
+        jdbcTemplate.queryForObject(selectCountSql3, Integer.class, TENANT, claimed.partitionId());
+    assertThat(selectedDeadLetterTaskCount).isEqualTo(1);
+    Integer selectedFailedPartitionCount = jdbcTemplate.queryForObject(
+        selectFailedPartitionCountSql, Integer.class, TENANT, claimed.jobInstanceId());
+    assertThat(selectedFailedPartitionCount).isEqualTo(1);
+    Integer selectedCancelledPartitionCount = jdbcTemplate.queryForObject(
+        selectCancelledPartitionCountSql, Integer.class, TENANT, claimed.jobInstanceId());
+    assertThat(selectedCancelledPartitionCount).isZero();
 
-        jdbcTemplate.update(
-        updateJobPartitionSql,
-        TENANT,
-        claimed.partitionId());
+    jdbcTemplate.update(updateJobPartitionSql, TENANT, claimed.partitionId());
     assertThat(jobPartitionMapper.selectExpiredLeasesGlobal(
             PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), 100))
         .noneMatch(candidate -> claimed.partitionId().equals(candidate.getId()));
-        Integer selectedOutboxEventCount =
-            jdbcTemplate.queryForObject(selectCountSql4, Integer.class, TENANT, claimed.taskId());
-        assertThat(selectedOutboxEventCount).isEqualTo(dispatchOutboxBeforeFailure);
-        String selectedInstanceStatus = jdbcTemplate.queryForObject(
-            selectInstanceStatusSql, String.class, TENANT, claimed.jobInstanceId());
-        assertThat(selectedInstanceStatus).isEqualTo("FAILED");
+    Integer selectedOutboxEventCount =
+        jdbcTemplate.queryForObject(selectCountSql4, Integer.class, TENANT, claimed.taskId());
+    assertThat(selectedOutboxEventCount).isEqualTo(dispatchOutboxBeforeFailure);
+    String selectedInstanceStatus = jdbcTemplate.queryForObject(
+        selectInstanceStatusSql, String.class, TENANT, claimed.jobInstanceId());
+    assertThat(selectedInstanceStatus).isEqualTo("FAILED");
   }
 
   @Test
@@ -692,15 +656,15 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
     // 通过真实内部 HTTP 端点和 PostgreSQL 验证旧尝试报告围栏。
     assertThat(jobPartitionMapper.selectById(TENANT, claimed.partitionId()).getPartitionStatus())
         .isEqualTo(PartitionStatus.FAILED.code());
-        String selectedInstanceStatus = jdbcTemplate.queryForObject(
-            selectInstanceStatusSql, String.class, TENANT, claimed.jobInstanceId());
-        assertThat(selectedInstanceStatus).isEqualTo("FAILED");
-        Integer selectedFailedPartitionCount = jdbcTemplate.queryForObject(
-            selectFailedPartitionCountSql, Integer.class, TENANT, claimed.jobInstanceId());
-        assertThat(selectedFailedPartitionCount).isEqualTo(1);
-        Integer selectedCancelledPartitionCount = jdbcTemplate.queryForObject(
-            selectCancelledPartitionCountSql, Integer.class, TENANT, claimed.jobInstanceId());
-        assertThat(selectedCancelledPartitionCount).isZero();
+    String selectedInstanceStatus = jdbcTemplate.queryForObject(
+        selectInstanceStatusSql, String.class, TENANT, claimed.jobInstanceId());
+    assertThat(selectedInstanceStatus).isEqualTo("FAILED");
+    Integer selectedFailedPartitionCount = jdbcTemplate.queryForObject(
+        selectFailedPartitionCountSql, Integer.class, TENANT, claimed.jobInstanceId());
+    assertThat(selectedFailedPartitionCount).isEqualTo(1);
+    Integer selectedCancelledPartitionCount = jdbcTemplate.queryForObject(
+        selectCancelledPartitionCountSql, Integer.class, TENANT, claimed.jobInstanceId());
+    assertThat(selectedCancelledPartitionCount).isZero();
   }
 
   @Test
@@ -775,10 +739,7 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
 
     ClaimedTask claimed = launchAndClaim("workflow-pause-resume");
     Long workflowRunId = jdbcTemplate.queryForObject(
-        selectWorkflowRunIdSql,
-        Long.class,
-        TENANT,
-        claimed.jobInstanceId());
+        selectWorkflowRunIdSql, Long.class, TENANT, claimed.jobInstanceId());
 
     HttpResponse<String> pauseResponse = postJson(
         "/internal/workflow-runs/" + workflowRunId + "/pause?tenantId=" + TENANT, Map.of());
@@ -803,13 +764,11 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
         "/internal/workflow-runs/" + workflowRunId + "/resume?tenantId=" + TENANT, Map.of());
     assertThat(resumeResponse.statusCode()).isEqualTo(200);
     assertThat(resumeResponse.body()).contains("\"status\":\"RUNNING\"");
-    await()
-        .atMost(Duration.ofSeconds(10))
-        .untilAsserted(() -> {
-          String selectedRunStatusRead3 =
-              jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
-          assertThat(selectedRunStatusRead3).isEqualTo("SUCCESS");
-        });
+    await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+      String selectedRunStatusRead3 =
+          jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
+      assertThat(selectedRunStatusRead3).isEqualTo("SUCCESS");
+    });
     Integer selectedWorkflowNodeRunCount =
         jdbcTemplate.queryForObject(selectCountSql, Integer.class, workflowRunId);
     assertThat(selectedWorkflowNodeRunCount).isEqualTo(1);
@@ -839,10 +798,7 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
 
     ClaimedTask claimed = launchAndClaim("workflow-pause-report-race");
     Long workflowRunId = jdbcTemplate.queryForObject(
-        selectWorkflowRunIdSql,
-        Long.class,
-        TENANT,
-        claimed.jobInstanceId());
+        selectWorkflowRunIdSql, Long.class, TENANT, claimed.jobInstanceId());
     CountDownLatch ready = new CountDownLatch(2);
     CountDownLatch start = new CountDownLatch(1);
     ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -870,23 +826,18 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
 
     assertThat(pauseResponse.statusCode()).isIn(200, 409);
     assertThat(reportResponse.statusCode()).isEqualTo(200);
-    String runStatus = jdbcTemplate.queryForObject(
-        selectRunStatusSql,
-        String.class,
-        TENANT,
-        workflowRunId);
+    String runStatus =
+        jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
     if ("PAUSED".equals(runStatus)) {
       HttpResponse<String> resumeResponse = postJson(
           "/internal/workflow-runs/" + workflowRunId + "/resume?tenantId=" + TENANT, Map.of());
       assertThat(resumeResponse.statusCode()).isEqualTo(200);
     }
-    await()
-        .atMost(Duration.ofSeconds(10))
-        .untilAsserted(() -> {
-          String selectedRunStatus =
-              jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
-          assertThat(selectedRunStatus).isEqualTo("SUCCESS");
-        });
+    await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+      String selectedRunStatus =
+          jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
+      assertThat(selectedRunStatus).isEqualTo("SUCCESS");
+    });
     assertThat(jobTaskMapper.selectById(TENANT, claimed.taskId()).getTaskStatus())
         .isEqualTo(TaskStatus.SUCCESS.code());
     assertThat(jobPartitionMapper.selectById(TENANT, claimed.partitionId()).getPartitionStatus())
@@ -925,10 +876,7 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
         Map.of("tenantId", TENANT, "reason", "R15 cancel and reclaim ordering"));
     assertThat(cancelResponse.statusCode()).isEqualTo(200);
 
-    jdbcTemplate.update(
-        updateJobPartitionSql,
-        TENANT,
-        firstAttempt.partitionId());
+    jdbcTemplate.update(updateJobPartitionSql, TENANT, firstAttempt.partitionId());
     partitionReclaimUnit.reclaim(jobPartitionMapper.selectById(TENANT, firstAttempt.partitionId()));
 
     JobTaskEntity reclaimed = jobTaskMapper.selectById(TENANT, firstAttempt.taskId());
@@ -1060,10 +1008,7 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
 
     ClaimedTask claimed = launchAndClaim("workflow-pause-cancel-resume");
     Long workflowRunId = jdbcTemplate.queryForObject(
-        selectWorkflowRunIdSql,
-        Long.class,
-        TENANT,
-        claimed.jobInstanceId());
+        selectWorkflowRunIdSql, Long.class, TENANT, claimed.jobInstanceId());
 
     HttpResponse<String> pauseResponse = postJson(
         "/internal/workflow-runs/" + workflowRunId + "/pause?tenantId=" + TENANT, Map.of());
@@ -1105,13 +1050,11 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
     HttpResponse<String> resumeResponse = postJson(
         "/internal/workflow-runs/" + workflowRunId + "/resume?tenantId=" + TENANT, Map.of());
     assertThat(resumeResponse.statusCode()).isEqualTo(200);
-    await()
-        .atMost(Duration.ofSeconds(10))
-        .untilAsserted(() -> {
-          String selectedRunStatusRead2 =
-              jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
-          assertThat(selectedRunStatusRead2).isEqualTo("FAILED");
-        });
+    await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+      String selectedRunStatusRead2 =
+          jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
+      assertThat(selectedRunStatusRead2).isEqualTo("FAILED");
+    });
     Integer selectedWorkflowNodeRunCount =
         jdbcTemplate.queryForObject(selectCountSql, Integer.class, workflowRunId);
     assertThat(selectedWorkflowNodeRunCount).isEqualTo(1);
@@ -1185,10 +1128,7 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
 
     ClaimedTask claimed = launchAndClaim("workflow-resume-progress-recovery");
     Long workflowRunId = jdbcTemplate.queryForObject(
-        selectWorkflowRunIdSql,
-        Long.class,
-        TENANT,
-        claimed.jobInstanceId());
+        selectWorkflowRunIdSql, Long.class, TENANT, claimed.jobInstanceId());
 
     assertThat(postJson(
                 "/internal/workflow-runs/" + workflowRunId + "/pause?tenantId=" + TENANT, Map.of())
@@ -1240,10 +1180,7 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
     Process childA = null;
     Process childB = null;
     try {
-      jdbcTemplate.update(
-          updateWorkflowRunSql,
-          TENANT,
-          workflowRunId);
+      jdbcTemplate.update(updateWorkflowRunSql, TENANT, workflowRunId);
       Integer selectedWorkflowRunCount =
           jdbcTemplate.queryForObject(selectCountSql3, Integer.class, TENANT, workflowRunId);
       assertThat(selectedWorkflowRunCount).isEqualTo(1);
@@ -1252,9 +1189,7 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
       lockHolder = startLockHolderChild(
           lockHolderProperties, lockHolderReady, lockHolderStop, lockHolderLog);
       awaitReconcilerChildStarted(lockHolder, lockHolderReady, lockHolderLog, "lease holder");
-      String lockLeaseSnapshot = jdbcTemplate.queryForObject(
-          selectConcatSql,
-          String.class);
+      String lockLeaseSnapshot = jdbcTemplate.queryForObject(selectConcatSql, String.class);
       Boolean selectedLockUntil = jdbcTemplate.queryForObject(selectLockUntilSql, Boolean.class);
       assertThat(selectedLockUntil)
           .as(
@@ -1269,17 +1204,12 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
       awaitReconcilerChildStarted(childA, childAReady, childALog, "instance A");
       childB = startReconcilerChild(childBProperties, childBReady, childBStop, childBLog);
       awaitReconcilerChildStarted(childB, childBReady, childBLog, "instance B");
-      await()
-          .during(Duration.ofSeconds(2))
-          .atMost(Duration.ofSeconds(3))
-          .untilAsserted(() -> {
-            String selectedRunStatusRead3 =
-                jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
-            assertThat(selectedRunStatusRead3).isEqualTo("RUNNING");
-          });
-      String heldLockTimestamp = jdbcTemplate.queryForObject(
-          selectLockedAtSql,
-          String.class);
+      await().during(Duration.ofSeconds(2)).atMost(Duration.ofSeconds(3)).untilAsserted(() -> {
+        String selectedRunStatusRead3 =
+            jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
+        assertThat(selectedRunStatusRead3).isEqualTo("RUNNING");
+      });
+      String heldLockTimestamp = jdbcTemplate.queryForObject(selectLockedAtSql, String.class);
       lockHolder.destroyForcibly();
       assertThat(lockHolder.waitFor(10, TimeUnit.SECONDS))
           .as("the lease-holder JVM is killed without unlocking the row")
@@ -1287,21 +1217,16 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
       Boolean selectedLockUntilRead2 =
           jdbcTemplate.queryForObject(selectLockUntilSql2, Boolean.class);
       assertThat(selectedLockUntilRead2).isTrue();
-      await()
-          .during(Duration.ofSeconds(2))
-          .atMost(Duration.ofSeconds(3))
-          .untilAsserted(() -> {
-            String selectedRunStatusRead4 =
-                jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
-            assertThat(selectedRunStatusRead4).isEqualTo("RUNNING");
-          });
-      await()
-          .atMost(Duration.ofSeconds(360))
-          .untilAsserted(() -> {
-            String selectedRunStatusRead5 =
-                jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
-            assertThat(selectedRunStatusRead5).isEqualTo("SUCCESS");
-          });
+      await().during(Duration.ofSeconds(2)).atMost(Duration.ofSeconds(3)).untilAsserted(() -> {
+        String selectedRunStatusRead4 =
+            jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
+        assertThat(selectedRunStatusRead4).isEqualTo("RUNNING");
+      });
+      await().atMost(Duration.ofSeconds(360)).untilAsserted(() -> {
+        String selectedRunStatusRead5 =
+            jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
+        assertThat(selectedRunStatusRead5).isEqualTo("SUCCESS");
+      });
       String selectedLockedAt = jdbcTemplate.queryForObject(selectLockedAtSql2, String.class);
       assertThat(selectedLockedAt).isNotEqualTo(heldLockTimestamp);
     } finally {
@@ -1394,19 +1319,13 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
 
     ClaimedTask firstAttempt = launchAndClaim("workflow-pause-report-reclaim-race");
     Long workflowRunId = jdbcTemplate.queryForObject(
-        selectWorkflowRunIdSql,
-        Long.class,
-        TENANT,
-        firstAttempt.jobInstanceId());
+        selectWorkflowRunIdSql, Long.class, TENANT, firstAttempt.jobInstanceId());
 
     assertThat(postJson(
                 "/internal/workflow-runs/" + workflowRunId + "/pause?tenantId=" + TENANT, Map.of())
             .statusCode())
         .isEqualTo(200);
-    jdbcTemplate.update(
-        updateJobPartitionSql,
-        TENANT,
-        firstAttempt.partitionId());
+    jdbcTemplate.update(updateJobPartitionSql, TENANT, firstAttempt.partitionId());
 
     CountDownLatch ready = new CountDownLatch(R15_CONCURRENT_REPORT_COUNT + 1);
     CountDownLatch start = new CountDownLatch(1);
@@ -1481,13 +1400,11 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
                 "/internal/workflow-runs/" + workflowRunId + "/resume?tenantId=" + TENANT, Map.of())
             .statusCode())
         .isEqualTo(200);
-    await()
-        .atMost(Duration.ofSeconds(10))
-        .untilAsserted(() -> {
-          String selectedRunStatusRead2 =
-              jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
-          assertThat(selectedRunStatusRead2).isEqualTo("SUCCESS");
-        });
+    await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+      String selectedRunStatusRead2 =
+          jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
+      assertThat(selectedRunStatusRead2).isEqualTo("SUCCESS");
+    });
 
     Integer selectedWorkflowNodeRunCount =
         jdbcTemplate.queryForObject(selectCountSql, Integer.class, workflowRunId);
@@ -1555,19 +1472,13 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
 
     ClaimedTask firstAttempt = launchAndClaim("workflow-pause-reclaim");
     Long workflowRunId = jdbcTemplate.queryForObject(
-        selectWorkflowRunIdSql,
-        Long.class,
-        TENANT,
-        firstAttempt.jobInstanceId());
+        selectWorkflowRunIdSql, Long.class, TENANT, firstAttempt.jobInstanceId());
 
     assertThat(postJson(
                 "/internal/workflow-runs/" + workflowRunId + "/pause?tenantId=" + TENANT, Map.of())
             .statusCode())
         .isEqualTo(200);
-    jdbcTemplate.update(
-        updateJobPartitionSql,
-        TENANT,
-        firstAttempt.partitionId());
+    jdbcTemplate.update(updateJobPartitionSql, TENANT, firstAttempt.partitionId());
     partitionReclaimUnit.reclaim(jobPartitionMapper.selectById(TENANT, firstAttempt.partitionId()));
     assertThat(jobTaskMapper.selectById(TENANT, firstAttempt.taskId()).getTaskStatus())
         .isEqualTo(TaskStatus.READY.code());
@@ -1595,13 +1506,11 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
     HttpResponse<String> resumeResponse = postJson(
         "/internal/workflow-runs/" + workflowRunId + "/resume?tenantId=" + TENANT, Map.of());
     assertThat(resumeResponse.statusCode()).isEqualTo(200);
-    await()
-        .atMost(Duration.ofSeconds(10))
-        .untilAsserted(() -> {
-          String selectedRunStatusRead2 =
-              jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
-          assertThat(selectedRunStatusRead2).isEqualTo("SUCCESS");
-        });
+    await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+      String selectedRunStatusRead2 =
+          jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
+      assertThat(selectedRunStatusRead2).isEqualTo("SUCCESS");
+    });
     Integer selectedWorkflowNodeRunCountRead2 =
         jdbcTemplate.queryForObject(selectCountSql2, Integer.class, workflowRunId);
     assertThat(selectedWorkflowNodeRunCountRead2).isEqualTo(1);
@@ -1642,10 +1551,7 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
     E2eScenarioFixture.LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
     jdbcTemplate.update(
-        insertWorkerRegistrySql,
-        TENANT,
-        WORKER,
-        Timestamp.from(BatchDateTimeSupport.utcNow()));
+        insertWorkerRegistrySql, TENANT, WORKER, Timestamp.from(BatchDateTimeSupport.utcNow()));
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
@@ -1655,18 +1561,13 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
         "r15-" + tracePrefix + "-" + seed.requestId(),
         Map.of()));
     outboxPublishSupport.publishAllPending(TENANT);
-    await()
-        .atMost(Duration.ofSeconds(30))
-        .untilAsserted(() -> {
-          Integer selectedJobInstanceCount =
-              jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, seed.dedupKey());
-          assertThat(selectedJobInstanceCount).isEqualTo(1);
-        });
-    Long jobInstanceId = jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class,
-        TENANT,
-        seed.dedupKey());
+    await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+      Integer selectedJobInstanceCount =
+          jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, seed.dedupKey());
+      assertThat(selectedJobInstanceCount).isEqualTo(1);
+    });
+    Long jobInstanceId =
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, seed.dedupKey());
     JobInstanceEntity jobInstance = jobInstanceMapper.selectById(TENANT, jobInstanceId);
     JobTaskEntity task = jobTaskMapper
         .selectByQuery(new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null))
@@ -1719,8 +1620,7 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
       properties.setProperty(
           "batch.storage.filesystem.download-base-url",
           "http://localhost/api/console/files/fs-download");
-      properties.setProperty(
-          "batch.storage.filesystem.presign-secret", TEST_PRESIGN_SECRET);
+      properties.setProperty("batch.storage.filesystem.presign-secret", TEST_PRESIGN_SECRET);
       properties.setProperty("batch.storage.s3.bucket", s3Bucket());
     } else {
       properties.setProperty("batch.storage.backend", "s3");
@@ -1843,10 +1743,7 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
     """;
 
     ClaimedTask firstAttempt = launchAndClaim("cancel-report-reclaim-race-" + round);
-    jdbcTemplate.update(
-        updateJobPartitionSql,
-        TENANT,
-        firstAttempt.partitionId());
+    jdbcTemplate.update(updateJobPartitionSql, TENANT, firstAttempt.partitionId());
 
     CountDownLatch ready = new CountDownLatch(3);
     CountDownLatch start = new CountDownLatch(1);
@@ -1892,10 +1789,7 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
     if (TaskStatus.RUNNING.code().equals(task.getTaskStatus())) {
       // 应用重复请求的结果。一旦领取 I2，同一旧调用必须被 409 围栏拒绝。
       // 若 NOWAIT 领取因 REPORT 正在执行而让出锁，则竞态结束后重试；不得让活动任务
-      jdbcTemplate.update(
-          updateJobPartitionSql2,
-          TENANT,
-          firstAttempt.partitionId());
+      jdbcTemplate.update(updateJobPartitionSql2, TENANT, firstAttempt.partitionId());
       partitionReclaimUnit.reclaim(
           jobPartitionMapper.selectById(TENANT, firstAttempt.partitionId()));
       task = jobTaskMapper.selectById(TENANT, firstAttempt.taskId());
@@ -1999,10 +1893,7 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
     """;
 
     ClaimedTask firstAttempt = launchAndClaim("ordinary-failure-reclaim-race-" + round);
-    jdbcTemplate.update(
-        updateJobPartitionSql,
-        TENANT,
-        firstAttempt.partitionId());
+    jdbcTemplate.update(updateJobPartitionSql, TENANT, firstAttempt.partitionId());
 
     CountDownLatch ready = new CountDownLatch(2);
     CountDownLatch start = new CountDownLatch(1);
@@ -2050,10 +1941,7 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
 
     JobTaskEntity task = jobTaskMapper.selectById(TENANT, firstAttempt.taskId());
     if (TaskStatus.RUNNING.code().equals(task.getTaskStatus())) {
-      jdbcTemplate.update(
-          updateJobPartitionSql2,
-          TENANT,
-          firstAttempt.partitionId());
+      jdbcTemplate.update(updateJobPartitionSql2, TENANT, firstAttempt.partitionId());
       partitionReclaimUnit.reclaim(
           jobPartitionMapper.selectById(TENANT, firstAttempt.partitionId()));
       task = jobTaskMapper.selectById(TENANT, firstAttempt.taskId());

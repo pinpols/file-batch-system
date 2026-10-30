@@ -42,13 +42,26 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class QuotaExceededStrategyLimiterTest {
 
   private DefaultConcurrencyLimiter limiter;
-  @Mock private JobInstanceMapper jobInstanceMapper;
-  @Mock private OrchestratorConfigCacheService configCache;
-  @Mock private QuotaRuntimeStateService quotaRuntime;
-  @Mock private GlobalJobAdmission globalJobAdmission;
-  @Mock private FairShareGroupAdmissionGuard fairShareGroupAdmissionGuard;
+
+  @Mock
+  private JobInstanceMapper jobInstanceMapper;
+
+  @Mock
+  private OrchestratorConfigCacheService configCache;
+
+  @Mock
+  private QuotaRuntimeStateService quotaRuntime;
+
+  @Mock
+  private GlobalJobAdmission globalJobAdmission;
+
+  @Mock
+  private FairShareGroupAdmissionGuard fairShareGroupAdmissionGuard;
+
   private ResourceSchedulerProperties resScheduler;
-  @Mock private BatchOrchestratorGovernanceProperties governance;
+
+  @Mock
+  private BatchOrchestratorGovernanceProperties governance;
 
   @BeforeEach
   void setUp() {

@@ -4,7 +4,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -36,17 +35,23 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 @DisplayName("控制台查询接口:分页返回、详情返回与参数校验")
+@ExtendWith(MockitoExtension.class)
 class ConsoleQueryControllerTest {
 
-  private final ConsoleQueryApplicationService queryApplicationService =
-      mock(ConsoleQueryApplicationService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleQueryApplicationService queryApplicationService;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -115,7 +120,7 @@ class ConsoleQueryControllerTest {
                 .approvedAt(OffsetDateTime.ofInstant(Instant.EPOCH, ZoneOffset.UTC))
                 .createdAt(OffsetDateTime.ofInstant(Instant.EPOCH, ZoneOffset.UTC))
                 .updatedAt(OffsetDateTime.ofInstant(Instant.EPOCH, ZoneOffset.UTC))
-                .build()));
+                .build())));
 
     mockMvc
         .perform(get("/api/console/queries/approvals").param("tenantId", "t1"))
@@ -149,7 +154,7 @@ class ConsoleQueryControllerTest {
                 .status("OPEN")
                 .createdAt(Instant.EPOCH)
                 .updatedAt(Instant.EPOCH)
-                .build()));
+                .build())));
 
     mockMvc
         .perform(get("/api/console/queries/alerts").param("tenantId", "t1"))
@@ -179,7 +184,7 @@ class ConsoleQueryControllerTest {
                 .evidenceRef("evidence-1")
                 .detailSummary("summary")
                 .createdAt(Instant.EPOCH)
-                .build()));
+                .build())));
 
     mockMvc
         .perform(get("/api/console/queries/execution-logs").param("tenantId", "t1"))
@@ -369,7 +374,7 @@ class ConsoleQueryControllerTest {
                 .nextRetryAt(Instant.EPOCH)
                 .createdAt(Instant.EPOCH)
                 .updatedAt(Instant.EPOCH)
-                .build()));
+                .build())));
 
     mockMvc
         .perform(get("/api/console/queries/outbox-retries").param("tenantId", "t1"))
@@ -456,19 +461,20 @@ class ConsoleQueryControllerTest {
   @DisplayName("工作流运行详情:返回运行状态与当前节点")
   void shouldReturnWorkflowRunDetail() throws Exception {
     when(queryApplicationService.workflowRun(anyString(), anyLong()))
-        .thenReturn(new ConsoleWorkflowRunResponse(
-            31L,
-            "t1",
-            100L,
-            11L,
-            LocalDate.of(2026, Month.MARCH, 29),
-            "RUNNING",
-            "node-1",
-            "trace-1",
-            Instant.EPOCH,
-            null,
-            Instant.EPOCH,
-            Instant.EPOCH));
+        .thenReturn(ConsoleWorkflowRunResponse.builder()
+            .id(31L)
+            .tenantId("t1")
+            .workflowDefinitionId(100L)
+            .relatedJobInstanceId(11L)
+            .bizDate(LocalDate.of(2026, Month.MARCH, 29))
+            .runStatus("RUNNING")
+            .currentNodeCode("node-1")
+            .traceId("trace-1")
+            .startedAt(Instant.EPOCH)
+            .finishedAt(null)
+            .createdAt(Instant.EPOCH)
+            .updatedAt(Instant.EPOCH)
+            .build());
 
     mockMvc
         .perform(get("/api/console/queries/workflow-runs/31").param("tenantId", "t1"))
@@ -481,22 +487,23 @@ class ConsoleQueryControllerTest {
   @DisplayName("工作流节点运行详情:返回节点编码与节点状态")
   void shouldReturnWorkflowNodeRunDetail() throws Exception {
     when(queryApplicationService.workflowNodeRun(anyString(), anyLong()))
-        .thenReturn(new ConsoleWorkflowNodeRunResponse(
-            41L,
-            31L,
-            null,
-            "node-1",
-            "MAIN",
-            1,
-            "SUCCESS",
-            0,
-            null,
-            null,
-            null,
-            null,
-            Instant.EPOCH,
-            Instant.EPOCH,
-            120L));
+        .thenReturn(ConsoleWorkflowNodeRunResponse.builder()
+            .id(41L)
+            .workflowRunId(31L)
+            .jobInstanceId(null)
+            .nodeCode("node-1")
+            .nodeType("MAIN")
+            .runSeq(1)
+            .nodeStatus("SUCCESS")
+            .retryCount(0)
+            .errorCode(null)
+            .errorMessage(null)
+            .skipReasonCode(null)
+            .skipReason(null)
+            .startedAt(Instant.EPOCH)
+            .finishedAt(Instant.EPOCH)
+            .durationMs(120L)
+            .build());
 
     mockMvc
         .perform(get("/api/console/queries/workflow-node-runs/41").param("tenantId", "t1"))

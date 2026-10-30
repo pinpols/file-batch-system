@@ -251,8 +251,7 @@ class BatchDayReplayDispatcherTest {
         .planSnapshot("{\"jobDefinitionVersion\":12,\"defaultParams\":{\"region\":\"cn\"}}")
         .status("PENDING")
         .build();
-    when(entryMapper.selectBySessionAndStatus(11L, "t1", "PENDING", 20))
-        .thenReturn(List.of(entry));
+    when(entryMapper.selectBySessionAndStatus(11L, "t1", "PENDING", 20)).thenReturn(List.of(entry));
     when(entryMapper.claimPending(eq(4L), eq("t1"), eq(11L), any())).thenReturn(1);
     when(compensationService.submit(any(CompensationSubmitCommand.class))).thenReturn("CMD-PLAN");
 

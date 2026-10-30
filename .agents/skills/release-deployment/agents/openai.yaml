@@ -1,0 +1,3 @@
+interface:
+  display_name: "应用发布与部署晋级"
+  short_description: "核对联合版本、不可变发布清单、环境晋级、部署验证与失败回滚边界"

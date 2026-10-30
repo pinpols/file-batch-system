@@ -12,10 +12,10 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.console.config.WebhookRelayProperties;
-import io.github.pinpols.batch.console.domain.notification.view.TerminalNotificationArchiveCandidate;
 import io.github.pinpols.batch.console.domain.notification.mapper.TerminalNotificationArchiveMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.TerminalNotificationArchiveMapper.Family;
 import io.github.pinpols.batch.console.domain.notification.mapper.WorkflowTerminalNotificationMapper;
+import io.github.pinpols.batch.console.domain.notification.view.TerminalNotificationArchiveCandidate;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -32,9 +32,15 @@ class TerminalNotificationArchiveServiceTest {
   private static final TerminalNotificationArchiveCandidate CANDIDATE =
       new TerminalNotificationArchiveCandidate("t1", "t1:workflow:7:terminal");
 
-  @Mock private TerminalNotificationArchiveMapper archive;
-  @Mock private WorkflowTerminalNotificationMapper receipts;
-  @Mock private PlatformTransactionManager transactions;
+  @Mock
+  private TerminalNotificationArchiveMapper archive;
+
+  @Mock
+  private WorkflowTerminalNotificationMapper receipts;
+
+  @Mock
+  private PlatformTransactionManager transactions;
+
   private TerminalNotificationArchiveService service;
 
   @BeforeEach
@@ -103,7 +109,8 @@ class TerminalNotificationArchiveServiceTest {
       order.verify(archive).copyFamily(CANDIDATE, family);
       order.verify(archive).mismatches(CANDIDATE, family);
     }
-    for (Family family : List.of(Family.AUDIT, Family.PUSH, Family.RULE, Family.WEBHOOK, Family.RECEIPT)) {
+    for (Family family :
+        List.of(Family.AUDIT, Family.PUSH, Family.RULE, Family.WEBHOOK, Family.RECEIPT)) {
       order.verify(archive).deleteFamily(CANDIDATE, family);
     }
     verify(transactions, times(2)).commit(any());
@@ -116,7 +123,8 @@ class TerminalNotificationArchiveServiceTest {
     when(archive.mismatches(eq(CANDIDATE), any()))
         .thenAnswer(call -> call.getArgument(1) == Family.RULE ? 1L : 0L);
     assertThatThrownBy(() -> service.poll(() -> false))
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("RULE");
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("RULE");
     verify(archive, never()).copyFamily(eq(CANDIDATE), eq(Family.AUDIT));
     verify(archive, never()).deleteFamily(any(), any());
     verify(transactions).rollback(any());

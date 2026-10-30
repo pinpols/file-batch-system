@@ -106,7 +106,8 @@ class ExportStorageFailureE2eIT extends AbstractIntegrationTest {
                       """;
 
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
-    Long batchId = businessJdbc.queryForObject(insertSettlementBatchSql, Long.class, TENANT, BATCH_NO);
+    Long batchId =
+        businessJdbc.queryForObject(insertSettlementBatchSql, Long.class, TENANT, BATCH_NO);
     assertThat(batchId).isNotNull();
 
     businessJdbc.update(insertSettlementDetailSql, TENANT, batchId, "E2E-MF-001", "C-MF-1");
@@ -140,7 +141,8 @@ class ExportStorageFailureE2eIT extends AbstractIntegrationTest {
         .pollInterval(Duration.ofMillis(500))
         .untilAsserted(() -> {
           e2eOutboxPublishSupport.publishAllPending(TENANT);
-          Long dlq = jdbcTemplate.queryForObject(selectCountSql, Long.class, TENANT, seed.dedupKey());
+          Long dlq =
+              jdbcTemplate.queryForObject(selectCountSql, Long.class, TENANT, seed.dedupKey());
           assertThat(dlq).isNotNull().isGreaterThanOrEqualTo(1L);
         });
   }

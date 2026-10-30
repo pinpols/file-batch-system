@@ -2,28 +2,42 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.AdditionalAnswers.delegatesTo;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.archive.ArchiveIntegrityAlertService;
 import io.github.pinpols.batch.orchestrator.application.archive.OutboxArchiveService;
 import io.github.pinpols.batch.orchestrator.application.archive.SuccessInstanceArchiveService;
 import io.github.pinpols.batch.orchestrator.application.archive.WorkflowArchiveService;
+import io.github.pinpols.batch.orchestrator.config.SuccessInstanceArchiveProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.UpdateCompensationStatusParam;
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.ResultVersionRetentionScheduler;
+import io.github.pinpols.batch.orchestrator.mapper.CompensationCommandMapper;
 import io.github.pinpols.batch.orchestrator.mapper.DataQualityCheckMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
+import io.github.pinpols.batch.orchestrator.mapper.LineageEvidenceMapper;
+import io.github.pinpols.batch.orchestrator.mapper.SuccessInstanceArchiveMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
@@ -67,6 +81,18 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
   private final PlatformTransactionManager transactionManager;
 
   @Autowired
+  private SuccessInstanceArchiveMapper archiveMapper;
+
+  @Autowired
+  private CompensationCommandMapper compensationCommandMapper;
+
+  @Autowired
+  private LineageEvidenceMapper lineageEvidenceMapper;
+
+  @Autowired
+  private SqlSessionTemplate sqlSessionTemplate;
+
+  @Autowired
   ArchiveColdStorageIntegrationTest(
       JdbcTemplate jdbcTemplate,
       OutboxArchiveService outboxArchiveService,
@@ -87,6 +113,49 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("共享文件两次作业归档之间状态变化时回读当前冷副本")
+  void shouldExposeFirstSharedFileSnapshotAcrossLaterArchive() {
+    final String insertFileRecordSql1 = """
+        insert into batch.file_record
+          (tenant_id, file_category, file_name, file_format_type, storage_type, storage_path,
+           source_type, file_status)
+        values (?, 'OUTPUT', ?, 'BINARY', 'LOCAL', ?, 'SYSTEM', 'LOADED') returning id
+        """;
+    final String updateJobInstanceSql2 =
+        "update batch.job_instance set related_file_id = ? where tenant_id = ? and id = ?";
+    final String updateFileRecordSql3 =
+        "update batch.file_record set file_status = 'FAILED' where id = ?";
+    final String updateJobInstanceSql4 =
+        "update batch.job_instance set related_file_id = ? where tenant_id = ? and id = ?";
+    final String selectFileRecordSql5 = "select file_status from batch.file_record where id = ?";
+    String tenantId = unique("shared-file-history");
+    Long definitionId = insertJobDefinition(tenantId);
+    Long fileId = jdbcTemplate.queryForObject(
+        insertFileRecordSql1, Long.class, tenantId, unique("file"), unique("path"));
+    Long firstId = insertOldSuccessInstance(tenantId, definitionId);
+    jdbcTemplate.update(updateJobInstanceSql2, fileId, tenantId, firstId);
+    successInstanceArchiveService.archiveOnce();
+    assertThat(count("archive.job_instance_archive", firstId)).isEqualTo(1);
+    assertThat(jdbcTemplate.update(updateFileRecordSql3, fileId)).isEqualTo(1);
+
+    Long secondId = insertOldSuccessInstance(tenantId, definitionId);
+    jdbcTemplate.update(updateJobInstanceSql4, fileId, tenantId, secondId);
+    successInstanceArchiveService.archiveOnce();
+
+    assertThat(count("archive.job_instance_archive", secondId)).isEqualTo(1);
+    assertThat(jdbcTemplate.queryForObject(selectFileRecordSql5, String.class, fileId))
+        .isEqualTo("FAILED");
+    assertThat(lineageEvidenceMapper.selectArchivedFileRecords(tenantId, firstId, null))
+        .singleElement()
+        .extracting(row -> row.fileStatus())
+        .isEqualTo("LOADED");
+    assertThat(lineageEvidenceMapper.selectArchivedFileRecords(tenantId, secondId, null))
+        .singleElement()
+        .extracting(row -> row.fileStatus())
+        .isEqualTo("LOADED");
+  }
+
+  @Test
   @DisplayName("DQ执行证据随Job原子搬运且归档后可按同租户完整回读，重复执行不复制")
   void shouldArchiveDataQualityEvidenceAndReadColdRowsWithoutDuplicates() {
     String tenantId = unique("dq-archive");
@@ -95,10 +164,8 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
     String selectHotQualityEvidenceSql = """
         select to_jsonb(c)::text from batch.data_quality_check c where id=?\
         """;
-    String original = jdbcTemplate.queryForObject(
-        selectHotQualityEvidenceSql,
-        String.class,
-        checkId);
+    String original =
+        jdbcTemplate.queryForObject(selectHotQualityEvidenceSql, String.class, checkId);
     assertThat(dataQualityCheckMapper.selectByJobInstance(tenantId, instanceId)).hasSize(1);
 
     successInstanceArchiveService.archiveOnce();
@@ -119,6 +186,314 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("归档期间补偿命令关联作业必须与父行删除串行化")
+  void shouldSerializeCompensationAssociationWithArchive() throws Exception {
+    final String insertCompensationCommandSql6 = """
+        insert into batch.compensation_command
+          (tenant_id, command_no, compensation_type, target_id, command_status)
+        values (?, ?, 'JOB', ?, 'RUNNING') returning id
+        """;
+    final String selectStatementSql7 = "select pg_backend_pid()";
+    final String selectStatementSql8 = "select coalesce(array_length(pg_blocking_pids(?), 1), 0)";
+    String tenantId = unique("archive-compensation-race");
+    Long instanceId = insertOldSuccessInstance(tenantId, insertJobDefinition(tenantId));
+    Long commandId = jdbcTemplate.queryForObject(
+        insertCompensationCommandSql6, Long.class, tenantId, unique("compensation"), instanceId);
+    SuccessInstanceArchiveMapper intercepted =
+        mock(SuccessInstanceArchiveMapper.class, delegatesTo(archiveMapper));
+    SuccessInstanceArchiveProperties props = new SuccessInstanceArchiveProperties();
+    props.setEnabled(true);
+    props.setRetentionDays(1);
+    props.setBatchSize(10);
+    SuccessInstanceArchiveService service = new SuccessInstanceArchiveService(
+        intercepted, props, mock(ArchiveIntegrityAlertService.class));
+    AtomicReference<Future<Integer>> update = new AtomicReference<>();
+    AtomicReference<Integer> backendPid = new AtomicReference<>();
+    try (ExecutorService executor = Executors.newSingleThreadExecutor()) {
+      doAnswer(invocation -> {
+            long mismatches =
+                archiveMapper.countRuntimeTreeArchiveMismatches(invocation.getArgument(0));
+            Future<Integer> future = executor.submit(() -> {
+              TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+              return transaction.execute(status -> {
+                backendPid.set(jdbcTemplate.queryForObject(selectStatementSql7, Integer.class));
+                return compensationCommandMapper.updateStatus(
+                    UpdateCompensationStatusParam.builder()
+                        .tenantId(tenantId)
+                        .id(commandId)
+                        .expectedStatus("RUNNING")
+                        .commandStatus("SUCCESS")
+                        .relatedJobInstanceId(instanceId)
+                        .build());
+              });
+            });
+            update.set(future);
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            boolean waiting = false;
+            while (System.nanoTime() < deadline && !future.isDone()) {
+              Integer pid = backendPid.get();
+              Integer blockers = pid == null
+                  ? 0
+                  : jdbcTemplate.queryForObject(selectStatementSql8, Integer.class, pid);
+              if (blockers != null && blockers > 0) {
+                waiting = true;
+                break;
+              }
+              Thread.sleep(10);
+            }
+            assertThat(waiting).as("compensation association waits for archive").isTrue();
+            return mismatches;
+          })
+          .when(intercepted)
+          .countRuntimeTreeArchiveMismatches(anyList());
+      new TransactionTemplate(transactionManager)
+          .executeWithoutResult(status -> service.archiveOnce());
+      assertThat(update.get().get(10, TimeUnit.SECONDS)).isZero();
+      assertThat(count("archive.job_instance_archive", instanceId)).isEqualTo(1);
+    }
+  }
+
+  @Test
+  @DisplayName("补偿关联仅允许同租户热作业，空关联可记录失败")
+  void shouldValidateCompensationAssociationAndAllowUnboundFailure() {
+    final String insertCompensationCommandSql9 = """
+        insert into batch.compensation_command
+          (tenant_id, command_no, compensation_type, target_id, command_status)
+        values (?, ?, 'JOB', ?, 'RUNNING') returning id
+        """;
+    final String insertCompensationCommandSql10 = """
+        insert into batch.compensation_command
+          (tenant_id, command_no, compensation_type, target_id, command_status)
+        values (?, ?, 'JOB', ?, 'RUNNING') returning id
+        """;
+    final String selectCompensationCommandSql11 =
+        "select command_status from batch.compensation_command where id = ?";
+    String tenantId = unique("compensation-association");
+    Long instanceId = insertOldSuccessInstance(tenantId, insertJobDefinition(tenantId));
+    Long commandId = jdbcTemplate.queryForObject(
+        insertCompensationCommandSql9, Long.class, tenantId, unique("compensation"), instanceId);
+    UpdateCompensationStatusParam.UpdateCompensationStatusParamBuilder update =
+        UpdateCompensationStatusParam.builder()
+            .tenantId(tenantId)
+            .id(commandId)
+            .expectedStatus("RUNNING")
+            .commandStatus("SUCCESS");
+    assertThat(compensationCommandMapper.updateStatus(
+            update.relatedJobInstanceId(instanceId + 999999999L).build()))
+        .isZero();
+    String otherTenant = unique("other");
+    Long otherInstanceId = insertOldSuccessInstance(otherTenant, insertJobDefinition(otherTenant));
+    assertThat(compensationCommandMapper.updateStatus(
+            update.relatedJobInstanceId(otherInstanceId).build()))
+        .isZero();
+    assertThat(compensationCommandMapper.updateStatus(
+            update.relatedJobInstanceId(instanceId).build()))
+        .isEqualTo(1);
+
+    Long failureId = jdbcTemplate.queryForObject(
+        insertCompensationCommandSql10,
+        Long.class,
+        tenantId,
+        unique("compensation-failure"),
+        instanceId);
+    assertThat(compensationCommandMapper.updateStatus(update
+            .id(failureId)
+            .commandStatus("FAILED")
+            .relatedJobInstanceId(null)
+            .build()))
+        .isEqualTo(1);
+    assertThat(jdbcTemplate.queryForObject(selectCompensationCommandSql11, String.class, failureId))
+        .isEqualTo("FAILED");
+  }
+
+  @Test
+  @DisplayName("归档核对后并发更新不能在热行删除时丢失")
+  void shouldNotLoseCommittedStepUpdateDuringArchive() throws Exception {
+    String tenantId = unique("archive-step-race");
+    Long instanceId = insertOldSuccessInstance(tenantId, insertJobDefinition(tenantId));
+    Long partitionId = insertJobPartition(tenantId, instanceId);
+    Long taskId = insertJobTask(tenantId, instanceId, partitionId);
+    Long stepId = insertJobStepInstance(tenantId, instanceId, partitionId, taskId);
+    String concurrentUpdateSql = """
+        update batch.job_step_instance set error_message = 'concurrent-update' where id = ?
+        """;
+    String selectArchivedSql = """
+        select error_message from archive.job_step_instance_archive where id = ?
+        """;
+    String backendPidSql = "select pg_backend_pid()";
+    String blockedSql = "select coalesce(array_length(pg_blocking_pids(?), 1), 0)";
+    SuccessInstanceArchiveMapper intercepted =
+        mock(SuccessInstanceArchiveMapper.class, delegatesTo(archiveMapper));
+    SuccessInstanceArchiveProperties props = new SuccessInstanceArchiveProperties();
+    props.setEnabled(true);
+    props.setRetentionDays(1);
+    props.setBatchSize(10);
+    SuccessInstanceArchiveService service = new SuccessInstanceArchiveService(
+        intercepted, props, mock(ArchiveIntegrityAlertService.class));
+    AtomicReference<Future<Integer>> update = new AtomicReference<>();
+    AtomicReference<Integer> updateBackendPid = new AtomicReference<>();
+    try (ExecutorService executor = Executors.newSingleThreadExecutor()) {
+      doAnswer(invocation -> {
+            long mismatches =
+                archiveMapper.countRuntimeTreeArchiveMismatches(invocation.getArgument(0));
+            Future<Integer> future = executor.submit(() -> {
+              TransactionTemplate updateTransaction = new TransactionTemplate(transactionManager);
+              return updateTransaction.execute(status -> {
+                updateBackendPid.set(jdbcTemplate.queryForObject(backendPidSql, Integer.class));
+                return jdbcTemplate.update(concurrentUpdateSql, stepId);
+              });
+            });
+            update.set(future);
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            boolean waiting = false;
+            while (System.nanoTime() < deadline && !future.isDone()) {
+              Integer pid = updateBackendPid.get();
+              Integer blockers =
+                  pid == null ? 0 : jdbcTemplate.queryForObject(blockedSql, Integer.class, pid);
+              if (blockers != null && blockers > 0) {
+                waiting = true;
+                break;
+              }
+              Thread.sleep(10);
+            }
+            assertThat(waiting)
+                .as("concurrent update waits on the archive row lock")
+                .isTrue();
+            return mismatches;
+          })
+          .when(intercepted)
+          .countRuntimeTreeArchiveMismatches(anyList());
+      TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+      transaction.executeWithoutResult(status -> service.archiveOnce());
+      int changed = update.get().get(10, TimeUnit.SECONDS);
+      if (changed == 1) {
+        String archived = jdbcTemplate.queryForObject(selectArchivedSql, String.class, stepId);
+        assertThat(archived).isEqualTo("concurrent-update");
+      } else {
+        assertThat(changed).isZero();
+      }
+    }
+  }
+
+  @Test
+  @DisplayName("分区冷行内容冲突时归档必须保留热运行树")
+  void shouldRetainHotTreeWhenArchivedPartitionConflicts() {
+    String tenantId = unique("partition-archive-conflict");
+    Long instanceId = insertOldSuccessInstance(tenantId, insertJobDefinition(tenantId));
+    Long partitionId = insertJobPartition(tenantId, instanceId);
+    String copySql = """
+        insert into archive.job_partition_archive
+          (id, tenant_id, job_instance_id, job_instance_biz_date, partition_no,
+           partition_status, business_key, idempotency_key, finished_at)
+        select id, tenant_id, job_instance_id, job_instance_biz_date, partition_no,
+               partition_status, business_key, idempotency_key, finished_at
+        from batch.job_partition where id = ?
+        """;
+    String corruptSql = """
+        update archive.job_partition_archive set partition_status = 'FAILED' where id = ?
+        """;
+    String deleteColdSql = """
+        delete from archive.job_partition_archive where tenant_id = ? and id = ?
+        """;
+    String deletePartitionSql = """
+        delete from batch.job_partition where tenant_id = ? and id = ?
+        """;
+    String deleteInstanceSql = """
+        delete from batch.job_instance where tenant_id = ? and id = ?
+        """;
+    jdbcTemplate.update(copySql, partitionId);
+    jdbcTemplate.update(corruptSql, partitionId);
+    try {
+      assertThatThrownBy(() -> successInstanceArchiveService.archiveOnce())
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("Runtime tree archive copy verification failed");
+      assertThat(count("batch.job_instance", instanceId)).isEqualTo(1);
+      assertThat(count("batch.job_partition", partitionId)).isEqualTo(1);
+    } finally {
+      jdbcTemplate.update(deleteColdSql, tenantId, partitionId);
+      jdbcTemplate.update(deletePartitionSql, tenantId, partitionId);
+      jdbcTemplate.update(deleteInstanceSql, tenantId, instanceId);
+    }
+  }
+
+  @Test
+  @DisplayName("任务冷行内容冲突时归档必须保留完整热运行树")
+  void shouldRetainHotTreeWhenArchivedTaskConflicts() {
+    String tenantId = unique("task-archive-conflict");
+    Long instanceId = insertOldSuccessInstance(tenantId, insertJobDefinition(tenantId));
+    Long partitionId = insertJobPartition(tenantId, instanceId);
+    Long taskId = insertJobTask(tenantId, instanceId, partitionId);
+    String copySql = """
+        insert into archive.job_task_archive
+          (id, tenant_id, job_instance_id, job_instance_biz_date, job_partition_id,
+           task_type, task_seq, task_status, finished_at)
+        select id, tenant_id, job_instance_id, job_instance_biz_date, job_partition_id,
+               task_type, task_seq, task_status, finished_at
+        from batch.job_task where id = ?
+        """;
+    String corruptSql = """
+        update archive.job_task_archive set error_message = 'conflicting-cold-error' where id = ?
+        """;
+    String deleteColdSql = """
+        delete from archive.job_task_archive where tenant_id = ? and id = ?
+        """;
+    String deleteTaskSql = """
+        delete from batch.job_task where tenant_id = ? and id = ?
+        """;
+    String deletePartitionSql = """
+        delete from batch.job_partition where tenant_id = ? and id = ?
+        """;
+    String deleteInstanceSql = """
+        delete from batch.job_instance where tenant_id = ? and id = ?
+        """;
+    jdbcTemplate.update(copySql, taskId);
+    jdbcTemplate.update(corruptSql, taskId);
+    try {
+      assertThatThrownBy(() -> successInstanceArchiveService.archiveOnce())
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("Job task archive copy verification failed");
+      assertThat(count("batch.job_instance", instanceId)).isEqualTo(1);
+      assertThat(count("batch.job_partition", partitionId)).isEqualTo(1);
+      assertThat(count("batch.job_task", taskId)).isEqualTo(1);
+    } finally {
+      jdbcTemplate.update(deleteColdSql, tenantId, taskId);
+      jdbcTemplate.update(deleteTaskSql, tenantId, taskId);
+      jdbcTemplate.update(deletePartitionSql, tenantId, partitionId);
+      jdbcTemplate.update(deleteInstanceSql, tenantId, instanceId);
+    }
+  }
+
+  @Test
+  @DisplayName("Job 冷行内容冲突时归档必须保留热实例")
+  void shouldRetainHotInstanceWhenArchivedJobConflicts() {
+    String tenantId = unique("job-archive-conflict");
+    Long instanceId = insertOldSuccessInstance(tenantId, insertJobDefinition(tenantId));
+    String copySql = """
+        insert into archive.job_instance_archive select * from batch.job_instance where id = ?
+        """;
+    String corruptSql = """
+        update archive.job_instance_archive set trace_id = 'conflicting-cold-trace' where id = ?
+        """;
+    String deleteColdSql = """
+        delete from archive.job_instance_archive where tenant_id = ? and id = ?
+        """;
+    String deleteHotSql = """
+        delete from batch.job_instance where tenant_id = ? and id = ?
+        """;
+    jdbcTemplate.update(copySql, instanceId);
+    jdbcTemplate.update(corruptSql, instanceId);
+    try {
+      assertThatThrownBy(() -> successInstanceArchiveService.archiveOnce())
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("Job instance archive copy verification failed");
+      assertThat(count("batch.job_instance", instanceId)).isEqualTo(1);
+    } finally {
+      jdbcTemplate.update(deleteColdSql, tenantId, instanceId);
+      jdbcTemplate.update(deleteHotSql, tenantId, instanceId);
+    }
+  }
+
+  @Test
   @DisplayName("DQ冷行身份或内容冲突时整批归档回滚并保留热Job及检查证据")
   void shouldRetainHotDataWhenQualityArchiveCopyConflicts() {
     String tenantId = unique("dq-conflict");
@@ -132,8 +507,7 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
     String corruptArchivedQualityStatusSql = """
         update archive.data_quality_check_archive set status='FAIL' where id=?\
         """;
-    jdbcTemplate.update(
-        corruptArchivedQualityStatusSql, checkId);
+    jdbcTemplate.update(corruptArchivedQualityStatusSql, checkId);
 
     try {
       assertThatThrownBy(() -> successInstanceArchiveService.archiveOnce())
@@ -153,20 +527,15 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
       String deleteArchivedQualityEvidenceSql = """
           delete from archive.data_quality_check_archive where tenant_id=? and id=?\
           """;
-      jdbcTemplate.update(
-          deleteArchivedQualityEvidenceSql,
-          tenantId,
-          checkId);
+      jdbcTemplate.update(deleteArchivedQualityEvidenceSql, tenantId, checkId);
       String deleteHotQualityEvidenceSql = """
           delete from batch.data_quality_check where tenant_id=? and id=?\
           """;
-      jdbcTemplate.update(
-          deleteHotQualityEvidenceSql, tenantId, checkId);
+      jdbcTemplate.update(deleteHotQualityEvidenceSql, tenantId, checkId);
       String deleteHotJobInstanceSql = """
           delete from batch.job_instance where tenant_id=? and id=?\
           """;
-      jdbcTemplate.update(
-          deleteHotJobInstanceSql, tenantId, instanceId);
+      jdbcTemplate.update(deleteHotJobInstanceSql, tenantId, instanceId);
     }
   }
 
@@ -378,6 +747,12 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
     String tenantId = unique("tenant");
     Long definitionId = insertJobDefinition(tenantId);
     Long instanceId = insertOldSuccessInstance(tenantId, definitionId);
+    String setExecutionStartSql = """
+        update batch.job_instance set execution_started_at = now() - interval '4 days'
+        where tenant_id = ? and id = ?
+        """;
+    int preparedInstances = jdbcTemplate.update(setExecutionStartSql, tenantId, instanceId);
+    assertThat(preparedInstances).isEqualTo(1);
     String insertSourceFileSql = """
         insert into batch.file_record(
           tenant_id, file_category, file_name, file_format_type, storage_type,
@@ -571,11 +946,45 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
         rowSnapshot("batch", "compensation_command", compensationCommandId);
     String compensationFileSnapshot = rowSnapshot("batch", "file_record", compensationFileId);
 
+    List<ArchiveConflictProbe> conflictProbes = List.of(
+        new ArchiveConflictProbe(
+            "update archive.job_partition_archive set business_key = 'conflict' where id = ?",
+            partitionId),
+        new ArchiveConflictProbe(
+            "update archive.job_step_instance_archive set error_message = 'conflict' where id = ?",
+            stepId),
+        new ArchiveConflictProbe(
+            "update archive.pipeline_instance_archive set trace_id = 'conflict' where id = ?",
+            pipelineInstanceId),
+        new ArchiveConflictProbe(
+            "update archive.pipeline_step_run_archive set error_message = 'conflict' where id = ?",
+            pipelineStepRunId),
+        new ArchiveConflictProbe(
+            "update archive.file_dispatch_record_archive set error_message = 'conflict' where id = ?",
+            fileDispatchRecordId),
+        new ArchiveConflictProbe(
+            "update archive.workflow_run_archive set trace_id = 'conflict' where id = ?",
+            workflowRunId),
+        new ArchiveConflictProbe(
+            "update archive.workflow_node_run_archive set error_message = 'conflict' where id = ?",
+            workflowNodeRunId),
+        new ArchiveConflictProbe(
+            "update archive.job_execution_log_archive set message = 'conflict' where id = ?",
+            executionLogId),
+        new ArchiveConflictProbe(
+            "update archive.compensation_command_archive set error_message = 'conflict' where id = ?",
+            compensationCommandId));
+    assertRuntimeTreeConflictDetection(instanceId, conflictProbes);
+    List<ArchiveConflictProbe> lockProbes = new ArrayList<>(conflictProbes);
+    lockProbes.add(new ArchiveConflictProbe(
+        "update archive.job_task_archive set error_message = 'conflict' where id = ?", taskId));
+    assertRuntimeTreeRowLocks(instanceId, lockProbes);
+
     SuccessInstanceArchiveService.ArchiveBatchResult result =
         successInstanceArchiveService.archiveOnce();
 
-    // The local integration database may contain another expired fixture from a previous run.
-    // Assert the contract for this test instance instead of coupling the result to global state.
+    // 本地集成数据库可能保留上一次运行留下的其他过期 fixture。
+    // 断言当前测试实例的契约，不要让结果依赖全局状态。
     assertThat(result.instancesDeleted()).isGreaterThanOrEqualTo(1);
     assertThat(count("batch.job_instance", instanceId)).isZero();
     assertThat(count("batch.job_partition", partitionId)).isZero();
@@ -1206,6 +1615,91 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
         returning id
         """;
     return jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, tenantId, unique("job"));
+  }
+
+  private record ArchiveConflictProbe(String updateSql, Long id) {}
+
+  private void assertRuntimeTreeRowLocks(Long instanceId, List<ArchiveConflictProbe> probes) {
+    String pidSql = "select pg_backend_pid()";
+    String blockedBySql = "select ? = any(pg_blocking_pids(?))";
+    try (ExecutorService executor = Executors.newSingleThreadExecutor()) {
+      for (ArchiveConflictProbe probe : probes) {
+        AtomicReference<Integer> writerPid = new AtomicReference<>();
+        AtomicReference<Future<Integer>> update = new AtomicReference<>();
+        TransactionTemplate archiveTransaction = new TransactionTemplate(transactionManager);
+        archiveTransaction.executeWithoutResult(status -> {
+          assertThat(archiveMapper.selectArchivableInstanceIds(Instant.now(), 10000))
+              .contains(instanceId);
+          archiveMapper.selectPipelineInstanceIdsForUpdate(List.of(instanceId));
+          archiveMapper.lockRuntimeTreeRows(List.of(instanceId));
+          Integer archivePid = jdbcTemplate.queryForObject(pidSql, Integer.class);
+          String updateHotSql =
+              probe.updateSql().replace("archive.", "batch.").replace("_archive", "");
+          update.set(executor.submit(() -> {
+            TransactionTemplate writerTransaction = new TransactionTemplate(transactionManager);
+            return writerTransaction.execute(writerStatus -> {
+              writerPid.set(jdbcTemplate.queryForObject(pidSql, Integer.class));
+              int changed = jdbcTemplate.update(updateHotSql, probe.id());
+              writerStatus.setRollbackOnly();
+              return changed;
+            });
+          }));
+          long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+          boolean blocked = false;
+          try {
+            while (System.nanoTime() < deadline && !update.get().isDone()) {
+              Integer pid = writerPid.get();
+              Boolean isBlocked = pid == null
+                  ? false
+                  : jdbcTemplate.queryForObject(blockedBySql, Boolean.class, archivePid, pid);
+              if (Boolean.TRUE.equals(isBlocked)) {
+                blocked = true;
+                break;
+              }
+              Thread.sleep(10);
+            }
+          } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("lock verification interrupted", ex);
+          }
+          assertThat(blocked).as(updateHotSql).isTrue();
+        });
+        try {
+          assertThat(update.get().get(10, TimeUnit.SECONDS)).isEqualTo(1);
+        } catch (Exception ex) {
+          throw new AssertionError("writer did not complete after archive lock release", ex);
+        }
+      }
+    }
+  }
+
+  private void assertRuntimeTreeConflictDetection(
+      Long instanceId, List<ArchiveConflictProbe> probes) {
+    TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+    transaction.executeWithoutResult(status -> {
+      List<Long> ids = List.of(instanceId);
+      archiveMapper.archiveJobPartitionsByInstanceIds(ids);
+      archiveMapper.archiveJobStepInstancesByInstanceIds(ids);
+      archiveMapper.archivePipelineInstancesByInstanceIds(ids);
+      archiveMapper.archivePipelineStepRunsByInstanceIds(ids);
+      archiveMapper.archiveFileDispatchRecordsByInstanceIds(ids);
+      archiveMapper.archiveWorkflowRunsByInstanceIds(ids);
+      archiveMapper.archiveWorkflowNodeRunsByInstanceIds(ids);
+      archiveMapper.archiveJobExecutionLogsByInstanceIds(ids);
+      archiveMapper.archiveCompensationCommandsByInstanceIds(ids);
+      assertThat(archiveMapper.countRuntimeTreeArchiveMismatches(ids)).isZero();
+      for (ArchiveConflictProbe probe : probes) {
+        Object savepoint = status.createSavepoint();
+        assertThat(jdbcTemplate.update(probe.updateSql(), probe.id())).isEqualTo(1);
+        sqlSessionTemplate.clearCache();
+        assertThat(archiveMapper.countRuntimeTreeArchiveMismatches(ids))
+            .as(probe.updateSql())
+            .isEqualTo(1);
+        status.rollbackToSavepoint(savepoint);
+        status.releaseSavepoint(savepoint);
+      }
+      status.setRollbackOnly();
+    });
   }
 
   private Long insertOldSuccessInstance(String tenantId, Long definitionId) {

@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.trigger.infrastructure.kafka;
 
-import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
+import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.application.TriggerLaunchLagQueryPort;
 import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
@@ -61,8 +61,7 @@ public class KafkaTriggerLaunchLagQueryAdapter implements TriggerLaunchLagQueryP
     topic
         .partitions()
         .forEach(partition -> requests.put(
-              new TopicPartition(launchTopic, partition.partition()),
-            OffsetSpec.latest()));
+            new TopicPartition(launchTopic, partition.partition()), OffsetSpec.latest()));
     Map<TopicPartition, ListOffsetsResultInfo> endOffsets =
         admin.listOffsets(requests).all().get(timeout, TimeUnit.MILLISECONDS);
     Map<TopicPartition, OffsetSpec> earliestRequests = new LinkedHashMap<>();

@@ -136,42 +136,28 @@ class ReplayAdmissionRecoveryE2eIT extends AbstractIntegrationTest {
     try {
       assertThat(listener.isRunning()).isFalse();
       dispatcher.scheduledDispatch();
-      await()
-          .atMost(Duration.ofSeconds(30))
-          .untilAsserted(() -> {
-            Integer selectedOutboxEventCount = jdbc.queryForObject(selectCountSql, Integer.class, TENANT);
-            assertThat(selectedOutboxEventCount).isEqualTo(1);
-          });
+      await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+        Integer selectedOutboxEventCount =
+            jdbc.queryForObject(selectCountSql, Integer.class, TENANT);
+        assertThat(selectedOutboxEventCount).isEqualTo(1);
+      });
       assertThat(jobCount(selected.jobCode())).isEqualTo(1);
-      jdbc.update(
-          updateJobDefinitionSql,
-          parameters(changedCustomer),
-          TENANT,
-          selected.jobCode());
+      jdbc.update(updateJobDefinitionSql, parameters(changedCustomer), TENANT, selected.jobCode());
       cache.evictJobDefinition(TENANT, selected.jobCode());
-      envelope = jdbc.queryForObject(
-          selectPayloadJsonSql,
-          String.class,
-          TENANT);
+      envelope = jdbc.queryForObject(selectPayloadJsonSql, String.class, TENANT);
     } finally {
       listener.start();
     }
-    await()
-        .atMost(Duration.ofSeconds(90))
-        .untilAsserted(() -> {
-          String selectedStatus =
-              jdbc.queryForObject(selectStatusSql, String.class, TENANT, session.id());
-          assertThat(selectedStatus).isEqualTo("SUCCEEDED");
-        });
-    var entry = jdbc.queryForMap(
-        selectStatementSql,
-        TENANT,
-        session.id());
+    await().atMost(Duration.ofSeconds(90)).untilAsserted(() -> {
+      String selectedStatus =
+          jdbc.queryForObject(selectStatusSql, String.class, TENANT, session.id());
+      assertThat(selectedStatus).isEqualTo("SUCCEEDED");
+    });
+    var entry = jdbc.queryForMap(selectStatementSql, TENANT, session.id());
     long rerun = ((Number) entry.get("rerun_instance_id")).longValue();
     assertThat(rerun).isNotEqualTo(selected.jobId());
     assertThat(entry.get("source_instance_id")).isEqualTo(selected.jobId());
-    var job = jdbc.queryForMap(
-        selectStatementSql2, TENANT, rerun);
+    var job = jdbc.queryForMap(selectStatementSql2, TENANT, rerun);
     assertThat(job.get("job_definition_version")).isEqualTo(1);
     assertThat(job.get("parent_instance_id")).isEqualTo(selected.jobId());
     assertThat(job.get("biz_date").toString()).isEqualTo("2026-01-15");
@@ -181,11 +167,7 @@ class ReplayAdmissionRecoveryE2eIT extends AbstractIntegrationTest {
     assertThat(customerCount(selected.customer())).isEqualTo(1);
     assertThat(customerCount(unselected.customer())).isEqualTo(1);
     assertThat(customerCount(changedCustomer)).isZero();
-    long workflow = jdbc.queryForObject(
-        selectWorkflowRunIdSql,
-        Long.class,
-        TENANT,
-        rerun);
+    long workflow = jdbc.queryForObject(selectWorkflowRunIdSql, Long.class, TENANT, rerun);
     String selectedRunStatus =
         jdbc.queryForObject(selectRunStatusSql, String.class, TENANT, workflow);
     assertThat(selectedRunStatus).isEqualTo("SUCCESS");
@@ -238,11 +220,7 @@ class ReplayAdmissionRecoveryE2eIT extends AbstractIntegrationTest {
     var seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbc, TENANT, "IMPORT", "import", TriggerType.API);
     String customer = prefix + Long.toUnsignedString(System.nanoTime());
-    jdbc.update(
-        updateJobDefinitionSql,
-        parameters(customer),
-        TENANT,
-        seed.jobCode());
+    jdbc.update(updateJobDefinitionSql, parameters(customer), TENANT, seed.jobCode());
     var request = LaunchRequest.builder()
         .tenantId(TENANT)
         .workflowDefinitionId(seed.workflowDefinitionId())
@@ -253,18 +231,12 @@ class ReplayAdmissionRecoveryE2eIT extends AbstractIntegrationTest {
         .params(Map.of("operatorId", "r25-e2e"))
         .build();
     long workflow = Long.parseLong(launch.launch(request).instanceNo());
-    await()
-        .atMost(Duration.ofSeconds(90))
-        .untilAsserted(() -> {
-          String selectedRunStatus =
-              jdbc.queryForObject(selectRunStatusSql, String.class, TENANT, workflow);
-          assertThat(selectedRunStatus).isEqualTo("SUCCESS");
-        });
-    long job = jdbc.queryForObject(
-        selectJobInstanceIdSql,
-        Long.class,
-        TENANT,
-        workflow);
+    await().atMost(Duration.ofSeconds(90)).untilAsserted(() -> {
+      String selectedRunStatus =
+          jdbc.queryForObject(selectRunStatusSql, String.class, TENANT, workflow);
+      assertThat(selectedRunStatus).isEqualTo("SUCCESS");
+    });
+    long job = jdbc.queryForObject(selectJobInstanceIdSql, Long.class, TENANT, workflow);
     String selectedCalendarCode =
         jdbc.queryForObject(selectCalendarCodeSql, String.class, TENANT, job);
     assertThat(selectedCalendarCode).isEqualTo("e2e_calendar");
@@ -317,11 +289,7 @@ class ReplayAdmissionRecoveryE2eIT extends AbstractIntegrationTest {
         select count(*) from batch.job_instance where tenant_id=? and job_code=?
     """;
 
-    return jdbc.queryForObject(
-        selectCountSql,
-        Integer.class,
-        TENANT,
-        code);
+    return jdbc.queryForObject(selectCountSql, Integer.class, TENANT, code);
   }
 
   private int customerCount(String customer) {
@@ -330,10 +298,6 @@ class ReplayAdmissionRecoveryE2eIT extends AbstractIntegrationTest {
     """;
 
     return new JdbcTemplate(business)
-        .queryForObject(
-            selectCountSql,
-            Integer.class,
-            TENANT,
-            customer);
+        .queryForObject(selectCountSql, Integer.class, TENANT, customer);
   }
 }

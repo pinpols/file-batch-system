@@ -57,8 +57,8 @@ class ConfigSyncTargetExecutor {
 
   private TenantInitResult readReceipt(Target target) {
     receiptMapper.setTenantContext(target.tenantId());
-    String json = receiptMapper.selectResult(
-        target.auditTenantId(), target.logId(), target.tenantId());
+    String json =
+        receiptMapper.selectResult(target.auditTenantId(), target.logId(), target.tenantId());
     if (EmptyChecks.isNull(json)) {
       return null;
     }
@@ -71,8 +71,8 @@ class ConfigSyncTargetExecutor {
 
   private void insertReceipt(Target target, TenantInitResult result) {
     String resultJson = JsonUtils.toJson(result);
-    int rows = receiptMapper.insert(
-        target.auditTenantId(), target.logId(), target.tenantId(), resultJson);
+    int rows =
+        receiptMapper.insert(target.auditTenantId(), target.logId(), target.tenantId(), resultJson);
     if (rows != 1) {
       throw new IllegalStateException("Config sync receipt must affect exactly one row");
     }

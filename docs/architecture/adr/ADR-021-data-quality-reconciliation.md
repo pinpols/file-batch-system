@@ -3,7 +3,7 @@
 - **Status**: Accepted（**两档路径**：v0.0 mini 草案 ~3.5-5 天 待激活 / v1.0 完整 ~16-18 天 强金融触发；**默认两档都不开工** — 见"实施触发条件"+ §实施分阶段）
 - **Date**: 2026-05-06
 - **Supersedes**: —
-- **Related**: ADR-012（失败分类，DQ 失败映射 DATA_QUALITY）/ ADR-017（result_version，DQ 通过才能 EFFECTIVE）/ ADR-020（重放，DQ 失败可走 OUTPUTS_ONLY 反向 promote）/ §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../archive/standards/worker-capability-priority-and-scope-2026-05-06.md)
+- **Related**: ADR-012（失败分类，DQ 失败映射 DATA_QUALITY）/ ADR-017（result_version，DQ 通过才能 EFFECTIVE）/ ADR-020（重放，DQ 失败可走 OUTPUTS_ONLY 反向 promote）/ §14.3.2 / [系统职责范围](../system-scope-boundary.md)
 
 ## 范围边界（Scope Discipline）
 
@@ -84,17 +84,16 @@ batch.data_quality_check         -- 一次 job 的 DQ 检查实例
 
 ### Gate 链路
 
-```
-job_instance terminal (SUCCESS / PARTIAL_FAILED)
-    │
-    ▼
-DataQualityCheckExecutor — 取 (tenant, business_key) 关联的 enabled rules
-    │
-    ├── 全部 PASS / 仅 WARN / INFO    → result_version 写入 EFFECTIVE / AUTO_LATEST 流程
-    │
-    └── 任一 BLOCKER FAIL              → result_version.promotion_policy 强制 MANUAL_APPROVAL
-                                         job_instance.failure_class = DATA_QUALITY (即使 SUCCESS)
-                                         alert ERROR + 等 ops 显式 promote / reject
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+%% 决策示意；实施范围以本文状态记录为准。
+flowchart TB
+  J["Job 终态 · SUCCESS / PARTIAL_FAILED"] --> Q["DataQualityCheckExecutor"]
+  Q --> R["按租户 / business_key 读取启用规则"]
+  R -->|"PASS / WARN / INFO"| V["结果版本提升流程"]
+  R -->|"BLOCKER FAIL"| M["MANUAL_APPROVAL"]
+  M --> F["记录 DATA_QUALITY + ERROR 告警"]
+  F --> O["运营 promote / reject"]
 ```
 
 ### DSL（受限 SQL）

@@ -1,6 +1,9 @@
 package io.github.pinpols.batch.console.application.contract.response.config;
 
+import lombok.Builder;
+
 /** 租户配置包 Excel 上传响应：返回 token 和各 sheet 行数。 */
+@Builder
 public record TenantConfigPackageExcelUploadResponse(
     String uploadToken,
     String fileName,

@@ -1,11 +1,10 @@
 package io.github.pinpols.batch.console.domain.observability.mapper;
 
 import io.github.pinpols.batch.console.domain.observability.query.ConsoleUsageDailySummaryQuery;
-
-
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
+import lombok.Builder;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -18,9 +17,9 @@ public interface ConsoleUsageDailyMapper {
 
   int insertDaily(@Param("row") DailyUsageRow row);
 
-  List<DailyUsageRow> querySummary(
-      ConsoleUsageDailySummaryQuery parameters);
+  List<DailyUsageRow> querySummary(ConsoleUsageDailySummaryQuery parameters);
 
+  @Builder
   record DailyUsageRow(
       LocalDate statDate,
       String tenantId,

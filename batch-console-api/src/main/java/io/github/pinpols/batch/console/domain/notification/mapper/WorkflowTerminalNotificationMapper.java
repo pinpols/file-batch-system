@@ -4,8 +4,6 @@ import io.github.pinpols.batch.console.domain.notification.param.WorkflowTermina
 import io.github.pinpols.batch.console.domain.notification.param.WorkflowTerminalNotificationFinishParam;
 import io.github.pinpols.batch.console.domain.notification.param.WorkflowTerminalNotificationInsertRuleParam;
 import io.github.pinpols.batch.console.domain.notification.param.WorkflowTerminalNotificationInsertWebhookParam;
-
-
 import io.github.pinpols.batch.console.domain.notification.view.TerminalNotificationDelivery;
 import java.time.Instant;
 import java.util.List;
@@ -23,17 +21,13 @@ public interface WorkflowTerminalNotificationMapper {
 
   String receiptPayload(@Param("tenantId") String tenantId, @Param("eventKey") String eventKey);
 
-  int insertWebhook(
-      WorkflowTerminalNotificationInsertWebhookParam parameters);
+  int insertWebhook(WorkflowTerminalNotificationInsertWebhookParam parameters);
 
-  int insertRule(
-      WorkflowTerminalNotificationInsertRuleParam parameters);
+  int insertRule(WorkflowTerminalNotificationInsertRuleParam parameters);
 
   List<TerminalNotificationDelivery> pending(@Param("now") Instant now, @Param("limit") int limit);
 
-  int claim(
-      WorkflowTerminalNotificationClaimParam parameters);
+  int claim(WorkflowTerminalNotificationClaimParam parameters);
 
-  int finish(
-      WorkflowTerminalNotificationFinishParam parameters);
+  int finish(WorkflowTerminalNotificationFinishParam parameters);
 }

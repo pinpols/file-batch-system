@@ -24,7 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class WorkflowRunReplaySourceResolver {
 
-  private static final String INVALID_SOURCE_MESSAGE = "error.workflow.replay_source_snapshot_invalid";
+  private static final String INVALID_SOURCE_MESSAGE =
+      "error.workflow.replay_source_snapshot_invalid";
 
   private final WorkflowRunMapper workflowRunMapper;
   private final WorkflowNodeRunMapper workflowNodeRunMapper;
@@ -41,8 +42,10 @@ public class WorkflowRunReplaySourceResolver {
 
   @Transactional(readOnly = true)
   public Source resolve(String tenantId, Long workflowRunId) {
-    boolean replaySourceIdentityIsInvalid =
-        EmptyChecks.isNull(tenantId) || EmptyChecks.isBlank(tenantId) || EmptyChecks.isNull(workflowRunId) || workflowRunId <= 0;
+    boolean replaySourceIdentityIsInvalid = EmptyChecks.isNull(tenantId)
+        || EmptyChecks.isBlank(tenantId)
+        || EmptyChecks.isNull(workflowRunId)
+        || workflowRunId <= 0;
     if (replaySourceIdentityIsInvalid) {
       throw invalidSource();
     }
@@ -57,8 +60,8 @@ public class WorkflowRunReplaySourceResolver {
     if (EmptyChecks.isNull(executionSnapshot)) {
       throw invalidSource();
     }
-    WorkflowNodeRunEntity startNode = workflowNodeRunMapper
-        .selectLatestByWorkflowRunIdAndNodeCode(workflowRunId, WorkflowNodeType.START.code());
+    WorkflowNodeRunEntity startNode = workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
+        workflowRunId, WorkflowNodeType.START.code());
     boolean startNodeIsNotValidReplaySource = EmptyChecks.isNull(startNode)
         || !workflowRunId.equals(startNode.getWorkflowRunId())
         || !WorkflowNodeType.START.code().equals(startNode.getNodeType())
@@ -69,7 +72,8 @@ public class WorkflowRunReplaySourceResolver {
       throw invalidSource();
     }
     Map<String, Object> rootParams = parseRootParams(startNode.getSourcePayloadProtected());
-    return new Source(sourceRun, executionSnapshot, startNode.getSourcePayloadProtected(), rootParams);
+    return new Source(
+        sourceRun, executionSnapshot, startNode.getSourcePayloadProtected(), rootParams);
   }
 
   private Map<String, Object> parseRootParams(String protectedPayload) {

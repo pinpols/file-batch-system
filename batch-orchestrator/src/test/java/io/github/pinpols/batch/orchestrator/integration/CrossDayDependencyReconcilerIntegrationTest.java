@@ -41,6 +41,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * ADR-018 §决策 §实施分阶段 Stage 6 — 跨批量日依赖端到端 IT。
@@ -138,50 +139,50 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
         and wr.workflow_definition_id = ? and wr.trigger_request_id = (select id from batch.trigger_request\s\
         where tenant_id = ? and request_id = ?) and nr.node_code = 'JOB'\
         """;
-  final String selectParamsSnapshotSql = """
+    final String selectParamsSnapshotSql = """
       select params_snapshot->'effectiveParams'->'crossDay'->'prior_day'->>'resultVersionId'\s\
       from batch.job_instance where tenant_id = ? and id = ?\
       """;
-  final String updateWorkflowRunSql = """
+    final String updateWorkflowRunSql = """
       update batch.workflow_run set run_status = 'FAILED', finished_at = current_timestamp where tenant_id = ?\s\
       and trigger_request_id = (select id from batch.trigger_request where tenant_id = ? and request_id = ?)\
       """;
-  final String updateJobInstanceSql = """
+    final String updateJobInstanceSql = """
       update batch.job_instance set instance_status = 'FAILED', finished_at = current_timestamp\s\
       where tenant_id = ? and id = ?\
       """;
-  final String selectIdSql2 = """
+    final String selectIdSql2 = """
       select id from batch.result_version where tenant_id = ? and business_key = ? and version_no = 2\
       """;
-  final String insertTriggerRequestSql = """
+    final String insertTriggerRequestSql = """
           insert into batch.trigger_request (
               tenant_id, request_id, trigger_type, workflow_definition_id, biz_date,
               dedup_key, request_status, trace_id
           ) values (?, ?, 'CATCH_UP', ?, ?, ?, 'ACCEPTED', 'trace-cross-day-rerun-pinned')
           """;
-  final String selectParamsSnapshotSql2 = """
+    final String selectParamsSnapshotSql2 = """
       select params_snapshot->'effectiveParams' from batch.job_instance where tenant_id = ? and id = ?\
       """;
-  final String selectParamsSnapshotSql3 = """
+    final String selectParamsSnapshotSql3 = """
       select params_snapshot->'effectiveParams'->'crossDay'->'prior_day'->'output'->>'recordCount'\s\
       from batch.job_instance where tenant_id = ? and id = ?\
       """;
-  final String updateWorkflowDefinitionSql = """
+    final String updateWorkflowDefinitionSql = """
       update batch.workflow_definition set version = version + 1 where tenant_id = ? and id = ?
   """;
-  final String insertTriggerRequestSql2 = """
+    final String insertTriggerRequestSql2 = """
         insert into batch.trigger_request (
             tenant_id, request_id, trigger_type, workflow_definition_id, biz_date,
             dedup_key, request_status, trace_id
         ) values (?, ?, 'CATCH_UP', ?, ?, ?, 'ACCEPTED', 'trace-cross-day-rerun-changed-spec')
         """;
-  final String selectNodeStatusSql = """
+    final String selectNodeStatusSql = """
       select nr.node_status from batch.workflow_node_run nr\s\
       join batch.workflow_run wr on wr.id = nr.workflow_run_id where wr.tenant_id = ?\s\
       and wr.trigger_request_id = (select id from batch.trigger_request where tenant_id = ? and request_id = ?)\s\
       and nr.node_code = 'JOB'\
       """;
-  final String selectJobInstanceIdSql2 = """
+    final String selectJobInstanceIdSql2 = """
       select nr.job_instance_id from batch.workflow_node_run nr\s\
       join batch.workflow_run wr on wr.id = nr.workflow_run_id where wr.tenant_id = ?\s\
       and wr.trigger_request_id = (select id from batch.trigger_request where tenant_id = ? and request_id = ?)\s\
@@ -202,10 +203,7 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
           "scope":"REQUIRED","consumeVersionStrategy":"EFFECTIVE_ONLY"}]
         """.formatted(upstreamJobCode);
     jdbcTemplate.update(
-        updateWorkflowNodeSql,
-        dependencySpec,
-        TENANT,
-        rerun.workflowDefinitionId());
+        updateWorkflowNodeSql, dependencySpec, TENANT, rerun.workflowDefinitionId());
 
     long oldInstance =
         insertStubJobInstance("INST-RERUN-OLD-" + UUID.randomUUID(), "SUCCESS", upstreamJobCode);
@@ -225,11 +223,8 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
         .createdAt(Instant.parse("2026-05-03T22:00:00Z"))
         .updatedAt(Instant.parse("2026-05-03T22:00:00Z"))
         .build());
-    Long sourceVersionId = jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class,
-        TENANT,
-        businessKey);
+    Long sourceVersionId =
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, businessKey);
     LaunchResponse sourceLaunch = workflowRunLaunchService.launch(LaunchRequest.builder()
         .tenantId(TENANT)
         .workflowDefinitionId(rerun.workflowDefinitionId())
@@ -250,15 +245,8 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
     String selectedParamsSnapshot =
         jdbcTemplate.queryForObject(selectParamsSnapshotSql, String.class, TENANT, sourceChildId);
     assertThat(selectedParamsSnapshot).isEqualTo(sourceVersionId.toString());
-    jdbcTemplate.update(
-        updateWorkflowRunSql,
-        TENANT,
-        TENANT,
-        rerun.requestId());
-    jdbcTemplate.update(
-        updateJobInstanceSql,
-        TENANT,
-        sourceChildId);
+    jdbcTemplate.update(updateWorkflowRunSql, TENANT, TENANT, rerun.requestId());
+    jdbcTemplate.update(updateJobInstanceSql, TENANT, sourceChildId);
 
     long latestInstance =
         insertStubJobInstance("INST-RERUN-LATEST-" + UUID.randomUUID(), "SUCCESS", upstreamJobCode);
@@ -276,23 +264,21 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
         .createdAt(Instant.parse("2026-05-03T23:00:00Z"))
         .updatedAt(Instant.parse("2026-05-03T23:00:00Z"))
         .build());
-    Long pendingVersionId = jdbcTemplate.queryForObject(
-        selectIdSql2,
-        Long.class,
-        TENANT,
-        businessKey);
+    Long pendingVersionId =
+        jdbcTemplate.queryForObject(selectIdSql2, Long.class, TENANT, businessKey);
     resultVersionPromoteService.promote(TENANT, pendingVersionId);
 
     String rerunRequestId = "req-cross-day-rerun-" + UUID.randomUUID();
     String rerunDedupKey = "dedup-cross-day-rerun-" + UUID.randomUUID();
     jdbcTemplate.update(
-        insertTriggerRequestSql, TENANT, rerunRequestId, rerun.workflowDefinitionId(), BIZ_DATE, rerunDedupKey);
+        insertTriggerRequestSql,
+        TENANT,
+        rerunRequestId,
+        rerun.workflowDefinitionId(),
+        BIZ_DATE,
+        rerunDedupKey);
     Map<String, Object> rerunParams = JsonUtils.fromJson(
-    jdbcTemplate.queryForObject(
-            selectParamsSnapshotSql2,
-            String.class,
-            TENANT,
-            sourceChildId),
+        jdbcTemplate.queryForObject(selectParamsSnapshotSql2, String.class, TENANT, sourceChildId),
         new TypeReference<>() {});
     rerunParams.put("operationType", "JOB_RERUN");
     rerunParams.put("parentInstanceId", sourceChildId);
@@ -322,28 +308,15 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
         jdbcTemplate.queryForObject(selectParamsSnapshotSql3, String.class, TENANT, rerunChildId);
     assertThat(selectedParamsSnapshotRead3).isEqualTo("17");
 
-    jdbcTemplate.update(
-        updateWorkflowRunSql,
-        TENANT,
-        TENANT,
-        rerunRequestId);
-    jdbcTemplate.update(
-        updateJobInstanceSql,
-        TENANT,
-        rerunChildId);
+    jdbcTemplate.update(updateWorkflowRunSql, TENANT, TENANT, rerunRequestId);
+    jdbcTemplate.update(updateJobInstanceSql, TENANT, rerunChildId);
     String changedDependencySpec = """
         [{"alias":"prior_day","jobCode":"%s","bizDateOffset":-2,
           "scope":"REQUIRED","consumeVersionStrategy":"EFFECTIVE_ONLY"}]
         """.formatted(upstreamJobCode);
     jdbcTemplate.update(
-        updateWorkflowNodeSql,
-        changedDependencySpec,
-        TENANT,
-        rerun.workflowDefinitionId());
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        TENANT,
-        rerun.workflowDefinitionId());
+        updateWorkflowNodeSql, changedDependencySpec, TENANT, rerun.workflowDefinitionId());
+    jdbcTemplate.update(updateWorkflowDefinitionSql, TENANT, rerun.workflowDefinitionId());
     String changedSpecRequestId = "req-cross-day-rerun-changed-spec-" + UUID.randomUUID();
     jdbcTemplate.update(
         insertTriggerRequestSql2,
@@ -521,11 +494,7 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
       resultVersionMapper.insert(version);
       if (versionNo == 1) {
         selectedId = jdbcTemplate.queryForObject(
-            selectIdSql,
-            Long.class,
-            TENANT,
-            version.businessKey(),
-            versionNo);
+            selectIdSql, Long.class, TENANT, version.businessKey(), versionNo);
       }
     }
 
@@ -586,38 +555,38 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
   @DisplayName("根 Workflow 跨日依赖恢复与批日结算按两种顺序竞争")
   void shouldResumeRootWorkflowDependencyAndDispatchChildJob_whenResultBecomesEffective(
       String firstLockWaiter) throws Exception {
-        final String selectAcquireBatchDaySettlementFenceSql = """
+    final String selectAcquireBatchDaySettlementFenceSql = """
             select batch.acquire_batch_day_settlement_fence(?, ?, ?)
         """;
-        final String selectPgBackendPidSql = """
+    final String selectPgBackendPidSql = """
             select pg_backend_pid()
         """;
 
-        final String insertBusinessCalendarSql = """
+    final String insertBusinessCalendarSql = """
             insert into batch.business_calendar (tenant_id, calendar_code, calendar_name, timezone, enabled)\s\
             values (?, ?, ?, 'UTC', true)\
             """;
-        final String updateWorkflowDefinitionSql = """
+    final String updateWorkflowDefinitionSql = """
             update batch.workflow_definition set calendar_code = ? where tenant_id = ? and id = ?
         """;
-        final String updateWorkflowNodeSql = """
+    final String updateWorkflowNodeSql = """
             update batch.workflow_node set cross_day_dependencies = ?::jsonb,\s\
             cross_day_dependency_timeout_seconds = 3600 where tenant_id = ? and workflow_definition_id = ?\s\
             and node_code = 'JOB'\
             """;
-        final String selectIdSql = """
+    final String selectIdSql = """
             select id from batch.workflow_run where tenant_id = ? and workflow_definition_id = ?\s\
             and trigger_request_id = (select id from batch.trigger_request where tenant_id = ?\s\
             and request_id = ?)\
             """;
-        final String selectRelatedJobInstanceIdSql = """
+    final String selectRelatedJobInstanceIdSql = """
             select related_job_instance_id from batch.workflow_run where tenant_id = ? and id = ?
         """;
-        final String selectNodeStatusSql = """
+    final String selectNodeStatusSql = """
             select node_status from batch.workflow_node_run where workflow_run_id = ? and node_code = 'JOB'\s\
             order by run_seq desc limit 1\
             """;
-        final String insertBatchDayInstanceSql = """
+    final String insertBatchDayInstanceSql = """
     insert into batch.batch_day_instance (
     tenant_id, calendar_code, biz_date, day_status, open_at, cutoff_at,
     timezone_snapshot, dst_policy_snapshot, frozen, version, created_at, updated_at, dry_run
@@ -630,45 +599,45 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
     frozen = false, version = batch.batch_day_instance.version + 1,
     updated_at = current_timestamp
     """;
-  final String selectIdSql2 = """
+    final String selectIdSql2 = """
       select id from batch.result_version where tenant_id = ? and business_key = ? and version_no = 1\
       """;
-        final String selectJobInstanceIdSql = """
+    final String selectJobInstanceIdSql = """
             select nr.job_instance_id from batch.workflow_node_run nr where nr.workflow_run_id = ?\s\
             and nr.node_code = 'JOB' and nr.job_instance_id is not null order by nr.run_seq desc limit 1\
             """;
-  final String selectIdSql3 = """
+    final String selectIdSql3 = """
       select id from batch.result_version where tenant_id = ? and business_key = ? and version_no = 2\
       """;
-        final String selectStatusSql = """
+    final String selectStatusSql = """
             select status from batch.result_version where tenant_id = ? and business_key = ? and version_no = 1\
             """;
-        final String selectBizDateSql = """
+    final String selectBizDateSql = """
             select biz_date from batch.job_instance where tenant_id = ? and id = ?
         """;
-        final String selectDataIntervalStartSql = """
+    final String selectDataIntervalStartSql = """
             select data_interval_start from batch.job_instance where tenant_id = ? and id = ?
         """;
-        final String selectDataIntervalEndSql = """
+    final String selectDataIntervalEndSql = """
             select data_interval_end from batch.job_instance where tenant_id = ? and id = ?
         """;
-        final String selectParamsSnapshotSql = """
+    final String selectParamsSnapshotSql = """
             select params_snapshot->'effectiveParams'->>'rootMarker' from batch.job_instance where tenant_id = ?\s\
             and id = ?\
             """;
-  final String selectParamsSnapshotSql2 = """
+    final String selectParamsSnapshotSql2 = """
       select params_snapshot->'effectiveParams'->'crossDay'->'prior_day'->>'resultVersionId'\s\
       from batch.job_instance where tenant_id = ? and id = ?\
       """;
-  final String selectParamsSnapshotSql3 = """
+    final String selectParamsSnapshotSql3 = """
       select params_snapshot->'effectiveParams'->'crossDay'->'prior_day'->'output'->>'recordCount'\s\
       from batch.job_instance where tenant_id = ? and id = ?\
       """;
-        final String selectCountSql = """
+    final String selectCountSql = """
     select count(*) from batch.trigger_request
     where tenant_id = ? and parent_workflow_run_id = ? and parent_node_code = 'JOB'
     """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
             select count(*) from batch.workflow_node_run
             where workflow_run_id = ? and node_code = 'JOB'
               and node_status = 'READY' and job_instance_id is not null
@@ -681,27 +650,17 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
     WorkflowLaunchSeed downstream = LaunchIntegrationFixture.prepareWorkflowLaunchWithoutWorker(
         jdbcTemplate, TENANT, "DISPATCH", "IT_CROSS_DAY_ROOT", TriggerType.API, BIZ_DATE);
     String calendarCode = "CAL_CROSS_DAY_R11_" + UUID.randomUUID().toString().replace("-", "");
-        jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        TENANT,
-        calendarCode,
-        calendarCode);
-        jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        calendarCode,
-        TENANT,
-        downstream.workflowDefinitionId());
+    jdbcTemplate.update(insertBusinessCalendarSql, TENANT, calendarCode, calendarCode);
+    jdbcTemplate.update(
+        updateWorkflowDefinitionSql, calendarCode, TENANT, downstream.workflowDefinitionId());
     String upstreamJobCode =
         "DAILY_PNL_CROSS_DAY_" + UUID.randomUUID().toString().replace("-", "");
     String dependencySpec = """
         [{"alias":"prior_day","jobCode":"%s","bizDateOffset":-1,
           "scope":"REQUIRED","consumeVersionStrategy":"EFFECTIVE_ONLY"}]
         """.formatted(upstreamJobCode);
-        jdbcTemplate.update(
-        updateWorkflowNodeSql,
-        dependencySpec,
-        TENANT,
-        downstream.workflowDefinitionId());
+    jdbcTemplate.update(
+        updateWorkflowNodeSql, dependencySpec, TENANT, downstream.workflowDefinitionId());
 
     String rootMarker = "root-" + UUID.randomUUID();
     Instant intervalStart = Instant.parse("2026-05-03T23:30:00Z");
@@ -726,13 +685,13 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
         TENANT,
         downstream.requestId());
     assertThat(launch.instanceNo()).isNotBlank();
-        Long selectedRelatedJobInstanceId = jdbcTemplate.queryForObject(
-            selectRelatedJobInstanceIdSql, Long.class, TENANT, workflowRunId);
-        assertThat(selectedRelatedJobInstanceId).isNull();
-        String selectedNodeStatus =
-            jdbcTemplate.queryForObject(selectNodeStatusSql, String.class, workflowRunId);
-        assertThat(selectedNodeStatus).isEqualTo("WAITING_DEPENDENCY");
-        jdbcTemplate.update(insertBatchDayInstanceSql, TENANT, calendarCode, BIZ_DATE);
+    Long selectedRelatedJobInstanceId = jdbcTemplate.queryForObject(
+        selectRelatedJobInstanceIdSql, Long.class, TENANT, workflowRunId);
+    assertThat(selectedRelatedJobInstanceId).isNull();
+    String selectedNodeStatus =
+        jdbcTemplate.queryForObject(selectNodeStatusSql, String.class, workflowRunId);
+    assertThat(selectedNodeStatus).isEqualTo("WAITING_DEPENDENCY");
+    jdbcTemplate.update(insertBatchDayInstanceSql, TENANT, calendarCode, BIZ_DATE);
 
     long upstreamInstanceId = insertStubJobInstance(
         "INST-CROSS-DAY-ROOT-" + UUID.randomUUID(), "SUCCESS", upstreamJobCode);
@@ -752,10 +711,7 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
         .updatedAt(Instant.parse("2026-05-03T22:00:00Z"))
         .build());
     Long expectedResultVersionId = jdbcTemplate.queryForObject(
-        selectIdSql2,
-        Long.class,
-        TENANT,
-        "job:" + upstreamJobCode + ":" + UPSTREAM_BIZ_DATE);
+        selectIdSql2, Long.class, TENANT, "job:" + upstreamJobCode + ":" + UPSTREAM_BIZ_DATE);
 
     WorkflowNodeRunEntity waitingNode =
         workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
@@ -764,8 +720,7 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
     ExecutorService executor = Executors.newFixedThreadPool(2);
     try (Connection fence = jdbcTemplate.getDataSource().getConnection()) {
       fence.setAutoCommit(false);
-      try (var statement =
-          fence.prepareStatement(selectAcquireBatchDaySettlementFenceSql)) {
+      try (var statement = fence.prepareStatement(selectAcquireBatchDaySettlementFenceSql)) {
         statement.setString(1, TENANT);
         statement.setString(2, calendarCode);
         statement.setObject(3, BIZ_DATE);
@@ -796,10 +751,8 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
       executor.shutdownNow();
     }
 
-    Long childInstanceId = jdbcTemplate.queryForObject(
-        selectJobInstanceIdSql,
-        Long.class,
-        workflowRunId);
+    Long childInstanceId =
+        jdbcTemplate.queryForObject(selectJobInstanceIdSql, Long.class, workflowRunId);
     assertThat(childInstanceId).isNotNull();
 
     String upstreamBusinessKey = "job:" + upstreamJobCode + ":" + UPSTREAM_BIZ_DATE;
@@ -819,11 +772,8 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
         .createdAt(Instant.parse("2026-05-03T23:00:00Z"))
         .updatedAt(Instant.parse("2026-05-03T23:00:00Z"))
         .build());
-    Long promotedVersionId = jdbcTemplate.queryForObject(
-        selectIdSql3,
-        Long.class,
-        TENANT,
-        upstreamBusinessKey);
+    Long promotedVersionId =
+        jdbcTemplate.queryForObject(selectIdSql3, Long.class, TENANT, upstreamBusinessKey);
     resultVersionPromoteService.promote(TENANT, promotedVersionId);
 
     ResolutionResult latestAfterPromotion =
@@ -833,42 +783,259 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
     Map<String, Object> latestEntry =
         (Map<String, Object>) latestAfterPromotion.getResolved().get("prior_day");
     assertThat(latestEntry).containsEntry("resultVersionId", promotedVersionId);
-        String selectedStatus =
-            jdbcTemplate.queryForObject(selectStatusSql, String.class, TENANT, upstreamBusinessKey);
-        assertThat(selectedStatus).isEqualTo("SUPERSEDED");
+    String selectedStatus =
+        jdbcTemplate.queryForObject(selectStatusSql, String.class, TENANT, upstreamBusinessKey);
+    assertThat(selectedStatus).isEqualTo("SUPERSEDED");
 
-        LocalDate selectedBizDate =
-            jdbcTemplate.queryForObject(selectBizDateSql, LocalDate.class, TENANT, childInstanceId);
-        assertThat(selectedBizDate).isEqualTo(BIZ_DATE);
-        Timestamp selectedDataIntervalStart = jdbcTemplate.queryForObject(
-            selectDataIntervalStartSql, Timestamp.class, TENANT, childInstanceId);
-        assertThat(selectedDataIntervalStart).isEqualTo(Timestamp.from(intervalStart));
-        Timestamp selectedDataIntervalEnd = jdbcTemplate.queryForObject(
-            selectDataIntervalEndSql, Timestamp.class, TENANT, childInstanceId);
-        assertThat(selectedDataIntervalEnd).isEqualTo(Timestamp.from(intervalEnd));
-        String selectedParamsSnapshot =
-            jdbcTemplate.queryForObject(selectParamsSnapshotSql, String.class, TENANT, childInstanceId);
-        assertThat(selectedParamsSnapshot).isEqualTo(rootMarker);
-        String selectedParamsSnapshotRead2 = jdbcTemplate.queryForObject(
-            selectParamsSnapshotSql2, String.class, TENANT, childInstanceId);
-        assertThat(selectedParamsSnapshotRead2).isEqualTo(expectedResultVersionId.toString());
-        String selectedParamsSnapshotRead3 = jdbcTemplate.queryForObject(
-            selectParamsSnapshotSql3, String.class, TENANT, childInstanceId);
-        assertThat(selectedParamsSnapshotRead3).isEqualTo("17");
-        Long selectedTriggerRequestCount =
-            jdbcTemplate.queryForObject(selectCountSql, Long.class, TENANT, workflowRunId);
-        assertThat(selectedTriggerRequestCount).isEqualTo(1L);
-        Long selectedWorkflowNodeRunCount =
-            jdbcTemplate.queryForObject(selectCountSql2, Long.class, workflowRunId);
-        assertThat(selectedWorkflowNodeRunCount).isEqualTo(1L);
-        String selectedDayStatus = jdbcTemplate.queryForObject(
-            selectDayStatusSql, String.class, TENANT, calendarCode, BIZ_DATE);
-        assertThat(selectedDayStatus).isEqualTo("IN_FLIGHT");
+    LocalDate selectedBizDate =
+        jdbcTemplate.queryForObject(selectBizDateSql, LocalDate.class, TENANT, childInstanceId);
+    assertThat(selectedBizDate).isEqualTo(BIZ_DATE);
+    Timestamp selectedDataIntervalStart = jdbcTemplate.queryForObject(
+        selectDataIntervalStartSql, Timestamp.class, TENANT, childInstanceId);
+    assertThat(selectedDataIntervalStart).isEqualTo(Timestamp.from(intervalStart));
+    Timestamp selectedDataIntervalEnd = jdbcTemplate.queryForObject(
+        selectDataIntervalEndSql, Timestamp.class, TENANT, childInstanceId);
+    assertThat(selectedDataIntervalEnd).isEqualTo(Timestamp.from(intervalEnd));
+    String selectedParamsSnapshot =
+        jdbcTemplate.queryForObject(selectParamsSnapshotSql, String.class, TENANT, childInstanceId);
+    assertThat(selectedParamsSnapshot).isEqualTo(rootMarker);
+    String selectedParamsSnapshotRead2 = jdbcTemplate.queryForObject(
+        selectParamsSnapshotSql2, String.class, TENANT, childInstanceId);
+    assertThat(selectedParamsSnapshotRead2).isEqualTo(expectedResultVersionId.toString());
+    String selectedParamsSnapshotRead3 = jdbcTemplate.queryForObject(
+        selectParamsSnapshotSql3, String.class, TENANT, childInstanceId);
+    assertThat(selectedParamsSnapshotRead3).isEqualTo("17");
+    Long selectedTriggerRequestCount =
+        jdbcTemplate.queryForObject(selectCountSql, Long.class, TENANT, workflowRunId);
+    assertThat(selectedTriggerRequestCount).isEqualTo(1L);
+    Long selectedWorkflowNodeRunCount =
+        jdbcTemplate.queryForObject(selectCountSql2, Long.class, workflowRunId);
+    assertThat(selectedWorkflowNodeRunCount).isEqualTo(1L);
+    String selectedDayStatus = jdbcTemplate.queryForObject(
+        selectDayStatusSql, String.class, TENANT, calendarCode, BIZ_DATE);
+    assertThat(selectedDayStatus).isEqualTo("IN_FLIGHT");
     assertThat(workflowMappers.workflowNodeRunMapper.selectByNodeStatus("WAITING_DEPENDENCY", 100))
         .anySatisfy(row -> assertThat(row.getWorkflowRunId()).isEqualTo(workflowRunId));
     assertThat(workflowMappers.workflowNodeRunMapper.selectLatestByNodeStatus(
             "WAITING_DEPENDENCY", 100))
         .noneMatch(row -> workflowRunId.equals(row.getWorkflowRunId()));
+  }
+
+  @Test
+  @DisplayName("旧依赖等待快照不能失败已进入运行的节点")
+  void shouldNotFailNodeThatStartedAfterDependencyScan() {
+    final String updateDefinitionSql = """
+        update batch.workflow_node set cross_day_dependencies=?::jsonb, cross_day_dependency_timeout_seconds=1
+        where tenant_id=? and workflow_definition_id=? and node_code='JOB'
+        """;
+    final String updateStartedSql = """
+        update batch.workflow_node_run set started_at=current_timestamp - interval '1 minute'
+        where workflow_run_id=? and node_code='JOB' and node_status='WAITING_DEPENDENCY'
+        """;
+    final String updateRunningSql = """
+        update batch.workflow_node_run set node_status='RUNNING' where id=? and node_status='WAITING_DEPENDENCY'
+        """;
+    final String selectNodeStatusSql = """
+        select node_status from batch.workflow_node_run where id=?
+        """;
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithoutWorker(
+        jdbcTemplate,
+        TENANT,
+        "DISPATCH",
+        "STALE_DEP_" + UUID.randomUUID(),
+        TriggerType.API,
+        BIZ_DATE);
+    String dependency = """
+        [{"alias":"prior_day","jobCode":"%s","bizDateOffset":-1,
+          "scope":"REQUIRED","consumeVersionStrategy":"EFFECTIVE_ONLY"}]
+        """.formatted("MISSING_" + UUID.randomUUID());
+    jdbcTemplate.update(updateDefinitionSql, dependency, TENANT, seed.workflowDefinitionId());
+    LaunchRequest request = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .workflowDefinitionId(seed.workflowDefinitionId())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.API)
+        .requestId(seed.requestId())
+        .build();
+    workflowRunLaunchService.launch(request);
+    WorkflowNodeRunEntity snapshot =
+        workflowMappers
+            .workflowNodeRunMapper
+            .selectLatestByNodeStatus("WAITING_DEPENDENCY", 100)
+            .stream()
+            .filter(row -> seed.workflowDefinitionId()
+                .equals(workflowMappers
+                    .workflowRunMapper
+                    .selectByIdAnyTenant(row.getWorkflowRunId())
+                    .getWorkflowDefinitionId()))
+            .findFirst()
+            .orElseThrow();
+    assertThat(jdbcTemplate.update(updateStartedSql, snapshot.getWorkflowRunId()))
+        .isEqualTo(1);
+    snapshot.setStartedAt(Instant.now().minusSeconds(60));
+    assertThat(jdbcTemplate.update(updateRunningSql, snapshot.getId())).isEqualTo(1);
+
+    ReflectionTestUtils.invokeMethod(
+        crossDayDependencyReconciler, "reconcileOne", snapshot, Instant.now());
+
+    assertThat(jdbcTemplate.queryForObject(selectNodeStatusSql, String.class, snapshot.getId()))
+        .isEqualTo("RUNNING");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"REMOVED_DEPENDENCY", "SHORTENED_TIMEOUT"})
+  @DisplayName("跨日依赖恢复使用运行时冻结的依赖与超时")
+  void shouldUseFrozenCrossDayDependencyWhenDefinitionChanges(String change) {
+    final String seedDependencySql = """
+        update batch.workflow_node set cross_day_dependencies=?::jsonb, cross_day_dependency_timeout_seconds=86400
+        where tenant_id=? and workflow_definition_id=? and node_code='JOB'
+        """;
+    final String removeDependencySql = """
+        update batch.workflow_node set cross_day_dependencies=null
+        where tenant_id=? and workflow_definition_id=? and node_code='JOB'
+        """;
+    final String shortenTimeoutSql = """
+        update batch.workflow_node set cross_day_dependency_timeout_seconds=1
+        where tenant_id=? and workflow_definition_id=? and node_code='JOB'
+        """;
+    final String updateStartedSql = """
+        update batch.workflow_node_run set started_at=current_timestamp - interval '1 minute'
+        where workflow_run_id=? and node_code='JOB' and node_status='WAITING_DEPENDENCY'
+        """;
+    final String selectStatusSql = "select node_status from batch.workflow_node_run where id=?";
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithoutWorker(
+        jdbcTemplate,
+        TENANT,
+        "DISPATCH",
+        "FROZEN_DEP_" + UUID.randomUUID(),
+        TriggerType.API,
+        BIZ_DATE);
+    String dependency = """
+        [{"alias":"prior_day","jobCode":"%s","bizDateOffset":-1,
+          "scope":"REQUIRED","consumeVersionStrategy":"EFFECTIVE_ONLY"}]
+        """.formatted("MISSING_" + UUID.randomUUID());
+    jdbcTemplate.update(seedDependencySql, dependency, TENANT, seed.workflowDefinitionId());
+    LaunchRequest request = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .workflowDefinitionId(seed.workflowDefinitionId())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.API)
+        .requestId(seed.requestId())
+        .build();
+    workflowRunLaunchService.launch(request);
+    WorkflowNodeRunEntity waiting =
+        workflowMappers
+            .workflowNodeRunMapper
+            .selectLatestByNodeStatus("WAITING_DEPENDENCY", 100)
+            .stream()
+            .filter(row -> seed.workflowDefinitionId()
+                .equals(workflowMappers
+                    .workflowRunMapper
+                    .selectByIdAnyTenant(row.getWorkflowRunId())
+                    .getWorkflowDefinitionId()))
+            .findFirst()
+            .orElseThrow();
+    assertThat(jdbcTemplate.update(updateStartedSql, waiting.getWorkflowRunId()))
+        .isEqualTo(1);
+    waiting.setStartedAt(Instant.now().minusSeconds(60));
+    jdbcTemplate.update(
+        "REMOVED_DEPENDENCY".equals(change) ? removeDependencySql : shortenTimeoutSql,
+        TENANT,
+        seed.workflowDefinitionId());
+
+    ReflectionTestUtils.invokeMethod(
+        crossDayDependencyReconciler, "reconcileOne", waiting, Instant.now());
+
+    assertThat(jdbcTemplate.queryForObject(selectStatusSql, String.class, waiting.getId()))
+        .isEqualTo("WAITING_DEPENDENCY");
+  }
+
+  @Test
+  @DisplayName("当前定义删除依赖后，原依赖结果就绪仍按冻结图派发")
+  void shouldDispatchFrozenDependencyWhenOriginalResultBecomesReady() {
+    final String seedDependencySql = """
+        update batch.workflow_node set cross_day_dependencies=?::jsonb, cross_day_dependency_timeout_seconds=86400
+        where tenant_id=? and workflow_definition_id=? and node_code='JOB'
+        """;
+    final String removeDependencySql = """
+        update batch.workflow_node set cross_day_dependencies=null
+        where tenant_id=? and workflow_definition_id=? and node_code='JOB'
+        """;
+    final String selectChildSql = """
+        select job_instance_id from batch.workflow_node_run
+        where workflow_run_id=? and node_code='JOB' and job_instance_id is not null
+        order by run_seq desc limit 1
+        """;
+    final String selectVersionSql = """
+        select params_snapshot->'effectiveParams'->'crossDay'->'prior_day'->>'resultVersionId'
+        from batch.job_instance where tenant_id=? and id=?
+        """;
+    final String selectUpstreamVersionSql = """
+        select id from batch.result_version where tenant_id=? and business_key=? and version_no=1
+        """;
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithoutWorker(
+        jdbcTemplate,
+        TENANT,
+        "DISPATCH",
+        "FROZEN_RESOLVE_" + UUID.randomUUID(),
+        TriggerType.API,
+        BIZ_DATE);
+    String upstream = "FROZEN_UPSTREAM_" + UUID.randomUUID();
+    String dependency = """
+        [{"alias":"prior_day","jobCode":"%s","bizDateOffset":-1,
+          "scope":"REQUIRED","consumeVersionStrategy":"EFFECTIVE_ONLY"}]
+        """.formatted(upstream);
+    jdbcTemplate.update(seedDependencySql, dependency, TENANT, seed.workflowDefinitionId());
+    LaunchRequest request = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .workflowDefinitionId(seed.workflowDefinitionId())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.API)
+        .requestId(seed.requestId())
+        .build();
+    workflowRunLaunchService.launch(request);
+    WorkflowNodeRunEntity waiting =
+        workflowMappers
+            .workflowNodeRunMapper
+            .selectLatestByNodeStatus("WAITING_DEPENDENCY", 100)
+            .stream()
+            .filter(row -> seed.workflowDefinitionId()
+                .equals(workflowMappers
+                    .workflowRunMapper
+                    .selectByIdAnyTenant(row.getWorkflowRunId())
+                    .getWorkflowDefinitionId()))
+            .findFirst()
+            .orElseThrow();
+    jdbcTemplate.update(removeDependencySql, TENANT, seed.workflowDefinitionId());
+    long upstreamInstanceId =
+        insertStubJobInstance("FROZEN_INST_" + UUID.randomUUID(), "SUCCESS", upstream);
+    ResultVersionEntity version = ResultVersionEntity.builder()
+        .tenantId(TENANT)
+        .businessKey("job:" + upstream + ":" + UPSTREAM_BIZ_DATE)
+        .versionNo(1)
+        .jobInstanceId(upstreamInstanceId)
+        .status("EFFECTIVE")
+        .effectiveAt(Instant.parse("2026-05-03T22:00:00Z"))
+        .payloadStorage("INLINE_JSON")
+        .payloadJson("{\"recordCount\":17}")
+        .generatedAt(Instant.parse("2026-05-03T22:00:00Z"))
+        .generatedBy("frozen-cross-day-test")
+        .promotionPolicy("AUTO_LATEST")
+        .createdAt(Instant.parse("2026-05-03T22:00:00Z"))
+        .updatedAt(Instant.parse("2026-05-03T22:00:00Z"))
+        .build();
+    resultVersionMapper.insert(version);
+    Long expectedVersionId = jdbcTemplate.queryForObject(
+        selectUpstreamVersionSql, Long.class, TENANT, version.businessKey());
+
+    ReflectionTestUtils.invokeMethod(
+        crossDayDependencyReconciler, "reconcileOne", waiting, Instant.now());
+
+    Long childId =
+        jdbcTemplate.queryForObject(selectChildSql, Long.class, waiting.getWorkflowRunId());
+    assertThat(childId).isNotNull();
+    assertThat(jdbcTemplate.queryForObject(selectVersionSql, String.class, TENANT, childId))
+        .isEqualTo(expectedVersionId.toString());
   }
 
   @Test
@@ -927,26 +1094,16 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
         BIZ_DATE);
     String calendarCode =
         "CAL_CROSS_DAY_TIMEOUT_" + UUID.randomUUID().toString().replace("-", "");
+    jdbcTemplate.update(insertBusinessCalendarSql, TENANT, calendarCode, calendarCode);
     jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        TENANT,
-        calendarCode,
-        calendarCode);
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        calendarCode,
-        TENANT,
-        downstream.workflowDefinitionId());
+        updateWorkflowDefinitionSql, calendarCode, TENANT, downstream.workflowDefinitionId());
     String upstreamJobCode = "MISSING_UPSTREAM_" + UUID.randomUUID().toString().replace("-", "");
     String dependencySpec = """
         [{"alias":"prior_day","jobCode":"%s","bizDateOffset":-1,
           "scope":"REQUIRED","consumeVersionStrategy":"EFFECTIVE_ONLY"}]
         """.formatted(upstreamJobCode);
     jdbcTemplate.update(
-        updateWorkflowNodeSql,
-        dependencySpec,
-        TENANT,
-        downstream.workflowDefinitionId());
+        updateWorkflowNodeSql, dependencySpec, TENANT, downstream.workflowDefinitionId());
 
     LaunchRequest downstreamLaunchRequest = LaunchRequest.builder()
         .tenantId(TENANT)
@@ -990,10 +1147,7 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
 
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
     while (System.nanoTime() < deadline) {
-      Integer waiting = jdbcTemplate.queryForObject(
-          selectCountSql,
-          Integer.class,
-          blockerPid);
+      Integer waiting = jdbcTemplate.queryForObject(selectCountSql, Integer.class, blockerPid);
       if (waiting != null && waiting >= expectedWaiters) return;
       Thread.sleep(10);
     }
@@ -1035,11 +1189,7 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
         triggerRequestId,
         status,
         TENANT + ":" + jobCode + ":" + instanceNo);
-    return jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class,
-        TENANT,
-        instanceNo);
+    return jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, instanceNo);
   }
 
   private Long ensureJobDefinition(String jobCode) {
@@ -1058,59 +1208,33 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
         select id from batch.job_definition where tenant_id=? and job_code=?
     """;
 
-    Long existing = jdbcTemplate.queryForObject(
-        selectCoalesceSql,
-        Long.class,
-        TENANT,
-        jobCode);
+    Long existing = jdbcTemplate.queryForObject(selectCoalesceSql, Long.class, TENANT, jobCode);
     if (existing != null && existing > 0) {
       return existing;
     }
-    jdbcTemplate.update(
-        insertJobDefinitionSql,
-        TENANT,
-        jobCode);
-    return jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class,
-        TENANT,
-        jobCode);
+    jdbcTemplate.update(insertJobDefinitionSql, TENANT, jobCode);
+    return jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, jobCode);
   }
 
   private Long insertStubWorkflowRun() {
-  final String insertWorkflowDefinitionSql = """
+    final String insertWorkflowDefinitionSql = """
       insert into batch.workflow_definition (tenant_id, workflow_code, workflow_name, workflow_type, version,\s\
       enabled, description) values (?, 'WF1', 'wf', 'DAG', 1, true, '') on conflict do nothing\
       """;
-  final String selectIdSql = """
+    final String selectIdSql = """
       select id from batch.workflow_definition where tenant_id=? and workflow_code=?
   """;
-  final String insertWorkflowRunSql = """
+    final String insertWorkflowRunSql = """
       insert into batch.workflow_run (tenant_id, workflow_definition_id, biz_date, run_status, trace_id)\s\
       values (?, ?, ?, 'RUNNING', 't-stub')\
       """;
-  final String selectIdSql2 = """
+    final String selectIdSql2 = """
       select id from batch.workflow_run where tenant_id=? and workflow_definition_id=? and biz_date=?\
       """;
 
-    jdbcTemplate.update(
-        insertWorkflowDefinitionSql,
-        TENANT);
-    Long defId = jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class,
-        TENANT,
-        "WF1");
-    jdbcTemplate.update(
-        insertWorkflowRunSql,
-        TENANT,
-        defId,
-        BIZ_DATE);
-    return jdbcTemplate.queryForObject(
-        selectIdSql2,
-        Long.class,
-        TENANT,
-        defId,
-        BIZ_DATE);
+    jdbcTemplate.update(insertWorkflowDefinitionSql, TENANT);
+    Long defId = jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, "WF1");
+    jdbcTemplate.update(insertWorkflowRunSql, TENANT, defId, BIZ_DATE);
+    return jdbcTemplate.queryForObject(selectIdSql2, Long.class, TENANT, defId, BIZ_DATE);
   }
 }

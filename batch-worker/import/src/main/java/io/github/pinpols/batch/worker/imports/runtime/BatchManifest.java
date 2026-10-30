@@ -66,8 +66,8 @@ public record BatchManifest(
     if (fileMapping == null || fileName == null) {
       return Optional.empty();
     }
-    Stream<FileMapping> fileNameMatches =
-        fileMapping.stream().filter(mapping -> EmptyChecks.isNotNull(mapping) && fileName.equals(mapping.fileName()));
+    Stream<FileMapping> fileNameMatches = fileMapping.stream()
+        .filter(mapping -> EmptyChecks.isNotNull(mapping) && fileName.equals(mapping.fileName()));
     return fileNameMatches
         .filter(mapping -> EmptyChecks.isNotNull(extractor.apply(mapping)))
         .map(extractor)
@@ -86,7 +86,8 @@ public record BatchManifest(
     if (hasRetiredJobTarget()) {
       return false;
     }
-    boolean hasNoRequiredInputFiles = EmptyChecks.isNull(requiredFiles) || EmptyChecks.isEmpty(Objects.requireNonNull(requiredFiles));
+    boolean hasNoRequiredInputFiles = EmptyChecks.isNull(requiredFiles)
+        || EmptyChecks.isEmpty(Objects.requireNonNull(requiredFiles));
     if (!hasNoRequiredInputFiles) {
       return false;
     }

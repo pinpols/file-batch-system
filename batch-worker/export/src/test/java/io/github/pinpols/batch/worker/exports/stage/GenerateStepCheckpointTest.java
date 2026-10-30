@@ -11,17 +11,22 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
+import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
+import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressRegistry;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPosition;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingStage;
 import io.github.pinpols.batch.worker.exports.config.ExportWorkerConfiguration;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.domain.ExportPayload;
+import io.github.pinpols.batch.worker.exports.domain.ExportStage;
 import io.github.pinpols.batch.worker.exports.domain.ExportStageResult;
+import io.github.pinpols.batch.worker.exports.infrastructure.S3ExportStorage;
 import io.github.pinpols.batch.worker.exports.plugin.ExportDataPluginRegistry;
 import io.github.pinpols.batch.worker.exports.stage.format.DelimitedExportFormat;
 import io.github.pinpols.batch.worker.exports.stage.format.ExcelExportFormat;
@@ -29,14 +34,19 @@ import io.github.pinpols.batch.worker.exports.stage.format.ExportFormatStrategyR
 import io.github.pinpols.batch.worker.exports.stage.format.FixedWidthExportFormat;
 import io.github.pinpols.batch.worker.exports.stage.format.GenerateCursorCodec;
 import io.github.pinpols.batch.worker.exports.stage.format.JsonExportFormat;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.beans.factory.ObjectProvider;
 
 /**
  * ADR-038 P3 端到端续跑测试:模拟 GENERATE 在第二页崩溃 → 位点记下首页 cursor → 重派从该 cursor 续写 → 最终文件完整有效。 验证「单文件 +
@@ -205,6 +215,96 @@ class GenerateStepCheckpointTest {
     assertThat(result.success()).isTrue();
     assertThat(rerun.getAttributes()).containsEntry(PipelineRuntimeKeys.RECORD_COUNT, 1L);
     assertThat(positionStore.advanceCalls).isEqualTo(advancesAfterFirst);
+  }
+
+  @Test
+  @DisplayName("演练 STORE 删除文件后步骤结果持久化失败，重派恢复相同校验和")
+  @SuppressWarnings("unchecked")
+  void dryRunStoreCleanup_whenStepResultWriteFails_requeueRegenerates() throws Exception {
+    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+        .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "1")), null));
+    var storage = mock(S3ExportStorage.class);
+    var crypto = mock(BatchObjectCryptoService.class);
+    var store = new StoreStep(storage, crypto);
+    var pipelineRuns = mock(PlatformPipelineRunRepository.class);
+    when(pipelineRuns.startStepRun(any(), any(), any(), any()))
+        .thenAnswer(call -> "STORE".equals(call.getArgument(2)) ? 2L : 1L);
+    Mockito.doThrow(new IllegalStateException("simulated result persistence failure"))
+        .doNothing()
+        .when(pipelineRuns)
+        .finishStepRunSuccess(eq(2L), any());
+    var meters = (ObjectProvider<MeterRegistry>) mock(ObjectProvider.class);
+    List<ExportStageStep> stages = new ArrayList<>();
+    for (var stage : ExportStage.values()) {
+      if (stage == ExportStage.GENERATE) stages.add(generateStep);
+      else if (stage == ExportStage.STORE) stages.add(store);
+      else {
+        ExportStageStep step = mock(ExportStageStep.class);
+        when(step.stage()).thenReturn(stage);
+        when(step.stepCode()).thenReturn("EXPORT_" + stage.name());
+        when(step.implCode()).thenReturn("EXPORT_" + stage.name());
+        when(step.stepName()).thenReturn("EXPORT_" + stage.name());
+        stages.add(step);
+      }
+    }
+    var executor = new DefaultExportStageExecutor(stages, pipelineRuns, meters);
+    var definitions = List.of(
+        new PipelineStepDefinition(
+            1L,
+            "EXPORT_GENERATE",
+            "Generate",
+            "GENERATE",
+            1,
+            "EXPORT_GENERATE",
+            Map.of(),
+            0,
+            "NONE",
+            0,
+            true),
+        new PipelineStepDefinition(
+            2L, "EXPORT_STORE", "Store", "STORE", 2, "EXPORT_STORE", Map.of(), 0, "NONE", 0, true));
+    ExportJobContext first = buildContext();
+    first.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
+    first.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, definitions);
+    Assertions.assertThatThrownBy(() -> executor.execute(first))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("simulated result persistence failure");
+    assertThat(deterministicFile).doesNotExist();
+    Object checksum = first.getAttributes().get(PipelineRuntimeKeys.CHECKSUM_VALUE);
+    assertThat(checksum).isNotNull();
+    ExportJobContext retry = buildContext();
+    retry.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
+    retry.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, definitions);
+    assertThat(executor.execute(retry)).hasSize(2).allMatch(ExportStageResult::success);
+    assertThat(retry.getAttributes()).containsEntry(PipelineRuntimeKeys.CHECKSUM_VALUE, checksum);
+    assertThat(deterministicFile).doesNotExist();
+    Mockito.verifyNoInteractions(storage, crypto);
+  }
+
+  @Test
+  @DisplayName("演练存储清理生成文件后重派，已完成位点仍重新生成相同内容")
+  void dryRunStoreCleanup_thenRequeuedGenerateRebuildsFile() throws Exception {
+    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+        .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "1")), null));
+    ExportJobContext first = buildContext();
+    first.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
+    assertThat(generateStep.execute(first).success()).isTrue();
+    byte[] original = Files.readAllBytes(deterministicFile);
+    var store = new StoreStep(mock(S3ExportStorage.class), mock(BatchObjectCryptoService.class));
+    assertThat(store.execute(first).success()).isTrue();
+    assertThat(deterministicFile).doesNotExist();
+    assertThat(positionStore
+            .load("tenant-gen-test", INSTANCE_ID, ProcessingStage.GENERATE)
+            .completed())
+        .isTrue();
+
+    ExportJobContext retry = buildContext();
+    retry.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
+    assertThat(generateStep.execute(retry).success()).isTrue();
+    assertThat(Files.readAllBytes(deterministicFile)).isEqualTo(original);
+    assertThat(retry.getAttributes()).containsEntry(PipelineRuntimeKeys.RECORD_COUNT, 1L);
+    assertThat(store.execute(retry).success()).isTrue();
+    assertThat(deterministicFile).doesNotExist();
   }
 
   @Test

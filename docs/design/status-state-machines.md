@@ -64,30 +64,47 @@ job_instance、workflow_run、pipeline_instance、task、partition 和 step inst
 
 ### 3.1 job_instance 状态机
 
-```
-CREATED → WAITING → READY → RUNNING ─┬→ SUCCESS / FAILED / PARTIAL_FAILED
-   │         │        │       │      └→ SUCCESS_DRY_RUN / FAILED_DRY_RUN (dry_run)
-   │         │        │       ├↔ PAUSED
-   └─────────┴────────┴───────┴→ CANCELLED / TERMINATED
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  C[CREATED] --> W[WAITING]
+  W --> R[READY]
+  R --> X[RUNNING]
+  X <--> P[PAUSED]
+  X --> T[SUCCESS / FAILED / PARTIAL_FAILED]
+  X --> D[SUCCESS_DRY_RUN / FAILED_DRY_RUN]
+  C -. 受控取消或终止 .-> E[CANCELLED / TERMINATED]
+  W -. 受控取消或终止 .-> E
+  R -. 受控取消或终止 .-> E
+  X -. 受控取消或终止 .-> E
 ```
 
 ### 3.2 outbox_event 状态机
 
-```
-NEW → PUBLISHING → PUBLISHED
-  ↑        │           
-  │        ├── FAILED → ... (退避后回到 NEW 重试) → ...
-  │        │
-  └────────┴── GIVE_UP （retry_count 耗尽）
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart LR
+  N[NEW] --> P[PUBLISHING]
+  P -->|发布确认| D[PUBLISHED]
+  P -->|可重试失败| F[FAILED]
+  F -->|到达 next_publish_at，CAS 领取| P
+  P -->|重试耗尽| G[GIVE_UP]
 ```
 
 ### 3.3 trigger_request 状态机（ADR-010）
 
-```
-PENDING → PROCESSING → ACCEPTED ─┬→ LAUNCHED
-   │          │          │       ├→ WAITING (业务日/容量门禁)
-   │          │          │       └→ FORWARD_FAILED → ACCEPTED / GIVE_UP
-   └──────────┴──────────┴→ DUPLICATE / REJECTED
+主路径示意：普通新请求在同一事务写入 `ACCEPTED` 与 Trigger Outbox；人工补跑审批才会 CAS 到 `PROCESSING`。上表的 `PENDING`、`FORWARD_FAILED`、`GIVE_UP` 不能据此理解为每个请求的必经状态，发布重试由 Outbox 状态机单独承载。
+
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  A[ACCEPTED：请求与 Outbox 已入库] -->|Orchestrator 创建根运行| L[LAUNCHED]
+  A -->|门禁要求持久化等待| W[WAITING]
+  W -->|条件满足并创建根运行| L
+  A -->|接纳校验拒绝| R[REJECTED / DUPLICATE]
+  A -->|人工补跑审批 CAS| P[PROCESSING]
+  P -->|创建根运行| L
+  P -->|仍须等待| W
 ```
 
 ## 4. 状态推进的硬约束

@@ -100,11 +100,9 @@ class WorkflowArchiveIntegrityIntegrationTest extends AbstractIntegrationTest {
 
     ArchiveFixture fixture = insertFixture();
 
-    assertThatThrownBy(() ->
-    jdbcTemplate.update(deleteJobInstanceSql, fixture.jobId()))
+    assertThatThrownBy(() -> jdbcTemplate.update(deleteJobInstanceSql, fixture.jobId()))
         .isInstanceOf(DataIntegrityViolationException.class);
-    assertThatThrownBy(() -> jdbcTemplate.update(
-            updateJobInstanceSql, fixture.jobId()))
+    assertThatThrownBy(() -> jdbcTemplate.update(updateJobInstanceSql, fixture.jobId()))
         .isInstanceOf(DataIntegrityViolationException.class);
     assertThat(count("batch.job_instance", fixture.jobId())).isEqualTo(1);
     assertThat(count("batch.workflow_node_run", fixture.jobNodeId())).isEqualTo(1);
@@ -113,10 +111,10 @@ class WorkflowArchiveIntegrityIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("Workflow 节点绑定 Job 与父删除并发时不留下悬空引用")
   void shouldSerializeWorkflowNodeAttachmentAgainstJobInstanceDelete() throws Exception {
-  final String updateWorkflowNodeRunSql = """
+    final String updateWorkflowNodeRunSql = """
       update batch.workflow_node_run set job_instance_id = null where id = ?
   """;
-  final String updateWorkflowNodeRunSql2 = """
+    final String updateWorkflowNodeRunSql2 = """
       update batch.workflow_node_run set job_instance_id = ? where id = ?
   """;
     final String selectPgBackendPidSql = """
@@ -133,9 +131,7 @@ class WorkflowArchiveIntegrityIntegrationTest extends AbstractIntegrationTest {
     """;
 
     ArchiveFixture fixture = insertFixture();
-    jdbcTemplate.update(
-        updateWorkflowNodeRunSql,
-        fixture.jobNodeId());
+    jdbcTemplate.update(updateWorkflowNodeRunSql, fixture.jobNodeId());
     CountDownLatch nodeAttached = new CountDownLatch(1);
     CountDownLatch allowNodeCommit = new CountDownLatch(1);
     CountDownLatch deleteStarted = new CountDownLatch(1);
@@ -143,10 +139,7 @@ class WorkflowArchiveIntegrityIntegrationTest extends AbstractIntegrationTest {
     ExecutorService executor = Executors.newFixedThreadPool(2);
     Future<?> attach = executor.submit(() -> new TransactionTemplate(transactionManager)
         .executeWithoutResult(status -> {
-          jdbcTemplate.update(
-              updateWorkflowNodeRunSql2,
-              fixture.jobId(),
-              fixture.jobNodeId());
+          jdbcTemplate.update(updateWorkflowNodeRunSql2, fixture.jobId(), fixture.jobNodeId());
           nodeAttached.countDown();
           awaitLatch(allowNodeCommit);
         }));
@@ -162,11 +155,8 @@ class WorkflowArchiveIntegrityIntegrationTest extends AbstractIntegrationTest {
       assertThat(deleteStarted.await(5, TimeUnit.SECONDS)).isTrue();
       Awaitility.await()
           .atMost(Duration.ofSeconds(5))
-          .until(() -> jdbcTemplate.queryForObject(
-                  selectCountSql,
-                  Integer.class,
-                  deletePid.get())
-              == 1);
+          .until(() ->
+              jdbcTemplate.queryForObject(selectCountSql, Integer.class, deletePid.get()) == 1);
       allowNodeCommit.countDown();
       attach.get(10, TimeUnit.SECONDS);
       Future<?> deleteFuture = delete;
@@ -207,9 +197,7 @@ class WorkflowArchiveIntegrityIntegrationTest extends AbstractIntegrationTest {
     """;
 
     ArchiveFixture fixture = insertFixture();
-    jdbcTemplate.update(
-        updateWorkflowNodeRunSql,
-        fixture.jobNodeId());
+    jdbcTemplate.update(updateWorkflowNodeRunSql, fixture.jobNodeId());
     CountDownLatch parentDeleted = new CountDownLatch(1);
     CountDownLatch allowParentCommit = new CountDownLatch(1);
     CountDownLatch linkStarted = new CountDownLatch(1);
@@ -229,19 +217,13 @@ class WorkflowArchiveIntegrityIntegrationTest extends AbstractIntegrationTest {
           .executeWithoutResult(status -> {
             linkPid.set(jdbcTemplate.queryForObject(selectPgBackendPidSql, Integer.class));
             linkStarted.countDown();
-            jdbcTemplate.update(
-                updateWorkflowRunSql,
-                fixture.jobId(),
-                fixture.runId());
+            jdbcTemplate.update(updateWorkflowRunSql, fixture.jobId(), fixture.runId());
           }));
       assertThat(linkStarted.await(5, TimeUnit.SECONDS)).isTrue();
       Awaitility.await()
           .atMost(Duration.ofSeconds(5))
-          .until(() -> jdbcTemplate.queryForObject(
-                  selectCountSql,
-                  Integer.class,
-                  linkPid.get())
-              == 1);
+          .until(
+              () -> jdbcTemplate.queryForObject(selectCountSql, Integer.class, linkPid.get()) == 1);
 
       allowParentCommit.countDown();
       delete.get(10, TimeUnit.SECONDS);
@@ -264,13 +246,13 @@ class WorkflowArchiveIntegrityIntegrationTest extends AbstractIntegrationTest {
   @DisplayName("WorkflowRun 历史关联提交后允许删除 JobInstance 并保留引用")
   void shouldKeepWorkflowRunSourceLinkAsHistory_whenParentIsDeletedAfterAttachment()
       throws Exception {
-        final String updateWorkflowNodeRunSql = """
+    final String updateWorkflowNodeRunSql = """
             update batch.workflow_node_run set job_instance_id = null where id = ?
         """;
-        final String updateWorkflowRunSql = """
+    final String updateWorkflowRunSql = """
             update batch.workflow_run set related_job_instance_id = ? where id = ?
         """;
-        final String selectPgBackendPidSql = """
+    final String selectPgBackendPidSql = """
             select pg_backend_pid()
         """;
     final String deleteJobInstanceSql = """
@@ -284,9 +266,7 @@ class WorkflowArchiveIntegrityIntegrationTest extends AbstractIntegrationTest {
     """;
 
     ArchiveFixture fixture = insertFixture();
-        jdbcTemplate.update(
-        updateWorkflowNodeRunSql,
-        fixture.jobNodeId());
+    jdbcTemplate.update(updateWorkflowNodeRunSql, fixture.jobNodeId());
     CountDownLatch linkWritten = new CountDownLatch(1);
     CountDownLatch allowLinkCommit = new CountDownLatch(1);
     CountDownLatch deleteStarted = new CountDownLatch(1);
@@ -297,10 +277,7 @@ class WorkflowArchiveIntegrityIntegrationTest extends AbstractIntegrationTest {
     try {
       attach = executor.submit(() -> new TransactionTemplate(transactionManager)
           .executeWithoutResult(status -> {
-            jdbcTemplate.update(
-                updateWorkflowRunSql,
-                fixture.jobId(),
-                fixture.runId());
+            jdbcTemplate.update(updateWorkflowRunSql, fixture.jobId(), fixture.runId());
             linkWritten.countDown();
             awaitLatch(allowLinkCommit);
           }));
@@ -314,11 +291,8 @@ class WorkflowArchiveIntegrityIntegrationTest extends AbstractIntegrationTest {
       assertThat(deleteStarted.await(5, TimeUnit.SECONDS)).isTrue();
       Awaitility.await()
           .atMost(Duration.ofSeconds(5))
-          .until(() -> jdbcTemplate.queryForObject(
-                  selectCountSql,
-                  Integer.class,
-                  deletePid.get())
-              == 1);
+          .until(() ->
+              jdbcTemplate.queryForObject(selectCountSql, Integer.class, deletePid.get()) == 1);
 
       allowLinkCommit.countDown();
       attach.get(10, TimeUnit.SECONDS);
@@ -347,10 +321,8 @@ class WorkflowArchiveIntegrityIntegrationTest extends AbstractIntegrationTest {
     ArchiveFixture fixture = insertFixture();
     ArchiveFixture foreignFixture = insertFixture();
 
-    assertForeignKeyViolation(() -> jdbcTemplate.update(
-        updateWorkflowRunSql,
-        foreignFixture.jobId(),
-        fixture.runId()));
+    assertForeignKeyViolation(
+        () -> jdbcTemplate.update(updateWorkflowRunSql, foreignFixture.jobId(), fixture.runId()));
     Long selectedRelatedJobInstanceId =
         jdbcTemplate.queryForObject(selectRelatedJobInstanceIdSql, Long.class, fixture.runId());
     assertThat(selectedRelatedJobInstanceId).isNull();
@@ -374,16 +346,10 @@ class WorkflowArchiveIntegrityIntegrationTest extends AbstractIntegrationTest {
     """;
 
     ArchiveFixture fixture = insertFixture();
-    jdbcTemplate.update(
-        updateWorkflowNodeRunSql,
-        fixture.jobNodeId());
-    jdbcTemplate.update(
-        updateWorkflowRunSql,
-        fixture.jobId(),
-        fixture.runId());
+    jdbcTemplate.update(updateWorkflowNodeRunSql, fixture.jobNodeId());
+    jdbcTemplate.update(updateWorkflowRunSql, fixture.jobId(), fixture.runId());
 
-    assertForeignKeyViolation(() -> jdbcTemplate.update(
-        updateJobInstanceSql, fixture.jobId()));
+    assertForeignKeyViolation(() -> jdbcTemplate.update(updateJobInstanceSql, fixture.jobId()));
     assertThat(count("batch.job_instance", fixture.jobId())).isEqualTo(1);
     Long selectedRelatedJobInstanceId =
         jdbcTemplate.queryForObject(selectRelatedJobInstanceIdSql, Long.class, fixture.runId());
@@ -407,16 +373,10 @@ class WorkflowArchiveIntegrityIntegrationTest extends AbstractIntegrationTest {
     """;
 
     ArchiveFixture fixture = insertFixture();
-    jdbcTemplate.update(
-        updateWorkflowNodeRunSql,
-        fixture.jobNodeId());
-    jdbcTemplate.update(
-        updateWorkflowRunSql,
-        fixture.jobId(),
-        fixture.runId());
+    jdbcTemplate.update(updateWorkflowNodeRunSql, fixture.jobNodeId());
+    jdbcTemplate.update(updateWorkflowRunSql, fixture.jobId(), fixture.runId());
 
-    assertForeignKeyViolation(() -> jdbcTemplate.update(
-        updateJobInstanceSql, fixture.jobId()));
+    assertForeignKeyViolation(() -> jdbcTemplate.update(updateJobInstanceSql, fixture.jobId()));
     assertThat(count("batch.job_instance", fixture.jobId())).isEqualTo(1);
     Long selectedRelatedJobInstanceId =
         jdbcTemplate.queryForObject(selectRelatedJobInstanceIdSql, Long.class, fixture.runId());
@@ -495,8 +455,7 @@ class WorkflowArchiveIntegrityIntegrationTest extends AbstractIntegrationTest {
           .isZero();
     } finally {
       // 只移除本用例注入的坏冷记录，随后走生产归档入口完成重试。
-      jdbcTemplate.update(
-          deleteWorkflowNodeRunArchiveSql, fixture.jobNodeId());
+      jdbcTemplate.update(deleteWorkflowNodeRunArchiveSql, fixture.jobNodeId());
     }
     archiveService.archiveOnce();
     assertThat(snapshot("archive.workflow_node_run_archive", fixture.jobNodeId()))
@@ -532,9 +491,7 @@ class WorkflowArchiveIntegrityIntegrationTest extends AbstractIntegrationTest {
     ArchiveFixture fixture = insertFixture();
     String root = snapshot("batch.workflow_run", fixture.runId());
     workflowRunMapper.archiveWorkflowRunsByIds(List.of(fixture.runId()));
-    jdbcTemplate.update(
-        updateWorkflowRunArchiveSql,
-        fixture.runId());
+    jdbcTemplate.update(updateWorkflowRunArchiveSql, fixture.runId());
     String conflictingRoot = snapshot("archive.workflow_run_archive", fixture.runId());
     try {
       assertThatThrownBy(archiveService::archiveOnce)
@@ -567,24 +524,24 @@ class WorkflowArchiveIntegrityIntegrationTest extends AbstractIntegrationTest {
           ) values (?, ?, ?, 'archive-job', 'MANUAL', ?, current_date, 'SUCCESS',
             now() - interval '3 days', now() - interval '2 days') returning id
           """;
-  final String insertWorkflowDefinitionSql = """
+    final String insertWorkflowDefinitionSql = """
           insert into batch.workflow_definition (
             tenant_id, workflow_code, workflow_name, calendar_code
           ) values (?, 'archive-workflow', 'Archive Workflow', 'archive-calendar') returning id
           """;
-  final String insertWorkflowRunSql = """
+    final String insertWorkflowRunSql = """
           insert into batch.workflow_run (
             tenant_id, workflow_definition_id, biz_date, run_status, finished_at,
             workflow_version_snapshot, execution_snapshot
           ) values (?, ?, current_date, 'SUCCESS', now() - interval '2 days', 7,
             '{"nodes":["job","end"]}'::jsonb) returning id
           """;
-  final String insertWorkflowNodeRunSql = """
+    final String insertWorkflowNodeRunSql = """
           insert into batch.workflow_node_run (
             workflow_run_id, job_instance_id, node_code, node_type, node_status, output
           ) values (?, ?, 'job', 'JOB', 'SUCCESS', '{"result":"retained"}'::jsonb) returning id
           """;
-  final String insertWorkflowNodeRunSql2 = """
+    final String insertWorkflowNodeRunSql2 = """
         insert into batch.workflow_node_run (workflow_run_id, node_code, node_type, node_status)
         values (?, 'end', 'END', 'SUCCESS') returning id
         """;
@@ -600,7 +557,8 @@ class WorkflowArchiveIntegrityIntegrationTest extends AbstractIntegrationTest {
         "archive-dedup-" + UUID.randomUUID());
     Long workflowId = jdbcTemplate.queryForObject(insertWorkflowDefinitionSql, Long.class, tenant);
     Long runId = jdbcTemplate.queryForObject(insertWorkflowRunSql, Long.class, tenant, workflowId);
-    Long jobNodeId = jdbcTemplate.queryForObject(insertWorkflowNodeRunSql, Long.class, runId, jobId);
+    Long jobNodeId =
+        jdbcTemplate.queryForObject(insertWorkflowNodeRunSql, Long.class, runId, jobId);
     Long endNodeId = jdbcTemplate.queryForObject(insertWorkflowNodeRunSql2, Long.class, runId);
     ArchiveFixture fixture = new ArchiveFixture(runId, jobId, jobNodeId, endNodeId);
     fixtures.add(fixture);
@@ -629,14 +587,9 @@ class WorkflowArchiveIntegrityIntegrationTest extends AbstractIntegrationTest {
     """;
 
     for (ArchiveFixture fixture : fixtures) {
+      jdbcTemplate.update(deleteWorkflowNodeRunSql, fixture.jobNodeId(), fixture.endNodeId());
       jdbcTemplate.update(
-          deleteWorkflowNodeRunSql,
-          fixture.jobNodeId(),
-          fixture.endNodeId());
-      jdbcTemplate.update(
-          deleteWorkflowNodeRunArchiveSql,
-          fixture.jobNodeId(),
-          fixture.endNodeId());
+          deleteWorkflowNodeRunArchiveSql, fixture.jobNodeId(), fixture.endNodeId());
       jdbcTemplate.update(deleteWorkflowRunSql, fixture.runId());
       jdbcTemplate.update(deleteWorkflowRunArchiveSql, fixture.runId());
       jdbcTemplate.update(deleteJobInstanceSql, fixture.jobId());
@@ -645,21 +598,17 @@ class WorkflowArchiveIntegrityIntegrationTest extends AbstractIntegrationTest {
   }
 
   private String snapshot(String table, Long id) {
-  final String selectToJsonbSql = """
+    final String selectToJsonbSql = """
       select to_jsonb(row_data)::text from %s row_data where id = ?\
       """.formatted(table);
-  return jdbcTemplate.queryForObject(
-        selectToJsonbSql,
-        String.class,
-        id);
+    return jdbcTemplate.queryForObject(selectToJsonbSql, String.class, id);
   }
 
   private int count(String table, Long id) {
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from %s where id = ?\
       """.formatted(table);
-  return jdbcTemplate.queryForObject(
-        selectCountSql, Integer.class, id);
+    return jdbcTemplate.queryForObject(selectCountSql, Integer.class, id);
   }
 
   private static void assertForeignKeyViolation(Runnable write) {

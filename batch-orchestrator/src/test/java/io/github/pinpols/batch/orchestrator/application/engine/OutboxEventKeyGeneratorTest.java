@@ -29,8 +29,8 @@ class OutboxEventKeyGeneratorTest {
   @DisplayName("各业务场景的事件键按租户与场景前缀编码")
   void shouldEncodeTenantIdAndScopePrefix() {
     assertThat(OutboxEventKeyGenerator.forDispatch("t1", 100L)).isEqualTo("t1:dispatch:100");
-    assertThat(OutboxEventKeyGenerator.forFileRedispatch("t1", 100L))
-        .isEqualTo("t1:file-redispatch:100");
+    assertThat(OutboxEventKeyGenerator.forFileRedispatch("t1", 100L, 2L))
+        .isEqualTo("t1:file-redispatch:100:2");
     assertThat(OutboxEventKeyGenerator.forRetry("t1", 100L, 3)).isEqualTo("t1:retry:100:3");
     assertThat(OutboxEventKeyGenerator.forReclaim("t1", 100L, "worker-x"))
         .isEqualTo("t1:reclaim:100:worker-x");
@@ -53,7 +53,7 @@ class OutboxEventKeyGeneratorTest {
     String tenant = "t1";
     Set<String> keys = new HashSet<>();
     keys.add(OutboxEventKeyGenerator.forDispatch(tenant, taskId));
-    keys.add(OutboxEventKeyGenerator.forFileRedispatch(tenant, taskId));
+    keys.add(OutboxEventKeyGenerator.forFileRedispatch(tenant, taskId, 1L));
     keys.add(OutboxEventKeyGenerator.forRetry(tenant, taskId, 1));
     keys.add(OutboxEventKeyGenerator.forReclaim(tenant, taskId, "worker-x"));
     keys.add(OutboxEventKeyGenerator.forCompensation(tenant, "cmp-001", taskId));

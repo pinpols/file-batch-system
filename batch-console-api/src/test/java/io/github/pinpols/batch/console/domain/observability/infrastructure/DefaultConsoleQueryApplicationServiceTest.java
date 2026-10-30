@@ -114,7 +114,7 @@ class DefaultConsoleQueryApplicationServiceTest {
                 .startedAt(Instant.parse("2026-08-02T01:00:00Z"))
                 .finishedAt(Instant.parse("2026-08-02T01:03:00Z"))
                 .dryRun(false)
-                .build()));
+                .build())));
 
     ConsoleTraceSnapshotResponse response = service.traceSnapshot("t1", "trace-1");
 

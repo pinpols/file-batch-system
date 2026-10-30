@@ -1,11 +1,11 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.response;
 
-import lombok.Builder;
-
 import com.fasterxml.jackson.annotation.JsonFormat;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
+import lombok.Builder;
+
 @Builder
 public record ConsoleJobDefinitionResponse(
     Long id,

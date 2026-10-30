@@ -1,9 +1,5 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
-import io.github.pinpols.batch.console.domain.notification.param.WorkflowTerminalNotificationInsertRuleParam;
-import io.github.pinpols.batch.console.domain.notification.param.WorkflowTerminalNotificationInsertWebhookParam;
-
-
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -12,6 +8,9 @@ import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscri
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookSubscriptionMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.WorkflowTerminalNotificationMapper;
+import io.github.pinpols.batch.console.domain.notification.param.WorkflowTerminalNotificationInsertRuleParam;
+import io.github.pinpols.batch.console.domain.notification.param.WorkflowTerminalNotificationInsertWebhookParam;
+import io.github.pinpols.batch.console.domain.notification.view.EnabledSubscriptionRuleRow;
 import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -25,8 +24,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class WorkflowTerminalNotificationService {
-  private static final String INVALID_JOB_TERMINAL_IDENTITY = "invalid Job terminal identity or schema";
-  private static final TypeReference<Map<String, Object>> EVENT_DATA_TYPE = new TypeReference<>() {};
+  private static final String INVALID_JOB_TERMINAL_IDENTITY =
+      "invalid Job terminal identity or schema";
+  private static final TypeReference<Map<String, Object>> EVENT_DATA_TYPE =
+      new TypeReference<>() {};
   private static final Set<String> TERMINAL =
       Set.of("SUCCESS", "FAILED", "TERMINATED", "SUCCESS_DRY_RUN", "FAILED_DRY_RUN");
   private final WorkflowTerminalNotificationMapper deliveries;
@@ -136,28 +137,30 @@ public class WorkflowTerminalNotificationService {
     for (WebhookSubscriptionEntity subscription : subscriptions.findEnabledByTenant(tenant)) {
       if (SubscriptionRuleDispatchPolicy.eventTypeMatches(
           subscription.getEventTypes(), eventType)) {
-        WorkflowTerminalNotificationInsertWebhookParam workflowTerminalNotificationInsertWebhookParam = WorkflowTerminalNotificationInsertWebhookParam.builder()
-            .tenantId(tenant)
-            .recipientId(subscription.getId())
-            .eventKey(eventKey)
-            .eventType(eventType)
-            .payload(notification)
-            .build();
+        WorkflowTerminalNotificationInsertWebhookParam
+            workflowTerminalNotificationInsertWebhookParam =
+                WorkflowTerminalNotificationInsertWebhookParam.builder()
+                    .tenantId(tenant)
+                    .recipientId(subscription.getId())
+                    .eventKey(eventKey)
+                    .eventType(eventType)
+                    .payload(notification)
+                    .build();
         deliveries.insertWebhook(workflowTerminalNotificationInsertWebhookParam);
       }
     }
-    for (Map<String, Object> rule : rules.selectEnabledByEventType(tenant, eventType)) {
+    for (EnabledSubscriptionRuleRow rule : rules.selectEnabledByEventType(tenant, eventType)) {
       if (SubscriptionRuleDispatchPolicy.matchesRule(rule, eventType, data)) {
-        WorkflowTerminalNotificationInsertRuleParam workflowTerminalNotificationInsertRuleParam = WorkflowTerminalNotificationInsertRuleParam.builder()
-            .tenantId(tenant)
-            .recipientId(((Number) rule.get("id")).longValue())
-            .channelCode(String.valueOf(rule.get("channel_code")))
-            .eventKey(eventKey)
-            .eventType(eventType)
-            .payload(notification)
-            .build();
-        deliveries.insertRule(
-            workflowTerminalNotificationInsertRuleParam);
+        WorkflowTerminalNotificationInsertRuleParam workflowTerminalNotificationInsertRuleParam =
+            WorkflowTerminalNotificationInsertRuleParam.builder()
+                .tenantId(tenant)
+                .recipientId(rule.id())
+                .channelCode(rule.channelCode())
+                .eventKey(eventKey)
+                .eventType(eventType)
+                .payload(notification)
+                .build();
+        deliveries.insertRule(workflowTerminalNotificationInsertRuleParam);
       }
     }
   }

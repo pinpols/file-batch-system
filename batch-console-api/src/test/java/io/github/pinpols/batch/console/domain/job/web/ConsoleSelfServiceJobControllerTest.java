@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.job.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -19,18 +18,24 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 @DisplayName("自助作业控制器: 重跑与补偿申请的提交与受理编号回包")
+@ExtendWith(MockitoExtension.class)
 class ConsoleSelfServiceJobControllerTest {
 
-  private final ConsoleSelfServiceJobService selfServiceJobService =
-      mock(ConsoleSelfServiceJobService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleSelfServiceJobService selfServiceJobService;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -41,9 +46,6 @@ class ConsoleSelfServiceJobControllerTest {
 
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
@@ -58,6 +60,9 @@ class ConsoleSelfServiceJobControllerTest {
   @Test
   @DisplayName("提交重跑申请后返回受理编号, 回包为成功状态")
   void shouldSubmitRerunRequest() throws Exception {
+    when(requestMetadataResolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
     when(selfServiceJobService.requestRerun(
             any(ConsoleSelfServiceJobService.RerunParam.class), anyString(), anyString()))
         .thenReturn("APR-20260101-001");
@@ -83,6 +88,9 @@ class ConsoleSelfServiceJobControllerTest {
   @Test
   @DisplayName("提交补偿申请后返回受理编号, 回包为成功状态")
   void shouldSubmitCompensationRequest() throws Exception {
+    when(requestMetadataResolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
     when(selfServiceJobService.requestCompensation(
             any(ConsoleSelfServiceJobService.CompensationParam.class), anyString(), anyString()))
         .thenReturn("APR-20260101-002");

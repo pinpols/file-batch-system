@@ -130,13 +130,12 @@ public class JobDependencyWaitingLaunchService {
     }
     try {
       LaunchRequest request = JsonUtils.fromJson(waiting.launchPayload(), LaunchRequest.class);
-      boolean waitRequestMatchesOriginal =
-          LaunchRequestIdentityGuard.matches(request, original)
-              && Objects.equals(waiting.tenantId(), request.tenantId())
-              && Objects.equals(waiting.requestId(), request.requestId())
-              && !EmptyChecks.isBlank(waiting.jobCode())
-              && Objects.equals(waiting.jobCode(), request.jobCode())
-              && Objects.equals(waiting.bizDate(), request.bizDate());
+      boolean waitRequestMatchesOriginal = LaunchRequestIdentityGuard.matches(request, original)
+          && Objects.equals(waiting.tenantId(), request.tenantId())
+          && Objects.equals(waiting.requestId(), request.requestId())
+          && !EmptyChecks.isBlank(waiting.jobCode())
+          && Objects.equals(waiting.jobCode(), request.jobCode())
+          && Objects.equals(waiting.bizDate(), request.bizDate());
       if (!waitRequestMatchesOriginal) {
         return Optional.empty();
       }
@@ -156,13 +155,12 @@ public class JobDependencyWaitingLaunchService {
         triggerRequestMapper.selectByTenantAndRequestIdForUpdate(tenantId, requestId);
     JobDependencyWaitingLaunchEntity current =
         waitingMapper.selectByTenantAndRequestIdForUpdate(tenantId, requestId);
-    boolean observedWaitIsStillCurrent =
-        EmptyChecks.isNotNull(current)
-            && "WAITING".equals(current.waitStatus())
-            && Objects.equals(observed.id(), current.id())
-            && Objects.equals(observed.jobCode(), current.jobCode())
-            && Objects.equals(observed.bizDate(), current.bizDate())
-            && Objects.equals(observed.launchPayload(), current.launchPayload());
+    boolean observedWaitIsStillCurrent = EmptyChecks.isNotNull(current)
+        && "WAITING".equals(current.waitStatus())
+        && Objects.equals(observed.id(), current.id())
+        && Objects.equals(observed.jobCode(), current.jobCode())
+        && Objects.equals(observed.bizDate(), current.bizDate())
+        && Objects.equals(observed.launchPayload(), current.launchPayload());
     if (!observedWaitIsStillCurrent) {
       return;
     }
@@ -226,20 +224,18 @@ public class JobDependencyWaitingLaunchService {
     String pendingTenantId = request.tenantId();
     String pendingRequestId = request.requestId();
     TriggerRequestEntity pendingRequest =
-        triggerRequestMapper.selectByTenantAndRequestIdForUpdate(
-            pendingTenantId, pendingRequestId);
+        triggerRequestMapper.selectByTenantAndRequestIdForUpdate(pendingTenantId, pendingRequestId);
     LaunchRequestIdentityGuard.requirePending(request, pendingRequest);
     String existingTenantId = request.tenantId();
     String existingRequestId = request.requestId();
     JobDependencyWaitingLaunchEntity existing =
         waitingMapper.selectByTenantAndRequestId(existingTenantId, existingRequestId);
-    boolean existingWaitConflictsWithRequest =
-        EmptyChecks.isNotNull(existing)
-            && (!Objects.equals(existing.tenantId(), request.tenantId())
-                || !Objects.equals(existing.requestId(), request.requestId())
-                || !Objects.equals(existing.jobCode(), request.jobCode())
-                || !Objects.equals(existing.bizDate(), request.bizDate())
-                || !"WAITING".equals(existing.waitStatus()));
+    boolean existingWaitConflictsWithRequest = EmptyChecks.isNotNull(existing)
+        && (!Objects.equals(existing.tenantId(), request.tenantId())
+            || !Objects.equals(existing.requestId(), request.requestId())
+            || !Objects.equals(existing.jobCode(), request.jobCode())
+            || !Objects.equals(existing.bizDate(), request.bizDate())
+            || !"WAITING".equals(existing.waitStatus()));
     if (existingWaitConflictsWithRequest) {
       throw waitConflict();
     }
@@ -266,8 +262,7 @@ public class JobDependencyWaitingLaunchService {
     } else {
       String tenantId = request.tenantId();
       LocalDate businessDate = request.bizDate();
-      notReadyReason =
-          captureDependencyResults(tenantId, businessDate, dependencies, references);
+      notReadyReason = captureDependencyResults(tenantId, businessDate, dependencies, references);
     }
     if (EmptyChecks.isNull(notReadyReason)) {
       return Optional.of(List.copyOf(references));

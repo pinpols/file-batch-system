@@ -5,6 +5,25 @@
 本文覆盖 Trigger 的状态查询、注册、暂停、恢复、排空和 misfire 验证。生产操作统一经
 Trigger 管理 API 完成，禁止直接改 Quartz 表或 `batch.job_definition`。
 
+## 实现职责与事务
+
+`TriggerService` 的统一入口保持不变，排障时按下列职责查找实际执行位置：
+
+| 位置 | 职责与事务边界 |
+|---|---|
+| `DefaultTriggerService` | API手工启动校验及用例委派；`createPendingCatchUp` 的声明式事务仍从此入口开始 |
+| `TriggerRequestPersistence` | 普通请求以原 `REQUIRES_NEW` 完成幂等/业务日围栏、request与Outbox；其构造/发布辅助方法不另开事务 |
+| `TriggerExternalEventService` | 事件身份、冻结目标和全部目标写入位于同一接纳事务，不能逐目标调用新的独立事务 |
+| `TriggerScheduledRecoveryService` | 原fire、readiness、已拒绝occurrence及冻结审批恢复；保留各流程原有显式事务，待审批创建继承门面事务 |
+| `TriggerLaunchQueryService` | 启动/事件状态回查，保留原查询事务和租户绑定，不执行接纳或推进 |
+| `TriggerAdmissionRules` | 现有租户、Workflow版本和稳定错误身份核验，不写状态、不新建事务 |
+
+职责拆分没有改变锁顺序、幂等身份、首次启动快照或Outbox发布方式；不能绕过统一入口直接调用协作者来模拟恢复。
+
+## 批次日自动补跑的原回执核验
+
+同一补跑幂等键仅能复用相同的冻结业务载荷；重试时请求 ID 和 trace ID 可不同，其余身份和载荷不匹配时返回冲突。内部 `POST /internal/trigger/catch-up/verify` 使用内部密钥、原项目键和预期启动载荷，只读核验租户、Workflow、业务日、触发类型及持久化载荷；匹配后返回原 Trigger 请求标识，不返回原始载荷，也不接纳新请求。未找到或核验失败不能证明请求未提交，不能换键重发。请求标识证明接纳记录，不代表 Workflow 或 Job 已成功。
+
 ## 前置条件
 
 调度定义的唯一权威字段属于 Workflow：单作业 Workflow 通过 `single_job_definition_id` 找到执行 Job，组合 Workflow
@@ -18,7 +37,7 @@ JobCode 管理别名。
 
 Quartz 恢复信封的 `sourceFireTime` 保留原计划 fire；非 Quartz 补跑使用接纳事件时刻，不能拿业务数据区间起点代替。审批后的 Root 及其 JOB 子请求继承同一冻结区间；核验时必须同时检查 Root 和实际 JobInstance，不能只检查 Root 快照或成功状态。
 
-已处于 SETTLED、FAILED、SKIPPED 或 MANUAL_RELEASED 的业务日拒绝普通 API 新请求，返回 HTTP 409 / `STATE_CONFLICT`，请求与 Outbox 事务回滚；调用方应先核对原请求，再经显式 CATCH_UP/RERUN 及其原有权限/审批流程处置，不可重开日或改写状态表来绕过。普通定时 fire 仍由 occurrence 记录 `CLOSED_DAY_REJECTED` 及原拒绝原因，不能将该路径和 API 冲突响应混为一种投递结果。
+已处于 SETTLED、FAILED、SKIPPED 或 MANUAL_RELEASED 的业务日拒绝普通 API 新请求，返回 HTTP 409 / `STATE_CONFLICT`，请求与 Outbox 事务回滚；调用方应先核对原请求，再经显式 CATCH_UP/RERUN 及其原有权限/审批流程处置，不可重开日或改写状态表来绕过。普通定时 fire 仍由 occurrence 记录 `CLOSED_DAY_REJECTED` 及原拒绝原因，不能将该路径和 API 冲突响应混为一种投递结果。 关账拒绝不会覆盖已绑定补跑请求的 occurrence；如果旧回调与补跑接纳交错，回调回查并返回已接纳的请求。
 
 本地 Stage 22/24 的 misfire 必须由管理 API 暂停/恢复真实 Quartz，在原 fire 超过阈值后由 callback 产生待办和原启动快照，再审批该原请求并核对 Root/Job SUCCESS、原日期/区间/版本。手工插入无快照的 ACCEPTED 请求或改写 NEXT_FIRE_TIME 都不能替代这一证据。压力 API 使用与历史结算隔离的独立业务日；所有正常 API/Outbox 请求逐项核对同租户的 request→Root→JOB 节点→JobInstance 成功，失败终态和其它租户的同名 request 不计成功。
 
@@ -73,7 +92,45 @@ BATCH_TRIGGER_MANAGEMENT_DRY_RUN=false \
 
 `batch.trigger.outbox.publish.latency.negative_duration` 记录因单调时长差为负而跳过的无效计时样本；此样本不进入 ok/fail 延迟分布。单独出现该计数不等于 outbox 投递失败，仍须按请求状态、outbox 终态和 Kafka 消费结果追查；若持续增长，应检查 JVM 运行时与计时采样路径。
 
+## Readiness 持久等待恢复
+
+Trigger 将首次等待的依赖集合、Workflow 调度版本、原计划 fire、业务日和截止时间移交至
+Orchestrator 的 `readiness_wait`。Quartz 回调缺失时，Orchestrator 的等待扫描器仍按原业务日检查全部依赖，
+并通过 Trigger 内部恢复端点进入正常启动链路；Trigger 继续校验原 occurrence 的版本、身份、终态及幂等性。
+同一 fire 的等待起点和截止时间以 Trigger 首次持久化的窗口为准，后续重试和重复移交沿用该窗口；
+调整等待窗口配置只影响尚未登记的新等待，不会延长或缩短已有等待。重新规划为新版本的 fire 使用新窗口。
+依赖未就绪且超过截止时间时，Orchestrator 将等待终结为 `TIMED_OUT`；Trigger 的独立扫尾器将
+occurrence 终结为 `READINESS_TIMEOUT`，日结不再被该计划 fire 阻塞。两端扫描均不依赖 Quartz 回调。
+Trigger 扫尾更新时会重新核对截止时间仍不晚于本轮扫描时刻；扫描后窗口已延长的记录保留等待，由后续扫描处理。
+
+恢复客户端的 `batch.trigger.internal.base-url` 沿用现有 `BATCH_TRIGGER_BASE_URL`；本地未指定完整地址时
+使用 `BATCH_TRIGGER_PORT`，默认 18081。Compose 使用 `http://trigger:18081`，Helm 使用既有 Trigger Service
+地址。该地址为静态配置，修改后需要重启 Orchestrator。两端还需注入一致的 `BATCH_INTERNAL_SECRET`；
+恢复客户端不会在密钥为空时发送请求，即使测试环境开启安全 bypass 也一样。
+
+恢复调用复用 Orchestrator 受控 HTTP 通道。`batch.trigger.internal.connect-timeout` 默认 `2s`,
+`batch.trigger.internal.request-timeout` 默认 `5s`, 属于静态启动配置; 不回包在单次请求预算内失败,
+原等待保持 PENDING。可通过应用配置覆盖, 不在业务方法内新建无超时客户端。
+
+等待扫描仍保持单轮 100 条上限, 按 `updated_at` 探测水位轮转, 同水位按 deadline/id 排序。
+每项探测前仅更新仍为 PENDING 的水位, 不改等待状态, 使长期未就绪项不会占满每轮入口。
+V359 增加对应部分索引; 截止时间和原 fire 身份语义保持不变。
+
+排查时同时核对 `readiness_wait` 和同租户、Workflow、原 fire 的 `scheduled_occurrence`。
+移交失败会记录 `batch.trigger.readiness.handover.failed.total`；HTTP 恢复失败应保留等待，下一轮重试。
+不能把接口收到请求或单端等待终结当作完整恢复或日结解除阻塞的证据。
+
+Console 的“调度快照 → 持久化等待”页签可通过 `GET /api/console/ops/persistent-waits` 按租户、类型、状态和业务日查询 readiness 与容量准入等待。该接口是只读安全投影，不返回 `workflow_launch_wait.launch_payload`；它用于定位记录和关联请求，不替代核对 Trigger occurrence、WorkflowRun 或最终启动结果。
+
 ## Workflow 执行槽位等待
+
+Trigger Kafka 启动消息有限重试耗尽后，Orchestrator 将原始信封加密保存到 `trigger_launch_recovery`，待恢复器处理。同租户、同请求 ID 的重复信封必须与已保存信封一致：`PENDING` 保留原等待与退避；`DEAD` 在相同信封再次投递时重置重试次数并回到 `PENDING`；`DONE` 和 `REJECTED` 保持终态。不同信封、无法解密的原记录或无法确认持久状态时，登记不会报告成功，消费错误处理器不得按已恢复跳过消息。原信封对比包括请求、来源时刻及追踪上下文，排查冲突时应检查请求生产方的幂等身份，不要把密文或原始载荷写入日志。
+
+重新入队时 `recovery_generation` 递增，旧一轮迟到的失败或拒绝回执不能消耗新一轮次数或改写状态；同一冻结请求的成功回执仍可完成锚点。恢复失败次数和退避按数据库当前值原子更新，达到上限后停止继续排队；已经并发开始的调用仍可能完成。
+
+如果重复启动在读取旧状态后遇到定义、版本或父实例校验失败，但同一原请求已经建档，启动入口返回可重试的 503；Trigger 消费端交给监听器重投，恢复锚点按退避重试。排查时应沿用原请求身份，不要换新请求键重发；状态和重试结果以持久化记录为准。
+
+Workflow 首次建档时会加密保存 START 载荷；该运行的入口节点派发和重复启动均使用这份冻结载荷，不能通过同一请求键的后续参数改变它。冻结载荷缺失或无法解密时不会继续派发，需检查运行记录及密钥可用性。
 
 同一 Workflow 定义、业务日和 dry-run 模式已有 `CREATED/RUNNING` 根运行时，独立请求进入 Orchestrator 的
 `workflow_launch_wait` 持久等待。Kafka 消息只有在等待记录和请求 `PROCESSING` 同事务提交后才确认；
@@ -86,6 +143,8 @@ BATCH_TRIGGER_MANAGEMENT_DRY_RUN=false \
 等待写入必须与原请求身份、可受理状态及对应状态转换在同一事务提交；原请求终结、目标/业务日/dry-run不一致或必需写入0行时拒绝并回滚，不能只看等待INSERT成功。容量恢复先核对持久槽位与载荷，再由启动事务核对原请求；LAUNCHED不被等待拒绝路径改回拒绝。普通启动从未等待或重复收敛时的可选CAS0行属于幂等无操作，与准入必需写入0行区分。
 
 排障时通过受支持的查询入口对照tenant、requestId、Workflow/Job、bizDate、dry-run、原请求状态和等待状态，保留首次载荷及错误记录。Job依赖等待恢复先核对原请求与持久载荷，即使上游未就绪也拒绝坏身份；未创建实例的坏等待与原请求同事务收敛为CANCELLED/REJECTED。若已有该原请求亲自创建的实例，则保留等待并显示`LAUNCH_ALREADY_PREPARED`，应追踪既有CREATED恢复与派发结果，不能人工删除或重新触发。合法等待的损坏依赖快照仍保持WAITING并报告`DEPENDENCY_SNAPSHOT_INVALID`。V294已为两类等待绑定同租户原请求NO ACTION外键；父请求/终态等待按[引用整改专题§2.11](../plans/database-reference-integrity-remediation-2026-10-18.md)先子后父清理，活跃、近期或仍有关联运行/审计的记录保留。FK不校验载荷业务日或状态，应用身份守护仍必须执行；不要用删除原请求或手改载荷解决不一致。
+
+容量等待也可从 Console 的“调度快照 → 持久化等待”只读查看。页面按 `tenantId` 和后端租户守卫过滤，不展示首次保存的启动载荷；遇到 `WAITING`、`RESUMED` 或 `REJECTED` 时，仍须按 requestId/Trace ID 对照请求状态与 WorkflowRun，不能将查询结果当作恢复或派发成功。
 
 以下均为 `STATIC / RESTART_REQUIRED` 配置，默认适用于本地、Compose 与 Helm 同版本应用；
 可通过 Spring 配置或部署的额外环境变量覆盖，修改后滚动重启 Orchestrator，不在 Console 动态修改：
@@ -143,3 +202,24 @@ Workflow schedule version 查询已物化、早于 `batch.trigger.runtime.misfir
 | dedup | requestId、幂等键及实例数量 |
 | 最终状态 | job instance、task、outbox 是否终态 |
 | 证据 | 日志、指标和查询结果路径 |
+
+## 业务日与夏令时日切
+
+有日历时，触发 Instant 先按日历时区定位当日，再和当日日切的实际时间点比较：日切前归前一天，日切起归当天。秋季回拨造成同一日切出现两次时，采用第一次，避免业务日期在重复小时倒退；春季跳时造成日切不存在时，采用跳时后的首个有效时刻。无日历时仍按生效时区取自然日期，不套用默认日切。
+
+例如纽约 2026-11-01、日切 01:30：05:40Z 与回拨后的 06:10Z 都属于 11 月 1 日，不因第二次本地 01:10 退回前一天。之后仍按日历中明确维护的节假日、补工作日与滚动规则处理；周末不自动等同节假日。排查应保留原 fireTime、日历时区/日切及冻结 bizDate，不能仅比较格式化后的本地时分。
+
+
+### 批量日状态推进的服务所有权
+
+Trigger 不承担 `batch_day_instance` 的 OPEN→CUTOFF 写入。由 Orchestrator 按持久化截止时间或日历时间策略推进，冻结记录跳过，版本 CAS 与审计在同一短事务中完成。排查应检查 Orchestrator 的扫描与审计，不在 Trigger 补建第二条日切写入链路。更新源码只改变后续构建；现有环境需按发布流程更新对应服务，本地回归不代表已部署。
+
+
+### 准入排队期间开始排水
+
+手工启动、外部事件及指定 occurrence 补跑会先进入本地有界准入队列。若等待期间开始排水，获得许可后在业务调用前再次检查并返回 `STATE_CONFLICT`（HTTP 409），不新增业务写入。已进入业务执行的请求继续由事务、Outbox 与原幂等键收敛；排水开关不撤销已经受理的动作，调用方应按原请求查询状态。
+
+
+### 外部事件冻结目标的重投
+
+事件级接纳以数字 ID 数组冻结首次 Workflow 目标。按单个 Workflow 重投同一事件时，目标在冻结集合内则复用原请求及 Outbox；集合外目标仍拒绝，不能因后续定义变化扩展既有投递。排查应按 tenant/source/event ID 核对原目标与请求，不将合法重投的冲突误认为需要生成新业务事件。

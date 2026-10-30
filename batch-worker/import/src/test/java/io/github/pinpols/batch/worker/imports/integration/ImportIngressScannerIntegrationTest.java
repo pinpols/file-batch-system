@@ -370,18 +370,11 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
       final String deleteBatchFileAuditLogSql = """
           delete from batch.file_audit_log where tenant_id = ? and evidence_ref = ?
       """;
-      jdbcTemplate.update(
-          deleteBatchFileAuditLogSql,
-          "t1",
-          objectName);
+      jdbcTemplate.update(deleteBatchFileAuditLogSql, "t1", objectName);
       final String deleteBatchFileRecordSql = """
           delete from batch.file_record where tenant_id = ? and storage_bucket = ? and storage_path = ?
       """;
-      jdbcTemplate.update(
-          deleteBatchFileRecordSql,
-          "t1",
-          bucket,
-          objectName);
+      jdbcTemplate.update(deleteBatchFileRecordSql, "t1", bucket, objectName);
       client.deleteObject(builder -> builder.bucket(bucket).key(manifestName));
       client.deleteObject(builder -> builder.bucket(bucket).key(objectName));
       client.close();

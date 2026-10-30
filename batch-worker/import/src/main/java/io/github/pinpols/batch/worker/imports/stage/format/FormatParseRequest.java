@@ -104,7 +104,8 @@ public record FormatParseRequest(
         throw failure;
       }
     }
-    StringReader payloadReader = new StringReader(EmptyChecks.isNull(payloadText) ? "" : payloadText);
+    StringReader payloadReader =
+        new StringReader(EmptyChecks.isNull(payloadText) ? "" : payloadText);
     return new BufferedReader(payloadReader);
   }
 

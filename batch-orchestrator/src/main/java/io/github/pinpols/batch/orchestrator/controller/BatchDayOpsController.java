@@ -32,9 +32,9 @@ public class BatchDayOpsController {
   public BatchDayOperateResponse operate(@RequestBody BatchDayOperateRequest request) {
     BatchDayOperateCommand.BatchDayOperateCommandBuilder commandBuilder =
         BatchDayOperateCommand.builder()
-        .tenantId(request.tenantId())
-        .calendarCode(request.calendarCode())
-        .bizDate(request.bizDate());
+            .tenantId(request.tenantId())
+            .calendarCode(request.calendarCode())
+            .bizDate(request.bizDate());
     String actionText = request.action();
     BatchDayOperation action = BatchDayOperation.valueOf(actionText);
     BatchDayOperateCommand command = commandBuilder

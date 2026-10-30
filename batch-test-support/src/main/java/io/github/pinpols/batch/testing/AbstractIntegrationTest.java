@@ -95,7 +95,8 @@ public abstract class AbstractIntegrationTest {
     IntegrationTestInfrastructure.InfrastructureEndpoints endpoints =
         new IntegrationTestInfrastructure.InfrastructureEndpoints(
             PLATFORM_POSTGRES, BUSINESS_POSTGRES, KAFKA, OBJECT_STORE, REDIS);
-    IntegrationTestInfrastructure.registerDynamicProperties(registry, endpoints, securityBypassMode);
+    IntegrationTestInfrastructure.registerDynamicProperties(
+        registry, endpoints, securityBypassMode);
   }
 
   protected static String platformJdbcUrl() {

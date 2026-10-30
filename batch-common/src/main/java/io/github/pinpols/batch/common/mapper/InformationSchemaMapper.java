@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.common.mapper;
 
 import java.util.List;
-import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 /**
@@ -36,7 +35,7 @@ public interface InformationSchemaMapper {
    * <p>用于 {@code ArchiveSchemaDriftCheck} 列级类型 / nullable 漂移检测 — 仅靠列名集合无法捕获 ALTER COLUMN ... TYPE /
    * DROP NOT NULL 这类语义变更。
    */
-  List<Map<String, Object>> listColumnsWithTypes(
+  List<InformationSchemaColumnView> listColumnsWithTypes(
       @Param("schemaName") String schemaName, @Param("tableName") String tableName);
 
   /**

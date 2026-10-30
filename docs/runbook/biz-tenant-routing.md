@@ -2,7 +2,7 @@
 
 > 应用层把租户路由到不同 biz PG 实例的能力。**自研、零依赖**(不引 Citus / ShardingSphere),
 > 走 Spring `AbstractRoutingDataSource`。设计背景见 `docs/plans/biz-tiered-tenancy-plan-2026-06-14.md`
-> 与 `docs/archive/architecture/scaling-state-and-biz-path-2026-06-14.md`。RLS(片内租户隔离)是正交的另一层,
+> 与 `docs/agent-baseline.md` 的多租户隔离约束。RLS(片内租户隔离)是正交的另一层,
 > 见 `docs/runbook/multi-tenant-rls.md`。
 
 ## 1. 它解决什么 / 不解决什么
@@ -35,13 +35,16 @@
 
 ## 3. 架构与关键类
 
-```
-请求(带 RLS tenant 上下文 RlsTenantContextHolder)
-  └─ BusinessRoutingDataSource (extends AbstractRoutingDataSource)
-       └─ determineCurrentLookupKey() = resolver.resolve(currentTenant)
-            ├─ CONFIG: HashAndSiloPlacementResolver  (hash 取模 + siloOverrides)
-            └─ TABLE : DbTablePlacementResolver       (placement 表覆盖 + hash 回退)
-       └─ 选中 placement key → 对应 shard 的 HikariDataSource
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  REQUEST["请求的 RLS 租户上下文"] --> ROUTING["BusinessRoutingDataSource"]
+  ROUTING --> MODE{"Placement resolver 模式"}
+  MODE -->|"CONFIG"| CONFIG["HashAndSiloPlacementResolver<br/>哈希 + silo 覆盖"]
+  MODE -->|"TABLE"| TABLE["DbTablePlacementResolver<br/>表覆盖 + 哈希回退"]
+  CONFIG --> KEY["placement key"]
+  TABLE --> KEY
+  KEY --> POOL["对应业务分片 HikariDataSource"]
 ```
 
 | 关注点 | 类 / 文件 | 位置 |
@@ -139,11 +142,12 @@ BATCH_DATASOURCE_BUSINESS_ROUTING_SHARDS_1_URL=...
 凭据来源是外部 secret 后端,经**标准 env/文件注入**喂进上面那组配置——故意不把系统绑死到某个 vault,
 谁部署谁用自己的后端注入。链条:
 
-```
-外部 secret 后端(Vault / AWS Secrets Manager / K8s Secret)
-   → 注入成 env 变量 / 挂载文件
-      → Spring relaxed binding 绑定 BATCH_DATASOURCE_BUSINESS_ROUTING_SHARDS_n_PASSWORD 等
-         → BusinessRoutingProperties.shards[*]
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart LR
+  SECRET["外部密钥服务 / K8s Secret"] --> INJECT["环境变量 / 挂载文件"]
+  INJECT --> BIND["Spring 配置绑定"]
+  BIND --> PROPS["BusinessRoutingProperties<br/>shards 配置"]
 ```
 
 **绝不**把账密写进 placement 表 / shard catalog 表(catalog 的 `secret_ref` 只是引用名,指向后端里的条目,不是密钥)。

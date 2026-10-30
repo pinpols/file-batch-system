@@ -47,8 +47,10 @@ public class ConsoleInternalRequestSizeFilter extends OncePerRequestFilter {
 
     long max = properties.getMaxBodyBytes();
     String uri = request.getRequestURI();
-    boolean shouldBypassBodySizeLimit =
-        max <= 0 || EmptyChecks.isNull(uri) || !uri.startsWith("/internal/") || !isWriteMethod(request);
+    boolean shouldBypassBodySizeLimit = max <= 0
+        || EmptyChecks.isNull(uri)
+        || !uri.startsWith("/internal/")
+        || !isWriteMethod(request);
     if (shouldBypassBodySizeLimit) {
       chain.doFilter(request, response);
       return;

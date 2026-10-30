@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import io.github.pinpols.batch.trigger.infrastructure.QuartzMisfireRecoveryListener;
+import io.github.pinpols.batch.trigger.infrastructure.QuartzScheduledFireEnumerator;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerSchedulerFacade;
 import io.github.pinpols.batch.trigger.service.TriggerScheduledOccurrencePlanner;
@@ -21,9 +22,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.quartz.CronTrigger;
-import org.quartz.JobKey;
-import org.quartz.JobDetail;
 import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobKey;
 import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
 import org.quartz.SimpleTrigger;
@@ -179,7 +180,8 @@ public class TriggerReconciler {
       if (EmptyChecks.isNull(primary)) {
         return;
       }
-      occurrencePlanner.materialize(descriptor, primary, Instant.now());
+      occurrencePlanner.materialize(
+          descriptor, QuartzScheduledFireEnumerator.fireTimeSource(primary), Instant.now());
     } catch (SchedulerException | RuntimeException exception) {
       SwallowedExceptionLogger.warn(
           TriggerReconciler.class, "scheduled-occurrence-materialization-failed", exception);

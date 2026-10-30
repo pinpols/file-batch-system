@@ -5,7 +5,7 @@
 - **Status**: Accepted（2026-10-17；超时动作以本 ADR「执行机制」中 `FAIL` 与 `SKIP_DOWNSTREAM` 的区分为准）
 - **Date**: 2026-05-13
 - **Related**: ADR-009（节点参数 DSL，sensor 输出可被下游 DSL 引用）/ ADR-025（静态校验，加 V16 sensor_spec 校验）
-- **Source**: 行业对标改进计划 §3 P0-1（[`docs/archive/plans/industry-benchmark-improvement-plan-2026-05-13.md`](../../archive/plans/industry-benchmark-improvement-plan-2026-05-13.md)）
+- **背景**：原行业对标计划的 WAIT 节点需求已并入本 ADR；现行边界见[系统职责边界](../system-scope-boundary.md)。
 
 ## 背景
 
@@ -55,7 +55,9 @@ START → JOB_A → JOB_B → END
 }
 ```
 
-FILE_ARRIVAL 的 `bizDate` 和 `fileGroupCode` 对旧式文件匹配均可选。新配置可显式提供 `bizDate`，或设 `bindWorkflowBizDate=true` 使用 Workflow run 固定业务日；未请求完整组时，旧配置仍按原文件名/最大年龄规则运行。设置 `requireCompleteGroup=true` 时，必须同时提供 `fileGroupCode` 和 `bizDate` 或 `bindWorkflowBizDate=true`，避免周期性复用的组编码把另一个业务日的完整组误判为本次运行到达。只有到达组治理将成员 `arrivalState` 推进到 `TRIGGERED` 且业务日一致后 sensor 才命中。
+KAFKA_OFFSET 的 `partition` 必须是非负 32 位整数，`minOffset` 必须是非负 64 位整数；非整数和溢出配置会被图验证及运行时探针拒绝。
+
+FILE_ARRIVAL 文件名 `pattern` 中仅 `*` 匹配任意长度字符，`%`、`_`、反斜线和 `!` 按字面匹配。`bizDate` 和 `fileGroupCode` 对旧式文件匹配均可选。新配置可显式提供 `bizDate`，或设 `bindWorkflowBizDate=true` 使用 Workflow run 固定业务日；未请求完整组时，旧配置仍按原文件名/最大年龄规则运行。设置 `requireCompleteGroup=true` 时，必须同时提供 `fileGroupCode` 和 `bizDate` 或 `bindWorkflowBizDate=true`，避免周期性复用的组编码把另一个业务日的完整组误判为本次运行到达。只有到达组治理将成员 `arrivalState` 推进到 `TRIGGERED` 且业务日一致后 sensor 才命中。
 
 ### 执行机制
 

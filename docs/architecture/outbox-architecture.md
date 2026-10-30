@@ -11,59 +11,41 @@ V182 的 `outbox_event_dedup_key(tenant_id,event_key)` 是全局身份裁决者�
 ### 投递关系图
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 erDiagram
-  outbox_event ||--o{ event_outbox_retry : "tenant_id + id + created_at (FK)"
-  outbox_event ||--o{ event_delivery_log : "tenant_id + id + created_at (FK)"
-
+  outbox_event ||--o{ event_outbox_retry : "复合父引用"
+  outbox_event ||--o{ event_delivery_log : "复合父引用"
   outbox_event {
     bigint id PK
-    string tenant_id
-    timestamp created_at "分区键"
-    string aggregate_type
-    bigint aggregate_id
-    string event_type
-    string event_key "全局唯一由去重台账裁决"
-    jsonb payload_json
-    string publish_status "5态: NEW/PUBLISHING/PUBLISHED/FAILED/GIVE_UP"
+    timestamp created_at PK "分区键"
+    string tenant_id "复合引用租户"
+    string event_key "全局去重台账裁决"
+    string publish_status "五态发布生命周期"
     int publish_attempt
     timestamp next_publish_at
   }
-
   event_outbox_retry {
     bigint id PK
     string tenant_id FK
     bigint outbox_event_id FK
-    timestamp outbox_event_created_at FK "父分区键"
-    string event_key
+    timestamp outbox_event_created_at FK
     int retry_attempt
     string retry_status
-    string retry_reason
-    timestamp next_retry_at
   }
-
   event_delivery_log {
     bigint id PK
     string tenant_id FK
     bigint outbox_event_id FK
-    timestamp outbox_event_created_at FK "父分区键"
     string topic
+    timestamp outbox_event_created_at FK
     int partition
-    long offset
-    int latency_ms
+    bigint offset
   }
-
   trigger_outbox_event {
     bigint id PK
-    string tenant_id
-    string request_id UK "tenant_id+request_id 防双写"
-    string topic "默认 batch.trigger.launch.v1"
-    jsonb payload
-    string publish_status "5态 同 outbox_event"
-    int publish_attempt
-    string last_error
-    string trace_id
-    timestamp next_publish_at
-    timestamp published_at
+    string tenant_id "联合唯一约束的一部分"
+    string request_id "联合唯一约束的一部分"
+    string publish_status "独立 Trigger 发布生命周期"
   }
 ```
 
@@ -166,3 +148,7 @@ archive.event_delivery_log_archive    ← 关联 delivery_log 行（按完整复
 - [ADR-010 trigger 异步解耦](adr/ADR-010-trigger-async-decoupling.md) — `trigger_outbox_event` 独立表的决策
 - [docs/runbook/feature-switches.md](../runbook/feature-switches.md) — outbox 相关开关
 - [docs/agent-baseline.md §架构硬约束](../agent-baseline.md) — outbox_event 同事务约束、console-api 不能直接 UPDATE/DELETE 等
+
+## Worker结果回报发件箱的独立边界
+
+`worker_report_outbox`不是以上事件主表的子表，不使用event_key或上述复合外键。V96/V360形成的当前结构以租户、任务、执行身份去重，领取凭据claim_token只裁决这次投递的状态修改；不同执行不能互相覆盖，迟到确认或失败不能改写新领取。平台任务执行是否仍有效继续由Orchestrator围栏判断。结构与持久文件的全新部署、同版本恢复及验证边界见[ADR-015](adr/ADR-015-worker-side-outbox.md#2026-10-27-执行身份领取所有权与部署边界)，不将该独立队列等同于业务事务Outbox或分布式提交。

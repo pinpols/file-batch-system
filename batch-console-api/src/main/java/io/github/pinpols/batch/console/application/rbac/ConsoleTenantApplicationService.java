@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.console.application.rbac;
 
-import io.github.pinpols.batch.console.domain.rbac.param.ConsoleUserAccountInsertParam;
-
-
 import io.github.pinpols.batch.common.config.BatchProfileSupport;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
@@ -13,6 +10,7 @@ import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.InitMode;
@@ -28,9 +26,11 @@ import io.github.pinpols.batch.console.domain.rbac.application.contract.response
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.TenantReadinessResponse;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleUserAccountInsertParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsolePasswordHasher;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.domain.rbac.view.TenantRow;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowRunMapper;
 import io.github.pinpols.batch.console.support.naming.ReservedPrefixGuard;
 import java.util.ArrayList;
@@ -113,7 +113,7 @@ public class ConsoleTenantApplicationService {
     // 全局角色(ADMIN / AUDITOR)返回 null 作用域 → 保留原全量查询。
     String tenantScope = tenantGuard.currentTenantScopeOrNull();
     if (tenantScope != null) {
-      Map<String, Object> row = tenantMapper.selectByTenantId(tenantScope);
+      TenantRow row = tenantMapper.selectByTenantId(tenantScope);
       List<ConsoleTenantResponse> scoped = row == null
           ? List.of()
           : Stream.of(row)
@@ -123,7 +123,7 @@ public class ConsoleTenantApplicationService {
       return new PageResponse<>(
           scoped.size(), pageRequest.pageNo(), pageRequest.pageSize(), scoped);
     }
-    List<Map<String, Object>> rows = tenantMapper.selectByQuery(keyword, status, pageRequest);
+    List<TenantRow> rows = tenantMapper.selectByQuery(keyword, status, pageRequest);
     long total = tenantMapper.countByQuery(keyword, status);
     List<ConsoleTenantResponse> items = rows.stream()
         .map(this::toResponse)
@@ -138,9 +138,8 @@ public class ConsoleTenantApplicationService {
     // SEC(跨租户越权修复):非全局角色只能读自身租户,path tenantId 与 JWT 不符 → FORBIDDEN;
     // 全局角色(ADMIN / AUDITOR)可读任意租户。
     tenantGuard.assertTenantAllowed(tenantId);
-    Map<String, Object> tenantRow = tenantMapper.selectByTenantId(tenantId);
-    Map<String, Object> foundTenant =
-        Guard.requireFound(tenantRow, "tenant not found: " + tenantId);
+    TenantRow tenantRow = tenantMapper.selectByTenantId(tenantId);
+    TenantRow foundTenant = Guard.requireFound(tenantRow, "tenant not found: " + tenantId);
     return toResponse(foundTenant);
   }
 
@@ -169,7 +168,7 @@ public class ConsoleTenantApplicationService {
     String encodedPassword = passwordHasher.encode(cmd.plainPassword());
     String operator = cmd.operator();
     insertTenantWithAccount(tenantId, tenantName, description, username, encodedPassword, operator);
-    Map<String, Object> createdTenant = tenantMapper.selectByTenantId(cmd.tenantId());
+    TenantRow createdTenant = tenantMapper.selectByTenantId(cmd.tenantId());
     return toResponse(createdTenant);
   }
 
@@ -223,7 +222,7 @@ public class ConsoleTenantApplicationService {
     List<String> requestedTenantIds =
         cmd.tenants().stream().map(TenantSpec::tenantId).toList();
     Set<String> conflictingTenantIds = tenantMapper.selectByTenantIds(requestedTenantIds).stream()
-        .map(row -> str(row, "tenant_id"))
+        .map(TenantRow::tenantId)
         .collect(Collectors.toSet());
     for (TenantSpec spec : cmd.tenants()) {
       if (conflictingTenantIds.contains(spec.tenantId())) {
@@ -252,12 +251,12 @@ public class ConsoleTenantApplicationService {
           passwordHash,
           cmd.operator());
     }
-    Map<String, Map<String, Object>> insertedRows =
+    Map<String, TenantRow> insertedRows =
         tenantMapper.selectByTenantIds(requestedTenantIds).stream()
-            .collect(Collectors.toMap(row -> str(row, "tenant_id"), row -> row, (a, b) -> a));
+            .collect(Collectors.toMap(TenantRow::tenantId, row -> row, (a, b) -> a));
     List<ConsoleTenantResponse> created = new ArrayList<>(cmd.tenants().size());
     for (TenantSpec spec : cmd.tenants()) {
-      Map<String, Object> row = insertedRows.get(spec.tenantId());
+      TenantRow row = insertedRows.get(spec.tenantId());
       if (row == null) {
         throw BizException.of(ResultCode.NOT_FOUND, "error.tenant.not_found", spec.tenantId());
       }
@@ -270,7 +269,7 @@ public class ConsoleTenantApplicationService {
       String tenantId, String tenantName, String description) {
     assertExists(tenantId);
     tenantMapper.update(tenantId, tenantName, description);
-    Map<String, Object> updatedTenant = tenantMapper.selectByTenantId(tenantId);
+    TenantRow updatedTenant = tenantMapper.selectByTenantId(tenantId);
     return toResponse(updatedTenant);
   }
 
@@ -282,7 +281,7 @@ public class ConsoleTenantApplicationService {
     // 避免「DB 已 commit 但 trigger runtime 未变」的状态分裂(P1-5)。
     triggerProxyService.pauseByTenant(tenantId);
     tenantMapper.updateStatus(tenantId, TenantStatus.SUSPENDED.code());
-    Map<String, Object> suspendedTenant = tenantMapper.selectByTenantId(tenantId);
+    TenantRow suspendedTenant = tenantMapper.selectByTenantId(tenantId);
     return toResponse(suspendedTenant);
   }
 
@@ -313,7 +312,7 @@ public class ConsoleTenantApplicationService {
     // 避免「DB 已 commit 但 trigger runtime 未变」的状态分裂(P1-5)。
     triggerProxyService.resumeByTenant(tenantId);
     tenantMapper.updateStatus(tenantId, TenantStatus.ACTIVE.code());
-    Map<String, Object> activatedTenant = tenantMapper.selectByTenantId(tenantId);
+    TenantRow activatedTenant = tenantMapper.selectByTenantId(tenantId);
     return toResponse(activatedTenant);
   }
 
@@ -333,37 +332,36 @@ public class ConsoleTenantApplicationService {
     tenantMapper.insert(param);
     // 2026-05 角色重设计:租户首账号必须是 TENANT_ADMIN,后续由它派生 TENANT_USER。
     // 若给 TENANT_USER,新租户没人能加员工,还需平台 ADMIN 额外介入,500 租户场景下不可持续。
-    ConsoleUserAccountInsertParam consoleUserAccountInsertParam = ConsoleUserAccountInsertParam.builder()
-        .tenantId(tenantId)
-        .username(username)
-        .displayName(tenantName)
-        .passwordHash(passwordHash)
-        .authoritiesCsv(ConsoleRoles.TENANT_ADMIN)
-        .createdBy(operator)
-        .build();
-    userAccountMapper.insert(
-        consoleUserAccountInsertParam);
+    ConsoleUserAccountInsertParam consoleUserAccountInsertParam =
+        ConsoleUserAccountInsertParam.builder()
+            .tenantId(tenantId)
+            .username(username)
+            .displayName(tenantName)
+            .passwordHash(passwordHash)
+            .authoritiesCsv(ConsoleRoles.TENANT_ADMIN)
+            .createdBy(operator)
+            .build();
+    userAccountMapper.insert(consoleUserAccountInsertParam);
   }
 
   private void assertExists(String tenantId) {
-    Map<String, Object> tenant = tenantMapper.selectByTenantId(tenantId);
+    TenantRow tenant = tenantMapper.selectByTenantId(tenantId);
     Guard.requireFound(tenant, "tenant not found: " + tenantId);
   }
 
-  private ConsoleTenantResponse toResponse(Map<String, Object> row) {
+  private ConsoleTenantResponse toResponse(TenantRow row) {
+    String createdAtText =
+        EmptyChecks.isNull(row.createdAt()) ? null : String.valueOf(row.createdAt());
+    String updatedAtText =
+        EmptyChecks.isNull(row.updatedAt()) ? null : String.valueOf(row.updatedAt());
     return new ConsoleTenantResponse(
-        row.get("id") instanceof Number n ? n.longValue() : null,
-        str(row, "tenant_id"),
-        str(row, "tenant_name"),
-        str(row, "status"),
-        str(row, "description"),
-        str(row, "created_by"),
-        str(row, "created_at"),
-        str(row, "updated_at"));
-  }
-
-  private String str(Map<String, Object> row, String key) {
-    Object v = row.get(key);
-    return v == null ? null : String.valueOf(v);
+        row.id(),
+        row.tenantId(),
+        row.tenantName(),
+        row.status(),
+        row.description(),
+        row.createdBy(),
+        createdAtText,
+        updatedAtText);
   }
 }

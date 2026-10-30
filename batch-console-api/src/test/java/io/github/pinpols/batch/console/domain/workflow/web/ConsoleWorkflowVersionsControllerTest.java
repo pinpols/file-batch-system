@@ -1,9 +1,12 @@
 package io.github.pinpols.batch.console.domain.workflow.web;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -15,8 +18,10 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.workflow.application.ConsoleWorkflowTriggerService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionDetailResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionVersionSummaryResponse;
+import io.github.pinpols.batch.console.domain.workflow.validation.WorkflowDagValidator;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -26,6 +31,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
@@ -65,6 +72,51 @@ class ConsoleWorkflowVersionsControllerTest {
             service, responseFactory, lockService, mock(ConsoleWorkflowTriggerService.class)))
         .setControllerAdvice(exceptionHandler)
         .build();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"nodes", "edges"})
+  @DisplayName("节点或边包含空元素时 HTTP 拒绝，不进入真实 DAG 校验或写服务")
+  void shouldRejectCreate_whenDagCollectionContainsNull(String collection) throws Exception {
+    // 旧实现会通过 HTTP 校验并进入真正的 DAG 校验器，在解引用空节点或空边时返回 500。
+    lenient().when(service.create(any())).thenAnswer(invocation -> {
+      WorkflowDefinitionSaveRequest request = invocation.getArgument(0);
+      new WorkflowDagValidator().validate("ta", request);
+      return null;
+    });
+    String nodes = "nodes".equals(collection) ? "[null]" : """
+        [{"nodeCode":"start","nodeName":"start","nodeType":"START"},{"nodeCode":"end","nodeName":"end","nodeType":"END"}]
+        """;
+    String edges = "edges".equals(collection) ? "[null]" : "[]";
+    String payload = """
+        {"tenantId":"ta","workflowCode":"WF_NULL_ITEM","workflowType":"DAG",
+         "nodes":%s,"edges":%s}
+        """.formatted(nodes, edges);
+
+    mockMvc
+        .perform(post("/api/console/workflow-definitions")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(payload))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(service, lockService);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"nodes", "edges"})
+  @DisplayName("全量替换嵌套定义中的空元素同样在 HTTP 校验阶段拒绝")
+  void shouldRejectFullUpdate_whenDagCollectionContainsNull(String collection) throws Exception {
+    String payload = """
+        {"expectedVersion":1,"definition":{"tenantId":"ta","workflowCode":"WF_NULL_ITEM",
+         "%s":[null]}}
+        """.formatted(collection);
+    mockMvc
+        .perform(put("/api/console/workflow-definitions/42/full")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(payload))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(service, lockService);
   }
 
   @Test

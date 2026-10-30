@@ -214,6 +214,14 @@ func (w *Worker) consumeLoop(ctx context.Context) {
 				return
 			}
 			msg, disp := w.pipeline.OnMessage(rec)
+			if disp == DispositionBackpressure {
+				// 当前记录已被适配器取出, 必须原地保留到容量恢复, 不能继续拉取并跨过其 offset。
+				w.consumer.Pause()
+				if !w.awaitCapacity(ctx) {
+					return
+				}
+				msg, disp = w.pipeline.OnMessage(rec)
+			}
 			switch disp {
 			case DispositionAccepted:
 				// dispatch() reports whether the offset is safe to commit: claim
@@ -241,6 +249,28 @@ func (w *Worker) consumeLoop(ctx context.Context) {
 				// Commit() would silently skip this rejected/foreign message.
 				w.consumer.Withhold()
 			}
+		}
+	}
+}
+
+// awaitCapacity 保持当前消费记录, 使用原有低水位判定恢复, 停机时及时退出。
+func (w *Worker) awaitCapacity(ctx context.Context) bool {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if w.draining.Load() || ctx.Err() != nil {
+			return false
+		}
+		decision := protocol.DecideBackpressure(w.registry.Count(), w.cfg.MaxConcurrentTasks, true)
+		if decision.Kafka != nil && *decision.Kafka == "resume" {
+			w.fsm.ApplyKafkaDirective(decision.Kafka)
+			w.consumer.Resume()
+			return true
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-ticker.C:
 		}
 	}
 }
@@ -297,13 +327,9 @@ func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) (commit 
 	w.taskWg.Add(1)
 	go func() {
 		defer w.taskWg.Done()
-		defer w.registry.Remove(msg.TaskID)
 		defer func() {
-			// A slot just freed (registry.Remove ran first). Route the resume
-			// decision through the shared core so the max/2 hysteresis applies:
-			// stay paused while in-flight is still in the [max/2, max) band,
-			// resume only once it drops below max/2. This avoids pause/resume
-			// thrash at the capacity boundary.
+			// 先归还容量再判断恢复, 避免最后一个任务仍被计入在途数。
+			w.registry.Remove(msg.TaskID)
 			if w.fsm.Paused() {
 				inFlight := w.registry.Count()
 				maxConcurrent := w.cfg.MaxConcurrentTasks
@@ -362,6 +388,20 @@ func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) (commit 
 			DryRun:          dryRunAttribute(msg.RuntimeAttributes, parameters),
 			Cancellation:    sig,
 			Progress:        NoopProgressReporter{},
+		}
+		// 在业务协程实际进入处理器前确认当前身份；拒绝或响应未知均不伪造业务失败。
+		startRequest := RenewRequest{TenantID: w.cfg.TenantID, WorkerID: w.cfg.WorkerCode,
+			PartitionInvocationID: invID, Details: map[string]any{"executionStarted": true}}
+		startResult, startError := w.transport.Renew(ctx, msg.TaskID, startRequest)
+		if startError != nil || startResult.Revoked {
+			w.logger.Printf("WARN execution start was not confirmed taskId=%s: %v", msg.TaskID, startError)
+			return
+		}
+		if (startResult.CancelRequested != nil && *startResult.CancelRequested) || sig.IsCancellationRequested() {
+			sig.MarkCancelled()
+			cancelled := Fail(protocol.ErrorCodeCancelled, "task cancelled before handler entry")
+			w.report(msg, invID, cancelled)
+			return
 		}
 		result := w.handler.Execute(tc)
 		// If cancelled and handler didn't set a terminal cancel code, normalize.

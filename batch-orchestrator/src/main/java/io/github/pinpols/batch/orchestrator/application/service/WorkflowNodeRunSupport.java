@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 
-/** Shared persistence helpers for creating workflow node-run records. */
+/** 用于创建 Workflow 节点运行记录的共享持久化辅助方法。 */
 public final class WorkflowNodeRunSupport {
 
   private WorkflowNodeRunSupport() {}

@@ -10,7 +10,7 @@ import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Shared normalization for export template JSON values and numeric settings. */
+/** 导出模板 JSON 值和数值配置共用的规范化逻辑。 */
 public final class ExportConfigValueSupport {
 
   private ExportConfigValueSupport() {}

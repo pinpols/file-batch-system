@@ -98,12 +98,12 @@ class OutboundHttpRequestTest {
     Duration connectTimeout = Duration.ofSeconds(1);
     OutboundHttpContent httpContent = new OutboundHttpContent("{}", null);
     assertThatThrownBy(() -> OutboundHttpRequest.post(
-        "https://example.test",
-        headers,
-        httpContent,
-        connectTimeout,
-        requestTimeout,
-        OutboundAddressPolicy.TRUSTED))
+            "https://example.test",
+            headers,
+            httpContent,
+            connectTimeout,
+            requestTimeout,
+            OutboundAddressPolicy.TRUSTED))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("mediaType");
   }

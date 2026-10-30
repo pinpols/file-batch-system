@@ -25,6 +25,10 @@ BFS 采用两条相互独立的横切链路：
 | 告警查看 | Grafana / Alertmanager | 观测、确认和排障入口 |
 | 告警交付 | Webhook、邮件及现有渠道适配 | 投递状态和重试由 BFS 记录 |
 
+告警实体的最终渠道回执独立保存在 `alert_notification_receipt`（V356），按租户、平台告警指纹和接收渠道记录发生/恢复通知的明确成功。Alertmanager 收到应用 POST、回调 Console 成功与最终渠道成功是不同阶段；只有最终渠道明确成功后才写回执，回执写入失败时 Console 返回可重试失败。通知正文按 `max-alerts` 分批展开全部已接收实体，结构化 `alerts` 与本批实体一致；重试沿用本批身份，发生与恢复使用不同身份。外部渠道重试为至少一次交付；Alertmanager 告警与 Job/Workflow 终态 Webhook 将稳定 cursor 编码到 `Idempotency-Key`，接收端可据此幂等处理，不承诺外部提供商恰好一次。
+
+回执是逐条自动解除和可靠恢复重投的依据。V357 已保存新关闭意图并按租户补发待确认的恢复通知；V358 及后续 mapper 判定已按来源事实关闭恢复的 Job/Workflow 时限告警。历史关闭不制造新意图，确认/静默不等同恢复，重复信号命中 CLOSED 不重新发布 firing；自然恢复要求已有最终发生回执，策略撤销单独记录。Workflow 子作业在 `job_instance` 创建前后的时限告警现按触发请求身份持续追踪，并由真实 PostgreSQL 定向用例覆盖；Console 告警接入、最终 Webhook、发生/恢复回执也已有真实 PostgreSQL 与本地 HTTP 收件端联合用例。真实 Alertmanager/Orchestrator 联合发送和目标环境验收仍未完成，见 [时限告警专项计划](../plans/job-workflow-sla-completion-plan-2026-10-25.md)。当前 Alertmanager 模板按单条路由选中一个 receiver；自定义多接收渠道路由需分别核对目标渠道的送达证据。
+
 ### 2.2 业务事件通知
 
 | 数据/组件 | 责任 |
@@ -36,6 +40,10 @@ BFS 采用两条相互独立的横切链路：
 | `console_push_job_delivery` | Job 终态 Push 消费交付记录；与 Workflow 通知分开 |
 | `NotificationDispatchService` | 按订阅规则生成并投递业务事件通知 |
 | Webhook relay | 持久化投递、退避重试、GIVE_UP 和指标 |
+
+渠道创建以清洗后的编码为租户内身份：NFKC规范化、去除控制字符及首尾空白后查重和写入，清洗后为空则拒绝。已有活动渠道返回409，创建动作不能覆盖其配置；两个请求同时查到不存在时，由数据库唯一冲突条件及影响行数裁决，只有一个成功。软删除渠道允许按原主键恢复，保留创建身份；活动配置的修改仍走更新接口。此处约束配置写入，不表示外部提供商已送达。
+
+订阅规则创建和更新时，名称及事件类型经过规范化、控制字符清洗和首尾空白处理后仍须非空；否则返回400，规则不写入或改写。
 
 ### 2.3 `alert_routing_config` 的真实状态
 
@@ -116,3 +124,13 @@ V346 的归档单元是一个终态事实、首次冻结的全部投递及人工
 3. [`../design/logging-architecture.md`](../design/logging-architecture.md)：日志、MDC、OTel、Loki 和审计表清单的实现细节。
 4. [`../runbook/observability-stack.md`](../runbook/observability-stack.md)：观测栈启动、指标、告警和排障操作。
 5. [`../plans/bfs-open-source-scheduler-boundary-roadmap-2026-06-29.md`](../plans/bfs-open-source-scheduler-boundary-roadmap-2026-06-29.md)：动态告警路由、配置中心和产品边界的后续裁定。
+
+## 维护控制信号与告警事实
+
+`MaintenanceAlertPublisher` 将已提交的共享维护状态发布为带固定截止时间的 `BatchPlannedMaintenance` 控制信号；它只参与 Alertmanager 按部署/服务的通知抑制，进入空接收端，不写成业务 `alert_event` 或业务送达回执。原始告警仍继续产生、持久化和判断恢复；维护提前结束或窗口到期仅解除通知抑制，不能发布虚假的业务 resolved。具体范围、部署前置与验证边界见[维护 SOP](../runbook/maintenance-mode.md#10-维护期通知抑制2026-10-26)。
+
+## 主动停用渠道与接入确认
+
+Alertmanager 接入先读取渠道启用状态。明确停用的渠道不调用 sender/Webhook, 不写送达日志或成功回执;
+返回 `delivered=false,status=DISABLED`, HTTP 正常接收, 避免对主动停用无限重试。
+该结果不表示消息送达。渠道缺失或真实发送失败仍返回可重试错误, 保留既有告警与投递失败观测。

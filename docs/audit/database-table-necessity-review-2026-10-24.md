@@ -67,7 +67,7 @@ Orchestrator合并测试进程退出时出现Surefire 30秒退出超时提示，
 
 当前表并非全部属于平台不可缺少的运行模型。按数据库身份逐表核对后：**190张逻辑表中，166张有保留依据，3张为退役候选，2张为旧模型整体收尾候选，5张存在归档生命周期缺口，1张是有意维护的默认值审计目录，13张属于本地演示/验收环境。**这些分类不能直接作为删表清单。
 
-- 工作树：`/Users/dengchao/.codex/worktrees/workflow-daily-integration/file-batch-system`，分支 `feature/workflow-daily-integration`，HEAD `ee01e97515b04fd167ed17977535ec5cab8572f8`；包含当前暂存、未暂存和未跟踪工作，不以冻结主分支代替开发工作树。
+- 工作树：`~/.codex/worktrees/workflow-daily-integration/file-batch-system`，分支 `feature/workflow-daily-integration`，HEAD `ee01e97515b04fd167ed17977535ec5cab8572f8`；包含当前暂存、未暂存和未跟踪工作，不以冻结主分支代替开发工作树。
 - 实库：本机 PostgreSQL 17.11；平台库 `batch_workflow_jar_20261021_platform`、业务库 `batch_workflow_jar_20261021_business`；目录快照为2026-10-24 12:31:08 +08:00，平台最新成功迁移V346，与当前源码最高版本一致。
 - 使用 `project-engineering-review` 总控，结合 `database-migration-safety`、`module-config-boundaries`、`script-sql-governance`；报告按 `documentation-governance` 留档。
 - 用户已确定只支持空库部署，不提供旧数据库兼容。后续退役应同步移除当前消费者及初始化/治理依赖，不以历史兼容为理由永久保留旧模型。

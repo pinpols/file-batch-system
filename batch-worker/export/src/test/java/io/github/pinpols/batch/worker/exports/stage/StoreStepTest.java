@@ -78,15 +78,42 @@ class StoreStepTest {
     context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
     context.getAttributes().put(PipelineRuntimeKeys.GENERATED_FILE_PATH, generated.toString());
 
-    var result = new StoreStep(storage, crypto).execute(context);
+    try {
+      var result = new StoreStep(storage, crypto).execute(context);
 
-    assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes())
-        .containsEntry(PipelineRuntimeKeys.OBJECT_NAME, "dry-run/no-upload")
-        .containsEntry(PipelineRuntimeKeys.EXPORT_STORE_COMMITTED, Boolean.TRUE)
-        .containsEntry("checksumType", "SHA-256");
-    verifyNoInteractions(storage, crypto);
-    Files.deleteIfExists(generated);
+      assertThat(result.success()).isTrue();
+      assertThat(context.getAttributes())
+          .containsEntry(PipelineRuntimeKeys.OBJECT_NAME, "dry-run/no-upload")
+          .containsEntry(PipelineRuntimeKeys.EXPORT_STORE_COMMITTED, Boolean.TRUE)
+          .containsEntry("checksumType", "SHA-256");
+      verifyNoInteractions(storage, crypto);
+      assertThat(generated).doesNotExist();
+    } finally {
+      Files.deleteIfExists(generated);
+    }
+  }
+
+  @Test
+  @DisplayName("演练生成文件无法读取时报告失败且不标记存储完成")
+  void execute_dryRunReportsFailure_whenGeneratedFileCannotBeRead() throws Exception {
+    S3ExportStorage storage = mock(S3ExportStorage.class);
+    BatchObjectCryptoService crypto = mock(BatchObjectCryptoService.class);
+    Path directory = Files.createTempDirectory("export-dry-run-unreadable-");
+    Path child = Files.writeString(directory.resolve("child"), "data");
+    try {
+      ExportJobContext context = new ExportJobContext();
+      context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
+      context.getAttributes().put(PipelineRuntimeKeys.GENERATED_FILE_PATH, directory.toString());
+      var result = new StoreStep(storage, crypto).execute(context);
+      assertThat(result.success()).isFalse();
+      assertThat(result.code()).isEqualTo("EXPORT_STORE_FAILED");
+      assertThat(context.getAttributes())
+          .doesNotContainKey(PipelineRuntimeKeys.EXPORT_STORE_COMMITTED);
+      verifyNoInteractions(storage, crypto);
+    } finally {
+      Files.deleteIfExists(child);
+      Files.deleteIfExists(directory);
+    }
   }
 
   @Test
@@ -139,10 +166,10 @@ class StoreStepTest {
     Path generated = Files.createTempFile("export-generated-", ".json");
     Files.writeString(generated, "{\"ok\":true}");
 
-    // Match both temp and final sha256 with local file's computed sha
-    // The method calls sha256Hex(tempKey) then sha256Hex(objectName).
+    // 临时对象和最终对象的 sha256 均应与本地文件计算出的摘要一致。
+    // 该方法依次调用 sha256Hex(tempKey) 和 sha256Hex(objectName)。
     when(storage.writeObject(anyString(), eq(generated), anyString())).thenReturn("tmp.part");
-    // We don't know expectedSha beforehand; so return whatever StoreStep computed by echoing
+    // 事先无法确定 expectedSha，因此应回显 StoreStep 计算出的摘要，
     // back via Answer-like behavior isn't available here; instead compute it ourselves:
     String expectedSha = TestSha256.sha256Hex(generated);
     when(storage.sha256Hex("tmp.part")).thenReturn(expectedSha);
@@ -227,7 +254,13 @@ class StoreStepTest {
             "file_size_bytes",
             123L,
             "metadata_json",
-            Map.of("contentEncryptionEnabled", true, "encryptionKeyRef", "key-v1", "jobInstanceId", 101L)));
+            Map.of(
+                "contentEncryptionEnabled",
+                true,
+                "encryptionKeyRef",
+                "key-v1",
+                "jobInstanceId",
+                101L)));
     when(storage.sha256Hex("same-key.json")).thenReturn(checksum);
     ExportJobContext context = new ExportJobContext();
     context.setTenantId("tenant");
@@ -265,8 +298,13 @@ class StoreStepTest {
     Path generated = Files.createTempFile("export-retry-drift-", ".json");
     Files.writeString(generated, "regenerated output");
     when(records.loadFileRecordByStoragePath("tenant", "exports", "same-key.json"))
-        .thenReturn(Map.of("checksum_value", "a".repeat(64), "checksum_type", "SHA-256",
-            "metadata_json", Map.of("jobInstanceId", 101L)));
+        .thenReturn(Map.of(
+            "checksum_value",
+            "a".repeat(64),
+            "checksum_type",
+            "SHA-256",
+            "metadata_json",
+            Map.of("jobInstanceId", 101L)));
     when(storage.sha256Hex("same-key.json")).thenReturn("b".repeat(64));
     ExportJobContext context = new ExportJobContext();
     context.setTenantId("tenant");
@@ -286,7 +324,7 @@ class StoreStepTest {
     Files.deleteIfExists(generated);
   }
 
-  /** Local helper to avoid duplicating StoreStep's sha256 calculation logic in tests. */
+  /** 本地辅助方法，用于避免在测试中重复 StoreStep 的 sha256 计算逻辑。 */
   private static final class TestSha256 {
     private TestSha256() {}
 

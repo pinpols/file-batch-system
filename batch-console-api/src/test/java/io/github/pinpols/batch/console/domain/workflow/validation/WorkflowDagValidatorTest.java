@@ -250,6 +250,19 @@ class WorkflowDagValidatorTest {
   }
 
   @Test
+  @DisplayName("单入边分支网关显式未知汇聚模式时拒绝保存")
+  void shouldRejectUnknownJoinModeOnBranchGateway() {
+    WorkflowDefinitionSaveRequest req = baseRequest();
+    NodeItem gw = node("gw", "GATEWAY");
+    gw.setNodeParams("{\"joinMode\":\"BAD\"}");
+    req.setNodes(Arrays.asList(
+        node("start", "START"), gw, node("a", "TASK"), node("b", "TASK"), node("end", "END")));
+    req.setEdges(Arrays.asList(
+        edge("start", "gw"), edge("gw", "a"), edge("gw", "b"), edge("a", "end"), edge("b", "end")));
+    assertBizError(req, "error.workflow.dag.gateway_join_mode_missing");
+  }
+
+  @Test
   @DisplayName("汇聚 GATEWAY N_OF 阈值超过入度 → gateway_join_threshold_invalid")
   void shouldFail_whenJoinThresholdExceedsIncomingCount() {
     WorkflowDefinitionSaveRequest req = baseRequest();
@@ -265,6 +278,67 @@ class WorkflowDagValidatorTest {
         edge("gw", "end")));
 
     assertBizError(req, "error.workflow.dag.gateway_join_threshold_invalid");
+  }
+
+  @Test
+  @DisplayName("汇聚阈值的小数与溢出值不能截断成有效整数")
+  void shouldRejectFractionalOrOverflowJoinThreshold() {
+    for (String threshold : List.of("1.5", "4294967297")) {
+      WorkflowDefinitionSaveRequest req = baseRequest();
+      NodeItem gw = node("gw", "GATEWAY");
+      gw.setNodeParams("{\"joinMode\":\"N_OF\",\"joinThreshold\":" + threshold + "}");
+      req.setNodes(Arrays.asList(
+          node("start", "START"), node("a", "TASK"), node("b", "TASK"), gw, node("end", "END")));
+      req.setEdges(Arrays.asList(
+          edge("start", "a"),
+          edge("start", "b"),
+          edge("a", "gw"),
+          edge("b", "gw"),
+          edge("gw", "end")));
+      assertBizError(req, "error.workflow.dag.gateway_join_threshold_invalid");
+    }
+  }
+
+  @Test
+  @DisplayName("非网关节点显式汇聚配置非法时保存校验拒绝")
+  void shouldRejectInvalidJoinConfigOnTask() {
+    for (String params :
+        List.of("{\"joinMode\":\"BAD\"}", "{\"joinMode\":\"N_OF\",\"joinThreshold\":3}")) {
+      WorkflowDefinitionSaveRequest req = baseRequest();
+      NodeItem task = node("join", "TASK");
+      task.setNodeParams(params);
+      req.setNodes(Arrays.asList(
+          node("start", "START"), node("a", "TASK"), node("b", "TASK"), task, node("end", "END")));
+      req.setEdges(Arrays.asList(
+          edge("start", "a"),
+          edge("start", "b"),
+          edge("a", "join"),
+          edge("b", "join"),
+          edge("join", "end")));
+      String key = params.contains("BAD")
+          ? "error.workflow.dag.gateway_join_mode_missing"
+          : "error.workflow.dag.gateway_join_threshold_invalid";
+      assertBizError(req, key);
+    }
+  }
+
+  @Test
+  @DisplayName("普通节点保留缺省汇聚和合法整数文本阈值")
+  void shouldKeepDefaultAndStringJoinThresholdOnTask() {
+    WorkflowDefinitionSaveRequest req = baseRequest();
+    NodeItem task = node("join", "TASK");
+    req.setNodes(Arrays.asList(
+        node("start", "START"), node("a", "TASK"), node("b", "TASK"), task, node("end", "END")));
+    req.setEdges(Arrays.asList(
+        edge("start", "a"),
+        edge("start", "b"),
+        edge("a", "join"),
+        edge("b", "join"),
+        edge("join", "end")));
+    task.setNodeParams("{}");
+    assertThatCode(() -> validator.validate(TENANT, req)).doesNotThrowAnyException();
+    task.setNodeParams("{\"joinMode\":\"N_OF\",\"joinThreshold\":\"1\"}");
+    assertThatCode(() -> validator.validate(TENANT, req)).doesNotThrowAnyException();
   }
 
   @Test

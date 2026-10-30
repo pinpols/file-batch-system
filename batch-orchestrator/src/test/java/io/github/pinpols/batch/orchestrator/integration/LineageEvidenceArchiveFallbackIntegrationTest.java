@@ -2,23 +2,28 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse;
 import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.DispatchRecord;
 import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.FileRecord;
 import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.JobInstance;
 import io.github.pinpols.batch.orchestrator.application.service.lineage.LineageEvidenceService;
+import io.github.pinpols.batch.orchestrator.controller.LineageEvidenceController;
 import io.github.pinpols.batch.orchestrator.mapper.LineageEvidenceMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * #744/#745 lineage 证据链的 ARCHIVE 回退真实 PG 护栏（原来只有 mocked-mapper 单测覆盖）。
@@ -92,6 +97,235 @@ class LineageEvidenceArchiveFallbackIntegrationTest extends AbstractIntegrationT
     assertThat(evidence.coverage().sources())
         .isEqualTo(new LineageEvidenceResponse.LineageSources(
             "HOT", "ARCHIVE", "ARCHIVE", "ARCHIVE", "ARCHIVE"));
+  }
+
+  @Test
+  @DisplayName("载荷文件在热表时仍应收集同一作业关联的归档文件")
+  void shouldCombineHotPayloadAndArchivedRelatedFiles() {
+    final String insertFileRecordSql1 = """
+        insert into batch.file_record (
+          tenant_id, file_code, biz_type, file_category, file_name, file_format_type,
+          storage_type, storage_path, source_type, file_status, biz_date, trace_id
+        ) values (?, ?, 'GL', 'INPUT', ?, 'DELIMITED', 'S3', ?, 'SYSTEM', 'LOADED',
+                  current_date, ?) returning id
+        """;
+    String tenant = unique("mixed-tenant");
+    long archivedFileId = insertArchivedFileRecord(tenant);
+    long instanceId = insertArchivedJobInstance(tenant, archivedFileId);
+    insertArchivedPipelineInstance(tenant, instanceId, archivedFileId);
+    long hotFileId = jdbcTemplate.queryForObject(
+        insertFileRecordSql1,
+        Long.class,
+        tenant,
+        unique("fc"),
+        unique("file"),
+        unique("path"),
+        unique("trace"));
+    long versionId = insertLiveResultVersion(tenant, instanceId, "file_record:" + hotFileId);
+
+    LineageEvidenceResponse evidence =
+        lineageEvidenceService.evidenceForResultVersion(tenant, versionId);
+
+    assertThat(evidence.fileRecords())
+        .extracting(FileRecord::id)
+        .containsExactlyInAnyOrder(hotFileId, archivedFileId);
+    assertThat(evidence.coverage().payloadFileResolved()).isTrue();
+    assertThat(evidence.coverage().sources().fileRecords()).isEqualTo("HOT_AND_ARCHIVE");
+  }
+
+  @Test
+  @DisplayName("归档作业和流水线引用的文件仍在热表时也可回查")
+  void shouldFindHotFilesReferencedByArchivedParents() {
+    final String insertFileRecordSql2 = """
+        insert into batch.file_record (
+          tenant_id, file_code, biz_type, file_category, file_name, file_format_type,
+          storage_type, storage_path, source_type, file_status, biz_date, trace_id
+        ) values (?, ?, 'GL', 'INPUT', ?, 'DELIMITED', 'S3', ?, 'SYSTEM', 'LOADED',
+                  current_date, ?) returning id
+        """;
+    String tenant = unique("archived-parent");
+    long payloadFileId = insertArchivedFileRecord(tenant);
+    long hotFileId = jdbcTemplate.queryForObject(
+        insertFileRecordSql2,
+        Long.class,
+        tenant,
+        unique("fc"),
+        unique("file"),
+        unique("path"),
+        unique("trace"));
+    long instanceId = insertArchivedJobInstance(tenant, hotFileId);
+    insertArchivedPipelineInstance(tenant, instanceId, hotFileId);
+    long versionId = insertLiveResultVersion(tenant, instanceId, "file_record:" + payloadFileId);
+
+    LineageEvidenceResponse evidence =
+        lineageEvidenceService.evidenceForResultVersion(tenant, versionId);
+
+    assertThat(evidence.fileRecords())
+        .extracting(FileRecord::id)
+        .containsExactlyInAnyOrder(hotFileId, payloadFileId);
+    assertThat(evidence.coverage().sources().fileRecords()).isEqualTo("HOT_AND_ARCHIVE");
+  }
+
+  @Test
+  @DisplayName("血缘冷热文件及投递证据不回显凭据")
+  void shouldMaskSensitiveLineageEvidenceFromHotAndArchive() throws Exception {
+    final String insertHotFileSql = """
+        insert into batch.file_record
+          (tenant_id, file_category, file_name, file_format_type, storage_type, storage_path,
+           source_type, file_status, metadata_json)
+        values (?, 'OUTPUT', ?, 'BINARY', 'LOCAL', ?, 'SYSTEM', 'RECEIVED', ?::jsonb) returning id
+        """;
+    final String updateArchivedFileSql =
+        "update archive.file_record_archive set storage_path = ?, metadata_json = ?::jsonb where tenant_id = ? and id = ?";
+    final String insertHotDispatchSql = """
+        insert into batch.file_dispatch_record
+          (tenant_id, file_id, channel_code, dispatch_status, dispatch_target, error_message)
+        values (?, ?, 'CH_HOT', 'FAILED', ?, ?) returning id
+        """;
+    final String updateArchivedDispatchSql =
+        "update archive.file_dispatch_record_archive set dispatch_target = ?, error_message = ? where tenant_id = ? and id = ?";
+    final String selectArchivedTargetSql =
+        "select dispatch_target from archive.file_dispatch_record_archive where tenant_id = ? and id = ?";
+    String tenant = unique("lineage-mask");
+    String target =
+        "https://probe-user:probe-password@invalid.example/path?token=probe-token&view=ok";
+    String error = "delivery failed token=probe-error";
+    String metadata = JsonUtils.toJson(Map.of(
+        "token",
+        "probe-meta",
+        "nested",
+        Map.of("password", "probe-nested", "endpoint", target),
+        "urls",
+        List.of(target),
+        "notes",
+        "first line\nsecond line",
+        "count",
+        7));
+    long hotFileId = jdbcTemplate.queryForObject(
+        insertHotFileSql, Long.class, tenant, unique("file"), target, metadata);
+    long archivedFileId = insertArchivedFileRecord(tenant);
+    jdbcTemplate.update(updateArchivedFileSql, target, metadata, tenant, archivedFileId);
+    long instanceId = insertArchivedJobInstance(tenant, archivedFileId);
+    long archivedDispatchId = insertArchivedDispatchRecord(tenant, hotFileId, null);
+    jdbcTemplate.update(updateArchivedDispatchSql, target, error, tenant, archivedDispatchId);
+    jdbcTemplate.queryForObject(insertHotDispatchSql, Long.class, tenant, hotFileId, target, error);
+    long versionId = insertLiveResultVersion(tenant, instanceId, "file_record:" + hotFileId);
+
+    LineageEvidenceResponse evidence =
+        lineageEvidenceService.evidenceForResultVersion(tenant, versionId);
+
+    assertThat(evidence.fileRecords()).hasSize(2);
+    assertThat(evidence.dispatchRecords()).hasSize(2);
+    assertThat(evidence.fileRecords()).allSatisfy(file -> {
+      assertThat(file.metadataJson()).containsEntry("count", 7);
+      assertThat(file.metadataJson()).containsEntry("notes", "first line\nsecond line");
+    });
+    assertThat(JsonUtils.toJson(evidence))
+        .doesNotContain(
+            "probe-user",
+            "probe-password",
+            "probe-token",
+            "probe-error",
+            "probe-meta",
+            "probe-nested")
+        .contains("view=ok", "count");
+    var httpResponse = MockMvcBuilders.standaloneSetup(
+            new LineageEvidenceController(lineageEvidenceService))
+        .build()
+        .perform(get("/internal/orchestrator/lineage/result-versions/{id}", versionId)
+            .param("tenantId", tenant))
+        .andReturn()
+        .getResponse();
+    assertThat(httpResponse.getStatus()).isEqualTo(200);
+    assertThat(httpResponse.getContentAsString())
+        .doesNotContain(
+            "probe-user",
+            "probe-password",
+            "probe-token",
+            "probe-error",
+            "probe-meta",
+            "probe-nested")
+        .contains("view=ok", "count");
+    assertThat(jdbcTemplate.queryForObject(
+            selectArchivedTargetSql, String.class, tenant, archivedDispatchId))
+        .isEqualTo(target);
+  }
+
+  @Test
+  @DisplayName("热表和归档同时有投递记录时返回完整回执")
+  void shouldCombineHotAndArchivedDispatchRecords() {
+    final String insertFileRecordSql3 = """
+        insert into batch.file_record
+          (tenant_id, file_category, file_name, file_format_type, storage_type, storage_path,
+           source_type, file_status)
+        values (?, 'OUTPUT', ?, 'BINARY', 'LOCAL', ?, 'SYSTEM', 'RECEIVED') returning id
+        """;
+    final String insertFileDispatchRecordSql4 = """
+        insert into batch.file_dispatch_record (tenant_id, file_id, channel_code, dispatch_status)
+        values (?, ?, 'CH_HOT', 'SENT') returning id
+        """;
+    String tenant = unique("dispatch-mixed");
+    long hotFileId = jdbcTemplate.queryForObject(
+        insertFileRecordSql3, Long.class, tenant, unique("file"), unique("path"));
+    long instanceId = insertArchivedJobInstance(tenant, hotFileId);
+    long archivedId = insertArchivedDispatchRecord(tenant, hotFileId, null);
+    long hotId =
+        jdbcTemplate.queryForObject(insertFileDispatchRecordSql4, Long.class, tenant, hotFileId);
+    long versionId = insertLiveResultVersion(tenant, instanceId, "file_record:" + hotFileId);
+
+    LineageEvidenceResponse evidence =
+        lineageEvidenceService.evidenceForResultVersion(tenant, versionId);
+
+    assertThat(evidence.dispatchRecords())
+        .extracting(DispatchRecord::id)
+        .containsExactly(hotId, archivedId);
+    assertThat(evidence.coverage().sources().dispatchRecords()).isEqualTo("HOT_AND_ARCHIVE");
+  }
+
+  @Test
+  @DisplayName("归档投递引用热 Pipeline 时按作业和租户匹配")
+  void shouldFindArchivedDispatchByHotPipelineAndRespectTenant() {
+    final String insertJobDefinitionSql5 = """
+        insert into batch.job_definition
+          (tenant_id, job_code, job_name, job_type, schedule_type, timezone, retry_policy)
+        values (?, ?, 'test job', 'GENERAL', 'MANUAL', 'Asia/Shanghai', 'NONE') returning id
+        """;
+    final String insertJobInstanceSql6 = """
+        insert into batch.job_instance
+          (tenant_id, job_definition_id, job_code, instance_no, biz_date, trigger_type,
+           instance_status, priority, dedup_key, expected_partition_count,
+           success_partition_count, failed_partition_count, trace_id)
+        values (?, ?, 'JOB', ?, current_date, 'MANUAL', 'RUNNING', 5, ?, 1, 0, 0, ?)
+        returning id
+        """;
+    final String insertPipelineInstanceSql7 = """
+        insert into batch.pipeline_instance
+          (tenant_id, system_pipeline_code, system_pipeline_version, job_code, pipeline_type,
+           related_job_instance_id, run_status)
+        values (?, 'DISPATCH', 1, 'JOB', 'DISPATCH', ?, 'RUNNING') returning id
+        """;
+    String tenant = unique("hot-pipeline");
+    long definitionId =
+        jdbcTemplate.queryForObject(insertJobDefinitionSql5, Long.class, tenant, unique("job"));
+    long instanceId = jdbcTemplate.queryForObject(
+        insertJobInstanceSql6,
+        Long.class,
+        tenant,
+        definitionId,
+        unique("instance"),
+        unique("dedup"),
+        unique("trace"));
+    long pipelineId =
+        jdbcTemplate.queryForObject(insertPipelineInstanceSql7, Long.class, tenant, instanceId);
+    long fileId = insertArchivedFileRecord(tenant);
+    long dispatchId = insertArchivedDispatchRecord(tenant, fileId, pipelineId);
+
+    assertThat(lineageEvidenceMapper.selectArchivedDispatchRecords(tenant, instanceId, List.of()))
+        .extracting(DispatchRecord::id)
+        .containsExactly(dispatchId);
+    assertThat(lineageEvidenceMapper.selectArchivedDispatchRecords(
+            unique("other"), instanceId, List.of()))
+        .isEmpty();
   }
 
   @Test

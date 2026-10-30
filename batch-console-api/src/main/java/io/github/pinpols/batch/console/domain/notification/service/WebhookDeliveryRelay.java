@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
-import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogMarkRetryFailureParam;
-
-
 import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -12,6 +9,7 @@ import io.github.pinpols.batch.console.domain.notification.entity.WebhookDeliver
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookSubscriptionMapper;
+import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogMarkRetryFailureParam;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -340,15 +338,15 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
 
     Instant nextRetryAt =
         BatchDateTimeSupport.utcNow().plusSeconds(computeBackoffSeconds(nextAttempt));
-    ConsoleWebhookDeliveryLogMarkRetryFailureParam consoleWebhookDeliveryLogMarkRetryFailureParam = ConsoleWebhookDeliveryLogMarkRetryFailureParam.builder()
-        .id(row.getId())
-        .attempt(nextAttempt)
-        .httpStatus(result.httpStatus())
-        .responseBody(result.errorSummary())
-        .nextRetryAt(nextRetryAt)
-        .build();
-    deliveryLogRepository.markRetryFailure(
-        consoleWebhookDeliveryLogMarkRetryFailureParam);
+    ConsoleWebhookDeliveryLogMarkRetryFailureParam consoleWebhookDeliveryLogMarkRetryFailureParam =
+        ConsoleWebhookDeliveryLogMarkRetryFailureParam.builder()
+            .id(row.getId())
+            .attempt(nextAttempt)
+            .httpStatus(result.httpStatus())
+            .responseBody(result.errorSummary())
+            .nextRetryAt(nextRetryAt)
+            .build();
+    deliveryLogRepository.markRetryFailure(consoleWebhookDeliveryLogMarkRetryFailureParam);
     log.debug(
         "WebhookDeliveryRelay retry failed; scheduling the next attempt: id={} tenantId={} attempt={} nextRetryAt={}",
         row.getId(),

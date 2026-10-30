@@ -79,8 +79,7 @@ public class ResultVersionQueryService {
   /** 精确读取指定 Job 业务日的版本，不经过控制台列表分页。 */
   public Optional<ResultVersionEntity> findVersionByJob(
       String tenantId, String jobCode, LocalDate bizDate, int versionNo) {
-    boolean versionQueryIsInvalid =
-        !Texts.hasText(tenantId)
+    boolean versionQueryIsInvalid = !Texts.hasText(tenantId)
         || !Texts.hasText(jobCode)
         || EmptyChecks.isNull(bizDate)
         || versionNo <= 0;
@@ -107,8 +106,7 @@ public class ResultVersionQueryService {
   /** 仅查找同一正式/试运行执行模式中的指定版本。 */
   public Optional<ResultVersionEntity> findCrossDayDependencyVersion(
       String tenantId, String jobCode, LocalDate bizDate, int versionNo, boolean dryRun) {
-    boolean versionQueryIsInvalid =
-        !Texts.hasText(tenantId)
+    boolean versionQueryIsInvalid = !Texts.hasText(tenantId)
         || !Texts.hasText(jobCode)
         || EmptyChecks.isNull(bizDate)
         || versionNo <= 0;

@@ -1,23 +1,15 @@
 package io.github.pinpols.batch.console.domain.observability.application.contract.response;
 
-import static io.github.pinpols.batch.console.domain.observability.application.contract.response.ObservabilityResponseFieldReader.longValue;
-import static io.github.pinpols.batch.console.domain.observability.application.contract.response.ObservabilityResponseFieldReader.mapList;
-import static io.github.pinpols.batch.console.domain.observability.application.contract.response.ObservabilityResponseFieldReader.stringValue;
-
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.AlertTrendView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.DaySeverityCountView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.SeverityCountView;
 import java.util.List;
-import java.util.Map;
 
 /** dashboard alert-trend 响应：按严重度计数 + 按日趋势（均为固定字段行）。 */
 public record ConsoleAlertTrendResponse(
     List<SeverityCountEntry> bySeverity, List<DaySeverityCountEntry> dailyTrend) {
 
   public record SeverityCountEntry(String severity, Long count) {
-    static SeverityCountEntry from(Map<String, Object> row) {
-      return new SeverityCountEntry(stringValue(row, "severity"), longValue(row, "count"));
-    }
 
     static SeverityCountEntry from(SeverityCountView row) {
       return new SeverityCountEntry(
@@ -27,10 +19,6 @@ public record ConsoleAlertTrendResponse(
   }
 
   public record DaySeverityCountEntry(String day, String severity, Long count) {
-    static DaySeverityCountEntry from(Map<String, Object> row) {
-      return new DaySeverityCountEntry(
-          stringValue(row, "day"), stringValue(row, "severity"), longValue(row, "count"));
-    }
 
     static DaySeverityCountEntry from(DaySeverityCountView row) {
       return new DaySeverityCountEntry(
@@ -48,20 +36,6 @@ public record ConsoleAlertTrendResponse(
         view.bySeverity().stream().map(SeverityCountEntry::from).toList();
     List<DaySeverityCountEntry> dailyTrendEntries =
         view.dailyTrend().stream().map(DaySeverityCountEntry::from).toList();
-    return new ConsoleAlertTrendResponse(
-        severityEntries, dailyTrendEntries);
-  }
-
-  public static ConsoleAlertTrendResponse from(Map<String, Object> row) {
-    if (row == null) {
-      return null;
-    }
-    List<Map<String, Object>> severityRows = mapList(row, "bySeverity");
-    List<SeverityCountEntry> severityEntries =
-        severityRows.stream().map(SeverityCountEntry::from).toList();
-    List<Map<String, Object>> dailyTrendRows = mapList(row, "dailyTrend");
-    List<DaySeverityCountEntry> dailyTrendEntries =
-        dailyTrendRows.stream().map(DaySeverityCountEntry::from).toList();
     return new ConsoleAlertTrendResponse(severityEntries, dailyTrendEntries);
   }
 }

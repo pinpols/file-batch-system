@@ -166,9 +166,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
               || hm.getBeanType().isAnnotationPresent(Idempotent.class));
       if (handlerIsIdempotent) {
         String requestUriForLog = LogSanitizer.value(request.getRequestURI());
-        log.warn(
-            "missing Idempotency-Key on @Idempotent endpoint: uri={}",
-            requestUriForLog);
+        log.warn("missing Idempotency-Key on @Idempotent endpoint: uri={}", requestUriForLog);
         writeJson(response, HttpStatus.BAD_REQUEST, MISSING_KEY_BODY);
         return false;
       }

@@ -11,6 +11,7 @@ import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectStoreAccessException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
@@ -121,13 +122,10 @@ final class RemoteFilesystemDispatchSupport {
         String manifestTempName = manifestPath.getFileName() + ".tmp-" + UUID.randomUUID();
         Path manifestTempPath = directory.resolve(manifestTempName);
         DispatchManifestSupport.ManifestTarget manifestTarget =
-            new DispatchManifestSupport.ManifestTarget(target.toString(), remoteName, manifestPath.toString());
+            new DispatchManifestSupport.ManifestTarget(
+                target.toString(), remoteName, manifestPath.toString());
         manifest = DispatchManifestSupport.manifestPayload(
-            command,
-            manifestTarget,
-            externalRequestId,
-            receiptCode,
-            payloadDigest);
+            command, manifestTarget, externalRequestId, receiptCode, payloadDigest);
         try {
           Files.write(manifestTempPath, manifest.bytes());
           movePublishedFile(manifestTempPath, manifestPath);
@@ -259,11 +257,7 @@ final class RemoteFilesystemDispatchSupport {
         DispatchManifestSupport.ManifestTarget manifestTarget =
             new DispatchManifestSupport.ManifestTarget(evidence, remoteName, manifestRef);
         manifest = DispatchManifestSupport.manifestPayload(
-            command,
-            manifestTarget,
-            externalRequestId,
-            receiptCode,
-            payloadDigest);
+            command, manifestTarget, externalRequestId, receiptCode, payloadDigest);
         byte[] manifestBytes = manifest.bytes();
         ByteArrayInputStream manifestStream = new ByteArrayInputStream(manifestBytes);
         objectStore.put(
@@ -291,15 +285,16 @@ final class RemoteFilesystemDispatchSupport {
     String receiptCode = resolveReceiptCode(command, externalRequestId);
     boolean unknownExternalOutcome =
         publicationConfirmed || (publicationAttempted && !isKnownNoEffectFailure(ex));
+    String failureSummary = SwallowedExceptionLogger.summary(ex);
     if (unknownExternalOutcome) {
       return DispatchResult.externalOutcomeUnknown(
           externalRequestId,
           receiptCode,
           "EXTERNAL_OUTCOME_UNKNOWN: remote file publication may have completed: "
-              + ex.getMessage());
+              + failureSummary);
     }
     return new DispatchResult(
-        false, externalRequestId, receiptCode, false, false, ex.getMessage(), null);
+        false, externalRequestId, receiptCode, false, false, failureSummary, null);
   }
 
   private static boolean isKnownNoEffectFailure(Exception failure) {
@@ -350,7 +345,7 @@ final class RemoteFilesystemDispatchSupport {
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
-      return new DispatchChannelProbeResult(false, ex.getMessage(), null);
+      return new DispatchChannelProbeResult(false, SwallowedExceptionLogger.summary(ex), null);
     }
   }
 
@@ -385,7 +380,7 @@ final class RemoteFilesystemDispatchSupport {
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
-      return new DispatchChannelProbeResult(false, ex.getMessage(), null);
+      return new DispatchChannelProbeResult(false, SwallowedExceptionLogger.summary(ex), null);
     }
   }
 
@@ -420,7 +415,7 @@ final class RemoteFilesystemDispatchSupport {
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
-      return new DispatchChannelProbeResult(false, ex.getMessage(), null);
+      return new DispatchChannelProbeResult(false, SwallowedExceptionLogger.summary(ex), null);
     }
   }
 
@@ -455,7 +450,7 @@ final class RemoteFilesystemDispatchSupport {
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
-      return new DispatchChannelProbeResult(false, ex.getMessage(), null);
+      return new DispatchChannelProbeResult(false, SwallowedExceptionLogger.summary(ex), null);
     }
   }
 
@@ -485,17 +480,18 @@ final class RemoteFilesystemDispatchSupport {
       Request request = new Request.Builder().url(endpoint).head().build();
       try (Response response = client.newCall(request).execute()) {
         int status = response.code();
+        String safeEndpoint = SecretMasking.maskEndpoint(endpoint);
         if (status >= 200 && status < 500) {
           return new DispatchChannelProbeResult(
-              true, "http probe ok (status=" + status + ")", endpoint);
+              true, "http probe ok (status=" + status + ")", safeEndpoint);
         }
         return new DispatchChannelProbeResult(
-            false, "http probe failed (status=" + status + ")", endpoint);
+            false, "http probe failed (status=" + status + ")", safeEndpoint);
       }
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
-      return new DispatchChannelProbeResult(false, ex.getMessage(), null);
+      return new DispatchChannelProbeResult(false, SwallowedExceptionLogger.summary(ex), null);
     }
   }
 
@@ -615,7 +611,8 @@ final class RemoteFilesystemDispatchSupport {
     if (Texts.hasText(explicit)) {
       return sanitizeFileName(explicit);
     }
-    Object originalFileName = EmptyChecks.isNull(fileRecord) ? null : fileRecord.get("original_file_name");
+    Object originalFileName =
+        EmptyChecks.isNull(fileRecord) ? null : fileRecord.get("original_file_name");
     Object fileName = EmptyChecks.isNull(fileRecord) ? null : fileRecord.get("file_name");
     Object original = firstNonNull(originalFileName, fileName);
     String fallback =
@@ -631,7 +628,9 @@ final class RemoteFilesystemDispatchSupport {
     String withoutParentTraversal = trimmedName.replace("..", "_");
     String withoutForwardSlashes = withoutParentTraversal.replace('/', '_');
     String sanitizedName = withoutForwardSlashes.replace('\\', '_');
-    return EmptyChecks.isBlank(Objects.requireNonNull(sanitizedName)) ? BatchFileConstants.DEFAULT_FILE_NAME : sanitizedName;
+    return EmptyChecks.isBlank(Objects.requireNonNull(sanitizedName))
+        ? BatchFileConstants.DEFAULT_FILE_NAME
+        : sanitizedName;
   }
 
   private static String normalizeObjectName(String prefix, String name) {

@@ -23,6 +23,7 @@ import io.github.pinpols.batch.orchestrator.mapper.FileTemplateSnapshotMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.service.LaunchValidationService.WorkflowReplayExecutionBinding;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -130,8 +131,8 @@ class FileTemplateSnapshotServiceTest {
   void shouldApplyOnlyApprovedReplayTemplateBoundToParentNode() {
     String protectedSnapshot = "sealed-TPL_A";
     when(protector.revealEncrypted(protectedSnapshot)).thenReturn(snapshot("TPL_A", "IMPORT"));
-    WorkflowReplayExecutionBinding binding = replayBinding(
-        "IMPORT_NODE", Map.of("TPL_A", protectedSnapshot));
+    WorkflowReplayExecutionBinding binding =
+        replayBinding("IMPORT_NODE", Map.of("TPL_A", protectedSnapshot));
 
     Map<String, Object> pinned = service.pinWorkflowReplay(
         workflowReplayRequest("IMPORT_NODE", Map.of("templateCode", "TPL_A")),
@@ -148,8 +149,8 @@ class FileTemplateSnapshotServiceTest {
   @Test
   @DisplayName("整 Workflow 子 Job 不接受其他节点的模板密文绑定")
   void shouldRejectReplayTemplateBoundToDifferentNode() {
-    WorkflowReplayExecutionBinding binding = replayBinding(
-        "OTHER_NODE", Map.of("TPL_A", "sealed-TPL_A"));
+    WorkflowReplayExecutionBinding binding =
+        replayBinding("OTHER_NODE", Map.of("TPL_A", "sealed-TPL_A"));
 
     assertThatThrownBy(() -> service.pinWorkflowReplay(
             workflowReplayRequest("IMPORT_NODE", Map.of("templateCode", "TPL_A")),
@@ -306,7 +307,7 @@ class FileTemplateSnapshotServiceTest {
   }
 
   private Map<String, Object> templateConfiguration(String code, String type) {
-    Map<String, Object> configuration = new java.util.LinkedHashMap<>(Map.of(
+    Map<String, Object> configuration = new LinkedHashMap<>(Map.of(
         "id",
         101,
         "tenant_id",
@@ -360,7 +361,7 @@ class FileTemplateSnapshotServiceTest {
   }
 
   private Map<String, Object> replayParams(String nodeCode, Map<String, Object> params) {
-    Map<String, Object> replayParams = new java.util.LinkedHashMap<>(params);
+    Map<String, Object> replayParams = new LinkedHashMap<>(params);
     replayParams.put("operationType", "WORKFLOW_RUN");
     replayParams.put("_parentWorkflowRunId", 51L);
     replayParams.put("_parentNodeCode", nodeCode);

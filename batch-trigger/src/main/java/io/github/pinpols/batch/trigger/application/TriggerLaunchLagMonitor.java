@@ -64,8 +64,7 @@ public class TriggerLaunchLagMonitor {
       return;
     }
     Duration samplingInterval = Duration.ofMillis(properties.getLagSampleIntervalMillis());
-    scheduledTask.set(scheduler.scheduleWithFixedDelay(
-        this::sampleSafely, samplingInterval));
+    scheduledTask.set(scheduler.scheduleWithFixedDelay(this::sampleSafely, samplingInterval));
   }
 
   @EventListener(ContextClosedEvent.class)

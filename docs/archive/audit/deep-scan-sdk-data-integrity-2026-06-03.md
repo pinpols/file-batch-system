@@ -1,3 +1,5 @@
+> 历史原始记录：本轮恢复保留，正文中的结论、参数、状态和操作步骤仅适用于原日期/基线。提炼方法不替代原始证据；当前事实须按[文档治理](../../standards/document-governance.md)重新核实。本轮未执行原测试或扫描。
+
 # 深度扫描 2026-06-03:SDK 双语言一致性 + 数据完整性
 
 > 作用域:`batch-worker-sdk/`(Java)+ `batch-worker-sdk-python/` 跨语言协议对照、`docs/api/sdk-shared-constants.yaml` 与 `docs/api/orchestrator-internal.openapi.yaml` 漂移、Flyway V1–V165 archive 镜像合规、outbox 三表分工、多租 UNIQUE / 守护、`ArchiveSchemaDriftCheck` 启动期守护、跨服务事务边界、soft-delete / 时区 / 编码静态扫描。

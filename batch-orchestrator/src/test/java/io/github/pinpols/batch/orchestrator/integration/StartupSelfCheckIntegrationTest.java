@@ -78,13 +78,14 @@ class StartupSelfCheckIntegrationTest extends AbstractIntegrationTest {
   void shouldAddCalendarTimingColumns_whenMigrationRuns() {
     for (String column :
         new String[] {"cutoff_time", "late_arrival_tolerance_min", "sla_offset_min"}) {
-           final String calendarColumnCountSql = """
+      final String calendarColumnCountSql = """
     select count(*) from information_schema.columns
     where table_schema = 'batch'
     and table_name = 'business_calendar'
     and column_name = ?
     """;
-      Long calendarColumnCount = jdbcTemplate.queryForObject(calendarColumnCountSql, Long.class, column);
+      Long calendarColumnCount =
+          jdbcTemplate.queryForObject(calendarColumnCountSql, Long.class, column);
       assertThat(calendarColumnCount)
           .as("column business_calendar.%s should exist", column)
           .isEqualTo(1L);
@@ -104,10 +105,9 @@ class StartupSelfCheckIntegrationTest extends AbstractIntegrationTest {
           select count(*) from information_schema.tables
           where table_schema = 'quartz' and table_name = ?
           """;
-      Long schedulerTableCount = jdbcTemplate.queryForObject(schedulerTableCountSql, Long.class, table);
-      assertThat(schedulerTableCount)
-          .as("quartz table %s should exist", table)
-          .isEqualTo(1L);
+      Long schedulerTableCount =
+          jdbcTemplate.queryForObject(schedulerTableCountSql, Long.class, table);
+      assertThat(schedulerTableCount).as("quartz table %s should exist", table).isEqualTo(1L);
     }
   }
 }

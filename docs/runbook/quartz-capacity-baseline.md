@@ -224,6 +224,6 @@ QRTZ_LOCKS 抢锁等待已成主因
 
 ## 7. 相关文档
 
-- [`docs/archive/audit/quartz-replacement-evaluation-2026-04-25.md`](../archive/audit/quartz-replacement-evaluation-2026-04-25.md)（已撤销方案的历史风险分析）
+- [docs/architecture/adr/ADR-033-quartz-to-wheel-scheduler.md](../architecture/adr/ADR-033-quartz-to-wheel-scheduler.md)（已撤销方案的历史风险分析）
 - [`docs/runbook/feature-switches.md`](./feature-switches.md) §3.4（Phase 2 quartz-datasource 开关移除说明）
 - [`docs/runbook/observability-stack.md`](./observability-stack.md) PG 监控

@@ -1,7 +1,7 @@
-# 已被现行规范吸收的规则与范围裁决
+# 历史能力范围与优先级判断
 
-本目录对应当前 `standards/` 的历史材料。原日期与结论保留；当前资料见 [现行入口](../../standards/README.md)，当前事项见 [TODO Master](../../plans/todo-master.md)。
+保留原始经验及决策背景。旧路径、工具、参数、结论和步骤不作为当前执行依据；现行入口按[文档路由](../../standards/document-routing-guide.md)定位。
 
-| 文档 | 用途 |
+| 原始记录 | 用途 |
 |---|---|
-| [worker-capability-priority-and-scope-2026-05-06.md](worker-capability-priority-and-scope-2026-05-06.md) | Worker 能力优先级与范围纪律；用于追溯当时基线 |
+| [worker-capability-priority-and-scope-2026-05-06.md](worker-capability-priority-and-scope-2026-05-06.md) | 历史能力范围与优先级判断的原始正文；按原日期追溯 |

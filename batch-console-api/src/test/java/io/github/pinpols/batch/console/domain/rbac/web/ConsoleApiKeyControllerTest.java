@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.rbac.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -25,16 +24,23 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 @DisplayName("访问密钥控制器: 列表、创建与吊销接口")
+@ExtendWith(MockitoExtension.class)
 class ConsoleApiKeyControllerTest {
 
-  private final ConsoleApiKeyService apiKeyService = mock(ConsoleApiKeyService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleApiKeyService apiKeyService;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -45,9 +51,6 @@ class ConsoleApiKeyControllerTest {
 
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
@@ -81,6 +84,9 @@ class ConsoleApiKeyControllerTest {
   @Test
   @DisplayName("创建访问密钥返回名称与一次性明文密钥")
   void shouldCreateApiKey() throws Exception {
+    when(requestMetadataResolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
     ApiKeyEntity entity = new ApiKeyEntity();
     entity.setId(1L);
     entity.setKeyName("my-key");
@@ -105,6 +111,9 @@ class ConsoleApiKeyControllerTest {
   @Test
   @DisplayName("吊销访问密钥按租户与操作人记录")
   void shouldRevokeApiKey() throws Exception {
+    when(requestMetadataResolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
     mockMvc
         .perform(delete("/api/console/api-keys/1").param("tenantId", "t1"))
         .andExpect(status().isOk())

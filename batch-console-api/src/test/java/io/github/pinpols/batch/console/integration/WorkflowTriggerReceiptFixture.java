@@ -35,7 +35,8 @@ public final class WorkflowTriggerReceiptFixture {
     SqlSessionFactory factory = new SqlSessionFactoryBuilder().build(configuration);
     try (SqlSession session = factory.openSession(false)) {
       try {
-        JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(session.getConnection(), true));
+        JdbcTemplate jdbc =
+            new JdbcTemplate(new SingleConnectionDataSource(session.getConnection(), true));
         String suffix = UUID.randomUUID().toString();
         String tenant = "receipt-" + suffix;
         Long workflowId = insertWorkflow(jdbc, tenant, suffix);
@@ -47,18 +48,27 @@ public final class WorkflowTriggerReceiptFixture {
                dedup_key, request_status, trace_id)
             values (?, ?, ?, 'MANUAL', ?, ?, 'WAITING', ?)
             """;
-        jdbc.update(insertRequestSql, tenant, requestId, workflowId, bizDate, "original-key", "trace-receipt");
+        jdbc.update(
+            insertRequestSql,
+            tenant,
+            requestId,
+            workflowId,
+            bizDate,
+            "original-key",
+            "trace-receipt");
         String insertAliasSql = """
             insert into batch.trigger_request_idempotency_alias
               (tenant_id, request_id, idempotency_key) values (?, ?, ?)
             """;
         jdbc.update(insertAliasSql, tenant, requestId, "alias-key");
         WorkflowTriggerReceiptMapper mapper = session.getMapper(WorkflowTriggerReceiptMapper.class);
-        WorkflowTriggerStatusResponse direct = mapper.selectByIdentity(tenant, workflowId, "original-key");
+        WorkflowTriggerStatusResponse direct =
+            mapper.selectByIdentity(tenant, workflowId, "original-key");
         assertThat(direct.requestId()).isEqualTo(requestId);
         assertThat(direct.bizDate()).isEqualTo(bizDate);
         assertThat(direct.requestStatus()).isEqualTo("WAITING");
-        WorkflowTriggerStatusResponse alias = mapper.selectByIdentity(tenant, workflowId, "alias-key");
+        WorkflowTriggerStatusResponse alias =
+            mapper.selectByIdentity(tenant, workflowId, "alias-key");
         assertThat(alias).isEqualTo(direct);
         WorkflowTriggerStatusResponse wrongTenant =
             mapper.selectByIdentity("other-tenant", workflowId, "original-key");

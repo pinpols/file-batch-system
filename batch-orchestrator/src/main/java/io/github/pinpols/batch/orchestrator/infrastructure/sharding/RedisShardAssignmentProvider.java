@@ -101,10 +101,7 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
     } catch (RuntimeException ex) {
       coordinationHealthy.set(false);
       String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn(
-          "Shard coordinator heartbeat failed: member={}, err={}",
-          memberId,
-          causeSummary);
+      log.warn("Shard coordinator heartbeat failed: member={}, err={}", memberId, causeSummary);
     }
   }
 
@@ -116,10 +113,7 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
       redis.opsForZSet().remove(membersKey, memberId);
     } catch (RuntimeException ex) {
       String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn(
-          "Shard coordinator leave failed: member={}, err={}",
-          memberId,
-          causeSummary);
+      log.warn("Shard coordinator leave failed: member={}, err={}", memberId, causeSummary);
     }
   }
 

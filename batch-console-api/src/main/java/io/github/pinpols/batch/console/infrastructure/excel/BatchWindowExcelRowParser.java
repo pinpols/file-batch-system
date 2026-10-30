@@ -7,8 +7,6 @@ import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingl
 import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.requireText;
 import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.resolveTenantField;
 
-import lombok.Builder;
-
 import io.github.pinpols.batch.common.enums.BatchWindowEndStrategy;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.OutOfWindowAction;
@@ -19,7 +17,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
-/** Shared parser/upsert helper for batch_window Excel rows. */
+import lombok.Builder;
+
+/** batch_window Excel 行共用的解析与新增或更新辅助逻辑。 */
 public final class BatchWindowExcelRowParser {
 
   public static final String SHEET_NAME = "batch_window";
@@ -33,7 +33,8 @@ public final class BatchWindowExcelRowParser {
   public static WindowRow parseRow(
       String tenantId, int rowNo, Map<String, String> values, List<String> issues) {
     String effectiveTenant = resolveTenantField(values, tenantId, issues);
-    WindowRow.WindowRowBuilder rowBuilder = WindowRow.builder().rowNo(rowNo).tenantId(effectiveTenant);
+    WindowRow.WindowRowBuilder rowBuilder =
+        WindowRow.builder().rowNo(rowNo).tenantId(effectiveTenant);
     String windowCodeText = requireText(values, "window_code", 128, issues);
     String windowCode = CodeNormalizer.toConfigFormOrNull(windowCodeText);
     rowBuilder.windowCode(windowCode);

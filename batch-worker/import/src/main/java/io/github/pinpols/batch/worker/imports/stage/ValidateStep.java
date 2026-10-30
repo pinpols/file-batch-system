@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.worker.imports.stage;
 
-import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService.BadRecordCommand;
-
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,6 +15,7 @@ import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
 import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 import io.github.pinpols.batch.worker.imports.infrastructure.ImportDataQualityService;
 import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
+import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService.BadRecordCommand;
 import io.github.pinpols.batch.worker.imports.infrastructure.quality.ControlTotalEvaluator;
 import io.github.pinpols.batch.worker.imports.infrastructure.quality.DatasetRuleEvaluator;
 import io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationIssue;
@@ -201,8 +199,7 @@ public class ValidateStep implements ImportStageStep {
       String tenantId = context.getTenantId();
       String normalizedFileId = fileIdRaw.trim();
       Long fileId = Long.valueOf(normalizedFileId);
-      Map<String, Object> fileRecord =
-          fileRecords.loadFileRecord(tenantId, fileId);
+      Map<String, Object> fileRecord = fileRecords.loadFileRecord(tenantId, fileId);
       Object metadataJson = fileRecord == null ? null : fileRecord.get("metadata_json");
       if (metadataJson == null) {
         return;
@@ -400,8 +397,8 @@ public class ValidateStep implements ImportStageStep {
     long skippedCount =
         numberValue(context.getAttributes().get(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT));
     long badRecordCount = badRecordCount(context);
-    boolean manualReviewRequired = Boolean.TRUE.equals(
-        context.getAttributes().get(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED));
+    boolean manualReviewRequired =
+        Boolean.TRUE.equals(context.getAttributes().get(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED));
     Map<String, Object> validationMetadata = Map.of(
         PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT,
         validatedCount,
@@ -416,10 +413,7 @@ public class ValidateStep implements ImportStageStep {
         PipelineRuntimeKeys.VALIDATED_RECORDS_PATH,
         validatedRecordsPath.toString());
     ImportStageSupport.updateFileStatusRecoverAware(
-        fileRecords,
-        context,
-        validatedStatus,
-        validationMetadata);
+        fileRecords, context, validatedStatus, validationMetadata);
   }
 
   private record StreamingValidationResult(
@@ -487,8 +481,7 @@ public class ValidateStep implements ImportStageStep {
           .errorMessage(errorMessage)
           .rawRecord(rawRecord)
           .build();
-      recordGovernanceService.recordFailedRecord(
-          context, command);
+      recordGovernanceService.recordFailedRecord(context, command);
       return ValidationErrorOutcome.stop(errorCode, errorMessage);
     }
     BadRecordCommand command = BadRecordCommand.builder()
@@ -498,8 +491,7 @@ public class ValidateStep implements ImportStageStep {
         .errorMessage(errorMessage)
         .rawRecord(rawRecord)
         .build();
-    recordGovernanceService.recordSkippedRecord(
-        context, command);
+    recordGovernanceService.recordSkippedRecord(context, command);
     if (recordGovernanceService.shouldFailOnSkip(errorCode)) {
       return ValidationErrorOutcome.stop(errorCode, "skip action FAIL_BATCH");
     }

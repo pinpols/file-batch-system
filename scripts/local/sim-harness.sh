@@ -256,7 +256,7 @@ preflight() {
     [[ -f "$FIXTURE_DIR/${t}-tenant-config-package-test.xlsx" ]] \
       && ok "fixture $t 存在" || fail "fixture $t 缺失:$FIXTURE_DIR/${t}-tenant-config-package-test.xlsx"
   done
-  if "${PYTHON_BIN:-python3}" scripts/fix-fixture-xlsx.py --check >/tmp/sim-fixture-xlsx-check.log 2>&1; then
+  if "${PYTHON_BIN:-python3}" scripts/sim/fix-fixture-xlsx.py --check >/tmp/sim-fixture-xlsx-check.log 2>&1; then
     ok "tenant-package xlsx fixture header 与当前 12 sheet schema 对齐"
   else
     fail "tenant-package xlsx fixture 过时或 openpyxl 不可用:$(tail -20 /tmp/sim-fixture-xlsx-check.log | tr '\n' ' ')"
@@ -595,6 +595,7 @@ prepare_sim_inputs() {
 # 每个阶段前做一次轻量健康检查;若核心服务不健康,用本地小堆参数拉起,避免后续
 # import worker 只看到 Kafka 但注册不到 orchestrator 而空转。
 ensure_core_runtime() {
+  local import_mode="${1:-default}" process_batch_mode="${2:-default}"
   local ports=("$ORCHESTRATOR_PORT" "$CONSOLE_API_PORT" "$TRIGGER_PORT" "$WORKER_IMPORT_PORT" "$WORKER_EXPORT_PORT" "$WORKER_DISPATCH_PORT" "$WORKER_PROCESS_PORT" "$WORKER_ATOMIC_PORT")
   local p code unhealthy=0
   for p in "${ports[@]}"; do
@@ -609,7 +610,7 @@ ensure_core_runtime() {
   # 下方重启的是宿主机 JVM，因此启动前需要映射宿主机可访问的地址。
   batch_configure_local_jvm_runtime_env
   JAVA_OPTS="${JAVA_OPTS:-$SIM_JAVA_OPTS}" SKIP_CDS=1 \
-    bash scripts/local/restart.sh trigger orchestrator console worker-import worker-export worker-process worker-dispatch worker-atomic >"$log" 2>&1
+    bash scripts/local/restart.sh trigger orchestrator console worker-import worker-export worker-process worker-dispatch worker-atomic >"$log" 2>&1 || return 1
   for p in "${ports[@]}"; do
     for _ in $(seq 1 90); do
       code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "http://localhost:$p/actuator/health" 2>/dev/null || true)
@@ -618,6 +619,13 @@ ensure_core_runtime() {
     done
     [[ "$code" == 200 ]] || { echo "  [core-runtime] :$p NOT ready(health=$code), see $log" >&2; return 1; }
   done
+  # 核心恢复会重置Worker启动参数；重建本阶段模式后才能执行场景，失败必须阻断。
+  if [[ "$import_mode" != default ]]; then
+    restart_import "$import_mode" || return 1
+  fi
+  if [[ "$process_batch_mode" != default ]]; then
+    restart_process_batch_claim "$process_batch_mode" || return 1
+  fi
 }
 
 # 健康探针只代表 HTTP 进程已启动，不能证明 worker 已注册并能被调度器选中。
@@ -675,7 +683,7 @@ restart_import() {
     # 该文件包含基准 JAVA_OPTS，会清除当前模式所需的参数。
     COMPOSE_ENV_FILE=/dev/null \
     JAVA_OPTS="${JAVA_OPTS:-$SIM_JAVA_OPTS} $extra" \
-      bash scripts/local/restart.sh worker-import >"$SIM_LOG_DIR/worker-import-${mode}.log" 2>&1
+      bash scripts/local/restart.sh worker-import >"$SIM_LOG_DIR/worker-import-${mode}.log" 2>&1 || return 1
     for _ in $(seq 1 40); do
       curl -s -o /dev/null -w '%{http_code}' "http://localhost:${WORKER_IMPORT_PORT}/actuator/health" 2>/dev/null \
         | grep -F 200 >/dev/null && { echo "  [worker-import:$mode ready]"; return 0; }
@@ -739,7 +747,7 @@ restart_process_batch_claim() {
   # 防止 restart.sh 重新加载基准 JAVA_OPTS 并覆盖 SIM 配置。
   COMPOSE_ENV_FILE=/dev/null \
   JAVA_OPTS="${JAVA_OPTS:-$SIM_JAVA_OPTS} $extra" SKIP_CDS=1 \
-    bash scripts/local/restart.sh worker-process >"$SIM_LOG_DIR/worker-process-batch-claim-${mode}.log" 2>&1
+    bash scripts/local/restart.sh worker-process >"$SIM_LOG_DIR/worker-process-batch-claim-${mode}.log" 2>&1 || return 1
   for _ in $(seq 1 40); do
     curl -s -o /dev/null -w '%{http_code}' "http://localhost:${WORKER_PROCESS_PORT}/actuator/health" 2>/dev/null \
       | grep -F 200 >/dev/null && { echo "  [worker-process:batch-claim-$mode ready]"; return 0; }
@@ -908,7 +916,7 @@ sim() {
           restart_process_batch_claim enabled
           ;;
       esac
-      ensure_core_runtime || exit 1
+      ensure_core_runtime "$active_import_mode" "$active_process_batch_claim" || exit 1
       ensure_worker_registrations || exit 1
       echo ">>> $n $(date +%T)" | tee -a "$sum"
       local stage_log="$SIM_LOG_DIR/$n.log"

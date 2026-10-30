@@ -87,7 +87,8 @@ public class RegisterStep implements ExportStageStep {
   @Override
   public ExportStageResult execute(ExportJobContext context) {
     // ADR-026: 演练模式不创建 file_record / 不调 plugin.onRegistered（避免污染平台 file 视图）。
-    Map<String, Object> dryRunAttributes = EmptyChecks.isNull(context) ? null : context.getAttributes();
+    Map<String, Object> dryRunAttributes =
+        EmptyChecks.isNull(context) ? null : context.getAttributes();
     boolean dryRun = DryRunGuard.fromAttributes(dryRunAttributes).isDryRun();
     if (dryRun) {
       return ExportStageResult.success(stage());
@@ -138,7 +139,8 @@ public class RegisterStep implements ExportStageStep {
         .fileCode(exportPayload.fileCode());
     String businessType =
         Texts.hasText(exportPayload.bizType()) ? exportPayload.bizType() : context.getJobCode();
-    fileRecordBuilder.bizType(businessType)
+    fileRecordBuilder
+        .bizType(businessType)
         .fileCategory("OUTPUT")
         .fileName(fileName)
         .originalFileName(fileName)
@@ -147,7 +149,8 @@ public class RegisterStep implements ExportStageStep {
         .fileSizeBytes(EmptyChecks.isNull(fileSizeBytes) ? 0L : fileSizeBytes)
         .checksumType(checksumType);
     String checksumValue = nullableText(attrs.get(PipelineRuntimeKeys.CHECKSUM_VALUE));
-    fileRecordBuilder.checksumValue(checksumValue)
+    fileRecordBuilder
+        .checksumValue(checksumValue)
         .storageType("S3")
         .storagePath(objectName)
         .storageBucket(bucket)
@@ -161,10 +164,8 @@ public class RegisterStep implements ExportStageStep {
         .sourceRef(exportPayload.batchNo())
         .fileStatus(FileStatus.GENERATED.code());
     String fileRecordTraceId = String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID));
-    FileRecordParam fileRecordParam = fileRecordBuilder
-        .traceId(fileRecordTraceId)
-        .metadata(metadata)
-        .build();
+    FileRecordParam fileRecordParam =
+        fileRecordBuilder.traceId(fileRecordTraceId).metadata(metadata).build();
     Long fileId = fileRecords.createFileRecord(fileRecordParam);
     Map<String, Object> fileRecord = fileRecords.loadFileRecord(context.getTenantId(), fileId);
     attrs.put(PipelineRuntimeKeys.FILE_ID, fileId);
@@ -173,8 +174,7 @@ public class RegisterStep implements ExportStageStep {
     String tenantId = context.getTenantId();
     Object pipelineInstanceIdValue = attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID);
     Long pipelineInstanceId = PlatformRuntimeValues.toLong(pipelineInstanceIdValue);
-    pipelineRuns.bindFileToPipelineInstance(
-        tenantId, pipelineInstanceId, fileId);
+    pipelineRuns.bindFileToPipelineInstance(tenantId, pipelineInstanceId, fileId);
     Long batchId = PlatformRuntimeValues.toLong(batch.get("id"));
     Integer exportVersion =
         fileRecord.get("file_generation_no") instanceof Number number ? number.intValue() : 1;
@@ -195,14 +195,18 @@ public class RegisterStep implements ExportStageStep {
       String expectedChecksum) {
     if (!ExportArtifactIdentity.belongsToJob(context, existing)) {
       String reason = "registered artifact belongs to another or unknown Job instance";
-      return ExportStageResult.failure(stage(), "EXPORT_REGISTER_ARTIFACT_CONFLICT",
-          "error.export.store.artifact_conflict", new Object[] {reason}, reason, ERROR_OBJECT_MAPPER);
+      return ExportStageResult.failure(
+          stage(),
+          "EXPORT_REGISTER_ARTIFACT_CONFLICT",
+          "error.export.store.artifact_conflict",
+          new Object[] {reason},
+          reason,
+          ERROR_OBJECT_MAPPER);
     }
     String existingChecksum = nullableText(existing.get("checksum_value"));
-    boolean existingFileRecordHasChecksumConflict =
-        Texts.hasText(expectedChecksum)
-            && Texts.hasText(existingChecksum)
-            && !expectedChecksum.equalsIgnoreCase(existingChecksum);
+    boolean existingFileRecordHasChecksumConflict = Texts.hasText(expectedChecksum)
+        && Texts.hasText(existingChecksum)
+        && !expectedChecksum.equalsIgnoreCase(existingChecksum);
     if (existingFileRecordHasChecksumConflict) {
       return ExportStageResult.failure(
           stage(),
@@ -274,11 +278,9 @@ public class RegisterStep implements ExportStageStep {
     context.setFileId(String.valueOf(fileId));
     String tenantId = context.getTenantId();
     Map<String, Object> attributes = context.getAttributes();
-    Object pipelineInstanceIdValue =
-        attributes.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID);
+    Object pipelineInstanceIdValue = attributes.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID);
     Long pipelineInstanceId = PlatformRuntimeValues.toLong(pipelineInstanceIdValue);
-    pipelineRuns.bindFileToPipelineInstance(
-        tenantId, pipelineInstanceId, fileId);
+    pipelineRuns.bindFileToPipelineInstance(tenantId, pipelineInstanceId, fileId);
     Long batchId = PlatformRuntimeValues.toLong(batch.get("id"));
     Integer exportVersion =
         existing.get("file_generation_no") instanceof Number number ? number.intValue() : 1;

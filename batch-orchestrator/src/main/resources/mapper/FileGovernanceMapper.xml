@@ -1,14 +1,148 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.orchestrator.mapper.FileGovernanceMapper">
-    <select id="selectFileRecord" resultType="map">
-        select *
+    <resultMap id="fileRecordRow" type="io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews$FileRecordRow">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="file_status" javaType="java.lang.String"/>
+            <arg column="storage_bucket" javaType="java.lang.String"/>
+            <arg column="storage_path" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+    <resultMap id="templateSecurityRow" type="io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews$TemplateSecurityRow">
+        <constructor>
+            <arg column="preview_masking_enabled" javaType="java.lang.Boolean"/>
+            <arg column="error_line_masking_enabled" javaType="java.lang.Boolean"/>
+            <arg column="log_masking_enabled" javaType="java.lang.Boolean"/>
+            <arg column="content_encryption_enabled" javaType="java.lang.Boolean"/>
+            <arg column="encryption_key_ref" javaType="java.lang.String"/>
+            <arg column="download_requires_approval" javaType="java.lang.Boolean"/>
+            <arg column="masking_rule_set" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+    <resultMap id="dispatchRecordRow" type="io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews$DispatchRecordRow">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="pipeline_instance_id" javaType="java.lang.Long"/>
+            <arg column="channel_code" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+    <resultMap id="archivedFileCleanupRow" type="io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews$ArchivedFileCleanupRow">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="storage_path" javaType="java.lang.String"/>
+            <arg column="storage_type" javaType="java.lang.String"/>
+            <arg column="file_status" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+    <resultMap id="orphanUploadSessionRow" type="io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews$OrphanUploadSessionRow">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="file_name" javaType="java.lang.String"/>
+            <arg column="file_status" javaType="java.lang.String"/>
+            <arg column="storage_bucket" javaType="java.lang.String"/>
+            <arg column="storage_path" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+    <resultMap id="arrivalCandidateRow" type="io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews$ArrivalCandidateRow">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="checksum_type" javaType="java.lang.String"/>
+            <arg column="file_name" javaType="java.lang.String"/>
+            <arg column="biz_date" javaType="java.time.LocalDate"/>
+            <arg column="file_status" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+            <arg column="metadata_json" javaType="java.lang.Object"/>
+            <arg column="file_group_code" javaType="java.lang.String"/>
+            <arg column="wait_file_group_mode" javaType="java.lang.String"/>
+            <arg column="required_file_set" javaType="java.lang.String"/>
+            <arg column="arrival_timeout_action" javaType="java.lang.String"/>
+            <arg column="arrival_state" javaType="java.lang.String"/>
+            <arg column="arrival_reason" javaType="java.lang.String"/>
+            <arg column="expected_arrival_time" javaType="java.lang.String"/>
+            <arg column="latest_tolerable_time" javaType="java.lang.String"/>
+            <arg column="trigger_on_complete" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+    <resultMap id="arrivalGroupBacklogRow" type="io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews$ArrivalGroupBacklogRow">
+        <constructor>
+            <arg column="waiting_groups" javaType="java.lang.Long"/>
+            <arg column="oldest_wait_seconds" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+    <resultMap id="arrivalGroupSummaryRow" type="io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews$ArrivalGroupSummaryRow">
+        <constructor>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="biz_date" javaType="java.time.LocalDate"/>
+            <arg column="file_group_code" javaType="java.lang.String"/>
+            <arg column="wait_file_group_mode" javaType="java.lang.String"/>
+            <arg column="required_file_set" javaType="java.lang.String"/>
+            <arg column="arrival_timeout_action" javaType="java.lang.String"/>
+            <arg column="arrival_state" javaType="java.lang.String"/>
+            <arg column="expected_arrival_time" javaType="java.lang.String"/>
+            <arg column="latest_tolerable_time" javaType="java.lang.String"/>
+            <arg column="arrived_count" javaType="java.lang.Long"/>
+            <arg column="triggered_count" javaType="java.lang.Long"/>
+            <arg column="timeout_count" javaType="java.lang.Long"/>
+            <arg column="waiting_count" javaType="java.lang.Long"/>
+            <arg column="last_updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+    <resultMap id="arrivalGroupFileRow" type="io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews$ArrivalGroupFileRow">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="file_name" javaType="java.lang.String"/>
+            <arg column="file_status" javaType="java.lang.String"/>
+            <arg column="biz_date" javaType="java.time.LocalDate"/>
+            <arg column="metadata_json" javaType="java.lang.Object"/>
+            <arg column="file_group_code" javaType="java.lang.String"/>
+            <arg column="arrival_state" javaType="java.lang.String"/>
+            <arg column="arrival_timeout_action" javaType="java.lang.String"/>
+            <arg column="allow_empty_run" javaType="java.lang.String"/>
+            <arg column="allow_skip_biz_date" javaType="java.lang.String"/>
+            <arg column="required_file_set" javaType="java.lang.String"/>
+            <arg column="latest_tolerable_time" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+    <resultMap id="arrivalDelaySampleRow" type="io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews$ArrivalDelaySampleRow">
+        <constructor>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="file_name" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="expected_arrival_time" javaType="java.lang.String"/>
+            <arg column="arrival_delay_seconds" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+    <resultMap id="processingDelaySampleRow" type="io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews$ProcessingDelaySampleRow">
+        <constructor>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="job_code" javaType="java.lang.String"/>
+            <arg column="pipeline_type" javaType="java.lang.String"/>
+            <arg column="related_job_instance_id" javaType="java.lang.Long"/>
+            <arg column="started_at" javaType="java.time.Instant"/>
+            <arg column="processing_delay_seconds" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectFileRecord" resultMap="fileRecordRow">
+        select id,
+               file_status,
+               storage_bucket,
+               storage_path
         from batch.file_record
         where tenant_id = #{tenantId}
           and id = #{fileId}
     </select>
 
-    <select id="selectFileTemplateSecurity" resultType="map">
+    <select id="selectFileTemplateSecurity" resultMap="templateSecurityRow">
         select ftc.preview_masking_enabled,
                ftc.error_line_masking_enabled,
                ftc.log_masking_enabled,
@@ -55,8 +189,10 @@
           and (dispatch_status in (#{dispatchCreatedStatus}, #{dispatchSentStatus}) or receipt_status = #{receiptPendingStatus})
     </select>
 
-    <select id="selectLatestDispatchRecord" resultType="map">
-        select *
+    <select id="selectLatestDispatchRecord" resultMap="dispatchRecordRow">
+        select id,
+               pipeline_instance_id,
+               channel_code
         from batch.file_dispatch_record
         where tenant_id = #{tenantId}
           and file_id = #{fileId}
@@ -73,9 +209,10 @@
         where id = #{pipelineInstanceId}
     </select>
 
+    <!-- 已知失败保留为 FAILED；Worker 开始外发时才原子置为 CREATED。 -->
     <update id="resetDispatchRecordForRedispatch">
         update batch.file_dispatch_record
-        set dispatch_status = #{dispatchCreatedStatus},
+        set dispatch_status = #{dispatchFailedStatus},
             receipt_status = #{receiptNoneStatus},
             error_code = null,
             error_message = null,
@@ -85,9 +222,11 @@
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{dispatchRecordId}
+          and dispatch_status in (#{dispatchFailedStatus}, 'COMPENSATED')
+          and coalesce(error_code, '') &lt;&gt; 'EXTERNAL_OUTCOME_UNKNOWN'
     </update>
 
-    <select id="selectArchivedFilesForCleanup" resultType="map">
+    <select id="selectArchivedFilesForCleanup" resultMap="archivedFileCleanupRow">
         select id,
                tenant_id,
                storage_path,
@@ -102,7 +241,7 @@
 
     <!-- 托管上传会话孤儿候选:#440 createUploadSession 写入的占位行(RECEIVED + APP_MANAGED + WAITING_ARRIVAL),
          超过 TTL 且从未确认到达(arrivalConfirmedAt 缺失)。S3 对象是否真实存在由调用方二次确认。 -->
-    <select id="selectOrphanUploadSessions" resultType="map">
+    <select id="selectOrphanUploadSessions" resultMap="orphanUploadSessionRow">
         select id,
                tenant_id,
                file_name,
@@ -120,7 +259,7 @@
         limit #{limit}
     </select>
 
-    <select id="selectArrivalGovernanceCandidates" resultType="map">
+    <select id="selectArrivalGovernanceCandidates" resultMap="arrivalCandidateRow">
         select id,
                tenant_id,
                checksum_type,
@@ -141,6 +280,8 @@
                metadata_json -&gt;&gt; 'triggerOnComplete' as trigger_on_complete
         from batch.file_record
         where jsonb_exists(metadata_json, 'fileGroupCode')
+          and (metadata_json -&gt;&gt; 'uploadMode' is distinct from 'APP_MANAGED'
+               or jsonb_exists(metadata_json, 'arrivalConfirmedAt'))
           and coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL')
                 not in ('TRIGGERED', 'TIMEOUT', 'WAITING_MANUAL_CONFIRM')
         order by coalesce((metadata_json -&gt;&gt; 'latestTolerableTime')::timestamptz, created_at) asc,
@@ -148,7 +289,15 @@
         limit #{limit}
     </select>
 
-    <select id="selectArrivalGroupBacklogMetrics" resultType="map">
+    <resultMap id="arrivalGroupBacklogRowMap"
+               type="io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews$ArrivalGroupBacklogRow">
+        <constructor>
+            <arg column="waiting_groups" javaType="java.lang.Long"/>
+            <arg column="oldest_wait_seconds" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectArrivalGroupBacklogMetrics" resultMap="arrivalGroupBacklogRowMap">
         with waiting_groups as (
             select tenant_id,
                    biz_date,
@@ -171,7 +320,27 @@
         from waiting_groups
     </select>
 
-    <select id="selectArrivalGroupSummaries" resultType="map">
+    <resultMap id="arrivalGroupSummaryRowMap"
+               type="io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews$ArrivalGroupSummaryRow">
+        <constructor>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="biz_date" javaType="java.time.LocalDate"/>
+            <arg column="file_group_code" javaType="java.lang.String"/>
+            <arg column="wait_file_group_mode" javaType="java.lang.String"/>
+            <arg column="required_file_set" javaType="java.lang.String"/>
+            <arg column="arrival_timeout_action" javaType="java.lang.String"/>
+            <arg column="arrival_state" javaType="java.lang.String"/>
+            <arg column="expected_arrival_time" javaType="java.lang.String"/>
+            <arg column="latest_tolerable_time" javaType="java.lang.String"/>
+            <arg column="arrived_count" javaType="java.lang.Long"/>
+            <arg column="triggered_count" javaType="java.lang.Long"/>
+            <arg column="timeout_count" javaType="java.lang.Long"/>
+            <arg column="waiting_count" javaType="java.lang.Long"/>
+            <arg column="last_updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectArrivalGroupSummaries" resultMap="arrivalGroupSummaryRowMap">
         select tenant_id,
                biz_date,
                metadata_json -&gt;&gt; 'fileGroupCode' as file_group_code,
@@ -207,7 +376,7 @@
         order by last_updated_at desc, file_group_code asc
     </select>
 
-    <select id="selectArrivalGroupFiles" resultType="map">
+    <select id="selectArrivalGroupFiles" resultMap="arrivalGroupFileRow">
         select id,
                tenant_id,
                file_name,
@@ -224,6 +393,8 @@
         from batch.file_record
         where tenant_id = #{tenantId}
           and metadata_json -&gt;&gt; 'fileGroupCode' = #{fileGroupCode}
+          and (metadata_json -&gt;&gt; 'uploadMode' is distinct from 'APP_MANAGED'
+               or jsonb_exists(metadata_json, 'arrivalConfirmedAt'))
         <if test="bizDate != null and bizDate != ''">
           and biz_date = #{bizDate}::date
         </if>
@@ -245,7 +416,7 @@
           and jsonb_exists(metadata_json, 'expectedArrivalTime')
     </select>
 
-    <select id="selectArrivalDelaySamples" resultType="map">
+    <select id="selectArrivalDelaySamples" resultMap="arrivalDelaySampleRow">
         select tenant_id,
                id,
                file_name,
@@ -280,7 +451,7 @@
           and started_at &gt; current_timestamp - (#{maxAgeSeconds} * interval '1 second')
     </select>
 
-    <select id="selectProcessingDelaySamples" resultType="map">
+    <select id="selectProcessingDelaySamples" resultMap="processingDelaySampleRow">
         select tenant_id,
                id,
                job_code,
@@ -305,7 +476,7 @@
           and storage_path = #{storagePath}
     </select>
 
-    <insert id="insertReconciledFileRecord" parameterType="map" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+    <insert id="insertReconciledFileRecord" parameterType="io.github.pinpols.batch.orchestrator.domain.param.FileGovernanceReconcileInsertParam" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.file_record (
             tenant_id, file_category, file_name, original_file_name, file_ext, file_format_type,
             charset, mime_type, file_size_bytes, checksum_type, checksum_value,
@@ -315,7 +486,7 @@
             #{tenantId}, #{fileCategory}, #{fileName}, #{fileName}, #{fileExt}, #{fileFormatType},
             'UTF-8', #{mimeType}, #{fileSizeBytes}, 'NONE', null,
             #{storageType}, #{storagePath}, #{storageBucket}, 'v1', 1, true,
-            #{sourceType}, null, #{fileStatus}, null, #{traceId}, #{metadataJson,jdbcType=VARCHAR}::jsonb, current_timestamp, current_timestamp
+            #{sourceType}, null, #{fileStatus}, #{bizDate,jdbcType=DATE}, #{traceId}, #{metadataJson,jdbcType=VARCHAR}::jsonb, current_timestamp, current_timestamp
         )
         <!--
           TOCTOU 回退(2026-06 加固):reconcileObject 的 existsFileRecordByStoragePath → insert 两步非原子,

@@ -49,6 +49,7 @@ class HttpDispatchHandlerTest {
   }
 
   private DataSource twoRowDataSource() throws Exception {
+    final String selectFixtureRowsSql = "select id from t";
     DataSource ds = mock(DataSource.class);
     Connection conn = mock(Connection.class);
     Statement st = mock(Statement.class);
@@ -56,10 +57,7 @@ class HttpDispatchHandlerTest {
     ResultSetMetaData meta = mock(ResultSetMetaData.class);
     when(ds.getConnection()).thenReturn(conn);
     when(conn.createStatement()).thenReturn(st);
-    final String selectTSql = """
-        select id from t
-    """;
-    when(st.executeQuery(selectTSql)).thenReturn(rs);
+    when(st.executeQuery(selectFixtureRowsSql)).thenReturn(rs);
     when(rs.getMetaData()).thenReturn(meta);
     when(meta.getColumnCount()).thenReturn(1);
     when(meta.getColumnLabel(1)).thenReturn("id");

@@ -68,17 +68,16 @@ class ExportSpiEquivalenceIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("Worker Spring 注册表发布 JDBC 映射导出的静态重放声明并保留 SQL 模板失败关闭")
   void shouldExposeConservativeReplayCatalog_whenContextLoads() {
-    List<ReplayCapabilityDeclaration> declarations = exportDataPluginRegistry.replayCapabilityCatalog();
-    ReplayCapabilityDeclaration jdbcMapped = declarations
-        .stream()
-        .filter(declaration ->
-            declaration.pluginId().equals(WorkerPluginIds.EXPORT_DATA_JDBC_MAPPED))
+    List<ReplayCapabilityDeclaration> declarations =
+        exportDataPluginRegistry.replayCapabilityCatalog();
+    ReplayCapabilityDeclaration jdbcMapped = declarations.stream()
+        .filter(
+            declaration -> declaration.pluginId().equals(WorkerPluginIds.EXPORT_DATA_JDBC_MAPPED))
         .findFirst()
         .orElseThrow();
-    ReplayCapabilityDeclaration sqlTemplate = declarations
-        .stream()
-        .filter(declaration ->
-            declaration.pluginId().equals(WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE))
+    ReplayCapabilityDeclaration sqlTemplate = declarations.stream()
+        .filter(
+            declaration -> declaration.pluginId().equals(WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE))
         .findFirst()
         .orElseThrow();
 

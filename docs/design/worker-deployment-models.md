@@ -22,7 +22,7 @@
 |---|---|---|
 | **部署位置** | 平台 K8s | 租户 K8s / VM |
 | **运行时** | 平台统一 JDK / 依赖 | 租户自由定 |
-| **能力面** | 完整 5 阶段 Pipeline 状态机 + 直写 `file_record` / `pipeline_instance` | 只 CLAIM → EXECUTE → REPORT |
+| **能力面** | 四类固定阶段 Pipeline（各 5 或 6 阶段） + 直写 `file_record` / `pipeline_instance` | 只 CLAIM → EXECUTE → REPORT |
 | **依赖** | `batch-common`(MyBatis / Flyway / Redis / DB 凭据) | 4 个轻量(jackson / kafka / slf4j / JDK) |
 | **跟平台耦合** | 同 reactor 同代码库,版本必须一致 | 协议解耦,SDK 版本可滞后 |
 | **数据可达性** | 必须能访问平台 DB + 业务数据源 | **平台访问不到租户数据** |
@@ -37,7 +37,7 @@
 
 ### 类型 A:**只能平台 worker**(SDK 干不了)
 
-- **Pipeline 5 阶段任务**(IMPORT / EXPORT / PROCESS / DISPATCH 内置流水线)
+- **系统固定阶段 Pipeline 任务**(IMPORT / EXPORT / PROCESS / DISPATCH 内置流水线)
   - 原因:这些阶段直接写 `pipeline_instance` / `file_record` / `pipeline_stage_*`,worker 跟 orchestrator 同库强一致;SDK 协议层没暴露这些状态机
   - 红线:docs/agent-baseline.md「Worker 不能直接写 `job_instance` / `workflow_run`」,平台内置 worker 通过 `batch-common` 用专属接口写 pipeline 表,SDK 没这个口子
 - **跨租户共享的标准化任务**(平台统一格式转换 / 统一对账 / 跨租户聚合)
@@ -63,12 +63,16 @@
 
 关键点:**编排统一**,orchestrator 不区分下游 worker 是平台的还是自托管的。
 
-```
-workflow_definition (在 console-api 定义)
-├─ node-1: taskType=IMPORT_STANDARD     → 平台 worker-import 接(平台域)
-├─ node-2: taskType=tenant_xyz_validate → 自托管 SDK 接(租户内网验证)
-├─ node-3: taskType=EXPORT_STANDARD     → 平台 worker-export 接(平台域)
-└─ node-4: taskType=tenant_xyz_notify   → 自托管 SDK 接(租户内网 webhook)
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart LR
+  W[Workflow 定义] --> N[JOB 节点引用 Job]
+  N --> P[平台标准任务类型]
+  N --> T[租户自定义 taskType]
+  P --> I[平台 Import / Export 等 Worker]
+  T --> S[租户自托管 SDK]
+  I --> R[CLAIM / lease / REPORT]
+  S --> R
 ```
 
 orchestrator 派单按 `taskType` 路由到对应 worker pool / Kafka topic:
@@ -124,14 +128,17 @@ orchestrator 派单按 `taskType` 路由到对应 worker pool / Kafka topic:
 
 trigger 不感知下游 worker 是谁,按 `taskType` 路由:
 
-```
-batch-trigger (cron / fixed-rate / event)
-    │  trigger_outbox_event
-    ▼
-orchestrator (launch workflow_run)
-    │  按 taskType 路由
-    ├──→ 内部 Kafka topic → 平台 worker 消费
-    └──→ batch.task.dispatch.<tenantId>.* → 自托管 SDK 消费
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  T[Trigger：cron / fixed-rate / event] --> O[trigger_outbox_event]
+  O --> K[Kafka 触发消息]
+  K --> W[Orchestrator：WorkflowRun / JOB]
+  W --> D[任务 Outbox → Kafka dispatch]
+  D --> P[平台 Worker]
+  D --> S[租户自托管 SDK]
+  P --> C[CLAIM 后执行与 REPORT]
+  S --> C
 ```
 
 **自托管节点跟平台节点对 trigger / workflow 引擎完全无差别**。
@@ -156,17 +163,16 @@ orchestrator (launch workflow_run)
 
 日切门闩(`BatchDayGateService`)在 orchestrator **launch 阶段**就执行 — 在写入 Kafka 派单消息**之前**:
 
-```
-trigger fire
-   │
-   ▼
-LaunchService.launch
-   │
-   ▼
-BatchDayGateService.evaluateAndApply  ← 日切门闩在这里
-   │ ┌─ALLOW──→ 写 trigger_request=ACCEPTED + outbox + Kafka 派单 ──→ worker(平台 / SDK)
-   │ ├─WAIT───→ 写 batch_day_waiting_launch + trigger_request=WAITING(**不发 Kafka**)
-   │ └─REJECT─→ 写 trigger_request=REJECTED(**不发 Kafka**)
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  T[Trigger 请求与 Trigger Outbox] --> K[Kafka 触发消息]
+  K --> O[Orchestrator：相关启动门禁]
+  O --> G{BatchDayGateService}
+  G -->|ALLOW| A[创建执行任务与任务 Outbox]
+  A --> D[Kafka 任务派发 → 平台 Worker / SDK]
+  G -->|WAIT| W[等待台账 + trigger_request WAITING]
+  G -->|REJECT| R[trigger_request REJECTED]
 ```
 
 WAIT/REJECT 路径**根本不会发出 Kafka 消息**,SDK 自然收不到。所以:
@@ -393,6 +399,8 @@ public final class SdkTaskContext {
 
 #### D. Heartbeat 双向通道(server-driven directive)
 
+内置Worker的在途心跳绑定本地注册实例；下线或重新注册后，旧响应不能恢复缓存或将旧平台指令施加到新注册。Worker滚动关闭的执行池、租约及回报边界见[滚动升级手册](../runbook/rolling-upgrade-workers.md)。此处协议能力仍按各SDK实际实现分别验证。
+
 `heartbeat` response 不再只是 200 OK,带 platform directive:
 
 ```json
@@ -490,22 +498,16 @@ public SdkTaskResult execute(SdkTaskContext ctx) {
 
 ## 9. 选型决策树
 
-```
-租户提需求:有个 X 任务想跑
-   │
-   ├─ X 涉及租户私有数据 / 数据不能出域? ──── 是 ──→ 自托管 SDK
-   │
-   ├─ X 需要租户专属运行时(特殊驱动 / native deps)? ─ 是 ──→ 自托管 SDK
-   │
-   ├─ X 是合规审计要求"代码在我家执行"? ─────── 是 ──→ 自托管 SDK
-   │
-   ├─ X 跑租户自家 shell / 任意 SQL? ───────── 是 ──→ 自托管 SDK(避免给平台 atomic 任意命令权限)
-   │
-   ├─ X 是 Pipeline 5 阶段标准流水线? ──────── 是 ──→ 平台 worker(SDK 干不了)
-   │
-   ├─ X 跨多租户共享(平台统一对账等)? ─────── 是 ──→ 平台 worker
-   │
-   └─ X 是普通业务任务,数据不敏感,租户也不想运维 ──→ 平台 worker(默认)
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  X[租户任务需求] --> P{数据驻留、专属运行时或<br/>代码须在租户域执行？}
+  P -->|是| S[自托管 SDK]
+  P -->|否| C{执行租户自定义 shell / SQL？}
+  C -->|是| S
+  C -->|否| F{平台固定文件 Pipeline？}
+  F -->|是| W[平台文件 Worker]
+  F -->|否| D[平台 Worker 为默认，按部署约束评估]
 ```
 
 ---

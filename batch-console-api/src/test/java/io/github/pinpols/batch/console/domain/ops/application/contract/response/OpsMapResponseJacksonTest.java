@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ConfigLifecycleStatus;
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,23 +26,22 @@ class OpsMapResponseJacksonTest {
   void shouldOmitNullApprovalColumnsButKeepKey_whenSerializingConfigApprovalDetail()
       throws Exception {
     // 顶层 approval 键恒定（无审批时为 null）；嵌套 approval 行来自 MyBatis map，pending 时省略 reviewedBy 等 null 列。
-    Map<String, Object> approvalRow = new LinkedHashMap<>();
-    approvalRow.put("id", 100L);
-    approvalRow.put("tenantId", "ta");
-    approvalRow.put("releaseId", 7L);
-    approvalRow.put("approvalStatus", "PENDING");
-    approvalRow.put("requestedBy", "admin");
-    approvalRow.put("requestedAt", Timestamp.from(Instant.parse("2026-07-11T02:00:00Z")));
-
-    Map<String, Object> row = new LinkedHashMap<>();
-    row.put("releaseId", 7L);
-    row.put("tenantId", "ta");
-    row.put("configType", "JOB");
-    row.put("configKey", "job-a");
-    row.put("configStatus", ConfigLifecycleStatus.PENDING_APPROVAL.code());
-    row.put("approval", approvalRow);
-
-    Map<String, Object> back = roundTrip(ConsoleConfigApprovalDetailResponse.from(row));
+    Instant requestedAt = Instant.parse("2026-07-11T02:00:00Z");
+    ConsoleConfigApprovalDetailResponse response = new ConsoleConfigApprovalDetailResponse(
+        7L,
+        "ta",
+        "JOB",
+        "job-a",
+        ConfigLifecycleStatus.PENDING_APPROVAL.code(),
+        ConsoleConfigApprovalDetailResponse.ApprovalRow.builder()
+            .id(100L)
+            .tenantId("ta")
+            .releaseId(7L)
+            .approvalStatus("PENDING")
+            .requestedBy("admin")
+            .requestedAt(requestedAt)
+            .build());
+    Map<String, Object> back = roundTrip(response);
 
     assertThat(back)
         .containsOnlyKeys(
@@ -56,38 +54,31 @@ class OpsMapResponseJacksonTest {
         .doesNotContainKey("reviewedBy")
         .doesNotContainKey("reviewedAt")
         .doesNotContainKey("reviewComment");
-    // Timestamp → Instant 归一由 record 承载。
-    assertThat(ConsoleConfigApprovalDetailResponse.from(row).approval().requestedAt())
-        .isEqualTo(Instant.parse("2026-07-11T02:00:00Z"));
+    // 时间值由 record 承载。
+    assertThat(response.approval().requestedAt()).isEqualTo(Instant.parse("2026-07-11T02:00:00Z"));
   }
 
   @Test
   @DisplayName("审批明细:无审批时保留显式空值键, 序列化后仍是空值")
   void shouldKeepExplicitNullApproval_whenApprovalAbsent() throws Exception {
-    Map<String, Object> row = new LinkedHashMap<>();
-    row.put("releaseId", 7L);
-    row.put("tenantId", "ta");
-    row.put("configType", "JOB");
-    row.put("configKey", "job-a");
-    row.put("configStatus", "DRAFT");
-    row.put("approval", null);
-
-    Map<String, Object> back = roundTrip(ConsoleConfigApprovalDetailResponse.from(row));
+    ConsoleConfigApprovalDetailResponse response =
+        new ConsoleConfigApprovalDetailResponse(7L, "ta", "JOB", "job-a", "DRAFT", null);
+    Map<String, Object> back = roundTrip(response);
     assertThat(back).containsKey("approval").containsEntry("approval", null);
   }
 
   @Test
   @DisplayName("Worker 一致性:分组内空的分组名键被省略, 外层计数保留")
   void shouldOmitNullWorkerGroupKey_whenSerializingWorkerConsistency() throws Exception {
-    Map<String, Object> nullGroupRow = new LinkedHashMap<>();
-    nullGroupRow.put("totalWorkers", 2L);
-    nullGroupRow.put("onlineWorkers", 1L);
-    Map<String, Object> row = new LinkedHashMap<>();
-    row.put("onlineWorkers", 3L);
-    row.put("healthy", true);
-    row.put("workerGroups", List.of(nullGroupRow));
+    var group = new ConsoleWorkerConsistencyResponse.WorkerGroupCapacity(
+        null, 2L, 1L, null, null, null, null, null);
+    var response = ConsoleWorkerConsistencyResponse.builder()
+        .onlineWorkers(3L)
+        .healthy(true)
+        .workerGroups(List.of(group))
+        .build();
 
-    Map<String, Object> back = roundTrip(ConsoleWorkerConsistencyResponse.from(row));
+    Map<String, Object> back = roundTrip(response);
     Map<String, Object> group0 =
         mapper.convertValue(((List<?>) back.get("workerGroups")).get(0), new TypeReference<>() {});
     assertThat(group0).doesNotContainKey("workerGroup").containsEntry("totalWorkers", 2);
@@ -97,43 +88,27 @@ class OpsMapResponseJacksonTest {
   @Test
   @DisplayName("实例诊断:摘要结构化并保留显式空键, 动态证据原样透传")
   void shouldTypeSummaryAndKeepDynamicEvidence_whenSerializingInstanceDiagnosis() throws Exception {
-    Map<String, Object> instance = new LinkedHashMap<>();
-    instance.put("id", 9L);
-    instance.put("instanceNo", "INS-9");
-    instance.put("jobCode", "JOB_A");
-    instance.put("instanceStatus", "RUNNING");
-    instance.put("queueCode", null); // 显式 null 键必须保留（LinkedHashMap 透传）
-
-    Map<String, Object> summary = new LinkedHashMap<>();
-    summary.put("partitionStatusCounts", List.of(Map.of("status", "RUNNING", "count", 2L)));
-    summary.put("taskStatusCounts", List.of());
-    summary.put(
-        "outboxStatusCounts",
-        List.of(Map.of(
-            "status",
-            "NEW",
-            "count",
-            1L,
-            "oldest",
-            Timestamp.from(Instant.parse("2026-07-11T02:00:00Z")))));
-    summary.put("onlineWorkersForGroup", 3L);
-
-    Map<String, Object> finding = new LinkedHashMap<>();
-    finding.put("severity", "WARN");
-    finding.put("reasonCode", "NO_ONLINE_WORKER_FOR_GROUP");
-    finding.put("message", "msg");
-    finding.put("suggestedActions", List.of("do x"));
-    finding.put("evidence", Map.of("workerGroup", "grp-1", "activeTasks", 5L));
-
-    Map<String, Object> row = new LinkedHashMap<>();
-    row.put("tenantId", "ta");
-    row.put("jobInstanceId", 9L);
-    row.put("healthy", false);
-    row.put("instance", instance);
-    row.put("summary", summary);
-    row.put("findings", List.of(finding));
-
-    Map<String, Object> back = roundTrip(ConsoleInstanceDiagnosisResponse.from(row));
+    var instance = ConsoleInstanceDiagnosisResponse.InstanceSummary.builder()
+        .id(9L)
+        .instanceNo("INS-9")
+        .jobCode("JOB_A")
+        .instanceStatus("RUNNING")
+        .build();
+    var summary = new ConsoleInstanceDiagnosisResponse.DiagnosisSummary(
+        List.of(new ConsoleInstanceDiagnosisResponse.StatusCount("RUNNING", 2L)),
+        List.of(),
+        List.of(new ConsoleInstanceDiagnosisResponse.OutboxStatusCount(
+            "NEW", 1L, Instant.parse("2026-07-11T02:00:00Z"), null)),
+        3L);
+    var finding = new ConsoleInstanceDiagnosisResponse.Finding(
+        "WARN",
+        "NO_ONLINE_WORKER_FOR_GROUP",
+        "msg",
+        List.of("do x"),
+        Map.of("workerGroup", "grp-1", "activeTasks", 5L));
+    var response =
+        new ConsoleInstanceDiagnosisResponse("ta", 9L, false, instance, summary, List.of(finding));
+    Map<String, Object> back = roundTrip(response);
 
     Map<String, Object> backInstance =
         mapper.convertValue(back.get("instance"), new TypeReference<>() {});
@@ -144,7 +119,7 @@ class OpsMapResponseJacksonTest {
         mapper.convertValue(back.get("summary"), new TypeReference<>() {});
     Map<String, Object> outbox0 = mapper.convertValue(
         ((List<?>) backSummary.get("outboxStatusCounts")).get(0), new TypeReference<>() {});
-    // MyBatis 行省略 null 列：该 outbox 行无 newest → 键不得出现。
+    // 可空时间字段 newest 不应出现在序列化结果中。
     assertThat(outbox0).containsKeys("status", "count", "oldest").doesNotContainKey("newest");
     assertThat(outbox0).containsEntry("status", "NEW").containsEntry("count", 1);
 
@@ -169,7 +144,8 @@ class OpsMapResponseJacksonTest {
         List.of(Map.of(
             "topic", "t1", "partition", 0, "committedOffset", 10L, "endOffset", 15L, "lag", 5L)));
 
-    Map<String, Object> normalBack = roundTrip(ConsoleKafkaConsumerLagResponse.from(normal));
+    Map<String, Object> normalBack = roundTrip(
+        mapper.readValue(mapper.writeValueAsString(normal), ConsoleKafkaConsumerLagResponse.class));
     assertThat(normalBack)
         .containsOnlyKeys("groupId", "totalLag", "partitionCount", "partitionsWithLag")
         .doesNotContainKey("error");
@@ -180,7 +156,8 @@ class OpsMapResponseJacksonTest {
     noLag.put("groupId", "batch-b");
     noLag.put("totalLag", 0L);
     noLag.put("partitionCount", 1);
-    Map<String, Object> noLagBack = roundTrip(ConsoleKafkaConsumerLagResponse.from(noLag));
+    Map<String, Object> noLagBack = roundTrip(
+        mapper.readValue(mapper.writeValueAsString(noLag), ConsoleKafkaConsumerLagResponse.class));
     assertThat(noLagBack)
         .containsOnlyKeys("groupId", "totalLag", "partitionCount")
         .doesNotContainKey("partitionsWithLag");
@@ -189,7 +166,8 @@ class OpsMapResponseJacksonTest {
     Map<String, Object> error = new LinkedHashMap<>();
     error.put("groupId", "batch-c");
     error.put("error", "boom");
-    Map<String, Object> errorBack = roundTrip(ConsoleKafkaConsumerLagResponse.from(error));
+    Map<String, Object> errorBack = roundTrip(
+        mapper.readValue(mapper.writeValueAsString(error), ConsoleKafkaConsumerLagResponse.class));
     assertThat(errorBack).containsOnlyKeys("groupId", "error").containsEntry("error", "boom");
   }
 
@@ -204,7 +182,8 @@ class OpsMapResponseJacksonTest {
     row.put("sha256", "abc");
     row.put("downloadUrl", null);
 
-    Map<String, Object> back = roundTrip(ConsoleForensicExportResponse.from(row));
+    Map<String, Object> back = roundTrip(
+        mapper.readValue(mapper.writeValueAsString(row), ConsoleForensicExportResponse.class));
     assertThat(back)
         .containsKeys(
             "exportId", "status", "storagePath", "fileSizeBytes", "sha256", "downloadUrl");
@@ -214,17 +193,14 @@ class OpsMapResponseJacksonTest {
   @Test
   @DisplayName("调度锁状态:嵌套锁条目的时间与标识字段完整保留")
   void shouldTypeNestedLockEntries_whenSerializingShedLockStatus() throws Exception {
-    Map<String, Object> lock = new LinkedHashMap<>();
-    lock.put("name", "job-scheduler");
-    lock.put("lockUntil", Instant.parse("2026-07-11T02:05:00Z"));
-    lock.put("lockedAt", Instant.parse("2026-07-11T02:00:00Z"));
-    lock.put("lockedBy", "node-1");
-    Map<String, Object> row = new LinkedHashMap<>();
-    row.put("totalLocks", 1);
-    row.put("activeLocks", 1L);
-    row.put("locks", List.of(lock));
+    var lock = new ConsoleShedLockStatusResponse.LockEntry(
+        "job-scheduler",
+        Instant.parse("2026-07-11T02:05:00Z"),
+        Instant.parse("2026-07-11T02:00:00Z"),
+        "node-1");
+    var response = new ConsoleShedLockStatusResponse(1, 1L, List.of(lock));
 
-    Map<String, Object> back = roundTrip(ConsoleShedLockStatusResponse.from(row));
+    Map<String, Object> back = roundTrip(response);
     assertThat(back).containsEntry("totalLocks", 1).containsEntry("activeLocks", 1);
     Map<String, Object> lock0 =
         mapper.convertValue(((List<?>) back.get("locks")).get(0), new TypeReference<>() {});

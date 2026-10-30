@@ -45,20 +45,22 @@ public class DispatchReplayCapabilityResolver {
       JsonNode payloadNode = objectMapper.readTree(rawPayload);
       boolean payloadIsNotWorkflowRunReplay = EmptyChecks.isNull(payloadNode)
           || !payloadNode.isObject()
-          || !ReplayOperationType.WORKFLOW_RUN.code()
+          || !ReplayOperationType.WORKFLOW_RUN
+              .code()
               .equals(payloadNode.path("operationType").asText(null));
       if (payloadIsNotWorkflowRunReplay) {
         return DispatchReplayCapability.unknown();
       }
-      DispatchPayload dispatchPayload = objectMapper.treeToValue(payloadNode, DispatchPayload.class);
+      DispatchPayload dispatchPayload =
+          objectMapper.treeToValue(payloadNode, DispatchPayload.class);
       boolean dispatchPayloadIsInvalid = EmptyChecks.isNull(dispatchPayload)
           || !hasPositiveFileId(dispatchPayload.fileId())
           || EmptyChecks.isBlank(dispatchPayload.channelCode());
       if (dispatchPayloadIsInvalid) {
         return DispatchReplayCapability.unknown();
       }
-      Optional<Map<String, Object>> frozenChannel = frozenChannels.resolve(
-          request.tenantId(), dispatchPayload.channelCode(), rawPayload);
+      Optional<Map<String, Object>> frozenChannel =
+          frozenChannels.resolve(request.tenantId(), dispatchPayload.channelCode(), rawPayload);
       if (!frozenChannel.isPresent()) {
         return DispatchReplayCapability.unknown();
       }

@@ -1,6 +1,6 @@
 # Import PARTITION_REPLACE_COPY 1000w 系统链路验证（2026-06-07）
 
-吞吐优化主文档：[`single-node-throughput-optimization-2026-06-06.md`](../archive/runbook/single-node-throughput-optimization-2026-06-06.md)。
+吞吐优化主文档：[streaming-large-file-import-export-2026-06-06.md](streaming-large-file-import-export-2026-06-06.md)。
 
 ## 结论
 

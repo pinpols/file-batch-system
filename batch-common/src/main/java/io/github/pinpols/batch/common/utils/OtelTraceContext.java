@@ -38,7 +38,7 @@ public final class OtelTraceContext {
       return null;
     }
     String traceId = ctx.getTraceId();
-    boolean traceIdIsInvalid = traceId == null || traceId.isEmpty() || INVALID_TRACE_ID.equals(traceId);
+    boolean traceIdIsInvalid = EmptyChecks.isEmpty(traceId) || INVALID_TRACE_ID.equals(traceId);
     if (traceIdIsInvalid) {
       return null;
     }

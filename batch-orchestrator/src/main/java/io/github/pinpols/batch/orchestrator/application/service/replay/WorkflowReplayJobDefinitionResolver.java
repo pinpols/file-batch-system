@@ -63,19 +63,16 @@ public class WorkflowReplayJobDefinitionResolver {
   }
 
   private void validateRequest(WorkflowReplayJobDefinitionRequest request) {
-    boolean requestHasRequiredFields =
-        EmptyChecks.isNotNull(request)
-            && EmptyChecks.isNotBlank(request.tenantId())
-            && EmptyChecks.isNotBlank(request.nodeCode())
-            && EmptyChecks.isNotBlank(request.jobCode())
-            && EmptyChecks.isNotNull(request.sourceSnapshot())
-            && EmptyChecks.isNotNull(request.policy());
-    boolean requestPolicyIsValid =
-        requestHasRequiredFields
-            && (request.policy() == ConfigVersionPolicy.USE_SPECIFIED_VERSION
-                ? EmptyChecks.isNotNull(request.specifiedVersion())
-                    && request.specifiedVersion() > 0
-                : EmptyChecks.isNull(request.specifiedVersion()));
+    boolean requestHasRequiredFields = EmptyChecks.isNotNull(request)
+        && EmptyChecks.isNotBlank(request.tenantId())
+        && EmptyChecks.isNotBlank(request.nodeCode())
+        && EmptyChecks.isNotBlank(request.jobCode())
+        && EmptyChecks.isNotNull(request.sourceSnapshot())
+        && EmptyChecks.isNotNull(request.policy());
+    boolean requestPolicyIsValid = requestHasRequiredFields
+        && (request.policy() == ConfigVersionPolicy.USE_SPECIFIED_VERSION
+            ? EmptyChecks.isNotNull(request.specifiedVersion()) && request.specifiedVersion() > 0
+            : EmptyChecks.isNull(request.specifiedVersion()));
     if (!requestPolicyIsValid) {
       throw invalidPolicy();
     }
@@ -91,12 +88,11 @@ public class WorkflowReplayJobDefinitionResolver {
   }
 
   private void validateDefinition(JobDefinitionEntity definition, String tenantId, String jobCode) {
-    boolean definitionMatchesReplayRequest =
-        EmptyChecks.isNotNull(definition)
-            && tenantId.equals(definition.tenantId())
-            && jobCode.equals(definition.jobCode())
-            && EmptyChecks.isNotNull(definition.id())
-            && EmptyChecks.isNotNull(definition.version());
+    boolean definitionMatchesReplayRequest = EmptyChecks.isNotNull(definition)
+        && tenantId.equals(definition.tenantId())
+        && jobCode.equals(definition.jobCode())
+        && EmptyChecks.isNotNull(definition.id())
+        && EmptyChecks.isNotNull(definition.version());
     if (!definitionMatchesReplayRequest) {
       throw unavailableVersion();
     }

@@ -125,30 +125,26 @@ class PauseResumeStateMachineIntegrationTest extends AbstractIntegrationTest {
         returning id
         """;
     return jdbcTemplate.queryForObject(
-        insertWorkflowRunSql, Long.class, TENANT, workflowDefId, BIZ_DATE, status, "trace-" + suffix);
+        insertWorkflowRunSql,
+        Long.class,
+        TENANT,
+        workflowDefId,
+        BIZ_DATE,
+        status,
+        "trace-" + suffix);
   }
 
   private String statusOfJobInstance(Long id) {
-    String selectJobInstanceStatusSql =
-        """
+    String selectJobInstanceStatusSql = """
         select instance_status from batch.job_instance where tenant_id = ? and id = ?
     """;
-    return jdbcTemplate.queryForObject(
-        selectJobInstanceStatusSql,
-        String.class,
-        TENANT,
-        id);
+    return jdbcTemplate.queryForObject(selectJobInstanceStatusSql, String.class, TENANT, id);
   }
 
   private String statusOfWorkflowRun(Long id) {
-    String selectWorkflowRunStatusSql =
-        """
+    String selectWorkflowRunStatusSql = """
         select run_status from batch.workflow_run where tenant_id = ? and id = ?
     """;
-    return jdbcTemplate.queryForObject(
-        selectWorkflowRunStatusSql,
-        String.class,
-        TENANT,
-        id);
+    return jdbcTemplate.queryForObject(selectWorkflowRunStatusSql, String.class, TENANT, id);
   }
 }

@@ -2,10 +2,10 @@ package io.github.pinpols.batch.orchestrator;
 
 import io.github.pinpols.batch.common.config.BatchJsonAutoConfiguration;
 import io.github.pinpols.batch.common.config.BatchKafkaProducerProperties;
-import io.github.pinpols.batch.common.config.KafkaConnectionProperties;
 import io.github.pinpols.batch.common.config.BatchKafkaProducerSupport;
 import io.github.pinpols.batch.common.config.BatchObjectCryptoAutoConfiguration;
 import io.github.pinpols.batch.common.config.BatchStartupSelfCheckAutoConfiguration;
+import io.github.pinpols.batch.common.config.KafkaConnectionProperties;
 import io.micrometer.observation.ObservationRegistry;
 import java.util.Map;
 import org.mybatis.spring.annotation.MapperScan;

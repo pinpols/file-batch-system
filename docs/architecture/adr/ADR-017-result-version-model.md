@@ -60,11 +60,12 @@ batch.result_version
 
 ### 状态机（version.status）
 
-```
-PENDING ─────► EFFECTIVE ─────► SUPERSEDED ─────► ARCHIVED
-   │              ▲                │
-   │              │                │
-   └────► (rejected/废弃)          └──► (新版本上线触发)
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+%% 决策示意；实施范围以本文状态记录为准。
+flowchart LR
+  P["PENDING"] -->|"提升"| E["EFFECTIVE"] -->|"新版本生效"| S["SUPERSEDED"] -->|"保留策略"| A["ARCHIVED"]
+  P --> R["拒绝 / 废弃"]
 ```
 
 - **PENDING**：刚创建，等待审批 / 等待 ops 显式 promote（`promotion_policy=MANUAL_APPROVAL` 时停在这里）

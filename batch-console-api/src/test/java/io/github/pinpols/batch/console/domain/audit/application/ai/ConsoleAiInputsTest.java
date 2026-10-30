@@ -17,9 +17,8 @@ class ConsoleAiInputsTest {
   void shouldSnapshotTurnAttachmentIds_whenCallerMutatesOriginal() {
     UUID attachmentId = UUID.randomUUID();
     List<UUID> requestedIds = new ArrayList<>(List.of(attachmentId));
-    ConsoleAiTurnStartInput input = ConsoleAiTurnStartInput.builder()
-        .attachmentIds(requestedIds)
-        .build();
+    ConsoleAiTurnStartInput input =
+        ConsoleAiTurnStartInput.builder().attachmentIds(requestedIds).build();
 
     requestedIds.clear();
 
@@ -35,22 +34,21 @@ class ConsoleAiInputsTest {
     List<UUID> requestedIds = new ArrayList<>();
     requestedIds.add(attachmentId);
     requestedIds.add(null);
-    ConsoleAiAttachmentBindingInput input = ConsoleAiAttachmentBindingInput.builder()
-        .ids(requestedIds)
-        .build();
+    ConsoleAiAttachmentBindingInput input =
+        ConsoleAiAttachmentBindingInput.builder().ids(requestedIds).build();
 
     requestedIds.clear();
 
     assertThat(input.ids()).containsExactly(attachmentId, null);
-    assertThatThrownBy(() -> input.ids().clear())
-        .isInstanceOf(UnsupportedOperationException.class);
+    assertThatThrownBy(() -> input.ids().clear()).isInstanceOf(UnsupportedOperationException.class);
   }
 
   @Test
   @DisplayName("可选输入的空值保持原样，由服务在原校验阶段处理")
   void shouldPreserveNullableRawInputs_whenOptionalFieldsAreOmitted() {
     ConsoleAiTurnStartInput turn = ConsoleAiTurnStartInput.builder().build();
-    ConsoleAiAttachmentBindingInput binding = ConsoleAiAttachmentBindingInput.builder().build();
+    ConsoleAiAttachmentBindingInput binding =
+        ConsoleAiAttachmentBindingInput.builder().build();
 
     assertThat(turn.requestedConversationId()).isNull();
     assertThat(turn.clientTurnId()).isNull();

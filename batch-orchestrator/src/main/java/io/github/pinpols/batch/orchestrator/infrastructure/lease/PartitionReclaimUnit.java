@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.lease;
 
-import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
-
-
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.enums.TaskErrorCodes;
@@ -11,6 +8,7 @@ import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
+import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
@@ -120,7 +118,8 @@ public class PartitionReclaimUnit {
           jobPartitionMapper.selectById(partition.getTenantId(), partition.getId());
       if (EmptyChecks.isNull(currentPartition)
           || EmptyChecks.isNull(currentPartition.getCurrentInvocationId())
-          || EmptyChecks.isBlank(Objects.requireNonNull(currentPartition.getCurrentInvocationId()))) {
+          || EmptyChecks.isBlank(
+              Objects.requireNonNull(currentPartition.getCurrentInvocationId()))) {
         throw new ReclaimRetryableException(
             "non-idempotent task reclaim has no current partition invocation: partitionId="
                 + partition.getId()
@@ -168,9 +167,8 @@ public class PartitionReclaimUnit {
     // partition(markStatus)。
     // 若这里直接 resetForRetry(task 行锁)采用默认「等待」语义,当 outcome 正持有该 task 行、并反向等待本事务已持有的
     // partition 行时,构成 40P01 行锁反转死锁(OutcomeVsReclaimDeadlockIntegrationTest 已真复现)。#768 的
-    // instance advisory lock 只串行化 outcome-vs-outcome(reclaim 不取该 advisory lock),无法限制这条 2 行反转。
-    // 修法:reclaim 是尽力而为的后台清理,先用 FOR UPDATE NOWAIT 试取 task 行锁——抢不到(=该 task 正被 outcome 回报)
-    // 就抛 ReclaimRetryableException 让本事务回滚(撤销上面的 partition reset)、本轮让路,由 15s 后的下一轮重试。
+    // 当前 reclaim 和 outcome 在各自行锁操作前共用 instance advisory lock；NOWAIT 仍保留，
+    // 对未使用该围栏且持有 task 行锁的并发操作主动让路，并回滚上面的 partition reset，等待下一轮重试。
     // reclaim 因此永不「等待」task 行锁,不再参与任何等待环。CAS/version/前态条件一律不变。
     try {
       jobTaskMapper.lockForReclaimNoWait(partition.getTenantId(), task.getId());
@@ -221,8 +219,7 @@ public class PartitionReclaimUnit {
         .eventKey(eventKey)
         .runModeOverride(RunMode.RECOVER)
         .build();
-    taskDispatchOutboxService.writeDispatchEvent(
-        dispatchCommand);
+    taskDispatchOutboxService.writeDispatchEvent(dispatchCommand);
     log.warn(
         "expired partition reclaimed and re-dispatched: tenantId={},"
             + " partitionId={}, taskId={}, resetSteps={}, fromVersion={}, leaseWindowSeconds={}",

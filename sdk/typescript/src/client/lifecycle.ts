@@ -334,10 +334,10 @@ export class WorkerLifecycle {
           });
           return;
         }
-        // record the ADR-014 invocation token so renew/report can echo it
+        // 开始确认、续租和回报使用 CLAIM 当前身份，消息中的身份只作为旧协议缺字段时的回退。
         const tracked = this.#inFlight.get(msg.taskId);
         if (tracked) {
-          tracked.partitionInvocationId = msgInvocationId ?? claim.partitionInvocationId ?? null;
+          tracked.partitionInvocationId = claim.partitionInvocationId ?? msgInvocationId ?? null;
         }
         const progress = new NoopProgressReporter();
         const resume = new ResumeSupport({
@@ -381,6 +381,23 @@ export class WorkerLifecycle {
           commit: (breakPosition) => resume.commit(breakPosition),
         };
 
+        // 在业务入口独立确认计时；失败由外层按控制面异常处理，不能转换为业务失败回报。
+        const executionStarted = await this.#transport.renew(msg.taskId, {
+          tenantId: this.#cfg.tenantId,
+          workerId: this.#cfg.workerCode,
+          partitionInvocationId: this.#inFlight.get(msg.taskId)?.partitionInvocationId ?? null,
+          details: { executionStarted: true },
+        });
+        if (executionStarted.cancelRequested || cancellation.isCancellationRequested) {
+          cancellation.markCancelled();
+          await this.#report(msg.taskId, {
+            success: false,
+            errorCode: ErrorCode.CANCELLED,
+            resultSummary: "task cancelled before handler entry",
+            partitionInvocationId: this.#inFlight.get(msg.taskId)?.partitionInvocationId ?? null,
+          });
+          return;
+        }
         let result: TaskResult;
         try {
           result = await this.#handler.execute(ctx);

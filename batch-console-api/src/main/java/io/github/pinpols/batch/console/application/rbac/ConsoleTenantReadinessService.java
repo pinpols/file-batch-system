@@ -5,16 +5,16 @@ import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMappe
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigReadinessView;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigReadinessView;
-import io.github.pinpols.batch.console.domain.job.view.JobDefinitionQueueRefView;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionQueueRefView;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.TenantReadinessResponse;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.TenantReadinessResponse.ReadinessItem;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.domain.rbac.view.TenantRow;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -57,7 +57,7 @@ public class ConsoleTenantReadinessService {
     // SEC(跨租户越权修复):非全局角色只能对自身租户跑就绪自检,tenantId 与 JWT 不符 → FORBIDDEN;
     // 全局角色(ADMIN / AUDITOR)及内部 provision 编排(ADMIN 上下文)可查任意租户。
     tenantGuard.assertTenantAllowed(tenantId);
-    Map<String, Object> tenant = tenantMapper.selectByTenantId(tenantId);
+    TenantRow tenant = tenantMapper.selectByTenantId(tenantId);
     Guard.requireFound(tenant, "tenant not found: " + tenantId);
 
     List<ReadinessItem> blocking = new ArrayList<>();
@@ -157,5 +157,4 @@ public class ConsoleTenantReadinessService {
   private static boolean isBlankJson(String v) {
     return v == null || EMPTY_JSON_PLACEHOLDERS.contains(v.trim());
   }
-
 }

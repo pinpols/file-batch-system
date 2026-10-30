@@ -114,13 +114,25 @@ for spec in "${SPECS[@]}"; do
       >> "$clarification_ignore_tmp" || true
     grep -E 'in API POST /api/console/config/tenant-package/excel/apply/\{uploadToken\} .*`data/pipeline(Inserted|Updated)`.*\[response-required-property-removed\]' "$raw_diff_tmp" \
       >> "$clarification_ignore_tmp" || true
+    # ADR-048 批准 Workflow 定义替代旧 Pipeline 定义 API，并按全新数据库同步切换；仅登记具体路由。
     printf '%s\n' \
+      'GET /api/console/pipeline-definitions api path removed without deprecation' \
+      'POST /api/console/pipeline-definitions api path removed without deprecation' \
+      'GET /api/console/pipeline-definitions/events api path removed without deprecation' \
+      'GET /api/console/pipeline-definitions/{id} api path removed without deprecation' \
+      'PUT /api/console/pipeline-definitions/{id} api path removed without deprecation' \
+      'PATCH /api/console/pipeline-definitions/{id}/enabled api path removed without deprecation' \
+      'GET /api/console/queries/pipeline-definitions api path removed without deprecation' \
+      'GET /api/console/queries/pipeline-definitions/{id} api path removed without deprecation' \
       'POST /api/console/jobs/batch-trigger api path removed without deprecation' \
       'POST /api/console/jobs/trigger api path removed without deprecation' \
       'GET /api/console/queries/pipeline-definitions/codes api path removed without deprecation' \
       'PUT /api/console/workflow-definitions/{id} api removed without deprecation' \
       >> "$clarification_ignore_tmp"
     grep -E 'in API (POST /api/console/pipeline-definitions|PUT /api/console/pipeline-definitions/\{id\}|PATCH /api/console/pipeline-definitions/\{id\}/enabled) .*response with the status `200`.*\[response-success-status-removed\]' "$raw_diff_tmp" \
+      >> "$clarification_ignore_tmp" || true
+    # claimed-task 响应仅暴露安全摘要；不再向 Console 返回载荷、结果摘要、错误文本或租户标识。
+    grep -E 'in API GET /api/console/workers/\{workerCode\}/claimed-tasks .*removed the required property `allOf\[subschema #2\]/data/items/(errorMessage|resultSummary|taskPayload|tenantId)`.*\[response-required-property-removed\]' "$raw_diff_tmp" \
       >> "$clarification_ignore_tmp" || true
     grep -E 'in API POST /api/console/ops/cache/evict-job-definition .*new required `query` request parameter `workflowCode`.*\[new-required-request-parameter\]' "$raw_diff_tmp" \
       >> "$clarification_ignore_tmp" || true

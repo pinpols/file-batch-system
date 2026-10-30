@@ -16,18 +16,26 @@ import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCop
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncImportRequest;
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncLogResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncRequestStatusResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncSummaryResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.ItemStats;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.TenantInitResult;
+import io.github.pinpols.batch.console.domain.config.param.ConfigSyncLogInsertParam;
+import io.github.pinpols.batch.console.domain.config.param.ConfigSyncLogUpdateParam;
+import io.github.pinpols.batch.console.domain.config.view.ConfigSyncLogRow;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.mapper.ConfigSyncLogMapper;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -39,20 +47,33 @@ import org.springframework.transaction.PlatformTransactionManager;
 @DisplayName("配置同步审计恢复: 原目标收据、缺失保持未知、重复提交与租户身份")
 class ConfigSyncAuditRecoveryTest {
 
-  @Mock private ConsoleTenantGuard tenantGuard;
-  @Mock private ConsoleTenantConfigCopyService copyService;
-  @Mock private ConfigSyncImportExecutor importExecutor;
-  @Mock private ConsoleRequestMetadataResolver metadataResolver;
-  @Mock private ConfigSyncLogMapper mapper;
-  @Mock private PlatformTransactionManager transactionManager;
-  @InjectMocks private DefaultConsoleConfigSyncApplicationService service;
+  @Mock
+  private ConsoleTenantGuard tenantGuard;
+
+  @Mock
+  private ConsoleTenantConfigCopyService copyService;
+
+  @Mock
+  private ConfigSyncImportExecutor importExecutor;
+
+  @Mock
+  private ConsoleRequestMetadataResolver metadataResolver;
+
+  @Mock
+  private ConfigSyncLogMapper mapper;
+
+  @Mock
+  private PlatformTransactionManager transactionManager;
+
+  @InjectMocks
+  private DefaultConsoleConfigSyncApplicationService service;
 
   @Test
   @DisplayName("已提交目标按原始收据补审计且不再次执行导入")
   void shouldReconcileOriginalCounts_whenAllReceiptsExist() {
     prepareIdentity();
-    Map<String, Object> running = log("RUNNING");
-    Map<String, Object> finished = log("SUCCESS");
+    ConfigSyncLogRow running = log("RUNNING");
+    ConfigSyncLogRow finished = log("SUCCESS");
     when(mapper.selectByIdForUpdate("audit", 42L)).thenReturn(running).thenReturn(finished);
     when(importExecutor.readReceipts("audit", 42L, List.of("target")))
         .thenReturn(List.of(created("target")));
@@ -61,14 +82,18 @@ class ConfigSyncAuditRecoveryTest {
     ConfigSyncLogResponse result = service.reconcile("audit", 42L);
 
     assertThat(result.syncStatus()).isEqualTo("SUCCESS");
-    ArgumentCaptor<Map<String, Object>> update = ArgumentCaptor.captor();
+    ArgumentCaptor<ConfigSyncLogUpdateParam> update = ArgumentCaptor.captor();
     verify(mapper).updateResult(update.capture());
-    assertThat(update.getValue()).containsEntry("successItems", 1)
-        .containsEntry("failedItems", 0).containsEntry("skippedItems", 0)
-        .containsEntry("mergeDetail", true);
-    String detail = update.getValue().get("detailJson").toString();
-    assertThat(detail).contains("\"batchOperationId\":\"original-operation\"",
-        "\"reconciledBy\":\"authenticated-operator\"", "\"created\":1");
+    assertThat(update.getValue().successItems()).isEqualTo(1);
+    assertThat(update.getValue().failedItems()).isEqualTo(0);
+    assertThat(update.getValue().skippedItems()).isEqualTo(0);
+    assertThat(update.getValue().mergeDetail()).isEqualTo(true);
+    String detail = update.getValue().detailJson();
+    assertThat(detail)
+        .contains(
+            "\"batchOperationId\":\"original-operation\"",
+            "\"reconciledBy\":\"authenticated-operator\"",
+            "\"created\":1");
     verify(importExecutor, never()).execute(any(), any());
   }
 
@@ -77,18 +102,19 @@ class ConfigSyncAuditRecoveryTest {
   void shouldReconcileFailure_whenRollbackReceiptExists() {
     prepareIdentity();
     when(mapper.selectByIdForUpdate("audit", 42L))
-        .thenReturn(log("RUNNING")).thenReturn(log("PARTIAL_FAILED"));
+        .thenReturn(log("RUNNING"))
+        .thenReturn(log("PARTIAL_FAILED"));
     TenantInitResult failed = TenantInitResult.failed("target", "error.common.system_error");
-    when(importExecutor.readReceipts("audit", 42L, List.of("target")))
-        .thenReturn(List.of(failed));
+    when(importExecutor.readReceipts("audit", 42L, List.of("target"))).thenReturn(List.of(failed));
     when(mapper.updateResult(any())).thenReturn(1);
 
     service.reconcile("audit", 42L);
 
-    ArgumentCaptor<Map<String, Object>> update = ArgumentCaptor.captor();
+    ArgumentCaptor<ConfigSyncLogUpdateParam> update = ArgumentCaptor.captor();
     verify(mapper).updateResult(update.capture());
-    assertThat(update.getValue()).containsEntry("syncStatus", "PARTIAL_FAILED")
-        .containsEntry("successItems", 0).containsEntry("failedItems", 1);
+    assertThat(update.getValue().syncStatus()).isEqualTo("PARTIAL_FAILED");
+    assertThat(update.getValue().successItems()).isEqualTo(0);
+    assertThat(update.getValue().failedItems()).isEqualTo(1);
   }
 
   @Test
@@ -126,7 +152,8 @@ class ConfigSyncAuditRecoveryTest {
     when(mapper.selectByIdForUpdate("audit", 42L)).thenReturn(null);
 
     assertThatThrownBy(() -> service.reconcile("audit", 42L))
-        .isInstanceOfSatisfying(BizException.class,
+        .isInstanceOfSatisfying(
+            BizException.class,
             failure -> assertThat(failure.getCode()).isEqualTo(ResultCode.NOT_FOUND));
 
     verify(importExecutor, never()).readReceipts(anyString(), any(), any());
@@ -158,16 +185,78 @@ class ConfigSyncAuditRecoveryTest {
     when(mapper.selectIdByRequestKey(anyString(), anyString())).thenReturn(42L);
 
     assertThatThrownBy(() -> service.importBundle(request))
-        .isInstanceOfSatisfying(BizException.class,
+        .isInstanceOfSatisfying(
+            BizException.class,
             failure -> assertThat(failure.getCode()).isEqualTo(ResultCode.CONFLICT));
 
-    ArgumentCaptor<Map<String, Object>> inserted = ArgumentCaptor.captor();
+    ArgumentCaptor<ConfigSyncLogInsertParam> inserted = ArgumentCaptor.captor();
     verify(mapper).insert(inserted.capture());
-    String detail = inserted.getValue().get("detailJson").toString();
+    String detail = inserted.getValue().getDetailJson();
     assertThat(detail).contains("requestKeyHash").doesNotContain("secret-idempotency-key");
     ArgumentCaptor<String> hash = ArgumentCaptor.forClass(String.class);
     verify(mapper).selectIdByRequestKey(eq("audit"), hash.capture());
     assertThat(hash.getValue()).matches("[0-9a-f]{64}");
+    verify(importExecutor, never()).execute(any(), any());
+  }
+
+  @Test
+  @DisplayName("按原幂等键摘要读取审计，查询不执行或核对业务")
+  void shouldFindOriginalAuditByHashedRequestIdentityWithoutApplyingAgain() {
+    when(tenantGuard.resolveTenant("audit")).thenReturn("audit");
+    when(mapper.selectByRequestKey(
+            "audit", "a048ff41fc4fe7d062c616a4e0e4a12eeb4808d8f0ff9d4d7e7623778fdd85a4"))
+        .thenReturn(log("RUNNING"));
+
+    ConfigSyncRequestStatusResponse result = service.requestStatus("audit", "original-unknown-key");
+
+    assertThat(result.found()).isTrue();
+    assertThat(result.audit().id()).isEqualTo(42L);
+    assertThat(result.audit().syncStatus()).isEqualTo("RUNNING");
+    verify(importExecutor, never()).execute(any(), any());
+    verify(importExecutor, never()).readReceipts(anyString(), any(), any());
+    verify(mapper, never()).updateResult(any());
+  }
+
+  @Test
+  @DisplayName("未观察到原请求审计时明确返回未找到，不推断执行结果")
+  void shouldKeepUnknownWhenOriginalAuditIsNotObserved() {
+    when(tenantGuard.resolveTenant("audit")).thenReturn("audit");
+
+    ConfigSyncRequestStatusResponse result = service.requestStatus("audit", "original-unknown-key");
+
+    assertThat(result.found()).isFalse();
+    assertThat(result.audit()).isNull();
+    verify(importExecutor, never()).execute(any(), any());
+    verify(mapper, never()).insert(any());
+  }
+
+  @Test
+  @DisplayName("空白原请求键在数据库查询前拒绝")
+  void shouldRejectBlankRequestIdentityBeforeReadingAudit() {
+    when(tenantGuard.resolveTenant("audit")).thenReturn("audit");
+
+    assertThatThrownBy(() -> service.requestStatus("audit", " ")).isInstanceOf(BizException.class);
+
+    verify(mapper, never()).selectByRequestKey(anyString(), anyString());
+  }
+
+  @ParameterizedTest
+  @NullAndEmptySource
+  @ValueSource(strings = {" ", "\t"})
+  @DisplayName("直接应用调用也在审计写入前拒绝缺失的目标身份")
+  void shouldRejectInvalidTargetBeforeCreatingAudit(String invalidTarget) {
+    when(tenantGuard.resolveTenant("audit")).thenReturn("audit");
+    ConfigSyncImportRequest request = new ConfigSyncImportRequest();
+    request.setTenantId("audit");
+    request.setBundle(new ConfigSyncBundlePayload());
+    request.setTargetTenantIds(Collections.singletonList(invalidTarget));
+
+    assertThatThrownBy(() -> service.importBundle(request))
+        .isInstanceOfSatisfying(
+            BizException.class,
+            failure -> assertThat(failure.getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT));
+
+    verify(mapper, never()).insert(any());
     verify(importExecutor, never()).execute(any(), any());
   }
 
@@ -178,13 +267,33 @@ class ConfigSyncAuditRecoveryTest {
     when(metadataResolver.current()).thenReturn(metadata);
   }
 
-  private static Map<String, Object> log(String status) {
+  private static ConfigSyncLogRow log(String status) {
     ConfigSyncSummaryResponse summary = new ConfigSyncSummaryResponse(1, 0, 0, 0, 0, 0, 0, 0, 0);
     Map<String, Object> detail = Map.of(
-        "batchOperationId", "original-operation", "summary", summary,
-        "dryRun", false, "targetTenantIds", List.of("target"));
+        "batchOperationId",
+        "original-operation",
+        "summary",
+        summary,
+        "dryRun",
+        false,
+        "targetTenantIds",
+        List.of("target"));
     String detailJson = JsonUtils.toJson(detail);
-    return Map.of("id", 42L, "tenantId", "audit", "syncStatus", status, "detailJson", detailJson);
+    return new ConfigSyncLogRow(
+        42L,
+        "audit",
+        "IMPORT",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        status,
+        detailJson,
+        null,
+        null);
   }
 
   static TenantInitResult created(String tenantId) {

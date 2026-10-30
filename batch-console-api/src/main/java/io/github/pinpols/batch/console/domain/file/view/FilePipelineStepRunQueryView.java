@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.domain.file.view;
 
+import java.time.Instant;
 import lombok.Builder;
 
-import java.time.Instant;
 /** 文件流水线步骤查询的固定列投影。 */
 @Builder
 public record FilePipelineStepRunQueryView(

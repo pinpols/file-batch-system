@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service;
 
-import io.github.pinpols.batch.orchestrator.domain.param.DeadLetterTaskMarkReplayFailureParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -33,6 +30,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 
@@ -146,8 +144,10 @@ class DeadLetterAutoRetryTest {
 
     verify(deadLetterTaskMapper, never()).markGiveUp(anyString(), anyLong());
     verify(deadLetterTaskMapper, never())
-        .markReplayFailure(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.targetStatus() != null && parameters.lastReplayResult() != null));
+        .markReplayFailure(ArgumentMatchers.argThat(parameters -> parameters != null
+            && parameters.tenantId() != null
+            && parameters.targetStatus() != null
+            && parameters.lastReplayResult() != null));
   }
 
   @Test

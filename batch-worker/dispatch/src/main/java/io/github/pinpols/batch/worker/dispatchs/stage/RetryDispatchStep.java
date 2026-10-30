@@ -48,7 +48,8 @@ public class RetryDispatchStep implements DispatchStageStep {
   @Override
   public DispatchStageResult execute(DispatchJobContext context) {
     // ADR-026: 演练模式不重试外部投递（无副作用 → 也不需要 retry）。
-    Map<String, Object> dryRunAttributes = EmptyChecks.isNull(context) ? null : context.getAttributes();
+    Map<String, Object> dryRunAttributes =
+        EmptyChecks.isNull(context) ? null : context.getAttributes();
     if (DryRunGuard.fromAttributes(dryRunAttributes).isDryRun()) {
       return DispatchStageResult.success(stage());
     }

@@ -27,8 +27,7 @@ public interface LaunchValidationService {
       WorkflowDefinitionEntity workflowDefinition,
       String workflowCalendarCode,
       JobInstanceEntity existingInstance, // 非空表示重复请求
-      WorkflowReplayExecutionBinding workflowReplayExecutionBinding
-      ) {
+      WorkflowReplayExecutionBinding workflowReplayExecutionBinding) {
 
     public LaunchLoadResult(
         TriggerRequestEntity triggerRequest,
@@ -84,7 +83,9 @@ public interface LaunchValidationService {
       protectedDispatchChannelSnapshots = EmptyChecks.isNull(protectedDispatchChannelSnapshots)
           ? Map.of()
           : Map.copyOf(protectedDispatchChannelSnapshots);
-      dispatchSecretBindings = EmptyChecks.isNull(dispatchSecretBindings) ? Map.of() : Map.copyOf(dispatchSecretBindings);
+      dispatchSecretBindings = EmptyChecks.isNull(dispatchSecretBindings)
+          ? Map.of()
+          : Map.copyOf(dispatchSecretBindings);
     }
   }
 }

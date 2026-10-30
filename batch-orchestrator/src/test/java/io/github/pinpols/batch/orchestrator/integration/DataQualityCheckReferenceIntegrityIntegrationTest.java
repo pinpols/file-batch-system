@@ -83,25 +83,21 @@ class DataQualityCheckReferenceIntegrityIntegrationTest extends AbstractIntegrat
   @Test
   @DisplayName("数据库触发器在 DQ 历史引用存在时拒绝改写父实例身份")
   void shouldRejectRekeyingReferencedJobInstance() {
-  final String updateJobInstanceSql = """
+    final String updateJobInstanceSql = """
       update batch.job_instance set id = id + 1_000_000_000 where tenant_id = ? and id = ?
   """;
-  final String updateJobInstanceSql2 = """
+    final String updateJobInstanceSql2 = """
       update batch.job_instance set biz_date = biz_date + 1 where tenant_id = ? and id = ?
   """;
 
     JobFixture fixture = insertJobInstance(unique("rekey"));
     checkMapper.insert(check(fixture.tenantId(), fixture.jobInstanceId()));
 
-    assertThatThrownBy(() -> jdbcTemplate.update(
-            updateJobInstanceSql,
-            fixture.tenantId(),
-            fixture.jobInstanceId()))
+    assertThatThrownBy(() ->
+            jdbcTemplate.update(updateJobInstanceSql, fixture.tenantId(), fixture.jobInstanceId()))
         .satisfies(DataQualityCheckReferenceIntegrityIntegrationTest::assertDqConstraintViolation);
-    assertThatThrownBy(() -> jdbcTemplate.update(
-            updateJobInstanceSql2,
-            fixture.tenantId(),
-            fixture.jobInstanceId()))
+    assertThatThrownBy(() ->
+            jdbcTemplate.update(updateJobInstanceSql2, fixture.tenantId(), fixture.jobInstanceId()))
         .satisfies(DataQualityCheckReferenceIntegrityIntegrationTest::assertDqConstraintViolation);
 
     assertThat(jobInstanceCount(fixture.tenantId(), fixture.jobInstanceId())).isEqualTo(1);
@@ -123,10 +119,7 @@ class DataQualityCheckReferenceIntegrityIntegrationTest extends AbstractIntegrat
 
     JobFixture fixture = insertJobInstance(unique("direct-rekey-race"));
     LocalDate originalBizDate = jdbcTemplate.queryForObject(
-        selectBizDateSql,
-        LocalDate.class,
-        fixture.tenantId(),
-        fixture.jobInstanceId());
+        selectBizDateSql, LocalDate.class, fixture.tenantId(), fixture.jobInstanceId());
     CountDownLatch checkInserted = new CountDownLatch(1);
     CountDownLatch allowCheckCommit = new CountDownLatch(1);
     CountDownLatch rekeyStarted = new CountDownLatch(1);
@@ -146,10 +139,7 @@ class DataQualityCheckReferenceIntegrityIntegrationTest extends AbstractIntegrat
           .executeWithoutResult(status -> {
             rekeyPid.set(jdbcTemplate.queryForObject(selectPgBackendPidSql, Integer.class));
             rekeyStarted.countDown();
-            jdbcTemplate.update(
-                updateJobInstanceSql,
-                fixture.tenantId(),
-                fixture.jobInstanceId());
+            jdbcTemplate.update(updateJobInstanceSql, fixture.tenantId(), fixture.jobInstanceId());
           }));
       assertThat(rekeyStarted.await(5, TimeUnit.SECONDS)).isTrue();
       awaitBlocked(rekeyPid.get());
@@ -203,10 +193,7 @@ class DataQualityCheckReferenceIntegrityIntegrationTest extends AbstractIntegrat
           .executeWithoutResult(status -> {
             deletePid.set(jdbcTemplate.queryForObject(selectPgBackendPidSql, Integer.class));
             deleteStarted.countDown();
-            jdbcTemplate.update(
-                deleteJobInstanceSql,
-                fixture.tenantId(),
-                fixture.jobInstanceId());
+            jdbcTemplate.update(deleteJobInstanceSql, fixture.tenantId(), fixture.jobInstanceId());
           }));
       assertThat(deleteStarted.await(5, TimeUnit.SECONDS)).isTrue();
       awaitBlocked(deletePid.get());
@@ -254,10 +241,7 @@ class DataQualityCheckReferenceIntegrityIntegrationTest extends AbstractIntegrat
           .executeWithoutResult(status -> {
             deletePid.set(jdbcTemplate.queryForObject(selectPgBackendPidSql, Integer.class));
             deleteStarted.countDown();
-            jdbcTemplate.update(
-                deleteJobInstanceSql,
-                fixture.tenantId(),
-                fixture.jobInstanceId());
+            jdbcTemplate.update(deleteJobInstanceSql, fixture.tenantId(), fixture.jobInstanceId());
           }));
       assertThat(deleteStarted.await(5, TimeUnit.SECONDS)).isTrue();
       awaitBlocked(deletePid.get());
@@ -294,10 +278,7 @@ class DataQualityCheckReferenceIntegrityIntegrationTest extends AbstractIntegrat
 
     Future<?> delete = executor.submit(() -> new TransactionTemplate(transactionManager)
         .executeWithoutResult(status -> {
-          jdbcTemplate.update(
-              deleteJobInstanceSql,
-              fixture.tenantId(),
-              fixture.jobInstanceId());
+          jdbcTemplate.update(deleteJobInstanceSql, fixture.tenantId(), fixture.jobInstanceId());
           parentDeleted.countDown();
           awaitLatch(allowDeleteCommit);
         }));
@@ -347,10 +328,7 @@ class DataQualityCheckReferenceIntegrityIntegrationTest extends AbstractIntegrat
 
     Future<?> delete = executor.submit(() -> new TransactionTemplate(transactionManager)
         .executeWithoutResult(status -> {
-          jdbcTemplate.update(
-              deleteJobInstanceSql,
-              fixture.tenantId(),
-              fixture.jobInstanceId());
+          jdbcTemplate.update(deleteJobInstanceSql, fixture.tenantId(), fixture.jobInstanceId());
           parentDeleted.countDown();
           awaitLatch(allowDeleteCommit);
         }));
@@ -397,7 +375,8 @@ class DataQualityCheckReferenceIntegrityIntegrationTest extends AbstractIntegrat
           """;
 
     String jobCode = unique("dq-job");
-    Long jobDefinitionId = jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, tenantId, jobCode);
+    Long jobDefinitionId =
+        jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, tenantId, jobCode);
     Long jobInstanceId = jdbcTemplate.queryForObject(
         insertJobInstanceSql,
         Long.class,
@@ -427,11 +406,7 @@ class DataQualityCheckReferenceIntegrityIntegrationTest extends AbstractIntegrat
         select count(*) from batch.data_quality_check where tenant_id = ? and job_instance_id = ?
     """;
 
-    return jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        tenantId,
-        jobInstanceId);
+    return jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId, jobInstanceId);
   }
 
   private void insertDirectCheck(String tenantId, Long jobInstanceId) {
@@ -449,11 +424,7 @@ class DataQualityCheckReferenceIntegrityIntegrationTest extends AbstractIntegrat
         select count(*) from batch.job_instance where tenant_id = ? and id = ?
     """;
 
-    return jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        tenantId,
-        jobInstanceId);
+    return jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId, jobInstanceId);
   }
 
   private void awaitBlocked(int pid) {
@@ -463,11 +434,7 @@ class DataQualityCheckReferenceIntegrityIntegrationTest extends AbstractIntegrat
 
     Awaitility.await()
         .atMost(Duration.ofSeconds(5))
-        .until(() -> jdbcTemplate.queryForObject(
-                selectCountSql,
-                Integer.class,
-                pid)
-            == 1);
+        .until(() -> jdbcTemplate.queryForObject(selectCountSql, Integer.class, pid) == 1);
   }
 
   private static void awaitLatch(CountDownLatch latch) {

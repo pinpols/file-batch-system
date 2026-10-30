@@ -36,7 +36,7 @@ File Batch System (BFS) is a **self-hosted distributed batch platform** for reli
 
 ## Key features
 
-- **Outbox-guaranteed delivery**: task state writes and message publication happen in the same transaction, eliminating message loss
+- **Outbox-guaranteed delivery**: task state and pending events are written in one transaction, then published asynchronously with retries
 - **DAG workflow orchestration**: multi-node directed acyclic graphs with conditional branches and parallel execution
 - **Checkpoint resume**: stages such as import LOAD / export GENERATE persist resume offsets, so crashes resume from the checkpoint instead of rerunning everything
 - **Resource quota management**: fair-share scheduling, burst borrowing, sliding-window reset
@@ -52,14 +52,23 @@ File Batch System (BFS) is a **self-hosted distributed batch platform** for reli
 The lifecycle of a single task:
 
 ```mermaid
-flowchart LR
-    S[External files / business events] --> T[batch-trigger<br/>Quartz clustered scheduler]
-    T --> O[batch-orchestrator<br/>DAG orchestration · sharding · routing]
-    O -->|Outbox, same transaction| DB[(PostgreSQL<br/>single source of truth)]
-    O -->|Kafka async driver| W[batch-worker cluster<br/>CLAIM → EXECUTE → REPORT]
-    W --> DB
-    W --> X[MinIO / SFTP / target systems]
-    O <--> C[batch-console-api<br/>console · audit · AI assistant]
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  subgraph Control["Control plane"]
+    direction LR
+    Trigger["Trigger<br/>API · schedule · arrival"] -->|"Launch outbox event · Kafka"| Orch["Orchestrator<br/>WorkflowRun → Job → Task"]
+  end
+  subgraph Delivery["Reliable dispatch"]
+    direction LR
+    DB[("PostgreSQL<br/>Runtime state + task outbox")] -->|"Asynchronous publisher"| Kafka["Kafka task topic"]
+  end
+  subgraph Execution["Execution plane"]
+    direction LR
+    Worker["Built-in Worker / tenant SDK<br/>CLAIM → EXECUTE → REPORT"] --> Target["Business DB / file store / receiver"]
+  end
+  Control -->|"Orchestrator writes state + outbox atomically"| Delivery
+  Delivery -->|"Kafka task delivery"| Execution
+  Execution -.->|"HTTP to Orchestrator: CLAIM / renew / REPORT"| Control
 ```
 
 The five worker types:
@@ -68,7 +77,7 @@ The five worker types:
 |---|---|
 | import | File receive, parse, validate, load | RECEIVE → PREPROCESS → PARSE → VALIDATE → LOAD → FEEDBACK |
 | export | Query, render, sharded export, object-store sink | PREPARE → GENERATE → STORE → REGISTER → COMPLETE |
-| process | Staging, compute/aggregate, validate, commit, idempotent rerun | READ → TRANSFORM → STAGE → PUBLISH → FEEDBACK |
+| process | Staging, compute/aggregate, validate, commit, idempotent rerun | PREPARE → COMPUTE → VALIDATE → COMMIT → FEEDBACK |
 | dispatch | SFTP / NAS / HTTP / S3 delivery | PREPARE → DISPATCH → ACK → RETRY/COMPENSATE → COMPLETE |
 | atomic | Controlled shell / SQL / stored-proc / HTTP atomic tasks | No file pipeline; isolated executor with allowlist / timeout / RCE boundaries |
 
@@ -104,7 +113,7 @@ Getting started and operations:
 | `batch-worker-import` | 18083 | Import pipeline: RECEIVE → PREPROCESS → PARSE → VALIDATE → LOAD → FEEDBACK |
 | `batch-worker-export` | 18084 | Export pipeline: PREPARE → GENERATE → STORE → REGISTER → COMPLETE |
 | `batch-worker-dispatch` | 18085 | Dispatch pipeline: PREPARE → DISPATCH → ACK → RETRY/COMPENSATE → COMPLETE |
-| `batch-worker-process` | 18086 | Process pipeline: READ → TRANSFORM → STAGE → PUBLISH → FEEDBACK (WAP mode + SQL transform plugins) |
+| `batch-worker-process` | 18086 | Process pipeline: PREPARE → COMPUTE → VALIDATE → COMMIT → FEEDBACK (WAP mode + SQL transform plugins) |
 | `batch-worker-atomic` | 18087 | Dedicated atomic-task worker (ADR-029): shell / SQL / stored-proc / HTTP executors, no file pipeline; dual-use (RCE-grade) capabilities isolated into least-privilege processes |
 | `batch-console-api` | 18080 | Console REST API, audit, AI assistance |
 | `sdk/java/core` | — | Tenant-hosted Worker SDK (core of ADR-035). Published as a jar with zero Spring dependencies; HTTP + Kafka protocol, handler runtime, 4-state governance. See [`sdk/java/core/README.md`](sdk/java/core/README.md) |
@@ -395,7 +404,7 @@ Integration and end-to-end tests start PostgreSQL 17 and Apache Kafka automatica
 | [Observability Docker environment](deploy/docker/observability/README.md) | Standalone startup and management for Prometheus / Exporter / OTel Collector / Tempo / Loki / Grafana |
 | [Runtime communication](docs/architecture/runtime-module-communication.md) | Inter-module message protocols and interface specs |
 | [Worker checkpoint how-to](docs/runbook/platform-worker-checkpoint-howto.md) | Checkpoint resume semantics and operational notes |
-| [Design gap audit](docs/archive/audit/design-gap-audit-2026-04-09.md) | Gap analysis between implementation and design docs |
+| [Current architecture facts](docs/architecture/architecture-truth.md) | Architecture facts and authoritative documentation |
 | [Default runtime parameters](docs/design/runtime-default-parameters.md) | Default scheduler, worker, outbox, and other parameters |
 | [Flyway migrations](db/migration) | Database migration scripts |
 

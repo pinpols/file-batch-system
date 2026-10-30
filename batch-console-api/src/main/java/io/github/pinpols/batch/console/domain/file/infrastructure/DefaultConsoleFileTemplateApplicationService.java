@@ -1,7 +1,5 @@
 package io.github.pinpols.batch.console.domain.file.infrastructure;
 
-import lombok.Builder;
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -25,7 +23,10 @@ import io.github.pinpols.batch.console.domain.file.application.contract.response
 import io.github.pinpols.batch.console.domain.file.application.contract.response.FileNamePreviewResponse;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.param.FileTemplateConfigUpsertParam;
+import io.github.pinpols.batch.console.domain.file.param.FileTemplateEnableFence;
 import io.github.pinpols.batch.console.domain.file.query.FileTemplateConfigQuery;
+import io.github.pinpols.batch.console.domain.file.support.FixedWidthMappingValidation;
+import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
 import io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleJobDefinitionApplicationService;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -77,28 +78,28 @@ public class DefaultConsoleFileTemplateApplicationService
         request.getEnabled(),
         pageRequest);
     long total = mapper.countByQuery(query);
-    List<Map<String, Object>> items = mapper.selectByQuery(query);
+    List<FileTemplateConfigQueryView> items = mapper.selectByQuery(query);
     return new PageResponse<>(
         total,
         pageRequest.pageNo(),
         pageRequest.pageSize(),
-        items.stream().map(ConsoleFileProjectionMapper::template).toList());
+        items.stream().map(ConsoleFileProjectionMapper::templateView).toList());
   }
 
   @Override
   public ConsoleFileTemplateResponse get(Long id, String tenantId) {
     String resolved = resolveTenant(tenantId);
-    Map<String, Object> templateRow = mapper.selectById(resolved, id);
-    Map<String, Object> requiredTemplateRow =
+    FileTemplateConfigQueryView templateRow = mapper.selectById(resolved, id);
+    FileTemplateConfigQueryView requiredTemplateRow =
         Guard.requireFound(templateRow, "file template not found: " + id);
-    return ConsoleFileProjectionMapper.template(requiredTemplateRow);
+    return ConsoleFileProjectionMapper.templateView(requiredTemplateRow);
   }
 
   @Override
   public ConsoleFileTemplateResponse create(FileTemplateCreateRequest request) {
     String tenantId = resolveTenant(request.getTenantId());
     int version = request.getVersion() != null ? request.getVersion() : 1;
-    Map<String, Object> existing =
+    FileTemplateConfigQueryView existing =
         mapper.selectByUniqueKey(tenantId, request.getTemplateCode(), version);
     if (existing != null) {
       throw BizException.of(
@@ -107,34 +108,60 @@ public class DefaultConsoleFileTemplateApplicationService
           "template code + version already exists: " + request.getTemplateCode() + "/" + version);
     }
     String operator = requestMetadataResolver.current().operatorId();
-    mapper.upsertFileTemplateConfig(buildCreateParam(tenantId, version, operator, request));
+    FileTemplateConfigUpsertParam param = buildCreateParam(tenantId, version, operator, request);
+    validateFixedWidthMappings(param.getBasicInfo(), param.getFormat());
+    mapper.upsertFileTemplateConfig(param);
     String templateCode = request.getTemplateCode();
-    Map<String, Object> createdTemplateRow =
+    FileTemplateConfigQueryView createdTemplateRow =
         mapper.selectByUniqueKey(tenantId, templateCode, version);
-    return ConsoleFileProjectionMapper.template(createdTemplateRow);
+    return ConsoleFileProjectionMapper.templateView(createdTemplateRow);
   }
 
   @Override
   public ConsoleFileTemplateResponse update(Long id, FileTemplateUpdateRequest request) {
     String tenantId = resolveTenant(request.getTenantId());
-    Map<String, Object> existing =
+    FileTemplateConfigQueryView existing =
         Guard.requireFound(mapper.selectById(tenantId, id), "file template not found: " + id);
     String operator = requestMetadataResolver.current().operatorId();
-    String templateCode = (String) existing.get("template_code");
+    String templateCode = existing.templateCode();
     // #9 (adv-review 2026-07-13)：update 不得改 version —— upsert 的 on conflict 键含 version，
     // 入参携带新 version 时不命中 path id 指向的现有行，反而 INSERT 一条新 version 幽灵行(新 id)，
     // 而回读仍按旧 id 取回陈旧行。update 语义固定就地作用于现有行，忽略入参的 version 覆盖。
-    int version =
-        existing.get("version") != null ? ((Number) existing.get("version")).intValue() : 1;
-    mapper.upsertFileTemplateConfig(
-        buildUpdateParam(tenantId, templateCode, version, operator, request, existing));
-    Map<String, Object> updatedTemplateRow = mapper.selectById(tenantId, id);
-    return ConsoleFileProjectionMapper.template(updatedTemplateRow);
+    int version = EmptyChecks.isNotNull(existing.version()) ? existing.version() : 1;
+    FileTemplateConfigUpsertParam param =
+        buildUpdateParam(tenantId, templateCode, version, operator, request, existing);
+    validateFixedWidthMappings(param.getBasicInfo(), param.getFormat());
+    mapper.upsertFileTemplateConfig(param);
+    FileTemplateConfigQueryView updatedTemplateRow = mapper.selectById(tenantId, id);
+    return ConsoleFileProjectionMapper.templateView(updatedTemplateRow);
   }
 
   @Override
   public void toggle(Long id, String tenantId, Boolean enabled) {
     String resolved = resolveTenant(tenantId);
+    if (Boolean.TRUE.equals(enabled)) {
+      FileTemplateConfigQueryView existing =
+          Guard.requireFound(mapper.selectById(resolved, id), "file template not found: " + id);
+      FixedWidthMappingValidation.validate(
+          objectMapper,
+          true,
+          existing.templateType(),
+          existing.fileFormatType(),
+          stringValue(existing.fieldMappings()));
+      FileTemplateEnableFence fence = new FileTemplateEnableFence(
+          resolved,
+          id,
+          existing.templateType(),
+          existing.fileFormatType(),
+          stringValue(existing.fieldMappings()));
+      if (mapper.toggleEnabledIfUnchanged(fence) == 0) {
+        throw BizException.of(
+            ResultCode.STATE_CONFLICT,
+            ResultCode.STATE_CONFLICT.detailKey(),
+            "file template changed while enabling: " + id);
+      }
+      return;
+    }
     int rows = mapper.toggleEnabled(resolved, id, enabled);
     if (rows == 0) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.file_template.not_found", id);
@@ -167,6 +194,17 @@ public class DefaultConsoleFileTemplateApplicationService
 
   private String resolveTenant(String tenantId) {
     return tenantGuard.resolveTenant(tenantId);
+  }
+
+  private void validateFixedWidthMappings(
+      FileTemplateConfigUpsertParam.BasicInfo basicInfo,
+      FileTemplateConfigUpsertParam.FormatOptions format) {
+    FixedWidthMappingValidation.validate(
+        objectMapper,
+        basicInfo.getEnabled(),
+        basicInfo.getTemplateType(),
+        format.getFileFormatType(),
+        format.getFieldMappingsJson());
   }
 
   private FileTemplateConfigUpsertParam buildCreateParam(
@@ -213,9 +251,12 @@ public class DefaultConsoleFileTemplateApplicationService
     Boolean effectiveStreamingEnabled = EmptyChecks.isNotNull(request.getStreamingEnabled())
         ? request.getStreamingEnabled()
         : Boolean.TRUE;
-    Integer effectivePageSize = EmptyChecks.isNotNull(request.getPageSize()) ? request.getPageSize() : 1000;
-    Integer effectiveFetchSize = EmptyChecks.isNotNull(request.getFetchSize()) ? request.getFetchSize() : 1000;
-    Integer effectiveChunkSize = EmptyChecks.isNotNull(request.getChunkSize()) ? request.getChunkSize() : 500;
+    Integer effectivePageSize =
+        EmptyChecks.isNotNull(request.getPageSize()) ? request.getPageSize() : 1000;
+    Integer effectiveFetchSize =
+        EmptyChecks.isNotNull(request.getFetchSize()) ? request.getFetchSize() : 1000;
+    Integer effectiveChunkSize =
+        EmptyChecks.isNotNull(request.getChunkSize()) ? request.getChunkSize() : 500;
     FileTemplateConfigUpsertParam.RuntimeOptions runtimeOptions = runtimeOptions(
         effectiveStreamingEnabled, effectivePageSize, effectiveFetchSize, effectiveChunkSize);
     param.setRuntime(runtimeOptions);
@@ -241,128 +282,134 @@ public class DefaultConsoleFileTemplateApplicationService
       int version,
       String operator,
       FileTemplateUpdateRequest request,
-      Map<String, Object> existing) {
+      FileTemplateConfigQueryView existing) {
     FileTemplateConfigUpsertParam param = new FileTemplateConfigUpsertParam();
     param.setTenantId(tenantId);
     param.setTemplateCode(templateCode);
-    FileTemplateConfigUpsertParam.BasicInfo basicInfo = buildBasicInfoForUpdate(request, existing, version);
+    FileTemplateConfigUpsertParam.BasicInfo basicInfo =
+        buildBasicInfoForUpdate(request, existing, version);
     param.setBasicInfo(basicInfo);
-    FileTemplateConfigUpsertParam.FormatOptions formatOptions = buildFormatForUpdate(request, existing);
+    FileTemplateConfigUpsertParam.FormatOptions formatOptions =
+        buildFormatForUpdate(request, existing);
     param.setFormat(formatOptions);
-    FileTemplateConfigUpsertParam.QueryOptions queryOptions = buildQueryForUpdate(request, existing);
+    FileTemplateConfigUpsertParam.QueryOptions queryOptions =
+        buildQueryForUpdate(request, existing);
     param.setQuery(queryOptions);
-    FileTemplateConfigUpsertParam.RuntimeOptions runtimeOptions = buildRuntimeForUpdate(request, existing);
+    FileTemplateConfigUpsertParam.RuntimeOptions runtimeOptions =
+        buildRuntimeForUpdate(request, existing);
     param.setRuntime(runtimeOptions);
-    DefaultConsoleFileTemplateApplicationService.SecurityOptionsInput securityOptionsInput = buildSecurityInputForUpdate(request, existing);
-    FileTemplateConfigUpsertParam.SecurityOptions securityOptions = securityOptions(securityOptionsInput);
+    DefaultConsoleFileTemplateApplicationService.SecurityOptionsInput securityOptionsInput =
+        buildSecurityInputForUpdate(request, existing);
+    FileTemplateConfigUpsertParam.SecurityOptions securityOptions =
+        securityOptions(securityOptionsInput);
     param.setSecurity(securityOptions);
-    FileTemplateConfigUpsertParam.PluginRefs pluginRefs = buildPluginRefsForUpdate(request, existing);
+    FileTemplateConfigUpsertParam.PluginRefs pluginRefs =
+        buildPluginRefsForUpdate(request, existing);
     param.setPluginRefs(pluginRefs);
     param.setAudit(auditOptions(operator, operator));
     return param;
   }
 
   private FileTemplateConfigUpsertParam.BasicInfo buildBasicInfoForUpdate(
-      FileTemplateUpdateRequest req, Map<String, Object> existing, int version) {
-    String templateName = coalesceString(req.getTemplateName(), existing, "template_name");
-    String templateType = coalesceString(req.getTemplateType(), existing, "template_type");
-    String bizType = coalesceString(req.getBizType(), existing, "biz_type");
-    Boolean enabled = coalesceBoolean(req.getEnabled(), existing, "enabled");
-    String description = coalesceString(req.getDescription(), existing, "description");
+      FileTemplateUpdateRequest req, FileTemplateConfigQueryView existing, int version) {
+    String templateName = coalesceString(req.getTemplateName(), existing.templateName());
+    String templateType = coalesceString(req.getTemplateType(), existing.templateType());
+    String bizType = coalesceString(req.getBizType(), existing.bizType());
+    Boolean enabled = coalesceBoolean(req.getEnabled(), existing.enabled());
+    String description = coalesceString(req.getDescription(), existing.description());
     return basicInfo(templateName, templateType, bizType, enabled, version, description);
   }
 
   private FileTemplateConfigUpsertParam.FormatOptions buildFormatForUpdate(
-      FileTemplateUpdateRequest req, Map<String, Object> existing) {
+      FileTemplateUpdateRequest req, FileTemplateConfigQueryView existing) {
     FileTemplateConfigUpsertParam.FormatOptions format =
         new FileTemplateConfigUpsertParam.FormatOptions();
-    format.setFileFormatType(coalesceString(req.getFileFormatType(), existing, "file_format_type"));
-    format.setCharset(coalesceString(req.getCharset(), existing, "charset"));
-    format.setTargetCharset(coalesceString(req.getTargetCharset(), existing, "target_charset"));
-    format.setWithBom(coalesceBoolean(req.getWithBom(), existing, "with_bom"));
-    format.setLineSeparator(coalesceString(req.getLineSeparator(), existing, "line_separator"));
-    format.setDelimiter(coalesceString(req.getDelimiter(), existing, "delimiter"));
-    format.setQuoteChar(coalesceString(req.getQuoteChar(), existing, "quote_char"));
-    format.setEscapeChar(coalesceString(req.getEscapeChar(), existing, "escape_char"));
-    format.setRecordLength(coalesceInt(req.getRecordLength(), existing, "record_length"));
-    format.setHeaderRows(coalesceInt(req.getHeaderRows(), existing, "header_rows"));
-    format.setFooterRows(coalesceInt(req.getFooterRows(), existing, "footer_rows"));
+    format.setFileFormatType(coalesceString(req.getFileFormatType(), existing.fileFormatType()));
+    format.setCharset(coalesceString(req.getCharset(), existing.charset()));
+    format.setTargetCharset(coalesceString(req.getTargetCharset(), existing.targetCharset()));
+    format.setWithBom(coalesceBoolean(req.getWithBom(), existing.withBom()));
+    format.setLineSeparator(coalesceString(req.getLineSeparator(), existing.lineSeparator()));
+    format.setDelimiter(coalesceString(req.getDelimiter(), existing.delimiter()));
+    format.setQuoteChar(coalesceString(req.getQuoteChar(), existing.quoteChar()));
+    format.setEscapeChar(coalesceString(req.getEscapeChar(), existing.escapeChar()));
+    format.setRecordLength(coalesceInt(req.getRecordLength(), existing.recordLength()));
+    format.setHeaderRows(coalesceInt(req.getHeaderRows(), existing.headerRows()));
+    format.setFooterRows(coalesceInt(req.getFooterRows(), existing.footerRows()));
     format.setHeaderTemplateJson(
         req.getHeaderTemplateJson() != null
             ? req.getHeaderTemplateJson()
-            : stringValue(existing.get("header_template")));
+            : stringValue(existing.headerTemplate()));
     format.setTrailerTemplateJson(
         req.getTrailerTemplateJson() != null
             ? req.getTrailerTemplateJson()
-            : stringValue(existing.get("trailer_template")));
-    format.setChecksumType(coalesceString(req.getChecksumType(), existing, "checksum_type"));
-    format.setCompressType(coalesceString(req.getCompressType(), existing, "compress_type"));
-    format.setEncryptType(coalesceString(req.getEncryptType(), existing, "encrypt_type"));
-    format.setNamingRule(coalesceString(req.getNamingRule(), existing, "naming_rule"));
+            : stringValue(existing.trailerTemplate()));
+    format.setChecksumType(coalesceString(req.getChecksumType(), existing.checksumType()));
+    format.setCompressType(coalesceString(req.getCompressType(), existing.compressType()));
+    format.setEncryptType(coalesceString(req.getEncryptType(), existing.encryptType()));
+    format.setNamingRule(coalesceString(req.getNamingRule(), existing.namingRule()));
     format.setFieldMappingsJson(
         req.getFieldMappingsJson() != null
             ? req.getFieldMappingsJson()
-            : stringValue(existing.get("field_mappings")));
+            : stringValue(existing.fieldMappings()));
     format.setValidationRuleSetJson(
         req.getValidationRuleSetJson() != null
             ? req.getValidationRuleSetJson()
-            : stringValue(existing.get("validation_rule_set")));
+            : stringValue(existing.validationRuleSet()));
     return format;
   }
 
   private FileTemplateConfigUpsertParam.QueryOptions buildQueryForUpdate(
-      FileTemplateUpdateRequest req, Map<String, Object> existing) {
+      FileTemplateUpdateRequest req, FileTemplateConfigQueryView existing) {
     String defaultQueryCode =
-        coalesceString(req.getDefaultQueryCode(), existing, "default_query_code");
-    String defaultQuerySql =
-        coalesceString(req.getDefaultQuerySql(), existing, "default_query_sql");
+        coalesceString(req.getDefaultQueryCode(), existing.defaultQueryCode());
+    String defaultQuerySql = coalesceString(req.getDefaultQuerySql(), existing.defaultQuerySql());
     String queryParamSchema = EmptyChecks.isNotNull(req.getQueryParamSchemaJson())
         ? req.getQueryParamSchemaJson()
-        : stringValue(existing.get("query_param_schema"));
+        : stringValue(existing.queryParamSchema());
     return queryOptions(defaultQueryCode, defaultQuerySql, queryParamSchema);
   }
 
   private FileTemplateConfigUpsertParam.RuntimeOptions buildRuntimeForUpdate(
-      FileTemplateUpdateRequest req, Map<String, Object> existing) {
+      FileTemplateUpdateRequest req, FileTemplateConfigQueryView existing) {
     Boolean streamingEnabled =
-        coalesceBoolean(req.getStreamingEnabled(), existing, "streaming_enabled");
-    Integer pageSize = coalesceInt(req.getPageSize(), existing, "page_size");
-    Integer fetchSize = coalesceInt(req.getFetchSize(), existing, "fetch_size");
-    Integer chunkSize = coalesceInt(req.getChunkSize(), existing, "chunk_size");
+        coalesceBoolean(req.getStreamingEnabled(), existing.streamingEnabled());
+    Integer pageSize = coalesceInt(req.getPageSize(), existing.pageSize());
+    Integer fetchSize = coalesceInt(req.getFetchSize(), existing.fetchSize());
+    Integer chunkSize = coalesceInt(req.getChunkSize(), existing.chunkSize());
     return runtimeOptions(streamingEnabled, pageSize, fetchSize, chunkSize);
   }
 
   private SecurityOptionsInput buildSecurityInputForUpdate(
-      FileTemplateUpdateRequest req, Map<String, Object> existing) {
-    SecurityOptionsInput.SecurityOptionsInputBuilder securityOptionsBuilder = SecurityOptionsInput.builder();
+      FileTemplateUpdateRequest req, FileTemplateConfigQueryView existing) {
+    SecurityOptionsInput.SecurityOptionsInputBuilder securityOptionsBuilder =
+        SecurityOptionsInput.builder();
     Boolean previewMaskingEnabled =
-        coalesceBoolean(req.getPreviewMaskingEnabled(), existing, "preview_masking_enabled");
+        coalesceBoolean(req.getPreviewMaskingEnabled(), existing.previewMaskingEnabled());
     securityOptionsBuilder.previewMaskingEnabled(previewMaskingEnabled);
     Boolean errorLineMaskingEnabled =
-        coalesceBoolean(req.getErrorLineMaskingEnabled(), existing, "error_line_masking_enabled");
+        coalesceBoolean(req.getErrorLineMaskingEnabled(), existing.errorLineMaskingEnabled());
     securityOptionsBuilder.errorLineMaskingEnabled(errorLineMaskingEnabled);
     Boolean logMaskingEnabled =
-        coalesceBoolean(req.getLogMaskingEnabled(), existing, "log_masking_enabled");
+        coalesceBoolean(req.getLogMaskingEnabled(), existing.logMaskingEnabled());
     securityOptionsBuilder.logMaskingEnabled(logMaskingEnabled);
     Boolean contentEncryptionEnabled =
-        coalesceBoolean(req.getContentEncryptionEnabled(), existing, "content_encryption_enabled");
+        coalesceBoolean(req.getContentEncryptionEnabled(), existing.contentEncryptionEnabled());
     securityOptionsBuilder.contentEncryptionEnabled(contentEncryptionEnabled);
     String encryptionKeyRef =
-        coalesceString(req.getEncryptionKeyRef(), existing, "encryption_key_ref");
+        coalesceString(req.getEncryptionKeyRef(), existing.encryptionKeyRef());
     securityOptionsBuilder.encryptionKeyRef(encryptionKeyRef);
     Boolean downloadRequiresApproval =
-        coalesceBoolean(req.getDownloadRequiresApproval(), existing, "download_requires_approval");
+        coalesceBoolean(req.getDownloadRequiresApproval(), existing.downloadRequiresApproval());
     securityOptionsBuilder.downloadRequiresApproval(downloadRequiresApproval);
-    String maskingRuleSet =
-        coalesceString(req.getMaskingRuleSet(), existing, "masking_rule_set");
+    String maskingRuleSet = coalesceString(req.getMaskingRuleSet(), existing.maskingRuleSet());
     securityOptionsBuilder.maskingRuleSet(maskingRuleSet);
     return securityOptionsBuilder.build();
   }
 
   private FileTemplateConfigUpsertParam.PluginRefs buildPluginRefsForUpdate(
-      FileTemplateUpdateRequest req, Map<String, Object> existing) {
-    String loadTargetRef = coalesceString(req.getLoadTargetRef(), existing, "load_target_ref");
-    String exportDataRef = coalesceString(req.getExportDataRef(), existing, "export_data_ref");
+      FileTemplateUpdateRequest req, FileTemplateConfigQueryView existing) {
+    String loadTargetRef = coalesceString(req.getLoadTargetRef(), existing.loadTargetRef());
+    String exportDataRef = coalesceString(req.getExportDataRef(), existing.exportDataRef());
     return pluginRefs(loadTargetRef, exportDataRef);
   }
 
@@ -575,17 +622,16 @@ public class DefaultConsoleFileTemplateApplicationService
     return v != null ? v : Boolean.FALSE;
   }
 
-  private static String coalesceString(String preferred, Map<String, Object> existing, String key) {
-    return preferred != null ? preferred : (String) existing.get(key);
+  private static String coalesceString(String preferred, String existing) {
+    return EmptyChecks.isNotNull(preferred) ? preferred : existing;
   }
 
-  private static Boolean coalesceBoolean(
-      Boolean preferred, Map<String, Object> existing, String key) {
-    return preferred != null ? preferred : (Boolean) existing.get(key);
+  private static Boolean coalesceBoolean(Boolean preferred, Boolean existing) {
+    return EmptyChecks.isNotNull(preferred) ? preferred : existing;
   }
 
-  private Integer coalesceInt(Integer preferred, Map<String, Object> existing, String key) {
-    return preferred != null ? preferred : intValue(existing.get(key));
+  private Integer coalesceInt(Integer preferred, Integer existing) {
+    return EmptyChecks.isNotNull(preferred) ? preferred : existing;
   }
 
   private FileTemplateConfigUpsertParam.BasicInfo basicInfo(
@@ -658,10 +704,6 @@ public class DefaultConsoleFileTemplateApplicationService
     audit.setCreatedBy(createdBy);
     audit.setUpdatedBy(updatedBy);
     return audit;
-  }
-
-  private Integer intValue(Object value) {
-    return value instanceof Number number ? number.intValue() : null;
   }
 
   private String stringValue(Object value) {

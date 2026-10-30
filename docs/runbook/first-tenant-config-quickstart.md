@@ -6,11 +6,15 @@
 
 ## 0. 心智模型(先记这张图)
 
-```
-租户(tenant) ──维护──► 作业 / 文件模板 / 日历 / 窗口 ──引用──► 渠道(channel)
-     │                        │
-     │                        └─ template_type = IMPORT / EXPORT / PROCESS / DISPATCH
-     └─ 作业创建后由平台资源策略解析物理队列和 Worker 路由
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  TENANT["租户"] --> BUSINESS["Workflow / 作业<br/>日历 / 窗口"]
+  TENANT --> TEMPLATE["文件模板<br/>IMPORT / EXPORT / SHARED"]
+  BUSINESS -. "按场景引用" .-> TEMPLATE
+  TEMPLATE -. "外部文件交付" .-> CHANNEL["获准渠道"]
+  BUSINESS --> POLICY["平台资源策略"]
+  POLICY --> ROUTE["物理队列 / Worker 路由"]
 ```
 
 - **业务配置**:作业、文件模板、Pipeline/Workflow、日历和窗口按实际场景维护；按需生成单场景或组合配置包，不要求每个作业都维护无关 Sheet。

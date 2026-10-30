@@ -38,8 +38,8 @@ class DispatchReplayCapabilityResolverTest {
 
   @BeforeEach
   void setUp() {
-    resolver = new DispatchReplayCapabilityResolver(
-        new ObjectMapper(), frozenChannels, channelGateway);
+    resolver =
+        new DispatchReplayCapabilityResolver(new ObjectMapper(), frozenChannels, channelGateway);
   }
 
   @Test
@@ -54,6 +54,23 @@ class DispatchReplayCapabilityResolverTest {
     assertThat(declaration).isEqualTo(DispatchReplayCapability.declaration());
     verify(frozenChannels).resolve("t1", "CH1", REPLAY_PAYLOAD);
     verify(channelGateway).supports("API");
+  }
+
+  @Test
+  @DisplayName("重放载荷使用调度支持的渠道字段时仍要求匹配冻结渠道")
+  void shouldResolveAliasOnlyWithMatchingFrozenChannel() {
+    String payload = """
+        {"operationType":"WORKFLOW_RUN","fileId":"10","targetChannelCode":"CH1"}
+        """;
+    when(frozenChannels.resolve("t1", "CH1", payload))
+        .thenReturn(Optional.of(Map.of("channel_code", "CH1", "channel_type", "API")))
+        .thenReturn(Optional.empty());
+    when(channelGateway.supports("API")).thenReturn(true);
+
+    assertThat(resolver.resolve(request("t1", payload)))
+        .isEqualTo(DispatchReplayCapability.declaration());
+    assertThat(resolver.resolve(request("t1", payload)))
+        .isEqualTo(ReplayCapabilityDeclaration.unknown("DISPATCH"));
   }
 
   @Test

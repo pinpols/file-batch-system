@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.console.integration;
 
-import io.github.pinpols.batch.console.domain.notification.query.AlertEventActiveAlertsInAmGroupCountQuery;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
@@ -12,9 +9,11 @@ import io.github.pinpols.batch.console.application.contract.request.ops.AlertAct
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleAlertApplicationService;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertActionResponse;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
+import io.github.pinpols.batch.console.domain.notification.query.AlertEventActiveAlertsInAmGroupCountQuery;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
+import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -83,10 +82,18 @@ class AlertEventActionIntegrationTest extends AbstractIntegrationTest {
     AlertEventEntity entity = alertEventMapper.selectById(tenantId, alertId);
     assertThat(entity).isNotNull();
     assertThat(entity.getStatus()).isEqualTo("CLOSED");
+    assertThat(entity.getClosedAt()).isNotNull();
+    assertThat(entity.getCloseReason()).isEqualTo("MANUAL");
+    Instant originalClosedAt = entity.getClosedAt();
+    alertApplicationService.close(alertId, alertRequest(tenantId), "idem-3-repeat");
+    AlertEventEntity retried = alertEventMapper.selectById(tenantId, alertId);
+    assertThat(retried.getClosedAt()).isEqualTo(originalClosedAt);
+    int reopened = alertEventMapper.updateStatus(tenantId, alertId, "ACKED");
+    assertThat(reopened).isZero();
   }
 
   @Test
-  @DisplayName("同一 Alertmanager 告警组仅在最后一条未关闭事件结束后才可解除")
+  @DisplayName("同组活动计数按各实体状态统计，独立关闭不影响其他实体")
   void shouldCountActivePeersInSameAlertmanagerGroup() {
     String tenantId = "t-alert-group-" + BatchDateTimeSupport.utcEpochMillis();
     long firstId = insertAlertEvent(tenantId, "JOB_RUNNING_TOO_LONG", "WARN", "OPEN", "first");

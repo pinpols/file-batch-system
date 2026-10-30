@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
-import io.github.pinpols.batch.orchestrator.domain.param.StaleCompensationFailureParam;
 import io.github.pinpols.batch.common.enums.CompensationCommandStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.orchestrator.domain.param.StaleCompensationFailureParam;
 import io.github.pinpols.batch.orchestrator.mapper.CompensationCommandMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,14 +46,16 @@ public class StaleCompensationCommandReconciler {
     if (timeoutSeconds <= 0 || batchSize <= 0) {
       return;
     }
-    StaleCompensationFailureParam staleCompensationFailureParam = StaleCompensationFailureParam.builder()
-        .runningStatus(CompensationCommandStatus.RUNNING.code())
-        .failedStatus(CompensationCommandStatus.FAILED.code())
-        .cutoff(BatchDateTimeSupport.utcNow().minusSeconds(timeoutSeconds))
-        .errorCode(ERROR_CODE)
-        .errorMessage("compensation command stayed RUNNING beyond timeout; marked failed by reconciler")
-        .limit(batchSize)
-        .build();
+    StaleCompensationFailureParam staleCompensationFailureParam =
+        StaleCompensationFailureParam.builder()
+            .runningStatus(CompensationCommandStatus.RUNNING.code())
+            .failedStatus(CompensationCommandStatus.FAILED.code())
+            .cutoff(BatchDateTimeSupport.utcNow().minusSeconds(timeoutSeconds))
+            .errorCode(ERROR_CODE)
+            .errorMessage(
+                "compensation command stayed RUNNING beyond timeout; marked failed by reconciler")
+            .limit(batchSize)
+            .build();
     int updated = compensationCommandMapper.markStaleRunningFailed(staleCompensationFailureParam);
     if (updated > 0) {
       log.warn(

@@ -29,6 +29,9 @@ public interface RetryGovernanceService {
 
   void replayDeadLetter(String tenantId, Long deadLetterTaskId);
 
+  /** 补偿处理器加入既有业务事务，重放副作用与补偿成功记账共同提交或回滚。 */
+  void replayDeadLetterInCurrentTransaction(String tenantId, Long deadLetterTaskId);
+
   /** 为操作员批准的外部结果核实结论持久化审计。 */
   void auditVerifiedExternalOutcomeResolution(
       String tenantId,
@@ -51,8 +54,7 @@ public interface RetryGovernanceService {
     replayDeadLetter(tenantId, deadLetterTaskId);
   }
 
-  default void replayDeadLetter(
-      DeadLetterReplayInput input) {
+  default void replayDeadLetter(DeadLetterReplayInput input) {
     String tenantId = input.tenantId();
     Long deadLetterTaskId = input.deadLetterTaskId();
     String operatorId = input.operatorId();
@@ -61,7 +63,8 @@ public interface RetryGovernanceService {
     boolean externalActionVerifiedNotExecuted = input.externalActionVerifiedNotExecuted();
     String externalOutcomeEvidenceReference = input.externalOutcomeEvidenceReference();
 
-    if (externalActionVerifiedNotExecuted || EmptyChecks.isNotNull(externalOutcomeEvidenceReference)) {
+    if (externalActionVerifiedNotExecuted
+        || EmptyChecks.isNotNull(externalOutcomeEvidenceReference)) {
       throw new UnsupportedOperationException(
           "verified external outcome recovery is not supported by this implementation");
     }

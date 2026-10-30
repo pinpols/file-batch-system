@@ -5,13 +5,13 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.console.application.ops.ConsoleJobOperationsPort;
-import io.github.pinpols.batch.console.domain.job.application.ConsoleJobRecoveryService;
-import io.github.pinpols.batch.console.domain.job.application.contract.request.CompensateRequest;
 import io.github.pinpols.batch.console.application.contract.request.WorkflowNodeReplayPreviewRequest;
 import io.github.pinpols.batch.console.application.contract.request.WorkflowRunReplayRequest;
 import io.github.pinpols.batch.console.application.contract.response.ConsoleWorkflowNodeReplayPreviewResponse;
 import io.github.pinpols.batch.console.application.contract.response.ConsoleWorkflowRunReplayPreviewResponse;
+import io.github.pinpols.batch.console.application.ops.ConsoleJobOperationsPort;
+import io.github.pinpols.batch.console.domain.job.application.ConsoleJobRecoveryService;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.CompensateRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleWorkflowRunReplaySubmissionResponse;
 import io.github.pinpols.batch.console.shared.command.ApprovalSubmitContext;
 import io.github.pinpols.batch.console.shared.command.CompensationCommandRequest;
@@ -59,19 +59,19 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
       if (workflowNodeReplay) {
         boolean workflowNodeReplayRequestIsIncomplete =
             EmptyChecks.isNull(request.getSourceWorkflowRunId())
-            || EmptyChecks.isNull(request.getSourceWorkflowNodeRunId())
-            || !ops.hasText(request.getOperationKey())
-            || !ops.hasText(request.getPreviewToken())
-            || EmptyChecks.isNotNull(request.getReplayOperationId());
+                || EmptyChecks.isNull(request.getSourceWorkflowNodeRunId())
+                || !ops.hasText(request.getOperationKey())
+                || !ops.hasText(request.getPreviewToken())
+                || EmptyChecks.isNotNull(request.getReplayOperationId());
         if (workflowNodeReplayRequestIsIncomplete) {
-          throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.replay_preview_required");
+          throw BizException.of(
+              ResultCode.INVALID_ARGUMENT, "error.workflow.replay_preview_required");
         }
         Long replayOperationId = ops.createPendingWorkflowNodeReplay(request);
         request.setReplayOperationId(replayOperationId);
       }
-      String approvalIdempotencyKey = workflowNodeReplay
-          ? request.getOperationKey()
-          : idempotencyKey;
+      String approvalIdempotencyKey =
+          workflowNodeReplay ? request.getOperationKey() : idempotencyKey;
       ApprovalSubmitContext approvalCtx = ApprovalSubmitContext.builder()
           .approvalType(JOB_TYPE_COMPENSATION)
           .actionType(JOB_TYPE_COMPENSATION)
@@ -92,14 +92,15 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.replay_preview_required");
     }
     ops.requireApprovedApproval(tenantId, request.getApprovalId(), JOB_TYPE_COMPENSATION, request);
-    // CPD-OFF: compensation and compensate intentionally normalize different request contracts
-    // into the same audited domain payload.
-    CompensationPayload.CompensationPayloadBuilder compensationPayloadBuilder = CompensationPayload.builder()
-        .tenantId(tenantId)
-        .compensationType(ConsoleTextSanitizer.safeInput(request.getCompensationType(), 64))
-        .targetId(request.getTargetId())
-        .targetInstanceNo(ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), 128))
-        .jobCode(ConsoleTextSanitizer.safeInput(request.getJobCode(), 128));
+    // CPD-OFF: compensation 和 compensate 按设计将不同的请求契约规范化
+    // 为相同的领域审计载荷。
+    CompensationPayload.CompensationPayloadBuilder compensationPayloadBuilder =
+        CompensationPayload.builder()
+            .tenantId(tenantId)
+            .compensationType(ConsoleTextSanitizer.safeInput(request.getCompensationType(), 64))
+            .targetId(request.getTargetId())
+            .targetInstanceNo(ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), 128))
+            .jobCode(ConsoleTextSanitizer.safeInput(request.getJobCode(), 128));
     LocalDate parsedBizDate = ops.parseOptionalBizDate(request.getBizDate());
     CompensationPayload compensationPayload = compensationPayloadBuilder
         .bizDate(parsedBizDate)
@@ -111,8 +112,7 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
         .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64))
         .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), 32))
         .resultPolicy(ConsoleTextSanitizer.safeInput(request.getResultPolicy(), 64))
-        .configVersionPolicy(
-            ConsoleTextSanitizer.safeInput(request.getConfigVersionPolicy(), 64))
+        .configVersionPolicy(ConsoleTextSanitizer.safeInput(request.getConfigVersionPolicy(), 64))
         .configVersion(request.getConfigVersion())
         .sourceWorkflowRunId(request.getSourceWorkflowRunId())
         .sourceWorkflowNodeRunId(request.getSourceWorkflowNodeRunId())
@@ -141,7 +141,8 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
     String tenantId = ops.resolveTenant(request.getTenantId());
     if (!ops.hasText(request.getOperationKey())
         || !request.getOperationKey().equals(idempotencyKey)) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.workflow_run_replay_preview_required");
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.workflow.workflow_run_replay_preview_required");
     }
     Long replayOperationId = ops.createPendingWorkflowRunReplay(request);
     String approvalNo = ops.submitApproval(ApprovalSubmitContext.builder()
@@ -174,12 +175,13 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
             || EmptyChecks.isBlank(Objects.requireNonNull(request.getCompensationType()))
         ? "JOB"
         : request.getCompensationType();
-    CompensationPayload.CompensationPayloadBuilder compensationPayloadBuilder = CompensationPayload.builder()
-        .tenantId(tenantId)
-        .compensationType(compensationType)
-        .targetId(request.getTargetId())
-        .targetInstanceNo(ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), 128))
-        .jobCode(ConsoleTextSanitizer.safeInput(request.getJobCode(), 128));
+    CompensationPayload.CompensationPayloadBuilder compensationPayloadBuilder =
+        CompensationPayload.builder()
+            .tenantId(tenantId)
+            .compensationType(compensationType)
+            .targetId(request.getTargetId())
+            .targetInstanceNo(ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), 128))
+            .jobCode(ConsoleTextSanitizer.safeInput(request.getJobCode(), 128));
     LocalDate parsedBizDate = ops.parseOptionalBizDate(request.getBizDate());
     CompensationPayload compensationPayload = compensationPayloadBuilder
         .bizDate(parsedBizDate)
@@ -191,8 +193,7 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
         .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64))
         .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), 32))
         .resultPolicy(ConsoleTextSanitizer.safeInput(request.getResultPolicy(), 64))
-        .configVersionPolicy(
-            ConsoleTextSanitizer.safeInput(request.getConfigVersionPolicy(), 64))
+        .configVersionPolicy(ConsoleTextSanitizer.safeInput(request.getConfigVersionPolicy(), 64))
         .configVersion(request.getConfigVersion())
         .sourceWorkflowRunId(request.getSourceWorkflowRunId())
         .sourceWorkflowNodeRunId(request.getSourceWorkflowNodeRunId())
@@ -215,12 +216,13 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
     if (ops.hasText(request.getApprovalId())) {
       ops.requireApprovedApproval(tenantId, request.getApprovalId(), "RERUN", request);
     }
-    CompensationPayload.CompensationPayloadBuilder compensationPayloadBuilder = CompensationPayload.builder()
-        .tenantId(tenantId)
-        .compensationType(compensationType)
-        .targetId(request.getTargetId())
-        .targetInstanceNo(ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), 128))
-        .jobCode(ConsoleTextSanitizer.safeInput(request.getJobCode(), 128));
+    CompensationPayload.CompensationPayloadBuilder compensationPayloadBuilder =
+        CompensationPayload.builder()
+            .tenantId(tenantId)
+            .compensationType(compensationType)
+            .targetId(request.getTargetId())
+            .targetInstanceNo(ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), 128))
+            .jobCode(ConsoleTextSanitizer.safeInput(request.getJobCode(), 128));
     LocalDate parsedBizDate = ops.parseOptionalBizDate(request.getBizDate());
     CompensationPayload compensationPayload = compensationPayloadBuilder
         .bizDate(parsedBizDate)
@@ -231,8 +233,7 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
         .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64))
         .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), 32))
         .resultPolicy(ConsoleTextSanitizer.safeInput(request.getResultPolicy(), 64))
-        .configVersionPolicy(
-            ConsoleTextSanitizer.safeInput(request.getConfigVersionPolicy(), 64))
+        .configVersionPolicy(ConsoleTextSanitizer.safeInput(request.getConfigVersionPolicy(), 64))
         .configVersion(request.getConfigVersion())
         .build();
     String result = ops.submitCompensation(compensationPayload, idempotencyKey);

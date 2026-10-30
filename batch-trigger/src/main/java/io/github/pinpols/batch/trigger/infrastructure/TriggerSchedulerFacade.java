@@ -357,9 +357,11 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
     jobDataMap.put(QuartzLaunchJob.CALENDAR_CODE, descriptor.getCalendarCode());
     jobDataMap.put(QuartzLaunchJob.DEPENDS_ON_JOB_CODE, descriptor.getDependsOnJobCode());
     // null 表示使用既有回退语义，空列表表示明确无依赖；两者都必须遮住后续 JobDetail 的新值。
-    jobDataMap.put(QuartzLaunchJob.DEPENDS_ON_JOB_CODES,
+    jobDataMap.put(
+        QuartzLaunchJob.DEPENDS_ON_JOB_CODES,
         EmptyChecks.isNull(descriptor.getDependsOnJobCodes())
-            ? null : new ArrayList<>(descriptor.getDependsOnJobCodes()));
+            ? null
+            : new ArrayList<>(descriptor.getDependsOnJobCodes()));
     jobDataMap.put(QuartzLaunchJob.CATCH_UP_POLICY, descriptor.getCatchUpPolicy());
     jobDataMap.put(QuartzLaunchJob.CATCH_UP_MAX_DAYS, descriptor.getCatchUpMaxDays());
     return jobDataMap;
@@ -422,15 +424,13 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
     }
     String tenantId = sourceData.getString(QuartzLaunchJob.TENANT_ID);
     long workflowDefinitionId = sourceData.getLongValue(QuartzLaunchJob.WORKFLOW_DEFINITION_ID);
-    JobKey recoveryJobKey = JobKey.jobKey(
-        tenantId + ":RECOVERY:" + workflowDefinitionId, JOB_GROUP);
+    JobKey recoveryJobKey =
+        JobKey.jobKey(tenantId + ":RECOVERY:" + workflowDefinitionId, JOB_GROUP);
     if (recoveryJobKey.equals(workflowJobKey)) {
       return;
     }
-    JobDetail recoveryJob = sourceJob.getJobBuilder()
-        .withIdentity(recoveryJobKey)
-        .storeDurably()
-        .build();
+    JobDetail recoveryJob =
+        sourceJob.getJobBuilder().withIdentity(recoveryJobKey).storeDurably().build();
     if (!scheduler.checkExists(recoveryJobKey)) {
       try {
         scheduler.addJob(recoveryJob, false);
@@ -448,8 +448,11 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
       }
       JobDataMap frozen = new JobDataMap(sourceData);
       frozen.putAll(trigger.getJobDataMap());
-      Trigger rebound = trigger.getTriggerBuilder()
-          .forJob(recoveryJobKey).usingJobData(frozen).build();
+      Trigger rebound = trigger
+          .getTriggerBuilder()
+          .forJob(recoveryJobKey)
+          .usingJobData(frozen)
+          .build();
       scheduler.rescheduleJob(trigger.getKey(), rebound);
     }
   }

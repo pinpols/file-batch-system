@@ -1,14 +1,12 @@
 package io.github.pinpols.batch.orchestrator.application.engine;
 
-import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.enums.SchedulingPriorityBand;
@@ -17,6 +15,7 @@ import io.github.pinpols.batch.common.event.DomainEventPublisher;
 import io.github.pinpols.batch.common.kafka.SchedulingContext;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.BizDateArithmetic;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -183,14 +182,15 @@ class TaskDispatchOutboxServiceTest {
   void shouldPersistRunModeToPayload_whenOverrideGiven() {
     JobTaskEntity t = task(500L, null);
     t.setTaskPayload("{}"); // 初始空 payload
+    when(jobTaskMapper.updatePayload(eq("ta"), eq(500L), anyString())).thenReturn(1);
     service.writeDispatchEvent(TaskDispatchEventCommand.builder()
-            .jobInstance(instance(100L, 5))
-            .task(t)
-            .partition(null)
-            .traceId("trace")
-            .eventKey(null)
-            .runModeOverride(RunMode.RECOVER)
-            .build());
+        .jobInstance(instance(100L, 5))
+        .task(t)
+        .partition(null)
+        .traceId("trace")
+        .eventKey(null)
+        .runModeOverride(RunMode.RECOVER)
+        .build());
 
     ArgumentCaptor<String> payloadCap = ArgumentCaptor.forClass(String.class);
     verify(jobTaskMapper).updatePayload(eq("ta"), eq(500L), payloadCap.capture());

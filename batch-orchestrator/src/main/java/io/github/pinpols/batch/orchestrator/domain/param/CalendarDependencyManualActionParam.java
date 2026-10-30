@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.orchestrator.domain.param;
 
+import java.time.Instant;
 import java.util.Objects;
 import lombok.Builder;
-import java.time.Instant;
 
 /** 一次等待记录的人工处置请求，状态竞争仍由原SQL控制。 */
 @Builder

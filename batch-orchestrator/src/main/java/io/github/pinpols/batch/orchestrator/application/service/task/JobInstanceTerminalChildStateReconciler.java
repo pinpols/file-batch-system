@@ -3,9 +3,12 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
+import io.github.pinpols.batch.common.enums.StepInstanceStatus;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.orchestrator.domain.param.CloseRunningPipelineStepsParam;
+import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +23,7 @@ public class JobInstanceTerminalChildStateReconciler {
 
   private final JobPartitionMapper jobPartitionMapper;
   private final JobTaskMapper jobTaskMapper;
+  private final JobInstanceMapper jobInstanceMapper;
 
   /**
    * @param terminalInstanceStatus {@link JobInstanceStatus} 的 code；非业务终态则 no-op。
@@ -33,15 +37,24 @@ public class JobInstanceTerminalChildStateReconciler {
         tenantId, jobInstanceId, targets.partitionStatus());
     int tasks = jobTaskMapper.closeNonTerminalTasksForTerminalInstance(
         tenantId, jobInstanceId, targets.taskStatus());
-    if (partitions > 0 || tasks > 0) {
+    int pipelineSteps = jobInstanceMapper.closeRunningPipelineStepsForTerminalInstance(
+        CloseRunningPipelineStepsParam.builder()
+            .tenantId(tenantId)
+            .id(jobInstanceId)
+            .terminalInstanceStatus(terminalInstanceStatus)
+            .interruptedStepStatus(StepInstanceStatus.FAILED.code())
+            .terminalStatusCodes(JobInstanceStatus.terminalCodes())
+            .build());
+    if (partitions > 0 || tasks > 0 || pipelineSteps > 0) {
       log.info(
           "job_instance terminal child-state reconcile: tenantId={} jobInstanceId={}"
-              + " instanceStatus={} partitionsClosed={} tasksClosed={}",
+              + " instanceStatus={} partitionsClosed={} tasksClosed={} pipelineStepsInterrupted={}",
           LogSanitizer.value(tenantId),
           jobInstanceId,
           LogSanitizer.value(terminalInstanceStatus),
           partitions,
-          tasks);
+          tasks,
+          pipelineSteps);
     }
   }
 

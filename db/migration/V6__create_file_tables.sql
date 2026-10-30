@@ -230,7 +230,7 @@ CREATE TABLE IF NOT EXISTS batch.file_audit_log (
     operation_type           VARCHAR(64)  NOT NULL,
     operation_result         VARCHAR(32)  NOT NULL,
     operator_type            VARCHAR(32)  NOT NULL,
-    operator_id              VARCHAR(128),
+    operator_id              VARCHAR(64),
     trace_id                 VARCHAR(128),
     evidence_ref             VARCHAR(512),
     detail_summary           JSONB,
@@ -238,6 +238,3 @@ CREATE TABLE IF NOT EXISTS batch.file_audit_log (
     CONSTRAINT ck_file_audit_result CHECK (operation_result IN ('SUCCESS', 'FAILED')),
     CONSTRAINT ck_file_audit_operator_type CHECK (operator_type IN ('SYSTEM', 'USER', 'API'))
 );
-
-COMMENT ON COLUMN batch.file_audit_log.operator_id IS
-    '文件操作主体标识，例如用户或 Worker。';

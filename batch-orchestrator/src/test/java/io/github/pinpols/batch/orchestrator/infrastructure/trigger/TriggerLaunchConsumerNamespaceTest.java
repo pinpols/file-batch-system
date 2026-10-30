@@ -27,7 +27,6 @@ class TriggerLaunchConsumerNamespaceTest {
         new BatchKafkaTopicNamespace("workflow-east-1"));
 
     assertThat(consumer.topicName()).isEqualTo("workflow-east-1." + BatchTopics.TRIGGER_LAUNCH_V1);
-    assertThat(consumer.consumerGroupId())
-        .isEqualTo("workflow-east-1." + properties.getGroupId());
+    assertThat(consumer.consumerGroupId()).isEqualTo("workflow-east-1." + properties.getGroupId());
   }
 }

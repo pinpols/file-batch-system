@@ -4,7 +4,7 @@
 
 本记录承接[模型与构造治理](entity-and-constructor-governance-2026-10-24.md)的 651 项定位快照。本批把两个 `ConsoleJobDefinitionResponse` 的 43 字段位置构造改为具名 Builder；将 `ConsoleFilePipelineResponse`、`ConsoleFilePipelineStepResponse` 和 `ConsoleFileDispatchRecordResponse` 的组装改为具名 Builder；把文件流水线、统计、分发记录、模板安全标记、渠道和模板配置、就绪检查及作业选项的固定列查询改为 record 视图和显式 MyBatis 构造映射。后续另完成集群诊断的6个固定列查询。未修改响应 record 的字段、顺序和 canonical constructor。
 
-定位快照中 145 个长构造候选已处理 78 个调用点，剩余 67 个仍需逐项核对；506 个 Map 返回候选已处理 24 个固定投影，剩余 482 个仍待分类。这些是快照中的定位项，不代表缺陷数或当前全量重新扫描的结果。逐项状态与文件 SHA 见[候选清单](model-next-candidates-2026-10-24.csv)。
+定位快照中 145 个长构造候选已处理 101 个调用点，剩余 44 个仍需逐项核对；506 个 Map 返回候选已处理 24 个固定投影，剩余 482 个仍待分类。这些是快照中的定位项，不代表缺陷数或当前全量重新扫描的结果。逐项状态与文件 SHA 见[候选清单](model-next-candidates-2026-10-24.csv)。
 
 ## 固定 SQL 投影
 
@@ -66,9 +66,9 @@
 - 此前 35 个 Java 文件的 JDK Parser-only AST 语法解析错误为 0；本次固定投影扩展涉及的 13 个 Java 文件 Parser-only 解析错误为 0。五条新增/整改查询的 SELECT 列、resultMap 参数和 record 组件按序对应；SQL 正文与 HEAD 一致。未做类型分析。
 - 未编译、未运行测试、未运行 MyBatis 集成映射或数据库，也未改 Flyway/表结构。实际 MyBatis 构造映射与 PostgreSQL 类型处理仍待后续运行验证。
 
-本轮累计关闭上述四十五个长构造调用点和二十四个固定 Mapper Map 项。其余长构造、Map 行映射、运行时配置导入、Controller/Service 职责、事务/锁/资源、Flyway 与全量文档影响分析继续保留在总台账。
+前一批记录关闭四十五个长构造调用点；随后依据同一定位快照继续逐项核对，当前累计处理一百零一项。固定 Mapper Map 项累计二十四项。其余构造、Map 行映射、运行时配置导入、Controller/Service 职责、事务/锁/资源、Flyway 与全量文档影响分析继续保留在总台账。
 
-本次续改后，固定 Mapper Map 项累计为24个；其余482个候选仍须按固定结构、动态键集合及调用边界逐项判断。长构造仍有100项未完成语义裁定，整体治理范围没有销项。
+本次续改后，固定 Mapper Map 项累计为24个；其余482个候选仍须按固定结构、动态键集合及调用边界逐项判断。长构造定位快照尚有44项未逐项完成语义裁定，整体治理范围没有销项。
 
 
 ### 跨日历依赖响应与批次日实体复制收敛（2026-10-24 续）
@@ -80,3 +80,21 @@
 
 
 继续收敛 3 类嵌套响应映射：审批行、实例诊断摘要、租户初始化结果。审批/诊断 Map 的 null 处理注解不变；初始化失败结果仍写入原来的 8 个空统计对象，成功结果保持原值映射。执行器的成功构造同步改为具名 Builder。
+
+
+另将 Console 作业执行日志、Workflow 运行和节点运行的长响应构造改为具名 Builder。脱敏/本地化仍在 Builder 之前以原顺序计算，最终响应字段逐一对应原 record 声明。
+
+
+重放预览的三个固定响应（日期区间、Workflow 节点、Workflow 整体）及 Console Ops 汇总改为具名 Builder。保留此前完成的预计算、本地化、掩码、快照序列化和字段值逻辑。
+
+
+Excel 导入说明的列项、上传结果和应用结果，以及区间/Workflow 重放预览，均改为具名字段组装。列说明中的校验、默认值和本地化计算仍使用原表达式；上传/应用统计继续读取同一 session 与 apply counts 字段。
+
+
+`AiAuditCommand` 的 18 字段审计命令在生产组装及对应集成测试夹具中改为具名 Builder；原始 canonical constructor 仍保留供兼容调用，字段内容与预计算顺序未变。
+
+
+补充收敛资产分区物化、Workflow 节点重放、任务执行报告、Console 私有重放命令的长参数构造。对应生产调用方与已有测试构造一并改为具名字段；canonical constructor 未删除，API/消息字段和实参求值次序保持。
+
+
+AI TurnSummary 与审批请求体的长字段映射改为具名 Builder。请求审计信息继续从原局部变量传入，JSON 属性仍由 record 组件名确定；canonical 构造入口保留。

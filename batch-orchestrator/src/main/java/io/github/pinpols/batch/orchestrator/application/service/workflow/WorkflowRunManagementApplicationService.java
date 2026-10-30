@@ -198,8 +198,7 @@ public class WorkflowRunManagementApplicationService {
     // P1-2: 写 audit 行 + 发 WARN alert,补齐"运维介入"事后追溯。
     Long nodeRunId = nodeRun.getId();
     Long jobInstanceId = nodeRun.getJobInstanceId();
-    appendSkipNodeAudit(
-        run, nodeCode, nodeRunId, jobInstanceId, operatorId, reason);
+    appendSkipNodeAudit(run, nodeCode, nodeRunId, jobInstanceId, operatorId, reason);
     emitSkipNodeAlert(run, nodeRun, operatorId);
     return new NodeAction(id, nodeCode, WorkflowNodeRunStatus.SKIPPED.code());
   }
@@ -230,7 +229,12 @@ public class WorkflowRunManagementApplicationService {
     extra.put("workflowDefinitionId", run.getWorkflowDefinitionId());
     extra.put("nodeCode", nodeCode);
     extra.put("nodeRunId", nodeRunId);
-    extra.put("bizDate", EmptyChecks.isNull(run.getBizDate()) ? null : run.getBizDate().toString());
+    extra.put(
+        "bizDate",
+        EmptyChecks.isNull(run.getBizDate()) ? null : run.getBizDate().toString());
+    extra.put(
+        "bizDate",
+        EmptyChecks.isNull(run.getBizDate()) ? null : run.getBizDate().toString());
     extra.put(
         "operatorId",
         Texts.hasText(operatorId) ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM);
@@ -260,8 +264,12 @@ public class WorkflowRunManagementApplicationService {
     detail.put("nodeRunId", nodeRun.getId());
     detail.put(
         "jobInstanceId",
-        EmptyChecks.isNull(nodeRun.getJobInstanceId()) ? null : nodeRun.getJobInstanceId().toString());
-    detail.put("bizDate", EmptyChecks.isNull(run.getBizDate()) ? null : run.getBizDate().toString());
+        EmptyChecks.isNull(nodeRun.getJobInstanceId())
+            ? null
+            : nodeRun.getJobInstanceId().toString());
+    detail.put(
+        "bizDate",
+        EmptyChecks.isNull(run.getBizDate()) ? null : run.getBizDate().toString());
     detail.put("operatorId", operatorId);
     AlertEmitRequest alertRequest = AlertEmitRequest.builder()
         .tenantId(run.getTenantId())

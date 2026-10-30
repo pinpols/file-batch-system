@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+/** 将 Kafka Topic 与 Redis key 绑定到同一批量命名空间，避免多个部署共享基础设施时相互覆盖。 */
 @AutoConfiguration
 @EnableConfigurationProperties(KafkaNamespaceProperties.class)
 public class BatchKafkaNamespaceAutoConfiguration {

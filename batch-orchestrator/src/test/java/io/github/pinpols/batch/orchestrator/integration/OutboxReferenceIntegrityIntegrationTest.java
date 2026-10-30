@@ -63,7 +63,7 @@ class OutboxReferenceIntegrityIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("V306 在分区父表及其约束克隆上安装已验证的复合外键")
   void shouldInstallValidatedCompositeForeignKeysForPartitionedOutbox() {
-  final String selectCountSql = """
+    final String selectCountSql = """
           select count(*)
             from pg_constraint
            where contype = 'f'
@@ -74,7 +74,7 @@ class OutboxReferenceIntegrityIntegrationTest extends AbstractIntegrationTest {
              and convalidated
              and confdeltype = 'a'
           """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
         select count(*)
           from pg_constraint child_constraint
          where child_constraint.contype = 'f'
@@ -97,7 +97,8 @@ class OutboxReferenceIntegrityIntegrationTest extends AbstractIntegrationTest {
         """;
 
     Integer validatedRootForeignKeys = jdbcTemplate.queryForObject(selectCountSql, Integer.class);
-    Integer unvalidatedForeignKeyClones = jdbcTemplate.queryForObject(selectCountSql2, Integer.class);
+    Integer unvalidatedForeignKeyClones =
+        jdbcTemplate.queryForObject(selectCountSql2, Integer.class);
 
     assertThat(validatedRootForeignKeys).isEqualTo(2);
     assertThat(unvalidatedForeignKeyClones).isZero();
@@ -218,7 +219,11 @@ class OutboxReferenceIntegrityIntegrationTest extends AbstractIntegrationTest {
           """;
 
     jdbcTemplate.update(
-        insertEventDeliveryLogSql, tenantId, outboxId, Timestamp.from(findCreatedAt(outboxId)), unique("delivery"));
+        insertEventDeliveryLogSql,
+        tenantId,
+        outboxId,
+        Timestamp.from(findCreatedAt(outboxId)),
+        unique("delivery"));
   }
 
   private void insertRetry(String tenantId, Long outboxId) {
@@ -229,7 +234,11 @@ class OutboxReferenceIntegrityIntegrationTest extends AbstractIntegrationTest {
           """;
 
     jdbcTemplate.update(
-        insertEventOutboxRetrySql, tenantId, outboxId, Timestamp.from(findCreatedAtOrDefault(outboxId)), unique("retry"));
+        insertEventOutboxRetrySql,
+        tenantId,
+        outboxId,
+        Timestamp.from(findCreatedAtOrDefault(outboxId)),
+        unique("retry"));
   }
 
   private Instant findCreatedAt(Long outboxId) {
@@ -237,8 +246,7 @@ class OutboxReferenceIntegrityIntegrationTest extends AbstractIntegrationTest {
         select created_at from batch.outbox_event where id = ?
     """;
 
-    return jdbcTemplate.queryForObject(
-        selectCreatedAtSql, Instant.class, outboxId);
+    return jdbcTemplate.queryForObject(selectCreatedAtSql, Instant.class, outboxId);
   }
 
   private boolean awaitChildInsertBlocked(Duration timeout) throws InterruptedException {
@@ -314,8 +322,7 @@ class OutboxReferenceIntegrityIntegrationTest extends AbstractIntegrationTest {
         delete from batch.outbox_event where tenant_id = ? and id = ?
     """;
 
-    jdbcTemplate.update(
-        deleteOutboxEventSql, tenantId, id);
+    jdbcTemplate.update(deleteOutboxEventSql, tenantId, id);
   }
 
   private void rekeyOutbox(String tenantId, Long id) {
@@ -323,11 +330,7 @@ class OutboxReferenceIntegrityIntegrationTest extends AbstractIntegrationTest {
         update batch.outbox_event set tenant_id = ? where tenant_id = ? and id = ?
     """;
 
-    jdbcTemplate.update(
-        updateOutboxEventSql,
-        unique("rekey"),
-        tenantId,
-        id);
+    jdbcTemplate.update(updateOutboxEventSql, unique("rekey"), tenantId, id);
   }
 
   private void assertForeignKeyViolation(Throwable failure) {
@@ -344,18 +347,16 @@ class OutboxReferenceIntegrityIntegrationTest extends AbstractIntegrationTest {
   }
 
   private int count(String table, Long outboxId) {
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from %s where outbox_event_id = ?\
       """.formatted(table);
-  return jdbcTemplate.queryForObject(
-        selectCountSql, Integer.class, outboxId);
+    return jdbcTemplate.queryForObject(selectCountSql, Integer.class, outboxId);
   }
 
   private int parentCount(String table, Long id) {
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from %s where id = ?\
       """.formatted(table);
-  return jdbcTemplate.queryForObject(
-        selectCountSql, Integer.class, id);
+    return jdbcTemplate.queryForObject(selectCountSql, Integer.class, id);
   }
 }

@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.domain.notification.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -20,28 +20,33 @@ import io.github.pinpols.batch.console.application.contract.request.config.Alert
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleAlertRoutingApplicationService;
 import io.github.pinpols.batch.console.domain.notification.application.contract.query.AlertRoutingQueryRequest;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertRoutingResponse;
+import io.github.pinpols.batch.console.domain.notification.view.AlertRoutingConfigRow;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
-import java.util.Map;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 /** P1: ConsoleAlertRoutingController CRUD 行为(原 ValidationTest 仅守 @ValidResourceCode)。 */
 @DisplayName("告警路由接口: 条件查询, 新增改与启停的入参透传")
+@ExtendWith(MockitoExtension.class)
 class ConsoleAlertRoutingControllerBehaviorTest {
 
-  private final ConsoleAlertRoutingApplicationService service =
-      mock(ConsoleAlertRoutingApplicationService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleAlertRoutingApplicationService service;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -90,22 +95,24 @@ class ConsoleAlertRoutingControllerBehaviorTest {
     ArgumentCaptor<AlertRoutingQueryRequest> captor =
         ArgumentCaptor.forClass(AlertRoutingQueryRequest.class);
     verify(service).list(captor.capture());
-    Assertions.assertEquals("ta", captor.getValue().getTenantId());
-    Assertions.assertEquals("RT_A", captor.getValue().getRouteCode());
-    Assertions.assertEquals("ops", captor.getValue().getTeam());
-    Assertions.assertEquals("WARN", captor.getValue().getSeverity());
-    Assertions.assertTrue(captor.getValue().getEnabled());
-    Assertions.assertEquals(1, captor.getValue().getPageNo());
-    Assertions.assertEquals(20, captor.getValue().getPageSize());
+    assertThat(captor.getValue().getTenantId()).isEqualTo("ta");
+    assertThat(captor.getValue().getRouteCode()).isEqualTo("RT_A");
+    assertThat(captor.getValue().getTeam()).isEqualTo("ops");
+    assertThat(captor.getValue().getSeverity()).isEqualTo("WARN");
+    assertThat(captor.getValue().getEnabled()).isTrue();
+    assertThat(captor.getValue().getPageNo()).isEqualTo(1);
+    assertThat(captor.getValue().getPageSize()).isEqualTo(20);
   }
 
   @Test
   @DisplayName("新增路由返回该行, 响应字段保持下划线命名")
   void shouldReturnRow_whenCreatingRouting() throws Exception {
-    // 生产 AlertRoutingConfigMapper 以 resultType=map 返回 snake_case 列键（route_code），
+    // 生产 AlertRoutingConfigMapper 以具名构造器投影返回行，
     // 类型化响应经 @JsonProperty 保持 snake_case wire 一字不差。
     when(service.create(any(AlertRoutingSaveRequest.class)))
-        .thenReturn(ConsoleAlertRoutingResponse.from(Map.of("id", 1L, "route_code", "RT_NEW")));
+        .thenReturn(ConsoleAlertRoutingResponse.from(new AlertRoutingConfigRow(
+            1L, "ta", "RT_NEW", null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null)));
     mockMvc
         .perform(post("/api/console/alert-routings")
             .contentType(APPLICATION_JSON)
@@ -118,7 +125,9 @@ class ConsoleAlertRoutingControllerBehaviorTest {
   @DisplayName("更新路由以路径主键为准, 请求体随附提交")
   void shouldPassPathId_whenUpdatingRouting() throws Exception {
     when(service.update(eq(7L), any(AlertRoutingSaveRequest.class)))
-        .thenReturn(ConsoleAlertRoutingResponse.from(Map.of("id", 7L)));
+        .thenReturn(ConsoleAlertRoutingResponse.from(new AlertRoutingConfigRow(
+            7L, "ta", null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null)));
     mockMvc
         .perform(put("/api/console/alert-routings/7")
             .contentType(APPLICATION_JSON)

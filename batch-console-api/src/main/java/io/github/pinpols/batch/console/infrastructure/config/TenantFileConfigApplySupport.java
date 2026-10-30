@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileChannelSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileTemplateSpec;
@@ -7,7 +8,9 @@ import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMappe
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.param.FileChannelConfigUpsertParam;
 import io.github.pinpols.batch.console.domain.file.param.FileTemplateConfigUpsertParam;
-import java.util.Map;
+import io.github.pinpols.batch.console.domain.file.support.FixedWidthMappingValidation;
+import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
+import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -18,8 +21,18 @@ final class TenantFileConfigApplySupport {
 
   private final FileChannelConfigMapper fileChannelConfigMapper;
   private final FileTemplateConfigMapper fileTemplateConfigMapper;
+  private final ObjectMapper objectMapper;
 
-  Map<String, Object> findChannel(String tenantId, FileChannelSpec spec) {
+  void validateTemplate(FileTemplateSpec spec) {
+    FixedWidthMappingValidation.validate(
+        objectMapper,
+        Nullables.coalesce(spec.getEnabled(), true),
+        spec.getTemplateType(),
+        spec.getFileFormatType(),
+        spec.getFieldMappingsJson());
+  }
+
+  FileChannelConfigQueryView findChannel(String tenantId, FileChannelSpec spec) {
     return fileChannelConfigMapper.selectByUniqueKey(tenantId, spec.getChannelCode());
   }
 
@@ -40,7 +53,7 @@ final class TenantFileConfigApplySupport {
     fileChannelConfigMapper.upsertFileChannelConfig(param);
   }
 
-  Map<String, Object> findTemplate(String tenantId, FileTemplateSpec spec) {
+  FileTemplateConfigQueryView findTemplate(String tenantId, FileTemplateSpec spec) {
     String templateCode = spec.getTemplateCode();
     Integer templateVersion = Nullables.coalesce(spec.getVersion(), 1);
     return fileTemplateConfigMapper.selectByUniqueKey(tenantId, templateCode, templateVersion);

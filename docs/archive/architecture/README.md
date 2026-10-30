@@ -1,9 +1,9 @@
-# 历史架构与边界资产
+# 历史架构事实与决策背景
 
-本目录对应当前 `architecture/` 的历史材料。原日期与结论保留；当前资料见 [现行入口](../../architecture/README.md)，当前事项见 [TODO Master](../../plans/todo-master.md)。
+保留原始经验及决策背景。旧路径、工具、参数、结论和步骤不作为当前执行依据；现行入口按[文档路由](../../standards/document-routing-guide.md)定位。
 
-| 文档 | 用途 |
+| 原始记录 | 用途 |
 |---|---|
-| [architecture-truth-2026-04-09.md](architecture-truth-2026-04-09.md) | 架构基线文档（Architecture Truth）；用于追溯当时基线 |
-| [arrival-group-malformed-data-quarantine-decision-2026-06-21.md](arrival-group-malformed-data-quarantine-decision-2026-06-21.md) | 到达组坏数据隔离的延期裁决；用于追溯当时基线 |
-| [scaling-state-and-biz-path-2026-06-14.md](scaling-state-and-biz-path-2026-06-14.md) | 扩容现状盘点 + biz 数据层路径决策(2026-06-14)；用于追溯当时基线 |
+| [architecture-truth-2026-04-09.md](architecture-truth-2026-04-09.md) | 历史架构事实与决策背景的原始正文；按原日期追溯 |
+| [arrival-group-malformed-data-quarantine-decision-2026-06-21.md](arrival-group-malformed-data-quarantine-decision-2026-06-21.md) | 历史架构事实与决策背景的原始正文；按原日期追溯 |
+| [scaling-state-and-biz-path-2026-06-14.md](scaling-state-and-biz-path-2026-06-14.md) | 历史架构事实与决策背景的原始正文；按原日期追溯 |

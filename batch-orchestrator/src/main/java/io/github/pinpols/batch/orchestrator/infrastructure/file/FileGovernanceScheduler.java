@@ -103,13 +103,12 @@ public class FileGovernanceScheduler {
     }
     String tenantId = properties.getReconcile().getDefaultTenantId();
     sweepStaleRunningPipelines(tenantId);
-    Map<String, Object> rawMetrics = metricsCacheService.compute(
+    FileGovernanceLatencyMetrics metrics = metricsCacheService.compute(
         tenantId,
         properties.getLatency().getArrivalDelayThresholdSeconds(),
         properties.getLatency().getProcessingDelayThresholdSeconds(),
         properties.getLatency().getProcessingDelayMaxAgeSeconds(),
         properties.getLatency().getSampleSize());
-    FileGovernanceLatencyMetrics metrics = FileGovernanceLatencyMetrics.from(rawMetrics);
     long arrivalCount = metrics.arrivalDelayViolations();
     long arrivalMax = metrics.maxArrivalDelaySeconds();
     long processingCount = metrics.processingDelayViolations();
@@ -118,7 +117,7 @@ public class FileGovernanceScheduler {
     arrivalDelayMaxSeconds.set(arrivalMax);
     processingDelayViolations.set(processingCount);
     processingDelayMaxSeconds.set(processingMax);
-    metricsCacheService.write(tenantId, rawMetrics);
+    metricsCacheService.write(tenantId, metrics);
 
     if (arrivalCount > 0) {
       List<Map<String, Object>> samples = metrics.arrivalDelaySamples();
@@ -169,13 +168,12 @@ public class FileGovernanceScheduler {
   }
 
   public FileGovernanceLatencyMetrics loadLatencyMetrics(String tenantId) {
-    Map<String, Object> rawMetrics = metricsCacheService.load(
+    return metricsCacheService.load(
         tenantId,
         properties.getLatency().getArrivalDelayThresholdSeconds(),
         properties.getLatency().getProcessingDelayThresholdSeconds(),
         properties.getLatency().getProcessingDelayMaxAgeSeconds(),
         properties.getLatency().getSampleSize());
-    return FileGovernanceLatencyMetrics.from(rawMetrics);
   }
 
   public void manageFileArrivalGroups() {

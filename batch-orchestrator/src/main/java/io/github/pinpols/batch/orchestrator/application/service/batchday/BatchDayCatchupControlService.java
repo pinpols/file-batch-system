@@ -1,15 +1,15 @@
 package io.github.pinpols.batch.orchestrator.application.service.batchday;
 
-import io.github.pinpols.batch.orchestrator.domain.param.BatchDayCatchupEventParam;
-import io.github.pinpols.batch.orchestrator.domain.param.BatchDayCatchupPauseStateParam;
+import io.github.pinpols.batch.common.jdbc.JdbcExceptionSupport;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayCatchupControlEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayCatchupEventParam;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayCatchupPauseStateParam;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayCatchupControlMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BusinessCalendarMapper;
-import java.sql.SQLException;
 import java.time.Instant;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
@@ -47,12 +47,12 @@ public class BatchDayCatchupControlService {
     String action = trimmedAction.toUpperCase(Locale.ROOT);
     String operator = command.operatorId().trim();
     String reason = command.reason().trim();
-    PauseCommand normalizedCommand = new PauseCommand(tenantId, calendarCode, action, operator, reason);
+    PauseCommand normalizedCommand =
+        new PauseCommand(tenantId, calendarCode, action, operator, reason);
     Instant now = dateTimeSupport.nowInstant();
     try {
       return RlsTenantContextHolder.runWithTenant(
-          tenantId,
-          () -> changeInTransaction(normalizedCommand, now));
+          tenantId, () -> changeInTransaction(normalizedCommand, now));
     } catch (DataIntegrityViolationException exception) {
       if (!isCatchupControlCalendarReferenceViolation(exception)) {
         throw exception;
@@ -78,8 +78,7 @@ public class BatchDayCatchupControlService {
     });
   }
 
-  private BatchDayCatchupControlEntity changeInTransaction(
-      PauseCommand command, Instant now) {
+  private BatchDayCatchupControlEntity changeInTransaction(PauseCommand command, Instant now) {
     String tenantId = command.tenantId();
     String calendarCode = command.calendarCode();
     String action = command.action();
@@ -96,15 +95,16 @@ public class BatchDayCatchupControlService {
         throw new IllegalStateException("Catch-up control row could not be initialized");
       }
       if (current.paused() == pause) return current;
-      BatchDayCatchupPauseStateParam batchDayCatchupPauseStateParam = BatchDayCatchupPauseStateParam.builder()
-          .tenantId(tenantId)
-          .calendarCode(calendarCode)
-          .paused(pause)
-          .pausedAt(pause ? now : current.pausedAt())
-          .pausedBy(pause ? operator : current.pausedBy())
-          .pauseReason(pause ? reason : current.pauseReason())
-          .updatedAt(now)
-          .build();
+      BatchDayCatchupPauseStateParam batchDayCatchupPauseStateParam =
+          BatchDayCatchupPauseStateParam.builder()
+              .tenantId(tenantId)
+              .calendarCode(calendarCode)
+              .paused(pause)
+              .pausedAt(pause ? now : current.pausedAt())
+              .pausedBy(pause ? operator : current.pausedBy())
+              .pauseReason(pause ? reason : current.pauseReason())
+              .updatedAt(now)
+              .build();
       int updated = controlMapper.updatePauseState(batchDayCatchupPauseStateParam);
       if (updated != 1) {
         throw new ResponseStatusException(
@@ -132,28 +132,17 @@ public class BatchDayCatchupControlService {
   }
 
   private static boolean isCatchupControlCalendarReferenceViolation(Throwable failure) {
-    boolean foreignKeyViolation = false;
-    boolean expectedConstraint = false;
-    for (Throwable cause = failure; EmptyChecks.isNotNull(cause); cause = cause.getCause()) {
-      if (cause instanceof SQLException sql && "23503".equals(sql.getSQLState())) {
-        foreignKeyViolation = true;
-      }
-      if (EmptyChecks.isNotNull(cause.getMessage())
-          && cause.getMessage().contains(CALENDAR_REFERENCE_CONSTRAINT)) {
-        expectedConstraint = true;
-      }
-    }
-    return foreignKeyViolation && expectedConstraint;
+    return JdbcExceptionSupport.isForeignKeyConstraintViolationInChain(
+        failure, CALENDAR_REFERENCE_CONSTRAINT);
   }
 
   private static void validate(PauseCommand command) {
-    boolean hasRequiredFields =
-        EmptyChecks.isNotNull(command)
-            && Texts.hasText(command.tenantId())
-            && Texts.hasText(command.calendarCode())
-            && Texts.hasText(command.action())
-            && Texts.hasText(command.operatorId())
-            && Texts.hasText(command.reason());
+    boolean hasRequiredFields = EmptyChecks.isNotNull(command)
+        && Texts.hasText(command.tenantId())
+        && Texts.hasText(command.calendarCode())
+        && Texts.hasText(command.action())
+        && Texts.hasText(command.operatorId())
+        && Texts.hasText(command.reason());
     if (!hasRequiredFields) {
       throw new IllegalArgumentException(
           "tenant, calendar, action, operator and reason are required");

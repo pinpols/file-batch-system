@@ -198,7 +198,9 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
           assertThat(body).contains("\"APPROVED\"");
         });
 
-    verify(approvalApplicationService).approve("tenant-a", "appr-001", "user-1", "ok");
+    // operator 取鉴权身份（body.operatorId 不授权），测试安全上下文用户为 testing-console-user。
+    verify(approvalApplicationService)
+        .approve("tenant-a", "appr-001", "testing-console-user", "ok");
   }
 
   @Test

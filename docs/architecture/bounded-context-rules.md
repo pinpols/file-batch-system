@@ -2,7 +2,7 @@
 
 > 守护测试:`batch-console-api/src/test/java/io/github/pinpols/batch/console/arch/BoundedContextDependencyArchTest.java`
 > 进度 metric:`BoundedContextMigrationProgressTest.java`
-> Roadmap:[`docs/archive/plans/p0-p1-p2-roadmap-2026-05-29.md`](../archive/plans/p0-p1-p2-roadmap-2026-05-29.md) § P1-A
+> 当前工程治理路线：[工程成熟度路线图](engineering-maturity-roadmap.md)；具体边界规则在本文维护。
 
 ## 9 个有界上下文
 

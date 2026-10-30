@@ -16,6 +16,7 @@
             <arg column="successJobCount" javaType="java.lang.Long"/>
             <arg column="failedJobCount" javaType="java.lang.Long"/>
             <arg column="inFlightJobCount" javaType="java.lang.Long"/>
+            <arg column="frozen" javaType="java.lang.Boolean"/>
         </constructor>
     </resultMap>
     <resultMap id="scheduledOccurrenceViewResultMap"
@@ -48,6 +49,7 @@
         select
             bdi.biz_date as "bizDate",
             bdi.day_status as "dayStatus",
+            bdi.frozen as "frozen",
             bdi.open_at as "openAt",
             bdi.cutoff_at as "cutoffAt",
             bdi.settled_at as "settledAt",
@@ -61,16 +63,15 @@
         from batch.batch_day_instance bdi
         left join (
             select ji.tenant_id,
-                   jd.calendar_code,
+                   ji.calendar_code,
                    ji.biz_date,
                    count(1) as total_job_count,
                    coalesce(sum(case when ji.instance_status = 'SUCCESS' then 1 else 0 end), 0) as success_job_count,
                    coalesce(sum(case when ji.instance_status in ('FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED') then 1 else 0 end), 0) as failed_job_count,
                    coalesce(sum(case when ji.instance_status in ('CREATED', 'WAITING', 'READY', 'RUNNING', 'PAUSED') then 1 else 0 end), 0) as in_flight_job_count
             from batch.job_instance ji
-                     join batch.job_definition jd on jd.id = ji.job_definition_id
             where ji.tenant_id = #{tenantId}
-              and jd.calendar_code = #{calendarCode}
+              and ji.calendar_code = #{calendarCode}
               and ji.dry_run = false
             <if test="fromBizDate != null">
               and ji.biz_date &gt;= #{fromBizDate}
@@ -78,7 +79,7 @@
             <if test="toBizDate != null">
               and ji.biz_date &lt;= #{toBizDate}
             </if>
-            group by ji.tenant_id, jd.calendar_code, ji.biz_date
+            group by ji.tenant_id, ji.calendar_code, ji.biz_date
         ) stats on stats.tenant_id = bdi.tenant_id
             and stats.calendar_code = bdi.calendar_code
             and stats.biz_date = bdi.biz_date
@@ -111,6 +112,7 @@
         select
             bdi.biz_date as "bizDate",
             bdi.day_status as "dayStatus",
+            bdi.frozen as "frozen",
             bdi.cutoff_at as "cutoffAt",
             bdi.sla_deadline_at as "slaDeadlineAt",
             bdi.open_at as "openAt",
@@ -124,19 +126,18 @@
         from batch.batch_day_instance bdi
         left join (
             select ji.tenant_id,
-                   jd.calendar_code,
+                   ji.calendar_code,
                    ji.biz_date,
                    count(1) as total_job_count,
                    coalesce(sum(case when ji.instance_status = 'SUCCESS' then 1 else 0 end), 0) as success_job_count,
                    coalesce(sum(case when ji.instance_status in ('FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED') then 1 else 0 end), 0) as failed_job_count,
                    coalesce(sum(case when ji.instance_status in ('CREATED', 'WAITING', 'READY', 'RUNNING', 'PAUSED') then 1 else 0 end), 0) as in_flight_job_count
             from batch.job_instance ji
-                     join batch.job_definition jd on jd.id = ji.job_definition_id
             where ji.tenant_id = #{tenantId}
-              and jd.calendar_code = #{calendarCode}
+              and ji.calendar_code = #{calendarCode}
               and ji.biz_date = #{bizDate}
               and ji.dry_run = false
-            group by ji.tenant_id, jd.calendar_code, ji.biz_date
+            group by ji.tenant_id, ji.calendar_code, ji.biz_date
         ) stats on stats.tenant_id = bdi.tenant_id
             and stats.calendar_code = bdi.calendar_code
             and stats.biz_date = bdi.biz_date
@@ -175,35 +176,37 @@
             coalesce(sum(case when ji.instance_status = 'SUCCESS' then 1 else 0 end), 0) as "successJobCount",
             coalesce(sum(case when ji.instance_status in ('FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED') then 1 else 0 end), 0) as "failedJobCount",
             coalesce(sum(case when ji.instance_status in ('CREATED', 'WAITING', 'READY', 'RUNNING', 'PAUSED') then 1 else 0 end), 0) as "inFlightJobCount",
-            coalesce(catchups.catchup_count, 0) as "catchupCount"
+            (
+                select count(1)
+                from batch.trigger_request request
+                where request.tenant_id = #{tenantId}
+                  and request.biz_date = #{bizDate}
+                  and request.trigger_type = 'CATCH_UP'
+                  and request.request_status in ('ACCEPTED', 'LAUNCHED')
+                  and request.dry_run = false
+                  and request.launch_payload -&gt; 'params' -&gt;&gt; 'batchDayCalendarCode' = #{calendarCode}
+                  and (
+                      request.launch_payload -&gt; 'params' -&gt;&gt; 'jobCode' = ji.job_code
+                      or request.dedup_key = request.tenant_id || ':batch-day-catchup:'
+                          || #{calendarCode} || ':' || request.biz_date::text || ':' || ji.job_code
+                  )
+            ) as "catchupCount"
         from batch.job_instance ji
-                 join batch.job_definition jd on jd.id = ji.job_definition_id
-                 left join (
-                    select tenant_id, job_code, biz_date, count(1) as catchup_count
-                    from batch.trigger_request
-                    where tenant_id = #{tenantId}
-                      and trigger_type = 'CATCH_UP'
-                      and request_status in ('ACCEPTED', 'LAUNCHED')
-                      and biz_date = #{bizDate}
-                    group by tenant_id, job_code, biz_date
-                 ) catchups on catchups.tenant_id = ji.tenant_id
-                    and catchups.job_code = ji.job_code
-                    and catchups.biz_date = ji.biz_date
         where ji.tenant_id = #{tenantId}
-          and jd.calendar_code = #{calendarCode}
+          and ji.calendar_code = #{calendarCode}
           and ji.biz_date = #{bizDate}
           and ji.dry_run = false
-        group by ji.job_code, catchups.catchup_count
+        group by ji.job_code
         order by ji.job_code asc
     </select>
 
     <select id="selectFailedJobCodes" resultType="string">
         select distinct ji.job_code
         from batch.job_instance ji
-                 join batch.job_definition jd on jd.id = ji.job_definition_id
         where ji.tenant_id = #{tenantId}
-          and jd.calendar_code = #{calendarCode}
+          and ji.calendar_code = #{calendarCode}
           and ji.biz_date = #{bizDate}
+          and ji.dry_run = false
           and ji.instance_status in ('FAILED', 'PARTIAL_FAILED')
         order by ji.job_code asc
     </select>

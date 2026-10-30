@@ -8,8 +8,8 @@ import io.github.bucket4j.distributed.BucketProxy;
 import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
+import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.RateLimitProperties;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
@@ -22,8 +22,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
 /**
  * 集群级令牌桶限流器：基于 Bucket4j + Redis（Lettuce）分布式后端，是名副其实的 token bucket。
@@ -125,12 +125,7 @@ public class TokenBucketRateLimiter {
   public boolean tryConsumePerSecond(String tenantId, String action, long maxPerSecond) {
     Duration refillPeriod = Duration.ofSeconds(1);
     BucketSpec bucketSpec = new BucketSpec(maxPerSecond, refillPeriod);
-    return tryConsume(
-        tenantId,
-        action,
-        bucketSpec,
-        BackendFailureMode.FAIL_CLOSED,
-        true);
+    return tryConsume(tenantId, action, bucketSpec, BackendFailureMode.FAIL_CLOSED, true);
   }
 
   private boolean tryConsume(

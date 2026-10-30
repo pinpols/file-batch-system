@@ -2,6 +2,8 @@ package io.github.pinpols.batch.orchestrator.config;
 
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.orchestrator.application.trigger.TriggerLaunchRecoveryService;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -11,7 +13,9 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,8 +23,8 @@ import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
-import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.ConsumerRecordRecoverer;
+import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.util.backoff.FixedBackOff;
 
@@ -37,8 +41,9 @@ import org.springframework.util.backoff.FixedBackOff;
  *   <li>瞬时错误（PG 抖动 / Kafka 短暂不可用）：固定 backoff（默认 3 次 × 2s）后跳过当前 offset，避免一条挂死整个 partition；
  *   <li>永久错误（jobCode 不存在 / 协议反序列化失败 / 校验失败）：注册 {@link BizException} + {@link
  *       IllegalArgumentException} 为 not-retryable，命中即跳过 — 业务错不会无限重试；
- *   <li>recover 阶段仅 ERROR 日志（LOG_ONLY），不发 DLT。如未来要落 DLT topic，注入 {@code
- *       DeadLetterPublishingRecoverer} 替换 lambda 即可。
+ *   <li>recover 阶段：业务级错误仅 WARN 日志；瞬时错误重试耗尽时除 ERROR 日志 + 指标外，调用 {@link
+ *       TriggerLaunchRecoveryService#park} 登记持久恢复锚点（跳过 offset 前最后一道防丢屏障），不发 DLT。
+ *       如未来要落 DLT topic，注入 {@code DeadLetterPublishingRecoverer} 替换 lambda 即可。
  * </ul>
  *
  * <p><b>历史教训</b>：2026-05-07 STRICT smoke 期间一条 jobCode 拼错的 launch 消息在 trigger.launch.v1 上无限重试， 占满
@@ -63,6 +68,7 @@ public class OrchestratorKafkaConsumerConfiguration {
 
   private final TriggerConsumerProperties consumerProperties;
   private final MeterRegistry meterRegistry;
+  private final ObjectProvider<TriggerLaunchRecoveryService> launchRecoveryServiceProvider;
 
   @Bean
   public ConsumerFactory<String, String> triggerLaunchConsumerFactory(
@@ -104,6 +110,34 @@ public class OrchestratorKafkaConsumerConfiguration {
    * Poison-pill 防护用 ErrorHandler。瞬时错误重试 N 次后放行；业务错（BizException /
    * IllegalArgumentException）不重试直接放行。429 已由 listener 的 nack 分支处理，不会进入本 handler。
    */
+  /**
+   * 瞬时错误重试耗尽时登记持久恢复锚点：该记录随后会被跳过(offset 提交)，若请求尚未落任何持久等待/prepare
+   * 记录，这里是唯一能阻止"永久失去执行机会"的位置。登记失败必须抛回 error handler，禁止跳过未持久化的请求。
+   */
+  private void parkForRecovery(ConsumerRecord<?, ?> consumerRecord) {
+    TriggerLaunchRecoveryService recoveryService = launchRecoveryServiceProvider.getIfAvailable();
+    if (EmptyChecks.isNull(recoveryService)) {
+      throw new IllegalStateException(
+          "trigger launch recovery is unavailable; cannot safely skip exhausted record");
+    }
+    try {
+      boolean parked = recoveryService.park(String.valueOf(consumerRecord.value()), null);
+      if (!parked) {
+        throw new IllegalStateException(
+            "trigger launch recovery did not persist an anchor for exhausted record");
+      }
+    } catch (RuntimeException ex) {
+      log.warn(
+          "trigger launch recovery park failed; exhausted record must not be skipped: topic={}"
+              + " partition={} offset={} cause={}",
+          consumerRecord.topic(),
+          consumerRecord.partition(),
+          consumerRecord.offset(),
+          SwallowedExceptionLogger.summary(ex));
+      throw ex;
+    }
+  }
+
   private DefaultErrorHandler triggerLaunchErrorHandler() {
     TriggerConsumerProperties.ErrorHandler eh = consumerProperties.getErrorHandler();
     ConsumerRecordRecoverer recoverer = (consumerRecord, exception) -> {
@@ -123,17 +157,18 @@ public class OrchestratorKafkaConsumerConfiguration {
       } else {
         log.error(
             "TriggerLaunchConsumer message exceeded the retry limit: topic={} partition={} offset={}"
-                + " key={} value={} cause={}",
+                + " key={} cause={}",
             consumerRecord.topic(),
             consumerRecord.partition(),
             consumerRecord.offset(),
             consumerRecord.key(),
-            consumerRecord.value(),
             SwallowedExceptionLogger.summary(exception));
         Counter.builder(METRIC_FAILED)
             .tags(Tags.of("reason", "retries_exhausted"))
             .register(meterRegistry)
             .increment();
+        // 重试耗尽即将跳过 offset：若请求尚未落任何持久等待/prepare 记录，这是最后能留下恢复锚点的位置
+        parkForRecovery(consumerRecord);
       }
     };
     long retryBackoffMillis = eh.getRetryBackoffMs();
@@ -142,6 +177,8 @@ public class OrchestratorKafkaConsumerConfiguration {
     int nonnegativeRetryCount = Math.max(0, retriesAfterFirstAttempt);
     FixedBackOff retryBackOff = new FixedBackOff(retryBackoffMillis, nonnegativeRetryCount);
     DefaultErrorHandler handler = new DefaultErrorHandler(recoverer, retryBackOff);
+    // MANUAL_IMMEDIATE 下，仅在恢复器成功处理后提交该记录的位置。
+    handler.setCommitRecovered(true);
     // 业务异常一次跳过：jobCode 不存在 / 协议字段缺失 / 跨租拒绝 等都不可能靠重试恢复
     handler.addNotRetryableExceptions(BizException.class);
     handler.addNotRetryableExceptions(IllegalArgumentException.class);

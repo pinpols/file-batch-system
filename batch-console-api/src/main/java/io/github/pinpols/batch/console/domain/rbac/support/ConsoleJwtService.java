@@ -175,8 +175,7 @@ public class ConsoleJwtService {
       // 兜 prod fail-fast 的第二层,防"漏开 prod profile 就用默认密钥签发 token"(审计 #4)。
       String jwtSecret = properties.getJwtSecret();
       String lower = EmptyChecks.isNull(jwtSecret) ? "" : jwtSecret.toLowerCase(Locale.ROOT);
-      boolean jwtSecretIsEmptyOrWeak =
-          !Texts.hasText(jwtSecret)
+      boolean jwtSecretIsEmptyOrWeak = !Texts.hasText(jwtSecret)
           || lower.contains("change-me")
           || lower.contains("change_me")
           || jwtSecret.length() < 32;

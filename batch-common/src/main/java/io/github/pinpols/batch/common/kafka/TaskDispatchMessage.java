@@ -2,6 +2,7 @@ package io.github.pinpols.batch.common.kafka;
 
 import io.github.pinpols.batch.common.observability.W3cTraceContext;
 import java.time.Instant;
+import lombok.Builder;
 
 /**
  * Kafka task 派发消息。
@@ -29,6 +30,7 @@ import java.time.Instant;
  * worker(P1-2.1 之前)期望旧字段 → P1-2.2 之前已经全量切到 P1-2.1 worker, 而 P1-2.1 worker 已优先用 claim
  * response,因此即使收到 v2 消息也能正常工作。
  */
+@Builder
 public record TaskDispatchMessage(
     String schemaVersion,
     String tenantId,

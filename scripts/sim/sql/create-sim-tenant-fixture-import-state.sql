@@ -5,4 +5,4 @@ CREATE TABLE IF NOT EXISTS batch.sim_tenant_fixture_import_state (
 );
 
 COMMENT ON TABLE batch.sim_tenant_fixture_import_state IS
-    'Local SIM harness idempotency ledger for tenant config package fixtures.';
+    '本地 SIM 测试框架用于租户配置包 fixture 的幂等记录表。';

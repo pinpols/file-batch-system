@@ -155,8 +155,8 @@ class KafkaConsumerNamespaceIsolationE2eIT extends AbstractIntegrationTest {
         .toList();
     for (String topic : missingTopics) {
       try {
-        admin.createTopics(List.of(new NewTopic(
-                topic, TOPIC_PARTITIONS, TOPIC_REPLICATION_FACTOR)))
+        admin
+            .createTopics(List.of(new NewTopic(topic, TOPIC_PARTITIONS, TOPIC_REPLICATION_FACTOR)))
             .all()
             .get(10, TimeUnit.SECONDS);
         testOwnedTopics.add(topic);
@@ -169,13 +169,14 @@ class KafkaConsumerNamespaceIsolationE2eIT extends AbstractIntegrationTest {
   }
 
   private static Admin kafkaAdmin() {
-    return Admin.create(Map.of(
-        AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers()));
+    return Admin.create(
+        Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers()));
   }
 
-  private static void assertNamespacedAssignments(
-      Admin admin, List<ConsumerProbe> probes) throws Exception {
-    List<String> groupIds = probes.stream().map(ConsumerProbe::groupId).distinct().toList();
+  private static void assertNamespacedAssignments(Admin admin, List<ConsumerProbe> probes)
+      throws Exception {
+    List<String> groupIds =
+        probes.stream().map(ConsumerProbe::groupId).distinct().toList();
     Map<String, ConsumerGroupDescription> descriptions;
     try {
       descriptions = admin.describeConsumerGroups(groupIds).all().get(10, TimeUnit.SECONDS);
@@ -213,7 +214,8 @@ class KafkaConsumerNamespaceIsolationE2eIT extends AbstractIntegrationTest {
   }
 
   private void stopKafkaListeners() {
-    for (MessageListenerContainer container : kafkaListenerEndpointRegistry.getListenerContainers()) {
+    for (MessageListenerContainer container :
+        kafkaListenerEndpointRegistry.getListenerContainers()) {
       container.stop();
     }
   }

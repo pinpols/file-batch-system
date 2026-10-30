@@ -57,9 +57,9 @@ final class TaskConsumerBatchExecutionCoordinator {
         log.error(
             "{} batch payload parse failed — publishing only this payload to DLQ: error={}",
             workerType,
-            errorSummary,
-            parseEx);
-        if (!publishToDlq.apply(payload, parseEx.getMessage())) {
+            errorSummary);
+        if (!publishToDlq.apply(
+            payload, SwallowedExceptionLogger.safeMessage(parseEx.getMessage(), 2000))) {
           return false;
         }
         continue;
@@ -92,7 +92,9 @@ final class TaskConsumerBatchExecutionCoordinator {
         }
         if (TaskConsumerFailurePolicy.isTransientOrchestratorFailure(execution.error())) {
           String workerType = workerTypeSupplier.get();
-          Long taskId = EmptyChecks.isNull(execution.message()) ? null : execution.message().taskId();
+          Long taskId = EmptyChecks.isNull(execution.message())
+              ? null
+              : execution.message().taskId();
           String errorSummary = SwallowedExceptionLogger.summary(execution.error());
           log.warn(
               "{} batch item transient failure (5xx/network) — NOT committing, will retry whole"
@@ -114,17 +116,17 @@ final class TaskConsumerBatchExecutionCoordinator {
           continue;
         }
         String workerType = workerTypeSupplier.get();
-        Long taskId = EmptyChecks.isNull(execution.message()) ? null : execution.message().taskId();
+        Long taskId =
+            EmptyChecks.isNull(execution.message()) ? null : execution.message().taskId();
         String errorSummary = SwallowedExceptionLogger.summary(execution.error());
-        Throwable failure = execution.error();
         log.error(
             "{} batch item execution failed — publishing only this payload to DLQ: taskId={},"
                 + " error={}",
             workerType,
             taskId,
-            errorSummary,
-            failure);
-        if (!publishToDlq.apply(payload, execution.error().getMessage())) {
+            errorSummary);
+        if (!publishToDlq.apply(
+            payload, SwallowedExceptionLogger.safeMessage(execution.error().getMessage(), 2000))) {
           allDlq = false;
         }
       }
@@ -148,7 +150,7 @@ final class TaskConsumerBatchExecutionCoordinator {
           workerTypeSupplier.get(),
           result.taskId(),
           result.success(),
-          result.message());
+          SwallowedExceptionLogger.safeMessage(result.message()));
     }
   }
 
@@ -157,7 +159,7 @@ final class TaskConsumerBatchExecutionCoordinator {
     if (index >= 0 && index < group.size()) {
       return group.get(index).payload();
     }
-    // Compatibility for test/custom executors that still construct an unindexed result.
+    // 兼容仍会构造无索引结果的测试执行器和自定义执行器。
     for (BatchPayload item : group) {
       if (item.message() == execution.message()) {
         return item.payload();

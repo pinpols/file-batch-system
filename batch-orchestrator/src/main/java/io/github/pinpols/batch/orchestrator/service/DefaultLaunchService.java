@@ -321,22 +321,25 @@ public class DefaultLaunchService implements LaunchService {
       LaunchRequest request, JobInstanceEntity jobInstance, BizException dispatchFailure) {
     Long expectedVersion = jobInstance.getVersion() == null ? 0L : jobInstance.getVersion();
     Instant now = BatchDateTimeSupport.utcNow();
-    UpdateInstanceProgressParam.UpdateInstanceProgressParamBuilder progressUpdate = UpdateInstanceProgressParam.builder()
-        .tenantId(jobInstance.getTenantId())
-        .id(jobInstance.getId())
-        .instanceStatus(JobInstanceStatus.FAILED.code())
-        .successPartitionCount(0)
-        .failedPartitionCount(0)
-        .cancelledPartitionCount(0)
-        .terminatedPartitionCount(0);
+    UpdateInstanceProgressParam.UpdateInstanceProgressParamBuilder progressUpdate =
+        UpdateInstanceProgressParam.builder()
+            .tenantId(jobInstance.getTenantId())
+            .id(jobInstance.getId())
+            .instanceStatus(
+                Boolean.TRUE.equals(jobInstance.getDryRun())
+                    ? JobInstanceStatus.FAILED_DRY_RUN.code()
+                    : JobInstanceStatus.FAILED.code())
+            .successPartitionCount(0)
+            .failedPartitionCount(0)
+            .cancelledPartitionCount(0)
+            .terminatedPartitionCount(0);
     String dispatchRejectSummary = buildDispatchRejectSummary(dispatchFailure);
-    int rows = jobMappers.jobInstanceMapper.updateProgress(
-        progressUpdate
-            .resultSummary(dispatchRejectSummary)
-            .finishedAt(now)
-            .expectedVersion(expectedVersion)
-            .failureClass(FailureClass.BUSINESS_RULE.code())
-            .build());
+    int rows = jobMappers.jobInstanceMapper.updateProgress(progressUpdate
+        .resultSummary(dispatchRejectSummary)
+        .finishedAt(now)
+        .expectedVersion(expectedVersion)
+        .failureClass(FailureClass.BUSINESS_RULE.code())
+        .build());
     if (rows > 0) {
       terminalOutbox.writeTerminalEvent(jobInstance.getTenantId(), jobInstance.getId());
       int updated = jobMappers.triggerRequestMapper.updateAcceptance(
@@ -407,18 +410,18 @@ public class DefaultLaunchService implements LaunchService {
       Map<String, Object> effectiveParams,
       String traceId) {
     ReplayExecutionGuard replayExecutionGuard = resolveReplayExecutionGuard(request, loaded);
-    LaunchValidationService.WorkflowReplayExecutionBinding replayBinding = loaded.workflowReplayExecutionBinding();
-    Map<String, Object> credentialParams = EmptyChecks.isNull(replayBinding)
-        ? dispatchSecretSnapshotResolver.pin(
-            request.tenantId(), loaded.jobDefinition().jobType(), effectiveParams)
-        : effectiveParams;
+    LaunchValidationService.WorkflowReplayExecutionBinding replayBinding =
+        loaded.workflowReplayExecutionBinding();
     Map<String, Object> executionParams;
     try {
+      Map<String, Object> credentialParams = EmptyChecks.isNull(replayBinding)
+          ? dispatchSecretSnapshotResolver.pin(
+              request.tenantId(), loaded.jobDefinition().jobType(), effectiveParams)
+          : effectiveParams;
       if (EmptyChecks.isNotNull(replayBinding)) {
         if (EmptyChecks.isNull(replayExecutionGuard)
             || !Objects.equals(
-                replayBinding.replayOperationId(),
-                replayExecutionGuard.replayOperationId())) {
+                replayBinding.replayOperationId(), replayExecutionGuard.replayOperationId())) {
           throw BizException.of(
               ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
         }
@@ -429,10 +432,7 @@ public class DefaultLaunchService implements LaunchService {
             replayBinding.protectedDispatchChannelSnapshots(),
             replayBinding.dispatchSecretBindings());
         executionParams = fileTemplateSnapshotService.pinWorkflowReplay(
-            request,
-            loaded.jobDefinition(),
-            dispatchParams,
-            replayBinding);
+            request, loaded.jobDefinition(), dispatchParams, replayBinding);
       } else {
         Map<String, Object> dispatchParams = dispatchChannelSnapshotService.pin(
             request.tenantId(), loaded.jobDefinition().jobType(), credentialParams);
@@ -474,7 +474,8 @@ public class DefaultLaunchService implements LaunchService {
       LaunchLoadResult loaded,
       Map<String, Object> effectiveParams,
       String traceId) {
-    TransactionTemplate transaction = newTransaction(TransactionDefinition.PROPAGATION_REQUIRED);
+    // 子作业可能参与 Workflow 节点事务；捕获阶段拒绝应回滚到保存点，保留外层失败收敛。
+    TransactionTemplate transaction = newTransaction(TransactionDefinition.PROPAGATION_NESTED);
     return transaction.execute(
         status -> preparePendingJobInstance(request, loaded, effectiveParams, traceId));
   }
@@ -595,7 +596,8 @@ public class DefaultLaunchService implements LaunchService {
     entity.setBatchNo(batchNo);
     String operatorId = LaunchParamResolver.resolveOperatorId(effectiveParams);
     entity.setOperatorId(operatorId);
-    boolean rerunFlag = launchParamResolver.resolveRerunFlag(request.triggerType(), effectiveParams);
+    boolean rerunFlag =
+        launchParamResolver.resolveRerunFlag(request.triggerType(), effectiveParams);
     entity.setRerunFlag(rerunFlag);
     boolean retryFlag = launchParamResolver.resolveRetryFlag(effectiveParams);
     entity.setRetryFlag(retryFlag);
@@ -661,7 +663,8 @@ public class DefaultLaunchService implements LaunchService {
     ReplayExecutionGuard replayExecutionGuard =
         snapshot.replayExecutionGuard(loaded.triggerRequest().getParentNodeCode());
     if (EmptyChecks.isNull(replayExecutionGuard)
-        || !Objects.equals(replayExecutionGuard.replayOperationId(), snapshot.replayOperationId())) {
+        || !Objects.equals(
+            replayExecutionGuard.replayOperationId(), snapshot.replayOperationId())) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
     }
     return replayExecutionGuard;

@@ -205,10 +205,8 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
     String persistedOutboxEventSql = """
         select id, created_at from batch.outbox_event where tenant_id = ? and event_key = ?
         """;
-    Map<String, Object> persisted = jdbcTemplate.queryForMap(
-        persistedOutboxEventSql,
-        event.getTenantId(),
-        event.getEventKey());
+    Map<String, Object> persisted =
+        jdbcTemplate.queryForMap(persistedOutboxEventSql, event.getTenantId(), event.getEventKey());
     Number persistedId = (Number) persisted.get("id");
     Timestamp persistedCreatedAt = (Timestamp) persisted.get("created_at");
     event.setId(persistedId.longValue());

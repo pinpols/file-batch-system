@@ -67,8 +67,7 @@ public class ConsolePushSubscriptionService {
    * <p>这里只拒绝非法载荷,不承担认证判断。认证由 Controller 方法安全执行,写入前仍经租户守卫解析。
    */
   private static void requireValidSubscription(ConsolePushSubscribeRequest request) {
-    boolean subscriptionIsInvalid =
-        EmptyChecks.isNull(request)
+    boolean subscriptionIsInvalid = EmptyChecks.isNull(request)
         || request.endpoint() == null
         || request.endpoint().isBlank()
         || request.keys() == null

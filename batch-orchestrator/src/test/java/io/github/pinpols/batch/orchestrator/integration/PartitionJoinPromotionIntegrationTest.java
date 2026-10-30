@@ -130,7 +130,7 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("动态 fan-out 总分区数超过租户上限时整组等待且完整物化")
   void dynamicFanOut_shouldDeferAllPartitionsWhenRequestedCountExceedsTenantCap() {
-  final String insertTenantQuotaPolicySql = """
+    final String insertTenantQuotaPolicySql = """
           insert into batch.tenant_quota_policy (
               tenant_id, policy_code, max_running_jobs_per_tenant, max_partitions_per_tenant,
               max_qps_per_tenant, fair_share_weight, enabled, description, burst_limit,
@@ -139,22 +139,19 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
           ) values (?, ?, 1, 2, 0, 1, true, 'R21 dynamic fan-out partition cap',
                     0, 0, 'NONE', 0, 'QUEUE_DEFER')
           """;
-  final String selectCountSql = """
+    final String selectCountSql = """
                 select count(*) from batch.job_partition
                 where tenant_id = ? and job_instance_id = ?
                   and partition_status in ('READY', 'RUNNING', 'RETRYING')
                 """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
               select count(*) from batch.job_partition
               where tenant_id = ? and job_instance_id = ? and partition_status = 'WAITING'
               """;
 
     String tenantId = "t-r21-fanout-" + Long.toUnsignedString(System.nanoTime());
     String policyCode = "fanout-partition-cap";
-    jdbcTemplate.update(
-        insertTenantQuotaPolicySql,
-        tenantId,
-        policyCode);
+    jdbcTemplate.update(insertTenantQuotaPolicySql, tenantId, policyCode);
 
     FannedOutInstance fannedOut = launchBundle(tenantId, 3);
 
@@ -165,7 +162,8 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
         .hasSize(3)
         .extracting(JobPartitionEntity::getPartitionStatus)
         .containsOnly(PartitionStatus.WAITING.code());
-    assertThat(jobInstanceMapper.selectById(tenantId, fannedOut.instanceId())
+    assertThat(jobInstanceMapper
+            .selectById(tenantId, fannedOut.instanceId())
             .getExpectedPartitionCount())
         .isEqualTo(3);
 
@@ -177,34 +175,35 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
         .extracting(JobTaskEntity::getTaskStatus)
         .containsOnly(TaskStatus.CREATED.code());
 
-    Awaitility.await()
-        .atMost(30, TimeUnit.SECONDS)
-        .untilAsserted(() -> {
-          // 测试手工触发前，Spring 定时 tick 可能已持有 ShedLock；
-          // 有界重试生产入口，直到某次 tick 持有锁并观察到目标行。
-          waitingPartitionDispatchScheduler.dispatchWaitingPartitions();
-          Integer selectedJobPartitionCount = jdbcTemplate.queryForObject(
-              selectCountSql, Integer.class, tenantId, fannedOut.instanceId());
-          assertThat(selectedJobPartitionCount)
-              .as("re-evaluation admits no more active fan-out partitions than the tenant cap")
-              .isEqualTo(2);
-          Integer selectedJobPartitionCountRead2 = jdbcTemplate.queryForObject(
-              selectCountSql2, Integer.class, tenantId, fannedOut.instanceId());
-          assertThat(selectedJobPartitionCountRead2).isEqualTo(1);
-        });
+    Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+      // 测试手工触发前，Spring 定时 tick 可能已持有 ShedLock；
+      // 有界重试生产入口，直到某次 tick 持有锁并观察到目标行。
+      waitingPartitionDispatchScheduler.dispatchWaitingPartitions();
+      Integer selectedJobPartitionCount = jdbcTemplate.queryForObject(
+          selectCountSql, Integer.class, tenantId, fannedOut.instanceId());
+      assertThat(selectedJobPartitionCount)
+          .as("re-evaluation admits no more active fan-out partitions than the tenant cap")
+          .isEqualTo(2);
+      Integer selectedJobPartitionCountRead2 = jdbcTemplate.queryForObject(
+          selectCountSql2, Integer.class, tenantId, fannedOut.instanceId());
+      assertThat(selectedJobPartitionCountRead2).isEqualTo(1);
+    });
 
-    JobPartitionEntity releasedPartition = jobPartitionMapper.selectByQuery(
-            new JobPartitionQuery(tenantId, fannedOut.instanceId(), null, null)).stream()
-        .filter(partition -> PartitionStatus.READY.code().equals(partition.getPartitionStatus()))
-        .findFirst()
-        .orElseThrow();
-    JobTaskEntity releasedTask = jobTaskMapper.selectByPartitionAndSeq(
-        tenantId, releasedPartition.getId(), 1);
+    JobPartitionEntity releasedPartition =
+        jobPartitionMapper
+            .selectByQuery(new JobPartitionQuery(tenantId, fannedOut.instanceId(), null, null))
+            .stream()
+            .filter(
+                partition -> PartitionStatus.READY.code().equals(partition.getPartitionStatus()))
+            .findFirst()
+            .orElseThrow();
+    JobTaskEntity releasedTask =
+        jobTaskMapper.selectByPartitionAndSeq(tenantId, releasedPartition.getId(), 1);
     JobTaskEntity claimedTask = taskExecutionService.assignWorker(
         tenantId, releasedTask.getId(), fannedOut.seed().workerCode());
     assertThat(claimedTask).isNotNull();
-    JobPartitionEntity claimedPartition = jobPartitionMapper.selectById(
-        tenantId, releasedPartition.getId());
+    JobPartitionEntity claimedPartition =
+        jobPartitionMapper.selectById(tenantId, releasedPartition.getId());
     TaskOutcomeCommand releasedPartitionOutcome = TaskOutcomeCommand.builder()
         .tenantId(tenantId)
         .taskId(claimedTask.getId())
@@ -214,20 +213,49 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
         .build();
     taskExecutionService.applyTaskOutcome(releasedPartitionOutcome);
 
-    Awaitility.await()
-        .atMost(30, TimeUnit.SECONDS)
-        .untilAsserted(() -> {
-          waitingPartitionDispatchScheduler.dispatchWaitingPartitions();
-          Integer selectedJobPartitionCountRead3 = jdbcTemplate.queryForObject(
-              selectCountSql, Integer.class, tenantId, fannedOut.instanceId());
-          assertThat(selectedJobPartitionCountRead3)
-              .as("the final WAITING partition is released after capacity becomes available")
-              .isEqualTo(2);
-          Integer selectedJobPartitionCountRead4 = jdbcTemplate.queryForObject(
-              selectCountSql2, Integer.class, tenantId, fannedOut.instanceId());
-          assertThat(selectedJobPartitionCountRead4).isZero();
-        });
+    Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+      waitingPartitionDispatchScheduler.dispatchWaitingPartitions();
+      Integer selectedJobPartitionCountRead3 = jdbcTemplate.queryForObject(
+          selectCountSql, Integer.class, tenantId, fannedOut.instanceId());
+      assertThat(selectedJobPartitionCountRead3)
+          .as("the final WAITING partition is released after capacity becomes available")
+          .isEqualTo(2);
+      Integer selectedJobPartitionCountRead4 = jdbcTemplate.queryForObject(
+          selectCountSql2, Integer.class, tenantId, fannedOut.instanceId());
+      assertThat(selectedJobPartitionCountRead4).isZero();
+    });
+  }
 
+  @Test
+  @DisplayName("最后失败报告的产物不能写入节点或部分失败结果版本")
+  void shouldNotPromoteFailedReportOutputsToSuccessfulOutputs() {
+    String nodeOutputSql = """
+        select output::text from batch.workflow_node_run where job_instance_id = ?
+        """;
+    String versionPayloadSql = """
+        select payload_json::text from batch.result_version where tenant_id = ? and job_instance_id = ?
+        """;
+    FannedOutInstance fannedOut = launchBundle(2);
+    List<Shard> shards = claimAllShards(fannedOut);
+    reportOutcome(shards.get(0), true);
+    Shard failedShard = shards.get(1);
+    JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, failedShard.partitionId());
+    taskExecutionService.applyTaskOutcome(TaskOutcomeCommand.builder()
+        .tenantId(TENANT)
+        .taskId(failedShard.taskId())
+        .success(false)
+        .errorCode("E_SHARD_FAIL")
+        .outputs(Map.of("failedOnly", 999))
+        .partitionInvocationId(partition.getCurrentInvocationId())
+        .build());
+
+    assertThat(jobInstanceMapper.selectById(TENANT, fannedOut.instanceId()).getInstanceStatus())
+        .isEqualTo(JobInstanceStatus.PARTIAL_FAILED.code());
+    assertThat(jdbcTemplate.queryForObject(nodeOutputSql, String.class, fannedOut.instanceId()))
+        .isNull();
+    assertThat(jdbcTemplate.queryForObject(
+            versionPayloadSql, String.class, TENANT, fannedOut.instanceId()))
+        .isEqualTo("{}");
   }
 
   @Test
@@ -266,11 +294,8 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
 
     // assert(结算级契约):PARTIAL_FAILED 不得产出 EFFECTIVE result_version —— 否则下游 readiness
     // 会把不完整结果当完整消费(roadmap §2.2「PARTIAL_FAILED 不得被静默消费」)。
-    Integer effectiveVersions = jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        TENANT,
-        fannedOut.instanceId());
+    Integer effectiveVersions =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, fannedOut.instanceId());
     assertThat(effectiveVersions).isZero();
   }
 
@@ -323,11 +348,8 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
     assertThat(failedPartitionCount(fannedOut.instanceId())).isZero();
 
     // assert:重放不产生重复的结果版本 —— 每个 job_instance 至多 1 行 result_version(writer 幂等守护)。
-    Long resultVersionRows = jdbcTemplate.queryForObject(
-        selectCountSql,
-        Long.class,
-        TENANT,
-        fannedOut.instanceId());
+    Long resultVersionRows =
+        jdbcTemplate.queryForObject(selectCountSql, Long.class, TENANT, fannedOut.instanceId());
     assertThat(resultVersionRows).isEqualTo(1L);
   }
 
@@ -364,22 +386,61 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
     FannedOutInstance fannedOut = launchBundle(1);
     claimAllShards(fannedOut);
 
-    jdbcTemplate.update(
-        updateJobInstanceSql,
-        TENANT,
-        fannedOut.instanceId());
+    jdbcTemplate.update(updateJobInstanceSql, TENANT, fannedOut.instanceId());
 
     assertThat(jobInstanceMapper.countTerminalInstancesWithActiveChildren()).isEqualTo(before + 1);
 
-    jdbcTemplate.update(
-        updateJobPartitionSql,
-        TENANT,
-        fannedOut.instanceId());
-    jdbcTemplate.update(
-        updateJobTaskSql,
-        TENANT,
-        fannedOut.instanceId());
+    jdbcTemplate.update(updateJobPartitionSql, TENANT, fannedOut.instanceId());
+    jdbcTemplate.update(updateJobTaskSql, TENANT, fannedOut.instanceId());
     assertThat(jobInstanceMapper.countTerminalInstancesWithActiveChildren()).isEqualTo(before);
+  }
+
+  @Test
+  @DisplayName("分片重试后迟到的旧报告不能覆盖新产物")
+  void shouldRejectStaleReportAndKeepOnlySuccessfulOutputsAfterRetry() {
+    String versionPayloadSql = """
+        select payload_json::text from batch.result_version where tenant_id = ? and job_instance_id = ?
+        """;
+    FannedOutInstance fannedOut = launchBundle(3);
+    List<Shard> shards = claimAllShards(fannedOut);
+    Shard retryShard = shards.get(0);
+    JobPartitionEntity firstAttempt =
+        jobPartitionMapper.selectById(TENANT, retryShard.partitionId());
+    String oldInvocation = firstAttempt.getCurrentInvocationId();
+    TaskOutcomeCommand oldReport = TaskOutcomeCommand.builder()
+        .tenantId(TENANT)
+        .taskId(retryShard.taskId())
+        .success(false)
+        .errorCode("E_SHARD_FAIL")
+        .outputs(Map.of("oldAttempt", "failed"))
+        .partitionInvocationId(oldInvocation)
+        .build();
+    taskExecutionService.applyTaskOutcome(oldReport);
+    retryGovernanceService.retryPartition(
+        TENANT, retryShard.partitionId(), TENANT + ":it-output-retry:" + retryShard.partitionId());
+    taskExecutionService.assignWorker(
+        TENANT, retryShard.taskId(), fannedOut.seed().workerCode());
+    String newInvocation =
+        jobPartitionMapper.selectById(TENANT, retryShard.partitionId()).getCurrentInvocationId();
+    assertThat(newInvocation).isNotBlank().isNotEqualTo(oldInvocation);
+    assertThatThrownBy(() -> taskExecutionService.applyTaskOutcome(oldReport))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.task.invocation_mismatch");
+    taskExecutionService.applyTaskOutcome(TaskOutcomeCommand.builder()
+        .tenantId(TENANT)
+        .taskId(retryShard.taskId())
+        .success(true)
+        .outputs(Map.of("newAttempt", "success"))
+        .partitionInvocationId(newInvocation)
+        .build());
+    reportOutcome(shards.get(1), true);
+    reportOutcome(shards.get(2), true);
+
+    assertThat(jobInstanceMapper.selectById(TENANT, fannedOut.instanceId()).getInstanceStatus())
+        .isEqualTo(JobInstanceStatus.SUCCESS.code());
+    String payload = jdbcTemplate.queryForObject(
+        versionPayloadSql, String.class, TENANT, fannedOut.instanceId());
+    assertThat(payload).contains("newAttempt", "success").doesNotContain("oldAttempt");
   }
 
   @Test
@@ -458,10 +519,7 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
 
     FannedOutInstance fannedOut = launchBundle(2);
 
-    jdbcTemplate.update(
-        updateJobInstanceSql,
-        TENANT,
-        fannedOut.instanceId());
+    jdbcTemplate.update(updateJobInstanceSql, TENANT, fannedOut.instanceId());
 
     terminalChildStateReconciler.reconcile(
         TENANT, fannedOut.instanceId(), JobInstanceStatus.FAILED.code());
@@ -531,10 +589,8 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
         jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, fannedOut.instanceId());
     assertThat(selectedJobPartitionCount).isZero();
 
-    Long workflowRunId = jdbcTemplate.queryForObject(
-        selectWorkflowRunIdSql,
-        Long.class,
-        fannedOut.instanceId());
+    Long workflowRunId =
+        jdbcTemplate.queryForObject(selectWorkflowRunIdSql, Long.class, fannedOut.instanceId());
     String selectedRunStatus =
         jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
     assertThat(selectedRunStatus).isEqualTo(WorkflowRunStatus.FAILED.code());
@@ -569,11 +625,7 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
     try {
       Future<JobTaskEntity> claim = pool.submit(() -> transactionTemplate.execute(status -> {
         jdbcTemplate.execute(setLocalSql);
-        jdbcTemplate.queryForObject(
-            selectIdSql,
-            Long.class,
-            TENANT,
-            task.getId());
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, task.getId());
         taskLocked.countDown();
         awaitBarrier(releaseClaim);
         return taskExecutionService.assignWorker(
@@ -583,8 +635,7 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
 
       Future<?> cancellation = pool.submit(() -> transactionTemplate.execute(status -> {
         jdbcTemplate.execute(setLocalSql);
-        cancellationPid.complete(
-        jdbcTemplate.queryForObject(selectPgBackendPidSql, Integer.class));
+        cancellationPid.complete(jdbcTemplate.queryForObject(selectPgBackendPidSql, Integer.class));
         return instanceManagementApplicationService.cancelPartition(TENANT, partition.getId());
       }));
       awaitDatabaseLockWait(cancellationPid.get(5, TimeUnit.SECONDS));
@@ -775,14 +826,11 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
   }
 
   private int countColumn(String column, Long instanceId) {
-  final String selectStatementSql = """
+    final String selectStatementSql = """
       select %s from batch.job_instance where tenant_id = ? and id = ?\
       """.formatted(column);
-  Integer value = jdbcTemplate.queryForObject(
-        selectStatementSql,
-        Integer.class,
-        TENANT,
-        instanceId);
+    Integer value =
+        jdbcTemplate.queryForObject(selectStatementSql, Integer.class, TENANT, instanceId);
     return value == null ? 0 : value;
   }
 
@@ -794,10 +842,8 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
     Awaitility.await()
         .alias("状态竞争必须在 PostgreSQL 中实际等待行锁")
         .atMost(3, TimeUnit.SECONDS)
-        .until(() -> Boolean.TRUE.equals(jdbcTemplate.queryForObject(
-            selectExistsSql,
-            Boolean.class,
-            pid)));
+        .until(() ->
+            Boolean.TRUE.equals(jdbcTemplate.queryForObject(selectExistsSql, Boolean.class, pid)));
   }
 
   private static void awaitBarrier(CountDownLatch barrier) {

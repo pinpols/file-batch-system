@@ -1,33 +1,65 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.ops.mapper.OutboxRetryLogMapper">
-    <select id="selectByQuery" resultType="map">
-        select id,
-               outbox_event_id,
-               tenant_id,
-               null as event_type,
-               event_key,
-               retry_status,
-               retry_attempt as retry_count,
-               null as retry_policy,
-               next_retry_at,
-               created_at,
-               updated_at
-        from batch.event_outbox_retry
+    <resultMap id="outboxRetryLogRowMap"
+               type="io.github.pinpols.batch.console.domain.ops.view.OutboxRetryLogRow">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="outbox_event_id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="event_type" javaType="java.lang.String"/>
+            <arg column="event_key" javaType="java.lang.String"/>
+            <arg column="retry_status" javaType="java.lang.String"/>
+            <arg column="retry_count" javaType="java.lang.Integer"/>
+            <arg column="retry_policy" javaType="java.lang.String"/>
+            <arg column="next_retry_at" javaType="java.time.Instant"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="retryParentJoin">
+        join batch.outbox_event e
+          on e.tenant_id = r.tenant_id
+         and e.id = r.outbox_event_id
+         and e.created_at = r.outbox_event_created_at
+    </sql>
+
+    <sql id="retryFilters">
         where 1 = 1
         <if test="tenantId != null and tenantId != ''">
-            and tenant_id = #{tenantId}
+            and r.tenant_id = #{tenantId}
         </if>
         <if test="retryStatus != null and retryStatus != ''">
-            and retry_status = #{retryStatus}
+            and r.retry_status = #{retryStatus}
         </if>
         <if test="eventKey != null and eventKey != ''">
-            and event_key = #{eventKey}
+            and r.event_key = #{eventKey}
         </if>
+        <if test="eventType != null and eventType != ''">
+            and e.event_type = #{eventType}
+        </if>
+    </sql>
+
+    <select id="selectByQuery" resultMap="outboxRetryLogRowMap">
+        select r.id,
+               r.outbox_event_id,
+               r.tenant_id,
+               e.event_type,
+               r.event_key,
+               r.retry_status,
+               r.retry_attempt as retry_count,
+               null as retry_policy,
+               r.next_retry_at,
+               r.created_at,
+               r.updated_at
+        from batch.event_outbox_retry r
+        <include refid="retryParentJoin"/>
+        <include refid="retryFilters"/>
         <if test="cursorId != null">
-            and id &lt; #{cursorId}
+            and r.id &lt; #{cursorId}
         </if>
-        order by id desc
+        order by r.id desc
         <if test="pageRequest != null">
             limit #{pageRequest.pageSize}
             <if test="cursorId == null">
@@ -38,17 +70,11 @@
 
     <select id="countByQuery" resultType="long">
         select count(1)
-        from batch.event_outbox_retry
-        where 1 = 1
-        <if test="tenantId != null and tenantId != ''">
-            and tenant_id = #{tenantId}
+        from batch.event_outbox_retry r
+        <if test="eventType != null and eventType != ''">
+            <include refid="retryParentJoin"/>
         </if>
-        <if test="retryStatus != null and retryStatus != ''">
-            and retry_status = #{retryStatus}
-        </if>
-        <if test="eventKey != null and eventKey != ''">
-            and event_key = #{eventKey}
-        </if>
+        <include refid="retryFilters"/>
     </select>
 
     <select id="countByStatuses" resultType="long">

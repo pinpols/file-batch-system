@@ -1,23 +1,21 @@
 package io.github.pinpols.batch.orchestrator.application.service.forensic;
 
-import io.github.pinpols.batch.orchestrator.domain.param.ForensicExportLogMarkCompletedParam;
-import io.github.pinpols.batch.orchestrator.domain.query.JobInstanceForensicByBizDateRangeQuery;
-
-
+import com.fasterxml.jackson.databind.ObjectWriter;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.IdGenerator;
-import com.fasterxml.jackson.databind.ObjectWriter;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayOperationAuditEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ForensicExportLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.ForensicExportLogMarkCompletedParam;
+import io.github.pinpols.batch.orchestrator.domain.query.JobInstanceForensicByBizDateRangeQuery;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayOperationAuditMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ForensicExportLogMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -114,32 +112,25 @@ public class ForensicExportService {
       String sha256 = result.sha256();
       String rowCountsJson = JsonUtils.toJson(result.rowCounts());
       Instant completedAt = dateTimeSupport.nowInstant();
-      ForensicExportLogMarkCompletedParam forensicExportLogMarkCompletedParam = ForensicExportLogMarkCompletedParam.builder()
-          .tenantId(tenantId)
-          .exportId(exportId)
-          .storagePath(exportPath)
-          .fileSizeBytes(sizeBytes)
-          .sha256(sha256)
-          .rowCountsJson(rowCountsJson)
-          .completedAt(completedAt)
-          .build();
-      forensicExportLogMapper.markCompleted(
-          forensicExportLogMarkCompletedParam);
-      return new ForensicExportResponse(
-          exportId,
-          "COMPLETED",
-          exportPath,
-          sizeBytes,
-          sha256,
-          null);
+      ForensicExportLogMarkCompletedParam forensicExportLogMarkCompletedParam =
+          ForensicExportLogMarkCompletedParam.builder()
+              .tenantId(tenantId)
+              .exportId(exportId)
+              .storagePath(exportPath)
+              .fileSizeBytes(sizeBytes)
+              .sha256(sha256)
+              .rowCountsJson(rowCountsJson)
+              .completedAt(completedAt)
+              .build();
+      forensicExportLogMapper.markCompleted(forensicExportLogMarkCompletedParam);
+      return new ForensicExportResponse(exportId, "COMPLETED", exportPath, sizeBytes, sha256, null);
     } catch (RuntimeException | IOException | NoSuchAlgorithmException e) {
       log.warn("forensic export failed exportId={}", exportId, e);
       String tenantId = request.tenantId();
       String failureMessage = e.getMessage();
       String truncatedFailureMessage = truncate(failureMessage, 2000);
       Instant failedAt = dateTimeSupport.nowInstant();
-      forensicExportLogMapper.markFailed(
-          tenantId, exportId, truncatedFailureMessage, failedAt);
+      forensicExportLogMapper.markFailed(tenantId, exportId, truncatedFailureMessage, failedAt);
       if (e instanceof RuntimeException re) {
         throw re;
       }
@@ -149,8 +140,7 @@ public class ForensicExportService {
   }
 
   private void validate(ForensicExportRequest request) {
-    boolean exportRequestIsIncomplete =
-        EmptyChecks.isNull(request)
+    boolean exportRequestIsIncomplete = EmptyChecks.isNull(request)
         || !Texts.hasText(request.tenantId())
         || request.bizDateFrom() == null
         || EmptyChecks.isNull(request.bizDateTo());
@@ -181,15 +171,16 @@ public class ForensicExportService {
         ZipOutputStream zip = new ZipOutputStream(digesting, StandardCharsets.UTF_8)) {
 
       // 1) job_instances
-      JobInstanceForensicByBizDateRangeQuery jobInstanceForensicByBizDateRangeQuery = JobInstanceForensicByBizDateRangeQuery.builder()
-          .tenantId(request.tenantId())
-          .bizDateFrom(request.bizDateFrom())
-          .bizDateTo(request.bizDateTo())
-          .jobCodes(request.jobCodes())
-          .limit(properties.getInstanceRowCap())
-          .build();
-      List<JobInstanceEntity> instances = jobInstanceMapper.selectForensicByBizDateRange(
-          jobInstanceForensicByBizDateRangeQuery);
+      JobInstanceForensicByBizDateRangeQuery jobInstanceForensicByBizDateRangeQuery =
+          JobInstanceForensicByBizDateRangeQuery.builder()
+              .tenantId(request.tenantId())
+              .bizDateFrom(request.bizDateFrom())
+              .bizDateTo(request.bizDateTo())
+              .jobCodes(request.jobCodes())
+              .limit(properties.getInstanceRowCap())
+              .build();
+      List<JobInstanceEntity> instances =
+          jobInstanceMapper.selectForensicByBizDateRange(jobInstanceForensicByBizDateRangeQuery);
       String instancesJson = BUNDLE_JSON.writeValueAsString(instances);
       writeEntry(zip, "job-instances.json", instancesJson);
       rowCounts.put("job_instances", instances.size());

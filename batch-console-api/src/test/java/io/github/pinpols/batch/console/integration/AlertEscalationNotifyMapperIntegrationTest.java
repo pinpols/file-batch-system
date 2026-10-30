@@ -1,10 +1,5 @@
 package io.github.pinpols.batch.console.integration;
 
-import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkFailedParam;
-import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkGiveUpParam;
-import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkPublishingParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
@@ -27,6 +22,9 @@ import io.github.pinpols.batch.console.domain.notification.entity.AlertEscalatio
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEscalationNotificationOutboxMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
+import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkFailedParam;
+import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkGiveUpParam;
+import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkPublishingParam;
 import io.github.pinpols.batch.console.domain.notification.service.AlertEscalationNotificationOutboxService;
 import io.github.pinpols.batch.console.domain.notification.service.AlertEscalationNotifier;
 import io.github.pinpols.batch.console.domain.notification.service.AlertEscalationNotifier.AlertEscalationNotifyPayload;
@@ -38,6 +36,7 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -296,15 +295,14 @@ class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest
                 .pendingStatus2(OutboxPublishStatus.FAILED.code())
                 .build()))
         .isEqualTo(1);
-    assertThat(outboxMapper.markFailed(
-            AlertEscalationNotificationOutboxMarkFailedParam.builder()
-                .id(failedId)
-                .tenantId(tenantId)
-                .failedStatus(OutboxPublishStatus.FAILED.code())
-                .nextPublishAt(now.plusSeconds(60))
-                .lastError("publish failed")
-                .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
-                .build()))
+    assertThat(outboxMapper.markFailed(AlertEscalationNotificationOutboxMarkFailedParam.builder()
+            .id(failedId)
+            .tenantId(tenantId)
+            .failedStatus(OutboxPublishStatus.FAILED.code())
+            .nextPublishAt(now.plusSeconds(60))
+            .lastError("publish failed")
+            .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+            .build()))
         .isEqualTo(1);
 
     long giveUpId =
@@ -318,14 +316,13 @@ class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest
                 .pendingStatus2(OutboxPublishStatus.FAILED.code())
                 .build()))
         .isEqualTo(1);
-    assertThat(outboxMapper.markGiveUp(
-            AlertEscalationNotificationOutboxMarkGiveUpParam.builder()
-                .id(giveUpId)
-                .tenantId(tenantId)
-                .giveUpStatus(OutboxPublishStatus.GIVE_UP.code())
-                .lastError("retry exhausted")
-                .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
-                .build()))
+    assertThat(outboxMapper.markGiveUp(AlertEscalationNotificationOutboxMarkGiveUpParam.builder()
+            .id(giveUpId)
+            .tenantId(tenantId)
+            .giveUpStatus(OutboxPublishStatus.GIVE_UP.code())
+            .lastError("retry exhausted")
+            .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+            .build()))
         .isEqualTo(1);
 
     assertThat(statusOf(publishedId)).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
@@ -424,7 +421,7 @@ class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest
           tenantId,
           channelCode,
           channelCode,
-          JsonUtils.toJson(java.util.Map.of("url", targetUrl)));
+          JsonUtils.toJson(Map.of("url", targetUrl)));
       jdbcTemplate.update(INSERT_SUBSCRIPTION_RULE_SQL, tenantId, ruleName, channelCode);
       awaitEscalationNotificationWatermark(tenantId, alertId, 2);
       List<AlertEscalationNotificationOutboxEntity> notificationOutbox = jdbcTemplate.query(
@@ -482,11 +479,14 @@ class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest
   private void awaitEscalationNotificationWatermark(
       String tenantId, long alertId, int expectedTier) {
     // 同类场景共享真实 ShedLock；以本告警已提交水位线确认获锁执行，而不是假设一次 poll 必然运行。
-    await().atMost(Duration.ofSeconds(15)).pollInterval(Duration.ofMillis(100)).untilAsserted(() -> {
-      notifier.poll();
-      AlertEventEntity notifiedAlert = alertEventMapper.selectById(tenantId, alertId);
-      assertThat(notifiedAlert.getEscalationNotifiedTier()).isEqualTo(expectedTier);
-    });
+    await()
+        .atMost(Duration.ofSeconds(15))
+        .pollInterval(Duration.ofMillis(100))
+        .untilAsserted(() -> {
+          notifier.poll();
+          AlertEventEntity notifiedAlert = alertEventMapper.selectById(tenantId, alertId);
+          assertThat(notifiedAlert.getEscalationNotifiedTier()).isEqualTo(expectedTier);
+        });
   }
 
   private record DeliveryRow(long alertEventId, String status, int attempt) {}

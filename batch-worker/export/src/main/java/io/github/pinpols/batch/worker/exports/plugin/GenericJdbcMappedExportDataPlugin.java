@@ -141,8 +141,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
         keysetRangePlanner.resolve(context, () -> minMax(spec, batchId));
     String detailColumnsSql = cols.toString();
     DetailSql detailSql = new DetailSql(detailColumnsSql, fq, fk, ob);
-    PagedQuery pq = buildDetailQuery(
-        detailSql, batchId, cursor, pageSize, keysetRange);
+    PagedQuery pq = buildDetailQuery(detailSql, batchId, cursor, pageSize, keysetRange);
     final String finalSql = pq.sql();
     final Object[] sqlArgs = pq.args();
     List<Map<String, Object>> rows = txTemplate.execute(status -> {

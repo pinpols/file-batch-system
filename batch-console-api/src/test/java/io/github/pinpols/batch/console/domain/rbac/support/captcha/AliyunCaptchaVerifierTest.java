@@ -206,10 +206,10 @@ class AliyunCaptchaVerifierTest {
     h.put("x-acs-action", "VerifyIntelligentCaptcha");
     String payload = CaptchaCrypto.sha256Hex("{}");
 
-    String a = AliyunCaptchaVerifier.buildAuthorization(
-        new TreeMap<>(h), payload, "ak", "secret-A");
-    String b = AliyunCaptchaVerifier.buildAuthorization(
-        new TreeMap<>(h), payload, "ak", "secret-B");
+    String a =
+        AliyunCaptchaVerifier.buildAuthorization(new TreeMap<>(h), payload, "ak", "secret-A");
+    String b =
+        AliyunCaptchaVerifier.buildAuthorization(new TreeMap<>(h), payload, "ak", "secret-B");
 
     assertThat(a).isNotEqualTo(b);
   }

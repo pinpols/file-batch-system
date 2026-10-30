@@ -139,8 +139,8 @@ class QueryRecordConstructionConventionTest {
     if (!file.getFileName().toString().equals(queryType + ".java")) {
       return false;
     }
-    String declarations = source.replaceAll("(?s)/\\*.*?\\*/", "")
-        .replaceAll("(?m)//[^\\r\\n]*", "");
+    String declarations =
+        source.replaceAll("(?s)/\\*.*?\\*/", "").replaceAll("(?m)//[^\\r\\n]*", "");
     String quotedType = Pattern.quote(queryType);
     Pattern declaration =
         Pattern.compile("(?m)^\\s*(?:public\\s+)?record\\s+" + quotedType + "\\s*\\(");

@@ -62,7 +62,7 @@ elif kind in ('psql', 'docker'):
     elif 'node_run.job_instance_id' in sql and 'request.request_id' in sql:
         print('601')
     elif 'after_id' in sql:
-        # A concurrent launch of the same Job must never become our control target.
+        # 同一 Job 的并发启动不能被选作本次测试的控制目标。
         print('999')
     elif 'workflow_run' in sql and 'request_id' in sql and 'INSERT' not in sql:
         print('701|SUCCESS')

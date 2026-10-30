@@ -145,12 +145,12 @@ class WorkflowNodeTerminalFinalizerTest {
     when(workflowRunMapper.selectByTenantAndIdForUpdate("tenant", 12L)).thenReturn(run);
     when(nodeRunMapper.selectByWorkflowRunId(12L))
         .thenReturn(List.of(nodeRun("END", 1, "SUCCESS")));
-    when(workflowRunMapper.updateStatus(any(UpdateWorkflowRunStatusParam.class))).thenReturn(1);
+    when(workflowRunMapper.updateStatus(any(UpdateWorkflowRunStatusParam.class)))
+        .thenReturn(1);
 
     finalizer.finalizeIfAllNodesTerminal(run);
 
-    verify(terminalOutboxService)
-        .writeTerminalEvent(any(), ArgumentMatchers.eq("SUCCESS"), any());
+    verify(terminalOutboxService).writeTerminalEvent(any(), ArgumentMatchers.eq("SUCCESS"), any());
   }
 
   @Test
@@ -160,26 +160,53 @@ class WorkflowNodeTerminalFinalizerTest {
     when(workflowRunMapper.selectByTenantAndIdForUpdate("tenant", 12L)).thenReturn(run);
     when(nodeRunMapper.selectByWorkflowRunId(12L))
         .thenReturn(List.of(nodeRun("BRANCH", 1, "SKIPPED")));
-    when(workflowRunMapper.updateStatus(any(UpdateWorkflowRunStatusParam.class))).thenReturn(1);
+    when(workflowRunMapper.updateStatus(any(UpdateWorkflowRunStatusParam.class)))
+        .thenReturn(1);
 
     finalizer.finalizeIfAllNodesTerminal(run);
 
-    verify(terminalOutboxService)
-        .writeTerminalEvent(any(), ArgumentMatchers.eq("SUCCESS"), any());
+    verify(terminalOutboxService).writeTerminalEvent(any(), ArgumentMatchers.eq("SUCCESS"), any());
   }
 
   private WorkflowRunEntity frozenRun(boolean branchEnabled) {
     WorkflowRunEntity run = workflowRun();
     run.setWorkflowDefinitionId(50L);
     run.setWorkflowVersionSnapshot(1);
-    Map<String, Object> end = Map.of("tenantId", "tenant", "workflowDefinitionId", 50L,
-        "nodeCode", "END", "nodeType", "END", "enabled", true);
-    Map<String, Object> branch = Map.of("tenantId", "tenant", "workflowDefinitionId", 50L,
-        "nodeCode", "BRANCH", "nodeType", "GATEWAY", "enabled", branchEnabled);
+    Map<String, Object> end = Map.of(
+        "tenantId",
+        "tenant",
+        "workflowDefinitionId",
+        50L,
+        "nodeCode",
+        "END",
+        "nodeType",
+        "END",
+        "enabled",
+        true);
+    Map<String, Object> branch = Map.of(
+        "tenantId",
+        "tenant",
+        "workflowDefinitionId",
+        50L,
+        "nodeCode",
+        "BRANCH",
+        "nodeType",
+        "GATEWAY",
+        "enabled",
+        branchEnabled);
     List<Map<String, Object>> nodes = List.of(end, branch);
     List<Object> edges = List.of();
-    Map<String, Object> snapshot = Map.of("schemaVersion", 2, "workflowDefinitionId", 50L,
-        "workflowVersion", 1, "nodes", nodes, "edges", edges);
+    Map<String, Object> snapshot = Map.of(
+        "schemaVersion",
+        2,
+        "workflowDefinitionId",
+        50L,
+        "workflowVersion",
+        1,
+        "nodes",
+        nodes,
+        "edges",
+        edges);
     String snapshotJson = JsonUtils.toJson(snapshot);
     run.setExecutionSnapshot(snapshotJson);
     return run;

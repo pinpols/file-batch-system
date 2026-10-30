@@ -177,7 +177,7 @@ Lane S (P2) 把 dispatcher + Kafka consumer 接上,对齐 Java SDK 下列 5 个�
 
 **P2 简化 vs Java**(明列出来,P3 接续清单):
 
-- 没有 CLAIM 5xx 重试 loop —— Python `_http.PlatformHttpClient` 在 wire-protocol §C 层做过 retry,我们这里只 surface `TransientError` 让 Kafka lease timeout 重投。
+- CLAIM 的有限重试由 `_http.PlatformHttpClient` 执行。消息入口等待认领确认后才返回可提交处置; CLAIM 传输失败或重试耗尽时返回 `RETRY_LATER`, Kafka 消费循环 seek 回原 offset 并临时暂停, 恢复后重读。未认领任务没有租约, 不能依赖租约超时补发。业务处理仍在后台执行, 不等待业务完成才提交。
 - 没有 `ThrottledLogger`(Java Lane J #2)—— PAUSED-state drop 日志降到 DEBUG 避免重复日志,不引外部依赖。
 - 没有 MDC —— 结构化字段以 `logging.LogRecord.extra` 形式传给用户的 formatter。
 
@@ -277,3 +277,7 @@ Apache-2.0,与主仓一致。见 [`LICENSE`](../../LICENSE)。
 | 文件 | 用途 / 调用归属 |
 |---|---|
 | [scripts/run-contract.sh](scripts/run-contract.sh) | 运行 SDK 契约 fixture 测试套件(硬校验)。 |
+
+## 实际执行入口计时
+
+默认 `TaskDispatcher` 在实际进入业务处理器前，通过原续租端点提交 `details.executionStarted=true`，使用 CLAIM 返回的当前 invocation。确认失败或租约失效时不调用业务、不伪造业务失败回报；明确取消则保留取消结果。计时信号与非幂等副作用开始标记独立，处理器参数和业务批处理逻辑保持原契约。详见 [通讯协议](../../docs/sdk/wire-protocol.md#实际执行入口计时)。

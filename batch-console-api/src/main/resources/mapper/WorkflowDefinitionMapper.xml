@@ -109,6 +109,24 @@
         limit 1
     </select>
 
+    <!-- 配置写入按精确编码定位，不能复用交互列表的模糊搜索。 -->
+    <select id="selectLatestByCode" resultMap="WorkflowDefinitionResultMap">
+        select *
+        from batch.workflow_definition
+        where tenant_id = #{tenantId}
+          and workflow_code = #{workflowCode}
+        order by version desc, id desc
+        limit 1
+    </select>
+
+    <!-- 每个编码仅导出当前最高版本；启停状态属于该版本，不回退到旧的启用版本。 -->
+    <select id="selectLatestByTenant" resultMap="WorkflowDefinitionResultMap">
+        select distinct on (workflow_code) *
+        from batch.workflow_definition
+        where tenant_id = #{tenantId}
+        order by workflow_code, version desc, id desc
+    </select>
+
     <select id="selectById" resultMap="WorkflowDefinitionResultMap">
         select *
         from batch.workflow_definition
@@ -224,6 +242,7 @@
             trigger_mode = #{triggerMode},
             calendar_code = #{calendarCode},
             depends_on_job_code = #{dependsOnJobCode},
+            description = #{description},
             version = version + 1,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}

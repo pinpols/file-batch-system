@@ -1,9 +1,5 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
-import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkFailedParam;
-import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkPublishingParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -23,14 +19,17 @@ import io.github.pinpols.batch.console.config.AlertEscalationNotifyProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.AlertEscalationNotificationOutboxEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEscalationNotificationOutboxMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
+import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkPublishingParam;
 import io.github.pinpols.batch.console.domain.notification.service.AlertEscalationNotifier.AlertEscalationNotifyPayload;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
+import java.util.Objects;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.support.StaticApplicationContext;
 
@@ -119,7 +118,10 @@ class AlertEscalationNotifierTest {
         .thenReturn(List.of(escalated(11L, "t1", 2, 1)));
     AlertEscalationNotificationOutboxEntity row = outbox(31L, "t1", 2);
     when(outboxMapper.selectPending(any(), anyInt(), any(), any())).thenReturn(List.of(row));
-    when(outboxMapper.markPublishing(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.id(), 31L) && java.util.Objects.equals(parameters.tenantId(), "t1")))).thenReturn(1);
+    when(outboxMapper.markPublishing(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.id(), 31L)
+            && Objects.equals(parameters.tenantId(), "t1"))))
+        .thenReturn(1);
     when(outboxMapper.markPublished(eq(31L), eq("t1"), any(), any())).thenReturn(1);
 
     notifier.poll();
@@ -183,7 +185,10 @@ class AlertEscalationNotifierTest {
         .enqueue(eq(escalated(14L, "t1", 1, 0)), any(), any(), any());
     AlertEscalationNotificationOutboxEntity row = outbox(41L, "t2", 1);
     when(outboxMapper.selectPending(any(), anyInt(), any(), any())).thenReturn(List.of(row));
-    when(outboxMapper.markPublishing(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.id(), 41L) && java.util.Objects.equals(parameters.tenantId(), "t2")))).thenReturn(1);
+    when(outboxMapper.markPublishing(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.id(), 41L)
+            && Objects.equals(parameters.tenantId(), "t2"))))
+        .thenReturn(1);
     when(outboxMapper.markPublished(eq(41L), eq("t2"), any(), any())).thenReturn(1);
 
     notifier.poll();
@@ -202,14 +207,21 @@ class AlertEscalationNotifierTest {
     AlertEscalationNotificationOutboxEntity row = outbox(51L, "t1", 1);
     row.setAttemptCount(0);
     when(outboxMapper.selectPending(any(), anyInt(), any(), any())).thenReturn(List.of(row));
-    when(outboxMapper.markPublishing(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.id(), 51L) && java.util.Objects.equals(parameters.tenantId(), "t1")))).thenReturn(1);
+    when(outboxMapper.markPublishing(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.id(), 51L)
+            && Objects.equals(parameters.tenantId(), "t1"))))
+        .thenReturn(1);
     doThrow(new RuntimeException("publish boom"))
         .when(domainEventPublisher)
         .publishChanged(eq("t1"), eq("alerts"), eq("ALERT_ESCALATED"), any());
 
     notifier.poll();
 
-    verify(outboxMapper).markFailed(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.id(), 51L) && java.util.Objects.equals(parameters.tenantId(), "t1") && java.util.Objects.equals(parameters.lastError(), "publish boom")));
+    verify(outboxMapper)
+        .markFailed(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.id(), 51L)
+            && Objects.equals(parameters.tenantId(), "t1")
+            && Objects.equals(parameters.lastError(), "publish boom")));
     verify(outboxMapper, never()).markPublished(eq(51L), eq("t1"), any(), any());
   }
 
@@ -231,7 +243,9 @@ class AlertEscalationNotifierTest {
         .thenReturn(List.of(escalated(21L, "t1", 1, 0), escalated(22L, "t2", 3, 2)));
     when(outboxMapper.selectPending(any(), anyInt(), any(), any()))
         .thenReturn(List.of(outbox(61L, "t1", 1), outbox(62L, "t2", 3)));
-    when(outboxMapper.markPublishing(org.mockito.ArgumentMatchers.any(AlertEscalationNotificationOutboxMarkPublishingParam.class))).thenReturn(1);
+    when(outboxMapper.markPublishing(
+            ArgumentMatchers.any(AlertEscalationNotificationOutboxMarkPublishingParam.class)))
+        .thenReturn(1);
     when(outboxMapper.markPublished(any(), any(), any(), any())).thenReturn(1);
 
     notifier.poll();

@@ -6,7 +6,7 @@
 
 `job_monitoring_policy` 中无依赖 Cron 使用 `completion_deadline_local_time` / `completion_deadline_day_offset`；依赖作业使用 `dependency_completion_window_seconds`，从满足执行资格时刻起算。固定频率独立作业仅适用运行耗时监控；运行耗时阈值不统一默认开启。
 
-修改工作簿、生成脚本或配置包导入 schema 后，必须执行 `python3 scripts/fix-fixture-xlsx.py --check`。该检查要求样本不含已退役 Pipeline sheet；本地修复命令会移除这些旧 sheet 并按当前模板修复其余字段，运行后需审查工作簿差异并再次执行检查模式。
+修改工作簿、生成脚本或配置包导入 schema 后，必须执行 `python3 scripts/sim/fix-fixture-xlsx.py --check`。该检查要求样本不含已退役 Pipeline sheet；本地修复命令会移除这些旧 sheet 并按当前模板修复其余字段，运行后需审查工作簿差异并再次执行检查模式。
 
 - `ta/tb/tc-tenant-config-package-test.xlsx`：三大业务租户样本。按租户分工覆盖配置枚举和 Workflow 拓扑——ta 补 IMPORT Job / LOCAL channel；tb 补 DISPATCH Job / API channel；tc 补 GATEWAY ALL 与 N_OF join + FAILURE / CONDITION 边。阶段由系统 Pipeline 按 Job 类型固定提供，不再由租户 Excel 定义。幂等追加脚本 `scripts/local/append-tenant-coverage.py`。
 - `default-tenant-config-package-test.xlsx`：与 `batch-test-support/src/main/resources/db/testdata/multi-tenant-seed.sql` 中 v4 硬化批次新增的 `default-tenant` 项对齐（4 条本地化 channel_config + `wf_probe_pipeline` / `wf_probe_gateway` / `wf_probe_mixed` 3 条探针 workflow + 对应 job_definition）。生成脚本 `scripts/local/gen-default-tenant-excel.py`。
@@ -29,10 +29,13 @@ docker compose --profile apps --profile test up -d   # 连同 Java 服务一起
 | ta | `ta_sftp_inbound` | SFTP | `sftp:22` | user=`ta` / pass=`ta_pass_123` / `/inbound` |
 | ta | `ta_oss_export` | OSS | `http://minio:9000` | bucket=`batch-dev` / prefix=`ta/outbound/report/` |
 | tb | `tb_sftp_inbound` | SFTP | `sftp:22` | user=`tb` / pass=`tb_pass_123` / `/inbound` |
-| tb | `tb_api_push` | API_PUSH | `http://mockserver:1080/tb/callback` | tokenHeader=`X-API-Token` |
+| tb | `tb_api_push` | API_PUSH | `http://mockserver:1080/tb/callback` | JSON 使用规范 `target_endpoint` |
+| tb | `tb_api_ingest` | API | `http://mockserver:1080/tb/ingest` | JSON 使用规范 `target_endpoint` |
 | tb | `tb_oss_statement` | OSS | `http://minio:9000` | bucket=`batch-dev` / prefix=`tb/outbound/statement/` |
-| tc | `tc_api_risk_push` | API_PUSH | `http://mockserver:1080/tc/ingest` | tokenHeader=`X-API-Token` |
+| tc | `tc_api_risk_push` | API_PUSH | `http://mockserver:1080/tc/ingest` | JSON 使用规范 `target_endpoint` |
 | tc | `tc_sftp_score` | SFTP | `sftp:22` | user=`tc` / pass=`tc_pass_123` / `/inbound` |
+
+`scripts/sim/03-import-tenants.sh` 在 Apply 前按 canonical 运行模式准备私有上传副本：宿主机使用环境解析的 MockServer 端口，Compose 保留模板的容器地址；不会修改此目录中的原模板。API JSON 不使用已退役的 `url`、`method`、`tokenHeader`，鉴权参数按 SIM bootstrap 的规范字段提供。
 
 样本文件（执行 `scripts/data/load-system-test-data.sh` 自动装载 MinIO 部分；SFTP 部分由 `deploy/docker/sftp/data/` 通过 volume 挂载自动生效）：
 

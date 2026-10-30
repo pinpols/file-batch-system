@@ -57,8 +57,7 @@ public class DispatchTaskExecutor implements BatchTaskExecutor {
     Set<ResourceKind> resourceKinds = Set.of(ResourceKind.NET, ResourceKind.DISK);
     long capabilityTimeoutSeconds = timeoutProperties.getCapabilityTimeoutSeconds();
     Duration capabilityTimeout = Duration.ofSeconds(capabilityTimeoutSeconds);
-    return new TaskCapability(
-        resourceKinds, false, true, capabilityTimeout);
+    return new TaskCapability(resourceKinds, false, true, capabilityTimeout);
   }
 
   @Override

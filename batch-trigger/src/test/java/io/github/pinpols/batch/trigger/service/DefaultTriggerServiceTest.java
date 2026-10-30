@@ -113,19 +113,42 @@ class DefaultTriggerServiceTest {
         .when(triggerRequestMapper.lockScheduledWorkflowAdmission(any(), any(), any(), any()))
         .thenReturn(true);
     TriggerRuntimeProperties runtimeProperties = new TriggerRuntimeProperties();
-    service = new DefaultTriggerService(
-        launchAdapterService,
+    TriggerAdmissionRules admissionRules = new TriggerAdmissionRules(tenantStatusMapper);
+    TriggerRequestPersistence persistence = new TriggerRequestPersistence(
         triggerRequestMapper,
         externalEventDeliveryMapper,
-        triggerMisfirePendingMapper,
         triggerOutboxPublisher,
+        occurrenceRecorder,
+        transactionManager,
+        admissionRules);
+    TriggerExternalEventService events = new TriggerExternalEventService(
+        triggerRequestMapper,
+        externalEventDeliveryMapper,
+        transactionManager,
+        admissionRules,
+        persistence);
+    TriggerScheduledRecoveryService scheduled = new TriggerScheduledRecoveryService(
+        launchAdapterService,
+        triggerRequestMapper,
+        triggerMisfirePendingMapper,
         calendarDefinitionProvider,
         occurrenceRecorder,
-        tenantStatusMapper,
         transactionManager,
         upstreamReadiness,
         runtimeProperties,
-        triggerDefinitionLoader);
+        triggerDefinitionLoader,
+        admissionRules,
+        persistence);
+    TriggerLaunchQueryService queries = new TriggerLaunchQueryService(
+        triggerRequestMapper, externalEventDeliveryMapper, transactionManager);
+    service = new DefaultTriggerService(
+        launchAdapterService,
+        triggerRequestMapper,
+        admissionRules,
+        persistence,
+        events,
+        scheduled,
+        queries);
   }
 
   @Test

@@ -13,4 +13,5 @@ public record ConsoleBatchDayWindowResponse(
     Long timeUntilCutoffSeconds,
     Instant lateArrivalWindowClosesAt,
     List<ConsoleBatchDaySummaryResponse> jobs,
-    List<ConsoleScheduledOccurrenceResponse> scheduledOccurrences) {}
+    List<ConsoleScheduledOccurrenceResponse> scheduledOccurrences,
+    Boolean frozen) {}

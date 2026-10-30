@@ -26,6 +26,7 @@ import io.github.pinpols.batch.trigger.web.request.ScheduledOccurrenceCatchUpReq
 import io.github.pinpols.batch.trigger.web.request.TriggerCatchUpRequest;
 import io.github.pinpols.batch.trigger.web.request.TriggerLaunchRequest;
 import jakarta.validation.Valid;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -75,8 +76,7 @@ public class TriggerController {
     String finalTraceId = EmptyChecks.isBlank(traceId) ? IdGenerator.newTraceId() : traceId;
     TriggerLaunchCommand launchCommand =
         new TriggerLaunchCommand(request, idempotencyKey, finalRequestId, finalTraceId);
-    return apiAdmissionGuard.execute(
-        () -> CommonResponse.success(triggerService.launch(launchCommand)));
+    return executeAdmittedLaunch(() -> triggerService.launch(launchCommand));
   }
 
   @PostMapping("/events")
@@ -101,8 +101,7 @@ public class TriggerController {
     String finalTraceId = EmptyChecks.isBlank(traceId) ? IdGenerator.newTraceId() : traceId;
     ExternalEventLaunchCommand command = new ExternalEventLaunchCommand(
         request, source.keyName(), idempotencyKey, finalRequestId, finalTraceId);
-    return apiAdmissionGuard.execute(
-        () -> CommonResponse.success(triggerService.launchExternalEvent(command)));
+    return executeAdmittedLaunch(() -> triggerService.launchExternalEvent(command));
   }
 
   @GetMapping("/events/status")
@@ -135,8 +134,7 @@ public class TriggerController {
     String finalTraceId = EmptyChecks.isBlank(traceId) ? IdGenerator.newTraceId() : traceId;
     ScheduledOccurrenceCatchUpCommand command = new ScheduledOccurrenceCatchUpCommand(
         request, idempotencyKey, finalRequestId, finalTraceId);
-    return apiAdmissionGuard.execute(
-        () -> CommonResponse.success(triggerService.catchUpRejectedOccurrence(command)));
+    return executeAdmittedLaunch(() -> triggerService.catchUpRejectedOccurrence(command));
   }
 
   /**
@@ -159,6 +157,17 @@ public class TriggerController {
     TriggerLaunchStatus launchStatus =
         triggerService.findLaunchStatus(tenantId, idempotencyKey, externalSource.keyName());
     return CommonResponse.success(launchStatus);
+  }
+
+  /** 排队期间可能进入排水，必须在获得准入许可后、业务写入前再次检查。 */
+  private <T> CommonResponse<T> executeAdmittedLaunch(Supplier<T> action) {
+    return apiAdmissionGuard.execute(() -> {
+      if (gracefulShutdown.isDraining()) {
+        throw BizException.of(ResultCode.STATE_CONFLICT, "error.trigger.draining");
+      }
+      T result = action.get();
+      return CommonResponse.success(result);
+    });
   }
 
   private static TriggerApiKeyPrincipal externalEventSourcePrincipal() {

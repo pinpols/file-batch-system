@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.config.HttpDispatchChannelProperties;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
@@ -85,6 +86,7 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
     if (endpoint == null || endpoint.isBlank()) {
       return DispatchResult.failureWithoutReceipt("target endpoint missing");
     }
+    String evidenceEndpoint = SecretMasking.maskEndpoint(endpoint);
     DispatchReceiptSupport.Receipt receipt =
         DispatchReceiptSupport.resolve(command, channelConfig, FileReceiptPolicy.SYNC.code());
 
@@ -105,7 +107,8 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
     if ("API_PUSH".equalsIgnoreCase(ct)) {
       Object apiKey = channelConfig.get("api_push_api_key");
       String apiKeyPresenceText = EmptyChecks.isNull(apiKey) ? null : String.valueOf(apiKey);
-      if (EmptyChecks.isNotNull(apiKey) && !EmptyChecks.isBlank(Objects.requireNonNull(apiKeyPresenceText))) {
+      if (EmptyChecks.isNotNull(apiKey)
+          && !EmptyChecks.isBlank(Objects.requireNonNull(apiKeyPresenceText))) {
         String rawApiKey = String.valueOf(apiKey);
         String normalizedApiKey = rawApiKey.trim();
         builder.addHeader("X-Api-Key", normalizedApiKey);
@@ -113,7 +116,8 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
       Object authorization = channelConfig.get("authorization");
       String authorizationPresenceText =
           EmptyChecks.isNull(authorization) ? null : String.valueOf(authorization);
-      if (EmptyChecks.isNotNull(authorization) && !EmptyChecks.isBlank(Objects.requireNonNull(authorizationPresenceText))) {
+      if (EmptyChecks.isNotNull(authorization)
+          && !EmptyChecks.isBlank(Objects.requireNonNull(authorizationPresenceText))) {
         String rawAuthorization = String.valueOf(authorization);
         String normalizedAuthorization = rawAuthorization.trim();
         builder.addHeader("Authorization", normalizedAuthorization);
@@ -134,8 +138,8 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
             receipt.receiptCode(),
             false,
             false,
-            ex.getMessage(),
-            endpoint);
+            SwallowedExceptionLogger.summary(ex),
+            evidenceEndpoint);
       }
     }
 
@@ -143,7 +147,8 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
     try (Response response = okHttpClient.newCall(request).execute()) {
       if (!response.isSuccessful()) {
         String responseMessage = "dispatch api responded " + response.code();
-        return failedResult(receipt, endpoint, responseMessage, receiverIdempotencySupported);
+        return failedResult(
+            receipt, evidenceEndpoint, responseMessage, receiverIdempotencySupported);
       }
 
       return new DispatchResult(
@@ -153,11 +158,15 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
           receipt.acknowledged(),
           receipt.pending(),
           "dispatched via http adapter",
-          endpoint);
+          evidenceEndpoint);
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(HttpDispatchChannelAdapter.class, "catch:Exception", ex);
 
-      return failedResult(receipt, endpoint, ex.getMessage(), receiverIdempotencySupported);
+      return failedResult(
+          receipt,
+          evidenceEndpoint,
+          SwallowedExceptionLogger.summary(ex),
+          receiverIdempotencySupported);
     }
   }
 
@@ -172,13 +181,7 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
     }
 
     return new DispatchResult(
-        false,
-        receipt.externalRequestId(),
-        receipt.receiptCode(),
-        false,
-        false,
-        message,
-        endpoint);
+        false, receipt.externalRequestId(), receipt.receiptCode(), false, false, message, endpoint);
   }
 
   @PreDestroy

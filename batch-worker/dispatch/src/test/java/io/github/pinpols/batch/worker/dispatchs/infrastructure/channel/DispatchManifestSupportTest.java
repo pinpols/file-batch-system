@@ -59,7 +59,8 @@ class DispatchManifestSupportTest {
 
   private static DispatchManifestSupport.ManifestPayload manifest(Map<String, Object> fileRecord) {
     DispatchManifestSupport.ManifestTarget manifestTarget =
-        new DispatchManifestSupport.ManifestTarget("sftp://host/outbound/daily.json", "daily.json", "sftp://host/outbound/daily.json.chk");
+        new DispatchManifestSupport.ManifestTarget(
+            "sftp://host/outbound/daily.json", "daily.json", "sftp://host/outbound/daily.json.chk");
     return DispatchManifestSupport.manifestPayload(
         new DispatchCommand("tenant-a", "trace-a", fileRecord, Map.of(), null),
         manifestTarget,

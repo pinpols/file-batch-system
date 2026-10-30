@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.enums.WorkflowJoinMode;
 import io.github.pinpols.batch.common.enums.WorkflowNodeCode;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.model.WorkflowJoinThreshold;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -197,11 +198,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
       Long workflowDefinitionId = run.getWorkflowDefinitionId();
       WorkflowRunExecutionSnapshot executionSnapshot = WorkflowRunExecutionSnapshot.from(run);
       return isNodeReadyForDispatchInternal(
-          workflowRunId,
-          workflowDefinitionId,
-          nodeCode,
-          payloadJson,
-          executionSnapshot);
+          workflowRunId, workflowDefinitionId, nodeCode, payloadJson, executionSnapshot);
     } finally {
       Timer timer = readyCheckTimer();
       if (timer != null) {
@@ -216,8 +213,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
       String nodeCode,
       String payloadJson,
       WorkflowRunExecutionSnapshot snapshot) {
-    boolean nodeReadinessIdentityIsIncomplete =
-        EmptyChecks.isNull(workflowRunId)
+    boolean nodeReadinessIdentityIsIncomplete = EmptyChecks.isNull(workflowRunId)
         || workflowDefinitionId == null
         || nodeCode == null
         || EmptyChecks.isBlank(nodeCode);
@@ -297,8 +293,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
   @Override
   public List<String> cascadeSkipDownstream(
       Long workflowRunId, Long workflowDefinitionId, String fromNodeCode) {
-    boolean downstreamCascadeIdentityIsIncomplete =
-        EmptyChecks.isNull(workflowRunId)
+    boolean downstreamCascadeIdentityIsIncomplete = EmptyChecks.isNull(workflowRunId)
         || workflowDefinitionId == null
         || fromNodeCode == null
         || EmptyChecks.isBlank(fromNodeCode);
@@ -671,18 +666,8 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
   }
 
   private int integerValue(Object value) {
-    if (value == null) {
-      return 0;
-    }
-    try {
-      String integerText = String.valueOf(value);
-      return Integer.parseInt(integerText);
-    } catch (NumberFormatException exception) {
-      SwallowedExceptionLogger.info(
-          DefaultWorkflowDagService.class, "catch:NumberFormatException", exception);
-
-      return 0;
-    }
+    Integer threshold = WorkflowJoinThreshold.parse(value);
+    return EmptyChecks.isNull(threshold) ? 0 : threshold;
   }
 
   private record JoinRule(WorkflowJoinMode joinMode, int joinThreshold) {}

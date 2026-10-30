@@ -16,6 +16,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodePayloadBuilder;
@@ -124,10 +125,10 @@ class ChildJobLaunchSupportTest {
         "IMPORT_SQL_V1",
         "contractVersion",
         1);
-    Map<String, Object> replayGuard = Map.of(
-        "replayOperationId", 701L, "declaration", replayDeclaration);
-    Map<String, Object> executionDefinition = Map.of(
-        "id", 1, "tenantId", TENANT, "jobCode", "JOB_B", "jobType", "IMPORT", "version", 1);
+    Map<String, Object> replayGuard =
+        Map.of("replayOperationId", 701L, "declaration", replayDeclaration);
+    Map<String, Object> executionDefinition =
+        Map.of("id", 1, "tenantId", TENANT, "jobCode", "JOB_B", "jobType", "IMPORT", "version", 1);
     Map<String, Object> jobDefinitionSnapshot = Map.of(
         "jobDefinitionId",
         1,
@@ -170,8 +171,7 @@ class ChildJobLaunchSupportTest {
         List.of(),
         "jobDefinitions",
         Map.of("N1", jobDefinitionSnapshot));
-    String serializedExecutionSnapshot =
-        io.github.pinpols.batch.common.utils.JsonUtils.toJson(executionSnapshot);
+    String serializedExecutionSnapshot = JsonUtils.toJson(executionSnapshot);
     run.setExecutionSnapshot(serializedExecutionSnapshot);
     return run;
   }
@@ -262,8 +262,9 @@ class ChildJobLaunchSupportTest {
     when(jobInstanceMapper.selectByInstanceNo(TENANT, "child-replay")).thenReturn(child);
     when(workflowNodeRunMapper.attachJobInstance(TENANT, 901L, 9L)).thenReturn(1);
 
-    newSupport().dispatchJobNode(
-        replayRun(), resolution(), jobNode(), "{\"templateCode\":\"TPL_A\"}", "trace-replay");
+    newSupport()
+        .dispatchJobNode(
+            replayRun(), resolution(), jobNode(), "{\"templateCode\":\"TPL_A\"}", "trace-replay");
 
     ArgumentCaptor<LaunchRequest> launchCaptor = ArgumentCaptor.forClass(LaunchRequest.class);
     verify(launchService).launch(launchCaptor.capture());

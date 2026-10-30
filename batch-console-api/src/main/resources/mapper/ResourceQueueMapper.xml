@@ -1,7 +1,56 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper">
-    <select id="selectByQuery" resultType="map">
+    <resultMap id="ResourceQueueRowMap"
+               type="io.github.pinpols.batch.console.domain.ops.view.ResourceQueueRow">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="queue_code" javaType="java.lang.String"/>
+            <arg column="queue_name" javaType="java.lang.String"/>
+            <arg column="queue_type" javaType="java.lang.String"/>
+            <arg column="max_running_jobs" javaType="java.lang.Integer"/>
+            <arg column="max_running_partitions" javaType="java.lang.Integer"/>
+            <arg column="max_qps" javaType="java.lang.Integer"/>
+            <arg column="worker_group" javaType="java.lang.String"/>
+            <arg column="resource_tag" javaType="java.lang.String"/>
+            <arg column="priority_policy" javaType="java.lang.String"/>
+            <arg column="fair_share_weight" javaType="java.lang.Integer"/>
+            <arg column="enabled" javaType="java.lang.Boolean"/>
+            <arg column="description" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+            <arg column="fair_share_group" javaType="java.lang.String"/>
+            <arg column="burst_limit" javaType="java.lang.Integer"/>
+            <arg column="quota_reset_policy" javaType="java.lang.String"/>
+            <arg column="group_shared_max_running_jobs" javaType="java.lang.Integer"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="resourceQueueFullColumns">
+        id,
+        tenant_id,
+        queue_code,
+        queue_name,
+        queue_type,
+        max_running_jobs,
+        max_running_partitions,
+        max_qps,
+        worker_group,
+        resource_tag,
+        priority_policy,
+        fair_share_weight,
+        enabled,
+        description,
+        created_at,
+        updated_at,
+        fair_share_group,
+        burst_limit,
+        quota_reset_policy,
+        group_shared_max_running_jobs
+    </sql>
+
+    <select id="selectByQuery" resultMap="ResourceQueueRowMap">
         select
             id,
             tenant_id,
@@ -18,7 +67,11 @@
             enabled,
             description,
             created_at,
-            updated_at
+            updated_at,
+            cast(null as varchar)  as fair_share_group,
+            cast(null as integer)  as burst_limit,
+            cast(null as varchar)  as quota_reset_policy,
+            cast(null as integer)  as group_shared_max_running_jobs
         from batch.resource_queue
         where tenant_id = #{tenantId}
         <if test="queueCode != null and queueCode != ''">
@@ -31,7 +84,9 @@
             and enabled = #{enabled}
         </if>
         order by id desc
-        <include refid="io.github.pinpols.batch.common.mapper.CommonFragments.offsetPageClause"/>
+        <if test="pageRequest != null">
+            <include refid="io.github.pinpols.batch.common.mapper.CommonFragments.offsetPageClause"/>
+        </if>
     </select>
 
     <select id="countByQuery" resultType="long">
@@ -49,15 +104,17 @@
         </if>
     </select>
 
-    <select id="selectById" resultType="map">
-        select *
+    <select id="selectById" resultMap="ResourceQueueRowMap">
+        select
+        <include refid="resourceQueueFullColumns"/>
         from batch.resource_queue
         where tenant_id = #{tenantId}
           and id = #{id}
     </select>
 
-    <select id="selectByUniqueKey" resultType="map">
-        select *
+    <select id="selectByUniqueKey" resultMap="ResourceQueueRowMap">
+        select
+        <include refid="resourceQueueFullColumns"/>
         from batch.resource_queue
         where tenant_id = #{tenantId}
           and queue_code = #{queueCode}
@@ -91,35 +148,35 @@
             updated_at = current_timestamp
     </insert>
 
-    <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+    <insert id="insert" parameterType="io.github.pinpols.batch.console.domain.param.ResourceQueueInsertParam" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.resource_queue (
             tenant_id, queue_code, queue_name, queue_type,
             max_running_jobs, max_running_partitions, max_qps,
             worker_group, resource_tag, priority_policy, fair_share_weight,
             enabled, description
         ) values (
-            #{tenant_id}, #{queue_code}, #{queue_name}, #{queue_type},
-            <choose><when test="max_running_jobs != null">#{max_running_jobs}</when><otherwise>0</otherwise></choose>, <choose><when test="max_running_partitions != null">#{max_running_partitions}</when><otherwise>0</otherwise></choose>, <choose><when test="max_qps != null">#{max_qps}</when><otherwise>0</otherwise></choose>,
-            #{worker_group}, #{resource_tag}, <choose><when test="priority_policy != null and priority_policy != ''">#{priority_policy}</when><otherwise>'FIFO'</otherwise></choose>, <choose><when test="fair_share_weight != null">#{fair_share_weight}</when><otherwise>1</otherwise></choose>,
+            #{tenantId}, #{queueCode}, #{queueName}, #{queueType},
+            <choose><when test="maxRunningJobs != null">#{maxRunningJobs}</when><otherwise>0</otherwise></choose>, <choose><when test="maxRunningPartitions != null">#{maxRunningPartitions}</when><otherwise>0</otherwise></choose>, <choose><when test="maxQps != null">#{maxQps}</when><otherwise>0</otherwise></choose>,
+            #{workerGroup}, #{resourceTag}, <choose><when test="priorityPolicy != null and priorityPolicy != ''">#{priorityPolicy}</when><otherwise>'FIFO'</otherwise></choose>, <choose><when test="fairShareWeight != null">#{fairShareWeight}</when><otherwise>1</otherwise></choose>,
             <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>, #{description}
         )
     </insert>
 
-    <update id="update" parameterType="map">
+    <update id="update" parameterType="io.github.pinpols.batch.console.domain.param.ResourceQueueUpdateParam">
         update batch.resource_queue
-        set queue_name = #{queue_name},
-            queue_type = #{queue_type},
-            max_running_jobs = #{max_running_jobs},
-            max_running_partitions = #{max_running_partitions},
-            max_qps = #{max_qps},
-            worker_group = #{worker_group},
-            resource_tag = #{resource_tag},
-            priority_policy = #{priority_policy},
-            fair_share_weight = #{fair_share_weight},
+        set queue_name = #{queueName},
+            queue_type = #{queueType},
+            max_running_jobs = #{maxRunningJobs},
+            max_running_partitions = #{maxRunningPartitions},
+            max_qps = #{maxQps},
+            worker_group = #{workerGroup},
+            resource_tag = #{resourceTag},
+            priority_policy = #{priorityPolicy},
+            fair_share_weight = #{fairShareWeight},
             enabled = #{enabled},
             description = #{description},
             updated_at = current_timestamp
-        where tenant_id = #{tenant_id}
+        where tenant_id = #{tenantId}
           and id = #{id}
     </update>
 

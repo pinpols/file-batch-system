@@ -82,7 +82,8 @@ public class ConsoleWorkflowDefinitionController {
       @PathVariable Long id,
       @RequestParam String tenantId,
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey) {
-    WorkflowTriggerStatusResponse receipt = triggerService.triggerStatus(id, tenantId, idempotencyKey);
+    WorkflowTriggerStatusResponse receipt =
+        triggerService.triggerStatus(id, tenantId, idempotencyKey);
     return responseFactory.success(receipt);
   }
 

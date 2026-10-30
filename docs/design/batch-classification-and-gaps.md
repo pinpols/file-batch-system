@@ -8,7 +8,7 @@
 >
 > 与 [`capability-assessment.md`](./capability-assessment.md) 的分工：能力评估是"现在能做什么"；本文是"模型上还应该长什么"。
 >
-> 与 [`api-gap-analysis-2026-04-10.md`](../archive/audit/api-gap-analysis-2026-04-10.md) 的分工：API 缺口分析是接口层；本文是领域模型层。
+> 与 [console-api-protocol.md](../api/console-api-protocol.md) 的分工：Console API 协议维护接口契约；本文维护领域模型边界。
 
 ## 1. 分类法与启动关系
 
@@ -423,7 +423,7 @@ E2E 三个用例(`ProcessPipelineE2eIT`)覆盖:
 | 主题 | 本文 | 现有文档 |
 |---|---|---|
 | 完整能力评估 | — | [`capability-assessment.md`](./capability-assessment.md) |
-| 接口缺口 | — | [`api-gap-analysis-2026-04-10.md`](../archive/audit/api-gap-analysis-2026-04-10.md) |
+| 接口契约 | — | [console-api-protocol.md](../api/console-api-protocol.md) |
 | 数据模型 DDL | §4.1 给出 V63 草案 | [`data-model-ddl.md`](./data-model-ddl.md) |
 | 触发模型 | §1.3 / §2.3 | [`../architecture/system-flow-overview.md`](../architecture/system-flow-overview.md) §1 |
 | 文件链路 | IMPORT/EXPORT/DISPATCH 工程实现 | [`file-pipeline-design.md`](./file-pipeline-design.md) |

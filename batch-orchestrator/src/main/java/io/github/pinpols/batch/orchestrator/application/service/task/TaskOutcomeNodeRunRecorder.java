@@ -51,7 +51,8 @@ final class TaskOutcomeNodeRunRecorder {
           command.workflowRunId(), command.nodeCode(), command.nodeType(), command.startedAt());
     }
     long duration = resolveDuration(command.startedAt(), command.finishedAt());
-    UpdateNodeRunStatusParam.UpdateNodeRunStatusParamBuilder updateStatusBuilder = UpdateNodeRunStatusParam.builder().id(current.getId());
+    UpdateNodeRunStatusParam.UpdateNodeRunStatusParamBuilder updateStatusBuilder =
+        UpdateNodeRunStatusParam.builder().id(current.getId());
     String nodeStatus = resolveStatus(command);
     UpdateNodeRunStatusParam updateStatusParam = updateStatusBuilder
         .nodeStatus(nodeStatus)

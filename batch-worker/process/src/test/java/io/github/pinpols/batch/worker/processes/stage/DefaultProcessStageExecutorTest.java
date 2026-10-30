@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,10 +39,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 // LENIENT 保留:setUp() 预置了 startStepRun 共享 stub,
 // 但 defaultStepDefinitions / 缺 PREPARE bean 直接抛错等用例并不触达这些 stub,严格模式会误报 UnnecessaryStubbing。
 
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 @MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("处理阶段执行器:默认步骤定义、五阶段顺序与失败短路、插件解析回退,以及阶段级续跑的开关与降级边界")
 class DefaultProcessStageExecutorTest {
@@ -155,8 +158,7 @@ class DefaultProcessStageExecutorTest {
     DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
         allStageStepBeans(), List.of(), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip());
 
-    org.assertj.core.api.Assertions.assertThatThrownBy(
-            () -> executor.replayCapability("missing", Map.of()))
+    Assertions.assertThatThrownBy(() -> executor.replayCapability("missing", Map.of()))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("missing");
   }
@@ -446,10 +448,10 @@ class DefaultProcessStageExecutorTest {
 
   @Test
   @DisplayName("插件准备抛运行时异常时不向上传播,结果映射为基础设施错误码并回带异常信息")
-  void execute_returnsInfraError_whenPluginPrepareThrowsRuntimeException() {
+  void execute_returnsInfraError_whenPluginPrepareThrowsRuntimeException(CapturedOutput output) {
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.implCode()).thenReturn("p1");
-    willThrow(new RuntimeException("io fail")).given(plugin).prepare(any());
+    willThrow(new RuntimeException("io token=probe-secret fail")).given(plugin).prepare(any());
 
     DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
         allStageStepBeans(),
@@ -468,7 +470,9 @@ class DefaultProcessStageExecutorTest {
     assertThat(results).hasSize(1);
     assertThat(results.get(0).success()).isFalse();
     assertThat(results.get(0).code()).isEqualTo(StageFailureCode.INFRA_ERROR.name());
-    assertThat(results.get(0).message()).isEqualTo("io fail");
+    assertThat(results.get(0).message()).contains("io").doesNotContain("probe-secret");
+    assertThat(results.get(0).errorArgs()).doesNotContain("probe-secret");
+    assertThat(output.getOut()).doesNotContain("probe-secret");
   }
 
   @Test
@@ -568,7 +572,7 @@ class DefaultProcessStageExecutorTest {
       }
     }
     // executor 构造期会因 buildDefaultStepDefinitions 缺 PREPARE bean 抛 IllegalStateException
-    org.assertj.core.api.Assertions.assertThatThrownBy(() -> new DefaultProcessStageExecutor(
+    Assertions.assertThatThrownBy(() -> new DefaultProcessStageExecutor(
             incomplete, List.of(), pipelineRuns, ProcessMetrics.noop(), disabledStageSkip()))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("missing process step bean for stage");

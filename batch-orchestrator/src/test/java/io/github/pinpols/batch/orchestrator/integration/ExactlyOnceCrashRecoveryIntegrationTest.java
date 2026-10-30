@@ -123,15 +123,10 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
       // assert:第二次空转;DB 中该 (tenant_id,event_key) 只有一行 → 下游不会重复出账
       assertThat(first).as("首次 outbox 写入应成功").isEqualTo(1);
       assertThat(second).as("重投的同 event_key 第二次 insert 必须空转").isZero();
-      Integer rows = jdbcTemplate.queryForObject(
-          selectCountSql,
-          Integer.class,
-          TENANT,
-          eventKey);
+      Integer rows = jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, eventKey);
       assertThat(rows).as("同一事件键全局只一行").isEqualTo(1);
     } finally {
-      jdbcTemplate.update(
-          deleteOutboxEventSql, TENANT, eventKey);
+      jdbcTemplate.update(deleteOutboxEventSql, TENANT, eventKey);
     }
   }
 
@@ -192,11 +187,7 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
         insertJobInstanceSql,
         Long.class,
         TENANT,
-    jdbcTemplate.queryForObject(
-            selectIdSql,
-            Long.class,
-            TENANT,
-            workflow.jobCode()),
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, workflow.jobCode()),
         child.triggerRequestId(),
         workflow.jobCode(),
         "INST_" + suffix,
@@ -211,8 +202,7 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
         SELECT task_status FROM batch.job_task WHERE id = ?
     """;
 
-    return jdbcTemplate.queryForObject(
-        selectTaskStatusSql, String.class, taskId);
+    return jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, taskId);
   }
 
   private long taskVersion(long taskId) {
@@ -220,24 +210,23 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
         SELECT version FROM batch.job_task WHERE id = ?
     """;
 
-    return jdbcTemplate.queryForObject(
-        selectVersionSql, Long.class, taskId);
+    return jdbcTemplate.queryForObject(selectVersionSql, Long.class, taskId);
   }
 
   private void cleanupTask(long taskId) {
     final String selectJobInstanceIdSql = """
         SELECT job_instance_id FROM batch.job_task WHERE id = ?
     """;
-  final String deleteJobTaskSql = """
+    final String deleteJobTaskSql = """
       DELETE FROM batch.job_task WHERE id = ?
   """;
-  final String selectTriggerRequestIdSql = """
+    final String selectTriggerRequestIdSql = """
       SELECT trigger_request_id FROM batch.job_instance WHERE id = ?
   """;
-  final String selectParentWorkflowRunIdSql = """
+    final String selectParentWorkflowRunIdSql = """
       SELECT parent_workflow_run_id FROM batch.trigger_request WHERE id = ?
   """;
-  final String selectTriggerRequestIdSql2 = """
+    final String selectTriggerRequestIdSql2 = """
       SELECT trigger_request_id FROM batch.workflow_run WHERE id = ?
   """;
     final String deleteJobInstanceSql = """
@@ -250,17 +239,13 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
         DELETE FROM batch.workflow_run WHERE id = ?
     """;
 
-    Long instanceId = jdbcTemplate.queryForObject(
-        selectJobInstanceIdSql, Long.class, taskId);
+    Long instanceId = jdbcTemplate.queryForObject(selectJobInstanceIdSql, Long.class, taskId);
     jdbcTemplate.update(deleteJobTaskSql, taskId);
-    Long trId = jdbcTemplate.queryForObject(
-        selectTriggerRequestIdSql, Long.class, instanceId);
-    Long workflowRunId = jdbcTemplate.queryForObject(
-        selectParentWorkflowRunIdSql, Long.class, trId);
-    Long rootTriggerRequestId = jdbcTemplate.queryForObject(
-        selectTriggerRequestIdSql2,
-        Long.class,
-        workflowRunId);
+    Long trId = jdbcTemplate.queryForObject(selectTriggerRequestIdSql, Long.class, instanceId);
+    Long workflowRunId =
+        jdbcTemplate.queryForObject(selectParentWorkflowRunIdSql, Long.class, trId);
+    Long rootTriggerRequestId =
+        jdbcTemplate.queryForObject(selectTriggerRequestIdSql2, Long.class, workflowRunId);
     jdbcTemplate.update(deleteJobInstanceSql, instanceId);
     jdbcTemplate.update(deleteTriggerRequestSql, trId);
     jdbcTemplate.update(deleteWorkflowRunSql, workflowRunId);

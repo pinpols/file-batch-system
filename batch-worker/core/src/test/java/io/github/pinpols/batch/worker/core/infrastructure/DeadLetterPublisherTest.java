@@ -72,6 +72,25 @@ class DeadLetterPublisherTest {
   }
 
   @Test
+  @DisplayName("死信失败摘要不得携带原始凭据")
+  void publish_masksCredentialsInErrorMessage() {
+    when(mqMessagePublisher.publish(any(MqMessage.class)))
+        .thenReturn(CompletableFuture.completedFuture(MqPublishResult.acknowledged()));
+
+    publisher.publish(
+        "payload",
+        "batch.task.dispatch.import",
+        "IMPORT",
+        "connect password=probe-secret token=query-secret");
+
+    ArgumentCaptor<MqMessage> messageCaptor = ArgumentCaptor.forClass(MqMessage.class);
+    verify(mqMessagePublisher).publish(messageCaptor.capture());
+    assertThat(messageCaptor.getValue().payload())
+        .contains("\"originalPayload\":\"payload\"")
+        .doesNotContain("probe-secret", "query-secret");
+  }
+
+  @Test
   @DisplayName("超长错误信息被截断, 最终载荷长度受限")
   void publish_longErrorMessage_truncatedTo2000chars() {
     when(mqMessagePublisher.publish(any(MqMessage.class)))

@@ -1,10 +1,5 @@
 package io.github.pinpols.batch.console.domain.job.web;
 
-import java.util.Objects;
-import io.github.pinpols.batch.console.application.ops.command.BatchDayOperationCommand;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -16,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
+import io.github.pinpols.batch.console.application.ops.command.BatchDayOperationCommand;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayCatchupPreviewResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayHistoricalGapInventoryResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayOperateResponse;
@@ -25,20 +21,29 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 /** P2: ConsoleBatchDayController operate 转发到 orchestrator + action 枚举校验。 */
 @DisplayName("批量日操作控制器: 请求字段透传与动作白名单拦截")
+@ExtendWith(MockitoExtension.class)
 class ConsoleBatchDayControllerTest {
 
-  private final ConsoleOrchestratorPort proxy = mock(ConsoleOrchestratorPort.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleOrchestratorPort proxy;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -48,8 +53,6 @@ class ConsoleBatchDayControllerTest {
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(requestMetadataResolver.current())
-        .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "ta", "ops-user", null, null));
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
@@ -63,7 +66,15 @@ class ConsoleBatchDayControllerTest {
   @Test
   @DisplayName("合法的批量日操作请求逐字段透传到下游端口, 业务日期按原值解析")
   void shouldForwardAllFieldsToOrchestrator_whenRequestValid() throws Exception {
-    when(proxy.batchDayOperate(org.mockito.ArgumentMatchers.argThat(command -> command != null && Objects.equals(command.tenantId(), "ta") && Objects.equals(command.calendarCode(), "default-calendar") && command.bizDate() != null && Objects.equals(command.action(), "FREEZE") && Objects.equals(command.operatorId(), "ops-user") && Objects.equals(command.reason(), "safety"))))
+    when(requestMetadataResolver.current())
+        .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "ta", "ops-user", null, null));
+    when(proxy.batchDayOperate(ArgumentMatchers.argThat(command -> command != null
+            && Objects.equals(command.tenantId(), "ta")
+            && Objects.equals(command.calendarCode(), "default-calendar")
+            && command.bizDate() != null
+            && Objects.equals(command.action(), "FREEZE")
+            && Objects.equals(command.operatorId(), "ops-user")
+            && Objects.equals(command.reason(), "safety"))))
         .thenReturn(new ConsoleBatchDayOperateResponse(1L, "FROZEN", true, 0));
     mockMvc
         .perform(post("/api/console/batch-days/operate")
@@ -82,13 +93,27 @@ class ConsoleBatchDayControllerTest {
         .andExpect(jsonPath("$.data.batchDayId").value(1))
         .andExpect(jsonPath("$.data.dayStatus").value("FROZEN"));
     verify(proxy)
-        .batchDayOperate(new BatchDayOperationCommand("ta", "default-calendar", LocalDate.parse("2026-05-20"), "FREEZE", "ops-user", "safety"));
+        .batchDayOperate(new BatchDayOperationCommand(
+            "ta",
+            "default-calendar",
+            LocalDate.parse("2026-05-20"),
+            "FREEZE",
+            "ops-user",
+            "safety"));
   }
 
   @Test
   @DisplayName("空日确认操作可透传且忽略客户端伪造的审计操作者")
   void shouldUseAuthenticatedOperatorForEmptyDaySettlement() throws Exception {
-    when(proxy.batchDayOperate(org.mockito.ArgumentMatchers.argThat(command -> command != null && Objects.equals(command.tenantId(), "ta") && Objects.equals(command.calendarCode(), "CAL") && Objects.equals(command.bizDate(), LocalDate.parse("2026-05-20")) && Objects.equals(command.action(), "SETTLE_EMPTY") && Objects.equals(command.operatorId(), "ops-user") && Objects.equals(command.reason(), "confirmed no expected jobs"))))
+    when(requestMetadataResolver.current())
+        .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "ta", "ops-user", null, null));
+    when(proxy.batchDayOperate(ArgumentMatchers.argThat(command -> command != null
+            && Objects.equals(command.tenantId(), "ta")
+            && Objects.equals(command.calendarCode(), "CAL")
+            && Objects.equals(command.bizDate(), LocalDate.parse("2026-05-20"))
+            && Objects.equals(command.action(), "SETTLE_EMPTY")
+            && Objects.equals(command.operatorId(), "ops-user")
+            && Objects.equals(command.reason(), "confirmed no expected jobs"))))
         .thenReturn(new ConsoleBatchDayOperateResponse(4L, "SETTLED", false, 0));
 
     mockMvc
@@ -108,7 +133,13 @@ class ConsoleBatchDayControllerTest {
         .andExpect(jsonPath("$.data.dayStatus").value("SETTLED"));
 
     verify(proxy)
-        .batchDayOperate(new BatchDayOperationCommand("ta", "CAL", LocalDate.parse("2026-05-20"), "SETTLE_EMPTY", "ops-user", "confirmed no expected jobs"));
+        .batchDayOperate(new BatchDayOperationCommand(
+            "ta",
+            "CAL",
+            LocalDate.parse("2026-05-20"),
+            "SETTLE_EMPTY",
+            "ops-user",
+            "confirmed no expected jobs"));
   }
 
   @Test
@@ -175,6 +206,8 @@ class ConsoleBatchDayControllerTest {
   @Test
   @DisplayName("catch-up 暂停请求使用认证上下文操作者并要求填写原因")
   void shouldUseAuthenticatedOperatorForCatchupControl() throws Exception {
+    when(requestMetadataResolver.current())
+        .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "ta", "ops-user", null, null));
     when(proxy.changeBatchDayCatchupControl("ta", "CAL", "PAUSE", "ops-user", "maintenance"))
         .thenReturn(new ConsoleBatchDayCatchupPreviewResponse(
             "ta",
@@ -231,7 +264,9 @@ class ConsoleBatchDayControllerTest {
   @Test
   @DisplayName("五个受支持动作逐一提交均返回成功")
   void shouldAcceptAllSupportedActions_whenActionValid() throws Exception {
-    when(proxy.batchDayOperate(org.mockito.ArgumentMatchers.any(BatchDayOperationCommand.class)))
+    when(requestMetadataResolver.current())
+        .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "ta", "ops-user", null, null));
+    when(proxy.batchDayOperate(ArgumentMatchers.any(BatchDayOperationCommand.class)))
         .thenReturn(new ConsoleBatchDayOperateResponse(null, null, null, null));
     for (String act : new String[] {"FREEZE", "RELEASE", "SKIP", "REOPEN", "CLOSE"}) {
       mockMvc

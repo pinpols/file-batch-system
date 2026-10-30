@@ -7,7 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
-/** Shared base fields for batch-day alert details. */
+/** 批次日告警详情共用的基础字段。 */
 final class BatchDayAlertDetails {
 
   private BatchDayAlertDetails() {}
@@ -25,7 +25,8 @@ final class BatchDayAlertDetails {
     if (EmptyChecks.isNotNull(request.workflowDefinitionId())) {
       detail.put("workflowDefinitionId", request.workflowDefinitionId().toString());
     }
-    if (EmptyChecks.isNotNull(triggerRequest) && EmptyChecks.isNotNull(triggerRequest.getParentWorkflowRunId())) {
+    if (EmptyChecks.isNotNull(triggerRequest)
+        && EmptyChecks.isNotNull(triggerRequest.getParentWorkflowRunId())) {
       detail.put("workflowRunId", triggerRequest.getParentWorkflowRunId().toString());
     }
     boolean requestHasParentWorkflowNode = EmptyChecks.isNotNull(triggerRequest)

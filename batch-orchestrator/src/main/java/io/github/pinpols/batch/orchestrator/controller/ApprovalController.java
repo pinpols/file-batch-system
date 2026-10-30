@@ -1,18 +1,23 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
+import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.governance.ApprovalWorkflowService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 审批工作流内部控制器，基础路径 {@code /internal/approvals}。 支持提交审批单（{@code POST /}）、查询审批记录（{@code GET
- * /{approvalNo}}）、 审批通过（{@code POST /{approvalNo}/approve}）、驳回（{@code POST /{approvalNo}/reject}）
+ * /{approvalNo}}）、按来源请求键回查（{@code GET /by-source-key}）、审批通过（{@code POST /{approvalNo}/approve}）、驳回（{@code POST /{approvalNo}/reject}）
  * 以及标记执行完成（{@code POST /{approvalNo}/executed}）等全流程操作。 仅限内部服务调用，不对外暴露。
  */
 @RestController
@@ -48,6 +53,19 @@ public class ApprovalController {
     ApprovalWorkflowService.ApprovalRecord record =
         approvalWorkflowService.get(tenantId, approvalNo);
     return new ApprovalRecordResponse(record);
+  }
+
+  /** 按原来源请求键回查已持久化审批；未找到不能推断远端请求必然未提交。 */
+  @GetMapping("/by-source-key")
+  public ApprovalRecordResponse getBySourceKey(
+      @RequestParam(required = false) String tenantId,
+      @RequestHeader(value = CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, required = false)
+          String sourceIdempotencyKey) {
+    if (!Texts.hasText(tenantId) || !Texts.hasText(sourceIdempotencyKey)) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+    }
+    return new ApprovalRecordResponse(
+        approvalWorkflowService.getBySourceKey(tenantId, sourceIdempotencyKey));
   }
 
   @PostMapping("/{approvalNo}/approve")

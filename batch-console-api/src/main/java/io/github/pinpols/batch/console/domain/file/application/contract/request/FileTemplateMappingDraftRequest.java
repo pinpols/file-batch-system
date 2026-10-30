@@ -36,8 +36,9 @@ public class FileTemplateMappingDraftRequest {
   private List<@Valid Field> fields = new ArrayList<>();
 
   public FileTemplateMappingDraftCommand toCommand() {
-    List<FileTemplateMappingDraftCommand.Field> commandFields =
-        EmptyChecks.isNull(fields) ? List.of() : fields.stream().map(Field::toCommandOrNull).toList();
+    List<FileTemplateMappingDraftCommand.Field> commandFields = EmptyChecks.isNull(fields)
+        ? List.of()
+        : fields.stream().map(Field::toCommandOrNull).toList();
     return new FileTemplateMappingDraftCommand(
         tenantId,
         direction,

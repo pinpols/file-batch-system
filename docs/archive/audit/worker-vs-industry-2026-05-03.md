@@ -1,3 +1,5 @@
+> 历史证据（2026-10-25 存量核对）：ADR-014/015/016 及 Worker 负载实现仍引用的原始问题来源。正文仅表示原日期/基线；当前规则与状态见[现行入口](../../architecture/worker-plugins.md)及 TODO，本轮没有重新执行原测试或扫描。
+
 # Worker 实现 vs 业界差距 — 评估报告 2026-05-03
 
 > **范围**：5 个 worker 模块（`batch-worker-core/-import/-export/-process/-dispatch`）的核心机制与业界主流方案对比，识别真缺陷与设计取舍。

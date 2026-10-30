@@ -68,9 +68,8 @@ public class StoredProcExecutorProperties {
   /**
    * 非 schema-qualified 过程名(无点)在 pin search_path 时使用的默认 schema。默认 "batch"。
    *
-   * <p>CALL 前会 {@code SET LOCAL search_path = pg_catalog, <schema>},以固定解析目标、防止 调用方通过 session
-   * search_path 把过程解析到攻击者可控的 schema(search_path 注入 / shadowing)。 过程名已 schema-qualified 时用其
-   * schema,否则用本值。
+   * <p>未限定的调用目标使用本值补全 schema，再查询元数据、校验权限并执行。事务模式下还会在 CALL 前设置 {@code SET LOCAL
+   * search_path = pg_catalog, <schema>}；自动提交模式不保留该设置，过程内部的 search_path 取决于数据库会话配置。
    */
   private String defaultSchema = "batch";
 

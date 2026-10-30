@@ -47,3 +47,7 @@ Kafka 消费组优先沿用已提交位点；首次订阅或位点已过期时�
 ## 样例
 
 可运行样例:[`examples/self-hosted-sdk/sample-tenant-worker-java/`](../../examples/self-hosted-sdk/sample-tenant-worker-java/)(纯 core)与 [`sample-tenant-worker-java-spring/`](../../examples/self-hosted-sdk/sample-tenant-worker-java-spring/)(Spring starter)。
+
+## 实际执行入口计时
+
+默认 `TaskDispatcher` 在实际进入业务处理器前，通过原续租端点提交 `details.executionStarted=true`，使用 CLAIM 返回的当前 invocation。确认失败或租约失效时不调用业务、不伪造业务失败回报；明确取消则保留取消结果。计时信号与非幂等副作用开始标记独立，处理器参数和业务批处理逻辑保持原契约。详见 [通讯协议](../../docs/sdk/wire-protocol.md#实际执行入口计时)。

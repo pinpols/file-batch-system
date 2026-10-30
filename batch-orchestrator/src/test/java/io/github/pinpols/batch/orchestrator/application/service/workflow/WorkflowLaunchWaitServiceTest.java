@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -26,8 +26,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.InOrder;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 
 @DisplayName("Workflow 容量等待必须绑定原请求并原子推进状态")
 class WorkflowLaunchWaitServiceTest {
@@ -85,7 +85,8 @@ class WorkflowLaunchWaitServiceTest {
   @Test
   @DisplayName("容量等待仅保存密文封套，原请求和有效参数不以明文落库")
   void shouldPersistOnlySealedSnapshot() {
-    LaunchRequest request = request().toBuilder().params(Map.of("apiToken", "raw-secret")).build();
+    LaunchRequest request =
+        request().toBuilder().params(Map.of("apiToken", "raw-secret")).build();
     WorkflowLaunchWaitSnapshot snapshot = WorkflowLaunchWaitFixtures.snapshot(request);
     when(requestMapper.selectByTenantAndRequestIdForUpdate("tenant-a", "root-request"))
         .thenReturn(pending(request));
@@ -99,7 +100,8 @@ class WorkflowLaunchWaitServiceTest {
         ArgumentCaptor.forClass(WorkflowLaunchWaitInsertParam.class);
     verify(waitingMapper).defer(inserted.capture());
     String payload = inserted.getValue().launchPayload();
-    assertThat(payload).contains("WORKFLOW_CAPACITY_WAIT_V1", "sealed-wait-snapshot")
+    assertThat(payload)
+        .contains("WORKFLOW_CAPACITY_WAIT_V1", "sealed-wait-snapshot")
         .doesNotContain("raw-secret", "executionSnapshotJson", "originalRequestJson");
     String snapshotJson = JsonUtils.toJson(snapshot);
     verify(protector).protect(snapshotJson);
@@ -108,22 +110,38 @@ class WorkflowLaunchWaitServiceTest {
   @Test
   @DisplayName("同请求变参重投不能替换或拒绝首个已冻结等待")
   void shouldRejectChangedRedeliveryWithoutReplacingFirstSnapshot() {
-    LaunchRequest original = request().toBuilder().params(Map.of("apiToken", "first-secret")).build();
+    LaunchRequest original =
+        request().toBuilder().params(Map.of("apiToken", "first-secret")).build();
     WorkflowLaunchWaitSnapshot snapshot = WorkflowLaunchWaitFixtures.snapshot(original);
     String sealedPayload = JsonUtils.toJson(Map.of(
-        "tenantId", original.tenantId(), "requestId", original.requestId(),
-        "workflowDefinitionId", original.workflowDefinitionId(), "bizDate", original.bizDate(),
-        "dryRun", false, "format", "WORKFLOW_CAPACITY_WAIT_V1",
-        "sealedSnapshotPayload", "sealed-wait-snapshot"));
+        "tenantId",
+        original.tenantId(),
+        "requestId",
+        original.requestId(),
+        "workflowDefinitionId",
+        original.workflowDefinitionId(),
+        "bizDate",
+        original.bizDate(),
+        "dryRun",
+        false,
+        "format",
+        "WORKFLOW_CAPACITY_WAIT_V1",
+        "sealedSnapshotPayload",
+        "sealed-wait-snapshot"));
     WorkflowLaunchWaitClaim waiting = new WorkflowLaunchWaitClaim(
-        original.tenantId(), original.requestId(), original.workflowDefinitionId(), original.bizDate(),
-        false, sealedPayload);
+        original.tenantId(),
+        original.requestId(),
+        original.workflowDefinitionId(),
+        original.bizDate(),
+        false,
+        sealedPayload);
     when(requestMapper.selectByTenantAndRequestIdForUpdate("tenant-a", "root-request"))
         .thenReturn(pending(original));
     when(waitingMapper.selectWaitingForUpdate("tenant-a", "root-request")).thenReturn(waiting);
     String snapshotJson = JsonUtils.toJson(snapshot);
     when(protector.revealEncrypted("sealed-wait-snapshot")).thenReturn(snapshotJson);
-    LaunchRequest changed = original.toBuilder().params(Map.of("apiToken", "second-secret")).build();
+    LaunchRequest changed =
+        original.toBuilder().params(Map.of("apiToken", "second-secret")).build();
 
     assertThatThrownBy(() -> service.findSnapshot(changed)).isInstanceOf(BizException.class);
 

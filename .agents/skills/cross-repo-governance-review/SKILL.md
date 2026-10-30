@@ -7,7 +7,7 @@ description: 对 file-batch-system 与 batch-console 做周期治理、全量工
 
 ## 目的与边界
 
-本技能是两仓治理审查的总入口，解决“每次重新想应该查什么”的问题。它负责固定覆盖面、证据口径、专项技能路由和闭环方式，不复制各专项规则，也不把所有检查机械地塞进每个 PR。
+本技能是双仓周期/全域治理总控，负责20域覆盖、跨仓责任、证据汇总和闭环。后端工程/规约由 `project-engineering-review` 承接，代码 Bug/变更由 `code-review-and-gates` 执行，明确攻击/故障组合才使用 `adversarial-system-review`；专项结论按同一基线复用，不重新执行相同扫描。
 
 - 适用于月度/季度治理、全项目深扫、规范漂移、代码腐化、技术债复核、发布前工程审查、事故后的系统性复盘，以及用户明确要求前后端一起检查。
 - 单个页面、模块、PR/diff 或已明确的专项缺陷直接使用对应专项 skill。
@@ -52,7 +52,7 @@ description: 对 file-batch-system 与 batch-console 做周期治理、全量工
 | 6. 前端状态与数据流 | 租户切换、query key、分页、轮询、SSE、迟到响应、取消、缓存、空/错/加载态 | 前端 `frontend-state-data-flow` |
 | 7. 数据库与迁移 | schema、事务、RLS/tenant、约束、归档、Flyway、前滚/恢复、查询与索引 | `database-migration-safety`、`sql-query-performance` |
 | 8. 架构与职责 | 模块依赖、分层、端口适配器、公共模块、抽象强度、重复实现 | `project-engineering-review`、前端 `frontend-engineering-governance` |
-| 9. 可读性与代码健康 | 复杂职责、深层控制流、参数合法状态、嵌套调用、固定 Map/字符串、重复/死代码、无价值包装、债务趋势 | `code-review-and-gates`、前端 `frontend-quality-review` |
+| 9. 可读性与代码健康 | 复杂职责、深层控制流、参数合法状态、嵌套调用、固定 Map/字符串、重复/死代码、无价值包装、债务趋势 | `project-engineering-review`（后端规约）；`code-review-and-gates`（变更现场）；前端 `frontend-quality-review` |
 | 10. 安全与隐私 | 认证授权、跨租、Cookie/CSRF/XSS、动态 SQL、文件、密钥、日志脱敏、bypass、例外期限 | `security-scan-governance`、前端质量/部署 skill |
 | 11. 配置、部署与运行时 | 配置事实源、默认值、动态刷新、版本快照、env/Compose/Helm/Nginx/PWA、镜像及本地/容器/生产一致性 | `configuration-governance`、`module-config-boundaries`、前端 `frontend-deploy-runtime` |
 | 12. 测试真实性 | 独立断言、fixture 来源、mock/真实依赖、skip/flaky、并发/故障/恢复、E2E 拓扑与数据隔离 | `ci-governance`、`acceptance-validation`、前端 `frontend-testing-ci` |
@@ -72,10 +72,10 @@ description: 对 file-batch-system 与 batch-console 做周期治理、全量工
    对大型架构迁移或跨多个业务域的改造，另建专项追踪矩阵：受影响模块/文件域、改造前语义、目标语义（保留/变化/退役）、生产者—持久化—消费者链、权威文档、责任方、验证证据和关闭条件。普通 PR 不要求逐文件建表；大规模改造不得只凭目录覆盖或扫描命中数声称完整。
 3. **填覆盖矩阵**：先判断 20 域适用性和证据，再深入高风险链。每域至少说明检查入口、样本和结论；季度/全量不得只扫 diff。
    批量运行模型或调度所有权变更时，批量领域语义至少逐项记录：作业实例创建时机与业务日归属、配置版本冻结、Job/Workflow 依赖及 Join、重放/补跑/跳批、告警规则与通知投递、分区/分片及恢复。每项结论标记保留、改变、退役或未验证，并链接对应 R 场景。
-4. **分开机械与语义审查**：复用仓库已有命令，不重写第二套扫描器。门禁通过只证明声明范围；人工检查业务组合、抽象适度、测试代表性、文档真实性和用户任务。
+4. **分开机械与语义审查**：复用仓库已有命令，不重写第二套扫描器。门禁通过只证明声明范围；人工检查业务组合、抽象适度、测试代表性、文档真实性和用户任务。后端工程/规约使用 `project-engineering-review` 的[25工作包及补充项](../project-engineering-review/references/backend-convention-coverage.md)，代码 Bug 使用 `code-review-and-gates` 的[统一失效机制](../code-review-and-gates/references/bug-mechanisms.md)。本技能汇总覆盖与依赖，规约和 Bug 各有证据及关闭条件。
 5. **验证正反例**：守卫缺口先证明一个应拦和一个相似但应放行案例。只有事实源稳定、误报可控且有自测时才建议阻断；否则用报告型、增量型或周期复核。
    优化扫描耗时时，比较前后同一 revision 范围、规则集、触发路径和依赖条件下的耗时与覆盖对象；确认提速没有漏掉相关模块、生成物、脚本、配置、配对仓或必需扫描器。仅缩小扫描范围或把门禁改成报告/跳过不算优化通过。
-6. **沿链路确认问题**：候选问题追到入口、状态/数据副作用、用户/运维影响和根因。搜索命中、Sonar issue、历史 TODO 和阈值只是候选。
+6. **核对专项结论**：确认专项报告包含当前入口、影响、证据和根因，合并重复问题并保留责任与验证边界。Bug 由代码审查追链确认，明确攻击/故障组合由对抗式审查验证；本技能复用其结果，不再维护第三套定位流程。
 7. **闭环且不制造新债务**：修复时同步必要的代码、测试、契约/生成物、fixture、CI 登记、runbook、ADR/规范、索引和 changelog。禁止靠扩大基线、跳过、吞错、宽泛 suppression 或重复文档换绿色。
 8. **复核治理成本**：新增门禁前评估耗时、稳定性、owner、失败处置及删除/升级条件；已有门禁精确覆盖时不加同义脚本。
 
@@ -102,3 +102,11 @@ description: 对 file-batch-system 与 batch-console 做周期治理、全量工
 9. 下一周期基线：用户需要持续治理时记录两仓 SHA 和仍有效的未验证项，不复制易漂移的告警数或测试数。
 
 无确认问题时仍必须给覆盖和残余风险，不能只写“未发现问题”。
+
+## 历史经验方法
+
+复核跨页异步目标、Workflow编辑往返或真实布局和可访问性时，按需读取 [历史经验方法](references/historical-methods.md)。只复用调查与验证方法，当前规则和原始证据分别维护。
+
+## 发布与观测专项路由
+
+应用发布清单、环境晋级与回滚使用`release-deployment`；日志/MDC、指标、追踪、采集和告警生命周期的实施审查使用`observability-governance`。已有运行现象只读分析仍用`operations-analysis`，不因新增专项扩展为部署、通知发送或故障注入。

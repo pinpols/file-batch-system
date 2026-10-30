@@ -20,6 +20,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.IntStream;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.DisplayName;
@@ -76,6 +77,74 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
   private static final Pattern INSERT_TARGET_PATTERN =
       Pattern.compile("(?im)^\\s*insert\\s+into\\s+([a-z_][a-z0-9_]*\\.[a-z_][a-z0-9_]*)\\b");
 
+  @Test
+  @DisplayName("V370 只扩展批日补跑状态约束及其列注释")
+  void shouldChangeOnlyCatchUpFenceConstraintAndComment() throws Exception {
+    Flyway flyway = newFlyway();
+    cleanTestDatabase(flyway);
+    Flyway.configure()
+        .configuration(flyway.getConfiguration())
+        .target("369")
+        .load()
+        .migrate();
+    try (SingleConnectionDataSource dataSource = new SingleConnectionDataSource(
+        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true)) {
+      JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+      String query = readManifestQuery(SCHEMA_MANIFEST_RESOURCE, "platform catalog");
+      Set<String> before =
+          new TreeSet<>(jdbc.query(query, (rs, row) -> rs.getString("canonical_object")));
+      Flyway.configure()
+          .configuration(flyway.getConfiguration())
+          .target("370")
+          .load()
+          .migrate();
+      Set<String> after =
+          new TreeSet<>(jdbc.query(query, (rs, row) -> rs.getString("canonical_object")));
+      Set<String> removed = new TreeSet<>(before);
+      removed.removeAll(after);
+      Set<String> added = new TreeSet<>(after);
+      added.removeAll(before);
+      assertThat(removed)
+          .hasSize(2)
+          .allSatisfy(value -> assertThat(value).contains("batch_day_catchup_operation"));
+      assertThat(added)
+          .hasSize(2)
+          .allSatisfy(
+              value -> assertThat(value).contains("batch_day_catchup_operation", "ABANDONED"));
+    }
+  }
+
+  @Test
+  @DisplayName("V371 只增加启动恢复轮次字段")
+  void shouldAddOnlyTriggerRecoveryGeneration() throws Exception {
+    Flyway flyway = newFlyway();
+    cleanTestDatabase(flyway);
+    Flyway.configure()
+        .configuration(flyway.getConfiguration())
+        .target("370")
+        .load()
+        .migrate();
+    try (SingleConnectionDataSource dataSource = new SingleConnectionDataSource(
+        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true)) {
+      JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+      String query = readManifestQuery(SCHEMA_MANIFEST_RESOURCE, "platform catalog");
+      Set<String> before =
+          new TreeSet<>(jdbc.query(query, (rs, row) -> rs.getString("canonical_object")));
+      flyway.migrate();
+      Set<String> after =
+          new TreeSet<>(jdbc.query(query, (rs, row) -> rs.getString("canonical_object")));
+      Set<String> removed = new TreeSet<>(before);
+      removed.removeAll(after);
+      Set<String> added = new TreeSet<>(after);
+      added.removeAll(before);
+      assertThat(removed).isEmpty();
+      assertThat(added)
+          .singleElement()
+          .asString()
+          .contains("COLUMN", "batch.trigger_launch_recovery.recovery_generation", "bigint");
+    }
+  }
+
   @Container
   @SuppressWarnings("resource")
   private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.platform();
@@ -83,6 +152,28 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
   @Container
   @SuppressWarnings("resource")
   private static final PostgreSQLContainer BUSINESS_POSTGRES = TestPostgresContainers.business();
+
+  @Test
+  @DisplayName("迁移种子清单应发现等待扫描游标初始值变更或缺失")
+  void shouldDetectWaitingScanCursorSeedDrift() throws Exception {
+    Flyway flyway = newFlyway();
+    cleanTestDatabase(flyway);
+    flyway.migrate();
+    try (SingleConnectionDataSource dataSource = new SingleConnectionDataSource(
+        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true)) {
+      JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+      assertFreshPlatformMigrationSeedManifest(jdbc);
+      String changeCursorSql =
+          "update batch.waiting_partition_scan_cursor set version = version + 1";
+      String deleteCursorSql = "delete from batch.waiting_partition_scan_cursor";
+      jdbc.update(changeCursorSql);
+      assertThatThrownBy(() -> assertFreshPlatformMigrationSeedManifest(jdbc))
+          .isInstanceOf(AssertionError.class);
+      jdbc.update(deleteCursorSql);
+      assertThatThrownBy(() -> assertFreshPlatformMigrationSeedManifest(jdbc))
+          .isInstanceOf(AssertionError.class);
+    }
+  }
 
   @Test
   @DisplayName("V347遇到旧表已有数据时拒绝并完整保留结构与数据，不提供旧库迁移")
@@ -139,7 +230,10 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
             and c.relkind in ('r','p') and not c.relispartition
           """;
       Set<String> before = new TreeSet<>(jdbc.queryForList(logicalTablesSql, String.class));
-      assertThat(flyway.migrate().migrationsExecuted).isEqualTo(1);
+      long sourceMigrationsAfterV346 = readSourceMigrationVersions().stream()
+          .filter(version -> version > 346)
+          .count();
+      assertThat(flyway.migrate().migrationsExecuted).isEqualTo(sourceMigrationsAfterV346);
       Set<String> after = new TreeSet<>(jdbc.queryForList(logicalTablesSql, String.class));
       Set<String> removed = new TreeSet<>(before);
       removed.removeAll(after);
@@ -154,8 +248,9 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
               "archive.custom_task_type_registry_archive",
               "archive.data_quality_rule_archive",
               "archive.workflow_definition_version_archive");
+      // 允许 V346 之后新增表(恢复锚点/readiness 等待等)；删除面由上面的 removed 断言独占约束，
+      // 这里只保证既有平台表未被静默丢弃。
       assertThat(after)
-          .isSubsetOf(before)
           .contains(
               "batch.atomic_task_config",
               "batch.custom_task_type_registry",
@@ -375,9 +470,7 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
         .count();
     assertThat(sourceMigrationVersions)
         .containsExactlyInAnyOrderElementsOf(
-            java.util.stream.IntStream.rangeClosed(1, latestSourceMigrationVersion)
-                .boxed()
-                .toList());
+            IntStream.rangeClosed(1, latestSourceMigrationVersion).boxed().toList());
     assertThat(appliedVersionedMigrationCount).isEqualTo(sourceMigrationCount);
     assertThat(flyway.info().pending()).isEmpty();
     assertThat(flyway.info().current().getVersion().getVersion())
@@ -520,7 +613,8 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
               "2113|dispatch_event_job_workflow|2015|dispatch_event_job|DISPATCH",
               "2114|manual_backfill_job_workflow|2016|manual_backfill_job|GENERAL",
               "2115|event_backfill_job_workflow|2017|event_backfill_job|GENERAL");
-      List<String> selectedConcatWsValuesRead2 = jdbc.queryForList(selectConcatWsSql2, String.class);
+      List<String> selectedConcatWsValuesRead2 =
+          jdbc.queryForList(selectConcatWsSql2, String.class);
       assertThat(selectedConcatWsValuesRead2)
           .as("edge-case JobInstances must reference the definition matching their seeded jobCode")
           .containsExactly(

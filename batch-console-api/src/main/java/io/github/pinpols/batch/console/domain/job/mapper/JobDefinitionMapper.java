@@ -26,6 +26,14 @@ public interface JobDefinitionMapper {
 
   int upsertJobMonitoringPolicy(JobMonitoringPolicyUpsertParam param);
 
+  /**
+   * 仅更新历史 legacy 依赖列，触发 DB 兼容同步；配置包两阶段应用用于把依赖写入推迟到全部 Job 落库之后。
+   */
+  int updateLegacyDependsOnJobCode(
+      @Param("tenantId") String tenantId,
+      @Param("jobCode") String jobCode,
+      @Param("dependsOnJobCode") String dependsOnJobCode);
+
   int deleteDependencies(
       @Param("tenantId") String tenantId, @Param("downstreamJobCode") String downstreamJobCode);
 

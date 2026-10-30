@@ -1,13 +1,11 @@
 package io.github.pinpols.batch.console.domain.rbac.mapper;
 
-import io.github.pinpols.batch.console.domain.rbac.param.ConsoleUserAccountInsertParam;
-import io.github.pinpols.batch.console.domain.rbac.param.ConsoleUserAccountInsertProvisionedParam;
-
-
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleUserAccountInsertParam;
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleUserAccountInsertProvisionedParam;
+import io.github.pinpols.batch.console.domain.rbac.view.ConsoleUserAccountRow;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import org.apache.ibatis.annotations.Param;
 
@@ -19,7 +17,7 @@ public interface ConsoleUserAccountMapper {
    */
   Optional<ConsoleUserAccountEntity> findByUsernameIgnoreCase(@Param("username") String username);
 
-  List<Map<String, Object>> selectByQuery(
+  List<ConsoleUserAccountRow> selectByQuery(
       @Param("tenantId") String tenantId,
       @Param("keyword") String keyword,
       @Param("enabled") Boolean enabled,
@@ -30,15 +28,13 @@ public interface ConsoleUserAccountMapper {
       @Param("keyword") String keyword,
       @Param("enabled") Boolean enabled);
 
-  Map<String, Object> selectById(@Param("id") long id);
+  ConsoleUserAccountRow selectById(@Param("id") long id);
 
-  Map<String, Object> selectByUsername(@Param("username") String username);
+  ConsoleUserAccountRow selectByUsername(@Param("username") String username);
 
-  int insert(
-      ConsoleUserAccountInsertParam parameters);
+  int insert(ConsoleUserAccountInsertParam parameters);
 
-  int insertProvisioned(
-      ConsoleUserAccountInsertProvisionedParam parameters);
+  int insertProvisioned(ConsoleUserAccountInsertProvisionedParam parameters);
 
   int updateProfile(
       @Param("id") long id,

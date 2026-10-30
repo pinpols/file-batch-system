@@ -36,7 +36,7 @@ File Batch System（BFS）是一套**自托管的分布式批处理平台**，�
 
 ## 核心特性
 
-- **Outbox 保证投递**：任务状态写入与消息发布在同一事务内，消除消息丢失风险
+- **Outbox 保证投递**：任务状态与待发事件同事务写入，再由发布器异步投递，支持失败重试
 - **DAG 工作流编排**：支持多节点有向无环图调度，含条件分支与并行执行
 - **断点续跑（Checkpoint）**：导入 LOAD / 导出 GENERATE 等阶段持久化续跑位点，崩溃后从断点继续而非全量重跑
 - **资源配额管理**：Fair-share 调度、突发借用（Burst）、滑动窗口重置
@@ -52,14 +52,23 @@ File Batch System（BFS）是一套**自托管的分布式批处理平台**，�
 一条任务的生命周期：
 
 ```mermaid
-flowchart LR
-    S[外部文件 / 业务事件] --> T[batch-trigger<br/>Quartz 集群调度]
-    T --> O[batch-orchestrator<br/>DAG 编排 · 分片 · 路由]
-    O -->|Outbox 同事务| DB[(PostgreSQL<br/>唯一事实来源)]
-    O -->|Kafka 异步驱动| W[batch-worker 集群<br/>CLAIM → EXECUTE → REPORT]
-    W --> DB
-    W --> X[S3 兼容对象存储 / SFTP / 目标系统]
-    O <--> C[batch-console-api<br/>控制台 · 审计 · AI 辅助]
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  subgraph Control["控制面"]
+    direction LR
+    Trigger["Trigger<br/>API · 计划 · 到达事件"] -->|"启动出箱事件 · Kafka"| Orch["Orchestrator<br/>WorkflowRun → Job → Task"]
+  end
+  subgraph Delivery["可靠派发"]
+    direction LR
+    DB[("PostgreSQL<br/>运行状态 + 任务 Outbox")] -->|"发布器异步投递"| Kafka["Kafka 任务主题"]
+  end
+  subgraph Execution["执行面"]
+    direction LR
+    Worker["内建 Worker / 租户 SDK<br/>CLAIM → EXECUTE → REPORT"] --> Target["业务库 / 文件存储 / 接收端"]
+  end
+  Control -->|"Orchestrator 同事务写状态与 Outbox"| Delivery
+  Delivery -->|"Kafka 派发任务"| Execution
+  Execution -.->|"HTTP 回到 Orchestrator：CLAIM / 续租 / REPORT"| Control
 ```
 
 五类 Worker：
@@ -68,7 +77,7 @@ flowchart LR
 |---|---|
 | import | 文件接收、解析、校验、装载 | RECEIVE → PREPROCESS → PARSE → VALIDATE → LOAD → FEEDBACK |
 | export | 查询、渲染、分片导出、对象存储落地 | PREPARE → GENERATE → STORE → REGISTER → COMPLETE |
-| process | staging、计算/聚合、校验、commit、幂等重跑 | READ → TRANSFORM → STAGE → PUBLISH → FEEDBACK |
+| process | staging、计算/聚合、校验、commit、幂等重跑 | PREPARE → COMPUTE → VALIDATE → COMMIT → FEEDBACK |
 | dispatch | SFTP / NAS / HTTP / S3 等下游交付 | PREPARE → DISPATCH → ACK → RETRY/COMPENSATE → COMPLETE |
 | atomic | 受控 shell / SQL / stored-proc / HTTP 原子任务 | 无文件 pipeline，独立隔离执行器，遵守 allowlist / timeout / RCE 边界 |
 
@@ -106,7 +115,7 @@ flowchart LR
 | `batch-worker-import` | 18083 | 导入链路：RECEIVE → PREPROCESS → PARSE → VALIDATE → LOAD → FEEDBACK |
 | `batch-worker-export` | 18084 | 导出链路：PREPARE → GENERATE → STORE → REGISTER → COMPLETE |
 | `batch-worker-dispatch` | 18085 | 分发链路：PREPARE → DISPATCH → ACK → RETRY/COMPENSATE → COMPLETE |
-| `batch-worker-process` | 18086 | 加工链路：READ → TRANSFORM → STAGE → PUBLISH → FEEDBACK（含 WAP 模式 + SQL transform 插件） |
+| `batch-worker-process` | 18086 | 加工链路：PREPARE → COMPUTE → VALIDATE → COMMIT → FEEDBACK（含 WAP 模式 + SQL transform 插件） |
 | `batch-worker-atomic` | 18087 | 专用原子任务 worker(ADR-029):shell / sql / stored-proc / http 执行器,不带文件 pipeline;dual-use(RCE 级)能力隔离到最小权限进程 |
 | `batch-console-api` | 18080 | 控制台 REST API、审计、AI 辅助 |
 | `sdk/java/core` | — | 租户自托管 Worker SDK(ADR-035 核心)。**对外发布 jar**,零 Spring 依赖,HTTP+Kafka 协议 + handler 运行时 + 4-state 治理。详见 [`sdk/java/core/README.md`](sdk/java/core/README.md) |
@@ -405,7 +414,7 @@ DB (job_task: READY)
 | [观测栈 Docker 环境](deploy/docker/observability/README.md) | Prometheus / Exporter / OTel Collector / Tempo / Loki / Grafana 的独立启动与管理 |
 | [运行时通信](docs/architecture/runtime-module-communication.md) | 模块间消息协议与接口规范 |
 | [平台 Worker 续跑位点](docs/runbook/platform-worker-checkpoint-howto.md) | checkpoint 断点续跑的位点语义与运维说明 |
-| [历史设计差距审计](docs/archive/audit/design-gap-audit-2026-04-09.md) | 2026-04-09 时点快照，仅用于历史审计 |
+| [当前架构事实](docs/architecture/architecture-truth.md) | 架构事实与权威文档入口 |
 | [默认运行参数](docs/design/runtime-default-parameters.md) | 调度器、Worker、Outbox 等默认参数说明 |
 | [Flyway 迁移脚本](db/migration) | 数据库迁移脚本目录 |
 

@@ -4,23 +4,15 @@
 
 ## 架构
 
-```
-手机浏览器
-   │ https://<random>.trycloudflare.com
-   ▼
-Cloudflare quick tunnel (公网)
-   │
-   ▼
-本机 cloudflared 客户端
-   │ http://localhost:5173
-   ▼
-本机 nginx (静态 dist + /api 反代)
-   ├── / → /tmp/fe-share (npm run build 产物)
-   └── /api/* → http://127.0.0.1:18080 (console-api)
-                                 │
-                                 ▼
-                       本地 docker stack (postgres / kafka / redis / minio)
-                       + 6 个 Java app (console-api / trigger / orchestrator / 4×worker)
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  PHONE["手机浏览器"] -->|"HTTPS"| PUBLIC["Cloudflare Quick Tunnel"]
+  PUBLIC --> CLIENT["本机 cloudflared"]
+  CLIENT -->|"localhost:5173"| NGINX["本机 Nginx"]
+  NGINX -->|"静态页面"| DIST["/tmp/fe-share<br/>前端 dist"]
+  NGINX -->|"/api/*"| API["本机 console-api<br/>127.0.0.1:18080"]
+  API --> LOCAL["本地平台服务与基础设施"]
 ```
 
 ## 前置

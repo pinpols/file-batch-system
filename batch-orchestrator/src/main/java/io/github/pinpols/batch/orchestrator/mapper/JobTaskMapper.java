@@ -1,15 +1,14 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.param.JobTaskPromoteStatusParam;
-import io.github.pinpols.batch.orchestrator.domain.query.JobTaskActiveByAssignedWorkerQuery;
-
-
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.orchestrator.domain.context.TaskOutcomePersistenceContext;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.AssignWorkerParam;
+import io.github.pinpols.batch.orchestrator.domain.param.ExternalOutcomeResolutionConsumeParam;
 import io.github.pinpols.batch.orchestrator.domain.param.FinishTaskParam;
+import io.github.pinpols.batch.orchestrator.domain.param.JobTaskPromoteStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateTaskStatusParam;
+import io.github.pinpols.batch.orchestrator.domain.query.JobTaskActiveByAssignedWorkerQuery;
 import io.github.pinpols.batch.orchestrator.domain.query.JobTaskQuery;
 import io.github.pinpols.batch.orchestrator.domain.query.NodePartitionAssignment;
 import java.time.LocalDate;
@@ -71,20 +70,19 @@ public interface JobTaskMapper {
       @Param("batchSize") int batchSize,
       @Param("readyStatus") String readyStatus);
 
-  List<JobTaskEntity> selectActiveByAssignedWorker(
-      JobTaskActiveByAssignedWorkerQuery parameters);
+  List<JobTaskEntity> selectActiveByAssignedWorker(JobTaskActiveByAssignedWorkerQuery parameters);
 
   /** 便捷重载：RUNNING / READY / CREATED 默认集合（所有调用方均用此组合）。 */
   default List<JobTaskEntity> selectActiveByAssignedWorker(String tenantId, String workerCode) {
-    JobTaskActiveByAssignedWorkerQuery jobTaskActiveByAssignedWorkerQuery = JobTaskActiveByAssignedWorkerQuery.builder()
-        .tenantId(tenantId)
-        .assignedWorkerCode(workerCode)
-        .runningStatus(TaskStatus.RUNNING.code())
-        .readyStatus(TaskStatus.READY.code())
-        .createdStatus(TaskStatus.CREATED.code())
-        .build();
-    return selectActiveByAssignedWorker(
-        jobTaskActiveByAssignedWorkerQuery);
+    JobTaskActiveByAssignedWorkerQuery jobTaskActiveByAssignedWorkerQuery =
+        JobTaskActiveByAssignedWorkerQuery.builder()
+            .tenantId(tenantId)
+            .assignedWorkerCode(workerCode)
+            .runningStatus(TaskStatus.RUNNING.code())
+            .readyStatus(TaskStatus.READY.code())
+            .createdStatus(TaskStatus.CREATED.code())
+            .build();
+    return selectActiveByAssignedWorker(jobTaskActiveByAssignedWorkerQuery);
   }
 
   int updateStatus(UpdateTaskStatusParam param);
@@ -113,6 +111,8 @@ public interface JobTaskMapper {
       @Param("sourceVersion") Long sourceVersion,
       @Param("workflowTriggerRequestId") Long workflowTriggerRequestId);
 
+  int consumeExternalOutcomeResolution(ExternalOutcomeResolutionConsumeParam parameters);
+
   /**
    * 租约回收专用复位：允许父 Job/Workflow 处于 PAUSED，以恢复暂停前已派发的在途任务；
    * 普通重试和人工重排队必须使用 {@link #resetForRetry}，暂停期间会被拒绝。
@@ -133,8 +133,7 @@ public interface JobTaskMapper {
    */
   Long lockForReclaimNoWait(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  int promoteStatus(
-      JobTaskPromoteStatusParam parameters);
+  int promoteStatus(JobTaskPromoteStatusParam parameters);
 
   /**
    * 以状态和版本 CAS 终结任务，并返回数据库中的最终行。
@@ -166,11 +165,17 @@ public interface JobTaskMapper {
       @Param("heartbeatDetails") String heartbeatDetails);
 
   /**
-   * ORCH-P4-1：平台请求取消(运维 cancel 端点 / ORCH-P4-2 超时)，置 cancel_requested=true。仅 RUNNING task 有意义。
+   * ORCH-P4-1：平台请求取消（运维 cancel 端点），置 cancel_requested=true。仅 RUNNING task 有意义。
    *
    * @return 更新行数(0 表示 task 不存在 / 非 RUNNING)
    */
   int requestCancel(@Param("tenantId") String tenantId, @Param("id") Long id);
+
+  /** 超时扫描专用取消：仅候选版本仍匹配且当前尝试仍超时时更新。 */
+  int requestCancelIfTimedOut(
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("expectedVersion") Long expectedVersion);
 
   /**
    * 实例级 RUNNING cancel：将实例下 RUNNING task 批量置 cancel_requested=true。

@@ -172,9 +172,8 @@ public class RedisTenantConfigExcelStore implements TenantConfigPackageExcelImpo
     String owner = redisTemplate.<String, String>opsForHash().get(sessionKey, "apply_owner");
     String revision =
         redisTemplate.<String, String>opsForHash().get(sessionKey, "preview_config_revision");
-    boolean applyOwnershipIsInvalid = !"APPLYING".equals(state)
-        || !applyOwnerToken.equals(owner)
-        || EmptyChecks.isNull(revision);
+    boolean applyOwnershipIsInvalid =
+        !"APPLYING".equals(state) || !applyOwnerToken.equals(owner) || EmptyChecks.isNull(revision);
     if (applyOwnershipIsInvalid) {
       throw new IllegalStateException("config upload apply claim lost its preview revision");
     }

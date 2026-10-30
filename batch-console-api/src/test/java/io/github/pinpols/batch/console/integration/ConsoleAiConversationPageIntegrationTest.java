@@ -1,15 +1,13 @@
 package io.github.pinpols.batch.console.integration;
 
-import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiConversationAllocateTurnNoParam;
-import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationPageByOwnerQuery;
-import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationTurnsQuery;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiConversationEntity;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiConversationMapper;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiConversationAllocateTurnNoParam;
+import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationPageByOwnerQuery;
+import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationTurnsQuery;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -82,8 +80,8 @@ class ConsoleAiConversationPageIntegrationTest extends AbstractIntegrationTest {
           .extracting(ConsoleAiConversationEntity::getId)
           .containsExactly("conversation-3", "conversation-2");
 
-      List<ConsoleAiConversationEntity> second = mapper.selectPageByOwner(
-          ConsoleAiConversationPageByOwnerQuery.builder()
+      List<ConsoleAiConversationEntity> second =
+          mapper.selectPageByOwner(ConsoleAiConversationPageByOwnerQuery.builder()
               .tenantId(tenantA)
               .ownerUserId("owner-a")
               .beforeUpdatedAt(first.get(1).getUpdatedAt())
@@ -107,31 +105,30 @@ class ConsoleAiConversationPageIntegrationTest extends AbstractIntegrationTest {
       assertThat(mapper.selectActiveByOwner(tenantA, "conversation-other-tenant", "owner-a"))
           .isNull();
       assertThat(mapper.selectTurns(ConsoleAiConversationTurnsQuery.builder()
-          .tenantId(tenantA)
-          .conversationId("conversation-3")
-          .ownerUserId("owner-a")
-          .beforeTurnNo(null)
-          .limit(20)
-          .build()))
+              .tenantId(tenantA)
+              .conversationId("conversation-3")
+              .ownerUserId("owner-a")
+              .beforeTurnNo(null)
+              .limit(20)
+              .build()))
           .hasSize(1);
       assertThat(mapper.selectTurns(ConsoleAiConversationTurnsQuery.builder()
-          .tenantId(tenantA)
-          .conversationId("conversation-expired")
-          .ownerUserId("owner-a")
-          .beforeTurnNo(null)
-          .limit(20)
-          .build()))
+              .tenantId(tenantA)
+              .conversationId("conversation-expired")
+              .ownerUserId("owner-a")
+              .beforeTurnNo(null)
+              .limit(20)
+              .build()))
           .isEmpty();
       assertThat(mapper.selectRecentCompleteTurns(tenantA, "conversation-3", 12))
           .hasSize(1);
-      assertThat(mapper.allocateTurnNo(
-              ConsoleAiConversationAllocateTurnNoParam.builder()
-                  .tenantId(tenantA)
-                  .conversationId("conversation-3")
-                  .ownerUserId("owner-a")
-                  .expiresAt(OffsetDateTime.now(ZoneOffset.UTC).plusHours(1))
-                  .contextVersion("v1")
-                  .build()))
+      assertThat(mapper.allocateTurnNo(ConsoleAiConversationAllocateTurnNoParam.builder()
+              .tenantId(tenantA)
+              .conversationId("conversation-3")
+              .ownerUserId("owner-a")
+              .expiresAt(OffsetDateTime.now(ZoneOffset.UTC).plusHours(1))
+              .contextVersion("v1")
+              .build()))
           .isEqualTo(1L);
       assertThat(mapper.selectForUpdate(tenantB, "conversation-3").getNextTurnNo())
           .isEqualTo(1L);

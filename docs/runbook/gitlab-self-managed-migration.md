@@ -19,16 +19,17 @@
 ## 2. 目标架构
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-    DEV[开发者] --> GL[GitLab Self-Managed Free\nGit + MR + CI Coordinator]
-    GL --> REG[内部 Container Registry\n或 S3 兼容对象存储]
-    GL --> RUNNER[Docker Runner 集群]
-    RUNNER --> JOB[隔离的 Job Container]
-    JOB --> DOCKER[Docker Engine\nTestcontainers / Compose]
-    DOCKER --> DEPS[(PG / Kafka / Redis / MinIO)]
-    JOB --> MIRROR[内网依赖镜像\nMaven / npm / PyPI / 扫描工具]
-    JOB --> ARTIFACT[内部制品存储\n测试报告 / 日志 / 覆盖率]
-    JOB --> STAGING[受保护的 staging\n仅允许受信 Runner]
+  DEV["开发者"] --> GL["GitLab Self-Managed<br/>Git / MR / CI"]
+  GL --> RUNNER["受信 Docker Runner"]
+  RUNNER --> JOB["隔离 Job 容器"]
+  JOB --> ENGINE["Docker Engine<br/>Compose / Testcontainers"]
+  ENGINE --> DEPS["PostgreSQL / Kafka<br/>Valkey / MinIO"]
+  JOB --> MIRROR["内网依赖镜像"]
+  JOB --> REG["Container Registry"]
+  JOB --> ART["报告与制品存储"]
+  JOB -. "受保护部署" .-> STG["staging"]
 ```
 
 推荐至少划分三类 Runner：

@@ -64,10 +64,11 @@ final class TaskOutcomeWorkflowFinalizer {
     Instant workflowFinishedAt =
         WorkflowTerminalOutboxService.isTerminal(workflowStatus) ? context.finishedAt() : null;
     WorkflowRunMapper workflowRunMapper = workflowMappers.workflowRunMapper;
-    UpdateWorkflowRunStatusParam.UpdateWorkflowRunStatusParamBuilder updateStatusBuilder = UpdateWorkflowRunStatusParam.builder()
-        .tenantId(context.command().tenantId())
-        .id(context.workflowRun().getId())
-        .runStatus(workflowStatus);
+    UpdateWorkflowRunStatusParam.UpdateWorkflowRunStatusParamBuilder updateStatusBuilder =
+        UpdateWorkflowRunStatusParam.builder()
+            .tenantId(context.command().tenantId())
+            .id(context.workflowRun().getId())
+            .runStatus(workflowStatus);
     String workflowCurrentNodeCode = TaskOutcomeStatePolicy.resolveWorkflowCurrentNode(
         context.activeNodes(), workflowStatus, context.currentNodeCode());
     UpdateWorkflowRunStatusParam updateStatusParam = updateStatusBuilder

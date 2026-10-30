@@ -5,13 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.orchestrator.application.service.governance.WorkflowNodeReplayTargetResolver.WorkflowNodeReplayTarget;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.orchestrator.application.service.governance.WorkflowNodeReplayTargetResolver.WorkflowNodeReplayTarget;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -49,8 +49,7 @@ class WorkflowNodeReplayTargetResolverTest {
     WorkflowNodeRunEntity sourceNode = workflowNode(
         82L, 71L, 93L, WorkflowNodeType.JOB.code(), WorkflowNodeRunStatus.FAILED.code());
     JobInstanceEntity sourceJob = jobInstance(93L, "IMPORT_CUSTOMERS", sourceRun.getBizDate());
-    when(workflowRunMapper.selectByTenantAndIdForUpdate("tenant-a", 71L))
-        .thenReturn(sourceRun);
+    when(workflowRunMapper.selectByTenantAndIdForUpdate("tenant-a", 71L)).thenReturn(sourceRun);
     when(workflowNodeRunMapper.selectByTenantRunAndIdForUpdate("tenant-a", 71L, 82L))
         .thenReturn(sourceNode);
     when(jobInstanceMapper.selectById("tenant-a", 93L)).thenReturn(sourceJob);
@@ -71,8 +70,7 @@ class WorkflowNodeReplayTargetResolverTest {
     WorkflowNodeRunEntity sourceNode = workflowNode(
         82L, 71L, 93L, WorkflowNodeType.JOB.code(), WorkflowNodeRunStatus.FAILED.code());
     JobInstanceEntity sourceJob = jobInstance(93L, "IMPORT_CUSTOMERS", sourceRun.getBizDate());
-    when(workflowRunMapper.selectByTenantAndIdForUpdate("tenant-a", 71L))
-        .thenReturn(sourceRun);
+    when(workflowRunMapper.selectByTenantAndIdForUpdate("tenant-a", 71L)).thenReturn(sourceRun);
     when(workflowNodeRunMapper.selectByTenantRunAndIdForUpdate("tenant-a", 71L, 82L))
         .thenReturn(sourceNode);
     when(jobInstanceMapper.selectById("tenant-a", 93L)).thenReturn(sourceJob);
@@ -88,8 +86,7 @@ class WorkflowNodeReplayTargetResolverTest {
   @Test
   void shouldRejectNode_whenOwnedByAnotherWorkflowRun() {
     WorkflowRunEntity sourceRun = workflowRun(71L, WorkflowRunStatus.FAILED.code());
-    when(workflowRunMapper.selectByTenantAndIdForUpdate("tenant-a", 71L))
-        .thenReturn(sourceRun);
+    when(workflowRunMapper.selectByTenantAndIdForUpdate("tenant-a", 71L)).thenReturn(sourceRun);
     when(workflowNodeRunMapper.selectByTenantRunAndIdForUpdate("tenant-a", 71L, 82L))
         .thenReturn(null);
 
@@ -101,18 +98,17 @@ class WorkflowNodeReplayTargetResolverTest {
   @Test
   void shouldRejectNode_whenSuccessfulOrControl() {
     WorkflowRunEntity sourceRun = workflowRun(71L, WorkflowRunStatus.FAILED.code());
-    when(workflowRunMapper.selectByTenantAndIdForUpdate("tenant-a", 71L))
-        .thenReturn(sourceRun);
+    when(workflowRunMapper.selectByTenantAndIdForUpdate("tenant-a", 71L)).thenReturn(sourceRun);
     when(workflowNodeRunMapper.selectByTenantRunAndIdForUpdate("tenant-a", 71L, 82L))
-        .thenReturn(workflowNode(82L, 71L, 93L, WorkflowNodeType.JOB.code(),
-            WorkflowNodeRunStatus.SUCCESS.code()));
+        .thenReturn(workflowNode(
+            82L, 71L, 93L, WorkflowNodeType.JOB.code(), WorkflowNodeRunStatus.SUCCESS.code()));
 
     assertThatThrownBy(() -> resolver.resolve("tenant-a", 71L, 82L))
         .isInstanceOf(BizException.class);
 
     when(workflowNodeRunMapper.selectByTenantRunAndIdForUpdate("tenant-a", 71L, 82L))
-        .thenReturn(workflowNode(82L, 71L, null, WorkflowNodeType.END.code(),
-            WorkflowNodeRunStatus.FAILED.code()));
+        .thenReturn(workflowNode(
+            82L, 71L, null, WorkflowNodeType.END.code(), WorkflowNodeRunStatus.FAILED.code()));
     assertThatThrownBy(() -> resolver.resolve("tenant-a", 71L, 82L))
         .isInstanceOf(BizException.class);
   }

@@ -1,10 +1,7 @@
 package io.github.pinpols.batch.console.domain.rbac.mapper;
 
-import io.github.pinpols.batch.console.domain.rbac.param.ConsoleApiKeyInsertParam;
-
-
 import io.github.pinpols.batch.console.domain.rbac.entity.ApiKeyEntity;
-import java.time.Instant;
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleApiKeyInsertParam;
 import java.util.List;
 import java.util.Optional;
 import org.apache.ibatis.annotations.Param;
@@ -20,8 +17,7 @@ public interface ConsoleApiKeyMapper {
   Optional<ApiKeyEntity> findByTenantAndName(
       @Param("tenantId") String tenantId, @Param("keyName") String keyName);
 
-  void insert(
-      ConsoleApiKeyInsertParam parameters);
+  void insert(ConsoleApiKeyInsertParam parameters);
 
   void revoke(
       @Param("tenantId") String tenantId, @Param("id") Long id, @Param("operator") String operator);

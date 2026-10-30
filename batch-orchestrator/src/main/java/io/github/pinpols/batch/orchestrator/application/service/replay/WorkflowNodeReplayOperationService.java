@@ -24,10 +24,10 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Collection;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -76,10 +76,11 @@ public class WorkflowNodeReplayOperationService {
     String rawToken = rawTokenId.toString();
     Instant now = dateTimeSupport.nowInstant();
     Instant expiresAt = now.plus(PREVIEW_TTL);
-    ReplayOperationPreviewTokenEntity.ReplayOperationPreviewTokenEntityBuilder previewTokenBuilder = ReplayOperationPreviewTokenEntity.builder()
-        .tenantId(command.tenantId());
+    ReplayOperationPreviewTokenEntity.ReplayOperationPreviewTokenEntityBuilder previewTokenBuilder =
+        ReplayOperationPreviewTokenEntity.builder().tenantId(command.tenantId());
     String tokenHash = sha256(rawToken);
-    previewTokenBuilder.tokenHash(tokenHash)
+    previewTokenBuilder
+        .tokenHash(tokenHash)
         .operationKey(operationKey.toString())
         .requestHash(requestHash)
         .snapshotHash(snapshotHash)
@@ -101,23 +102,24 @@ public class WorkflowNodeReplayOperationService {
     String configVersionPolicy = replayCommand.configVersionPolicy();
     Integer configVersion = replayCommand.configVersion();
     List<String> warnings = List.of(SIDE_EFFECT_WARNING);
-    return new WorkflowNodeReplayPreviewResponse(
-        tenantId,
-        operationKey,
-        sourceRunId,
-        sourceNodeRunId,
-        sourceNodeCode,
-        sourceRunSeq,
-        sourceInstanceId,
-        sourceJobCode,
-        businessDate,
-        sourceJobDefinitionVersion,
-        resultPolicy,
-        configVersionPolicy,
-        configVersion,
-        rawToken,
-        expiresAt,
-        warnings);
+    return WorkflowNodeReplayPreviewResponse.builder()
+        .tenantId(tenantId)
+        .operationKey(operationKey)
+        .sourceWorkflowRunId(sourceRunId)
+        .sourceWorkflowNodeRunId(sourceNodeRunId)
+        .sourceNodeCode(sourceNodeCode)
+        .sourceNodeRunSeq(sourceRunSeq)
+        .sourceJobInstanceId(sourceInstanceId)
+        .jobCode(sourceJobCode)
+        .bizDate(businessDate)
+        .sourceConfigVersion(sourceJobDefinitionVersion)
+        .resultPolicy(resultPolicy)
+        .configVersionPolicy(configVersionPolicy)
+        .configVersion(configVersion)
+        .previewToken(rawToken)
+        .expiresAt(expiresAt)
+        .warnings(warnings)
+        .build();
   }
 
   /** 按精确预览快照先创建持久父操作，再由 Console 提交审批。 */
@@ -180,20 +182,22 @@ public class WorkflowNodeReplayOperationService {
       throw invalidPreview();
     }
 
-    ReplayOperationEntity.ReplayOperationEntityBuilder operationBuilder = ReplayOperationEntity.builder()
-        .tenantId(command.tenantId())
-        .operationKey(command.operationKey().toString())
-        .operationType(ReplayOperationType.WORKFLOW_NODE.code())
-        .status(ReplayOperationStatus.PENDING_APPROVAL.code())
-        .scope("FAILED_NODE")
-        .executionMode("REPLAY")
-        .candidateSource("EXACT_SOURCE_NODE");
+    ReplayOperationEntity.ReplayOperationEntityBuilder operationBuilder =
+        ReplayOperationEntity.builder()
+            .tenantId(command.tenantId())
+            .operationKey(command.operationKey().toString())
+            .operationType(ReplayOperationType.WORKFLOW_NODE.code())
+            .status(ReplayOperationStatus.PENDING_APPROVAL.code())
+            .scope("FAILED_NODE")
+            .executionMode("REPLAY")
+            .candidateSource("EXACT_SOURCE_NODE");
     Map<String, Long> sourceIdentity = Map.of(
         "sourceWorkflowRunId", source.sourceRun().getId(),
         "sourceWorkflowNodeRunId", source.sourceNodeRun().getId(),
         "sourceJobInstanceId", source.sourceJobInstance().getId());
     String scopePayload = JsonUtils.toJson(sourceIdentity);
-    operationBuilder.scopePayload(scopePayload)
+    operationBuilder
+        .scopePayload(scopePayload)
         .resultPolicy(replayCommand.resultPolicy())
         .configVersionPolicy(replayCommand.configVersionPolicy())
         .configVersion(replayCommand.configVersion())
@@ -223,7 +227,8 @@ public class WorkflowNodeReplayOperationService {
         || EmptyChecks.isNull(persisted.id())
         || tokenMapper.linkOperation(command.tenantId(), tokenHash, persisted.id()) != 1;
     if (operationWasNotPersistedOrTokenLinkFailed) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.replay_operation_not_persisted");
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT, "error.workflow.replay_operation_not_persisted");
     }
     return persisted;
   }
@@ -232,34 +237,37 @@ public class WorkflowNodeReplayOperationService {
     WorkflowNodeReplayTarget source = targetResolver.resolve(
         command.tenantId(), command.workflowRunId(), command.workflowNodeRunId());
     if (UNKNOWN_EXTERNAL_OUTCOME.equals(source.sourceNodeRun().getErrorCode())) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.replay_external_outcome_unknown");
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT, "error.workflow.replay_external_outcome_unknown");
     }
     return source;
   }
 
   private void validate(WorkflowNodeReplayCommand command, boolean submission) {
-    boolean requiredReplayIdentityIsInvalid = EmptyChecks.isNull(command) || !Texts.hasText(command.tenantId())
-        || EmptyChecks.isNull(command.workflowRunId()) || EmptyChecks.isNull(command.workflowNodeRunId())
-        || !Texts.hasText(command.reason()) || !Texts.hasText(command.requestedBy());
+    boolean requiredReplayIdentityIsInvalid = EmptyChecks.isNull(command)
+        || !Texts.hasText(command.tenantId())
+        || EmptyChecks.isNull(command.workflowRunId())
+        || EmptyChecks.isNull(command.workflowNodeRunId())
+        || !Texts.hasText(command.reason())
+        || !Texts.hasText(command.requestedBy());
     if (requiredReplayIdentityIsInvalid) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_request");
     }
-    boolean submissionFieldsAreInvalid =
-        submission && (EmptyChecks.isNull(command.operationKey()) || !Texts.hasText(command.previewToken()));
+    boolean submissionFieldsAreInvalid = submission
+        && (EmptyChecks.isNull(command.operationKey()) || !Texts.hasText(command.previewToken()));
     if (submissionFieldsAreInvalid) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_request");
     }
     ResultVersionPolicy resultPolicy = ResultVersionPolicy.fromCodeOrNull(command.resultPolicy());
-    ConfigVersionPolicy configPolicy = ConfigVersionPolicy.fromCodeOrNull(command.configVersionPolicy());
-    boolean replayPolicyPairSupported =
-        EmptyChecks.isNotNull(resultPolicy)
-            && resultPolicy != ResultVersionPolicy.DRY_RUN_ONLY
-            && EmptyChecks.isNotNull(configPolicy);
-    boolean replayPolicyIsValid =
-        replayPolicyPairSupported
-            && (configPolicy == ConfigVersionPolicy.USE_SPECIFIED_VERSION
-                ? EmptyChecks.isNotNull(command.configVersion())
-                : EmptyChecks.isNull(command.configVersion()));
+    ConfigVersionPolicy configPolicy =
+        ConfigVersionPolicy.fromCodeOrNull(command.configVersionPolicy());
+    boolean replayPolicyPairSupported = EmptyChecks.isNotNull(resultPolicy)
+        && resultPolicy != ResultVersionPolicy.DRY_RUN_ONLY
+        && EmptyChecks.isNotNull(configPolicy);
+    boolean replayPolicyIsValid = replayPolicyPairSupported
+        && (configPolicy == ConfigVersionPolicy.USE_SPECIFIED_VERSION
+            ? EmptyChecks.isNotNull(command.configVersion())
+            : EmptyChecks.isNull(command.configVersion()));
     if (!replayPolicyIsValid) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.replay_invalid_policy");
     }
@@ -275,26 +283,36 @@ public class WorkflowNodeReplayOperationService {
     String configVersionPolicy = Texts.hasText(command.configVersionPolicy())
         ? command.configVersionPolicy()
         : ConfigVersionPolicy.USE_ORIGINAL_CONFIG.code();
-    return new WorkflowNodeReplayCommand(
-        command.tenantId(), command.workflowRunId(), command.workflowNodeRunId(), command.reason(),
-        command.requestedBy(), resultPolicy, configVersionPolicy, command.configVersion(),
-        command.traceId(), command.operationKey(), command.previewToken());
+    return WorkflowNodeReplayCommand.builder()
+        .tenantId(command.tenantId())
+        .workflowRunId(command.workflowRunId())
+        .workflowNodeRunId(command.workflowNodeRunId())
+        .reason(command.reason())
+        .requestedBy(command.requestedBy())
+        .resultPolicy(resultPolicy)
+        .configVersionPolicy(configVersionPolicy)
+        .configVersion(command.configVersion())
+        .traceId(command.traceId())
+        .operationKey(command.operationKey())
+        .previewToken(command.previewToken())
+        .build();
   }
 
   private CompensationSubmitCommand replayCommand(
       WorkflowNodeReplayCommand command, WorkflowNodeReplayTarget source) {
     CompensationSubmitCommand.CompensationSubmitCommandBuilder builder =
         CompensationSubmitCommand.builder()
-        .tenantId(command.tenantId())
-        .compensationType(ReplayOperationType.WORKFLOW_NODE.code())
-        .targetId(command.workflowNodeRunId())
-        .jobCode(source.sourceJobInstance().getJobCode())
-        .bizDate(source.sourceRun().getBizDate());
+            .tenantId(command.tenantId())
+            .compensationType(ReplayOperationType.WORKFLOW_NODE.code())
+            .targetId(command.workflowNodeRunId())
+            .jobCode(source.sourceJobInstance().getJobCode())
+            .bizDate(source.sourceRun().getBizDate());
     String normalizedReason = command.reason().trim();
     builder.reason(normalizedReason);
     String normalizedOperatorId = command.requestedBy().trim();
     builder.operatorId(normalizedOperatorId);
-    return builder.traceId(command.traceId())
+    return builder
+        .traceId(command.traceId())
         .resultPolicy(command.resultPolicy())
         .configVersionPolicy(command.configVersionPolicy())
         .configVersion(command.configVersion())

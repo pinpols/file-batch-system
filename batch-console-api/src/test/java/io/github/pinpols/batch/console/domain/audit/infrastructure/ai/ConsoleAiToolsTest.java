@@ -17,8 +17,11 @@ import io.github.pinpols.batch.console.domain.notification.application.contract.
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertEventResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleClusterDiagnosticResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleInstanceDiagnosisResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleOutboxHealthResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleShedLockStatusResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleTerminalChildrenHealthResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleWorkerConsistencyResponse;
 import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -95,18 +98,19 @@ class ConsoleAiToolsTest {
         1,
         1,
         10,
-        List.of(new ConsoleJobExecutionLogResponse(
-            1L,
-            TENANT,
-            42L,
-            7L,
-            "ERROR",
-            "EXEC",
-            "trace-1",
-            "NPE at line 10",
-            null,
-            null,
-            Instant.now())));
+        List.of(ConsoleJobExecutionLogResponse.builder()
+            .id(1L)
+            .tenantId(TENANT)
+            .jobInstanceId(42L)
+            .jobPartitionId(7L)
+            .logLevel("ERROR")
+            .logType("EXEC")
+            .traceId("trace-1")
+            .message("NPE at line 10")
+            .detailRef(null)
+            .extraJson(null)
+            .createdAt(Instant.now())
+            .build()));
     when(queryService.jobExecutionLogs(any())).thenReturn(page);
 
     String out = tools().getJobExecutionLogs(42L);
@@ -138,28 +142,18 @@ class ConsoleAiToolsTest {
   @Test
   @DisplayName("集群诊断工具:渲染健康状态,并按当前租户诊断")
   void shouldRenderHealthAndBindTenant_whenGettingClusterDiagnostics() {
-    Map<String, Object> shedLock = new LinkedHashMap<>();
-    shedLock.put("totalLocks", 3);
-    shedLock.put("activeLocks", 1);
-    Map<String, Object> workers = new LinkedHashMap<>();
-    workers.put("healthy", false);
-    workers.put("onlineWorkers", 2);
-    workers.put("staleOnlineWorkers", 1);
-    workers.put("runningInstances", 5);
-    Map<String, Object> outbox = new LinkedHashMap<>();
-    outbox.put("healthy", true);
-    outbox.put("pendingEvents", 0);
-    outbox.put("stalePublishingEvents", 0);
-    Map<String, Object> terminalChildren = new LinkedHashMap<>();
-    terminalChildren.put("healthy", true);
-    terminalChildren.put("terminalInstancesWithActiveChildren", 0);
-    Map<String, Object> diagnostics = new LinkedHashMap<>();
-    diagnostics.put("shedLock", shedLock);
-    diagnostics.put("workers", workers);
-    diagnostics.put("outbox", outbox);
-    diagnostics.put("terminalChildren", terminalChildren);
     when(diagnosticService.diagnose(TENANT))
-        .thenReturn(ConsoleClusterDiagnosticResponse.from(diagnostics));
+        .thenReturn(new ConsoleClusterDiagnosticResponse(
+            new ConsoleShedLockStatusResponse(3, 1L, List.of()),
+            ConsoleWorkerConsistencyResponse.builder()
+                .healthy(false)
+                .onlineWorkers(2L)
+                .staleOnlineWorkers(1L)
+                .runningInstances(5L)
+                .workerGroups(List.of())
+                .build(),
+            new ConsoleOutboxHealthResponse(0L, null, 0L, List.of(), true),
+            new ConsoleTerminalChildrenHealthResponse(0L, true)));
 
     String out = tools().getClusterDiagnostics();
 
@@ -185,29 +179,17 @@ class ConsoleAiToolsTest {
   @Test
   @DisplayName("实例诊断工具:按当前租户只读诊断,并渲染问题与建议")
   void shouldUseTenantBoundDiagnostic_whenDiagnosingInstance() {
-    Map<String, Object> instance = new LinkedHashMap<>();
-    instance.put("id", 42L);
-    instance.put("instanceStatus", "RUNNING");
-    Map<String, Object> summary = new LinkedHashMap<>();
-    summary.put("partitionStatusCounts", List.of());
-    summary.put("taskStatusCounts", List.of());
-    summary.put("outboxStatusCounts", List.of());
-    summary.put("onlineWorkersForGroup", 2L);
-    Map<String, Object> finding = new LinkedHashMap<>();
-    finding.put("severity", "WARN");
-    finding.put("reasonCode", "TASK_STALE");
-    finding.put("message", "task heartbeat is stale");
-    finding.put("suggestedActions", List.of("检查 worker 日志"));
-    finding.put("evidence", Map.of());
-    Map<String, Object> row = new LinkedHashMap<>();
-    row.put("tenantId", TENANT);
-    row.put("jobInstanceId", 42L);
-    row.put("healthy", false);
-    row.put("instance", instance);
-    row.put("summary", summary);
-    row.put("findings", List.of(finding));
-    when(diagnosticService.instanceDiagnosis(TENANT, 42L))
-        .thenReturn(ConsoleInstanceDiagnosisResponse.from(row));
+    var instance = ConsoleInstanceDiagnosisResponse.InstanceSummary.builder()
+        .id(42L)
+        .instanceStatus("RUNNING")
+        .build();
+    var summary =
+        new ConsoleInstanceDiagnosisResponse.DiagnosisSummary(List.of(), List.of(), List.of(), 2L);
+    var finding = new ConsoleInstanceDiagnosisResponse.Finding(
+        "WARN", "TASK_STALE", "task heartbeat is stale", List.of("检查 worker 日志"), Map.of());
+    var response = new ConsoleInstanceDiagnosisResponse(
+        TENANT, 42L, false, instance, summary, List.of(finding));
+    when(diagnosticService.instanceDiagnosis(TENANT, 42L)).thenReturn(response);
 
     String output = tools().diagnoseJobInstance(42L);
 

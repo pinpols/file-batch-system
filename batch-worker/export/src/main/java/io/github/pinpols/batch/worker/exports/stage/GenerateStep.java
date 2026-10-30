@@ -9,6 +9,8 @@ import io.github.pinpols.batch.common.logging.ThrottledLogger;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
+import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
@@ -128,6 +130,16 @@ public class GenerateStep implements ExportStageStep {
     try {
       Map<String, Object> attrs = context.getAttributes();
       String exportDataRef = resolveExportDataRef(context);
+      if (DryRunGuard.fromAttributes(attrs).isDryRun()
+          && WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE.equalsIgnoreCase(exportDataRef)) {
+        return ExportStageResult.failure(
+            stage(),
+            "EXPORT_DRY_RUN_SQL_UNAVAILABLE",
+            "error.export.generate.dry_run_sql_unavailable",
+            new Object[0],
+            "SQL template export is unavailable in dry-run because SQL planning may have side effects",
+            objectMapper);
+      }
       attrs.put(ExportRuntimeKeys.EXPORT_DATA_REF, exportDataRef);
       ExportDataContext dataCtx = buildExportDataContext(context, exportPayload);
       ExportDataPlugin dataPlugin = exportDataPluginRegistry.require(exportDataRef);
@@ -180,7 +192,8 @@ public class GenerateStep implements ExportStageStep {
               expectedSize >= 0 && actualSize == expectedSize;
           if (completedFileSizeMatchesCheckpoint) {
             // 幂等跳过:GENERATE 已整体完成且文件完整(STORE 尚未消费)→ 重派不重生成,补齐下游 attribute 即可。
-            return completeGeneration(context, context.getAttributes(), batch, generatedFile, pos.processedCount());
+            return completeGeneration(
+                context, context.getAttributes(), batch, generatedFile, pos.processedCount());
           }
           logFingerprintMismatch(context, checkpointInstanceId, expectedSize, actualSize);
           // 落到 open(pos.completed()) → resuming=false → generatePaged truncate 到 0 → 全量重写。
@@ -263,9 +276,8 @@ public class GenerateStep implements ExportStageStep {
     boolean configError = ex instanceof WorkerConfigException;
     ExportStage failureStage = stage();
     String failureCode = configError ? "EXPORT_GENERATE_CONFIG_INVALID" : "EXPORT_GENERATE_FAILED";
-    String failureMessageKey = configError
-        ? "error.export.generate.config_invalid"
-        : "error.export.generate.failed";
+    String failureMessageKey =
+        configError ? "error.export.generate.config_invalid" : "error.export.generate.failed";
     String localizedMessageArgument = ex.getMessage();
     String fallbackMessage = ex.getMessage();
     return ExportStageResult.failure(
@@ -564,7 +576,8 @@ public class GenerateStep implements ExportStageStep {
       Map<String, Object> attrs,
       Map<String, Object> batch,
       Path generatedFile,
-      long recordCount) throws IOException {
+      long recordCount)
+      throws IOException {
     attrs.put(ExportRuntimeKeys.EXPORT_BATCH, batch);
     attrs.put(PipelineRuntimeKeys.GENERATED_FILE_PATH, generatedFile.toString());
     attrs.put(PipelineRuntimeKeys.RECORD_COUNT, recordCount);

@@ -75,7 +75,7 @@
             where tenant_id = #{tenantId}
               and event_source = #{eventSource}
               and event_id = #{eventId}
-              and jsonb_exists(target_workflow_definition_ids, cast(#{workflowDefinitionId} as varchar))
+              and target_workflow_definition_ids @&gt; jsonb_build_array(cast(#{workflowDefinitionId} as bigint))
         )
     </select>
 

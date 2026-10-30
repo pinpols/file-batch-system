@@ -10,7 +10,7 @@ import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.util.Map;
 import java.util.Optional;
 
-/** Shared parameter, checkpoint, and output handling for typed row-stream templates. */
+/** 类型化行流模板共用的参数、检查点和输出处理逻辑。 */
 abstract class SdkAbstractTypedRowStreamHandler<I, O, R> extends SdkAbstractTaskHandler {
 
   private final SdkTypedParameters<I> parameters;

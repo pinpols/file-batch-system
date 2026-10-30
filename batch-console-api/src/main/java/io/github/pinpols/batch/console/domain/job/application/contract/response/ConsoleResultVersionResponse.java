@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.response;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.Instant;
 
 /**
- * ADR-017 结果版本响应（console 透传 orchestrator {@code ResultVersionResponse} 的 JSON 投影）。 字段与下游 record
- * 一一对应，console 不引入 orchestrator 模块，故本地镜像其序列化形态。
+ * ADR-017 结果版本安全投影。Console 只接收并下发治理所需元数据，不暴露原始结果载荷和内部存储引用。
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record ConsoleResultVersionResponse(
     Long id,
     String tenantId,
@@ -16,8 +17,6 @@ public record ConsoleResultVersionResponse(
     Instant effectiveAt,
     Instant deactivatedAt,
     String payloadStorage,
-    String payloadJson,
-    String payloadRef,
     Instant generatedAt,
     String generatedBy,
     String promotionPolicy,

@@ -11,18 +11,25 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.scheduling.TaskScheduler;
 
 @DisplayName("控制台幂等归属: 续期独占,旧持有者失效与迟到完成不覆盖")
+@ExtendWith(MockitoExtension.class)
 class ConsoleIdempotencyOwnershipTest {
   private final ExpiringStore store = new ExpiringStore();
-  private final ConsoleDurableIdempotencyStore durable = mock(ConsoleDurableIdempotencyStore.class);
-  private final ConsoleIdempotencyInterceptor interceptor = new ConsoleIdempotencyInterceptor(
-      store, durable, new BatchSecurityProperties(), mock(TaskScheduler.class));
+
+  @Mock
+  private ConsoleDurableIdempotencyStore durable;
+
+  private ConsoleIdempotencyInterceptor interceptor;
 
   @Test
   @DisplayName("长请求持续续期保持独占,完成后不再续期并标记已完成")
@@ -119,5 +126,11 @@ class ConsoleIdempotencyOwnershipTest {
       data.remove(key);
       return true;
     }
+  }
+
+  @BeforeEach
+  void initializeSubject() {
+    interceptor = new ConsoleIdempotencyInterceptor(
+        store, durable, new BatchSecurityProperties(), mock(TaskScheduler.class));
   }
 }

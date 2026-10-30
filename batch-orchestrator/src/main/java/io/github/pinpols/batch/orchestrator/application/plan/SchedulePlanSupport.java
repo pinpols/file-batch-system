@@ -8,7 +8,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-/** Shared conversion of a schedule plan to and from resource-admission decisions. */
+/** 调度计划与资源准入决策之间共用的转换逻辑。 */
 public final class SchedulePlanSupport {
 
   private SchedulePlanSupport() {}

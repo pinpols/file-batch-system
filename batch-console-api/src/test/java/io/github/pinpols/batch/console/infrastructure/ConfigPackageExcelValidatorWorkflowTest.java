@@ -8,6 +8,7 @@ import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
+import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator;
 import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore.PackageExcelSession;
 import java.time.Instant;
@@ -28,6 +29,22 @@ class ConfigPackageExcelValidatorWorkflowTest {
   private static final String WF_VERSION = "1";
 
   @Test
+  @DisplayName("配置包节点缺少名称时标记为无效")
+  void shouldRejectWorkflowNodeWithoutName_whenValidatingPackage() {
+    Map<String, String> missingName = node("START_0", "START");
+    missingName.remove("node_name");
+    PackageExcelSession session =
+        wfSession(List.of(wfDef()), List.of(missingName, node("END_0", "END")), List.of());
+
+    var result = validator().validate(session);
+
+    assertThat(result.wfNodes().invalid()).isEqualTo(1);
+    assertThat(result.wfNodes().issues())
+        .anySatisfy(issue -> assertThat(issue.message()).contains("node_name"));
+    assertThat(result.wfNodes().validRows()).hasSize(1);
+  }
+
+  @Test
   @DisplayName("起止节点齐备的链式编排图不产生编排表相关问题")
   void shouldReportNoTopologyIssues_whenChainWorkflowIsValid() {
     PackageExcelSession session = wfSession(
@@ -40,6 +57,45 @@ class ConfigPackageExcelValidatorWorkflowTest {
     assertThat(result.crossRefIssues())
         .filteredOn(i -> i.sheetName().startsWith("workflow_"))
         .isEmpty();
+  }
+
+  @Test
+  @DisplayName("Workflow 监控策略按工作流编码和版本校验并拒绝重复项")
+  void shouldValidateWorkflowMonitoringPolicyByDefinitionVersion() {
+    Map<String, String> policyRow = Map.of(
+        "workflow_code", WF_CODE,
+        "workflow_version", WF_VERSION,
+        "soft_runtime_seconds", "600",
+        "soft_runtime_severity", "ERROR",
+        "start_grace_seconds", "120",
+        "start_grace_severity", "WARN",
+        "completion_deadline_local_time", "04:30",
+        "completion_deadline_day_offset", "1",
+        "completion_deadline_severity", "CRITICAL");
+    PackageExcelSession session = new PackageExcelSession(
+        "wf.xlsx",
+        "t1",
+        Instant.EPOCH,
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(wfDef()),
+        List.of(),
+        List.of(),
+        List.of(policyRow, policyRow));
+
+    var result = validator(mock(WorkflowDefinitionMapper.class)).validate(session);
+
+    assertThat(result.workflowMonitoringPolicies().validRows()).hasSize(1);
+    assertThat(result.workflowMonitoringPolicies().invalid()).isEqualTo(1);
+    assertThat(result.workflowMonitoringPolicies().issues())
+        .anySatisfy(issue -> assertThat(issue.message()).contains("duplicate workflow_code"));
   }
 
   @Test
@@ -249,6 +305,16 @@ class ConfigPackageExcelValidatorWorkflowTest {
         mock(ResourceQueueMapper.class),
         mock(BusinessCalendarMapper.class),
         mock(BatchWindowMapper.class));
+  }
+
+  private static ConfigPackageExcelValidator validator(WorkflowDefinitionMapper workflowMapper) {
+    return new ConfigPackageExcelValidator(
+        mock(JobDefinitionMapper.class),
+        mock(FileTemplateConfigMapper.class),
+        mock(ResourceQueueMapper.class),
+        mock(BusinessCalendarMapper.class),
+        mock(BatchWindowMapper.class),
+        workflowMapper);
   }
 
   private static PackageExcelSession wfSession(

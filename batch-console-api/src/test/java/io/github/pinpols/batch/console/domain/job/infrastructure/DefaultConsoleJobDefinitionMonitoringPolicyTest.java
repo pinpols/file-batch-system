@@ -248,8 +248,8 @@ class DefaultConsoleJobDefinitionMonitoringPolicyTest {
   }
 
   @Test
-  @DisplayName("普通手动作业不能配置计划启动宽限")
-  void shouldRejectStartGrace_whenJobHasNoScheduleOrDependency() {
+  @DisplayName("MANUAL 作业可预先配置 Workflow 就绪规则，运行时仍按真实资格判断")
+  void shouldAllowExplicitWorkflowPolicyBeforeJobIsAttached() {
     JobDefinitionCreateRequest request = new JobDefinitionCreateRequest();
     request.setTenantId("tenant-a");
     request.setJobCode("JOB_MANUAL");
@@ -257,8 +257,29 @@ class DefaultConsoleJobDefinitionMonitoringPolicyTest {
     request.setJobType("PROCESS");
     request.setScheduleType("MANUAL");
     request.setStartGraceSeconds(60);
+    request.setDependencyCompletionWindowSeconds(120);
 
-    assertThatThrownBy(() -> service.create(request)).isInstanceOf(BizException.class);
+    assertThat(request.isScheduledMonitoringConfiguredCorrectly()).isTrue();
+    stubTenantAndOperator();
+    AtomicReference<JobDefinitionEntity> inserted = new AtomicReference<>();
+    doAnswer(invocation -> {
+          JobDefinitionEntity entity = invocation.getArgument(0);
+          entity.setId(42L);
+          inserted.set(entity);
+          return 1;
+        })
+        .when(jobDefinitionMapper)
+        .insert(any(JobDefinitionEntity.class));
+    when(jobDefinitionMapper.selectById("tenant-a", 42L)).thenAnswer(invocation -> inserted.get());
+
+    var response = service.create(request);
+    assertThat(response.startGraceSeconds()).isEqualTo(60);
+    assertThat(response.dependencyCompletionWindowSeconds()).isEqualTo(120);
+    ArgumentCaptor<JobMonitoringPolicyUpsertParam> policy =
+        ArgumentCaptor.forClass(JobMonitoringPolicyUpsertParam.class);
+    verify(jobDefinitionMapper).upsertJobMonitoringPolicy(policy.capture());
+    assertThat(policy.getValue().getStartGraceSeconds()).isEqualTo(60);
+    assertThat(policy.getValue().getDependencyCompletionWindowSeconds()).isEqualTo(120);
   }
 
   @Test

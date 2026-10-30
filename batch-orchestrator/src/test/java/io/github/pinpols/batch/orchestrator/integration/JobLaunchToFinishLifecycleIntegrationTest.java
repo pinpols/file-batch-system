@@ -114,7 +114,7 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
             JobInstanceStatus.RUNNING.code(),
             JobInstanceStatus.WAITING.code());
 
-    // 2) Claim the task
+    // 2) 认领任务
     List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(
         new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
     assertThat(tasks).isNotEmpty();
@@ -131,9 +131,7 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
     // 服务端 assignWorker 在 CLAIM 时把 current_invocation_id 写进 partition;真 worker 持此值并在 report
     // 携带。测试从 partition 读回该值填入命令,复现生产回填(否则触发 R3-P1-10 report invocation fence)。
     String invocationId = jdbcTemplate.queryForObject(
-        selectCurrentInvocationIdSql,
-        String.class,
-        claimed.getJobPartitionId());
+        selectCurrentInvocationIdSql, String.class, claimed.getJobPartitionId());
     TaskOutcomeCommand successOutcome = TaskOutcomeCommand.builder()
         .tenantId(TENANT)
         .taskId(claimed.getId())
@@ -192,9 +190,7 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
 
     // 上报失败（测试夹具中未配置重试策略：retry_max_count = 0）
     String invocationId = jdbcTemplate.queryForObject(
-        selectCurrentInvocationIdSql,
-        String.class,
-        claimed.getJobPartitionId());
+        selectCurrentInvocationIdSql, String.class, claimed.getJobPartitionId());
     TaskOutcomeCommand failureOutcome = TaskOutcomeCommand.builder()
         .tenantId(TENANT)
         .taskId(claimed.getId())
@@ -213,17 +209,145 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
   }
 
   @Test
+  @DisplayName("DISPATCH 束文件号在建任务时记录关联并校验租户")
+  void shouldRecordAndValidateBundleFileForDispatchTask() {
+    final String insertFileRecordSql1 = """
+        insert into batch.file_record (tenant_id, file_category, file_name, file_format_type,
+          storage_type, storage_path, source_type, file_status)
+        values (?, 'INPUT', ?, 'BINARY', 'LOCAL', ?, 'UPLOAD', 'RECEIVED') returning id
+        """;
+    final String selectJobStepInstanceSql2 =
+        "select related_file_id from batch.job_step_instance where tenant_id = ? and job_task_id = ?";
+    final String insertFileRecordSql3 = """
+        insert into batch.file_record (tenant_id, file_category, file_name, file_format_type,
+          storage_type, storage_path, source_type, file_status)
+        values ('t2', 'INPUT', ?, 'BINARY', 'LOCAL', ?, 'UPLOAD', 'RECEIVED') returning id
+        """;
+    final String selectJobStepInstanceSql4 =
+        "select related_file_id from batch.job_step_instance where tenant_id = ? and job_task_id = ?";
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
+        jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
+    LaunchResponse response = workflowRunLaunchService.launch(LaunchRequest.builder()
+        .tenantId(TENANT)
+        .workflowDefinitionId(seed.workflowDefinitionId())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.API)
+        .requestId(seed.requestId())
+        .params(Map.of())
+        .build());
+    JobInstanceEntity instance = jobInstanceForWorkflowRun(response.instanceNo());
+    JobTaskEntity existing = jobTaskMapper
+        .selectByQuery(new JobTaskQuery(TENANT, instance.getId(), null, null, null))
+        .getFirst();
+    Long fileId = jdbcTemplate.queryForObject(
+        insertFileRecordSql1,
+        Long.class,
+        TENANT,
+        "bundle-" + seed.requestId(),
+        "/bundle/" + seed.requestId());
+    JobTaskEntity task = new JobTaskEntity();
+    task.setTenantId(TENANT);
+    task.setJobInstanceId(instance.getId());
+    task.setJobInstanceBizDate(instance.getBizDate());
+    task.setJobPartitionId(existing.getJobPartitionId());
+    task.setTaskType("DISPATCH");
+    task.setTaskSeq(987650);
+    task.setTaskStatus(TaskStatus.CREATED.code());
+    task.setTaskPayload("{\"bundleSourceFileId\":" + fileId + "}");
+    RlsTenantContextHolder.runWithTenant(TENANT, () -> taskCreationService.createTask(task));
+
+    assertThat(jdbcTemplate.queryForObject(
+            selectJobStepInstanceSql2, Long.class, TENANT, task.getId()))
+        .isEqualTo(fileId);
+    Long foreignFile = jdbcTemplate.queryForObject(
+        insertFileRecordSql3,
+        Long.class,
+        "foreign-" + seed.requestId(),
+        "/foreign/" + seed.requestId());
+    JobTaskEntity mixed = new JobTaskEntity();
+    mixed.setTenantId(TENANT);
+    mixed.setJobInstanceId(instance.getId());
+    mixed.setJobInstanceBizDate(instance.getBizDate());
+    mixed.setJobPartitionId(existing.getJobPartitionId());
+    mixed.setTaskType("DISPATCH");
+    mixed.setTaskSeq(987652);
+    mixed.setTaskStatus(TaskStatus.CREATED.code());
+    mixed.setTaskPayload("{\"bundleSourceFileId\":" + fileId + ",\"fileId\":" + foreignFile + "}");
+    RlsTenantContextHolder.runWithTenant(TENANT, () -> taskCreationService.createTask(mixed));
+    assertThat(jdbcTemplate.queryForObject(
+            selectJobStepInstanceSql4, Long.class, TENANT, mixed.getId()))
+        .isEqualTo(fileId);
+    JobTaskEntity foreign = new JobTaskEntity();
+    foreign.setTenantId(TENANT);
+    foreign.setJobInstanceId(instance.getId());
+    foreign.setJobInstanceBizDate(instance.getBizDate());
+    foreign.setJobPartitionId(existing.getJobPartitionId());
+    foreign.setTaskType("DISPATCH");
+    foreign.setTaskSeq(987651);
+    foreign.setTaskStatus(TaskStatus.CREATED.code());
+    foreign.setTaskPayload("{\"bundleSourceFileId\":" + foreignFile + "}");
+    assertThatThrownBy(() -> RlsTenantContextHolder.runWithTenant(
+            TENANT, () -> taskCreationService.createTask(foreign)))
+        .hasMessage("error.file.record_not_found");
+  }
+
+  @Test
+  @DisplayName("任务创建时小数文件号不会关联到整数部分对应的文件")
+  void taskCreation_doesNotAssociateFractionalFileId() {
+    final String insertFileSql = """
+        insert into batch.file_record (tenant_id, file_category, file_name, file_format_type,
+          storage_type, storage_path, source_type, file_status)
+        values (?, 'INPUT', ?, 'BINARY', 'LOCAL', ?, 'UPLOAD', 'RECEIVED') returning id
+        """;
+    final String selectStepFileSql =
+        "select related_file_id from batch.job_step_instance where tenant_id = ? and job_task_id = ?";
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
+        jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
+    LaunchResponse response = workflowRunLaunchService.launch(LaunchRequest.builder()
+        .tenantId(TENANT)
+        .workflowDefinitionId(seed.workflowDefinitionId())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.API)
+        .requestId(seed.requestId())
+        .params(Map.of())
+        .build());
+    JobInstanceEntity instance = jobInstanceForWorkflowRun(response.instanceNo());
+    JobTaskEntity existing = jobTaskMapper
+        .selectByQuery(new JobTaskQuery(TENANT, instance.getId(), null, null, null))
+        .getFirst();
+    Long fileId = jdbcTemplate.queryForObject(
+        insertFileSql,
+        Long.class,
+        TENANT,
+        "fractional-" + seed.requestId(),
+        "/fractional/" + seed.requestId());
+    JobTaskEntity task = new JobTaskEntity();
+    task.setTenantId(TENANT);
+    task.setJobInstanceId(instance.getId());
+    task.setJobInstanceBizDate(instance.getBizDate());
+    task.setJobPartitionId(existing.getJobPartitionId());
+    task.setTaskType("DISPATCH");
+    task.setTaskSeq(987653);
+    task.setTaskStatus(TaskStatus.CREATED.code());
+    task.setTaskPayload("{\"fileId\":" + fileId + ".9}");
+    RlsTenantContextHolder.runWithTenant(TENANT, () -> taskCreationService.createTask(task));
+
+    assertThat(jdbcTemplate.queryForObject(selectStepFileSql, Long.class, TENANT, task.getId()))
+        .isNull();
+  }
+
+  @Test
   @DisplayName("任务创建拒绝引用其他租户的文件且不写任务或步骤实例")
   void taskCreation_rejectsForeignTenantRelatedFileBeforeWritingRows() {
-  final String insertFileRecordSql = """
+    final String insertFileRecordSql = """
       insert into batch.file_record (tenant_id, file_category, file_name, file_format_type, storage_type,\s\
       storage_path, source_type, file_status)\s\
       values ('t2', 'INPUT', ?, 'DELIMITED', 'LOCAL', ?, 'UPLOAD', 'RECEIVED') returning id\
       """;
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from batch.job_task where tenant_id = ? and task_seq = ?
   """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.job_step_instance where tenant_id = ? and related_file_id = ?\
       """;
 
@@ -251,6 +375,7 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
     JobTaskEntity invalidTask = new JobTaskEntity();
     invalidTask.setTenantId(TENANT);
     invalidTask.setJobInstanceId(instance.getId());
+    invalidTask.setJobInstanceBizDate(instance.getBizDate());
     invalidTask.setJobPartitionId(existingTask.getJobPartitionId());
     invalidTask.setTaskType(existingTask.getTaskType());
     invalidTask.setTaskSeq(987654);
@@ -273,11 +398,11 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
   @Test
   @DisplayName("批量步骤归属约束失败返回冲突并回滚本批任务和步骤, 保留已有运行树")
   void shouldRollbackTasksAndSteps_whenStepOwnershipFailsAfterTaskInsert() {
-  final String selectCountSql = """
+    final String selectCountSql = """
           select count(*) from batch.job_task
            where tenant_id=? and job_instance_id=? and task_seq in (987655,987656)
           """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
         select count(*) from batch.job_step_instance where tenant_id=? and step_code in (?, ?)
         """;
 
@@ -301,6 +426,7 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
       JobTaskEntity task = new JobTaskEntity();
       task.setTenantId(TENANT);
       task.setJobInstanceId(instance.getId());
+      task.setJobInstanceBizDate(instance.getBizDate());
       task.setJobPartitionId(original.getJobPartitionId());
       task.setTaskType(original.getTaskType());
       task.setTaskSeq(987655 + i);
@@ -359,7 +485,8 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
             and node_run.job_instance_id is not null
           """;
 
-    Long jobInstanceId = jdbcTemplate.queryForObject(selectJobInstanceIdSql, Long.class, Long.valueOf(workflowRunId));
+    Long jobInstanceId = jdbcTemplate.queryForObject(
+        selectJobInstanceIdSql, Long.class, Long.valueOf(workflowRunId));
     return jobInstanceMapper.selectById(TENANT, jobInstanceId);
   }
 
@@ -379,10 +506,7 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
     long deadline = System.currentTimeMillis() + 5_000L;
     while (System.currentTimeMillis() < deadline) {
       String partitionStatus = jdbcTemplate.queryForObject(
-          selectPartitionStatusSql,
-          String.class,
-          TENANT,
-          task.getJobPartitionId());
+          selectPartitionStatusSql, String.class, TENANT, task.getJobPartitionId());
       if (!PartitionStatus.READY.code().equals(partitionStatus)) {
         if (!sleepBeforeClaimRetry()) {
           return claimed;

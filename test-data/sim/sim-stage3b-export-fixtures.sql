@@ -1,4 +1,4 @@
--- Stage 3b Export fixture：STATIC 4 分片 keyset-range 导出。
+-- Stage 3b Export fixture：旧区间配置下 STATIC 4 分片哈希导出。
 -- 前置：docs/test-data/sim-e2e-bootstrap.sql 已执行。
 
 WITH src AS (
@@ -11,13 +11,13 @@ WITH src AS (
 ), tpl AS (
   SELECT
     'TA_EXPORT_REPORT_JSON_KEYSET_TPL' AS template_code,
-    '客户 JSON keyset-range 分片导出模板' AS template_name,
+    '客户 JSON 哈希分片导出模板' AS template_name,
     'TA_EXPORT_REPORT_JSON_KEYSET' AS biz_type,
     'ta_export_customer_keyset_${bizDate}_${batchNo}.json' AS naming_rule,
     'SELECT id, tenant_id, customer_no, customer_name, customer_type, certificate_no, mobile_no, email, status FROM biz.customer_account WHERE tenant_id = :tenantId AND customer_no LIKE ''EXP3B-%'' AND (CAST(:batchNo AS text) IS NOT NULL)' AS default_query_sql,
     jsonb_set(src.query_param_schema, '{partition_keyset_range}', 'true'::jsonb, true)
       AS query_param_schema,
-    'Stage 3b export keyset-range 4-shard scenario' AS description
+    'Stage 3b export hash 4-shard with legacy range setting' AS description
   FROM src
 )
 INSERT INTO batch.file_template_config (
@@ -81,7 +81,7 @@ SELECT src.tenant_id, 'TA_EXPORT_REPORT_STATIC', '客户导出 STATIC 分片', s
        src.queue_code, src.worker_group, src.calendar_code, src.window_code,
        'API', false, 'STATIC', 'NONE', 0, src.timeout_seconds, src.execution_handler,
        src.param_schema, jsonb_build_object('templateCode', 'TA_EXPORT_REPORT_JSON_KEYSET_TPL'),
-       1, true, 'Stage 3b export keyset-range 4-shard scenario', 'sim-e2e', 'sim-e2e',
+       1, true, 'Stage 3b export hash 4-shard with legacy range setting', 'sim-e2e', 'sim-e2e',
        'FULL', coalesce(src.previous_day_dependency_scope, 'INHERIT'), src.retry_policy_by_class
 FROM src
 ON CONFLICT (tenant_id, job_code) DO UPDATE

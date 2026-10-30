@@ -102,7 +102,7 @@ class BizDateArithmeticTest {
   @DisplayName("解析前五个营业日时跳过周末, 按时间顺序给出五天")
   void shouldSkipWeekends_whenResolvingPreviousFiveBizDays() {
     // 2026-05-04 is Monday → prev 5 biz days = Apr 27 (Mon), Apr 28 (Tue), Apr 29 (Wed), Apr 30
-    // (Thu), May 1 (Fri)
+    // 5 月 1 日为星期五（前一天星期四）。
     List<LocalDate> dates =
         arithmetic.resolveRange(LocalDate.of(2026, Month.MAY, 4), "PREV_5_BIZ_DAYS");
     assertThat(dates)

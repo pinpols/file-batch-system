@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.argThat;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -19,6 +20,7 @@ import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
+import io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties;
 import io.github.pinpols.batch.worker.core.domain.PulledTask;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
@@ -32,18 +34,21 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
@@ -64,6 +69,16 @@ class DefaultTaskExecutionWrapperTest {
   void setUp() {
     stepExecutionAdapter = mock(StepExecutionAdapter.class);
     taskExecutionClient = mock(TaskExecutionClient.class);
+    when(taskExecutionClient.renewLeasesBatch(argThat(items -> items != null
+            && !items.isEmpty()
+            && items.stream().allMatch(TaskLeaseRenewItem::executionStarted))))
+        .thenAnswer(invocation -> {
+          List<TaskLeaseRenewItem> items = invocation.getArgument(0);
+          Map<Long, TaskLeaseRenewResult> confirmed = new LinkedHashMap<>();
+          for (TaskLeaseRenewItem item : items)
+            confirmed.put(item.taskId(), TaskLeaseRenewResult.renewed(item.taskId()));
+          return confirmed;
+        });
     activeTaskLeaseRegistry = mock(ActiveTaskLeaseRegistry.class);
     when(activeTaskLeaseRegistry.beginExecution(any(), any(), any(), any())).thenReturn(true);
     when(activeTaskLeaseRegistry.isRenewalDue(any(), anyLong())).thenReturn(false);
@@ -92,7 +107,7 @@ class DefaultTaskExecutionWrapperTest {
         timeoutProperties,
         provider,
         watchdogScheduler,
-        10_000L);
+        new WorkerLeaseProperties());
   }
 
   @AfterEach
@@ -100,6 +115,50 @@ class DefaultTaskExecutionWrapperTest {
     wrapper.shutdownWatchdog();
     watchdogScheduler.shutdown();
     executionPool.shutdown();
+  }
+
+  @Test
+  @DisplayName("实际执行入口在执行池线程内确认，并且必须先于适配器调用")
+  void shouldConfirmExecutionStartInsidePoolBeforeCallingAdapter() {
+    PulledTask task = sampleTask("1021", "t1", "w1");
+    task.setPartitionInvocationId("inv-21");
+    TaskLeaseRenewItem startItem = TaskLeaseRenewItem.executionStart("t1", 1021L, "w1", "inv-21");
+    List<TaskLeaseRenewItem> startItems = List.of(startItem);
+    AtomicReference<String> confirmationThread = new AtomicReference<>();
+    when(taskExecutionClient.renewLeasesBatch(startItems)).thenAnswer(invocation -> {
+      confirmationThread.set(Thread.currentThread().getName());
+      TaskLeaseRenewResult confirmed = TaskLeaseRenewResult.renewed(1021L);
+      return Map.of(1021L, confirmed);
+    });
+    when(stepExecutionAdapter.execute(any())).thenReturn(StepExecutionResponse.successResponse());
+    String listenerThread = Thread.currentThread().getName();
+
+    WorkerExecutionResult result = wrapper.execute(task);
+
+    assertThat(result.success()).isTrue();
+    assertThat(confirmationThread.get()).isNotNull().isNotEqualTo(listenerThread);
+    InOrder order = inOrder(taskExecutionClient, stepExecutionAdapter);
+    order.verify(taskExecutionClient).renewLeasesBatch(startItems);
+    order.verify(stepExecutionAdapter).execute(any());
+  }
+
+  @Test
+  @DisplayName("执行入口未确认时不调用业务适配器，也不伪造业务失败回报")
+  void shouldNotExecuteOrReportWhenStartWasNotConfirmed() {
+    PulledTask task = sampleTask("1023", "t1", "w1");
+    task.setPartitionInvocationId("inv-23");
+    TaskLeaseRenewItem startItem = TaskLeaseRenewItem.executionStart("t1", 1023L, "w1", "inv-23");
+    List<TaskLeaseRenewItem> startItems = List.of(startItem);
+    TaskLeaseRenewResult rejected = TaskLeaseRenewResult.rejected(1023L);
+    when(taskExecutionClient.renewLeasesBatch(startItems)).thenReturn(Map.of(1023L, rejected));
+    when(activeTaskLeaseRegistry.markCompletingUnlessLost("1023")).thenReturn(false);
+    when(stepExecutionAdapter.execute(any())).thenReturn(StepExecutionResponse.successResponse());
+
+    WorkerExecutionResult result = wrapper.execute(task);
+
+    assertThat(result.success()).isFalse();
+    verify(stepExecutionAdapter, never()).execute(any());
+    verify(taskExecutionClient, never()).report(any());
   }
 
   @Test
@@ -306,10 +365,8 @@ class DefaultTaskExecutionWrapperTest {
   }
 
   /**
-   * 回归:第三方插件返回的 StepExecutionResponse 允许 message / code 为 null(record 无 @NotNull, 字面失败构造器 {@code
-   * new StepExecutionResponse(false, code, message)} 契约就允许)。 resultSummary 曾用 Map.of("code", code,
-   * "message", message) 构造 → null 时 NPE,把干净的失败 上报掩盖成执行崩溃。见 DefaultTaskExecutionWrapper 的
-   * resultSummary 构造。
+   * 第三方插件的失败响应允许 code 或 message 为空；构造结果摘要时仍应保留原始业务失败，
+   * 不能因 Map.of 拒绝空值而转换为包装器异常。
    */
   @Test
   @DisplayName("失败响应缺少错误描述时仍正常上报, 不因空值抛异常")
@@ -385,8 +442,7 @@ class DefaultTaskExecutionWrapperTest {
     PulledTask task = sampleTask("1019", "t1", "w1");
     task.setPartitionInvocationId("inv-19");
     when(activeTaskLeaseRegistry.isRenewalDue("1019", 20_000L)).thenReturn(true);
-    // 确认启动消息前先持久化准入名额等待；首次请求载荷优先。
-    // 使用原始节点尝试标识恢复已持久化拒绝的延迟子作业。
+    // 同步续租返回取消指令后，注册表保留取消状态，业务适配器不得执行。
     when(activeTaskLeaseRegistry.isCancellationRequested("1019")).thenReturn(true);
     when(taskExecutionClient.renewLeasesBatch(
             List.of(new TaskLeaseRenewItem("t1", 1019L, "w1", "inv-19"))))
@@ -418,8 +474,7 @@ class DefaultTaskExecutionWrapperTest {
   }
 
   /**
-   * P0-1: adapter 抛 RuntimeException 时, 之前会让 listener 也抛; 现在 wrapper 把它转成 WORKER_EXECUTION_ERROR
-   * 失败上报, listener 始终能继续派下个 task.
+   * 适配器抛出的运行时异常转换为 WORKER_EXECUTION_ERROR，避免普通业务异常中断监听线程。
    */
   @Test
   @DisplayName("适配器抛出运行时异常时转换为执行错误上报, 租约正常清理")
@@ -592,8 +647,8 @@ class DefaultTaskExecutionWrapperTest {
   }
 
   /**
-   * P0-1 核心: adapter 卡住超过 task.timeoutSeconds → wrapper 在限时后强 cancel(true) + 失败上报
-   * WORKER_EXECUTION_TIMEOUT, 不让 listener 永久阻塞.
+   * 适配器超过任务时限后请求中断，并在租约仍有效时上报 WORKER_EXECUTION_TIMEOUT，
+   * 防止监听线程无限等待业务返回。
    */
   @Test
   @DisplayName("适配器超时未返回时按限时中断执行并上报超时失败, 同时累加超时计数")
@@ -642,7 +697,7 @@ class DefaultTaskExecutionWrapperTest {
         timeoutProperties,
         provider,
         scheduler,
-        10_000L);
+        new WorkerLeaseProperties());
     CountDownLatch release = new CountDownLatch(1);
     CountDownLatch exited = new CountDownLatch(1);
     when(stepExecutionAdapter.execute(any())).thenAnswer(invocation -> {
@@ -689,7 +744,9 @@ class DefaultTaskExecutionWrapperTest {
         })
         .when(activeTaskLeaseRegistry)
         .registerCancellationCallback(any(), any());
-    when(activeTaskLeaseRegistry.isCancellationRequested("1013")).thenReturn(false, true);
+    AtomicBoolean cancellationRequested = new AtomicBoolean();
+    when(activeTaskLeaseRegistry.isCancellationRequested("1013"))
+        .thenAnswer(invocation -> cancellationRequested.get());
     when(stepExecutionAdapter.execute(any(StepExecutionRequest.class))).thenAnswer(invocation -> {
       started.countDown();
       try {
@@ -706,6 +763,7 @@ class DefaultTaskExecutionWrapperTest {
     assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
     Runnable callback = waitForCancellationCallback(cancellationCallback);
 
+    cancellationRequested.set(true);
     callback.run();
 
     WorkerExecutionResult result = resultFuture.get(5, TimeUnit.SECONDS);
@@ -716,7 +774,7 @@ class DefaultTaskExecutionWrapperTest {
             report -> DefaultTaskExecutionWrapper.CANCELLED_ERROR_CODE.equals(report.getCode())));
   }
 
-  /** P0-1: clamp — task 配 timeout 超过 maxTimeoutSeconds 必须截断, 防呆配置错误把 worker 长期停滞 2 小时以上. */
+  /** 任务超时配置不得超过平台上限，防止错误配置造成过长等待。 */
   @Test
   @DisplayName("任务配置的超时超过上限时被截断, 任务仍能正常完成")
   void shouldClampTimeoutToMax() {
@@ -728,10 +786,10 @@ class DefaultTaskExecutionWrapperTest {
     WorkerExecutionResult result = wrapper.execute(task);
 
     assertThat(result.success()).isTrue();
-    // 没断言具体 timeout 数值; 只看 success + 没 OOM, 表示 clamp 生效让任务正常完成
+    // 此用例验证超限配置仍可正常执行，不作为具体超时边界的时间证据。
   }
 
-  /** P0-1: task 没配 timeout (null/0) 走默认 (defaultTimeoutSeconds=60s 这里). */
+  /** 任务未设置超时时，使用平台配置的默认时限。 */
   @Test
   @DisplayName("任务未配置超时时回退到默认超时并正常上报")
   void shouldFallbackToDefaultTimeoutWhenTaskTimeoutIsNull() {
@@ -766,8 +824,7 @@ class DefaultTaskExecutionWrapperTest {
   }
 
   private static ReplayCapabilityDeclaration declaredReplayCapability() {
-    return replayCapability(
-        "csv-import", List.of("FILE_READ", "DATABASE_WRITE", "FILE_ARCHIVE"));
+    return replayCapability("csv-import", List.of("FILE_READ", "DATABASE_WRITE", "FILE_ARCHIVE"));
   }
 
   private static ReplayCapabilityDeclaration actualReplayCapability() {

@@ -1,12 +1,11 @@
 package io.github.pinpols.batch.testing;
 
-import java.util.Objects;
-
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.testcontainers.containers.GenericContainer;

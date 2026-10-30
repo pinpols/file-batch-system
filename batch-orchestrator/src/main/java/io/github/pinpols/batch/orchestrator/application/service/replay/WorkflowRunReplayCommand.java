@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.replay;
 
-import lombok.Builder;
 import java.util.UUID;
+import lombok.Builder;
 
 /** ADR-049 整 Workflow 重放身份与显式选定的策略。 */
 @Builder(toBuilder = true)

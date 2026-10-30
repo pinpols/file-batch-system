@@ -474,11 +474,11 @@ INSERT INTO batch.file_channel_health (
 INSERT INTO batch.approval_command (
     id, tenant_id, approval_no, approval_type, action_type, target_type, target_id, payload_json,
     approval_status, requester_id, approver_id, rejection_reason, approval_reason, source_trace_id,
-    source_idempotency_key, approved_at, executed_at, created_at, updated_at
+    source_idempotency_key, source_approval_reason, approved_at, executed_at, created_at, updated_at
 ) VALUES
-    (6501, 'default-tenant', 'APP-20260322-001', 'COMPENSATION', 'COMPENSATION', 'JOB_PARTITION', '4102', jsonb_build_object('jobPartitionId', 4102, 'reason', 'retry failed partition'), 'APPROVED', 'ops-user', 'sre-lead', NULL, 'Approved for retry', 'trace-import-001', 'default-tenant:APP-20260322-001', TIMESTAMPTZ '2026-03-22 08:06:00+08', NULL, TIMESTAMPTZ '2026-03-22 08:05:50+08', TIMESTAMPTZ '2026-03-22 08:06:00+08'),
-    (6502, 'default-tenant', 'APP-20260322-002', 'DOWNLOAD', 'DOWNLOAD', 'FILE', '5203', jsonb_build_object('fileId', 5203, 'download', true), 'PENDING', 'admin', NULL, NULL, 'Awaiting approval', 'trace-export-001', 'default-tenant:APP-20260322-002', NULL, NULL, TIMESTAMPTZ '2026-03-22 08:10:00+08', TIMESTAMPTZ '2026-03-22 08:10:00+08'),
-    (6504, 'default-tenant', 'APP-20260322-004', 'DLQ_REPLAY', 'DLQ_REPLAY', 'DEAD_LETTER_TASK', '5902', jsonb_build_object('deadLetterTaskId', 5902, 'reason', 'replay dead letter'), 'REJECTED', 'ops-user', 'sre-lead', 'Source still unavailable', NULL, 'trace-dispatch-001', 'default-tenant:APP-20260322-004', NULL, NULL, TIMESTAMPTZ '2026-03-22 08:12:30+08', TIMESTAMPTZ '2026-03-22 08:12:30+08');
+    (6501, 'default-tenant', 'APP-20260322-001', 'COMPENSATION', 'COMPENSATION', 'JOB_PARTITION', '4102', jsonb_build_object('jobPartitionId', 4102, 'reason', 'retry failed partition'), 'APPROVED', 'ops-user', 'sre-lead', NULL, 'Approved for retry', 'trace-import-001', 'default-tenant:APP-20260322-001', 'retry failed partition', TIMESTAMPTZ '2026-03-22 08:06:00+08', NULL, TIMESTAMPTZ '2026-03-22 08:05:50+08', TIMESTAMPTZ '2026-03-22 08:06:00+08'),
+    (6502, 'default-tenant', 'APP-20260322-002', 'DOWNLOAD', 'DOWNLOAD', 'FILE', '5203', jsonb_build_object('fileId', 5203, 'download', true), 'PENDING', 'admin', NULL, NULL, 'Awaiting approval', 'trace-export-001', 'default-tenant:APP-20260322-002', 'Awaiting approval', NULL, NULL, TIMESTAMPTZ '2026-03-22 08:10:00+08', TIMESTAMPTZ '2026-03-22 08:10:00+08'),
+    (6504, 'default-tenant', 'APP-20260322-004', 'DLQ_REPLAY', 'DLQ_REPLAY', 'DEAD_LETTER_TASK', '5902', jsonb_build_object('deadLetterTaskId', 5902, 'reason', 'replay dead letter'), 'REJECTED', 'ops-user', 'sre-lead', 'Source still unavailable', NULL, 'trace-dispatch-001', 'default-tenant:APP-20260322-004', 'replay dead letter', NULL, NULL, TIMESTAMPTZ '2026-03-22 08:12:30+08', TIMESTAMPTZ '2026-03-22 08:12:30+08');
 
 INSERT INTO batch.alert_event (
     id, tenant_id, service_name, alert_type, severity, title, detail_json, dedup_fingerprint,

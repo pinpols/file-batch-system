@@ -5,7 +5,8 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
@@ -151,13 +152,10 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
     }
     tenantId = "quartz-misfire-" + UUID.randomUUID();
     workflowCode = "WF_" + UUID.randomUUID().toString().replace("-", "");
-    jdbcTemplate.update(
-        insertTenantSql,
-        tenantId,
-        tenantId);
+    jdbcTemplate.update(insertTenantSql, tenantId, tenantId);
     jdbcTemplate.update(insertBusinessCalendarSql, tenantId, LocalTime.MIDNIGHT);
-    workflowDefinitionId =
-    jdbcTemplate.queryForObject(insertWorkflowDefinitionSql, Long.class, tenantId, workflowCode, workflowCode);
+    workflowDefinitionId = jdbcTemplate.queryForObject(
+        insertWorkflowDefinitionSql, Long.class, tenantId, workflowCode, workflowCode);
     jobKey = JobKey.jobKey(tenantId + ":WF:" + workflowCode, TriggerSchedulerFacade.JOB_GROUP);
   }
 
@@ -207,18 +205,13 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
           tenantId + ":RECOVERY:" + workflowDefinitionId, TriggerSchedulerFacade.JOB_GROUP));
     }
     jdbcTemplate.update(deleteScheduledOccurrenceSql, tenantId);
-    jdbcTemplate.update(
-        deleteScheduledOccurrenceCoverageSql, tenantId);
+    jdbcTemplate.update(deleteScheduledOccurrenceCoverageSql, tenantId);
     jdbcTemplate.update(deleteTriggerMisfirePendingSql, tenantId);
     jdbcTemplate.update(deleteTriggerOutboxEventSql, tenantId);
     jdbcTemplate.update(deleteTriggerRequestSql, tenantId);
     jdbcTemplate.update(deleteCalendarHolidaySql, tenantId);
-    jdbcTemplate.update(
-        deleteWorkflowDefinitionSql,
-        tenantId,
-        workflowDefinitionId);
-    jdbcTemplate.update(
-        deleteBatchDayCatchupControlSql, tenantId);
+    jdbcTemplate.update(deleteWorkflowDefinitionSql, tenantId, workflowDefinitionId);
+    jdbcTemplate.update(deleteBatchDayCatchupControlSql, tenantId);
     jdbcTemplate.update(deleteBusinessCalendarSql, tenantId);
     jdbcTemplate.update(deleteTenantSql, tenantId);
     if (replacementSchedulerFactory != null) {
@@ -230,24 +223,24 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("恢复 JDBC 调度器后真实 misfire callback 保留原 fire time 并只产生一个补跑请求")
   void realQuartzMisfire_recoversWorkflowOccurrenceIntoCatchUpRequest() throws Exception {
-  final String insertScheduledOccurrenceSql = """
+    final String insertScheduledOccurrenceSql = """
           insert into batch.scheduled_occurrence (
               tenant_id, workflow_definition_id, workflow_code, schedule_version, calendar_code,
               scheduled_fire_time, biz_date, occurrence_status
           ) values (?, ?, ?, 1, 'misfire_cal', ?, ?, 'PLANNED')
           """;
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from batch.trigger_request where tenant_id = ? and workflow_definition_id = ?\s\
       and trigger_type = 'CATCH_UP'\
       """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.trigger_outbox_event where tenant_id = ?
   """;
-  final String selectBizDateSql = """
+    final String selectBizDateSql = """
       select biz_date from batch.trigger_request where tenant_id = ? and workflow_definition_id = ?\s\
       and trigger_type = 'CATCH_UP'\
       """;
-  final String selectCountSql3 = """
+    final String selectCountSql3 = """
       select count(*) from batch.scheduled_occurrence where tenant_id = ? and workflow_definition_id = ?\s\
       and scheduled_fire_time = ? and occurrence_status = 'REQUESTED'\
       """;
@@ -295,53 +288,40 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
 
     await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
       Integer requestCount = jdbcTemplate.queryForObject(
-          selectCountSql,
-          Integer.class,
-          tenantId,
-          workflowDefinitionId);
+          selectCountSql, Integer.class, tenantId, workflowDefinitionId);
       assertThat(requestCount).isEqualTo(1);
-      Integer outboxCount = jdbcTemplate.queryForObject(
-          selectCountSql2,
-          Integer.class,
-          tenantId);
+      Integer outboxCount = jdbcTemplate.queryForObject(selectCountSql2, Integer.class, tenantId);
       assertThat(outboxCount).isEqualTo(1);
       LocalDate requestBizDate = jdbcTemplate.queryForObject(
-          selectBizDateSql,
-          LocalDate.class,
-          tenantId,
-          workflowDefinitionId);
+          selectBizDateSql, LocalDate.class, tenantId, workflowDefinitionId);
       assertThat(requestBizDate)
           .isEqualTo(
               expectedScheduledFireTime.toInstant().atZone(ZoneOffset.UTC).toLocalDate());
     });
 
     Integer occurrenceCount = jdbcTemplate.queryForObject(
-        selectCountSql3,
-        Integer.class,
-        tenantId,
-        workflowDefinitionId,
-        expectedScheduledFireTime);
+        selectCountSql3, Integer.class, tenantId, workflowDefinitionId, expectedScheduledFireTime);
     assertThat(occurrenceCount).isEqualTo(1);
   }
 
   @Test
   @DisplayName("Quartz 跨过多个已规划 fire 后对账不能只恢复首个而遗留其余 PLANNED")
   void realQuartzMisfire_shouldAccountForEveryPersistedMissedFire() throws Exception {
-  final String insertScheduledOccurrenceSql = """
+    final String insertScheduledOccurrenceSql = """
             insert into batch.scheduled_occurrence (
                 tenant_id, workflow_definition_id, workflow_code, schedule_version, calendar_code,
                 scheduled_fire_time, biz_date, occurrence_status
             ) values (?, ?, ?, 1, 'misfire_cal', ?, ?, 'PLANNED')
             """;
-  final String selectCountSql = """
+    final String selectCountSql = """
               select count(*) from batch.scheduled_occurrence
               where tenant_id = ? and workflow_definition_id = ?
                 and occurrence_status = 'PLANNED' and scheduled_fire_time < ?
               """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.trigger_request where tenant_id = ?
   """;
-  final String selectCountSql3 = """
+    final String selectCountSql3 = """
       select count(*) from batch.trigger_outbox_event where tenant_id = ?
   """;
 
@@ -401,7 +381,7 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
         beanFactory.getBean(TriggerScheduledOccurrencePlanner.class),
         replacementMisfireRecoveryListener);
     reconciler.reconcile();
-    verifyNoInteractions(registration);
+    verify(registration, never()).registerRecoveryJob(any());
 
     Integer selectedScheduledOccurrenceCount = jdbcTemplate.queryForObject(
         selectCountSql,
@@ -446,17 +426,17 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
               scheduled_fire_time, biz_date, occurrence_status
           ) values (?, ?, ?, 1, 'misfire_cal', ?, ?, 'PLANNED')
           """;
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from batch.trigger_request where tenant_id = ? and workflow_definition_id = ?\
       """;
-  final String selectBizDateSql = """
+    final String selectBizDateSql = """
       select biz_date from batch.trigger_request where tenant_id = ? and workflow_definition_id = ?\
       """;
-  final String selectScheduledFireTimeSql = """
+    final String selectScheduledFireTimeSql = """
       select scheduled_fire_time from batch.scheduled_occurrence where tenant_id = ?\s\
       and workflow_definition_id = ?\
       """;
-  final String selectBizDateSql2 = """
+    final String selectBizDateSql2 = """
       select biz_date from batch.scheduled_occurrence where tenant_id = ? and workflow_definition_id = ?\s\
       and scheduled_fire_time = ?\
       """;
@@ -464,19 +444,9 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
     Instant scheduledFireTime = Instant.parse("2026-03-08T07:00:00Z");
     LocalDate rawBizDate = LocalDate.of(2026, 3, 8);
     LocalDate rolledBizDate = LocalDate.of(2026, 3, 9);
-    jdbcTemplate.update(
-        updateBusinessCalendarSql,
-        tenantId);
-    Long calendarId = jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class,
-        tenantId,
-        "misfire_cal");
-    jdbcTemplate.update(
-        insertCalendarHolidaySql,
-        tenantId,
-        calendarId,
-        rawBizDate);
+    jdbcTemplate.update(updateBusinessCalendarSql, tenantId);
+    Long calendarId = jdbcTemplate.queryForObject(selectIdSql, Long.class, tenantId, "misfire_cal");
+    jdbcTemplate.update(insertCalendarHolidaySql, tenantId, calendarId, rawBizDate);
     assertThat(scheduledFireTime.atZone(ZoneId.of("America/New_York")).toLocalTime())
         .isEqualTo(LocalTime.of(3, 0));
 
@@ -507,10 +477,7 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
 
     await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
       Integer requestCount = jdbcTemplate.queryForObject(
-          selectCountSql,
-          Integer.class,
-          tenantId,
-          workflowDefinitionId);
+          selectCountSql, Integer.class, tenantId, workflowDefinitionId);
       assertThat(requestCount).isEqualTo(1);
       LocalDate selectedBizDate = jdbcTemplate.queryForObject(
           selectBizDateSql, LocalDate.class, tenantId, workflowDefinitionId);
@@ -533,20 +500,20 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
   @DisplayName("真实 Quartz misfire 与并发重复恢复报告同一 fire 时只接纳一条 request 和 Outbox")
   void realQuartzDuplicateMisfireCallbacksForSameFire_persistOneRequestAndOutbox()
       throws Exception {
-        final String insertScheduledOccurrenceSql = """
+    final String insertScheduledOccurrenceSql = """
     insert into batch.scheduled_occurrence (
     tenant_id, workflow_definition_id, workflow_code, schedule_version, calendar_code,
     scheduled_fire_time, biz_date, occurrence_status
     ) values (?, ?, ?, 1, 'misfire_cal', ?, ?, 'PLANNED')
     """;
-        final String selectCountSql = """
+    final String selectCountSql = """
             select count(*) from batch.trigger_request where tenant_id = ? and workflow_definition_id = ?\s\
             and trigger_type = 'CATCH_UP'\
             """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.trigger_outbox_event where tenant_id = ?
   """;
-  final String selectCountSql3 = """
+    final String selectCountSql3 = """
       select count(*) from batch.scheduled_occurrence where tenant_id = ? and workflow_definition_id = ?\s\
       and scheduled_fire_time = ? and occurrence_status = 'REQUESTED'\
       """;
@@ -568,7 +535,7 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
     if (scheduler.checkExists(jobKey)) {
       scheduler.deleteJob(jobKey);
     }
-        jdbcTemplate.update(
+    jdbcTemplate.update(
         insertScheduledOccurrenceSql,
         tenantId,
         workflowDefinitionId,
@@ -638,15 +605,9 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
 
     await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
       Integer requestCount = jdbcTemplate.queryForObject(
-          selectCountSql,
-          Integer.class,
-          tenantId,
-          workflowDefinitionId);
+          selectCountSql, Integer.class, tenantId, workflowDefinitionId);
       assertThat(requestCount).isEqualTo(1);
-      Integer outboxCount = jdbcTemplate.queryForObject(
-          selectCountSql2,
-          Integer.class,
-          tenantId);
+      Integer outboxCount = jdbcTemplate.queryForObject(selectCountSql2, Integer.class, tenantId);
       assertThat(outboxCount).isEqualTo(1);
       Integer occurrenceCount = jdbcTemplate.queryForObject(
           selectCountSql3,
@@ -666,42 +627,42 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("真实 Quartz 恢复积压期间旧项受阻,多轮新义务持续推进且重复扫描不重复接纳")
   void realQuartzRecoveryBacklog_allowsNewArrivalAfterCapacityFrees() throws Exception {
-  final String insertScheduledOccurrenceSql = """
+    final String insertScheduledOccurrenceSql = """
             insert into batch.scheduled_occurrence (
                 tenant_id, workflow_definition_id, workflow_code, schedule_version, calendar_code,
                 scheduled_fire_time, biz_date, occurrence_status
             ) values (?, ?, ?, 1, 'misfire_cal', ?, ?, 'PLANNED')
             """;
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from quartz.QRTZ_TRIGGERS where SCHED_NAME = ?\s\
       and TRIGGER_GROUP = 'batch-trigger-recovery'\
       """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.scheduled_occurrence where tenant_id = ? and workflow_definition_id = ?\s\
       and occurrence_status = 'MISFIRE_PENDING'\
       """;
-  final String insertScheduledOccurrenceSql2 = """
+    final String insertScheduledOccurrenceSql2 = """
               insert into batch.scheduled_occurrence (
                   tenant_id, workflow_definition_id, workflow_code, schedule_version, calendar_code,
                   scheduled_fire_time, biz_date, occurrence_status
               ) values (?, ?, ?, 1, 'misfire_cal', ?, ?, 'PLANNED')
               """;
-  final String selectCountSql3 = """
+    final String selectCountSql3 = """
       select count(*) from batch.scheduled_occurrence where tenant_id = ? and workflow_definition_id = ?\s\
       and occurrence_status = 'REQUESTED'\
       """;
-  final String selectCountSql4 = """
+    final String selectCountSql4 = """
       select count(*) from batch.trigger_request where tenant_id = ? and workflow_definition_id = ?\s\
       and trigger_type = 'CATCH_UP'\
       """;
-  final String selectCountSql5 = """
+    final String selectCountSql5 = """
       select count(*) from batch.trigger_outbox_event where tenant_id = ?
   """;
-  final String selectCountSql6 = """
+    final String selectCountSql6 = """
       select count(*) from batch.scheduled_occurrence where tenant_id = ? and workflow_definition_id = ?\s\
       and occurrence_status = 'REQUESTED'\
       """;
-  final String selectCountSql7 = """
+    final String selectCountSql7 = """
             select count(*) from batch.scheduled_occurrence occurrence
             join batch.trigger_request request
               on request.tenant_id = occurrence.tenant_id
@@ -735,7 +696,12 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
     for (int index = 0; index < backlogSize; index++) {
       Instant fireTime = firstFireTime.plusSeconds(index);
       jdbcTemplate.update(
-          insertScheduledOccurrenceSql, tenantId, workflowDefinitionId, workflowCode, Timestamp.from(fireTime), bizDate);
+          insertScheduledOccurrenceSql,
+          tenantId,
+          workflowDefinitionId,
+          workflowCode,
+          Timestamp.from(fireTime),
+          bizDate);
       assertThat(occurrenceRecorder.markMisfirePending(tenantId, workflowDefinitionId, fireTime))
           .isTrue();
     }
@@ -797,19 +763,22 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
     scheduler.start();
     try {
       assertThat(firstExecutionBlocked.await(10, TimeUnit.SECONDS)).isTrue();
-      await()
-          .atMost(Duration.ofSeconds(20))
-          .untilAsserted(() -> {
-            Integer selectedScheduledOccurrenceCount =
-                jdbcTemplate.queryForObject(selectCountSql2, Integer.class, tenantId, workflowDefinitionId);
-            assertThat(selectedScheduledOccurrenceCount).isEqualTo(1);
-          });
+      await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
+        Integer selectedScheduledOccurrenceCount = jdbcTemplate.queryForObject(
+            selectCountSql2, Integer.class, tenantId, workflowDefinitionId);
+        assertThat(selectedScheduledOccurrenceCount).isEqualTo(1);
+      });
 
       for (int wave = 0; wave < arrivalWaves; wave++) {
         for (int index = 0; index < arrivalsPerWave; index++) {
           Instant arrival = firstNewArrival.plusSeconds((long) wave * arrivalsPerWave + index);
           jdbcTemplate.update(
-              insertScheduledOccurrenceSql2, tenantId, workflowDefinitionId, workflowCode, Timestamp.from(arrival), bizDate);
+              insertScheduledOccurrenceSql2,
+              tenantId,
+              workflowDefinitionId,
+              workflowCode,
+              Timestamp.from(arrival),
+              bizDate);
           assertThat(occurrenceRecorder.markMisfirePending(tenantId, workflowDefinitionId, arrival))
               .isTrue();
         }
@@ -820,16 +789,16 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
         int expectedNewArrivals = (wave + 1) * arrivalsPerWave;
         int expectedRequests = backlogSize - 1 + expectedNewArrivals;
         await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
-          Integer selectedScheduledOccurrenceCountRead2 =
-              jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId, workflowDefinitionId);
+          Integer selectedScheduledOccurrenceCountRead2 = jdbcTemplate.queryForObject(
+              selectCountSql3, Integer.class, tenantId, workflowDefinitionId);
           assertThat(selectedScheduledOccurrenceCountRead2).isEqualTo(expectedRequests);
           assertThat(executedNewArrivals).hasSize(expectedNewArrivals);
         });
         assertThat(occurrenceStatus(Instant.ofEpochMilli(blockedFireTime.get())))
             .as("the blocked old execution must remain pending while new waves make progress")
             .isEqualTo("MISFIRE_PENDING");
-        Integer selectedTriggerRequestCount =
-            jdbcTemplate.queryForObject(selectCountSql4, Integer.class, tenantId, workflowDefinitionId);
+        Integer selectedTriggerRequestCount = jdbcTemplate.queryForObject(
+            selectCountSql4, Integer.class, tenantId, workflowDefinitionId);
         assertThat(selectedTriggerRequestCount).isEqualTo(expectedRequests);
         Integer selectedTriggerOutboxEventCount =
             jdbcTemplate.queryForObject(selectCountSql5, Integer.class, tenantId);
@@ -844,8 +813,8 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
     }
 
     await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-      Integer selectedScheduledOccurrenceCountRead3 =
-          jdbcTemplate.queryForObject(selectCountSql6, Integer.class, tenantId, workflowDefinitionId);
+      Integer selectedScheduledOccurrenceCountRead3 = jdbcTemplate.queryForObject(
+          selectCountSql6, Integer.class, tenantId, workflowDefinitionId);
       assertThat(selectedScheduledOccurrenceCountRead3)
           .isEqualTo(backlogSize + arrivalWaves * arrivalsPerWave);
     });
@@ -863,30 +832,30 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
   @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
   @DisplayName("Quartz Scheduler 重启后从 MISFIRE_PENDING 台账重建 one-shot 并接纳一个补跑")
   void restartedQuartzScheduler_restoresPendingRecoveryFromDatabase() throws Exception {
-  final String insertScheduledOccurrenceSql = """
+    final String insertScheduledOccurrenceSql = """
           insert into batch.scheduled_occurrence (
               tenant_id, workflow_definition_id, workflow_code, schedule_version, calendar_code,
               scheduled_fire_time, biz_date, occurrence_status
           ) values (?, ?, ?, 1, 'misfire_cal', ?, ?, 'PLANNED')
           """;
-  final String selectOccurrenceStatusSql = """
+    final String selectOccurrenceStatusSql = """
       select occurrence_status from batch.scheduled_occurrence where tenant_id = ?\s\
       and workflow_definition_id = ? and scheduled_fire_time = ?\
       """;
-  final String selectCountSql = """
+    final String selectCountSql = """
             select count(*)::int
               from quartz.QRTZ_TRIGGERS
              where SCHED_NAME = ? and TRIGGER_GROUP = 'batch-trigger-recovery'
                and TRIGGER_NAME = ?
             """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.trigger_request where tenant_id = ? and workflow_definition_id = ?\s\
       and trigger_type = 'CATCH_UP'\
       """;
-  final String selectCountSql3 = """
+    final String selectCountSql3 = """
       select count(*) from batch.trigger_outbox_event where tenant_id = ?
   """;
-  final String selectCountSql4 = """
+    final String selectCountSql4 = """
       select count(*) from batch.scheduled_occurrence where tenant_id = ? and workflow_definition_id = ?\s\
       and scheduled_fire_time = ? and occurrence_status = 'REQUESTED'\
       """;
@@ -995,15 +964,9 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
 
       await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
         Integer requestCount = jdbcTemplate.queryForObject(
-            selectCountSql2,
-            Integer.class,
-            tenantId,
-            workflowDefinitionId);
+            selectCountSql2, Integer.class, tenantId, workflowDefinitionId);
         assertThat(requestCount).isEqualTo(1);
-        Integer outboxCount = jdbcTemplate.queryForObject(
-            selectCountSql3,
-            Integer.class,
-            tenantId);
+        Integer outboxCount = jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId);
         assertThat(outboxCount)
             .as("competing Quartz recovery nodes must publish only one launch outbox event")
             .isEqualTo(1);
@@ -1032,36 +995,36 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
   @DisplayName("Workflow 暂停新调度后既有 misfire 继续恢复,不重建主日程且只接纳一次补跑")
   void pausedWorkflow_recoversExistingMisfireWithoutResumingSchedule(boolean disableWorkflow)
       throws Exception {
-        final String insertScheduledOccurrenceSql = """
+    final String insertScheduledOccurrenceSql = """
     insert into batch.scheduled_occurrence (
     tenant_id, workflow_definition_id, workflow_code, schedule_version, calendar_code,
     scheduled_fire_time, biz_date, occurrence_status
     ) values (?, ?, ?, 1, 'misfire_cal', ?, ?, 'PLANNED')
     """;
-        final String updateWorkflowDefinitionSql = """
+    final String updateWorkflowDefinitionSql = """
             update batch.workflow_definition set schedule_enabled = false, enabled = ? where tenant_id = ?\s\
             and id = ?\
             """;
-        final String updateTenantSql = """
+    final String updateTenantSql = """
             update batch.tenant set status = 'SUSPENDED' where tenant_id = ?
         """;
-        final String selectCountSql = """
+    final String selectCountSql = """
             select count(*) from batch.trigger_request where tenant_id = ?
         """;
-  final String updateTenantSql2 = """
+    final String updateTenantSql2 = """
       update batch.tenant set status = 'ACTIVE' where tenant_id = ?
   """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.trigger_request where tenant_id = ? and workflow_definition_id = ?\s\
       and trigger_type = 'CATCH_UP'\
       """;
-        final String selectScheduleEnabledSql = """
+    final String selectScheduleEnabledSql = """
             select schedule_enabled from batch.workflow_definition where tenant_id = ? and id = ?
         """;
-        final String selectEnabledSql = """
+    final String selectEnabledSql = """
             select enabled from batch.workflow_definition where tenant_id=? and id=?
         """;
-  final String selectCountSql3 = """
+    final String selectCountSql3 = """
       select count(*) from batch.trigger_request where tenant_id = ? and trigger_type = 'CATCH_UP'
   """;
 
@@ -1073,7 +1036,7 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
         .storeDurably()
         .build();
     scheduler.addJob(job, true);
-        jdbcTemplate.update(
+    jdbcTemplate.update(
         insertScheduledOccurrenceSql,
         tenantId,
         workflowDefinitionId,
@@ -1098,44 +1061,38 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
             new TriggerRuntimeProperties())
         .triggerMisfired(missedTrigger);
 
-        jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        !disableWorkflow,
-        tenantId,
-        workflowDefinitionId);
-        jdbcTemplate.update(
-        updateTenantSql, tenantId);
+    jdbcTemplate.update(
+        updateWorkflowDefinitionSql, !disableWorkflow, tenantId, workflowDefinitionId);
+    jdbcTemplate.update(updateTenantSql, tenantId);
     // 所有前驱都已终态但汇合规则仍不满足时，此节点不能触发。
     AopTestUtils.<TriggerReconciler>getTargetObject(triggerReconciler).reconcile();
     assertThat(scheduler.checkExists(jobKey)).isFalse();
     assertThat(occurrenceStatus(originalFireTime)).isEqualTo("MISFIRE_PENDING");
-        Integer selectedTriggerRequestCount =
-            jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId);
-        assertThat(selectedTriggerRequestCount).isZero();
+    Integer selectedTriggerRequestCount =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId);
+    assertThat(selectedTriggerRequestCount).isZero();
 
-        jdbcTemplate.update(updateTenantSql2, tenantId);
+    jdbcTemplate.update(updateTenantSql2, tenantId);
     AopTestUtils.<TriggerReconciler>getTargetObject(triggerReconciler).reconcile();
 
-    await()
-        .atMost(Duration.ofSeconds(20))
-        .untilAsserted(() -> {
-          Integer selectedTriggerRequestCountRead2 =
-              jdbcTemplate.queryForObject(selectCountSql2, Integer.class, tenantId, workflowDefinitionId);
-          assertThat(selectedTriggerRequestCountRead2).isEqualTo(1);
-        });
+    await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
+      Integer selectedTriggerRequestCountRead2 = jdbcTemplate.queryForObject(
+          selectCountSql2, Integer.class, tenantId, workflowDefinitionId);
+      assertThat(selectedTriggerRequestCountRead2).isEqualTo(1);
+    });
     assertThat(occurrenceStatus(originalFireTime)).isEqualTo("REQUESTED");
-        Boolean selectedScheduleEnabled = jdbcTemplate.queryForObject(
-            selectScheduleEnabledSql, Boolean.class, tenantId, workflowDefinitionId);
-        assertThat(selectedScheduleEnabled).isFalse();
-        Boolean selectedEnabled = jdbcTemplate.queryForObject(
-            selectEnabledSql, Boolean.class, tenantId, workflowDefinitionId);
-        assertThat(selectedEnabled).isEqualTo(!disableWorkflow);
+    Boolean selectedScheduleEnabled = jdbcTemplate.queryForObject(
+        selectScheduleEnabledSql, Boolean.class, tenantId, workflowDefinitionId);
+    assertThat(selectedScheduleEnabled).isFalse();
+    Boolean selectedEnabled = jdbcTemplate.queryForObject(
+        selectEnabledSql, Boolean.class, tenantId, workflowDefinitionId);
+    assertThat(selectedEnabled).isEqualTo(!disableWorkflow);
     assertThat(scheduler.getTrigger(TriggerKey.triggerKey(jobKey.getName(), jobKey.getGroup())))
         .isNull();
     AopTestUtils.<TriggerReconciler>getTargetObject(triggerReconciler).reconcile();
-        Integer selectedTriggerRequestCountRead3 =
-            jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId);
-        assertThat(selectedTriggerRequestCountRead3).isEqualTo(1);
+    Integer selectedTriggerRequestCountRead3 =
+        jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId);
+    assertThat(selectedTriggerRequestCountRead3).isEqualTo(1);
   }
 
   @Test
@@ -1171,9 +1128,7 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
     """;
 
     Instant fire = Instant.now().minus(Duration.ofHours(3)).truncatedTo(ChronoUnit.MINUTES);
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        workflowDefinitionId);
+    jdbcTemplate.update(updateWorkflowDefinitionSql, workflowDefinitionId);
     jdbcTemplate.update(
         insertScheduledOccurrenceSql,
         tenantId,
@@ -1183,15 +1138,16 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
         fire.atZone(ZoneOffset.UTC).toLocalDate());
     assertThat(occurrenceRecorder.markMisfirePending(tenantId, workflowDefinitionId, fire))
         .isTrue();
-    Long newerId = jdbcTemplate.queryForObject(insertWorkflowDefinitionSql, Long.class, tenantId, workflowCode);
+    Long newerId = jdbcTemplate.queryForObject(
+        insertWorkflowDefinitionSql, Long.class, tenantId, workflowCode);
     try {
       if (!scheduler.isStarted()) {
         scheduler.start();
       }
       reconcilerForCurrentScheduler().reconcile();
       await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
-        Integer selectedTriggerRequestCount =
-            jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId, workflowDefinitionId);
+        Integer selectedTriggerRequestCount = jdbcTemplate.queryForObject(
+            selectCountSql, Integer.class, tenantId, workflowDefinitionId);
         assertThat(selectedTriggerRequestCount).isEqualTo(1);
         assertThat(occurrenceStatus(fire)).isEqualTo("REQUESTED");
       });
@@ -1204,18 +1160,9 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
               .getLong(QuartzLaunchJob.WORKFLOW_DEFINITION_ID))
           .isEqualTo(newerId);
     } finally {
-      jdbcTemplate.update(
-          deleteScheduledOccurrenceSql,
-          tenantId,
-          newerId);
-      jdbcTemplate.update(
-          deleteScheduledOccurrenceCoverageSql,
-          tenantId,
-          newerId);
-      jdbcTemplate.update(
-          deleteWorkflowDefinitionSql,
-          tenantId,
-          newerId);
+      jdbcTemplate.update(deleteScheduledOccurrenceSql, tenantId, newerId);
+      jdbcTemplate.update(deleteScheduledOccurrenceCoverageSql, tenantId, newerId);
+      jdbcTemplate.update(deleteWorkflowDefinitionSql, tenantId, newerId);
     }
   }
 

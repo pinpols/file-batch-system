@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.i18n.LocalizedErrorRenderer;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.domain.job.application.contract.query.JobDefinitionQueryRequest;
@@ -37,7 +38,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -129,18 +133,19 @@ public class ConsoleJobQueryService {
     String rawExtraJson = entity.getExtraJson();
     String extraJson = SecretMasking.maskSensitiveJson(rawExtraJson);
     Instant createdAt = entity.getCreatedAt();
-    return new ConsoleJobExecutionLogResponse(
-        id,
-        tenantId,
-        jobInstanceId,
-        jobPartitionId,
-        logLevel,
-        logType,
-        traceId,
-        message,
-        detailRef,
-        extraJson,
-        createdAt);
+    return ConsoleJobExecutionLogResponse.builder()
+        .id(id)
+        .tenantId(tenantId)
+        .jobInstanceId(jobInstanceId)
+        .jobPartitionId(jobPartitionId)
+        .logLevel(logLevel)
+        .logType(logType)
+        .traceId(traceId)
+        .message(message)
+        .detailRef(detailRef)
+        .extraJson(extraJson)
+        .createdAt(createdAt)
+        .build();
   }
 
   public PageResponse<ConsoleJobInstanceResponse> jobInstances(JobInstanceQueryRequest request) {
@@ -256,8 +261,8 @@ public class ConsoleJobQueryService {
     Long jobInstanceId = request.getJobInstanceId();
     String partitionStatus = request.getPartitionStatus();
     Long cursorId = decodeCursorId(request.getCursor());
-    JobPartitionQuery query =
-        new JobPartitionQuery(tenantId, jobInstanceId, partitionStatus, pageRequest, cursorId);
+    JobPartitionQuery query = new JobPartitionQuery(
+        tenantId, jobInstanceId, partitionStatus, pageRequest, cursorId, cursorMode);
     List<JobPartitionEntity> rows = jobMappers.jobPartitionMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(pageRequest, rows, this::toJobPartitionResponse, JobPartitionEntity::getId);
@@ -432,7 +437,7 @@ public class ConsoleJobQueryService {
     Integer retryCount = entity.getRetryCount();
     Long relatedFileId = entity.getRelatedFileId();
     String rawResultSummary = entity.getResultSummary();
-    String resultSummary = SecretMasking.maskSensitiveJson(rawResultSummary);
+    String resultSummary = maskStepResultSummary(rawResultSummary);
     String errorCode = display(entity.getErrorCode());
     String displayedErrorMessage = display(errorMessage);
     Long relatedPipelineInstanceId = entity.getRelatedPipelineInstanceId();
@@ -456,6 +461,49 @@ public class ConsoleJobQueryService {
         .startedAt(startedAt)
         .finishedAt(finishedAt)
         .build();
+  }
+
+  /** 步骤摘要中的 taskPayload 和结构化 Worker resultSummary 是内嵌 JSON 字符串。 */
+  private static String maskStepResultSummary(String rawResultSummary) {
+    if (EmptyChecks.isBlank(rawResultSummary)) {
+      return rawResultSummary;
+    }
+    Object parsed = JsonUtils.fromJson(rawResultSummary, Object.class);
+    if (parsed instanceof Map<?, ?> summary) {
+      Map<String, Object> safeSummary = new LinkedHashMap<>();
+      for (Map.Entry<?, ?> entry : summary.entrySet()) {
+        safeSummary.put(String.valueOf(entry.getKey()), entry.getValue());
+      }
+      maskEmbeddedJsonField(safeSummary, "taskPayload", false);
+      maskEmbeddedJsonField(safeSummary, "resultSummary", true);
+      if (safeSummary.get("outputs") instanceof Map<?, ?> outputs) {
+        Map<String, Object> safeOutputs = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : outputs.entrySet()) {
+          safeOutputs.put(String.valueOf(entry.getKey()), entry.getValue());
+        }
+        maskEmbeddedJsonField(safeOutputs, "responseBody", true);
+        safeSummary.put("outputs", safeOutputs);
+      }
+      parsed = safeSummary;
+    }
+    Object maskedSummary = SecretMasking.maskSensitiveValue(parsed, Set.of());
+    return JsonUtils.toJson(maskedSummary);
+  }
+
+  private static void maskEmbeddedJsonField(
+      Map<String, Object> summary, String field, boolean preservePlainText) {
+    if (!(summary.get(field) instanceof String value)) {
+      return;
+    }
+    String trimmed = value.stripLeading();
+    if (preservePlainText && !trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+      return;
+    }
+    try {
+      summary.put(field, SecretMasking.maskSensitiveJson(value));
+    } catch (IllegalArgumentException malformedJson) {
+      summary.put(field, SecretMasking.MASKED_VALUE);
+    }
   }
 
   /** Comma-separated -> trimmed list,null/空 → null。供「多状态过滤」入口复用。 */

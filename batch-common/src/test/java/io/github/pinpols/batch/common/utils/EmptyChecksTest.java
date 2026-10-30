@@ -40,7 +40,9 @@ class EmptyChecksTest {
   @DisplayName("全部 Unicode 码点的空白判断与 JDK String 保持一致")
   void shouldMatchJdkBlankSemantics_whenCheckingEveryUnicodeCodePoint() {
     int checked = 0;
-    for (int codePoint = Character.MIN_CODE_POINT; codePoint <= Character.MAX_CODE_POINT; codePoint++) {
+    for (int codePoint = Character.MIN_CODE_POINT;
+        codePoint <= Character.MAX_CODE_POINT;
+        codePoint++) {
       char[] codeUnits = Character.toChars(codePoint);
       String text = new String(codeUnits);
       boolean expected = text.isBlank();

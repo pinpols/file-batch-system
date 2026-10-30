@@ -287,15 +287,21 @@ class SdkTaskContextTest {
   }
 
   @Test
-  @DisplayName("运行时属性优先于兼容参数,两者都能识别试运行")
+  @DisplayName("运行时属性或兼容参数任一为 true 时识别为试运行")
   void shouldResolveDryRun_whenRuntimeAttributeAndLegacyParameterDiffer() {
     SdkTaskContext runtime = new SdkTaskContext(
         "t1", "job-1", "ti-1", 42L, "w1", Map.of("dryRun", false), Map.of("dryRun", true));
     SdkTaskContext legacy =
         new SdkTaskContext("t1", "job-1", "ti-1", 43L, "w1", Map.of("dryRun", "true"), Map.of());
+    SdkTaskContext legacyTrueWithRuntimeFalse = new SdkTaskContext(
+        "t1", "job-1", "ti-1", 44L, "w1", Map.of("dryRun", true), Map.of("dryRun", false));
+    SdkTaskContext bothFalse = new SdkTaskContext(
+        "t1", "job-1", "ti-1", 45L, "w1", Map.of("dryRun", false), Map.of("dryRun", false));
 
     assertThat(runtime.isDryRun()).isTrue();
     assertThat(legacy.isDryRun()).isTrue();
+    assertThat(legacyTrueWithRuntimeFalse.isDryRun()).isTrue();
+    assertThat(bothFalse.isDryRun()).isFalse();
   }
 
   @Test

@@ -57,7 +57,7 @@ class ConsoleSelfServiceJobServiceTest {
     when(orchestratorInternalRestClient.client()).thenReturn(restClient);
     when(restClient.post()).thenReturn(bodyUriSpec);
     when(bodyUriSpec.uri(anyString())).thenReturn(bodySpec);
-    // varargs: header(String, String...) — use doReturn with explicit String[] cast
+    // 可变参数：header(String, String...)；调用 doReturn 时应显式转换为 String[]。
     doReturn(bodySpec).when(bodySpec).header(anyString(), (String[]) any());
     when(bodySpec.body(any(Object.class))).thenReturn(bodySpec);
     when(bodySpec.retrieve()).thenReturn(responseSpec);

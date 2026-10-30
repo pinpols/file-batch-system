@@ -139,8 +139,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
               request.getTenantId(), "TENANT_JOBS", request.getTenantId());
       String quotaResetPolicy = quotaPolicy.quotaResetPolicy();
       int maximumRunningJobs = quotaPolicy.maxRunningJobsPerTenant();
-      int slidingWindowHours =
-          governance.resourceScheduler().getQuotaResetSlidingWindowHours();
+      int slidingWindowHours = governance.resourceScheduler().getQuotaResetSlidingWindowHours();
       QuotaRuntimeStateService.QuotaReservationPolicy reservationPolicy =
           new QuotaRuntimeStateService.QuotaReservationPolicy(
               quotaResetPolicy, maximumRunningJobs, burst, slidingWindowHours);
@@ -150,8 +149,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
       QuotaRuntimeStateService.QuotaReservationRequest reservationRequest =
           new QuotaRuntimeStateService.QuotaReservationRequest(
               reservationOwner, reservationPolicy, tenantActiveJobs, 1, reservationReason);
-      ResourceCheck burstCheck =
-          quotaRuntimeStateService.evaluateAndReserve(reservationRequest);
+      ResourceCheck burstCheck = quotaRuntimeStateService.evaluateAndReserve(reservationRequest);
       if (!burstCheck.allowed()) {
         return applyStrategy(strategy, burstCheck.reasonCode(), burstCheck.reasonMessage());
       }

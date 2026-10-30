@@ -15,10 +15,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * P3-3 archive 系列：SUCCESS / PARTIAL_FAILED job_instance 级联归档业务层。
+ * P3-3 archive 系列：终态 job_instance 运行树归档业务层。
  *
- * <p>同删除语义对应 {@code cleanup-success-instances.sql}，本类先把运行态树复制到 {@code archive} schema 冷表，再执行 12
- * 步级联删除。单批 {@link SuccessInstanceArchiveProperties#getBatchSize()} 个 instance id 在同一事务内完成。
+ * <p>本类在同一事务复制冷表并按依赖清理热表。独立清理脚本不复制冷表，不能视为相同操作。
  */
 @Slf4j
 @Service
@@ -35,6 +34,7 @@ public class SuccessInstanceArchiveService {
     if (!properties.isEnabled()) {
       return ArchiveBatchResult.disabled();
     }
+    archiveMapper.disableJitForCurrentTransaction();
     Instant cutoff = retentionCutoff();
     reportIntegrityIssues(cutoff);
     return archiveBatch(cutoff);
@@ -46,6 +46,7 @@ public class SuccessInstanceArchiveService {
     if (!properties.isEnabled()) {
       return;
     }
+    archiveMapper.disableJitForCurrentTransaction();
     reportIntegrityIssues(retentionCutoff());
   }
 
@@ -55,6 +56,7 @@ public class SuccessInstanceArchiveService {
     if (!properties.isEnabled()) {
       return ArchiveBatchResult.disabled();
     }
+    archiveMapper.disableJitForCurrentTransaction();
     Instant cutoff = retentionCutoff();
     return archiveBatch(cutoff);
   }
@@ -80,6 +82,7 @@ public class SuccessInstanceArchiveService {
       return ArchiveBatchResult.empty(cutoff);
     }
     List<Long> pipelineIds = archiveMapper.selectPipelineInstanceIdsForUpdate(ids);
+    archiveMapper.lockRuntimeTreeRows(ids);
     // 先复制到冷表；任一步失败都会回滚事务，避免只删热表丢历史。
     archiveMapper.selectDataQualityCheckIdsForUpdate(ids);
     long archivedQualityChecks = archiveMapper.archiveDataQualityChecksByInstanceIds(ids);
@@ -88,8 +91,16 @@ public class SuccessInstanceArchiveService {
           "Data quality check archive copy verification failed; hot data retained");
     }
     long archivedInstances = archiveMapper.archiveJobInstancesByIds(ids);
+    if (archiveMapper.countJobInstanceArchiveMismatches(ids) > 0) {
+      throw new IllegalStateException(
+          "Job instance archive copy verification failed; hot data retained");
+    }
     long archivedPartitions = archiveMapper.archiveJobPartitionsByInstanceIds(ids);
     long archivedJobTasks = archiveMapper.archiveJobTasksByInstanceIds(ids);
+    if (archiveMapper.countJobTaskArchiveMismatches(ids) > 0) {
+      throw new IllegalStateException(
+          "Job task archive copy verification failed; hot data retained");
+    }
     long archivedStepInstances = archiveMapper.archiveJobStepInstancesByInstanceIds(ids);
     long archivedPipelineInstances = archiveMapper.archivePipelineInstancesByInstanceIds(ids);
     long archivedPipelineProgress = archivePipelineCheckpoints(pipelineIds);
@@ -100,9 +111,13 @@ public class SuccessInstanceArchiveService {
     long archivedWorkflowNodeRuns = archiveMapper.archiveWorkflowNodeRunsByInstanceIds(ids);
     long archivedExecutionLogs = archiveMapper.archiveJobExecutionLogsByInstanceIds(ids);
     long archivedCompensations = archiveMapper.archiveCompensationCommandsByInstanceIds(ids);
+    if (archiveMapper.countRuntimeTreeArchiveMismatches(ids) > 0) {
+      throw new IllegalStateException(
+          "Runtime tree archive copy verification failed; hot data retained");
+    }
 
     // 归档后清除热表运行树及其告警幂等 claim，避免 claim 脱离源实例长期增长。
-    // 级联清理顺序遵守 cleanup-success-instances.sql。
+    // 级联清理顺序按当前外键依赖安排，与独立清理脚本的执行范围不同。
     // FK 依赖：job_execution_log.job_partition_id 在 V119 之前没有 ON DELETE CASCADE，必须在
     // deleteJobPartitionsByInstanceIds 之前删完执行日志，否则 partition 删除会被 FK 阻塞。
     long qualityChecks = archiveMapper.deleteDataQualityChecksByInstanceIds(ids);

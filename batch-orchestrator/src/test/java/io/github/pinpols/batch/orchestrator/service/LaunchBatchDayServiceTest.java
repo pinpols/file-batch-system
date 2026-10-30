@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
@@ -29,8 +28,9 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 
 /**
@@ -46,6 +46,7 @@ import org.springframework.transaction.PlatformTransactionManager;
  * <p>upsert 主流程(insert / update / 审计 / SLA 计算) 已被 DefaultLaunchServiceTest 4 个集成测试覆盖。
  */
 @DisplayName("批次日实例维护的早退分支:启动请求上下文缺失时跳过数据库读写,以及补跑启动与迟到接受的判定口径")
+@ExtendWith(MockitoExtension.class)
 class LaunchBatchDayServiceTest {
 
   @Mock
@@ -91,7 +92,6 @@ class LaunchBatchDayServiceTest {
 
   @BeforeEach
   void setUp() {
-    MockitoAnnotations.openMocks(this);
     OrchestratorJobMappers jobMappers = new OrchestratorJobMappers(
         jobInstanceMapper,
         jobPartitionMapper,
@@ -108,7 +108,6 @@ class LaunchBatchDayServiceTest {
         dateTimeSupport,
         alertEventService,
         transactionManager);
-    when(dateTimeSupport.nowInstant()).thenReturn(Instant.parse("2026-05-20T10:00:00Z"));
   }
 
   private LaunchRequest req(String jobCode, LocalDate bizDate, TriggerType type) {

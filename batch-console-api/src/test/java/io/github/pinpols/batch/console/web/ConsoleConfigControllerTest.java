@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.web;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -25,18 +24,24 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatchers;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 @DisplayName("配置管理控制器: 发布单与密钥、变更日志查询及废弃发布端点")
+@ExtendWith(MockitoExtension.class)
 class ConsoleConfigControllerTest {
 
-  private final ConsoleConfigApplicationService configApplicationService =
-      mock(ConsoleConfigApplicationService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleConfigApplicationService configApplicationService;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -44,9 +49,6 @@ class ConsoleConfigControllerTest {
     ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
     ConsoleApiExceptionHandler exceptionHandler =
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
@@ -61,6 +63,8 @@ class ConsoleConfigControllerTest {
   @Test
   @DisplayName("查询配置发布单列表时, 响应返回配置键")
   void shouldReturnConfigReleaseListAsDtos() throws Exception {
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     when(configApplicationService.configReleases(any()))
         .thenReturn(List.of(ConsoleConfigReleaseResponse.builder()
             .id(1L)
@@ -107,6 +111,8 @@ class ConsoleConfigControllerTest {
   @Test
   @DisplayName("查询密钥版本与变更日志时, 响应分别返回密钥引用与变更动作")
   void shouldReturnSecretVersionAndChangeLogDtos() throws Exception {
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     when(configApplicationService.secretVersions(any()))
         .thenReturn(List.of(ConsoleSecretVersionResponse.builder()
             .id(1L)
@@ -156,6 +162,8 @@ class ConsoleConfigControllerTest {
   @Test
   @DisplayName("撤销指定密钥版本时, 将租户与原因交给应用服务并返回成功")
   void shouldRevokeSecretVersion() throws Exception {
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     mockMvc
         .perform(post("/api/console/config/secrets/42/revoke")
             .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-42")

@@ -10,7 +10,11 @@ public interface ImportLoadPlugin {
   @SuppressWarnings("java:S112")
   String id();
 
-  /** 持久化一批行数据，行结构对应 PARSE/VALIDATE 阶段产出的 NDJSON 行（通常为 camelCase 键），返回实际写入行数。 */
+  /**
+   * 持久化一批经校验的 NDJSON 行（通常为 camelCase 键），返回已确认处理的逻辑行数。
+   * 正常返回必须确认整批，包括由幂等规则确认已存在的记录；否则 LOAD 阶段失败且不推进该分块位点。
+   * 插件发生异常或部分副作用时，恢复安全性由其幂等声明及执行围栏约束。
+   */
   @SuppressWarnings("java:S112")
   int loadChunk(ImportLoadContext context, List<Map<String, Object>> records) throws Exception;
 

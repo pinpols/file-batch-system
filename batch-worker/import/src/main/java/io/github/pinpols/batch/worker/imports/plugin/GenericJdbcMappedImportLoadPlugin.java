@@ -231,19 +231,22 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     String staging = stagingTableName(loadContext, spec);
     txTemplate.execute(status -> {
       RlsTenantSessionSupport.applyIfPresent(businessDataSource);
-      jdbcTemplate.execute("ALTER TABLE " + parent + " DETACH PARTITION " + partition);
-      jdbcTemplate.execute("DROP TABLE " + partition);
+      String detachPartitionSql = "ALTER TABLE " + parent + " DETACH PARTITION " + partition;
+      jdbcTemplate.execute(detachPartitionSql);
+      String dropPartitionSql = "DROP TABLE " + partition;
+      jdbcTemplate.execute(dropPartitionSql);
       String partitionTableName = spec.stageSwap().partitionTable();
       String quotedPartitionTableName = JdbcMappedSqlValidator.quotePg(partitionTableName);
       String renamePartitionSql =
           "ALTER TABLE " + staging + " RENAME TO " + quotedPartitionTableName;
       jdbcTemplate.execute(renamePartitionSql);
-      jdbcTemplate.execute("ALTER TABLE "
+      String attachPartitionSql = "ALTER TABLE "
           + parent
           + " ATTACH PARTITION "
           + partition
           + " "
-          + spec.stageSwap().attachClause());
+          + spec.stageSwap().attachClause();
+      jdbcTemplate.execute(attachPartitionSql);
       return null;
     });
   }
@@ -388,8 +391,9 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
         ? context.region()
         : spec.defaultRegion();
     List<String> allowed = spec.allowedRegions();
-    boolean regionViolatesAllowlist =
-        EmptyChecks.isNotNull(allowed) && !EmptyChecks.isEmpty(allowed) && (EmptyChecks.isNull(region) || !allowed.contains(region));
+    boolean regionViolatesAllowlist = EmptyChecks.isNotNull(allowed)
+        && !EmptyChecks.isEmpty(allowed)
+        && (EmptyChecks.isNull(region) || !allowed.contains(region));
     if (regionViolatesAllowlist) {
       throw new WorkerConfigException(
           "import region not in allowedRegions: region=" + region + ", allowed=" + allowed);
@@ -397,18 +401,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     if (Objects.equals(region, context.region())) {
       return context;
     }
-    return new ImportLoadContext(
-        context.tenantId(),
-        context.jobCode(),
-        context.traceId(),
-        context.workerId(),
-        context.sourceFileName(),
-        context.batchNo(),
-        context.bizDate(),
-        context.bizType(),
-        region,
-        context.templateCode(),
-        context.templateConfig());
+    return context.toBuilder().region(region).build();
   }
 
   static String resolveBinding(String pattern, ImportLoadContext context) {
@@ -519,8 +512,10 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
           String tempTable = "batch_import_copy_" + tempTableSuffix;
           String quotedTempTable = JdbcMappedSqlValidator.quotePg(tempTable);
           try (Statement statement = conn.createStatement()) {
-            statement.execute("CREATE TEMP TABLE " + quotedTempTable + " ON COMMIT DROP AS SELECT "
-                + quotedColumns(insertCols) + " FROM " + destinationTable + " WITH NO DATA");
+            String createTempTableSql =
+                "CREATE TEMP TABLE " + quotedTempTable + " ON COMMIT DROP AS SELECT "
+                    + quotedColumns(insertCols) + " FROM " + destinationTable + " WITH NO DATA";
+            statement.execute(createTempTableSql);
           }
           log.info(
               "jdbc-mapped-import COPY staged before RLS-protected insert:"
@@ -569,10 +564,10 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     if (parts.length != 2) {
       throw new IllegalArgumentException("qualified destination table required");
     }
-    try (PreparedStatement statement =
-        connection.prepareStatement("SELECT c.relrowsecurity FROM pg_class c"
-            + " JOIN pg_namespace n ON n.oid = c.relnamespace"
-            + " WHERE n.nspname = ? AND c.relname = ?")) {
+    String selectRlsSql = "SELECT c.relrowsecurity FROM pg_class c"
+        + " JOIN pg_namespace n ON n.oid = c.relnamespace"
+        + " WHERE n.nspname = ? AND c.relname = ?";
+    try (PreparedStatement statement = connection.prepareStatement(selectRlsSql)) {
       statement.setString(1, parts[0].replace("\"", ""));
       statement.setString(2, parts[1].replace("\"", ""));
       try (ResultSet result = statement.executeQuery()) {
@@ -593,9 +588,11 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
   @SuppressWarnings("java:S2077")
   private void prepareStageSwapTable(ImportLoadContext context, JdbcMappedImportSpec spec) {
     String staging = stagingTableName(context, spec);
-    jdbcTemplate.execute("DROP TABLE IF EXISTS " + staging);
-    jdbcTemplate.execute(
-        "CREATE TABLE " + staging + " (LIKE " + tableName(spec) + " INCLUDING ALL)");
+    String dropStagingSql = "DROP TABLE IF EXISTS " + staging;
+    jdbcTemplate.execute(dropStagingSql);
+    String createStagingSql =
+        "CREATE TABLE " + staging + " (LIKE " + tableName(spec) + " INCLUDING ALL)";
+    jdbcTemplate.execute(createStagingSql);
   }
 
   private String buildCopySql(String destinationTable, List<String> insertCols) {
@@ -622,8 +619,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     String batchNo = context.batchNo();
     String bizDate = context.bizDate();
     String templateCode = context.templateCode();
-    int stagingIdentityHash =
-        Objects.hash(tenantId, traceId, batchNo, bizDate, templateCode);
+    int stagingIdentityHash = Objects.hash(tenantId, traceId, batchNo, bizDate, templateCode);
     String suffix = Integer.toHexString(stagingIdentityHash);
     String schema = spec.schema();
     String partitionTable = spec.stageSwap().partitionTable();

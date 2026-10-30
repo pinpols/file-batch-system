@@ -2,7 +2,24 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.notification.mapper.NotificationChannelMapper">
 
-    <select id="selectByTenant" resultType="map">
+    <resultMap id="NotificationChannelRowMap"
+               type="io.github.pinpols.batch.console.domain.notification.view.NotificationChannelRow">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="channel_code" javaType="java.lang.String"/>
+            <arg column="channel_name" javaType="java.lang.String"/>
+            <arg column="channel_type" javaType="java.lang.String"/>
+            <arg column="config_json" javaType="java.lang.String"/>
+            <arg column="enabled" javaType="java.lang.Boolean"/>
+            <arg column="created_by" javaType="java.lang.String"/>
+            <arg column="updated_by" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectByTenant" resultMap="NotificationChannelRowMap">
         SELECT id, tenant_id, channel_code, channel_name, channel_type, config_json,
                enabled, created_by, updated_by, created_at, updated_at
           FROM batch.notification_channel
@@ -11,7 +28,7 @@
          ORDER BY created_at DESC
     </select>
 
-    <select id="selectByCode" resultType="map">
+    <select id="selectByCode" resultMap="NotificationChannelRowMap">
         SELECT id, tenant_id, channel_code, channel_name, channel_type, config_json,
                enabled, created_by, updated_by, created_at, updated_at
           FROM batch.notification_channel
@@ -21,10 +38,10 @@
     </select>
 
     <!--
-        upsert 语义: 同 channel_code 撞 UNIQUE 时复活软删行(V146 软删 + 复活约定)。
-        纯 INSERT 路径在软删后 recreate 会撞 UNIQUE, 改 ON CONFLICT 自动覆盖+ is_deleted=false。
+        同租户、同编码冲突时仅复活软删除行；活动行返回零行，由应用层报告创建冲突。
+        防止两次创建都通过前置查重后，后写请求覆盖已生效的渠道配置。
     -->
-    <insert id="insert">
+    <insert id="insert" parameterType="io.github.pinpols.batch.console.domain.notification.param.NotificationChannelInsertParam">
         INSERT INTO batch.notification_channel (tenant_id, channel_code, channel_name, channel_type,
                                                 config_json, enabled, created_by, updated_by)
         VALUES (#{tenantId}, #{channelCode}, #{channelName}, #{channelType},
@@ -37,9 +54,10 @@
             updated_by = excluded.updated_by,
             is_deleted = false,
             updated_at = CURRENT_TIMESTAMP
+        WHERE notification_channel.is_deleted = true
     </insert>
 
-    <update id="update">
+    <update id="update" parameterType="io.github.pinpols.batch.console.domain.notification.param.NotificationChannelUpdateParam">
         UPDATE batch.notification_channel
            SET channel_name = #{channelName},
                channel_type = #{channelType},

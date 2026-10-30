@@ -80,7 +80,8 @@ public class DownstreamFallback {
   }
 
   private static CircuitBreakerConfig buildConfig(DownstreamCircuitBreakerProperties props) {
-    CircuitBreakerConfig.Builder config = CircuitBreakerConfig.custom().slidingWindowType(SlidingWindowType.COUNT_BASED);
+    CircuitBreakerConfig.Builder config =
+        CircuitBreakerConfig.custom().slidingWindowType(SlidingWindowType.COUNT_BASED);
 
     int requestedWindowSize = props.getSlidingWindowSize();
     int windowSize = Math.max(1, requestedWindowSize);

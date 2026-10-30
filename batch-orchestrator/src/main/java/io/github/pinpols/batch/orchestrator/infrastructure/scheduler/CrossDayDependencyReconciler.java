@@ -13,6 +13,7 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.CrossDa
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
 import io.github.pinpols.batch.orchestrator.config.CrossDayDependencyReconcileProperties;
 import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
@@ -109,14 +110,16 @@ public class CrossDayDependencyReconciler {
   /** 已绑定 RLS 后的真实 reconcile 主体。所有 mapper 调用都依赖此处的 holder。 */
   private void reconcileOneBound(
       WorkflowNodeRunEntity nodeRun, WorkflowRunEntity workflowRun, Instant now) {
-    WorkflowNodeEntity workflowNode =
-        workflowMappers.workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(
-            workflowRun.getWorkflowDefinitionId(), nodeRun.getNodeCode());
+    WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(workflowRun);
+    WorkflowNodeEntity workflowNode = EmptyChecks.isNull(snapshot)
+        ? workflowMappers.workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(
+            workflowRun.getWorkflowDefinitionId(), nodeRun.getNodeCode())
+        : snapshot.node(nodeRun.getNodeCode());
     boolean nodeHasNoCrossDayDependencies = workflowNode == null
         || workflowNode.getCrossDayDependencies() == null
         || workflowNode.getCrossDayDependencies().isBlank();
     if (nodeHasNoCrossDayDependencies) {
-      // 依赖被人工清掉或节点定义改了 → 直接 fail（保守，避免无依据再 dispatch）
+      // 无可用依赖声明时失败关闭，避免无依据地派发。
       markFailed(nodeRun, "CROSS_DAY_DEP_SPEC_MISSING", now);
       return;
     }
@@ -133,8 +136,7 @@ public class CrossDayDependencyReconciler {
           nodeRun.getNodeCode());
       WorkflowNodeDispatchService dispatchService = dispatchServiceProvider.getObject();
       WorkflowDagService.DagNodeResolution resolution =
-          new WorkflowDagService.DagNodeResolution(
-              nodeRun.getNodeCode(), nodeRun.getNodeType());
+          new WorkflowDagService.DagNodeResolution(nodeRun.getNodeCode(), nodeRun.getNodeType());
       String sourcePayload = EmptyChecks.isNull(nodeRun.getSourcePayloadProtected())
           ? null
           : secretPayloadProtector.reveal(nodeRun.getSourcePayloadProtected());
@@ -143,8 +145,9 @@ public class CrossDayDependencyReconciler {
       return;
     }
     if (result.isFailed()) {
-      markFailed(nodeRun, result.getFailureCode(), now);
-      emitTimeoutAlert(workflowRun, nodeRun, "FAILED:" + result.getFailureCode());
+      if (markFailed(nodeRun, result.getFailureCode(), now)) {
+        emitTimeoutAlert(workflowRun, nodeRun, "FAILED:" + result.getFailureCode());
+      }
       return;
     }
     // WAITING — 看是否超时
@@ -158,8 +161,9 @@ public class CrossDayDependencyReconciler {
     }
     Instant deadline = nodeRun.getStartedAt().plus(Duration.ofSeconds(timeoutSeconds));
     if (now.isAfter(deadline)) {
-      markFailed(nodeRun, "CROSS_DAY_DEP_TIMEOUT", now);
-      emitTimeoutAlert(workflowRun, nodeRun, "TIMEOUT");
+      if (markFailed(nodeRun, "CROSS_DAY_DEP_TIMEOUT", now)) {
+        emitTimeoutAlert(workflowRun, nodeRun, "TIMEOUT");
+      }
     }
   }
 
@@ -175,15 +179,17 @@ public class CrossDayDependencyReconciler {
     return declared;
   }
 
-  private void markFailed(WorkflowNodeRunEntity nodeRun, String failureCode, Instant now) {
-    workflowMappers.workflowNodeRunMapper.updateStatus(UpdateNodeRunStatusParam.builder()
-        .id(nodeRun.getId())
-        .nodeStatus(STATUS_FAILED)
-        .errorCode(failureCode == null ? "CROSS_DAY_DEP_FAILED" : failureCode)
-        .errorMessage("cross-day dependency reconcile fail")
-        .durationMs(0L)
-        .finishedAt(now)
-        .build());
+  private boolean markFailed(WorkflowNodeRunEntity nodeRun, String failureCode, Instant now) {
+    return workflowMappers.workflowNodeRunMapper.updateStatus(UpdateNodeRunStatusParam.builder()
+            .id(nodeRun.getId())
+            .nodeStatus(STATUS_FAILED)
+            .expectedStatus(STATUS_WAITING_DEPENDENCY)
+            .errorCode(EmptyChecks.isNull(failureCode) ? "CROSS_DAY_DEP_FAILED" : failureCode)
+            .errorMessage("cross-day dependency reconcile fail")
+            .durationMs(0L)
+            .finishedAt(now)
+            .build())
+        == 1;
   }
 
   private void emitTimeoutAlert(

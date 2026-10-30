@@ -1,9 +1,5 @@
 package io.github.pinpols.batch.console.domain.audit.application;
 
-import io.github.pinpols.batch.console.domain.audit.query.OperationAuditCountQuery;
-import io.github.pinpols.batch.console.domain.audit.query.OperationAuditQuery;
-
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
@@ -12,6 +8,8 @@ import io.github.pinpols.batch.console.domain.audit.application.contract.query.O
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.ConsoleOperationAuditResponse;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper.AuditRow;
+import io.github.pinpols.batch.console.domain.audit.query.OperationAuditCountQuery;
+import io.github.pinpols.batch.console.domain.audit.query.OperationAuditQuery;
 import io.github.pinpols.batch.console.domain.audit.support.AuditParamRedactor;
 import io.github.pinpols.batch.console.shared.query.ConsoleQuerySupport;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
@@ -59,10 +57,10 @@ public class OperationAuditQueryService {
         .startTime(req.getStartTime())
         .endTime(req.getEndTime())
         .cursorId(ConsoleQuerySupport.decodeCursorId(req.getCursor()))
+        .cursorMode(cursorMode)
         .pageRequest(pageRequest)
         .build();
-    List<AuditRow> rows = mapper.query(
-        operationAuditQuery);
+    List<AuditRow> rows = mapper.query(operationAuditQuery);
     if (cursorMode) {
       return ConsoleQuerySupport.cursorPage(pageRequest, rows, this::toResponse, AuditRow::id);
     }
@@ -78,8 +76,7 @@ public class OperationAuditQueryService {
         .endTime(req.getEndTime())
         .cursorId(null)
         .build();
-    long total = mapper.count(
-        operationAuditCountQuery);
+    long total = mapper.count(operationAuditCountQuery);
     List<ConsoleOperationAuditResponse> items =
         rows.stream().map(this::toResponse).toList();
     return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);

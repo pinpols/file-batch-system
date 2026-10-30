@@ -1,14 +1,17 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.model.PageRequest;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
@@ -27,22 +30,25 @@ import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.CalendarHolidayMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.query.JobDefinitionQuery;
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.BatchWindowRow;
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarHolidayRow;
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarQueryRow;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertRoutingConfigMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
+import io.github.pinpols.batch.console.domain.ops.view.ResourceQueueRow;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantQuotaPolicyMapper;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
-import io.github.pinpols.batch.console.domain.workflow.query.WorkflowDefinitionQuery;
-import java.util.Collections;
+import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 
 @DisplayName("控制台租户配置复制服务: 显式引用组装与最小依赖委派")
 class DefaultConsoleTenantConfigCopyServiceTest {
@@ -183,28 +189,25 @@ class DefaultConsoleTenantConfigCopyServiceTest {
   @DisplayName("构建作业复制包时忽略缺少编码的无关依赖配置")
   void shouldIgnoreUncodedConfigRows_whenBuildingJobBundle() {
     stubExplicitReferenceBundle();
-    when(batchWindowMapper.selectByQuery(anyString(), isNull(), isNull(), any(PageRequest.class)))
+    when(batchWindowMapper.selectByQuery(anyString(), isNull(), isNull(), isNull()))
+        .thenReturn(List.of(batchWindowRow(null, null), batchWindowRow("nightly", true)));
+    when(businessCalendarMapper.selectByQuery(anyString(), isNull(), isNull(), isNull()))
         .thenReturn(List.of(
-            Collections.singletonMap("window_code", null),
-            Map.of("window_code", "nightly", "enabled", true)));
-    when(businessCalendarMapper.selectByQuery(
-            anyString(), isNull(), isNull(), any(PageRequest.class)))
-        .thenReturn(List.of(
-            Collections.singletonMap("calendarCode", null),
-            Map.of("id", 301L, "calendarCode", "cn", "enabled", true),
-            Map.of("id", 302L, "calendarCode", "workflow-cn", "enabled", true)));
+            calendarRow(null, null, null),
+            calendarRow(301L, "cn", true),
+            calendarRow(302L, "workflow-cn", true)));
     when(fileTemplateConfigMapper.selectByQuery(any(FileTemplateConfigQuery.class)))
         .thenReturn(List.of(
             templateConfigView(null, null, null),
             templateConfigView("tpl-from-job", "OTHER", true),
             templateConfigView("tpl-from-step", "OTHER", true)));
     when(fileChannelConfigMapper.selectByQuery(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null
+            ArgumentMatchers.argThat(parameters -> parameters != null
                 && parameters.tenantId() != null
                 && parameters.channelCode() == null
                 && parameters.channelType() == null
                 && parameters.enabled() == null
-                && parameters.pageRequest() != null)))
+                && parameters.pageRequest() == null)))
         .thenReturn(List.of(
             channelConfigView(null, null, null, null),
             channelConfigView("chan-explicit", null, null, true)));
@@ -219,6 +222,49 @@ class DefaultConsoleTenantConfigCopyServiceTest {
         .extracting("templateCode")
         .containsExactly("tpl-from-job", "tpl-from-step");
     assertThat(bundle.getFileChannels()).extracting("channelCode").containsExactly("chan-explicit");
+  }
+
+  @Test
+  @DisplayName("内部复制调用也在读取源配置前拒绝源目标重合")
+  void shouldRejectOverlappingSourceBeforeReadingOrApplyingConfiguration() {
+    TenantConfigCopyRequest request = new TenantConfigCopyRequest();
+    request.setSourceTenantId("source");
+    request.setTargetTenantIds(List.of("other", "source"));
+
+    assertThatThrownBy(() -> service.copy(request, "admin", "self-copy"))
+        .isInstanceOfSatisfying(BizException.class, failure -> {
+          assertThat(failure.getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT);
+          assertThat(failure.getMessageKey()).isEqualTo("error.config_copy.source_target_overlap");
+        });
+    verifyNoInteractions(jobDefinitionMapper, initService);
+  }
+
+  private static BatchWindowRow batchWindowRow(String windowCode, Boolean enabled) {
+    return new BatchWindowRow(
+        null,
+        null,
+        windowCode,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        enabled,
+        null,
+        null,
+        null);
+  }
+
+  private static CalendarQueryRow calendarRow(Long id, String calendarCode, Boolean enabled) {
+    return new CalendarQueryRow(
+        id, null, calendarCode, null, null, null, null, null, enabled, null, null, null);
+  }
+
+  private static CalendarHolidayRow holidayRow(String bizDate) {
+    return new CalendarHolidayRow(
+        null, null, LocalDate.parse(bizDate), null, null, null, null, null);
   }
 
   private void stubExplicitReferenceBundle() {
@@ -255,33 +301,32 @@ class DefaultConsoleTenantConfigCopyServiceTest {
     WorkflowNodeEntity node = new WorkflowNodeEntity();
     node.setNodeCode("job");
     node.setRelatedJobCode("JOB_A");
-    when(workflowDefinitionMapper.selectByQuery(any(WorkflowDefinitionQuery.class)))
-        .thenReturn(List.of(workflow));
+    when(workflowDefinitionMapper.selectLatestByTenant("ta")).thenReturn(List.of(workflow));
     when(workflowNodeMapper.selectByQuery(any())).thenReturn(List.of(node));
     when(workflowEdgeMapper.selectByQuery(any())).thenReturn(List.of());
     when(jobDefinitionMapper.selectById("ta", job.getId())).thenReturn(job);
-    when(resourceQueueMapper.selectByQuery(
-            org.mockito.ArgumentMatchers.argThat(query -> query != null
-                && query.tenantId() != null
-                && query.queueCode() == null
-                && query.queueType() == null
-                && query.enabled() == null
-                && query.pageRequest() != null)))
-        .thenReturn(List.of(Map.of("queue_code", "q1", "enabled", true)));
-    when(batchWindowMapper.selectByQuery(anyString(), isNull(), isNull(), any(PageRequest.class)))
-        .thenReturn(List.of(Map.of("window_code", "nightly", "enabled", true)));
-    when(businessCalendarMapper.selectByQuery(
-            anyString(), isNull(), isNull(), any(PageRequest.class)))
+    when(resourceQueueMapper.selectByQuery(ArgumentMatchers.argThat(query -> query != null
+            && query.tenantId() != null
+            && query.queueCode() == null
+            && query.queueType() == null
+            && query.enabled() == null
+            && query.pageRequest() == null)))
+        .thenReturn(List.of(new ResourceQueueRow(
+            null, "ta", "q1", null, null, null, null, null, null, null, null, null, true, null,
+            null, null, null, null, null, null)));
+    when(batchWindowMapper.selectByQuery(anyString(), isNull(), isNull(), isNull()))
+        .thenReturn(List.of(batchWindowRow("nightly", true)));
+    when(businessCalendarMapper.selectByQuery(anyString(), isNull(), isNull(), isNull()))
         .thenReturn(List.of(
-            Map.of("id", 301L, "calendarCode", "cn", "enabled", true),
-            Map.of("id", 302L, "calendarCode", "workflow-cn", "enabled", true),
-            Map.of("id", 303L, "calendarCode", "unrelated", "enabled", true)));
+            calendarRow(301L, "cn", true),
+            calendarRow(302L, "workflow-cn", true),
+            calendarRow(303L, "unrelated", true)));
     when(calendarHolidayMapper.selectByCalendarId(301L))
-        .thenReturn(List.of(Map.of("bizDate", "2026-01-01")));
+        .thenReturn(List.of(holidayRow("2026-01-01")));
     when(calendarHolidayMapper.selectByCalendarId(302L))
-        .thenReturn(List.of(Map.of("bizDate", "2026-10-01")));
+        .thenReturn(List.of(holidayRow("2026-10-01")));
     when(calendarHolidayMapper.selectByCalendarId(303L))
-        .thenReturn(List.of(Map.of("bizDate", "2026-12-25")));
+        .thenReturn(List.of(holidayRow("2026-12-25")));
     when(fileTemplateConfigMapper.selectByQuery(any(FileTemplateConfigQuery.class)))
         .thenReturn(List.of(
             FileTemplateConfigQueryView.builder()
@@ -297,12 +342,12 @@ class DefaultConsoleTenantConfigCopyServiceTest {
             templateConfigView("tpl-from-step", "OTHER", true),
             templateConfigView("tpl-legacy", "PAYROLL", true)));
     when(fileChannelConfigMapper.selectByQuery(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null
+            ArgumentMatchers.argThat(parameters -> parameters != null
                 && parameters.tenantId() != null
                 && parameters.channelCode() == null
                 && parameters.channelType() == null
                 && parameters.enabled() == null
-                && parameters.pageRequest() != null)))
+                && parameters.pageRequest() == null)))
         .thenReturn(List.of(
             channelConfigView(
                 "chan-explicit",
@@ -310,18 +355,17 @@ class DefaultConsoleTenantConfigCopyServiceTest {
                 "{\"password\":\"source-password\"}",
                 true),
             channelConfigView("PAYROLL", null, null, true)));
-    when(tenantQuotaPolicyMapper.selectByQuery(
-            anyString(), isNull(), isNull(), any(PageRequest.class)))
+    when(tenantQuotaPolicyMapper.selectByQuery(anyString(), isNull(), isNull(), isNull()))
         .thenReturn(List.of());
     when(alertRoutingConfigMapper.selectByQuery(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null
+            ArgumentMatchers.argThat(parameters -> parameters != null
                 && parameters.tenantId() != null
                 && parameters.keyword() == null
                 && parameters.routeCode() == null
                 && parameters.team() == null
                 && parameters.severity() == null
                 && parameters.enabled() == null
-                && parameters.pageRequest() != null)))
+                && parameters.pageRequest() == null)))
         .thenReturn(List.of());
   }
 

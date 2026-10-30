@@ -59,7 +59,8 @@ async def test_mark_cancel_flips_signal_for_in_flight_task() -> None:
     http.report = fake_report  # type: ignore[method-assign]
     dispatcher = TaskDispatcher(cfg, http)
     try:
-        await dispatcher.on_message(_msg(task_id=123))
+        pending = asyncio.create_task(dispatcher.on_message(_msg(task_id=123)))
+        await asyncio.sleep(0)
         await asyncio.sleep(0)  # let _process start
 
         # in-flight 必然带 signal
@@ -77,6 +78,7 @@ async def test_mark_cancel_flips_signal_for_in_flight_task() -> None:
         assert signal.is_cancellation_requested is True
 
         blocker.set()
+        await pending
         await asyncio.gather(*list(dispatcher._in_flight.values()), return_exceptions=True)
     finally:
         await http.close()

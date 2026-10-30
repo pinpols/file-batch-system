@@ -1,7 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service.batchday;
 
-import io.github.pinpols.batch.orchestrator.domain.param.BatchDayCatchupEventParam;
-import io.github.pinpols.batch.orchestrator.domain.param.BatchDayCatchupPauseStateParam;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
@@ -15,6 +13,8 @@ import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayCatchupControlEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayCatchupEventParam;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayCatchupPauseStateParam;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayCatchupControlMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BusinessCalendarMapper;
 import java.sql.SQLException;
@@ -63,7 +63,15 @@ class BatchDayCatchupControlServiceTest {
   @Test
   void shouldRecordPauseWithOperatorAndReasonAtomically() {
     when(controlMapper.selectForUpdate("t1", "CAL")).thenReturn(state(false), state(true));
-    when(controlMapper.updatePauseState(BatchDayCatchupPauseStateParam.builder().tenantId("t1").calendarCode("CAL").paused(true).pausedAt(now).pausedBy("ops-7").pauseReason("maintenance").updatedAt(now).build()))
+    when(controlMapper.updatePauseState(BatchDayCatchupPauseStateParam.builder()
+            .tenantId("t1")
+            .calendarCode("CAL")
+            .paused(true)
+            .pausedAt(now)
+            .pausedBy("ops-7")
+            .pauseReason("maintenance")
+            .updatedAt(now)
+            .build()))
         .thenReturn(1);
     when(controlMapper.selectCurrent("t1", "CAL")).thenReturn(state(true));
 
@@ -73,7 +81,15 @@ class BatchDayCatchupControlServiceTest {
 
     assertThat(result.paused()).isTrue();
     verify(controlMapper).insertIfMissing("t1", "CAL");
-    verify(controlMapper).insertEvent(BatchDayCatchupEventParam.builder().tenantId("t1").calendarCode("CAL").action("PAUSE").operatorId("ops-7").reason("maintenance").occurredAt(now).build());
+    verify(controlMapper)
+        .insertEvent(BatchDayCatchupEventParam.builder()
+            .tenantId("t1")
+            .calendarCode("CAL")
+            .action("PAUSE")
+            .operatorId("ops-7")
+            .reason("maintenance")
+            .occurredAt(now)
+            .build());
   }
 
   @DisplayName("恢复保留原暂停证据，并用归一化后的当前操作信息记录审计")
@@ -85,7 +101,15 @@ class BatchDayCatchupControlServiceTest {
     BatchDayCatchupControlEntity resumed = new BatchDayCatchupControlEntity(
         "t1", "CAL", false, pausedAt, "original-operator", "original-reason", now);
     when(controlMapper.selectForUpdate("t1", "CAL")).thenReturn(paused);
-    when(controlMapper.updatePauseState(BatchDayCatchupPauseStateParam.builder().tenantId("t1").calendarCode("CAL").paused(false).pausedAt(pausedAt).pausedBy("original-operator").pauseReason("original-reason").updatedAt(now).build()))
+    when(controlMapper.updatePauseState(BatchDayCatchupPauseStateParam.builder()
+            .tenantId("t1")
+            .calendarCode("CAL")
+            .paused(false)
+            .pausedAt(pausedAt)
+            .pausedBy("original-operator")
+            .pauseReason("original-reason")
+            .updatedAt(now)
+            .build()))
         .thenReturn(1);
     when(controlMapper.selectCurrent("t1", "CAL")).thenReturn(resumed);
     BatchDayCatchupControlService.PauseCommand command =
@@ -96,8 +120,25 @@ class BatchDayCatchupControlServiceTest {
 
     assertThat(result).isEqualTo(resumed);
     verify(controlMapper).setTenantContext("t1");
-    verify(controlMapper).updatePauseState(BatchDayCatchupPauseStateParam.builder().tenantId("t1").calendarCode("CAL").paused(false).pausedAt(pausedAt).pausedBy("original-operator").pauseReason("original-reason").updatedAt(now).build());
-    verify(controlMapper).insertEvent(BatchDayCatchupEventParam.builder().tenantId("t1").calendarCode("CAL").action("RESUME").operatorId("ops-8").reason("recovered").occurredAt(now).build());
+    verify(controlMapper)
+        .updatePauseState(BatchDayCatchupPauseStateParam.builder()
+            .tenantId("t1")
+            .calendarCode("CAL")
+            .paused(false)
+            .pausedAt(pausedAt)
+            .pausedBy("original-operator")
+            .pauseReason("original-reason")
+            .updatedAt(now)
+            .build());
+    verify(controlMapper)
+        .insertEvent(BatchDayCatchupEventParam.builder()
+            .tenantId("t1")
+            .calendarCode("CAL")
+            .action("RESUME")
+            .operatorId("ops-8")
+            .reason("recovered")
+            .occurredAt(now)
+            .build());
   }
 
   @DisplayName("重复暂停保持幂等且不重复审计")

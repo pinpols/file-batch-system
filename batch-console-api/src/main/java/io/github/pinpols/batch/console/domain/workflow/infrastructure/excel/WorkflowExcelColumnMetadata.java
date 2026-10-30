@@ -147,12 +147,12 @@ public final class WorkflowExcelColumnMetadata {
               requiredColumn(
                   "excel.workflow.node.node_type.desc",
                   "excel.guide.format.enum",
-                  "TASK",
-                  "TASK",
+                  "JOB",
                   "GATEWAY",
                   "START",
                   "END",
-                  "JOB")),
+                  "JOB",
+                  "WAIT")),
           Map.entry(
               "related_job_code",
               optionalColumn(

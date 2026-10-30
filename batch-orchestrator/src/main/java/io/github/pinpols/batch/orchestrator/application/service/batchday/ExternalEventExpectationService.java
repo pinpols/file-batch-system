@@ -1,18 +1,17 @@
 package io.github.pinpols.batch.orchestrator.application.service.batchday;
 
-import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceInsertIfAbsentParam;
-import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceTransitionStatusByGenerationParam;
-import io.github.pinpols.batch.orchestrator.domain.param.ExternalEventExpectationDefinitionUpsertParam;
-
-
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.jdbc.JdbcExceptionSupport;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceInsertIfAbsentParam;
+import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceTransitionStatusByGenerationParam;
+import io.github.pinpols.batch.orchestrator.domain.param.ExternalEventExpectationDefinitionUpsertParam;
 import io.github.pinpols.batch.orchestrator.domain.query.ExternalEventExpectationDefinition;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ExpectedWorkOccurrenceMapper;
@@ -61,29 +60,28 @@ public class ExternalEventExpectationService {
   public int configure(DefinitionRequest request) {
     validate(request);
     try {
-      return RlsTenantContextHolder.runWithTenant(
-          request.tenantId(),
-          () -> {
-            TransactionTemplate transaction = new TransactionTemplate(transactionManager);
-            return transaction.execute(status -> {
-              occurrenceMapper.setTenantContext(request.tenantId());
-              validateWorkflowCalendar(
-                  request.tenantId(), request.calendarCode(), request.workflowDefinitionId());
-              ExternalEventExpectationDefinitionUpsertParam externalEventExpectationDefinitionUpsertParam = ExternalEventExpectationDefinitionUpsertParam.builder()
-                  .tenantId(request.tenantId())
-                  .calendarCode(request.calendarCode())
-                  .workflowDefinitionId(request.workflowDefinitionId())
-                  .eventCode(request.eventCode())
-                  .expectedLocalTime(request.expectedLocalTime())
-                  .dueLocalTime(request.dueLocalTime())
-                  .enabled(request.enabled())
-                  .build();
-              return definitionMapper.upsert(
-                  externalEventExpectationDefinitionUpsertParam);
-            });
-          });
+      return RlsTenantContextHolder.runWithTenant(request.tenantId(), () -> {
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        return transaction.execute(status -> {
+          occurrenceMapper.setTenantContext(request.tenantId());
+          validateWorkflowCalendar(
+              request.tenantId(), request.calendarCode(), request.workflowDefinitionId());
+          ExternalEventExpectationDefinitionUpsertParam
+              externalEventExpectationDefinitionUpsertParam =
+                  ExternalEventExpectationDefinitionUpsertParam.builder()
+                      .tenantId(request.tenantId())
+                      .calendarCode(request.calendarCode())
+                      .workflowDefinitionId(request.workflowDefinitionId())
+                      .eventCode(request.eventCode())
+                      .expectedLocalTime(request.expectedLocalTime())
+                      .dueLocalTime(request.dueLocalTime())
+                      .enabled(request.enabled())
+                      .build();
+          return definitionMapper.upsert(externalEventExpectationDefinitionUpsertParam);
+        });
+      });
     } catch (DataIntegrityViolationException failure) {
-      if (ExpectationCalendarConstraintConflict.matches(
+      if (JdbcExceptionSupport.isForeignKeyConstraintViolation(
           failure, "fk_external_event_expectation_workflow_calendar")) {
         throw new ResponseStatusException(
             HttpStatus.CONFLICT,
@@ -97,8 +95,7 @@ public class ExternalEventExpectationService {
   /** 明确只删除周期性定义；已经生成的 occurrence 仍保留以供审计。 */
   public boolean deleteDefinition(
       String tenantId, String calendarCode, Long workflowDefinitionId, String eventCode) {
-    boolean eventDefinitionIdentityIsInvalid =
-        !valid(tenantId, 64)
+    boolean eventDefinitionIdentityIsInvalid = !valid(tenantId, 64)
         || !valid(calendarCode, 128)
         || EmptyChecks.isNull(workflowDefinitionId)
         || workflowDefinitionId <= 0
@@ -107,16 +104,14 @@ public class ExternalEventExpectationService {
       throw new IllegalArgumentException(
           "tenant, calendar, workflowDefinitionId and eventCode are required");
     }
-    return RlsTenantContextHolder.runWithTenant(
-        tenantId,
-        () -> {
-          TransactionTemplate transaction = new TransactionTemplate(transactionManager);
-          return transaction.execute(status -> {
-            occurrenceMapper.setTenantContext(tenantId);
-            return definitionMapper.delete(tenantId, calendarCode, workflowDefinitionId, eventCode)
-                == 1;
-          });
-        });
+    return RlsTenantContextHolder.runWithTenant(tenantId, () -> {
+      TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+      return transaction.execute(status -> {
+        occurrenceMapper.setTenantContext(tenantId);
+        return definitionMapper.delete(tenantId, calendarCode, workflowDefinitionId, eventCode)
+            == 1;
+      });
+    });
   }
 
   /** 在批次日开启事务内调用；重试会复用稳定的每日事件标识。 */
@@ -160,33 +155,35 @@ public class ExternalEventExpectationService {
         Instant dueAt = EmptyChecks.isNull(definition.dueLocalTime())
             ? null
             : resolve(bizDate, definition.dueLocalTime(), zone);
-        ExpectedWorkOccurrenceInsertIfAbsentParam expectedWorkOccurrenceInsertIfAbsentParam = ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
-            .tenantId(tenantId)
-            .calendarCode(calendarCode)
-            .bizDate(bizDate)
-            .workflowDefinitionId(workflowDefinitionId)
-            .sourceType("EXTERNAL_EVENT")
-            .sourceKey(eventCode)
-            .expectedAt(expectedAt)
-            .dueAt(dueAt)
-            .build();
-        inserted += occurrenceMapper.insertIfAbsent(
-            expectedWorkOccurrenceInsertIfAbsentParam);
+        ExpectedWorkOccurrenceInsertIfAbsentParam expectedWorkOccurrenceInsertIfAbsentParam =
+            ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
+                .tenantId(tenantId)
+                .calendarCode(calendarCode)
+                .bizDate(bizDate)
+                .workflowDefinitionId(workflowDefinitionId)
+                .sourceType("EXTERNAL_EVENT")
+                .sourceKey(eventCode)
+                .expectedAt(expectedAt)
+                .dueAt(dueAt)
+                .build();
+        inserted += occurrenceMapper.insertIfAbsent(expectedWorkOccurrenceInsertIfAbsentParam);
         String launchedRequestId = triggerRequestMapper.selectLaunchedExternalEventRequestId(
             tenantId, definition.workflowDefinitionId(), definition.eventCode(), bizDate);
         if (Texts.hasText(launchedRequestId)) {
-          ExpectedWorkOccurrenceTransitionStatusByGenerationParam expectedWorkOccurrenceTransitionStatusByGenerationParam = ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
-              .tenantId(tenantId)
-              .calendarCode(calendarCode)
-              .workflowDefinitionId(definition.workflowDefinitionId())
-              .sourceType("EXTERNAL_EVENT")
-              .sourceKey(definition.eventCode())
-              .bizDate(bizDate)
-              .generation(null)
-              .expectedStatus("EXPECTED")
-              .newStatus("SATISFIED")
-              .triggerRequestId(launchedRequestId)
-              .build();
+          ExpectedWorkOccurrenceTransitionStatusByGenerationParam
+              expectedWorkOccurrenceTransitionStatusByGenerationParam =
+                  ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
+                      .tenantId(tenantId)
+                      .calendarCode(calendarCode)
+                      .workflowDefinitionId(definition.workflowDefinitionId())
+                      .sourceType("EXTERNAL_EVENT")
+                      .sourceKey(definition.eventCode())
+                      .bizDate(bizDate)
+                      .generation(null)
+                      .expectedStatus("EXPECTED")
+                      .newStatus("SATISFIED")
+                      .triggerRequestId(launchedRequestId)
+                      .build();
           occurrenceMapper.transitionStatus(
               expectedWorkOccurrenceTransitionStatusByGenerationParam);
         }
@@ -201,16 +198,14 @@ public class ExternalEventExpectationService {
       occurrenceMapper.setTenantContext(request.tenantId());
       batchDayInstanceMapper.acquireSettlementFence(
           request.tenantId(), request.calendarCode(), request.bizDate());
-      TriggerRequestEntity triggerRequest =
-          triggerRequestMapper.selectByTenantAndRequestId(
-              request.tenantId(), request.triggerRequestId());
-      boolean launchedEventMatchesExpectation =
-          EmptyChecks.isNotNull(triggerRequest)
-              && request.workflowDefinitionId().equals(triggerRequest.getWorkflowDefinitionId())
-              && request.bizDate().equals(triggerRequest.getBizDate())
-              && TriggerType.EVENT.code().equals(triggerRequest.getTriggerType())
-              && request.eventCode().equals(triggerRequest.getExternalEventCode())
-              && TriggerRequestStatus.LAUNCHED.code().equals(triggerRequest.getRequestStatus());
+      TriggerRequestEntity triggerRequest = triggerRequestMapper.selectByTenantAndRequestId(
+          request.tenantId(), request.triggerRequestId());
+      boolean launchedEventMatchesExpectation = EmptyChecks.isNotNull(triggerRequest)
+          && request.workflowDefinitionId().equals(triggerRequest.getWorkflowDefinitionId())
+          && request.bizDate().equals(triggerRequest.getBizDate())
+          && TriggerType.EVENT.code().equals(triggerRequest.getTriggerType())
+          && request.eventCode().equals(triggerRequest.getExternalEventCode())
+          && TriggerRequestStatus.LAUNCHED.code().equals(triggerRequest.getRequestStatus());
       if (!launchedEventMatchesExpectation) {
         throw new ResponseStatusException(
             HttpStatus.CONFLICT,
@@ -218,18 +213,20 @@ public class ExternalEventExpectationService {
       }
       validateWorkflowCalendarForLaunchedEvent(
           request.tenantId(), request.calendarCode(), request.workflowDefinitionId());
-      ExpectedWorkOccurrenceTransitionStatusByGenerationParam expectedWorkOccurrenceTransitionStatusByGenerationParam2 = ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
-          .tenantId(request.tenantId())
-          .calendarCode(request.calendarCode())
-          .workflowDefinitionId(request.workflowDefinitionId())
-          .sourceType("EXTERNAL_EVENT")
-          .sourceKey(request.eventCode())
-          .bizDate(request.bizDate())
-          .generation(null)
-          .expectedStatus("EXPECTED")
-          .newStatus("SATISFIED")
-          .triggerRequestId(request.triggerRequestId())
-          .build();
+      ExpectedWorkOccurrenceTransitionStatusByGenerationParam
+          expectedWorkOccurrenceTransitionStatusByGenerationParam2 =
+              ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
+                  .tenantId(request.tenantId())
+                  .calendarCode(request.calendarCode())
+                  .workflowDefinitionId(request.workflowDefinitionId())
+                  .sourceType("EXTERNAL_EVENT")
+                  .sourceKey(request.eventCode())
+                  .bizDate(request.bizDate())
+                  .generation(null)
+                  .expectedStatus("EXPECTED")
+                  .newStatus("SATISFIED")
+                  .triggerRequestId(request.triggerRequestId())
+                  .build();
       return occurrenceMapper.transitionStatus(
               expectedWorkOccurrenceTransitionStatusByGenerationParam2)
           == 1;
@@ -280,18 +277,16 @@ public class ExternalEventExpectationService {
   }
 
   private static void validate(DefinitionRequest request) {
-    boolean requiredFieldsAreValid =
-        EmptyChecks.isNotNull(request)
-            && valid(request.tenantId(), 64)
-            && valid(request.calendarCode(), 128)
-            && EmptyChecks.isNotNull(request.workflowDefinitionId())
-            && request.workflowDefinitionId() > 0
-            && valid(request.eventCode(), 128)
-            && EmptyChecks.isNotNull(request.expectedLocalTime());
-    boolean dueLocalTimeIsValidWhenRequiredFieldsAreValid =
-        !requiredFieldsAreValid
-            || EmptyChecks.isNull(request.dueLocalTime())
-            || request.dueLocalTime().isAfter(request.expectedLocalTime());
+    boolean requiredFieldsAreValid = EmptyChecks.isNotNull(request)
+        && valid(request.tenantId(), 64)
+        && valid(request.calendarCode(), 128)
+        && EmptyChecks.isNotNull(request.workflowDefinitionId())
+        && request.workflowDefinitionId() > 0
+        && valid(request.eventCode(), 128)
+        && EmptyChecks.isNotNull(request.expectedLocalTime());
+    boolean dueLocalTimeIsValidWhenRequiredFieldsAreValid = !requiredFieldsAreValid
+        || EmptyChecks.isNull(request.dueLocalTime())
+        || request.dueLocalTime().isAfter(request.expectedLocalTime());
     boolean definitionIsValid =
         requiredFieldsAreValid && dueLocalTimeIsValidWhenRequiredFieldsAreValid;
     if (!definitionIsValid) {
@@ -301,15 +296,14 @@ public class ExternalEventExpectationService {
   }
 
   private static void validate(SatisfactionRequest request) {
-    boolean requestHasRequiredFields =
-        EmptyChecks.isNotNull(request)
-            && valid(request.tenantId(), 64)
-            && valid(request.calendarCode(), 128)
-            && EmptyChecks.isNotNull(request.workflowDefinitionId())
-            && request.workflowDefinitionId() > 0
-            && valid(request.eventCode(), 128)
-            && valid(request.triggerRequestId(), 128)
-            && EmptyChecks.isNotNull(request.bizDate());
+    boolean requestHasRequiredFields = EmptyChecks.isNotNull(request)
+        && valid(request.tenantId(), 64)
+        && valid(request.calendarCode(), 128)
+        && EmptyChecks.isNotNull(request.workflowDefinitionId())
+        && request.workflowDefinitionId() > 0
+        && valid(request.eventCode(), 128)
+        && valid(request.triggerRequestId(), 128)
+        && EmptyChecks.isNotNull(request.bizDate());
     if (!requestHasRequiredFields) {
       throw new IllegalArgumentException(
           "tenant, calendar, workflowDefinitionId, eventCode, bizDate and triggerRequestId are required");

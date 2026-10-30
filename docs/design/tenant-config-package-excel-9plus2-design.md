@@ -1,10 +1,10 @@
 # 租户配置包 Excel 9+2 设计
 
-> **当前规格**：完整配置包导出 **10 个数据 sheet**：7 个业务定义 + 3 个可选基础依赖。历史文件名 `9plus2` 保留以维持引用，不代表当前数量。
+> **当前规格**：完整配置包导出 **11 个数据 sheet**：8 个业务定义 + 3 个可选基础依赖。历史文件名 `9plus2` 保留以维持引用，不代表当前数量。
 >
-> `ConfigPackageSheetSpecs` 仅保留当前 10 张数据 sheet 的规格，旧 Pipeline sheet 规格及示例已删除。解析器显式拒绝 `pipeline_definition`、`pipeline_step_definition` 旧 sheet，不做转换。新运行按 Job 类型选择系统 Pipeline，Job 保存阶段业务参数，调度归属 Workflow。
+> `ConfigPackageSheetSpecs` 仅保留当前 11 张数据 sheet 的规格，旧 Pipeline sheet 规格及示例已删除。解析器显式拒绝 `pipeline_definition`、`pipeline_step_definition` 旧 sheet，不做转换。新运行按 Job 类型选择系统 Pipeline，Job 保存阶段业务参数，调度归属 Workflow。
 >
-> 字典、填写说明、填写顺序和校验结果等辅助 sheet 不计入数据 sheet。场景专用模板按场景投影，不一定包含完整包的 10 个数据 sheet；空表/必需表规则以当前解析器和模板为准。旧 Pipeline/FILE_STEP 配置数据不得静默转换或导入。
+> 字典、填写说明、填写顺序和校验结果等辅助 sheet 不计入数据 sheet。场景专用模板按场景投影，不一定包含完整包的 11 个数据 sheet；空表/必需表规则以当前解析器和模板为准。旧 Pipeline/FILE_STEP 配置数据不得静默转换或导入。
 
 ## 背景
 
@@ -15,7 +15,7 @@
 - Export 查询 SQL 在 `file_template_config.default_query_sql`。
 - Export 的表结构式配置在 `file_template_config.query_param_schema.jdbcMappedExport`。
 
-因此当前 8-Sheet 包适合“已有基础模板的环境内维护”，不适合“跨环境迁移、压测复现、从零导入一条可运行链路”。
+因此当时的 8-Sheet 包适合“已有基础模板的环境内维护”，不适合“跨环境迁移、压测复现、从零导入一条可运行链路”。
 
 ## 设计目标
 
@@ -41,7 +41,7 @@
 
 ## 当前 Sheet 范围
 
-### 业务定义 7 Sheet
+### 业务定义 8 Sheet
 
 | Sheet | 定位 |
 |---|---|
@@ -50,6 +50,7 @@
 | `file_template_config` | Import/Export 模板、字段映射与查询参数 |
 | `file_channel_config` | 文件来源与外部投递渠道引用 |
 | `workflow_definition` | 顶层运行图、日程、日历、时区与启停 |
+| `workflow_monitoring_policy` | Workflow 根级启动、完成、耗时阈值及告警级别；按工作流编码和版本引用 |
 | `workflow_node` | START/END/JOB/GATEWAY/WAIT；JOB 引用 `related_job_code` |
 | `workflow_edge` | 同图依赖、条件分支与汇聚 |
 
@@ -543,3 +544,9 @@ Excel 展示顺序按业务主线组织；后端 apply 必须按依赖拓扑执�
 - job 粒度复制和预览使用 dependency-aware bundle：先取 job，再取关联 workflow / queue / window / calendar，并从 job default params、系统阶段业务参数、workflow node params 递归识别 `templateCode` / `fileTemplateCode` / `channelCode` / `fileChannelCode` 等显式引用；无显式引用时才保留旧 `bizType` template/channel 兜底。
 - 同一 job 多租户配置漂移由 `POST /api/console/config/tenant-config-matrix` 展示，重点看 schedule、queue、calendar、window、workerGroup、template、channel。
 - 边界：不做通用配置中心，不做跨租户自动删除，不把 alert routing / quota / worker registry 重新塞回 Excel。
+
+## 已有 Workflow 的说明字段更新
+
+`workflow_definition.description` 与名称、日程等字段一起进入版本比较更新。应用已有定义时保留 CAS,
+说明字段与版本在同一更新中落库, 不能只增加 updated 统计而忽略输入。
+未提供说明的普通定义更新保留当前说明; Excel 的空值/缺列继续使用既有合并规则。

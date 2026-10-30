@@ -164,12 +164,29 @@ class ConsoleWorkflowFullUpdateControllerTest {
             "workflowCode": "wf_ok",
             "workflowName": "wf",
             "workflowType": "DAG",
-            "nodes": [{"nodeCode": "bad code", "nodeType": "TASK"}],
+            "nodes": [{"nodeCode": "bad code", "nodeName": "name", "nodeType": "TASK"}],
             "edges": []
           },
           "expectedVersion": 1
         }
         """.stripTrailing();
+    mockMvc
+        .perform(put("/api/console/workflow-definitions/42/full")
+            .contentType(APPLICATION_JSON)
+            .content(body))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    verify(service, never()).fullUpdate(any(Long.class), any(), any());
+  }
+
+  @Test
+  @DisplayName("全量保存缺少节点名称时拒绝且不调用服务")
+  void shouldRejectMissingNodeName_whenUpdatingWorkflow() throws Exception {
+    String body = """
+        {"definition":{"tenantId":"ta","workflowCode":"wf_ok","workflowName":"wf",
+         "workflowType":"DAG","nodes":[{"nodeCode":"start","nodeType":"START"}]},
+         "expectedVersion":1}
+        """;
     mockMvc
         .perform(put("/api/console/workflow-definitions/42/full")
             .contentType(APPLICATION_JSON)
@@ -188,8 +205,8 @@ class ConsoleWorkflowFullUpdateControllerTest {
             "workflowName": "wf",
             "workflowType": "DAG",
             "nodes": [
-              {"nodeCode": "start", "nodeType": "START"},
-              {"nodeCode": "end", "nodeType": "END"}
+              {"nodeCode": "start", "nodeName": "start", "nodeType": "START"},
+              {"nodeCode": "end", "nodeName": "end", "nodeType": "END"}
             ],
             "edges": [{"fromNodeCode": "start", "toNodeCode": "end"}]
           },

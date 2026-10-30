@@ -21,12 +21,17 @@ public record WorkflowLaunchWaitSnapshot(
 
   public static WorkflowLaunchWaitSnapshot capture(
       LaunchRequest original, LaunchRequest effective, WorkflowRunEntity prepared) {
-    Map<String, Object> params = EmptyChecks.isNull(effective.params()) ? Map.of() : effective.params();
+    Map<String, Object> params =
+        EmptyChecks.isNull(effective.params()) ? Map.of() : effective.params();
     String originalJson = JsonUtils.toJson(original);
     String paramsJson = JsonUtils.toJson(params);
     WorkflowLaunchWaitSnapshot snapshot = new WorkflowLaunchWaitSnapshot(
-        originalJson, paramsJson, prepared.getWorkflowVersionSnapshot(),
-        prepared.getSingleJobDefinitionId(), prepared.getTraceId(), prepared.getExecutionSnapshot());
+        originalJson,
+        paramsJson,
+        prepared.getWorkflowVersionSnapshot(),
+        prepared.getSingleJobDefinitionId(),
+        prepared.getTraceId(),
+        prepared.getExecutionSnapshot());
     return snapshot;
   }
 
@@ -35,7 +40,8 @@ public record WorkflowLaunchWaitSnapshot(
   }
 
   public LaunchRequest effectiveRequest() {
-    Map<String, Object> params = JsonUtils.fromJson(launchParamsJson, new TypeReference<Map<String, Object>>() {});
+    Map<String, Object> params =
+        JsonUtils.fromJson(launchParamsJson, new TypeReference<Map<String, Object>>() {});
     if (EmptyChecks.isNull(params)) {
       throw invalidSnapshot();
     }
@@ -53,24 +59,30 @@ public record WorkflowLaunchWaitSnapshot(
   }
 
   public void validate() {
-    if (EmptyChecks.isBlank(originalRequestJson) || EmptyChecks.isBlank(launchParamsJson)
-        || EmptyChecks.isNull(workflowVersion) || workflowVersion <= 0
-        || EmptyChecks.isBlank(traceId) || EmptyChecks.isBlank(executionSnapshotJson)) {
+    if (EmptyChecks.isBlank(originalRequestJson)
+        || EmptyChecks.isBlank(launchParamsJson)
+        || EmptyChecks.isNull(workflowVersion)
+        || workflowVersion <= 0
+        || EmptyChecks.isBlank(traceId)
+        || EmptyChecks.isBlank(executionSnapshotJson)) {
       throw invalidSnapshot();
     }
     LaunchRequest original = originalRequest();
-    if (EmptyChecks.isNull(original) || EmptyChecks.isNull(original.workflowDefinitionId())
+    if (EmptyChecks.isNull(original)
+        || EmptyChecks.isNull(original.workflowDefinitionId())
         || original.workflowDefinitionId() <= 0
-        || EmptyChecks.isNotNull(original.jobCode()) || EmptyChecks.isBlank(original.tenantId())
-        || EmptyChecks.isBlank(original.requestId()) || EmptyChecks.isNull(original.bizDate())) {
+        || EmptyChecks.isNotNull(original.jobCode())
+        || EmptyChecks.isBlank(original.tenantId())
+        || EmptyChecks.isBlank(original.requestId())
+        || EmptyChecks.isNull(original.bizDate())) {
       throw invalidSnapshot();
     }
     WorkflowRunExecutionSnapshot parsed = executionSnapshot();
     if (EmptyChecks.isNull(parsed) || EmptyChecks.isBlank(parsed.workflowCalendarCode())) {
       throw invalidSnapshot();
     }
-    Map<String, Object> raw = JsonUtils.fromJson(executionSnapshotJson,
-        new TypeReference<Map<String, Object>>() {});
+    Map<String, Object> raw =
+        JsonUtils.fromJson(executionSnapshotJson, new TypeReference<Map<String, Object>>() {});
     if (!Objects.equals(raw.get("triggerRequestId"), original.requestId())) {
       throw invalidSnapshot();
     }
@@ -101,7 +113,10 @@ public record WorkflowLaunchWaitSnapshot(
     }
     Map<String, Object> params = EmptyChecks.isNull(request.params()) ? Map.of() : request.params();
     LaunchRequest normalized = request.toBuilder()
-        .params(params).dryRun(Boolean.TRUE.equals(request.dryRun())).traceId(null).build();
+        .params(params)
+        .dryRun(Boolean.TRUE.equals(request.dryRun()))
+        .traceId(null)
+        .build();
     String serialized = JsonUtils.toJson(normalized);
     return JsonUtils.fromJson(serialized, new TypeReference<Map<String, Object>>() {});
   }

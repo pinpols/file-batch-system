@@ -146,46 +146,10 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
             request.setApprovalId(approvalNo);
             yield consoleJobApprovalService.approveCatchUp(request, approvalNo);
           }
-          case "BATCH_DAY_REPLAY" -> {
-            // ADR-020 Stage 3 审批接入：payload = {"sessionId":<long>, "tenantId":<str>}。
-            // approve 后转发到 orchestrator 推进 session 状态 PENDING_APPROVAL → RUNNING；
-            // 复用 batch-day-replay/sessions/{id}/approve 端点，approver 取审批人 operatorId。
-            BatchDayReplayApprovalPayload payload = JsonUtils.fromJson(
-                approvalRecord.getPayloadJson(), BatchDayReplayApprovalPayload.class);
-            boolean batchDayReplayPayloadIsInvalid = EmptyChecks.isNull(payload)
-                || payload.getSessionId() == null
-                || payload.getTenantId() == null
-                || EmptyChecks.isBlank(Objects.requireNonNull(payload.getTenantId()));
-            if (batchDayReplayPayloadIsInvalid) {
-              throw BizException.of(
-                  ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.invalid_argument");
-            }
-            orchestratorInternalRestClient.approveBatchDayReplay(
-                payload.getSessionId(),
-                payload.getTenantId(),
-                EmptyChecks.isNull(operatorId) ? "system" : operatorId);
-            yield approvalNo;
-          }
-          case "WORKFLOW_RUN_REPLAY" -> {
-            WorkflowRunReplayApprovalPayload payload = JsonUtils.fromJson(
-                approvalRecord.getPayloadJson(), WorkflowRunReplayApprovalPayload.class);
-            boolean workflowRunReplayApprovalIsInvalid = EmptyChecks.isNull(payload)
-                || EmptyChecks.isNull(payload.replayOperationId())
-                || payload.replayOperationId() <= 0
-                || !tenantId.equals(payload.tenantId())
-                || EmptyChecks.isNull(operatorId)
-                || EmptyChecks.isBlank(operatorId);
-            if (workflowRunReplayApprovalIsInvalid) {
-              throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_request");
-            }
-            String approvedBy = approvalRecord.getApproverId();
-            if (EmptyChecks.isBlank(approvedBy)) {
-              throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.not_approved_yet");
-            }
-            orchestratorInternalRestClient.approveWorkflowRunReplayOperation(
-                payload.replayOperationId(), tenantId, approvedBy);
-            yield approvalNo;
-          }
+          case "BATCH_DAY_REPLAY" ->
+            batchdayreplayAction(approvalRecord, tenantId, approvalNo, operatorId);
+          case "WORKFLOW_RUN_REPLAY" ->
+            workflowrunreplayAction(approvalRecord, tenantId, approvalNo, operatorId);
           default ->
             throw BizException.of(
                 ResultCode.INVALID_ARGUMENT,
@@ -194,6 +158,49 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
         };
     markExecutedRemote(tenantId, approvalNo);
     return result;
+  }
+
+  private String batchdayreplayAction(
+      ApprovalRecord approvalRecord, String tenantId, String approvalNo, String operatorId) {
+    // ADR-020 Stage 3 审批接入：payload = {"sessionId":<long>, "tenantId":<str>}。
+    // approve 后转发到 orchestrator 推进 session 状态 PENDING_APPROVAL → RUNNING；
+    // 复用 batch-day-replay/sessions/{id}/approve 端点，approver 取审批人 operatorId。
+    BatchDayReplayApprovalPayload payload =
+        JsonUtils.fromJson(approvalRecord.getPayloadJson(), BatchDayReplayApprovalPayload.class);
+    boolean batchDayReplayPayloadIsInvalid = EmptyChecks.isNull(payload)
+        || EmptyChecks.isNull(payload.getSessionId())
+        || EmptyChecks.isNull(payload.getTenantId())
+        || EmptyChecks.isBlank(Objects.requireNonNull(payload.getTenantId()));
+    if (batchDayReplayPayloadIsInvalid) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.invalid_argument");
+    }
+    orchestratorInternalRestClient.approveBatchDayReplay(
+        payload.getSessionId(),
+        payload.getTenantId(),
+        EmptyChecks.isNull(operatorId) ? "system" : operatorId);
+    return approvalNo;
+  }
+
+  private String workflowrunreplayAction(
+      ApprovalRecord approvalRecord, String tenantId, String approvalNo, String operatorId) {
+    WorkflowRunReplayApprovalPayload payload =
+        JsonUtils.fromJson(approvalRecord.getPayloadJson(), WorkflowRunReplayApprovalPayload.class);
+    boolean workflowRunReplayApprovalIsInvalid = EmptyChecks.isNull(payload)
+        || EmptyChecks.isNull(payload.replayOperationId())
+        || payload.replayOperationId() <= 0
+        || !tenantId.equals(payload.tenantId())
+        || EmptyChecks.isNull(operatorId)
+        || EmptyChecks.isBlank(operatorId);
+    if (workflowRunReplayApprovalIsInvalid) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_request");
+    }
+    String approvedBy = approvalRecord.getApproverId();
+    if (EmptyChecks.isBlank(approvedBy)) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.not_approved_yet");
+    }
+    orchestratorInternalRestClient.approveWorkflowRunReplayOperation(
+        payload.replayOperationId(), tenantId, approvedBy);
+    return approvalNo;
   }
 
   @Override
@@ -229,8 +236,8 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     if (!"COMPENSATION".equals(approvalRecord.getActionType())) {
       return;
     }
-    CompensationCommandRequest request = JsonUtils.fromJson(
-        approvalRecord.getPayloadJson(), CompensationCommandRequest.class);
+    CompensationCommandRequest request =
+        JsonUtils.fromJson(approvalRecord.getPayloadJson(), CompensationCommandRequest.class);
     boolean isWorkflowNodeReplayApproval = EmptyChecks.isNotNull(request)
         && "WORKFLOW_NODE".equalsIgnoreCase(request.getCompensationType())
         && EmptyChecks.isNotNull(request.getReplayOperationId());
@@ -241,8 +248,8 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
   }
 
   private void rejectAssociatedWorkflowRunReplay(String tenantId, ApprovalRecord approvalRecord) {
-    WorkflowRunReplayApprovalPayload payload = JsonUtils.fromJson(
-        approvalRecord.getPayloadJson(), WorkflowRunReplayApprovalPayload.class);
+    WorkflowRunReplayApprovalPayload payload =
+        JsonUtils.fromJson(approvalRecord.getPayloadJson(), WorkflowRunReplayApprovalPayload.class);
     boolean workflowRunReplayApprovalIsInvalid = EmptyChecks.isNull(payload)
         || EmptyChecks.isNull(payload.replayOperationId())
         || payload.replayOperationId() <= 0
@@ -308,7 +315,8 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     return response;
   }
 
-  private ApprovalDecision approveRemote(String tenantId, String approvalNo, String operatorId, String reason) {
+  private ApprovalDecision approveRemote(
+      String tenantId, String approvalNo, String operatorId, String reason) {
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
     return orchestratorInternalRestClient.approveApproval(
         tenantId,
@@ -335,7 +343,8 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.approval.unsupported_retry_target");
   }
 
-  private ApprovalDecision rejectRemote(String tenantId, String approvalNo, String operatorId, String reason) {
+  private ApprovalDecision rejectRemote(
+      String tenantId, String approvalNo, String operatorId, String reason) {
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
     return orchestratorInternalRestClient.rejectApproval(
         tenantId,
@@ -363,7 +372,10 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
 
   private BizException decisionConflict(String approvalNo, String actualStatus) {
     return BizException.of(
-        ResultCode.STATE_CONFLICT, "error.approval.not_pending_for_action", approvalNo, actualStatus);
+        ResultCode.STATE_CONFLICT,
+        "error.approval.not_pending_for_action",
+        approvalNo,
+        actualStatus);
   }
 
   private void markExecutedRemote(String tenantId, String approvalNo) {

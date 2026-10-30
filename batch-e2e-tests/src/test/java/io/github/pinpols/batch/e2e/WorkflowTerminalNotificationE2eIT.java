@@ -137,55 +137,55 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
   @DisplayName("实际业务写入成功后后继解析失败,只通知 Workflow 失败;重跑和旧终态重投保持独立且无重复逻辑动作")
   void shouldNotifyFailedWorkflowAndDistinctRerun_afterSuccessfulJobAndLostReceiverResponse()
       throws Exception {
-        final String insertWebhookSubscriptionSql = """
+    final String insertWebhookSubscriptionSql = """
         insert into batch.webhook_subscription (tenant_id,name,callback_url,event_types,enabled)
         values (?, 'r32-dag-terminal', ?, 'WORKFLOW_SUCCESS,WORKFLOW_FAILED,JOB_SUCCESS,JOB_FAILED', true)
         """;
-        final String insertNotificationChannelSql = """
+    final String insertNotificationChannelSql = """
         insert into batch.notification_channel\s\
         (tenant_id,channel_code,channel_name,channel_type,config_json,enabled)
         values (?, 'r32-dag-terminal', 'r32 terminal', 'WEBHOOK', ?::jsonb, true)
         """;
-        final String insertSubscriptionRuleSql = """
+    final String insertSubscriptionRuleSql = """
         insert into batch.subscription_rule (tenant_id,rule_name,channel_code,event_types,enabled)
         values (?, 'r32-dag-terminal', 'r32-dag-terminal',\s\
         'WORKFLOW_SUCCESS,WORKFLOW_FAILED,JOB_SUCCESS,JOB_FAILED', true)
         """;
-        final String selectCountSql = """
+    final String selectCountSql = """
         select count(*) from batch.outbox_event where tenant_id=? and event_type='JOB_TERMINAL'
         """;
-        final String selectCountSql2 = """
+    final String selectCountSql2 = """
         select count(*) from batch.workflow_terminal_notification_receipt where tenant_id=?
         """;
-        final String selectCountSql3 = """
+    final String selectCountSql3 = """
         select count(*) from batch.webhook_delivery_log where tenant_id=? and terminal_event_key is not null
         """;
-        final String selectCountSql4 = """
+    final String selectCountSql4 = """
         select count(*) from batch.notification_delivery_log where tenant_id=?\s\
         and terminal_event_key is not null
         """;
-        final String selectCountSql5 = """
+    final String selectCountSql5 = """
         select count(*) from batch.webhook_delivery_log
         where tenant_id=? and event_type='WORKFLOW_SUCCESS'
         """;
-        final String selectCountSql6 = """
+    final String selectCountSql6 = """
         select count(*) from batch.notification_delivery_log
         where tenant_id=? and event_type='WORKFLOW_SUCCESS'
         """;
-        final String insertTriggerRequestSql = """
+    final String insertTriggerRequestSql = """
         insert into batch.trigger_request
           (tenant_id,request_id,trigger_type,workflow_definition_id,biz_date,dedup_key,request_status,trace_id,dry_run)
         values (?, ?, 'RERUN', ?, '2026-01-15', ?, 'ACCEPTED', 'r32-rerun', false)
         """;
-        final String selectCountSql7 = """
+    final String selectCountSql7 = """
         select count(*) from biz.customer_account where tenant_id=? and customer_no=?
         """;
-        final String selectEventKeySql = """
+    final String selectEventKeySql = """
         select event_key,payload_json::text as payload from batch.outbox_event
         where tenant_id=? and aggregate_type='WORKFLOW_RUN' and aggregate_id=?\s\
         and event_type='WORKFLOW_TERMINAL'
         """;
-        final String selectEventKeySql2 = """
+    final String selectEventKeySql2 = """
           select event_key,payload_json::text as payload from batch.outbox_event
           where tenant_id=? and aggregate_type='JOB_INSTANCE' and event_type='JOB_TERMINAL'
             and aggregate_id in (
@@ -223,8 +223,10 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
     int terminalReceiptBaseline = jdbc.queryForObject(selectCountSql2, Integer.class, TENANT);
     int webhookDeliveryBaseline = jdbc.queryForObject(selectCountSql3, Integer.class, TENANT);
     int notificationDeliveryBaseline = jdbc.queryForObject(selectCountSql4, Integer.class, TENANT);
-    int workflowSuccessWebhookBaseline = jdbc.queryForObject(selectCountSql5, Integer.class, TENANT);
-    int workflowSuccessNotificationBaseline = jdbc.queryForObject(selectCountSql6, Integer.class, TENANT);
+    int workflowSuccessWebhookBaseline =
+        jdbc.queryForObject(selectCountSql5, Integer.class, TENANT);
+    int workflowSuccessNotificationBaseline =
+        jdbc.queryForObject(selectCountSql6, Integer.class, TENANT);
 
     String originalRun = launch
         .launch(new LaunchRequest(
@@ -253,7 +255,8 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
         .allSatisfy(body -> assertThat(body).isEqualTo(firstNotification));
 
     String rerunRequest = "r32-rerun-" + System.nanoTime();
-    jdbc.update(insertTriggerRequestSql, TENANT, rerunRequest, first.workflowDefinitionId(), rerunRequest);
+    jdbc.update(
+        insertTriggerRequestSql, TENANT, rerunRequest, first.workflowDefinitionId(), rerunRequest);
     String rerun = launch
         .launch(new LaunchRequest(
             TENANT,
@@ -284,7 +287,8 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
         .queryForObject(selectCountSql7, Integer.class, TENANT, customer);
     assertThat(selectedCustomerAccountCount).isEqualTo(1);
 
-    Map<String, Object> original = jdbc.queryForMap(selectEventKeySql, TENANT, Long.valueOf(originalRun));
+    Map<String, Object> original =
+        jdbc.queryForMap(selectEventKeySql, TENANT, Long.valueOf(originalRun));
     try (KafkaProducer<String, String> producer = new KafkaProducer<>(Map.of(
         "bootstrap.servers",
         kafkaBootstrapServers(),
@@ -315,7 +319,8 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
           assertThat(offset.offset()).isGreaterThan(replay.offset());
         }
       });
-      Map<String, Object> jobOriginal = jdbc.queryForMap(selectEventKeySql2, TENANT, Long.valueOf(originalRun));
+      Map<String, Object> jobOriginal =
+          jdbc.queryForMap(selectEventKeySql2, TENANT, Long.valueOf(originalRun));
       producer
           .send(new ProducerRecord<>(
               BatchTopics.JOB_TERMINAL_V1,
@@ -429,8 +434,16 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
     String suffix = Long.toUnsignedString(System.nanoTime());
     String url = "http://127.0.0.1:" + endpoint.getAddress().getPort() + "/terminal";
     jdbc.update(insertWebhookSubscriptionSql, TENANT, "r29-manual-skip-" + suffix, url);
-    jdbc.update(insertNotificationChannelSql, TENANT, "r29-manual-skip-" + suffix, JsonUtils.toJson(Map.of("url", url)));
-    jdbc.update(insertSubscriptionRuleSql, TENANT, "r29-manual-skip-" + suffix, "r29-manual-skip-" + suffix);
+    jdbc.update(
+        insertNotificationChannelSql,
+        TENANT,
+        "r29-manual-skip-" + suffix,
+        JsonUtils.toJson(Map.of("url", url)));
+    jdbc.update(
+        insertSubscriptionRuleSql,
+        TENANT,
+        "r29-manual-skip-" + suffix,
+        "r29-manual-skip-" + suffix);
 
     long runId = Long.parseLong(launch
         .launch(new LaunchRequest(
@@ -448,9 +461,11 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
         .untilAsserted(() -> {
           String selectedNodeStatus = jdbc.queryForObject(selectNodeStatusSql, String.class, runId);
           assertThat(selectedNodeStatus).isEqualTo("FAILED");
-          String selectedNodeStatusRead2 = jdbc.queryForObject(selectNodeStatusSql2, String.class, runId);
+          String selectedNodeStatusRead2 =
+              jdbc.queryForObject(selectNodeStatusSql2, String.class, runId);
           assertThat(selectedNodeStatusRead2).isEqualTo("RUNNING");
-          String selectedRunStatus = jdbc.queryForObject(selectRunStatusSql, String.class, TENANT, runId);
+          String selectedRunStatus =
+              jdbc.queryForObject(selectRunStatusSql, String.class, TENANT, runId);
           assertThat(selectedRunStatus).isEqualTo("RUNNING");
         });
     Integer selectedOutboxEventCount =
@@ -481,7 +496,8 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
           Integer selectedWorkflowTerminalNotificationReceiptCount =
               jdbc.queryForObject(selectCountSql3, Integer.class, TENANT, eventKey);
           assertThat(selectedWorkflowTerminalNotificationReceiptCount).isEqualTo(1);
-          List<String> webhookStatuses = jdbc.queryForList(selectDeliveryStatusSql, String.class, TENANT, eventKey);
+          List<String> webhookStatuses =
+              jdbc.queryForList(selectDeliveryStatusSql, String.class, TENANT, eventKey);
           assertThat(webhookStatuses)
               .isNotEmpty()
               .allSatisfy(status -> assertThat(status).isEqualTo("SUCCESS"));
@@ -528,7 +544,10 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
                   select delivery_status from batch.%s where tenant_id=? and terminal_event_key=?\
                   """.formatted(table);
               List<String> selectedDeliveryStatusValues = jdbc.queryForList(
-                  selectDeliveryStatusSql, String.class, TENANT, body.path("cursor").asText());
+                  selectDeliveryStatusSql,
+                  String.class,
+                  TENANT,
+                  body.path("cursor").asText());
               assertThat(selectedDeliveryStatusValues).containsExactly("SUCCESS");
             }
           }
@@ -561,7 +580,8 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String selectedRunStatus = jdbc.queryForObject(selectRunStatusSql, String.class, TENANT, runId);
+          String selectedRunStatus =
+              jdbc.queryForObject(selectRunStatusSql, String.class, TENANT, runId);
           assertThat(selectedRunStatus).isEqualTo("FAILED");
           String selectedInstanceStatus =
               jdbc.queryForObject(selectInstanceStatusSql, String.class, runId, TENANT);
@@ -628,20 +648,16 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
         values (?, ?, 'JOB', 'JOB_FAIL', 'SUCCESS', true), (?, ?, 'JOB_FAIL', 'END', 'SUCCESS', true)
         """;
 
-    jdbc.update(
-        updateWorkflowDefinitionSql,
-        TENANT,
-        first.workflowDefinitionId());
-    jdbc.update(
-        updateWorkflowNodeSql,
-        TENANT,
-        first.workflowDefinitionId());
+    jdbc.update(updateWorkflowDefinitionSql, TENANT, first.workflowDefinitionId());
+    jdbc.update(updateWorkflowNodeSql, TENANT, first.workflowDefinitionId());
     jdbc.update(insertWorkflowNodeSql, TENANT, first.workflowDefinitionId(), second.jobCode());
+    jdbc.update(deleteWorkflowEdgeSql, TENANT, first.workflowDefinitionId());
     jdbc.update(
-        deleteWorkflowEdgeSql,
+        insertWorkflowEdgeSql,
+        TENANT,
+        first.workflowDefinitionId(),
         TENANT,
         first.workflowDefinitionId());
-    jdbc.update(insertWorkflowEdgeSql, TENANT, first.workflowDefinitionId(), TENANT, first.workflowDefinitionId());
   }
 
   private void configureManualSkipWaitDag(LaunchSeed seed) {

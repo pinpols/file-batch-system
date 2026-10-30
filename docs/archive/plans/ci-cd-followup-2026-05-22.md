@@ -1,3 +1,5 @@
+> 历史原始记录：本轮恢复保留，正文中的结论、参数、状态和操作步骤仅适用于原日期/基线。提炼方法不替代原始证据；当前事实须按[文档治理](../../standards/document-governance.md)重新核实。本轮未执行原测试或扫描。
+
 # CI/CD 5 项落地遗留 / 待验证清单
 
 > **历史资料 / 已被取代（2026-10-02）**：本文保留 2026-05-22 时点的 CI/CD 治理记录，不再作为当前部署或 GitOps 实施待办。当前权威路线、生产拓扑和 P0/P1/P2 待办统一见 [Compose CD → Kubernetes GitOps 路线](../../runbook/compose-cd-roadmap.md)。其中 GitOps / Argo CD 已明确调整为后续高可用阶段，不是当前 Compose CD 上线前置条件。

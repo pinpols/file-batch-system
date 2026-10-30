@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.infrastructure;
 
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.trigger.support.ScheduledFireTimeSource;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
@@ -9,13 +10,32 @@ import java.util.Objects;
 import org.quartz.Trigger;
 import org.springframework.stereotype.Component;
 
-/** SKIP 是有效的日历结果。将其持久化为终态，避免当天一直保持 */
+/** 在指定时间区间内有界枚举计划触发时刻，拒绝不前进的时间源及超量计划。 */
 @Component
 public class QuartzScheduledFireEnumerator {
 
   public List<Instant> enumerate(
       Trigger trigger, Instant afterExclusive, Instant throughInclusive, int occurrenceLimit) {
     Objects.requireNonNull(trigger, "trigger");
+    return enumerateFromSource(
+        fireTimeSource(trigger), afterExclusive, throughInclusive, occurrenceLimit);
+  }
+
+  /** Quartz类型仅在适配器边界出现，应用规划器只消费项目时间源。 */
+  public static ScheduledFireTimeSource fireTimeSource(Trigger trigger) {
+    Objects.requireNonNull(trigger, "trigger");
+    return afterExclusive -> {
+      Date next = trigger.getFireTimeAfter(Date.from(afterExclusive));
+      return EmptyChecks.isNull(next) ? null : next.toInstant();
+    };
+  }
+
+  public List<Instant> enumerateFromSource(
+      ScheduledFireTimeSource source,
+      Instant afterExclusive,
+      Instant throughInclusive,
+      int occurrenceLimit) {
+    Objects.requireNonNull(source, "source");
     Objects.requireNonNull(afterExclusive, "afterExclusive");
     Objects.requireNonNull(throughInclusive, "throughInclusive");
     if (occurrenceLimit <= 0) {
@@ -26,20 +46,19 @@ public class QuartzScheduledFireEnumerator {
     }
 
     List<Instant> fireTimes = new ArrayList<>();
-    Date cursor = Date.from(afterExclusive);
-    Date nextFireTime = trigger.getFireTimeAfter(cursor);
-    while (EmptyChecks.isNotNull(nextFireTime)
-        && !nextFireTime.toInstant().isAfter(throughInclusive)) {
+    Instant cursor = afterExclusive;
+    Instant nextFireTime = source.nextAfter(cursor);
+    while (EmptyChecks.isNotNull(nextFireTime) && !nextFireTime.isAfter(throughInclusive)) {
       if (fireTimes.size() == occurrenceLimit) {
         throw new OccurrenceLimitExceededException(occurrenceLimit);
       }
-      Instant next = nextFireTime.toInstant();
-      if (!next.isAfter(cursor.toInstant())) {
+      Instant next = nextFireTime;
+      if (!next.isAfter(cursor)) {
         throw new IllegalStateException("Quartz trigger returned a non-advancing fire time");
       }
       fireTimes.add(next);
       cursor = nextFireTime;
-      nextFireTime = trigger.getFireTimeAfter(cursor);
+      nextFireTime = source.nextAfter(cursor);
     }
     return List.copyOf(fireTimes);
   }

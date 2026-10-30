@@ -124,18 +124,18 @@ class WorkflowTerminalNotificationProcessRecoveryE2eIT extends AbstractIntegrati
   @Test
   void shouldRecoverCommittedIntentAfterConsoleKill_withoutChangingClaimsOrLocks()
       throws Exception {
-        final String updateJobDefinitionSql = """
+    final String updateJobDefinitionSql = """
             update batch.job_definition set default_params=?::jsonb where tenant_id=? and job_code=?
         """;
-        final String insertWebhookSubscriptionSql = """
+    final String insertWebhookSubscriptionSql = """
         insert into batch.webhook_subscription (tenant_id,name,callback_url,event_types,enabled)
         values (?, 'r32-console-crash', ?, 'WORKFLOW_SUCCESS,WORKFLOW_FAILED', true)
         """;
-        final String selectDeliveryStatusSql = """
+    final String selectDeliveryStatusSql = """
           select delivery_status,attempt,delivery_claim_token,delivery_claim_until
           from batch.webhook_delivery_log where tenant_id=? and terminal_event_key=?
           """;
-        final String selectDeliveryStatusSql2 = """
+    final String selectDeliveryStatusSql2 = """
             select delivery_status from batch.webhook_delivery_log where tenant_id=? and terminal_event_key=?
             """;
     final String selectAttemptSql = """
@@ -166,12 +166,11 @@ class WorkflowTerminalNotificationProcessRecoveryE2eIT extends AbstractIntegrati
         "CUSTOMER",
         "content",
         content));
+    jdbc.update(updateJobDefinitionSql, parameters, TENANT, seed.jobCode());
     jdbc.update(
-        updateJobDefinitionSql,
-        parameters,
+        insertWebhookSubscriptionSql,
         TENANT,
-        seed.jobCode());
-    jdbc.update(insertWebhookSubscriptionSql, TENANT, "http://127.0.0.1:" + endpoint.getAddress().getPort() + "/terminal");
+        "http://127.0.0.1:" + endpoint.getAddress().getPort() + "/terminal");
     List<Child> children = new ArrayList<>();
     try {
       Child first = startConsole(children);

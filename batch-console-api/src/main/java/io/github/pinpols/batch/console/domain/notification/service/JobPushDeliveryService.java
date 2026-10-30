@@ -8,7 +8,6 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.config.ConsolePushProperties;
 import io.github.pinpols.batch.console.config.WebhookRelayProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushSubscriptionEntity;
-import io.github.pinpols.batch.console.domain.notification.view.JobPushDelivery;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsolePushSubscriptionMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.JobPushDeliveryMapper;
 import io.github.pinpols.batch.console.domain.notification.param.JobPushDeliveryClaimParam;
@@ -17,6 +16,7 @@ import io.github.pinpols.batch.console.domain.notification.support.ConsolePushSe
 import io.github.pinpols.batch.console.domain.notification.support.ConsolePushSender.DeliveryOutcome;
 import io.github.pinpols.batch.console.domain.notification.support.ConsolePushSender.DeliveryResult;
 import io.github.pinpols.batch.console.domain.notification.support.ConsolePushSender.PushPayload;
+import io.github.pinpols.batch.console.domain.notification.view.JobPushDelivery;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -59,8 +59,9 @@ public class JobPushDeliveryService {
   }
 
   public synchronized void poll(BooleanSupplier stopping) {
-    boolean pollingUnavailable =
-        stopped(stopping) || !properties.isEnabled() || !properties.getJobNotify().isEnabled();
+    boolean pollingUnavailable = stopped(stopping)
+        || !properties.isEnabled()
+        || !properties.getJobNotify().isEnabled();
     if (pollingUnavailable) return;
     int remaining = Math.max(1, properties.getJobNotify().getBatchSize());
     List<String> tenants = deliveries.tenantPage(afterTenant, Math.min(100, remaining));
@@ -117,8 +118,7 @@ public class JobPushDeliveryService {
       DeliveryResult result;
       boolean pushDeviceSubscriptionDoesNotMatch = !device.isPresent()
           || !row.operatorId().equals(device.get().getUsername())
-          || !row.subscriptionFingerprint()
-              .equals(JobPushIntakeService.fingerprint(device.get()));
+          || !row.subscriptionFingerprint().equals(JobPushIntakeService.fingerprint(device.get()));
       if (pushDeviceSubscriptionDoesNotMatch) {
         result = new DeliveryResult(DeliveryOutcome.GONE, null);
       } else {

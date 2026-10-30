@@ -1,10 +1,10 @@
 package io.github.pinpols.batch.console.support.http;
 
-import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.security.BlockedAddressException;
@@ -36,7 +36,8 @@ class OkHttpConsoleExternalHttpTransportTest {
     OkHttpConsoleExternalHttpTransport transport = new OkHttpConsoleExternalHttpTransport(
         client(guarded), client(trusted), hostname -> List.of(InetAddress.getLoopbackAddress()));
 
-    OutboundHttpContent httpContent = new OutboundHttpContent("{\"ok\":true}", "application/json; charset=utf-8");
+    OutboundHttpContent httpContent =
+        new OutboundHttpContent("{\"ok\":true}", "application/json; charset=utf-8");
     OutboundHttpRequest httpRequest = OutboundHttpRequest.post(
         "https://example.test/notify",
         Map.of("X-Test", "value"),

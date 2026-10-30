@@ -1,18 +1,15 @@
 package io.github.pinpols.batch.orchestrator.integration;
 
-import io.github.pinpols.batch.orchestrator.domain.param.WorkflowRunMarkRunningParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
-import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.ExternalEventExpectationService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
@@ -26,11 +23,11 @@ import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegratio
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
-import java.time.Instant;
 import java.time.LocalDate;
-import java.time.Month;
 import java.time.LocalTime;
+import java.time.Month;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -141,26 +138,14 @@ class WorkflowRunResumeRecoveryIntegrationTest extends AbstractIntegrationTest {
     reportFailureWhilePaused();
 
     Long workflowDefinitionId = workflow.workflowDefinitionId();
-    int disabledEdges = jdbc.update(
-        disableJobEdgesSql,
-        tenantId,
-        workflowDefinitionId);
-    int disabledWaitNodes = jdbc.update(
-        disableWaitNodesSql,
-        tenantId,
-        workflowDefinitionId);
+    int disabledEdges = jdbc.update(disableJobEdgesSql, tenantId, workflowDefinitionId);
+    int disabledWaitNodes = jdbc.update(disableWaitNodesSql, tenantId, workflowDefinitionId);
     assertThat(disabledEdges).isEqualTo(4);
     assertThat(disabledWaitNodes).isEqualTo(3);
-    Integer remainingEnabledJobEdges = jdbc.queryForObject(
-        countEnabledJobEdgesSql,
-        Integer.class,
-        tenantId,
-        workflowDefinitionId);
+    Integer remainingEnabledJobEdges =
+        jdbc.queryForObject(countEnabledJobEdgesSql, Integer.class, tenantId, workflowDefinitionId);
     Integer remainingEnabledWaitNodes = jdbc.queryForObject(
-        countEnabledWaitNodesSql,
-        Integer.class,
-        tenantId,
-        workflowDefinitionId);
+        countEnabledWaitNodesSql, Integer.class, tenantId, workflowDefinitionId);
     assertThat(remainingEnabledJobEdges).isZero();
     assertThat(remainingEnabledWaitNodes).isZero();
 
@@ -231,7 +216,8 @@ class WorkflowRunResumeRecoveryIntegrationTest extends AbstractIntegrationTest {
     RlsTenantContextHolder.runWithTenant(tenantId, () -> launchService.launch(launchRequest));
 
     assertThat(runStatus()).isEqualTo("PAUSED");
-    String protectedStartPayload = jdbc.queryForObject(selectSourcePayloadProtectedSql, String.class, workflowRunId);
+    String protectedStartPayload =
+        jdbc.queryForObject(selectSourcePayloadProtectedSql, String.class, workflowRunId);
     assertThat(protectedStartPayload).isNotBlank().doesNotContain("retain-me");
     assertThat(secretPayloadProtector.reveal(protectedStartPayload))
         .contains("\"route\":\"A\"", "\"businessValue\":\"retain-me\"");
@@ -291,8 +277,11 @@ class WorkflowRunResumeRecoveryIntegrationTest extends AbstractIntegrationTest {
 
     Mockito.doThrow(new IllegalStateException("simulated process interruption"))
         .when(workflowRunMapper)
-        .markRunning(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), tenantId) && java.util.Objects.equals(parameters.runStatus(), "RUNNING") && parameters.currentNodeCode() != null && parameters.startedAt() != null));
+        .markRunning(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.tenantId(), tenantId)
+            && Objects.equals(parameters.runStatus(), "RUNNING")
+            && parameters.currentNodeCode() != null
+            && parameters.startedAt() != null));
 
     assertThatThrownBy(() -> RlsTenantContextHolder.runWithTenant(
             tenantId, () -> launchService.launch(launchRequest)))
@@ -312,7 +301,8 @@ class WorkflowRunResumeRecoveryIntegrationTest extends AbstractIntegrationTest {
     jdbc.update(updateWorkflowDefinitionSql, tenantId, workflow.workflowDefinitionId());
 
     String resumedRunId = RlsTenantContextHolder.runWithTenant(
-        tenantId, () -> launchService.launch(launchRequest)).instanceNo();
+            tenantId, () -> launchService.launch(launchRequest))
+        .instanceNo();
 
     assertThat(resumedRunId).isEqualTo(workflowRunId.toString());
     assertThat(runStatus()).isEqualTo("RUNNING");
@@ -366,15 +356,8 @@ class WorkflowRunResumeRecoveryIntegrationTest extends AbstractIntegrationTest {
     String eventCode = "event-" + tenantId;
     workflow = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
         jdbc, tenantId, "GENERAL", workerGroup, TriggerType.EVENT, BIZ_DATE);
-    jdbc.update(
-        updateWorkflowDefinitionSql,
-        tenantId,
-        workflow.workflowDefinitionId());
-    jdbc.update(
-        updateTriggerRequestSql,
-        eventCode,
-        tenantId,
-        workflow.requestId());
+    jdbc.update(updateWorkflowDefinitionSql, tenantId, workflow.workflowDefinitionId());
+    jdbc.update(updateTriggerRequestSql, eventCode, tenantId, workflow.requestId());
     externalEventExpectationService.configure(new ExternalEventExpectationService.DefinitionRequest(
         tenantId,
         "JOB_CALENDAR",
@@ -399,8 +382,11 @@ class WorkflowRunResumeRecoveryIntegrationTest extends AbstractIntegrationTest {
         .build();
     Mockito.doThrow(new IllegalStateException("simulated process interruption"))
         .when(workflowRunMapper)
-        .markRunning(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), tenantId) && java.util.Objects.equals(parameters.runStatus(), "RUNNING") && parameters.currentNodeCode() != null && parameters.startedAt() != null));
+        .markRunning(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.tenantId(), tenantId)
+            && Objects.equals(parameters.runStatus(), "RUNNING")
+            && parameters.currentNodeCode() != null
+            && parameters.startedAt() != null));
 
     assertThatThrownBy(() -> RlsTenantContextHolder.runWithTenant(
             tenantId, () -> launchService.launch(launchRequest)))
@@ -422,7 +408,8 @@ class WorkflowRunResumeRecoveryIntegrationTest extends AbstractIntegrationTest {
     jdbc.update(updateWorkflowDefinitionSql2, tenantId, workflow.workflowDefinitionId());
 
     String resumedRunId = RlsTenantContextHolder.runWithTenant(
-        tenantId, () -> launchService.launch(launchRequest)).instanceNo();
+            tenantId, () -> launchService.launch(launchRequest))
+        .instanceNo();
 
     assertThat(resumedRunId).isEqualTo(workflowRunId.toString());
     assertThat(runStatus()).isEqualTo("RUNNING");
@@ -555,9 +542,7 @@ class WorkflowRunResumeRecoveryIntegrationTest extends AbstractIntegrationTest {
     jdbc.update(deleteJobTaskSql, tenantId);
     jdbc.update(deleteJobPartitionSql, tenantId);
     jdbc.update(deleteJobInstanceSql, tenantId);
-    jdbc.update(
-        deleteTriggerRequestSql,
-        tenantId);
+    jdbc.update(deleteTriggerRequestSql, tenantId);
     jdbc.update(deleteWorkflowRunSql, tenantId);
     jdbc.update(deleteTriggerRequestSql2, tenantId);
     jdbc.update(deleteWorkflowEdgeSql, tenantId);
@@ -591,11 +576,8 @@ class WorkflowRunResumeRecoveryIntegrationTest extends AbstractIntegrationTest {
         .params(Map.of())
         .build();
     RlsTenantContextHolder.runWithTenant(tenantId, () -> launchService.launch(launchRequest));
-    workflowRunId = jdbc.queryForObject(
-        selectIdSql,
-        Long.class,
-        tenantId,
-        workflow.workflowDefinitionId());
+    workflowRunId =
+        jdbc.queryForObject(selectIdSql, Long.class, tenantId, workflow.workflowDefinitionId());
     RlsTenantContextHolder.runWithTenant(
         tenantId, () -> workflowRunManagement.pause(tenantId, workflowRunId));
   }
@@ -610,9 +592,7 @@ class WorkflowRunResumeRecoveryIntegrationTest extends AbstractIntegrationTest {
         {"sensor_type":"DB_ROW_EXISTS","sensor_spec":{"schema":"biz","sql":"select 1"},
          "timeout_seconds":3600,"poll_interval_seconds":60,"on_timeout":"FAIL"}
         """;
-    jdbc.update(
-        updateWorkflowNodeSql,
-        workflowDefinitionId);
+    jdbc.update(updateWorkflowNodeSql, workflowDefinitionId);
     insertWaitNode(FAILURE_WAIT, "Failure wait", 2, waitNodeParams);
     insertWaitNode(ALWAYS_WAIT, "Always wait", 3, waitNodeParams);
     insertWaitNode(SUCCESS_WAIT, "Success wait", 4, waitNodeParams);
@@ -641,13 +621,8 @@ class WorkflowRunResumeRecoveryIntegrationTest extends AbstractIntegrationTest {
         """;
 
     Long workflowDefinitionId = workflow.workflowDefinitionId();
-    jdbc.update(
-        updateWorkflowNodeSql,
-        workflowDefinitionId);
-    jdbc.update(insertWorkflowNodeSql,
-        tenantId,
-        workflowDefinitionId,
-        workflow.jobCode());
+    jdbc.update(updateWorkflowNodeSql, workflowDefinitionId);
+    jdbc.update(insertWorkflowNodeSql, tenantId, workflowDefinitionId, workflow.jobCode());
     jdbc.update(updateWorkflowEdgeSql, "route = 'A'", workflowDefinitionId);
     addConditionalEdge("START", "JOB_B", "route = 'B'");
     addEdge("JOB_B", "END", "SUCCESS");
@@ -661,7 +636,8 @@ class WorkflowRunResumeRecoveryIntegrationTest extends AbstractIntegrationTest {
         ) values (?, ?, ?, ?, 'WAIT', ?::jsonb, ?, 'NONE', 0, 0, true)
         """;
 
-    jdbc.update(insertWorkflowNodeSql,
+    jdbc.update(
+        insertWorkflowNodeSql,
         tenantId,
         workflow.workflowDefinitionId(),
         nodeCode,
@@ -677,7 +653,8 @@ class WorkflowRunResumeRecoveryIntegrationTest extends AbstractIntegrationTest {
         ) values (?, ?, ?, ?, ?, true)
         """;
 
-    jdbc.update(insertWorkflowEdgeSql,
+    jdbc.update(
+        insertWorkflowEdgeSql,
         tenantId,
         workflow.workflowDefinitionId(),
         fromNodeCode,
@@ -693,7 +670,8 @@ class WorkflowRunResumeRecoveryIntegrationTest extends AbstractIntegrationTest {
         ) values (?, ?, ?, ?, 'CONDITION', ?, true)
         """;
 
-    jdbc.update(insertWorkflowEdgeSql,
+    jdbc.update(
+        insertWorkflowEdgeSql,
         tenantId,
         workflow.workflowDefinitionId(),
         fromNodeCode,
@@ -714,16 +692,8 @@ class WorkflowRunResumeRecoveryIntegrationTest extends AbstractIntegrationTest {
     """;
 
     Long jobInstanceId = jdbc.queryForObject(selectJobInstanceIdSql, Long.class, workflowRunId);
-    Long taskId = jdbc.queryForObject(
-        selectIdSql,
-        Long.class,
-        tenantId,
-        jobInstanceId);
-    jdbc.update(
-        updateJobTaskSql,
-        Timestamp.from(BatchDateTimeSupport.utcNow()),
-        tenantId,
-        taskId);
+    Long taskId = jdbc.queryForObject(selectIdSql, Long.class, tenantId, jobInstanceId);
+    jdbc.update(updateJobTaskSql, Timestamp.from(BatchDateTimeSupport.utcNow()), tenantId, taskId);
     TaskOutcomeCommand failure = TaskOutcomeCommand.builder()
         .tenantId(tenantId)
         .taskId(taskId)
@@ -763,11 +733,7 @@ class WorkflowRunResumeRecoveryIntegrationTest extends AbstractIntegrationTest {
         select run_status from batch.workflow_run where tenant_id=? and id=?
     """;
 
-    return jdbc.queryForObject(
-        selectRunStatusSql,
-        String.class,
-        tenantId,
-        workflowRunId);
+    return jdbc.queryForObject(selectRunStatusSql, String.class, tenantId, workflowRunId);
   }
 
   private String nodeStatus(String nodeCode) {
@@ -784,10 +750,6 @@ class WorkflowRunResumeRecoveryIntegrationTest extends AbstractIntegrationTest {
         select count(*) from batch.workflow_node_run where workflow_run_id=? and node_code=?
     """;
 
-    return jdbc.queryForObject(
-        selectCountSql,
-        Long.class,
-        workflowRunId,
-        nodeCode);
+    return jdbc.queryForObject(selectCountSql, Long.class, workflowRunId, nodeCode);
   }
 }

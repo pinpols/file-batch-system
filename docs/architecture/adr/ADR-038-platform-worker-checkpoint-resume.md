@@ -1,6 +1,6 @@
 # ADR-038 · 平台 Worker 分片级断点续跑与 chunk 位点补偿式续跑(Import / Export)
 
-> **当前适用性（2026-10-24）**：平台 Worker 的断点续跑继续按执行器能力使用；检查点不代替外部效果确认。新根运行冻结分区与执行参数，未知结果恢复和非幂等开始证据按ADR-049，不能简单重置终态重跑。 原决策与历史阶段记录保留。
+> **当前适用性（2026-10-30）**：平台 Worker 的断点续跑继续按执行器能力使用；检查点不代替外部效果确认。新根运行冻结分区与执行参数，未知结果恢复和非幂等开始证据按ADR-049，不能简单重置终态重跑。Import LOAD 位点当前绑定文件 SHA-256，恢复前须核对文件身份；旧纯行号位点不兼容，详见[运行手册](../../runbook/platform-worker-checkpoint-howto.md)。原决策与历史阶段记录保留。
 
 > **措辞校正(2026-07,P0 R-1)**:本 ADR 早期在标题、范围边界和决策二里写「chunk 业务写与位点更新**同事务**」。
 > 实施确认 Import 业务数据落**租户业务库**、位点落**平台库**,**跨库无 1PC**,该措辞失真。真实语义是
@@ -91,7 +91,7 @@ ProcessingPosition {
   String  taskKey;          // pipeline_instance / file_record 维度键
   String  stage;            // LOAD / GENERATE
   long    processedCount;   // 已成功处理记录数
-  String  positionMarker;   // 续跑位点:Import=行号; Export=序列化 cursor
+  String  positionMarker;   // 续跑位点:Import=行号:SHA-256; Export=序列化 cursor
   boolean completed;        // 该阶段是否已整体完成
 }
 ```
@@ -100,8 +100,8 @@ ProcessingPosition {
 
 ```
 pos = positionStore.load(taskKey, stage)
-if (pos.completed) -> 跳过该阶段(幂等)
-resumeMarker  = pos.positionMarker     // Import: 跳过前 N 行; Export: 从该 cursor 续页
+if (pos.completed) -> 核验阶段所需的文件身份或完整性，通过后跳过该阶段
+resumeMarker  = pos.positionMarker     // Import: 校验文件摘要后跳过前 N 行; Export: 从该 cursor 续页
 processedCount = pos.processedCount     // 计数不归零
 ```
 
@@ -137,8 +137,8 @@ flushChunkWithPosition(plugin, chunk, position):
 
 | | Import LOAD | Export GENERATE |
 |---|---|---|
-| 位点 | 已处理**行号**(staging file 是 append-only,行号稳定可定位) | 序列化的 **cursor**(plugin 的 `nextCursor`) |
-| 续跑 | 重读 staging file,`skip` 到 `行号` 后继续 | 从存的 cursor 调 `loadDetailPage(cursor)` 续页 |
+| 位点 | 已处理物理行号和校验文件 SHA-256 | 序列化的 **cursor**(plugin 的 `nextCursor`) |
+| 续跑 | 先核对 staging 文件摘要，再 `skip` 到行号后继续 | 从存的 cursor 调 `loadDetailPage(cursor)` 续页 |
 | 一致性 | △ 业务写落**租户业务库**、行号位点落**平台库**,跨库无 1PC;业务先 commit → 位点后 advance,崩溃窗口重做 ≤1 chunk,靠插件幂等吸收(见 §决策二) | △ 文件写非事务;按"分片临时文件 + 已确认页位点"补偿,续跑时丢弃未确认的尾部重写 |
 | 幂等前提 | plugin `loadChunk` 需幂等或目标表有唯一键(多租已强制 `UNIQUE(tenant_id, ...)`)防重复 | 续跑重写从 cursor 起,临时文件覆盖,最终 STORE 阶段才落正式文件 |
 

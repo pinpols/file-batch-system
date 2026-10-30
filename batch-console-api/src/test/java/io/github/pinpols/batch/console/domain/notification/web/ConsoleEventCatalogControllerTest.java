@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.domain.notification.web;
 
 import static org.hamcrest.Matchers.contains;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -16,16 +15,21 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 @DisplayName("事件目录接口: 事件类型与消息主题清单的输出口径")
+@ExtendWith(MockitoExtension.class)
 class ConsoleEventCatalogControllerTest {
 
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -58,8 +62,13 @@ class ConsoleEventCatalogControllerTest {
         .perform(get("/api/console/event-catalog/event-types"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data[*].code").value(contains(
-            "JOB_SUCCESS", "JOB_FAILED", "WORKFLOW_SUCCESS", "WORKFLOW_FAILED", "ALERT_ESCALATED")));
+        .andExpect(jsonPath("$.data[*].code")
+            .value(contains(
+                "JOB_SUCCESS",
+                "JOB_FAILED",
+                "WORKFLOW_SUCCESS",
+                "WORKFLOW_FAILED",
+                "ALERT_ESCALATED")));
   }
 
   @Test

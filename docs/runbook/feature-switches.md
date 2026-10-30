@@ -2,7 +2,7 @@
 
 > 汇总跨模块运行时能力开关：配置 key、实际默认、启用条件、风险、验证和回滚。索引随实现持续维护，不再用固定数量描述范围。
 >
-> 配套阅读：[`docs/archive/plans/rework-classification-2026-04-25.md`](../archive/plans/rework-classification-2026-04-25.md) Phase 2 章节、[`docs/coding-conventions.md` §13.3](../coding-conventions.md) 配置归属决策。
+> 配套阅读：[容量治理](production-capacity-governance.md)中的启用和验收要求、[`docs/coding-conventions.md` §13.3](../coding-conventions.md) 配置归属决策。
 
 ---
 
@@ -462,7 +462,7 @@ Console 使用无状态 JWT：每次认证重建不应按有状态会话的“�
 | `deploy/docker/compose/app.yml` | 公共开关必须显式透传并提供与应用一致的 `:-xxx` 默认 |
 | `.env.example` | 列出该开关 + 默认值 + 一行作用说明 |
 | 本文档（`feature-switches.md`） | §1 索引表 + §3 详述节 |
-| `docs/archive/plans/rework-classification-2026-04-25.md` | Phase 2 表格的"开关"列 |
+| `docs/runbook/production-capacity-governance.md` | 受影响的容量预算、启用条件与验收边界 |
 | `docs/changelog.md` | **仅当**改的是 docs/agent-baseline.md 已有规范条款时记一条 |
 
 ---
@@ -475,3 +475,18 @@ Console 使用无状态 JWT：每次认证重建不应按有状态会话的“�
 | 2 | `rework-classification.md` 第 81 行更新为实际默认表 | ✅ 完成（替换为 5 项开关默认值表 + 引用 `feature-switches.md`） |
 | 3 | `read-replica` 应用层 fail-open | ✅ **本次梳理前已落地**（`ReadReplicaRoutingDataSource` C-3.1：失败计数 + quarantine + micrometer 指标 + `@RouteToPrimary` 注解）；本文档 §3.1 已校准 |
 | 4 | `mq.routing` 切换灰度发布 runbook | ✅ 完成（新增 `docs/runbook/mq-topic-routing-rollout.md`） |
+
+## Worker 批量 CLAIM 与 REPORT
+
+这两个开关均为 `STATIC / RESTART_REQUIRED / PUBLIC`，默认关闭，分别控制 Kafka 批量认领入口和 HTTP REPORT 微批；不改变每个 task 的租户、invocation、状态机、Outbox 与重试身份。配置源为 `batch-common/.../batch-defaults.yml` 和对应 ConfigurationProperties，Compose 公共环境、Helm `orchestrator.workerBatchClaim` / `workerTaskClient` 及 `.env.example` 提供同名入口。它们不是 Console 动态配置。
+
+| 配置 | 默认值 | 约束与作用 |
+|---|---|---|
+| `batch.worker.batch-claim.enabled` | false | 启用各 Worker 批量 listener；启动时验证 `listener concurrency × max-poll-records <= max-concurrent-tasks`，不能只翻开关而不校准准入 |
+| `batch.worker.batch-claim.max-batch-size` | 32 | 复用为 CLAIM/REPORT 单 HTTP 上限；不得大于 Orchestrator `batch.task.batch-claim.max-batch-size` |
+| `batch.worker.task-client.report-batch-enabled` | false | 同时段独立 listener 的报告做有界同步聚合；与 CLAIM 开关独立 |
+| `batch.worker.task-client.report-batch-wait-millis` | 5 ms | 输入规整至 0–100 ms；控制聚合等待，不能当作 HTTP/整体上报超时 |
+
+开 REPORT 后，调用者仍等待逐项确认，未确认项走原单条有限重试和 Outbox；成功项不因邻项失败重报，不回头执行业务。按租户分批；响应缺项、重复或未知身份不算成功。队列满和关闭走原安全路径，没有新增持久化或线程池。
+
+本地和 benchmark 只能在独占环境显式启用后记录实际 HTTP 批大小、吞吐、等待、lease/reclaim、重复效果和报告交付；mock 往返数与局部 SIM 不等于目标容量签收。生产启用仍按 ADR-046 和容量治理门槛完成目标环境负载/故障验收。退回两个开关 false 并重启 Worker 即恢复单条传输；先观察现有 Outbox/在途报告收敛，不清运行台账。

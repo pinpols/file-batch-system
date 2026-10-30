@@ -15,7 +15,7 @@
 
 ## 历史覆盖与压测
 
-[覆盖缺口（2026-04-08）](../archive/testing/coverage-gap-analysis-2026-04-08.md)、[Phase 1/2 矩阵（2026-09-11 状态记录）](../archive/testing/phase-coverage-2026-09-11.md)、[压测报告（2026-04-25）](../verifications/load-test-report-2026-04-25.md) 仅用于历史对照。当前测试资产、执行范围和结果以源码、CI、[发布门禁](release-gate.md) 与最新验证证据为准。
+当前测试方法见[全项目测试计划](full-project-test-plan.md)，场景入口见[E2E矩阵](e2e-coverage.md)。旧覆盖缺口和Phase矩阵中的有效要求已并入现行文档；[2026-04-25压测报告](../verifications/load-test-report-2026-04-25.md)只作历史证据。当前测试资产、执行范围和结果以源码、CI、[发布门禁](release-gate.md)与最新验证证据为准。
 
 ## 角色路径
 
@@ -35,7 +35,7 @@
 | [历史 Worker Stage 验证](../verifications/worker-stage-coverage-2026-04-25.md) | 2026-04-25 的运行证据，不作为当前覆盖率 |
 | [`../runbook/quartz-capacity-baseline.md`](../runbook/quartz-capacity-baseline.md) | Quartz 容量压测（运维角度）|
 | [`../analysis/`](../plans/README.md) | 测试中发现问题的滚动记录 |
-| [`../archive/testing/`](../archive/testing) | 历史压测报告 / 测试运行快照 |
+| [历史验证证据](../archive/verifications/README.md) | 带原基线的测试运行与优化记录 |
 
 ## 专题入口
 

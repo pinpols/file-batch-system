@@ -158,6 +158,10 @@ paths:
                     rowsProcessed: {type: integer, format: int64}
                     totalRowsHint: {type: integer, format: int64, nullable: true}
                     heartbeatAt: {type: string, format: date-time}
+                    stepRunIds:
+                      type: array
+                      items: {type: integer, format: int64}
+                      description: 本次聚合实际采用的阶段执行ID；Console仅在包含自身持久步骤ID时补值。
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
         '5XX': {$ref: '#/components/responses/ServerError'}
@@ -2149,7 +2153,7 @@ components:
         pipelineProgress:
           type: array
           nullable: true
-          description: 内置 Worker 全量活跃任务快照；null/缺省或空列表均清理该 worker 上一轮任务进度。仅观测，不代替 checkpoint。
+          description: 内置 Worker 活跃任务快照；实时查询只接收认领身份及阶段执行ID匹配数据库当前有效认领的样本。空心跳不删除带身份样本，防止同名旧进程影响新认领；失租、终态立即停止投影，缓存最长保留5分钟。缺身份的旧样本不对外补值，仅观测，不代替 checkpoint。
           items:
             type: object
             properties:
@@ -2168,6 +2172,15 @@ components:
                 type: integer
                 format: int64
                 nullable: true
+              partitionInvocationId:
+                type: string
+                nullable: true
+                description: 执行上下文原始分区认领身份；缺失时不进入实时聚合。
+              pipelineStepRunId:
+                type: integer
+                format: int64
+                nullable: true
+                description: 原始阶段执行记录ID；缺失或非当前运行尝试时不进入实时聚合。
             required:
             - taskId
             - pipelineInstanceId
@@ -2774,7 +2787,11 @@ components:
           type: object
           additionalProperties: true
           nullable: true
-          description: "任意 JSON 对象(平台落 job_task 字段,console 任务详情读取)。严禁含 DB 密码 / OAuth secret"
+          description: "进度与检查点 JSON，禁止包含凭据。保留字段 executionStarted 仅接受布尔 true：执行线程进入适配器前，携带当前 workerId 和 partitionInvocationId 确认首次执行入口；取消或租约失效时不得进入业务。该信号不替代非幂等副作用开始标记。"
+          properties:
+            executionStarted:
+              type: boolean
+              description: "仅在执行线程即将进入业务适配器时提交 true；认领、派发、执行池排队和普通续租均不得提前提交。"
       required: [tenantId, workerId]
 
     TaskHeartbeatResponse:

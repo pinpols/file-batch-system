@@ -9,12 +9,12 @@ import com.sun.net.httpserver.HttpServer;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
-import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
+import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
@@ -33,12 +33,12 @@ import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.BatchDayRep
 import io.github.pinpols.batch.orchestrator.service.WorkerRegistryServerService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.math.BigDecimal;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -58,31 +58,33 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
+import javax.sql.DataSource;
 import org.awaitility.core.ThrowingRunnable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.junit.jupiter.params.ParameterizedTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.core.env.Environment;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.jdbc.Sql;
+import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
-import org.springframework.test.web.reactive.server.WebTestClient;
 
 /** 通过真实认证的 Console 自助审批完成 Workflow 与 Worker 重跑。 */
 @E2eSpringBootTest(
     classes = E2eConsoleImportApplication.class,
-    webEnvironment =
-        org.springframework.boot.test.context.SpringBootTest.WebEnvironment.RANDOM_PORT,
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
       "batch.worker.import.worker-type=IMPORT",
       "batch.security.bypass-mode=true",
@@ -262,6 +264,10 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
       select count(1)::int from batch.worker_registry
       where tenant_id=? and coalesce(worker_pool_code, worker_code)=?
         and status='ONLINE' and worker_group='EXPORT'
+      """;
+  private static final String MARK_EXPORT_WORKER_OFFLINE_SQL = """
+      update batch.worker_registry set status='OFFLINE'
+      where tenant_id=? and worker_code=?
       """;
   private static final String SELECT_LATEST_WORKFLOW_REPLAY_TEMPLATE_VERSION_SQL = """
       select max(version) from batch.file_template_config
@@ -500,11 +506,11 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
 
   @Autowired
   @Qualifier("importBusinessDataSource")
-  private javax.sql.DataSource businessDataSource;
+  private DataSource businessDataSource;
 
   @Autowired
   @Qualifier("e2eBusinessDataSource")
-  private javax.sql.DataSource e2eBusinessDataSource;
+  private DataSource e2eBusinessDataSource;
 
   @Autowired
   private ObjectMapper objectMapper;
@@ -516,11 +522,9 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
   @MethodSource("selfServiceCompensationScenarios")
   @DisplayName("TENANT_USER 补偿成功、失败或重放后的 JobInstance 并按来源配置完成新 Workflow")
   void shouldExecuteAuthenticatedSelfServiceCompensation_asWorkflowRerun(
-      boolean sourceInitiallyFailed,
-      boolean replayBeforeSelfServiceCompensation) throws Exception {
+      boolean sourceInitiallyFailed, boolean replayBeforeSelfServiceCompensation) throws Exception {
     executeSelfServiceCompensationScenario(
-        sourceInitiallyFailed,
-        replayBeforeSelfServiceCompensation);
+        sourceInitiallyFailed, replayBeforeSelfServiceCompensation);
   }
 
   @Test
@@ -544,11 +548,16 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
         [{"customerNo":"%s","customerName":"node replay","customerType":"PERSONAL",
           "certificateNo":"ID-%s","mobileNo":"13800000001","email":"node@example.com","status":"ACTIVE"}]
         """.formatted(customerNo, customerNo);
-    CompensationSourceInput sourceInput = prepareCompensationSourceInput(
-        suffix, customerNo, repairedContent, true);
+    CompensationSourceInput sourceInput =
+        prepareCompensationSourceInput(suffix, customerNo, repairedContent, true);
     LaunchRequest sourceRequest = new LaunchRequest(
-        TENANT, seed.workflowDefinitionId(), bizDate, TriggerType.API,
-        seed.requestId(), requestId, sourceInput.launchParams());
+        TENANT,
+        seed.workflowDefinitionId(),
+        bizDate,
+        TriggerType.API,
+        seed.requestId(),
+        requestId,
+        sourceInput.launchParams());
     launchService.launch(sourceRequest);
     outboxPublishSupport.publishAllPending(TENANT);
 
@@ -556,27 +565,30 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(90))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          Map<String, Object> sourceInstance = jdbc.queryForMap(SELECT_INSTANCE_SQL, TENANT, seed.dedupKey());
+          Map<String, Object> sourceInstance =
+              jdbc.queryForMap(SELECT_INSTANCE_SQL, TENANT, seed.dedupKey());
           assertThat(sourceInstance).containsEntry("instance_status", "FAILED");
         });
-    Map<String, Object> sourceInstance = jdbc.queryForMap(SELECT_INSTANCE_SQL, TENANT, seed.dedupKey());
+    Map<String, Object> sourceInstance =
+        jdbc.queryForMap(SELECT_INSTANCE_SQL, TENANT, seed.dedupKey());
     long sourceJobInstanceId = ((Number) sourceInstance.get("id")).longValue();
     long sourceRunId = jdbc.queryForObject(
         SELECT_SOURCE_WORKFLOW_RUN_ID_SQL, Long.class, TENANT, sourceJobInstanceId);
-    Map<String, Object> sourceNode = jdbc.queryForMap(
-        SELECT_FAILED_NODE_SQL, TENANT, sourceRunId);
+    Map<String, Object> sourceNode = jdbc.queryForMap(SELECT_FAILED_NODE_SQL, TENANT, sourceRunId);
     long sourceNodeRunId = ((Number) sourceNode.get("id")).longValue();
     assertThat(sourceNode).containsEntry("node_status", "FAILED");
     repairCompensationObject(sourceInput);
 
     try (ConfigurableApplicationContext securedConsole = startSecuredConsole()) {
-      int consolePort = securedConsole.getEnvironment().getProperty("local.server.port", Integer.class);
+      int consolePort =
+          securedConsole.getEnvironment().getProperty("local.server.port", Integer.class);
       WebTestClient client = WebTestClient.bindToServer()
           .baseUrl("http://127.0.0.1:" + consolePort)
           .responseTimeout(Duration.ofSeconds(45))
           .build();
       ConsoleJwtService jwtService = securedConsole.getBean(ConsoleJwtService.class);
-      Actor tenantUser = authenticate(client, jwtService, "node-replay-tenant-user", "ROLE_TENANT_USER");
+      Actor tenantUser =
+          authenticate(client, jwtService, "node-replay-tenant-user", "ROLE_TENANT_USER");
       Actor requester = authenticate(client, jwtService, "node-replay-requester", "ROLE_ADMIN");
       Actor approver = authenticate(client, jwtService, "node-replay-approver", "ROLE_ADMIN");
 
@@ -586,10 +598,12 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
       previewRequest.put("workflowNodeRunId", sourceNodeRunId);
       previewRequest.put("reason", "Replay the exact failed JOB node after source repair");
       post(client, tenantUser, "/api/console/jobs/workflow-node/replay-preview", previewRequest)
-          .expectStatus().isForbidden();
+          .expectStatus()
+          .isForbidden();
       WebTestClient.ResponseSpec previewResponse = post(
-          client, requester, "/api/console/jobs/workflow-node/replay-preview", previewRequest)
-          .expectStatus().isOk();
+              client, requester, "/api/console/jobs/workflow-node/replay-preview", previewRequest)
+          .expectStatus()
+          .isOk();
       JsonNode preview = response(previewResponse).path("data");
       assertThat(preview.path("sourceWorkflowRunId").asLong()).isEqualTo(sourceRunId);
       assertThat(preview.path("sourceWorkflowNodeRunId").asLong()).isEqualTo(sourceNodeRunId);
@@ -613,20 +627,24 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
       replayRequest.put("operationKey", operationKey);
       replayRequest.put("previewToken", previewToken);
       replayRequest.put("resultPolicy", preview.path("resultPolicy").asText());
-      replayRequest.put("configVersionPolicy", preview.path("configVersionPolicy").asText());
+      replayRequest.put(
+          "configVersionPolicy", preview.path("configVersionPolicy").asText());
       WebTestClient.ResponseSpec submitResponse = post(
-          client, requester, "/api/console/jobs/compensations", replayRequest)
-          .expectStatus().isOk();
+              client, requester, "/api/console/jobs/compensations", replayRequest)
+          .expectStatus()
+          .isOk();
       String approvalNo = response(submitResponse).path("data").asText();
       assertThat(approvalNo).isNotBlank();
       WebTestClient.ResponseSpec duplicateSubmitResponse = post(
-          client, requester, "/api/console/jobs/compensations", replayRequest)
-          .expectStatus().isOk();
-      String duplicateApprovalNo = response(duplicateSubmitResponse).path("data").asText();
+              client, requester, "/api/console/jobs/compensations", replayRequest)
+          .expectStatus()
+          .isOk();
+      String duplicateApprovalNo =
+          response(duplicateSubmitResponse).path("data").asText();
       assertThat(duplicateApprovalNo).isEqualTo(approvalNo);
 
-      Map<String, Object> approvalPayload = jdbc.queryForMap(
-          SELECT_NODE_REPLAY_APPROVAL_PAYLOAD_SQL, TENANT, approvalNo);
+      Map<String, Object> approvalPayload =
+          jdbc.queryForMap(SELECT_NODE_REPLAY_APPROVAL_PAYLOAD_SQL, TENANT, approvalNo);
       Long replayOperationIdValue = jdbc.queryForObject(
           SELECT_REPLAY_OPERATION_ID_BY_KEY_SQL, Long.class, TENANT, operationKey);
       assertThat(replayOperationIdValue).isNotNull();
@@ -637,8 +655,8 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
           .containsEntry("preview_token", previewToken)
           .containsEntry("operation_key", operationKey);
       long replayOperationId = Long.parseLong((String) approvalPayload.get("replay_operation_id"));
-      Map<String, Object> operationBeforeApproval = jdbc.queryForMap(
-          SELECT_NODE_REPLAY_OPERATION_SQL, TENANT, sourceRunId, sourceNodeRunId);
+      Map<String, Object> operationBeforeApproval =
+          jdbc.queryForMap(SELECT_NODE_REPLAY_OPERATION_SQL, TENANT, sourceRunId, sourceNodeRunId);
       assertThat(operationBeforeApproval)
           .containsEntry("id", replayOperationId)
           .containsEntry("status", "PENDING_APPROVAL")
@@ -646,11 +664,12 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
           .containsEntry("source_job_instance_id", sourceJobInstanceId);
 
       Map<String, Object> approvalAction = Map.of(
-          "tenantId", TENANT,
-          "operatorId", "node-replay-approver",
-          "reason", approvalGranted
-              ? "Approve exact failed node replay"
-              : "Reject exact failed node replay");
+          "tenantId",
+          TENANT,
+          "operatorId",
+          "node-replay-approver",
+          "reason",
+          approvalGranted ? "Approve exact failed node replay" : "Reject exact failed node replay");
       String approvalActionPath = approvalGranted ? "approve" : "reject";
       String approvalActionUrl = "/api/console/approvals/" + approvalNo + "/" + approvalActionPath;
       post(client, approver, approvalActionUrl, approvalAction).expectStatus().isOk();
@@ -665,16 +684,16 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
             .containsEntry("succeeded_count", 0)
             .containsEntry("failed_count", 0)
             .containsEntry("in_flight_count", 0);
-        Map<String, Object> rejectedApproval = jdbc.queryForMap(
-            SELECT_NODE_REPLAY_APPROVAL_PAYLOAD_SQL, TENANT, approvalNo);
+        Map<String, Object> rejectedApproval =
+            jdbc.queryForMap(SELECT_NODE_REPLAY_APPROVAL_PAYLOAD_SQL, TENANT, approvalNo);
         assertThat(rejectedApproval).containsEntry("approval_status", "REJECTED");
-        int compensationCommandCount = jdbc.queryForObject(
-            COUNT_COMPENSATION_COMMAND_SQL, Integer.class, TENANT, approvalNo);
+        int compensationCommandCount =
+            jdbc.queryForObject(COUNT_COMPENSATION_COMMAND_SQL, Integer.class, TENANT, approvalNo);
         assertThat(compensationCommandCount).isZero();
         return;
       }
-      Map<String, Object> operationAfterApproval = jdbc.queryForMap(
-          SELECT_NODE_REPLAY_OPERATION_SQL, TENANT, sourceRunId, sourceNodeRunId);
+      Map<String, Object> operationAfterApproval =
+          jdbc.queryForMap(SELECT_NODE_REPLAY_OPERATION_SQL, TENANT, sourceRunId, sourceNodeRunId);
       assertThat(operationAfterApproval)
           .containsEntry("status", "RUNNING")
           .containsEntry("approved_by", "node-replay-approver");
@@ -687,23 +706,19 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
           .untilAsserted(() -> {
             outboxPublishSupport.publishAllPending(TENANT);
             List<Long> replayWorkflowRunIds = jdbc.queryForList(
-                SELECT_WORKFLOW_RUN_ID_BY_REQUEST_SQL,
-                Long.class,
-                TENANT,
-                TENANT,
-                replayRequestId);
+                SELECT_WORKFLOW_RUN_ID_BY_REQUEST_SQL, Long.class, TENANT, TENANT, replayRequestId);
             assertThat(replayWorkflowRunIds).hasSize(1);
             Long replayWorkflowRunId = replayWorkflowRunIds.get(0);
             assertThat(replayWorkflowRunId).isNotNull();
-            List<Map<String, Object>> replayJobs = jdbc.queryForList(
-                SELECT_NODE_REPLAY_JOB_SQL, TENANT, replayWorkflowRunId);
+            List<Map<String, Object>> replayJobs =
+                jdbc.queryForList(SELECT_NODE_REPLAY_JOB_SQL, TENANT, replayWorkflowRunId);
             assertThat(replayJobs).hasSize(1);
             Map<String, Object> replayJob = replayJobs.get(0);
             assertThat(replayJob.get("node_status")).isEqualTo("SUCCESS");
             assertThat(replayJob.get("run_status")).isEqualTo("SUCCESS");
           });
-      Map<String, Object> finalOperation = jdbc.queryForMap(
-          SELECT_NODE_REPLAY_OPERATION_SQL, TENANT, sourceRunId, sourceNodeRunId);
+      Map<String, Object> finalOperation =
+          jdbc.queryForMap(SELECT_NODE_REPLAY_OPERATION_SQL, TENANT, sourceRunId, sourceNodeRunId);
       assertThat(finalOperation)
           .containsEntry("status", "SUCCEEDED")
           .containsEntry("source_workflow_run_id", sourceRunId)
@@ -750,10 +765,7 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
           TENANT,
           priorDaySource.jobCode(),
           priorDaySource.requestId());
-      jdbc.update(
-          UPDATE_WORKFLOW_REPLAY_PRIOR_TRIGGER_SQL,
-          TENANT,
-          priorDaySource.requestId());
+      jdbc.update(UPDATE_WORKFLOW_REPLAY_PRIOR_TRIGGER_SQL, TENANT, priorDaySource.requestId());
       String priorBusinessKey = "job:" + priorDaySource.jobCode() + ":" + priorBizDate;
       Long previewResultVersionId = jdbc.queryForObject(
           INSERT_WORKFLOW_REPLAY_PRIOR_RESULT_VERSION_SQL,
@@ -802,8 +814,8 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
                 seed.requestId());
             assertThat(sourceRunIds).hasSize(1);
             Long sourceRunId = sourceRunIds.get(0);
-            List<Map<String, Object>> sourceJobs = jdbc.queryForList(
-                SELECT_WORKFLOW_REPLAY_JOB_SQL, TENANT, sourceRunId);
+            List<Map<String, Object>> sourceJobs =
+                jdbc.queryForList(SELECT_WORKFLOW_REPLAY_JOB_SQL, TENANT, sourceRunId);
             assertThat(sourceJobs).hasSize(1);
           });
       outboxPublishSupport.publishAllPending(TENANT);
@@ -823,17 +835,13 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
             String sourceStatus = jdbc.queryForObject(
                 SELECT_WORKFLOW_RUN_STATUS_SQL, String.class, TENANT, sourceRunId);
             assertThat(sourceStatus).isEqualTo("FAILED");
-            List<Map<String, Object>> sourceJobs = jdbc.queryForList(
-                SELECT_WORKFLOW_REPLAY_JOB_SQL, TENANT, sourceRunId);
+            List<Map<String, Object>> sourceJobs =
+                jdbc.queryForList(SELECT_WORKFLOW_REPLAY_JOB_SQL, TENANT, sourceRunId);
             assertThat(sourceJobs).hasSize(1);
             assertThat(sourceJobs.get(0)).containsEntry("instance_status", "FAILED");
           });
       Long sourceWorkflowRunId = jdbc.queryForObject(
-          SELECT_WORKFLOW_RUN_ID_BY_REQUEST_SQL,
-          Long.class,
-          TENANT,
-          TENANT,
-          seed.requestId());
+          SELECT_WORKFLOW_RUN_ID_BY_REQUEST_SQL, Long.class, TENANT, TENANT, seed.requestId());
       assertThat(sourceWorkflowRunId).isNotNull();
 
       createWorkflowReplayBusinessRows(batchTable, detailTable, batchNo);
@@ -843,41 +851,34 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
           "wf_replay_missing_batch_" + suffix,
           "wf_replay_missing_detail_" + suffix);
       Integer latestTemplateVersion = jdbc.queryForObject(
-          SELECT_LATEST_WORKFLOW_REPLAY_TEMPLATE_VERSION_SQL,
-          Integer.class,
-          TENANT,
-          templateCode);
+          SELECT_LATEST_WORKFLOW_REPLAY_TEMPLATE_VERSION_SQL, Integer.class, TENANT, templateCode);
       assertThat(latestTemplateVersion).isEqualTo(2);
 
       try (ConfigurableApplicationContext securedConsole = startSecuredConsole()) {
         WebTestClient client = WebTestClient.bindToServer()
-            .baseUrl("http://127.0.0.1:" + securedConsole.getEnvironment()
-                .getProperty("local.server.port", Integer.class))
+            .baseUrl("http://127.0.0.1:"
+                + securedConsole.getEnvironment().getProperty("local.server.port", Integer.class))
             .responseTimeout(Duration.ofSeconds(45))
             .build();
         ConsoleJwtService jwtService = securedConsole.getBean(ConsoleJwtService.class);
-        Actor requester = authenticate(
-            client, jwtService, "workflow-replay-requester", "ROLE_ADMIN");
-        Actor approver = authenticate(
-            client, jwtService, "workflow-replay-approver", "ROLE_ADMIN");
+        Actor requester =
+            authenticate(client, jwtService, "workflow-replay-requester", "ROLE_ADMIN");
+        Actor approver = authenticate(client, jwtService, "workflow-replay-approver", "ROLE_ADMIN");
 
         Map<String, Object> previewRequest = new LinkedHashMap<>();
         previewRequest.put("tenantId", TENANT);
         previewRequest.put("workflowRunId", sourceWorkflowRunId);
-        previewRequest.put("reason", "Replay the complete failed workflow after repairing export data");
+        previewRequest.put(
+            "reason", "Replay the complete failed workflow after repairing export data");
         previewRequest.put("resultPolicy", "CREATE_NEW_VERSION");
         previewRequest.put("configVersionPolicy", "USE_ORIGINAL_CONFIG");
-        JsonNode previewEnvelope = response(post(
-                client,
-                requester,
-                "/api/console/jobs/workflow-run/replay-preview",
-                previewRequest)
-            .expectStatus()
-            .isOk());
+        JsonNode previewEnvelope = response(
+            post(client, requester, "/api/console/jobs/workflow-run/replay-preview", previewRequest)
+                .expectStatus()
+                .isOk());
         JsonNode preview = previewEnvelope.path("data");
         assertThat(preview.path("sourceWorkflowRunId").asLong()).isEqualTo(sourceWorkflowRunId);
-        assertThat(preview.path("bizDate").asText())
-            .isEqualTo(WORKFLOW_REPLAY_BIZ_DATE.toString());
+        assertThat(preview.path("bizDate").asText()).isEqualTo(WORKFLOW_REPLAY_BIZ_DATE.toString());
         assertThat(preview.path("nodes").size()).isEqualTo(3);
         assertThat(preview.path("edges").size()).isEqualTo(2);
         JsonNode jobPreview = null;
@@ -889,8 +890,9 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
         assertThat(jobPreview).isNotNull();
         assertThat(jobPreview.path("pluginId").asText()).isEqualTo("jdbc_mapped_export");
         assertThat(jobPreview.path("blockers").size())
-            .as("replay blockers=%s, capability=%s", jobPreview.path("blockers"),
-                jobPreview.path("capability"))
+            .as(
+                "replay blockers=%s, capability=%s",
+                jobPreview.path("blockers"), jobPreview.path("capability"))
             .isZero();
 
         String operationKey = preview.path("operationKey").asText();
@@ -913,8 +915,8 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
         assertThat(submissionResult.path("replayOperationId").asLong()).isPositive();
         assertThat(approvalNo).isNotBlank();
 
-        Map<String, Object> operationBeforeApproval = jdbc.queryForMap(
-            SELECT_WORKFLOW_REPLAY_OPERATION_SQL, TENANT, operationKey);
+        Map<String, Object> operationBeforeApproval =
+            jdbc.queryForMap(SELECT_WORKFLOW_REPLAY_OPERATION_SQL, TENANT, operationKey);
         assertThat(operationBeforeApproval)
             .containsEntry("status", "PENDING_APPROVAL")
             .containsEntry("source_workflow_run_id", sourceWorkflowRunId)
@@ -940,16 +942,12 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
             "tenantId", TENANT,
             "operatorId", "workflow-replay-approver",
             "reason", "Approve complete workflow replay");
-        post(
-                client,
-                approver,
-                "/api/console/approvals/" + approvalNo + "/approve",
-                approvalAction)
+        post(client, approver, "/api/console/approvals/" + approvalNo + "/approve", approvalAction)
             .expectStatus()
             .isOk();
 
-        Map<String, Object> operationAfterApproval = jdbc.queryForMap(
-            SELECT_WORKFLOW_REPLAY_OPERATION_SQL, TENANT, operationKey);
+        Map<String, Object> operationAfterApproval =
+            jdbc.queryForMap(SELECT_WORKFLOW_REPLAY_OPERATION_SQL, TENANT, operationKey);
         assertThat(operationAfterApproval.get("status")).isEqualTo("RUNNING");
         String replayRequestId = (String) operationAfterApproval.get("target_request_id");
         assertThat(replayRequestId).isNotBlank();
@@ -966,8 +964,8 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
                   TENANT,
                   replayRequestId);
               assertThat(replayRunIds).hasSize(1);
-              List<Map<String, Object>> replayJobs = jdbc.queryForList(
-                  SELECT_WORKFLOW_REPLAY_JOB_SQL, TENANT, replayRunIds.get(0));
+              List<Map<String, Object>> replayJobs =
+                  jdbc.queryForList(SELECT_WORKFLOW_REPLAY_JOB_SQL, TENANT, replayRunIds.get(0));
               assertThat(replayJobs).hasSize(1);
             });
         outboxPublishSupport.publishAllPending(TENANT);
@@ -984,15 +982,15 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
                   replayRequestId);
               assertThat(replayRunIds).hasSize(1);
               Long replayRunId = replayRunIds.get(0);
-              List<Map<String, Object>> replayJobs = jdbc.queryForList(
-                  SELECT_WORKFLOW_REPLAY_JOB_SQL, TENANT, replayRunId);
+              List<Map<String, Object>> replayJobs =
+                  jdbc.queryForList(SELECT_WORKFLOW_REPLAY_JOB_SQL, TENANT, replayRunId);
               assertThat(replayJobs).hasSize(1);
               assertThat(replayJobs.get(0))
                   .containsEntry("node_status", "SUCCESS")
                   .containsEntry("instance_status", "SUCCESS")
                   .containsEntry("run_status", "SUCCESS");
-              Map<String, Object> completedOperation = jdbc.queryForMap(
-                  SELECT_WORKFLOW_REPLAY_OPERATION_SQL, TENANT, operationKey);
+              Map<String, Object> completedOperation =
+                  jdbc.queryForMap(SELECT_WORKFLOW_REPLAY_OPERATION_SQL, TENANT, operationKey);
               assertThat(completedOperation)
                   .containsEntry("status", "SUCCEEDED")
                   .containsEntry("succeeded_count", 1)
@@ -1001,14 +999,10 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
             });
 
         List<Long> replayRunIds = jdbc.queryForList(
-            SELECT_WORKFLOW_RUN_ID_BY_REQUEST_SQL,
-            Long.class,
-            TENANT,
-            TENANT,
-            replayRequestId);
+            SELECT_WORKFLOW_RUN_ID_BY_REQUEST_SQL, Long.class, TENANT, TENANT, replayRequestId);
         Long replayRunId = replayRunIds.get(0);
-        Map<String, Object> replayJob = jdbc.queryForMap(
-            SELECT_WORKFLOW_REPLAY_JOB_SQL, TENANT, replayRunId);
+        Map<String, Object> replayJob =
+            jdbc.queryForMap(SELECT_WORKFLOW_REPLAY_JOB_SQL, TENANT, replayRunId);
         Long replayJobInstanceId = ((Number) replayJob.get("job_instance_id")).longValue();
         String replayCrossDayVersionId = jdbc.queryForObject(
             SELECT_WORKFLOW_REPLAY_CROSS_DAY_VERSION_ID_SQL,
@@ -1049,14 +1043,15 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
             .tenantId(TENANT)
             .workerCode(workerCode)
             .workerGroup("EXPORT")
-            .replayCapabilities(List.of(ReplayCapabilityDeclaration.unknown(
-                WorkerPluginIds.EXPORT_DATA_JDBC_MAPPED)))
+            .replayCapabilities(List.of(
+                ReplayCapabilityDeclaration.unknown(WorkerPluginIds.EXPORT_DATA_JDBC_MAPPED)))
             .build();
         var reRegisteredWorker = workerRegistryService.register(unknownCapabilityRegistration);
         assertThat(reRegisteredWorker.workerCode()).isEqualTo(workerCode);
 
         Map<String, Object> blockedPreviewRequest = new LinkedHashMap<>(previewRequest);
-        blockedPreviewRequest.put("reason", "Verify UNKNOWN Worker capability blocks whole Workflow replay");
+        blockedPreviewRequest.put(
+            "reason", "Verify UNKNOWN Worker capability blocks whole Workflow replay");
         JsonNode blockedPreviewEnvelope = response(post(
                 client,
                 requester,
@@ -1094,10 +1089,7 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
             .expectStatus()
             .isEqualTo(409);
         Integer blockedOperationCount = jdbc.queryForObject(
-            COUNT_WORKFLOW_REPLAY_OPERATION_BY_KEY_SQL,
-            Integer.class,
-            TENANT,
-            blockedOperationKey);
+            COUNT_WORKFLOW_REPLAY_OPERATION_BY_KEY_SQL, Integer.class, TENANT, blockedOperationKey);
         assertThat(blockedOperationCount).isZero();
         Integer unconsumedPreviewTokenCount = jdbc.queryForObject(
             COUNT_UNCONSUMED_WORKFLOW_REPLAY_PREVIEW_TOKEN_BY_KEY_SQL,
@@ -1108,6 +1100,7 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
       }
     } finally {
       stopWorkerProcess(exportWorker);
+      jdbc.update(MARK_EXPORT_WORKER_OFFLINE_SQL, TENANT, workerCode);
       dropWorkflowReplayBusinessTables(batchTable, detailTable);
       jdbc.update(DELETE_WORKFLOW_REPLAY_TEMPLATE_SQL, TENANT, templateCode);
       Files.deleteIfExists(workerLog);
@@ -1116,8 +1109,7 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
 
   @Test
   @DisplayName("整图重放独立执行同一 Job 的失败与成功节点,不合并节点身份和导出产物")
-  void shouldReplayBothOccurrencesOfSameJob_whenSourceWorkflowHasMixedOutcomes()
-      throws Exception {
+  void shouldReplayBothOccurrencesOfSameJob_whenSourceWorkflowHasMixedOutcomes() throws Exception {
     final String expandWorkflowSql = """
         update batch.workflow_definition set single_job_definition_id=null where tenant_id=? and id=?
         """;
@@ -1191,30 +1183,54 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
           insertRepeatedJobNodeSql, successfulBatchNo, TENANT, seed.workflowDefinitionId());
       assertThat(insertedNode).isEqualTo(1);
       jdbc.update(updateFailureJoinSql, TENANT, seed.workflowDefinitionId());
-      jdbc.update(insertRepeatedJobEdgesSql, TENANT, seed.workflowDefinitionId(),
-          TENANT, seed.workflowDefinitionId());
+      jdbc.update(
+          insertRepeatedJobEdgesSql,
+          TENANT,
+          seed.workflowDefinitionId(),
+          TENANT,
+          seed.workflowDefinitionId());
       exportWorker = startExportWorker(workerCode, consumerGroupId, workerLog);
       awaitExportWorkerStarted(exportWorker, workerLog);
       awaitExportWorkerOnline(workerCode);
       Map<String, Object> sourceParams = Map.of(
-          "templateCode", templateCode, "bizDate", bizDate.toString(), "bizType", "WORKFLOW_REPLAY");
-      launchService.launch(new LaunchRequest(TENANT, seed.workflowDefinitionId(), bizDate,
-          TriggerType.API, seed.requestId(), "r25-two-source-" + suffix, sourceParams));
-      await().atMost(Duration.ofSeconds(120)).pollInterval(Duration.ofSeconds(1))
+          "templateCode",
+          templateCode,
+          "bizDate",
+          bizDate.toString(),
+          "bizType",
+          "WORKFLOW_REPLAY");
+      launchService.launch(new LaunchRequest(
+          TENANT,
+          seed.workflowDefinitionId(),
+          bizDate,
+          TriggerType.API,
+          seed.requestId(),
+          "r25-two-source-" + suffix,
+          sourceParams));
+      await()
+          .atMost(Duration.ofSeconds(120))
+          .pollInterval(Duration.ofSeconds(1))
           .untilAsserted(() -> {
             outboxPublishSupport.publishAllPending(TENANT);
-            Long sourceRunId = jdbc.queryForObject(SELECT_WORKFLOW_RUN_ID_BY_REQUEST_SQL,
-                Long.class, TENANT, TENANT, seed.requestId());
+            Long sourceRunId = jdbc.queryForObject(
+                SELECT_WORKFLOW_RUN_ID_BY_REQUEST_SQL,
+                Long.class,
+                TENANT,
+                TENANT,
+                seed.requestId());
             String sourceStatus = jdbc.queryForObject(
                 SELECT_WORKFLOW_RUN_STATUS_SQL, String.class, TENANT, sourceRunId);
-            assertThat(sourceStatus).as("source Worker log: %s", workerLog).isIn("FAILED", "SUCCESS");
+            assertThat(sourceStatus)
+                .as("source Worker log: %s", workerLog)
+                .isIn("FAILED", "SUCCESS");
           });
-      Long sourceRunId = jdbc.queryForObject(SELECT_WORKFLOW_RUN_ID_BY_REQUEST_SQL,
-          Long.class, TENANT, TENANT, seed.requestId());
-      List<Map<String, Object>> sourceNodes = jdbc.queryForList(
-          selectNodeArtifactsSql, TENANT, sourceRunId);
+      Long sourceRunId = jdbc.queryForObject(
+          SELECT_WORKFLOW_RUN_ID_BY_REQUEST_SQL, Long.class, TENANT, TENANT, seed.requestId());
+      List<Map<String, Object>> sourceNodes =
+          jdbc.queryForList(selectNodeArtifactsSql, TENANT, sourceRunId);
       assertThat(sourceNodes).hasSize(2);
-      assertThat(sourceNodes).extracting(node -> node.get("instance_status"))
+      assertThat(sourceNodes)
+          .extracting(node -> node.get("instance_status"))
           .containsExactly("FAILED", "SUCCESS");
       assertThat(sourceNodes).extracting(node -> node.get("job_code")).containsOnly(seed.jobCode());
       Map<String, Object> successfulSourceNode = sourceNodes.get(1);
@@ -1228,25 +1244,35 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
           repairSuccessfulSourceSql, "R25-ITEM-REPLAY", new BigDecimal("33.75"));
       assertThat(updatedSuccessfulSource).isEqualTo(1);
       String insertBatchSql = INSERT_WORKFLOW_REPLAY_BATCH_SQL.formatted(batchTable);
-      Long repairedBatchId = businessJdbc.queryForObject(insertBatchSql, Long.class, TENANT, failedBatchNo);
+      Long repairedBatchId =
+          businessJdbc.queryForObject(insertBatchSql, Long.class, TENANT, failedBatchNo);
       String insertDetailSql = INSERT_WORKFLOW_REPLAY_DETAIL_SQL.formatted(detailTable);
-      businessJdbc.update(insertDetailSql, repairedBatchId, "R25-RECOVERED", new BigDecimal("22.50"));
+      businessJdbc.update(
+          insertDetailSql, repairedBatchId, "R25-RECOVERED", new BigDecimal("22.50"));
 
       try (ConfigurableApplicationContext securedConsole = startSecuredConsole()) {
-        Integer consolePort = securedConsole.getEnvironment().getProperty("local.server.port", Integer.class);
-        WebTestClient client = WebTestClient.bindToServer().baseUrl("http://127.0.0.1:" + consolePort)
-            .responseTimeout(Duration.ofSeconds(45)).build();
+        Integer consolePort =
+            securedConsole.getEnvironment().getProperty("local.server.port", Integer.class);
+        WebTestClient client = WebTestClient.bindToServer()
+            .baseUrl("http://127.0.0.1:" + consolePort)
+            .responseTimeout(Duration.ofSeconds(45))
+            .build();
         ConsoleJwtService jwtService = securedConsole.getBean(ConsoleJwtService.class);
-        Actor requester = authenticate(client, jwtService, "two-job-requester-" + suffix, "ROLE_ADMIN");
-        Actor approver = authenticate(client, jwtService, "two-job-approver-" + suffix, "ROLE_ADMIN");
+        Actor requester =
+            authenticate(client, jwtService, "two-job-requester-" + suffix, "ROLE_ADMIN");
+        Actor approver =
+            authenticate(client, jwtService, "two-job-approver-" + suffix, "ROLE_ADMIN");
         Map<String, Object> previewRequest = new LinkedHashMap<>();
         previewRequest.put("tenantId", TENANT);
         previewRequest.put("workflowRunId", sourceRunId);
-        previewRequest.put("reason", "Replay both nodes including the successful occurrence of the same Job");
+        previewRequest.put(
+            "reason", "Replay both nodes including the successful occurrence of the same Job");
         previewRequest.put("resultPolicy", "CREATE_NEW_VERSION");
         previewRequest.put("configVersionPolicy", "USE_ORIGINAL_CONFIG");
-        JsonNode previewEnvelope = response(post(client, requester,
-            "/api/console/jobs/workflow-run/replay-preview", previewRequest).expectStatus().isOk());
+        JsonNode previewEnvelope = response(
+            post(client, requester, "/api/console/jobs/workflow-run/replay-preview", previewRequest)
+                .expectStatus()
+                .isOk());
         JsonNode preview = previewEnvelope.path("data");
         assertThat(preview.path("nodes")).hasSize(4);
         int jobPreviewCount = 0;
@@ -1262,50 +1288,71 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
         Map<String, Object> submission = new LinkedHashMap<>(previewRequest);
         submission.put("operationKey", operationKey);
         submission.put("previewToken", preview.path("previewToken").asText());
-        JsonNode submissionEnvelope = response(post(client, requester,
-            "/api/console/jobs/workflow-run/replay-operations", submission, operationKey)
-            .expectStatus().isOk());
+        JsonNode submissionEnvelope = response(post(
+                client,
+                requester,
+                "/api/console/jobs/workflow-run/replay-operations",
+                submission,
+                operationKey)
+            .expectStatus()
+            .isOk());
         String approvalNo = submissionEnvelope.path("data").path("approvalNo").asText();
         assertThat(approvalNo).isNotBlank();
-        post(client, approver, "/api/console/approvals/" + approvalNo + "/approve",
-            Map.of("tenantId", TENANT, "reason", "Approve complete graph replay"))
-            .expectStatus().isOk();
-        Map<String, Object> operation = jdbc.queryForMap(
-            SELECT_WORKFLOW_REPLAY_OPERATION_SQL, TENANT, operationKey);
+        post(
+                client,
+                approver,
+                "/api/console/approvals/" + approvalNo + "/approve",
+                Map.of("tenantId", TENANT, "reason", "Approve complete graph replay"))
+            .expectStatus()
+            .isOk();
+        Map<String, Object> operation =
+            jdbc.queryForMap(SELECT_WORKFLOW_REPLAY_OPERATION_SQL, TENANT, operationKey);
         String replayRequestId = (String) operation.get("target_request_id");
         assertThat(replayRequestId).isNotBlank();
-        await().atMost(Duration.ofSeconds(180)).pollInterval(Duration.ofSeconds(1))
+        await()
+            .atMost(Duration.ofSeconds(180))
+            .pollInterval(Duration.ofSeconds(1))
             .untilAsserted(() -> {
               outboxPublishSupport.publishAllPending(TENANT);
-              List<Long> replayRunIds = jdbc.queryForList(SELECT_WORKFLOW_RUN_ID_BY_REQUEST_SQL,
-                  Long.class, TENANT, TENANT, replayRequestId);
+              List<Long> replayRunIds = jdbc.queryForList(
+                  SELECT_WORKFLOW_RUN_ID_BY_REQUEST_SQL,
+                  Long.class,
+                  TENANT,
+                  TENANT,
+                  replayRequestId);
               assertThat(replayRunIds).hasSize(1);
               Long replayRunId = replayRunIds.getFirst();
               String replayStatus = jdbc.queryForObject(
                   SELECT_WORKFLOW_RUN_STATUS_SQL, String.class, TENANT, replayRunId);
-              assertThat(replayStatus).as("replay Worker log: %s", workerLog).isIn("SUCCESS", "FAILED");
+              assertThat(replayStatus)
+                  .as("replay Worker log: %s", workerLog)
+                  .isIn("SUCCESS", "FAILED");
             });
-        Long replayRunId = jdbc.queryForObject(SELECT_WORKFLOW_RUN_ID_BY_REQUEST_SQL,
-            Long.class, TENANT, TENANT, replayRequestId);
-        List<Map<String, Object>> replayNodes = jdbc.queryForList(
-            selectNodeArtifactsSql, TENANT, replayRunId);
-        String replayStatus = jdbc.queryForObject(
-            SELECT_WORKFLOW_RUN_STATUS_SQL, String.class, TENANT, replayRunId);
+        Long replayRunId = jdbc.queryForObject(
+            SELECT_WORKFLOW_RUN_ID_BY_REQUEST_SQL, Long.class, TENANT, TENANT, replayRequestId);
+        List<Map<String, Object>> replayNodes =
+            jdbc.queryForList(selectNodeArtifactsSql, TENANT, replayRunId);
+        String replayStatus =
+            jdbc.queryForObject(SELECT_WORKFLOW_RUN_STATUS_SQL, String.class, TENANT, replayRunId);
         assertThat(replayStatus).isEqualTo("SUCCESS");
         assertThat(replayNodes).hasSize(2);
         assertThat(replayNodes).allSatisfy(node -> {
           assertThat(node.get("instance_status")).isEqualTo("SUCCESS");
           assertThat(node.get("file_id")).isNotNull();
         });
-        assertThat(replayNodes).extracting(node -> node.get("job_instance_id")).doesNotHaveDuplicates();
+        assertThat(replayNodes)
+            .extracting(node -> node.get("job_instance_id"))
+            .doesNotHaveDuplicates();
         assertThat(replayNodes).extracting(node -> node.get("file_id")).doesNotHaveDuplicates();
-        assertThat(replayNodes).extracting(node -> node.get("source_ref"))
+        assertThat(replayNodes)
+            .extracting(node -> node.get("source_ref"))
             .containsExactly(failedBatchNo, successfulBatchNo);
         for (int index = 0; index < replayNodes.size(); index++) {
           Map<String, Object> sourceNode = sourceNodes.get(index);
           Map<String, Object> replayNode = replayNodes.get(index);
           assertThat(replayNode.get("node_code")).isEqualTo(sourceNode.get("node_code"));
-          assertThat(replayNode.get("job_instance_id")).isNotEqualTo(sourceNode.get("job_instance_id"));
+          assertThat(replayNode.get("job_instance_id"))
+              .isNotEqualTo(sourceNode.get("job_instance_id"));
           assertThat(replayNode.get("biz_date").toString()).isEqualTo(bizDate.toString());
           String bucket = (String) replayNode.get("storage_bucket");
           String key = (String) replayNode.get("storage_path");
@@ -1313,23 +1360,26 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
           String exportedContent = new String(exportedBytes, StandardCharsets.UTF_8);
           assertThat(exportedContent).contains(index == 0 ? "R25-RECOVERED" : "R25-ITEM-REPLAY");
         }
-        List<Map<String, Object>> sourceAfterReplay = jdbc.queryForList(
-            selectNodeArtifactsSql, TENANT, sourceRunId);
+        List<Map<String, Object>> sourceAfterReplay =
+            jdbc.queryForList(selectNodeArtifactsSql, TENANT, sourceRunId);
         assertThat(sourceAfterReplay).isEqualTo(sourceNodes);
         byte[] sourceArtifactAfterReplay = readObject(originalBucket, originalKey);
         assertThat(sourceArtifactAfterReplay).isEqualTo(originalSuccessfulArtifact);
-        assertThat(replayNodes.get(1).get("file_id")).isNotEqualTo(successfulSourceNode.get("file_id"));
-        Map<String, Object> completed = jdbc.queryForMap(
-            SELECT_WORKFLOW_REPLAY_OPERATION_SQL, TENANT, operationKey);
-        assertThat(completed).containsEntry("status", "SUCCEEDED")
+        assertThat(replayNodes.get(1).get("file_id"))
+            .isNotEqualTo(successfulSourceNode.get("file_id"));
+        Map<String, Object> completed =
+            jdbc.queryForMap(SELECT_WORKFLOW_REPLAY_OPERATION_SQL, TENANT, operationKey);
+        assertThat(completed)
+            .containsEntry("status", "SUCCEEDED")
             .containsEntry("target_workflow_run_id", replayRunId)
             .containsEntry("source_workflow_run_id", sourceRunId);
-        String frozenSourceRunId = jdbc.queryForObject(
-            selectReplaySourceRunSql, String.class, TENANT, replayRunId);
+        String frozenSourceRunId =
+            jdbc.queryForObject(selectReplaySourceRunSql, String.class, TENANT, replayRunId);
         assertThat(frozenSourceRunId).isEqualTo(sourceRunId.toString());
       }
     } finally {
       stopWorkerProcess(exportWorker);
+      jdbc.update(MARK_EXPORT_WORKER_OFFLINE_SQL, TENANT, workerCode);
       List<Map<String, Object>> ownedObjects = jdbc.queryForList(
           selectOwnedObjectsSql, TENANT, failedBatchNo, successfulBatchNo, templateCode);
       for (Map<String, Object> object : ownedObjects) {
@@ -1384,15 +1434,15 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
       createWorkflowReplayBusinessRows(batchTable, detailTable, firstBatchNo);
       JdbcTemplate businessJdbc = new JdbcTemplate(e2eBusinessDataSource);
       String insertBatchSql = INSERT_WORKFLOW_REPLAY_BATCH_SQL.formatted(batchTable);
-      Long secondBatchId = businessJdbc.queryForObject(
-          insertBatchSql, Long.class, TENANT, secondBatchNo);
+      Long secondBatchId =
+          businessJdbc.queryForObject(insertBatchSql, Long.class, TENANT, secondBatchNo);
       assertThat(secondBatchId).isNotNull();
       String insertDetailSql = INSERT_WORKFLOW_REPLAY_DETAIL_SQL.formatted(detailTable);
       int insertedDetails = businessJdbc.update(
           insertDetailSql, secondBatchId, "R25-RANGE-ITEM-B", new BigDecimal("18.25"));
       assertThat(insertedDetails).isEqualTo(1);
-      Long thirdBatchId = businessJdbc.queryForObject(
-          insertBatchSql, Long.class, TENANT, thirdBatchNo);
+      Long thirdBatchId =
+          businessJdbc.queryForObject(insertBatchSql, Long.class, TENANT, thirdBatchNo);
       assertThat(thirdBatchId).isNotNull();
       int insertedThirdDetails = businessJdbc.update(
           insertDetailSql, thirdBatchId, "R25-RANGE-ITEM-C", new BigDecimal("27.50"));
@@ -1400,12 +1450,13 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
 
       try (ConfigurableApplicationContext securedConsole = startSecuredConsole()) {
         WebTestClient client = WebTestClient.bindToServer()
-            .baseUrl("http://127.0.0.1:" + securedConsole.getEnvironment()
-                .getProperty("local.server.port", Integer.class))
+            .baseUrl("http://127.0.0.1:"
+                + securedConsole.getEnvironment().getProperty("local.server.port", Integer.class))
             .responseTimeout(Duration.ofSeconds(45))
             .build();
         ConsoleJwtService jwtService = securedConsole.getBean(ConsoleJwtService.class);
-        Actor requester = authenticate(client, jwtService, "range-replay-requester-" + suffix, "ROLE_ADMIN");
+        Actor requester =
+            authenticate(client, jwtService, "range-replay-requester-" + suffix, "ROLE_ADMIN");
         String approverName = "range-replay-approver-" + suffix;
         Actor approver = authenticate(client, jwtService, approverName, "ROLE_ADMIN");
 
@@ -1416,7 +1467,8 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
         rangeRequest.put("throughDate", thirdBizDate.toString());
         rangeRequest.put("scope", "SUBSET_JOB_CODES");
         rangeRequest.put(
-            "jobCodes", List.of(firstSource.jobCode(), secondSource.jobCode(), thirdSource.jobCode()));
+            "jobCodes",
+            List.of(firstSource.jobCode(), secondSource.jobCode(), thirdSource.jobCode()));
         rangeRequest.put("resultPolicy", "CREATE_NEW_VERSION");
         rangeRequest.put("configVersionPolicy", "USE_ORIGINAL_CONFIG");
         rangeRequest.put("reason", "Replay two failed business dates after export data repair");
@@ -1461,8 +1513,8 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
             .expectStatus()
             .isOk());
 
-        Map<String, Object> operationBeforeApproval = jdbc.queryForMap(
-            SELECT_DATE_RANGE_REPLAY_OPERATION_SQL, TENANT, operationKey);
+        Map<String, Object> operationBeforeApproval =
+            jdbc.queryForMap(SELECT_DATE_RANGE_REPLAY_OPERATION_SQL, TENANT, operationKey);
         assertThat(operationBeforeApproval)
             .containsEntry("status", "PENDING_APPROVAL")
             .containsEntry("total_count", 3)
@@ -1472,14 +1524,15 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
         assertThat(operationBeforeApproval.get("through_date").toString())
             .isEqualTo(thirdBizDate.toString());
         Long operationId = ((Number) operationBeforeApproval.get("id")).longValue();
-        List<Map<String, Object>> childSessions = jdbc.queryForList(
-            SELECT_DATE_RANGE_REPLAY_SESSIONS_SQL, TENANT, operationId);
+        List<Map<String, Object>> childSessions =
+            jdbc.queryForList(SELECT_DATE_RANGE_REPLAY_SESSIONS_SQL, TENANT, operationId);
         assertThat(childSessions).hasSize(3);
         assertThat(childSessions)
             .extracting(session -> session.get("status"))
             .containsExactly("PENDING_APPROVAL", "PENDING_APPROVAL", "PENDING_APPROVAL");
 
-        client.post()
+        client
+            .post()
             .uri(uriBuilder -> uriBuilder
                 .path("/api/console/ops/batch-day-replay/operations/{operationId}/approve")
                 .queryParam("tenantId", TENANT)
@@ -1495,8 +1548,8 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
             .expectStatus()
             .isOk();
 
-        Map<String, Object> operationAfterApproval = jdbc.queryForMap(
-            SELECT_DATE_RANGE_REPLAY_OPERATION_SQL, TENANT, operationKey);
+        Map<String, Object> operationAfterApproval =
+            jdbc.queryForMap(SELECT_DATE_RANGE_REPLAY_OPERATION_SQL, TENANT, operationKey);
         assertThat(operationAfterApproval)
             .containsEntry("status", "RUNNING")
             .containsEntry("approved_by", approverName);
@@ -1523,8 +1576,8 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
               .untilAsserted(() -> {
                 batchDayReplayDispatcher.scheduledDispatch();
                 outboxPublishSupport.publishAllPending(TENANT);
-                Map<String, Object> failedOperation = jdbc.queryForMap(
-                    SELECT_DATE_RANGE_REPLAY_OPERATION_SQL, TENANT, operationKey);
+                Map<String, Object> failedOperation =
+                    jdbc.queryForMap(SELECT_DATE_RANGE_REPLAY_OPERATION_SQL, TENANT, operationKey);
                 assertThat(failedOperation)
                     .containsEntry("status", "PARTIAL_FAILED")
                     .containsEntry("total_count", 3)
@@ -1544,7 +1597,8 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
                     SELECT_DATE_RANGE_REPLAY_FAILED_ENTRIES_SQL, TENANT, operationId);
                 assertThat(unboundFailedEntries).hasSize(2);
                 assertThat(unboundFailedEntries)
-                    .allSatisfy(entry -> assertThat(entry.get("rerun_instance_id")).isNull());
+                    .allSatisfy(
+                        entry -> assertThat(entry.get("rerun_instance_id")).isNull());
                 assertThat(failedEntries.get(2).get("rerun_instance_id")).isNotNull();
               });
         } finally {
@@ -1562,8 +1616,8 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
           assertThat(enabledSecondWorkflow).isEqualTo(1);
         }
 
-        List<Map<String, Object>> failedEntries = jdbc.queryForList(
-            SELECT_DATE_RANGE_REPLAY_FAILED_ENTRIES_SQL, TENANT, operationId);
+        List<Map<String, Object>> failedEntries =
+            jdbc.queryForList(SELECT_DATE_RANGE_REPLAY_FAILED_ENTRIES_SQL, TENANT, operationId);
         assertThat(failedEntries).hasSize(2);
         Map<String, Object> firstFailedEntry = failedEntries.get(0);
         Map<String, Object> secondFailedEntry = failedEntries.get(1);
@@ -1613,21 +1667,21 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
           retryExecutor.shutdownNow();
         }
 
-        Map<String, Object> operationAfterConcurrentRetry = jdbc.queryForMap(
-            SELECT_DATE_RANGE_REPLAY_OPERATION_SQL, TENANT, operationKey);
+        Map<String, Object> operationAfterConcurrentRetry =
+            jdbc.queryForMap(SELECT_DATE_RANGE_REPLAY_OPERATION_SQL, TENANT, operationKey);
         assertThat(operationAfterConcurrentRetry)
             .containsEntry("status", "RUNNING")
             .containsEntry("total_count", 3)
             .containsEntry("succeeded_count", 1)
             .containsEntry("failed_count", 0)
             .containsEntry("in_flight_count", 2);
-        List<Map<String, Object>> entriesAfterRetry = jdbc.queryForList(
-            SELECT_DATE_RANGE_REPLAY_ENTRIES_FOR_RETRY_SQL, TENANT, operationId);
+        List<Map<String, Object>> entriesAfterRetry =
+            jdbc.queryForList(SELECT_DATE_RANGE_REPLAY_ENTRIES_FOR_RETRY_SQL, TENANT, operationId);
         assertThat(entriesAfterRetry)
             .extracting(entry -> entry.get("entry_status"))
             .containsExactly("PENDING", "PENDING", "SUCCEEDED");
-        List<Map<String, Object>> unboundEntriesAfterRetry = jdbc.queryForList(
-            SELECT_DATE_RANGE_REPLAY_FAILED_ENTRIES_SQL, TENANT, operationId);
+        List<Map<String, Object>> unboundEntriesAfterRetry =
+            jdbc.queryForList(SELECT_DATE_RANGE_REPLAY_FAILED_ENTRIES_SQL, TENANT, operationId);
         assertThat(unboundEntriesAfterRetry).isEmpty();
         assertThat(entriesAfterRetry.subList(0, 2))
             .allSatisfy(entry -> assertThat(entry.get("rerun_instance_id")).isNull());
@@ -1641,8 +1695,8 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
             .pollInterval(Duration.ofSeconds(1))
             .untilAsserted(() -> {
               outboxPublishSupport.publishAllPending(TENANT);
-              Map<String, Object> completedOperation = jdbc.queryForMap(
-                  SELECT_DATE_RANGE_REPLAY_OPERATION_SQL, TENANT, operationKey);
+              Map<String, Object> completedOperation =
+                  jdbc.queryForMap(SELECT_DATE_RANGE_REPLAY_OPERATION_SQL, TENANT, operationKey);
               assertThat(completedOperation)
                   .containsEntry("status", "SUCCEEDED")
                   .containsEntry("total_count", 3)
@@ -1651,17 +1705,18 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
                   .containsEntry("in_flight_count", 0);
             });
 
-        List<Map<String, Object>> completedSessions = jdbc.queryForList(
-            SELECT_DATE_RANGE_REPLAY_SESSIONS_SQL, TENANT, operationId);
+        List<Map<String, Object>> completedSessions =
+            jdbc.queryForList(SELECT_DATE_RANGE_REPLAY_SESSIONS_SQL, TENANT, operationId);
         assertThat(completedSessions)
             .extracting(session -> session.get("status"))
             .containsExactly("SUCCEEDED", "SUCCEEDED", "SUCCEEDED");
         assertThat(completedSessions)
             .extracting(session -> session.get("biz_date").toString())
-            .containsExactly(firstBizDate.toString(), secondBizDate.toString(), thirdBizDate.toString());
+            .containsExactly(
+                firstBizDate.toString(), secondBizDate.toString(), thirdBizDate.toString());
 
-        List<Map<String, Object>> replayEntries = jdbc.queryForList(
-            SELECT_DATE_RANGE_REPLAY_ENTRIES_SQL, TENANT, operationId);
+        List<Map<String, Object>> replayEntries =
+            jdbc.queryForList(SELECT_DATE_RANGE_REPLAY_ENTRIES_SQL, TENANT, operationId);
         assertThat(replayEntries).hasSize(3);
         assertThat(replayEntries)
             .extracting(entry -> entry.get("entry_status"))
@@ -1677,7 +1732,8 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
             .containsExactly("SUCCESS", "SUCCESS", "SUCCESS");
         assertThat(replayEntries)
             .extracting(entry -> entry.get("rerun_biz_date").toString())
-            .containsExactly(firstBizDate.toString(), secondBizDate.toString(), thirdBizDate.toString());
+            .containsExactly(
+                firstBizDate.toString(), secondBizDate.toString(), thirdBizDate.toString());
         assertThat(replayEntries)
             .extracting(entry -> entry.get("source_instance_id"))
             .doesNotContainNull();
@@ -1709,6 +1765,7 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
       }
     } finally {
       stopWorkerProcess(exportWorker);
+      jdbc.update(MARK_EXPORT_WORKER_OFFLINE_SQL, TENANT, workerCode);
       dropWorkflowReplayBusinessTables(batchTable, detailTable);
       jdbc.update(DELETE_WORKFLOW_REPLAY_TEMPLATE_SQL, TENANT, templateCode);
       Files.deleteIfExists(workerLog);
@@ -1740,18 +1797,14 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
         .pollInterval(Duration.ofSeconds(1))
         .untilAsserted(() -> {
           List<Long> sourceRunIds = jdbc.queryForList(
-              SELECT_WORKFLOW_RUN_ID_BY_REQUEST_SQL,
-              Long.class,
-              TENANT,
-              TENANT,
-              requestId);
+              SELECT_WORKFLOW_RUN_ID_BY_REQUEST_SQL, Long.class, TENANT, TENANT, requestId);
           assertThat(sourceRunIds).hasSize(1);
           Long sourceRunId = sourceRunIds.get(0);
-          String selected_WORKFLOW_RUN_STATUS_ =
-              jdbc.queryForObject(SELECT_WORKFLOW_RUN_STATUS_SQL, String.class, TENANT, sourceRunId);
+          String selected_WORKFLOW_RUN_STATUS_ = jdbc.queryForObject(
+              SELECT_WORKFLOW_RUN_STATUS_SQL, String.class, TENANT, sourceRunId);
           assertThat(selected_WORKFLOW_RUN_STATUS_).isEqualTo("FAILED");
-          List<Map<String, Object>> sourceJobs = jdbc.queryForList(
-              SELECT_WORKFLOW_REPLAY_JOB_SQL, TENANT, sourceRunId);
+          List<Map<String, Object>> sourceJobs =
+              jdbc.queryForList(SELECT_WORKFLOW_REPLAY_JOB_SQL, TENANT, sourceRunId);
           assertThat(sourceJobs).hasSize(1);
           assertThat(sourceJobs.get(0))
               .containsEntry("instance_status", "FAILED")
@@ -1767,14 +1820,16 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
       String idempotencyKey,
       String reason,
       CountDownLatch retriesReady,
-      CountDownLatch beginRetries) throws Exception {
+      CountDownLatch beginRetries)
+      throws Exception {
     retriesReady.countDown();
     boolean retriesReleased = beginRetries.await(10, TimeUnit.SECONDS);
     if (!retriesReleased) {
       throw new IllegalStateException("Concurrent date-range replay retries were not released");
     }
 
-    WebTestClient.ResponseSpec responseSpec = client.post()
+    WebTestClient.ResponseSpec responseSpec = client
+        .post()
         .uri(uriBuilder -> uriBuilder
             .path(
                 "/api/console/ops/batch-day-replay/sessions/{sessionId}/entries/{entryId}/retry-submission")
@@ -1795,13 +1850,19 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
   }
 
   private void executeSelfServiceCompensationScenario(
-      boolean sourceInitiallyFailed,
-      boolean replayBeforeSelfServiceCompensation) throws Exception {
+      boolean sourceInitiallyFailed, boolean replayBeforeSelfServiceCompensation) throws Exception {
+    LocalDate scenarioBizDate = WORKFLOW_REPLAY_BIZ_DATE.plusWeeks(1);
+    if (sourceInitiallyFailed) {
+      scenarioBizDate = WORKFLOW_REPLAY_BIZ_DATE.plusWeeks(2);
+    }
+    if (replayBeforeSelfServiceCompensation) {
+      scenarioBizDate = WORKFLOW_REPLAY_BIZ_DATE.plusWeeks(3);
+    }
     String suffix = UUID.randomUUID().toString().replace("-", "");
     String customerNo = "SELF_SERVICE_" + suffix;
     String requestId = "self-service-source-" + suffix;
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbc, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbc, TENANT, "IMPORT", "import", TriggerType.API, scenarioBizDate);
     String customerName = "self service";
     String customerType = "PERSONAL";
     String certificateNo = "ID-" + customerNo;
@@ -1813,22 +1874,13 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
           "certificateNo":"%s","mobileNo":"%s","email":"%s","status":"%s"}]
         """;
     String repairedImportContent = repairedImportContentTemplate.formatted(
-        customerNo,
-        customerName,
-        customerType,
-        certificateNo,
-        mobileNo,
-        email,
-        status);
+        customerNo, customerName, customerType, certificateNo, mobileNo, email, status);
     CompensationSourceInput sourceInput = prepareCompensationSourceInput(
-        suffix,
-        customerNo,
-        repairedImportContent,
-        sourceInitiallyFailed);
+        suffix, customerNo, repairedImportContent, sourceInitiallyFailed);
     LaunchRequest sourceLaunchRequest = new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        BIZ_DATE,
+        scenarioBizDate,
         TriggerType.API,
         seed.requestId(),
         requestId,
@@ -1840,8 +1892,7 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
     ThrowingRunnable sourceInstanceCompleted = () -> {
       Map<String, Object> currentSourceInstance =
           jdbc.queryForMap(SELECT_INSTANCE_SQL, TENANT, seed.dedupKey());
-      assertThat(currentSourceInstance)
-          .containsEntry("instance_status", expectedSourceStatus);
+      assertThat(currentSourceInstance).containsEntry("instance_status", expectedSourceStatus);
     };
     await()
         .atMost(Duration.ofSeconds(90))
@@ -1851,17 +1902,11 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
         jdbc.queryForMap(SELECT_INSTANCE_SQL, TENANT, seed.dedupKey());
     long sourceInstanceId = ((Number) sourceInstance.get("id")).longValue();
     Long sourceWorkflowRunId = jdbc.queryForObject(
-        SELECT_SOURCE_WORKFLOW_RUN_ID_SQL,
-        Long.class,
-        TENANT,
-        sourceInstanceId);
+        SELECT_SOURCE_WORKFLOW_RUN_ID_SQL, Long.class, TENANT, sourceInstanceId);
     Map<String, Object> sourceJobNode =
         jdbc.queryForMap(SELECT_FAILED_NODE_SQL, TENANT, sourceWorkflowRunId);
     String sourceWorkflowStatus = jdbc.queryForObject(
-        SELECT_WORKFLOW_RUN_STATUS_SQL,
-        String.class,
-        TENANT,
-        sourceWorkflowRunId);
+        SELECT_WORKFLOW_RUN_STATUS_SQL, String.class, TENANT, sourceWorkflowRunId);
     assertThat(sourceJobNode).containsEntry("node_status", expectedSourceStatus);
     assertThat(sourceWorkflowStatus).isEqualTo(expectedSourceStatus);
 
@@ -1870,30 +1915,21 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
     Long replaySessionId = null;
     if (replayBeforeSelfServiceCompensation) {
       repairCompensationObject(sourceInput);
-      replaySessionId = replayFailedSource(seed, sourceInstance);
-      Map<String, Object> replayEntry = jdbc.queryForMap(
-          SELECT_REPLAY_ENTRY_SQL,
-          TENANT,
-          replaySessionId);
+      replaySessionId = replayFailedSource(seed, sourceInstance, scenarioBizDate);
+      Map<String, Object> replayEntry =
+          jdbc.queryForMap(SELECT_REPLAY_ENTRY_SQL, TENANT, replaySessionId);
       assertThat(replayEntry).containsEntry("status", "SUCCEEDED");
       Number replayedInstanceIdValue = (Number) replayEntry.get("rerun_instance_id");
       long replayedInstanceId = replayedInstanceIdValue.longValue();
-      compensationSourceInstance = jdbc.queryForMap(
-          SELECT_INSTANCE_BY_ID_SQL,
-          TENANT,
-          replayedInstanceId);
+      compensationSourceInstance =
+          jdbc.queryForMap(SELECT_INSTANCE_BY_ID_SQL, TENANT, replayedInstanceId);
       assertThat(compensationSourceInstance).containsEntry("instance_status", "SUCCESS");
       Long replayedWorkflowRunId = jdbc.queryForObject(
-          SELECT_SOURCE_WORKFLOW_RUN_ID_SQL,
-          Long.class,
-          TENANT,
-          replayedInstanceId);
+          SELECT_SOURCE_WORKFLOW_RUN_ID_SQL, Long.class, TENANT, replayedInstanceId);
       compensationSourceWorkflowRunId = replayedWorkflowRunId;
     }
-    String compensationSourceInstanceNo =
-        (String) compensationSourceInstance.get("instance_no");
-    long compensationSourceInstanceId =
-        ((Number) compensationSourceInstance.get("id")).longValue();
+    String compensationSourceInstanceNo = (String) compensationSourceInstance.get("instance_no");
+    long compensationSourceInstanceId = ((Number) compensationSourceInstance.get("id")).longValue();
 
     ConfigurableApplicationContext startedConsole = startSecuredConsole();
     try (ConfigurableApplicationContext securedConsole = startedConsole) {
@@ -1919,7 +1955,7 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
           "jobCode",
           seed.jobCode(),
           "bizDate",
-          BIZ_DATE.toString(),
+          scenarioBizDate.toString(),
           "compensationType",
           "JOB",
           "targetInstanceNo",
@@ -1971,8 +2007,8 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
           jdbc.queryForObject(SELECT_APPROVAL_STATUS_SQL, String.class, TENANT, approvalNo);
       assertThat(statusAfterApproval).isEqualTo("EXECUTED");
 
-      int advancedDefinitionCount = jdbc.update(
-          ADVANCE_JOB_DEFINITION_VERSION_SQL, TENANT, seed.jobCode());
+      int advancedDefinitionCount =
+          jdbc.update(ADVANCE_JOB_DEFINITION_VERSION_SQL, TENANT, seed.jobCode());
       assertThat(advancedDefinitionCount).isEqualTo(1);
       Integer latestJobDefinitionVersion = jdbc.queryForObject(
           SELECT_JOB_DEFINITION_VERSION_SQL, Integer.class, TENANT, seed.jobCode());
@@ -2008,41 +2044,25 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
       assertThat(rerunInstanceId).isNotEqualTo(compensationSourceInstanceId);
       long rerunWorkflowRunId = ((Number) rerunInstance.get("workflow_run_id")).longValue();
       Integer frozenJobDefinitionVersion = jdbc.queryForObject(
-          SELECT_RERUN_SNAPSHOT_JOB_VERSION_SQL,
-          Integer.class,
-          TENANT,
-          rerunWorkflowRunId);
+          SELECT_RERUN_SNAPSHOT_JOB_VERSION_SQL, Integer.class, TENANT, rerunWorkflowRunId);
       assertThat(frozenJobDefinitionVersion).isEqualTo(1);
       String rerunWorkflowStatus = jdbc.queryForObject(
           SELECT_WORKFLOW_RUN_STATUS_SQL, String.class, TENANT, rerunWorkflowRunId);
       assertThat(rerunWorkflowStatus).isEqualTo("SUCCESS");
       String sourceWorkflowStatusAfterRerun = jdbc.queryForObject(
-          SELECT_WORKFLOW_RUN_STATUS_SQL,
-          String.class,
-          TENANT,
-          compensationSourceWorkflowRunId);
+          SELECT_WORKFLOW_RUN_STATUS_SQL, String.class, TENANT, compensationSourceWorkflowRunId);
       String expectedCompensationSourceRunStatus =
           replayBeforeSelfServiceCompensation ? "SUCCESS" : expectedSourceStatus;
       assertThat(sourceWorkflowStatusAfterRerun).isEqualTo(expectedCompensationSourceRunStatus);
       String sourceNodeStatusAfterRerun = jdbc.queryForObject(
-          SELECT_NODE_STATUS_SQL,
-          String.class,
-          TENANT,
-          compensationSourceWorkflowRunId,
-          "JOB");
+          SELECT_NODE_STATUS_SQL, String.class, TENANT, compensationSourceWorkflowRunId, "JOB");
       assertThat(sourceNodeStatusAfterRerun).isEqualTo(expectedCompensationSourceRunStatus);
       String originalSourceWorkflowStatusAfterRerun = jdbc.queryForObject(
-          SELECT_WORKFLOW_RUN_STATUS_SQL,
-          String.class,
-          TENANT,
-          sourceWorkflowRunId);
+          SELECT_WORKFLOW_RUN_STATUS_SQL, String.class, TENANT, sourceWorkflowRunId);
       assertThat(originalSourceWorkflowStatusAfterRerun).isEqualTo(expectedSourceStatus);
       if (replaySessionId != null) {
         String replaySessionStatusAfterCompensation = jdbc.queryForObject(
-            SELECT_REPLAY_SESSION_STATUS_SQL,
-            String.class,
-            TENANT,
-            replaySessionId);
+            SELECT_REPLAY_SESSION_STATUS_SQL, String.class, TENANT, replaySessionId);
         assertThat(replaySessionStatusAfterCompensation).isEqualTo("SUCCEEDED");
       }
       JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
@@ -2056,36 +2076,29 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
   }
 
   private static Stream<Arguments> selfServiceCompensationScenarios() {
-    return Stream.of(
-        Arguments.of(false, false),
-        Arguments.of(true, false));
+    return Stream.of(Arguments.of(false, false), Arguments.of(true, false));
   }
 
   private Long replayFailedSource(
-      LaunchSeed seed, Map<String, Object> failedSourceInstance) {
+      LaunchSeed seed, Map<String, Object> failedSourceInstance, LocalDate scenarioBizDate) {
     String calendarCode = (String) failedSourceInstance.get("calendar_code");
     String replayTraceId = "self-service-replay-" + UUID.randomUUID();
-    BatchDayReplaySubmitCommand previewCommand = replayCommand(
-        seed.jobCode(), calendarCode, replayTraceId, null);
+    BatchDayReplaySubmitCommand previewCommand =
+        replayCommand(seed.jobCode(), calendarCode, scenarioBizDate, replayTraceId, null);
     var preview = batchDayReplayService.preview(previewCommand);
-    long failedSourceInstanceId =
-        ((Number) failedSourceInstance.get("id")).longValue();
+    long failedSourceInstanceId = ((Number) failedSourceInstance.get("id")).longValue();
     assertThat(preview.entries())
         .singleElement()
-        .satisfies(entry -> assertThat(entry.sourceInstanceId())
-            .isEqualTo(failedSourceInstanceId));
+        .satisfies(entry -> assertThat(entry.sourceInstanceId()).isEqualTo(failedSourceInstanceId));
 
     BatchDayReplaySubmitCommand submitCommand = replayCommand(
-        seed.jobCode(), calendarCode, replayTraceId, preview.previewToken());
+        seed.jobCode(), calendarCode, scenarioBizDate, replayTraceId, preview.previewToken());
     var session = batchDayReplayService.submit(submitCommand);
     batchDayReplayDispatcher.scheduledDispatch();
     ThrowingRunnable replayCompleted = () -> {
       outboxPublishSupport.publishAllPending(TENANT);
-      String currentSessionStatus = jdbc.queryForObject(
-          SELECT_REPLAY_SESSION_STATUS_SQL,
-          String.class,
-          TENANT,
-          session.id());
+      String currentSessionStatus =
+          jdbc.queryForObject(SELECT_REPLAY_SESSION_STATUS_SQL, String.class, TENANT, session.id());
       assertThat(currentSessionStatus).isEqualTo("SUCCEEDED");
     };
     await()
@@ -2098,12 +2111,13 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
   private static BatchDayReplaySubmitCommand replayCommand(
       String jobCode,
       String calendarCode,
+      LocalDate scenarioBizDate,
       String traceId,
       String previewToken) {
     return BatchDayReplaySubmitCommand.builder()
         .tenantId(TENANT)
         .calendarCode(calendarCode)
-        .bizDate(BIZ_DATE)
+        .bizDate(scenarioBizDate)
         .scope("SUBSET_JOB_CODES")
         .jobCodes(List.of(jobCode))
         .resultPolicy("CREATE_NEW_VERSION")
@@ -2179,7 +2193,8 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
           .queryParam("tenantId", TENANT)
           .queryParam("nodeCode", "JOB")
           .queryParam("reason", reason);
-      URI skipNodeUri = skipNodeUriBuilder.buildAndExpand(workflowRunId).encode().toUri();
+      URI skipNodeUri =
+          skipNodeUriBuilder.buildAndExpand(workflowRunId).encode().toUri();
 
       WebTestClient.ResponseSpec deniedResponse = postSkipNode(client, auditor, skipNodeUri);
       deniedResponse.expectStatus().isForbidden();
@@ -2207,10 +2222,7 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
       long nodeRunId = ((Number) skippedNode.get("id")).longValue();
       long jobInstanceId = ((Number) skippedNode.get("job_instance_id")).longValue();
       Map<String, Object> skipAuditRow = jdbc.queryForMap(
-          SELECT_SKIP_AUDIT_SQL,
-          TENANT,
-          String.valueOf(workflowRunId),
-          String.valueOf(nodeRunId));
+          SELECT_SKIP_AUDIT_SQL, TENANT, String.valueOf(workflowRunId), String.valueOf(nodeRunId));
       String auditJson = (String) skipAuditRow.get("extra_json");
       long auditedJobInstanceId = ((Number) skipAuditRow.get("job_instance_id")).longValue();
       JsonNode audit = objectMapper.readTree(auditJson);
@@ -2232,8 +2244,8 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
       assertThat(workflowStatusAfterNodeSkip).isEqualTo("FAILED");
       assertThat(auditedJobInstanceId).isEqualTo(jobInstanceId);
 
-      UriComponentsBuilder operationAuditUriBuilder = UriComponentsBuilder
-          .fromUriString(consoleBaseUrl)
+      UriComponentsBuilder operationAuditUriBuilder = UriComponentsBuilder.fromUriString(
+              consoleBaseUrl)
           .path("/api/console/queries/operation-audits");
       operationAuditUriBuilder
           .queryParam("tenantId", TENANT)
@@ -2265,8 +2277,8 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
       assertThat(operationAuditAggregateId).isEqualTo(String.valueOf(workflowRunId));
       assertThat(operationAuditParams).contains(reason, "JOB");
 
-      UriComponentsBuilder jobExecutionLogUriBuilder = UriComponentsBuilder
-          .fromUriString(consoleBaseUrl)
+      UriComponentsBuilder jobExecutionLogUriBuilder = UriComponentsBuilder.fromUriString(
+              consoleBaseUrl)
           .path("/api/console/queries/job-execution-logs");
       jobExecutionLogUriBuilder
           .queryParam("tenantId", TENANT)
@@ -2318,8 +2330,8 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
     AtomicBoolean sensorReady = new AtomicBoolean(false);
     sensorEndpoint.createContext("/sensor", exchange -> {
       String sensorStatus = sensorReady.get() ? "READY" : "WAIT";
-      byte[] responseBody = ("{\"status\":\"" + sensorStatus + "\"}")
-          .getBytes(StandardCharsets.UTF_8);
+      byte[] responseBody =
+          ("{\"status\":\"" + sensorStatus + "\"}").getBytes(StandardCharsets.UTF_8);
       exchange.getResponseHeaders().set("Content-Type", "application/json");
       exchange.sendResponseHeaders(200, responseBody.length);
       exchange.getResponseBody().write(responseBody);
@@ -2334,15 +2346,19 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
           jdbc, TENANT, "IMPORT", "import", TriggerType.API);
       int sensorPort = sensorEndpoint.getAddress().getPort();
       String sensorUrl = "http://127.0.0.1:" + sensorPort + "/sensor";
-      Map<String, Object> sensorSpecification = Map.of(
-          "url", sensorUrl,
-          "matchExpr", "$.status==READY");
+      Map<String, Object> sensorSpecification =
+          Map.of("url", sensorUrl, "matchExpr", "$.status==READY");
       Map<String, Object> waitNodeParams = Map.of(
-          "sensor_type", "HTTP_POLL",
-          "sensor_spec", sensorSpecification,
-          "timeout_seconds", 300,
-          "poll_interval_seconds", 1,
-          "on_timeout", "FAIL");
+          "sensor_type",
+          "HTTP_POLL",
+          "sensor_spec",
+          sensorSpecification,
+          "timeout_seconds",
+          300,
+          "poll_interval_seconds",
+          1,
+          "on_timeout",
+          "FAIL");
       String serializedWaitNodeParams = objectMapper.writeValueAsString(waitNodeParams);
       configureManualSkipWaitDag(seed, serializedWaitNodeParams);
       long workflowDefinitionId = seed.workflowDefinitionId();
@@ -2366,12 +2382,12 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
       outboxPublishSupport.publishAllPending(TENANT);
 
       ThrowingRunnable jobFailedAndWaitPending = () -> {
-        String jobStatus = jdbc.queryForObject(
-            SELECT_NODE_STATUS_SQL, String.class, TENANT, workflowRunId, "JOB");
+        String jobStatus =
+            jdbc.queryForObject(SELECT_NODE_STATUS_SQL, String.class, TENANT, workflowRunId, "JOB");
         String waitStatus = jdbc.queryForObject(
             SELECT_NODE_STATUS_SQL, String.class, TENANT, workflowRunId, "WAIT_RELEASE");
-        String workflowStatus = jdbc.queryForObject(
-            SELECT_RUN_STATUS_SQL, String.class, TENANT, workflowRunId);
+        String workflowStatus =
+            jdbc.queryForObject(SELECT_RUN_STATUS_SQL, String.class, TENANT, workflowRunId);
         assertThat(jobStatus).isEqualTo("FAILED");
         assertThat(waitStatus).isEqualTo("RUNNING");
         assertThat(workflowStatus).isEqualTo("RUNNING");
@@ -2393,7 +2409,8 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
             .responseTimeout(Duration.ofSeconds(45))
             .build();
         ConsoleJwtService jwtService = securedConsole.getBean(ConsoleJwtService.class);
-        Actor administrator = authenticate(client, jwtService, "manual-skip-dag-admin", "ROLE_ADMIN");
+        Actor administrator =
+            authenticate(client, jwtService, "manual-skip-dag-admin", "ROLE_ADMIN");
         Actor auditor = authenticate(client, jwtService, "manual-skip-dag-auditor", "ROLE_AUDITOR");
         URI failedJobSkipUri = buildSkipNodeUri(consoleBaseUrl, workflowRunId, "JOB");
         URI runningWaitSkipUri = buildSkipNodeUri(consoleBaseUrl, workflowRunId, "WAIT_RELEASE");
@@ -2415,12 +2432,12 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
         JsonNode skippedNodeData = skipResponseBody.path("data");
         String skippedNodeStatus = skippedNodeData.path("nodeStatus").asText();
         assertThat(skippedNodeStatus).isEqualTo("SKIPPED");
-        String workflowStatusAfterSkip = jdbc.queryForObject(
-            SELECT_RUN_STATUS_SQL, String.class, TENANT, workflowRunId);
+        String workflowStatusAfterSkip =
+            jdbc.queryForObject(SELECT_RUN_STATUS_SQL, String.class, TENANT, workflowRunId);
         String waitStatusAfterSkip = jdbc.queryForObject(
             SELECT_NODE_STATUS_SQL, String.class, TENANT, workflowRunId, "WAIT_RELEASE");
-        Integer endNodeCountAfterSkip = jdbc.queryForObject(
-            COUNT_NODE_RUNS_SQL, Integer.class, TENANT, workflowRunId, "END");
+        Integer endNodeCountAfterSkip =
+            jdbc.queryForObject(COUNT_NODE_RUNS_SQL, Integer.class, TENANT, workflowRunId, "END");
         assertThat(workflowStatusAfterSkip).isEqualTo("RUNNING");
         assertThat(waitStatusAfterSkip).isEqualTo("RUNNING");
         assertThat(endNodeCountAfterSkip).isZero();
@@ -2429,8 +2446,8 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
         ThrowingRunnable workflowJoinCompleted = () -> {
           String completedWaitStatus = jdbc.queryForObject(
               SELECT_NODE_STATUS_SQL, String.class, TENANT, workflowRunId, "WAIT_RELEASE");
-          String completedWorkflowStatus = jdbc.queryForObject(
-              SELECT_RUN_STATUS_SQL, String.class, TENANT, workflowRunId);
+          String completedWorkflowStatus =
+              jdbc.queryForObject(SELECT_RUN_STATUS_SQL, String.class, TENANT, workflowRunId);
           assertThat(completedWaitStatus).isEqualTo("SUCCESS");
           assertThat(completedWorkflowStatus).isEqualTo("SUCCESS");
         };
@@ -2483,10 +2500,7 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
         "storagePath", storagePath,
         "templateCode", templateCode);
     return new CompensationSourceInput(
-        objectStoreLaunchParams,
-        storageBucket,
-        storagePath,
-        repairedFileContent);
+        objectStoreLaunchParams, storageBucket, storagePath, repairedFileContent);
   }
 
   private record CompensationSourceInput(
@@ -2500,10 +2514,7 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
     jdbc.update(UPDATE_WORKFLOW_DEFINITION_FOR_DAG_SQL, TENANT, workflowDefinitionId);
     jdbc.update(MOVE_END_NODE_FOR_DAG_SQL, TENANT, workflowDefinitionId);
     jdbc.update(
-        INSERT_WAIT_NODE_FOR_DAG_SQL,
-        TENANT,
-        workflowDefinitionId,
-        serializedWaitNodeParams);
+        INSERT_WAIT_NODE_FOR_DAG_SQL, TENANT, workflowDefinitionId, serializedWaitNodeParams);
     jdbc.update(DELETE_WORKFLOW_EDGES_FOR_DAG_SQL, TENANT, workflowDefinitionId);
     jdbc.update(
         INSERT_WORKFLOW_EDGES_FOR_DAG_SQL,
@@ -2549,8 +2560,7 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
     consoleProperties.put("batch.console.security.single-session-enabled", false);
     consoleProperties.put("batch.console.security.default-tenant-id", TENANT);
     consoleProperties.put("batch.console.security.allowed-tenants", TENANT);
-    consoleProperties.put(
-        "batch.security.internal-secret", INTERNAL_SECRET);
+    consoleProperties.put("batch.security.internal-secret", INTERNAL_SECRET);
     String orchestratorBaseUrl = "http://127.0.0.1:" + orchestratorPort;
     consoleProperties.put("batch.console.orchestrator.base-url", orchestratorBaseUrl);
     consoleProperties.put("batch.console.trigger.base-url", orchestratorBaseUrl);
@@ -2621,7 +2631,7 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
         .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT)
         .header(CommonConstants.DEFAULT_OPERATOR_ID_HEADER, "spoofed-operator")
         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
-        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+        .contentType(MediaType.APPLICATION_JSON)
         .bodyValue(body)
         .exchange();
   }
@@ -2650,7 +2660,8 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
         "detailSelectColumns", List.of("id", "item_code", "amount"));
     Map<String, Object> queryParamSchema = Map.of("jdbcMappedExport", mappedExportSpec);
     String namingRule = "workflow_replay_{bizDate}_" + version + "_{seq}.csv";
-    String fieldMappingsJson = objectMapper.writeValueAsString(List.of(fieldMappings, amountMapping));
+    String fieldMappingsJson =
+        objectMapper.writeValueAsString(List.of(fieldMappings, amountMapping));
     String queryParamSchemaJson = objectMapper.writeValueAsString(queryParamSchema);
     int insertedRows = jdbc.update(
         INSERT_WORKFLOW_REPLAY_EXPORT_TEMPLATE_SQL,
@@ -2668,8 +2679,8 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
       String batchTable, String detailTable, String batchNo) {
     JdbcTemplate businessJdbc = new JdbcTemplate(e2eBusinessDataSource);
     String createBatchTableSql = CREATE_WORKFLOW_REPLAY_BATCH_TABLE_SQL.formatted(batchTable);
-    String createDetailTableSql = CREATE_WORKFLOW_REPLAY_DETAIL_TABLE_SQL.formatted(
-        detailTable, batchTable);
+    String createDetailTableSql =
+        CREATE_WORKFLOW_REPLAY_DETAIL_TABLE_SQL.formatted(detailTable, batchTable);
     businessJdbc.execute(createBatchTableSql);
     businessJdbc.execute(createDetailTableSql);
 
@@ -2678,8 +2689,8 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
     assertThat(batchId).isNotNull();
 
     String insertDetailSql = INSERT_WORKFLOW_REPLAY_DETAIL_SQL.formatted(detailTable);
-    int insertedRows = businessJdbc.update(
-        insertDetailSql, batchId, "R25-ITEM", new BigDecimal("12.50"));
+    int insertedRows =
+        businessJdbc.update(insertDetailSql, batchId, "R25-ITEM", new BigDecimal("12.50"));
     assertThat(insertedRows).isEqualTo(1);
   }
 

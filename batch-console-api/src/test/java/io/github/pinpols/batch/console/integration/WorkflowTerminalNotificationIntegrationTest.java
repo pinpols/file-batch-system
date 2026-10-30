@@ -1,9 +1,5 @@
 package io.github.pinpols.batch.console.integration;
 
-import io.github.pinpols.batch.console.domain.notification.param.WorkflowTerminalNotificationClaimParam;
-import io.github.pinpols.batch.console.domain.notification.param.WorkflowTerminalNotificationFinishParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
@@ -15,10 +11,14 @@ import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.console.domain.notification.view.TerminalNotificationDelivery;
+import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.WorkflowTerminalNotificationMapper;
+import io.github.pinpols.batch.console.domain.notification.param.WorkflowTerminalNotificationClaimParam;
+import io.github.pinpols.batch.console.domain.notification.param.WorkflowTerminalNotificationFinishParam;
 import io.github.pinpols.batch.console.domain.notification.service.TerminalNotificationDeliveryService;
 import io.github.pinpols.batch.console.domain.notification.service.WorkflowTerminalNotificationService;
+import io.github.pinpols.batch.console.domain.notification.view.EnabledSubscriptionRuleRow;
+import io.github.pinpols.batch.console.domain.notification.view.TerminalNotificationDelivery;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -69,6 +69,9 @@ class WorkflowTerminalNotificationIntegrationTest extends AbstractIntegrationTes
 
   @Autowired
   private WorkflowTerminalNotificationService service;
+
+  @Autowired
+  private SubscriptionRuleMapper subscriptionRules;
 
   @Autowired
   private WorkflowTerminalNotificationMapper mapper;
@@ -276,19 +279,21 @@ class WorkflowTerminalNotificationIntegrationTest extends AbstractIntegrationTes
     Instant now = Instant.now();
     String first = UUID.randomUUID().toString(), second = UUID.randomUUID().toString();
     assertThat(mapper.claim(WorkflowTerminalNotificationClaimParam.builder()
-        .row(row)
-        .token(first)
-        .now(now)
-        .until(now.plusSeconds(120))
-        .maxAttempts(8)
-        .build())).isEqualTo(1);
+            .row(row)
+            .token(first)
+            .now(now)
+            .until(now.plusSeconds(120))
+            .maxAttempts(8)
+            .build()))
+        .isEqualTo(1);
     assertThat(mapper.claim(WorkflowTerminalNotificationClaimParam.builder()
-        .row(row)
-        .token(second)
-        .now(now)
-        .until(now.plusSeconds(120))
-        .maxAttempts(8)
-        .build())).isZero();
+            .row(row)
+            .token(second)
+            .now(now)
+            .until(now.plusSeconds(120))
+            .maxAttempts(8)
+            .build()))
+        .isZero();
     String table =
         row.source().equals("WEBHOOK") ? "webhook_delivery_log" : "notification_delivery_log";
     final String updateStatementSql = """
@@ -297,20 +302,21 @@ class WorkflowTerminalNotificationIntegrationTest extends AbstractIntegrationTes
         """.formatted(table);
     jdbc.update(updateStatementSql, tenant, row.id());
     assertThat(mapper.claim(WorkflowTerminalNotificationClaimParam.builder()
-        .row(row)
-        .token(second)
-        .now(Instant.now())
-        .until(now.plusSeconds(120))
-        .maxAttempts(8)
-        .build()))
+            .row(row)
+            .token(second)
+            .now(Instant.now())
+            .until(now.plusSeconds(120))
+            .maxAttempts(8)
+            .build()))
         .isEqualTo(1);
     assertThat(mapper.finish(WorkflowTerminalNotificationFinishParam.builder()
-        .row(row)
-        .token(first)
-        .status("SUCCESS")
-        .error(null)
-        .nextRetry(null)
-        .build())).isZero();
+            .row(row)
+            .token(first)
+            .status("SUCCESS")
+            .error(null)
+            .nextRetry(null)
+            .build()))
+        .isZero();
     var foreign = new TerminalNotificationDelivery(
         row.source(),
         row.id(),
@@ -321,19 +327,21 @@ class WorkflowTerminalNotificationIntegrationTest extends AbstractIntegrationTes
         row.payloadJson(),
         row.attempt());
     assertThat(mapper.finish(WorkflowTerminalNotificationFinishParam.builder()
-        .row(foreign)
-        .token(second)
-        .status("SUCCESS")
-        .error(null)
-        .nextRetry(null)
-        .build())).isZero();
+            .row(foreign)
+            .token(second)
+            .status("SUCCESS")
+            .error(null)
+            .nextRetry(null)
+            .build()))
+        .isZero();
     assertThat(mapper.finish(WorkflowTerminalNotificationFinishParam.builder()
-        .row(row)
-        .token(second)
-        .status("SUCCESS")
-        .error(null)
-        .nextRetry(null)
-        .build())).isEqualTo(1);
+            .row(row)
+            .token(second)
+            .status("SUCCESS")
+            .error(null)
+            .nextRetry(null)
+            .build()))
+        .isEqualTo(1);
   }
 
   @Test
@@ -457,6 +465,49 @@ class WorkflowTerminalNotificationIntegrationTest extends AbstractIntegrationTes
       Integer selectedCount = jdbc.queryForObject(selectCountSql, Integer.class, tenant);
       assertThat(selectedCount).isZero();
     }
+  }
+
+  @Test
+  @DisplayName("终态按统一匹配展开小写和通配规则并隔离不匹配、停用与其他租户")
+  void shouldExpandMatchingCaseAndWildcardRulesWithoutCrossTenantOrDisabledRecipients() {
+    String tenant = tenant();
+    String foreignTenant = tenant();
+    seedRecipients(tenant);
+    seedRecipients(foreignTenant);
+    String updateEventTypesSql =
+        "update batch.subscription_rule set event_types = ? where tenant_id = ?";
+    jdbc.update(updateEventTypesSql, "workflow_failed", tenant);
+    String insertRuleSql = """
+        insert into batch.subscription_rule (tenant_id,rule_name,channel_code,event_types,enabled)
+        values (?, ?, 'selected', ?, ?)
+        """;
+    jdbc.update(insertRuleSql, tenant, "wildcard", "*", true);
+    jdbc.update(insertRuleSql, tenant, "exact", "WORKFLOW_FAILED", true);
+    jdbc.update(insertRuleSql, tenant, "other", "WORKFLOW_SUCCESS", true);
+    jdbc.update(insertRuleSql, tenant, "disabled", "*", false);
+    String insertChannelSql = """
+        insert into batch.notification_channel
+            (tenant_id,channel_code,channel_name,channel_type,config_json,enabled)
+        values (?, 'disabled-channel', 'disabled', 'WEBHOOK', '{}'::jsonb, false)
+        """;
+    jdbc.update(insertChannelSql, tenant);
+    String insertDisabledChannelRuleSql = """
+        insert into batch.subscription_rule (tenant_id,rule_name,channel_code,event_types,enabled)
+        values (?, 'disabled-channel-rule', 'disabled-channel', '*', true)
+        """;
+    jdbc.update(insertDisabledChannelRuleSql, tenant);
+    assertThat(subscriptionRules.selectEnabledByEventType(tenant, "WORKFLOW_FAILED"))
+        .extracting(EnabledSubscriptionRuleRow::ruleName)
+        .containsExactlyInAnyOrder("selected", "wildcard", "exact");
+    accept(tenant, "FAILED");
+    String ruleNamesSql = """
+        select r.rule_name from batch.notification_delivery_log d
+        join batch.subscription_rule r on r.id=d.rule_id and r.tenant_id=d.tenant_id
+        where d.tenant_id=? order by r.rule_name
+        """;
+    assertThat(jdbc.queryForList(ruleNamesSql, String.class, tenant))
+        .containsExactlyInAnyOrder("selected", "wildcard", "exact");
+    assertThat(count("notification_delivery_log", foreignTenant)).isZero();
   }
 
   private String tenant() {

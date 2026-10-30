@@ -49,7 +49,7 @@ description: 用户要求在特性分支交付代码、执行提交检查、创�
 3. 本地提交门禁：显式暂存拟交付文件，审查 `git diff --cached`，再运行 `bash scripts/local/pre-commit-checks.sh`；提交 hook 会按暂存文件域路由检查，并可能自动格式化或新增生成快照，执行后必须重新审查暂存差异。
 4. **Lean LOC 快照**：tracked 源码变化由 pre-commit 使用暂存树重生成 `docs/stats/loc-current-lean.md` 并自动暂存。生成器要求 Python 3.12+；手工复核可运行 `python3.12 scripts/ci/check-loc-snapshot.py`。不要用旧快照覆盖当前结果。
 5. **Java 可读性清单**：pre-push 可能自动刷新 `docs/stats/java-readability-inventory.md` 并拒绝本次 push。若仅清单排序/行数按生成逻辑变化，审查后单独暂存并提交该生成物，再重试 push；不要用 `SKIP_SDK_CHECKS=1` 绕过。
-6. **Changelog**：有用户可见功能、重要缺陷/安全修复、生产配置、部署、迁移或外部契约影响时，按根 `CHANGELOG.md` 的 `[Unreleased]` 分类追加条目。只有 `docs/agent-baseline.md` 或 ADR/架构权威约束变化才更新 `docs/changelog.md`。提交后运行 `python3 scripts/ci/check-changelog-sync.py --base origin/main`。
+6. **Changelog**：有用户可见功能、重要缺陷/安全修复、生产配置、部署、迁移或外部契约影响时，按根 `CHANGELOG.md` 的 `[Unreleased]` 分类追加条目。工程/文档基线与治理流程变化按文档治理约定更新 `docs/changelog.md`，产品/部署行为变化同时检查根 Changelog；不把日期执行日志当发布说明。提交后运行 `python3 scripts/ci/check-changelog-sync.py --base origin/main`。
 7. **Sonar**：Java 生产代码有改动时，PR 前应在 Docker、Java 21 和 Sonar 服务可用的本地环境运行 `bash scripts/dev/sonar-scan.sh --incremental --base-ref origin/main`，检查 issues、changed-lines 与 hotspots，并治理本次新增项；扫描未能运行时记录阻塞原因和未执行状态。需刷新覆盖率时添加 `--with-tests`。报告位于 `reports/sonar/<timestamp>/`，通常是本地产物，不要随意纳入 PR。该扫描分析完整 Maven reactor 并额外导出 Git 变更行报告，不等于只扫描改动文件。CI workflow 在 main push 及相关代码变更夜间扫描；SonarQube Community Build 不执行 PR 分析。是否属于 required check 以仓库 Ruleset 为准；若结果为 `SKIPPED`、未配置或未运行，不得描述为 Sonar 通过。
 8. 根据变更域运行 Shell/文档/配置/依赖/安全/API 等守护。全量 Full Gate、sim、BE-ACC 和 Sonar 是不同验证层级，不要互相替代；未运行则在 PR 中写明。
 9. **实现与文档同步**：所有有语义影响的变更都要检查对应文档、示例、索引和生成物是否需要更新，包括功能与 API 契约、配置/环境变量、数据库结构与表说明、部署和运行方式、脚本运维、测试验收及故障处理。按权威文档归属更新，不复制出相互矛盾的第二事实来源；同步生成类型、清单或快照时要运行对应校验。纯内部重构若不改变用户行为、操作方式或架构约束，可以不改文档，但在 PR 说明中简述判断依据。只完成代码、不核对适用文档，不算交付完成。
@@ -74,5 +74,9 @@ description: 用户要求在特性分支交付代码、执行提交检查、创�
 
 - 本地 Sonar 命令说明：`scripts/dev/sonar-scan.sh`、`scripts/dev/README.md`。
 - 临时 Sonar CI 触发范围、限制及 Quality Gate：`docs/runbook/ci.md`、`docs/runbook/sonar.md`。
-- LOC 口径与归档：`docs/stats/README.md`、`docs/archive/stats/README.md`。
+- LOC 口径与历史摘要：`docs/stats/README.md`。
 - 代码量自动刷新：`scripts/local/pre-commit-checks.sh`；可读性清单生成：`scripts/ci/report-java-readability-inventory.py`。
+
+## 平台版本与应用发布路由
+
+普通功能/修复PR只维护适用的Unreleased，不自动修改版本。联合平台发布按`docs/runbook/releasing.md`核对两仓同版本、固定SHA和不可变镜像集合；应用晋级与回滚使用`release-deployment`。源码提交、PR合并、tag/Release、环境部署分别核实授权和结果，SDK registry发布另用`sdk-contract-governance`。

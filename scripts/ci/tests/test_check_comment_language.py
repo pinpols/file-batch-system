@@ -85,6 +85,25 @@ class CommentLanguageTest(unittest.TestCase):
     def test_allows_command_examples(self) -> None:
         self.assertIsNone(MODULE.prose_comment("-- psql -d batch_business -f scripts/db/setup.sql", ".sql"))
 
+    def test_allows_java_code_and_schema_examples(self) -> None:
+        self.assertIsNone(MODULE.prose_comment(" * if (ctx.isCancelled()) {", ".java"))
+        self.assertIsNone(MODULE.prose_comment(' * .defaults(Map.of("batchSize", 1000))', ".java"))
+        self.assertIsNone(MODULE.prose_comment(' * gauge("batch_sdk_inflight", meter.count());', ".java"))
+        self.assertIsNone(MODULE.prose_comment(" * break_position JSONB NOT NULL,", ".java"))
+        self.assertIsNone(MODULE.prose_comment(" * ALL / ALL_FAILED / OUTPUTS_ONLY。", ".java"))
+        self.assertIsNone(
+            MODULE.prose_comment(
+                " * updateAndBumpVersion / delete* / upsert* / toggleEnabled / batchToggleEnabled /",
+                ".java",
+            )
+        )
+        self.assertIsNone(
+            MODULE.prose_comment(
+                " * io.github.pinpols.batch.orchestrator.service.BatchDayReplayService#execute()}",
+                ".java",
+            )
+        )
+
     def test_does_not_treat_shell_options_as_sql_comments(self) -> None:
         self.assertIsNone(MODULE.prose_comment("--if-not-exists \\", ".sh"))
 

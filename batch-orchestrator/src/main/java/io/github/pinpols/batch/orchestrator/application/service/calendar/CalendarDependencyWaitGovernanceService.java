@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.orchestrator.application.service.calendar;
 
-import io.github.pinpols.batch.orchestrator.domain.param.CalendarDependencyManualActionParam;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.CalendarDependencyWaitEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.CalendarDependencyManualActionParam;
 import io.github.pinpols.batch.orchestrator.mapper.CalendarDependencyWaitMapper;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -32,7 +33,7 @@ public class CalendarDependencyWaitGovernanceService {
   public List<CalendarDependencyWaitEntity> list(
       String tenantId, String calendarCode, String waitStatus, int limit) {
     requireText(tenantId, "tenantId");
-    String normalizedStatus = normalizeOptional(waitStatus);
+    String normalizedStatus = normalizeStatus(waitStatus);
     if (EmptyChecks.isNotNull(normalizedStatus)
         && !List.of(
                 CalendarDependencyWaitEntity.STATUS_WAITING,
@@ -42,17 +43,15 @@ public class CalendarDependencyWaitGovernanceService {
       throw new IllegalArgumentException("Unsupported calendar dependency wait status");
     }
     int pageSize = Math.max(1, Math.min(limit, MAX_PAGE_SIZE));
-    return RlsTenantContextHolder.runWithTenant(
-        tenantId,
-        () -> {
-          TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
-          return transactionTemplate.execute(status -> {
-            waitMapper.setTenantContext(tenantId);
-            String normalizedCalendarCode = normalizeOptional(calendarCode);
-            return waitMapper.selectRecent(
-                tenantId, normalizedCalendarCode, normalizedStatus, pageSize);
-          });
-        });
+    return RlsTenantContextHolder.runWithTenant(tenantId, () -> {
+      TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+      return transactionTemplate.execute(status -> {
+        waitMapper.setTenantContext(tenantId);
+        String normalizedCalendarCode = CodeNormalizer.toConfigFormOrNull(calendarCode);
+        return waitMapper.selectRecent(
+            tenantId, normalizedCalendarCode, normalizedStatus, pageSize);
+      });
+    });
   }
 
   public CalendarDependencyWaitEntity requestManualAction(ManualActionCommand command) {
@@ -62,20 +61,19 @@ public class CalendarDependencyWaitGovernanceService {
     String operatorId = command.operatorId().trim();
     String reason = command.reason().trim();
     Instant now = dateTimeSupport.nowInstant();
-    return RlsTenantContextHolder.runWithTenant(
-        command.tenantId(),
-        () -> {
-          TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
-          return transactionTemplate.execute(
-              status -> requestManualActionInTransaction(command, action, operatorId, reason, now));
-        });
+    return RlsTenantContextHolder.runWithTenant(command.tenantId(), () -> {
+      TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+      return transactionTemplate.execute(
+          status -> requestManualActionInTransaction(command, action, operatorId, reason, now));
+    });
   }
 
   private CalendarDependencyWaitEntity requestManualActionInTransaction(
       ManualActionCommand command, String action, String operatorId, String reason, Instant now) {
     waitMapper.setTenantContext(command.tenantId());
+    String normalizedCalendarCode = CodeNormalizer.toConfigFormOrNull(command.calendarCode());
     CalendarDependencyWaitEntity wait = waitMapper.selectByTenantCalendarBizDate(
-        command.tenantId(), command.calendarCode(), command.bizDate());
+        command.tenantId(), normalizedCalendarCode, command.bizDate());
     if (EmptyChecks.isNull(wait)
         || !CalendarDependencyWaitEntity.STATUS_WAITING.equals(wait.waitStatus())) {
       throw new ResponseStatusException(
@@ -91,26 +89,26 @@ public class CalendarDependencyWaitGovernanceService {
       throw new ResponseStatusException(
           HttpStatus.CONFLICT, "A manual action is already pending for this wait");
     }
-    CalendarDependencyManualActionParam calendarDependencyManualActionParam = CalendarDependencyManualActionParam.builder()
-        .tenantId(command.tenantId())
-        .id(wait.id())
-        .manualAction(action)
-        .operatorId(operatorId)
-        .reason(reason)
-        .requestedAt(now)
-        .build();
+    CalendarDependencyManualActionParam calendarDependencyManualActionParam =
+        CalendarDependencyManualActionParam.builder()
+            .tenantId(command.tenantId())
+            .id(wait.id())
+            .manualAction(action)
+            .operatorId(operatorId)
+            .reason(reason)
+            .requestedAt(now)
+            .build();
     int updated = waitMapper.requestManualAction(calendarDependencyManualActionParam);
     if (updated != 1) {
       throw new ResponseStatusException(
           HttpStatus.CONFLICT, "Calendar dependency wait changed concurrently");
     }
     return waitMapper.selectByTenantCalendarBizDate(
-        command.tenantId(), command.calendarCode(), command.bizDate());
+        command.tenantId(), normalizedCalendarCode, command.bizDate());
   }
 
   private static void validate(ManualActionCommand command) {
-    boolean manualActionCommandIsInvalid =
-        EmptyChecks.isNull(command)
+    boolean manualActionCommandIsInvalid = EmptyChecks.isNull(command)
         || !Texts.hasText(command.tenantId())
         || !Texts.hasText(command.calendarCode())
         || EmptyChecks.isNull(command.bizDate())
@@ -133,7 +131,7 @@ public class CalendarDependencyWaitGovernanceService {
     }
   }
 
-  private static String normalizeOptional(String value) {
+  private static String normalizeStatus(String value) {
     if (!Texts.hasText(value)) {
       return null;
     }

@@ -80,7 +80,7 @@ class LocalOutboxDispatchSupportTest {
   void shouldReportUnknown_whenEnvelopeWasPublishedButManifestFailed(@TempDir Path tempDir)
       throws Exception {
     Path sandbox = tempDir.resolve("sandbox");
-    Path target = sandbox.resolve("outbox");
+    Path target = sandbox.resolve("token=probe-secret");
     Files.createDirectories(target);
     Path envelope = target.resolve("LOCAL_TEST-req-1.json");
     Path manifest = target.resolve("LOCAL_TEST-req-1.json.chk");
@@ -89,14 +89,23 @@ class LocalOutboxDispatchSupportTest {
     Files.writeString(existingManifestEntry, "keep");
     DispatchCommand base = command(target);
     DispatchCommand dispatch = new DispatchCommand(
-        base.tenantId(), base.traceId(), base.fileRecord(),
-        Map.of("channel_type", "LOCAL", "channel_code", "LOCAL_TEST",
-            "target_endpoint", target.toString(), "dispatch_manifest_enabled", true),
+        base.tenantId(),
+        base.traceId(),
+        base.fileRecord(),
+        Map.of(
+            "channel_type",
+            "LOCAL",
+            "channel_code",
+            "LOCAL_TEST",
+            "target_endpoint",
+            target.toString(),
+            "dispatch_manifest_enabled",
+            true),
         base.payload());
     DispatchRuntimeProperties properties = runtimeProperties(sandbox);
 
-    DispatchResult result = LocalOutboxDispatchSupport.writeFilesystemEnvelope(
-        dispatch, false, null, properties);
+    DispatchResult result =
+        LocalOutboxDispatchSupport.writeFilesystemEnvelope(dispatch, false, null, properties);
 
     assertThat(envelope).isRegularFile();
     String publishedEnvelope = Files.readString(envelope);
@@ -105,6 +114,7 @@ class LocalOutboxDispatchSupportTest {
     assertThat(result.externalOutcomeUnknown()).isTrue();
     assertThat(result.externalRequestId()).isEqualTo("req-1");
     assertThat(result.receiptCode()).isEqualTo("rcpt-1");
+    assertThat(result.message()).doesNotContain("probe-secret");
     assertThat(existingManifestEntry).hasContent("keep");
   }
 
@@ -112,7 +122,7 @@ class LocalOutboxDispatchSupportTest {
   @DisplayName("目标目录越出沙箱根时拒绝写入,并说明路径逃逸沙箱根")
   void shouldRejectTargetEndpointEscapingSandbox(@TempDir Path tempDir) throws Exception {
     Path sandbox = tempDir.resolve("sandbox");
-    Path outside = tempDir.resolve("outside");
+    Path outside = tempDir.resolve("token=probe-secret");
     Files.createDirectories(sandbox);
     Files.createDirectories(outside);
     DispatchRuntimeProperties properties = runtimeProperties(sandbox);
@@ -123,6 +133,7 @@ class LocalOutboxDispatchSupportTest {
     assertThat(result.success()).isFalse();
     assertThat(result.externalOutcomeUnknown()).isFalse();
     assertThat(result.message()).contains("escapes sandbox root");
+    assertThat(result.message()).doesNotContain("probe-secret");
   }
 
   private static DispatchRuntimeProperties runtimeProperties(Path sandbox) {

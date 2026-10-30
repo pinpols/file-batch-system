@@ -11,6 +11,16 @@
             <arg column="due_local_time" javaType="java.time.LocalTime"/>
         </constructor>
     </resultMap>
+    <resultMap id="UploadTargetResultMap" type="io.github.pinpols.batch.orchestrator.domain.query.FileGroupUploadTarget">
+        <constructor>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="calendar_code" javaType="java.lang.String"/>
+            <arg column="workflow_definition_id" javaType="java.lang.Long"/>
+            <arg column="workflow_code" javaType="java.lang.String"/>
+            <arg column="workflow_name" javaType="java.lang.String"/>
+            <arg column="file_group_code" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
 
     <insert id="upsert">
         insert into batch.file_group_expectation_definition
@@ -48,5 +58,36 @@
            and expectation.enabled = true
            and workflow.enabled = true
          order by expectation.file_group_code, expectation.workflow_definition_id
+    </select>
+
+    <select id="selectEnabledUploadTargets" resultMap="UploadTargetResultMap">
+        select expectation.tenant_id, expectation.calendar_code,
+               expectation.workflow_definition_id, workflow.workflow_code,
+               workflow.workflow_name, expectation.file_group_code
+          from batch.file_group_expectation_definition expectation
+          join batch.workflow_definition workflow
+            on workflow.tenant_id = expectation.tenant_id
+           and workflow.id = expectation.workflow_definition_id
+           and workflow.calendar_code = expectation.calendar_code
+         where expectation.tenant_id = #{tenantId}
+           and expectation.enabled = true
+           and workflow.enabled = true
+         order by expectation.file_group_code, workflow.workflow_code
+    </select>
+
+    <select id="selectEnabledUploadTargetsByGroup" resultMap="UploadTargetResultMap">
+        select expectation.tenant_id, expectation.calendar_code,
+               expectation.workflow_definition_id, workflow.workflow_code,
+               workflow.workflow_name, expectation.file_group_code
+          from batch.file_group_expectation_definition expectation
+          join batch.workflow_definition workflow
+            on workflow.tenant_id = expectation.tenant_id
+           and workflow.id = expectation.workflow_definition_id
+           and workflow.calendar_code = expectation.calendar_code
+         where expectation.tenant_id = #{tenantId}
+           and expectation.file_group_code = #{fileGroupCode}
+           and expectation.enabled = true
+           and workflow.enabled = true
+         order by workflow.workflow_code
     </select>
 </mapper>

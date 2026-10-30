@@ -38,8 +38,10 @@ public class TaskDispatchExecutor {
 
   /** Kafka 只负责把任务送到 worker，实际执行前仍然要回 Orchestrator 做 CLAIM。 */
   public WorkerExecutionResult execute(TaskDispatchMessage message, String workerId) {
-    boolean executionRequestIsIncomplete =
-        EmptyChecks.isNull(message) || EmptyChecks.isNull(message.taskId()) || EmptyChecks.isNull(workerId) || EmptyChecks.isBlank(workerId);
+    boolean executionRequestIsIncomplete = EmptyChecks.isNull(message)
+        || EmptyChecks.isNull(message.taskId())
+        || EmptyChecks.isNull(workerId)
+        || EmptyChecks.isBlank(workerId);
     if (executionRequestIsIncomplete) {
       return null;
     }
@@ -54,10 +56,11 @@ public class TaskDispatchExecutor {
 
   /**
    * ADR-046 P2 切片 2.3b:批量执行 —— 一次 {@code claim-batch} 认领 K 个独立 task(CLAIM 往返 O(N)→O(N/K)),
-   * 对**领到**的逐个独立执行(沿用 {@link #execute} 的 per-task 执行与上报语义),返回逐项结果。
+   * 对领到的任务在批内串行、逐项独立执行，沿用 {@link #execute} 的 per-task 执行与上报交接语义，返回逐项结果。
    *
-   * <p>没领到的项(被抢/不可领/不存在)跳过、不计入结果,与单条 {@link #execute} 返 null「消费层跳过」一致。 **本步只批量化 CLAIM**;每个 task 的执行
-   * + 上报仍 per-task(report 批量化需拆执行包装器,见 2.3 施工方案后续)。 仅供 2.3c 的批量 listener 调用;flag 关时无调用方。
+   * <p>没领到的项跳过，与单条 {@link #execute} 返回 null 一致。REPORT 可按独立开关合并跨并发 listener 的完成项，
+   * 每项仍同步等待确认或原 Outbox 交接；不等待整个 poll 执行结束。没有并发完成项时 HTTP 微批可只有一项。
+   * 仅供批量 listener 调用；认领开关关闭时没有该调用方。
    */
   public List<WorkerExecutionResult> executeBatch(
       List<TaskDispatchMessage> messages, String workerId) {
@@ -80,8 +83,10 @@ public class TaskDispatchExecutor {
   /** 批量执行的逐项结果版本。Kafka 批量 consumer 需要知道是哪条消息失败，才能只 DLQ 毒丸消息，而不是把同 poll 的正常任务一起送进 DLQ。 */
   public List<BatchItemExecution> executeBatchDetailed(
       List<TaskDispatchMessage> messages, String workerId) {
-    boolean batchExecutionRequestIsIncomplete =
-        EmptyChecks.isNull(messages) || EmptyChecks.isEmpty(messages) || EmptyChecks.isNull(workerId) || EmptyChecks.isBlank(workerId);
+    boolean batchExecutionRequestIsIncomplete = EmptyChecks.isNull(messages)
+        || EmptyChecks.isEmpty(messages)
+        || EmptyChecks.isNull(workerId)
+        || EmptyChecks.isBlank(workerId);
     if (batchExecutionRequestIsIncomplete) {
       return List.of();
     }
@@ -123,41 +128,49 @@ public class TaskDispatchExecutor {
     taskExecutionWrapper.registerClaimedBatch(claimedBatch);
     List<BatchItemExecution> detailedResults = new ArrayList<>();
     Set<Long> executedTaskIds = new HashSet<>();
-    for (int messageIndex = 0; messageIndex < messages.size(); messageIndex++) {
-      TaskDispatchMessage message = messages.get(messageIndex);
-      if (message == null || message.taskId() == null) {
-        continue;
+    try {
+      for (int messageIndex = 0; messageIndex < messages.size(); messageIndex++) {
+        TaskDispatchMessage message = messages.get(messageIndex);
+        if (EmptyChecks.isNull(message) || EmptyChecks.isNull(message.taskId())) {
+          continue;
+        }
+        if (!executedTaskIds.add(message.taskId())) {
+          detailedResults.add(BatchItemExecution.skipped(messageIndex, message));
+          continue;
+        }
+        TaskClaimResult claim = claimedById.get(message.taskId());
+        if (!isClaimReadyForExecution(claim)) {
+          detailedResults.add(BatchItemExecution.skipped(messageIndex, message));
+          continue; // 没领到 → 跳过(与单条 execute 返 null 一致)
+        }
+        putExecutionMdc(message, workerId);
+        try {
+          PulledTask claimedTask = claimedTasksById.get(message.taskId());
+          WorkerExecutionResult result = taskExecutionWrapper.execute(claimedTask);
+          detailedResults.add(BatchItemExecution.completed(messageIndex, message, result));
+        } catch (Exception ex) {
+          detailedResults.add(BatchItemExecution.failed(messageIndex, message, ex));
+        } finally {
+          BatchMdc.removeAll(
+              StructuredLogField.TENANT_ID,
+              StructuredLogField.TRACE_ID,
+              StructuredLogField.TASK_ID,
+              StructuredLogField.JOB_INSTANCE_ID,
+              StructuredLogField.WORKFLOW_RUN_ID,
+              StructuredLogField.PARTITION_ID,
+              StructuredLogField.BATCH_DAY,
+              StructuredLogField.ATTEMPT,
+              StructuredLogField.WORKER_TYPE,
+              StructuredLogField.WORKER_ID,
+              StructuredLogField.RUN_MODE);
+        }
       }
-      if (!executedTaskIds.add(message.taskId())) {
-        detailedResults.add(BatchItemExecution.skipped(messageIndex, message));
-        continue;
-      }
-      TaskClaimResult claim = claimedById.get(message.taskId());
-      if (!isClaimReadyForExecution(claim)) {
-        detailedResults.add(BatchItemExecution.skipped(messageIndex, message));
-        continue; // 没领到 → 跳过(与单条 execute 返 null 一致)
-      }
-      putExecutionMdc(message, workerId);
-      try {
-        PulledTask claimedTask = claimedTasksById.get(message.taskId());
-        WorkerExecutionResult result = taskExecutionWrapper.execute(claimedTask);
-        detailedResults.add(BatchItemExecution.completed(messageIndex, message, result));
-      } catch (Exception ex) {
-        detailedResults.add(BatchItemExecution.failed(messageIndex, message, ex));
-      } finally {
-        BatchMdc.removeAll(
-            StructuredLogField.TENANT_ID,
-            StructuredLogField.TRACE_ID,
-            StructuredLogField.TASK_ID,
-            StructuredLogField.JOB_INSTANCE_ID,
-            StructuredLogField.WORKFLOW_RUN_ID,
-            StructuredLogField.PARTITION_ID,
-            StructuredLogField.BATCH_DAY,
-            StructuredLogField.ATTEMPT,
-            StructuredLogField.WORKER_TYPE,
-            StructuredLogField.WORKER_ID,
-            StructuredLogField.RUN_MODE);
-      }
+    } finally {
+      // 致命错误继续向上传播；尚未开始的项交由租约超时恢复，不能在本进程永久续租。
+      List<PulledTask> unexecutedClaims = claimedBatch.stream()
+          .filter(task -> !executedTaskIds.contains(Long.valueOf(task.getTaskId())))
+          .toList();
+      taskExecutionWrapper.releaseUnexecutedClaims(unexecutedClaims);
     }
     return detailedResults;
   }
@@ -198,9 +211,7 @@ public class TaskDispatchExecutor {
   }
 
   private static boolean isClaimReadyForExecution(TaskClaimResult claim) {
-    return EmptyChecks.isNotNull(claim)
-        && claim.claimed()
-        && EmptyChecks.isNotNull(claim.config());
+    return EmptyChecks.isNotNull(claim) && claim.claimed() && EmptyChecks.isNotNull(claim.config());
   }
 
   private static void putExecutionMdc(TaskDispatchMessage message, String workerId) {

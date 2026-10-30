@@ -40,6 +40,7 @@ from typing import Any
 import httpx
 
 from batch_worker_sdk.client.config import BatchPlatformClientConfig
+from batch_worker_sdk.exceptions import PlatformError
 from batch_worker_sdk.internal import _signing
 from batch_worker_sdk.retry._retry import ClientErrorCounter, with_retry
 
@@ -197,7 +198,13 @@ class PlatformHttpClient:
         与 heartbeat 同走 §C no-backoff 豁免(``max_attempts=1``):续约单次失败不退避,
         等下一个续约 tick 再试,避免内部退避拖过 lease TTL。见 fixture 25 / wire-protocol §C。
         """
-        return await self._post_json(f"/internal/tasks/{task_id}/renew", body, max_attempts=1)
+        response = await self._post_json_raw(
+            f"/internal/tasks/{task_id}/renew", body, max_attempts=1
+        )
+        # 续租的 409 表示当前租约已失效,不能沿用 CLAIM 的幂等成功口径。
+        if response.status_code == 409:
+            raise PlatformError("task lease was revoked", status_code=409)
+        return _decode_body(response)
 
     # ─── 内部实现 ────────────────────────────────────────────────────
 

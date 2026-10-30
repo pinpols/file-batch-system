@@ -10,6 +10,7 @@ import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileConte
 import jakarta.mail.internet.MimeMessage;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
@@ -106,6 +107,29 @@ class SmtpEmailDispatchChannelAdapterTest {
       assertThat(result.message()).contains("EXTERNAL_OUTCOME_UNKNOWN");
       assertThat(smtpServer.awaitAcceptedMessages()).isEqualTo(1);
     }
+  }
+
+  @Test
+  @DisplayName("SMTP 投递失败结果不保存底层异常中的凭据")
+  void shouldMaskCredentialInFailureMessage() throws Exception {
+    DispatchFileContentResolver fileContentResolver = mock(DispatchFileContentResolver.class);
+    when(fileContentResolver.openInputStream(anyMap()))
+        .thenThrow(new IOException("attachment token=probe-secret unavailable"));
+    Environment environment = mock(Environment.class);
+    when(environment.getActiveProfiles()).thenReturn(new String[0]);
+    SmtpEmailDispatchChannelAdapter adapter =
+        new SmtpEmailDispatchChannelAdapter(fileContentResolver, environment);
+    Map<String, Object> config = Map.of(
+        "smtp_host", "127.0.0.1",
+        "smtp_port", 2525,
+        "mail_from", "sender@example.test",
+        "mail_to", "receiver@example.test");
+
+    DispatchResult result = adapter.dispatch(command(config));
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.externalOutcomeUnknown()).isFalse();
+    assertThat(result.message()).contains("IOException").doesNotContain("probe-secret");
   }
 
   private static final class AcceptThenDropSmtpServer implements AutoCloseable {

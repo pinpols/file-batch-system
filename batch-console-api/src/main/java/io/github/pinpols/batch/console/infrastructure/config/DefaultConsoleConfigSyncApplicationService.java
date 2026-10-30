@@ -19,13 +19,17 @@ import io.github.pinpols.batch.console.application.contract.response.config.Conf
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncImportResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncLogResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncPreviewResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncRequestStatusResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncSummaryResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
+import io.github.pinpols.batch.console.domain.config.param.ConfigSyncLogInsertParam;
+import io.github.pinpols.batch.console.domain.config.param.ConfigSyncLogUpdateParam;
+import io.github.pinpols.batch.console.domain.config.view.ConfigSyncLogRow;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import io.github.pinpols.batch.console.mapper.ConfigSyncLogMapper;
 import io.github.pinpols.batch.console.infrastructure.config.ConfigSyncImportExecutor.ImportContext;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
+import io.github.pinpols.batch.console.mapper.ConfigSyncLogMapper;
 import io.github.pinpols.batch.console.support.web.ConsoleMapSupport;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -95,12 +99,7 @@ public class DefaultConsoleConfigSyncApplicationService
     String sourceEnv = request.getSourceEnv();
     String targetEnv = request.getTargetEnv();
     ConfigSyncSummaryResponse summary = ConfigSyncSummaryResponse.from(bundle);
-    return new ConfigSyncExportResponse(
-        tenantId,
-        sourceEnv,
-        targetEnv,
-        summary,
-        bundle);
+    return new ConfigSyncExportResponse(tenantId, sourceEnv, targetEnv, summary, bundle);
   }
 
   @Override
@@ -112,12 +111,7 @@ public class DefaultConsoleConfigSyncApplicationService
     String sourceEnv = request.getSourceEnv();
     String targetEnv = request.getTargetEnv();
     ConfigSyncSummaryResponse summary = ConfigSyncSummaryResponse.from(bundle);
-    return new ConfigSyncPreviewResponse(
-        tenantId,
-        sourceTenantId,
-        sourceEnv,
-        targetEnv,
-        summary);
+    return new ConfigSyncPreviewResponse(tenantId, sourceTenantId, sourceEnv, targetEnv, summary);
   }
 
   @Override
@@ -128,8 +122,9 @@ public class DefaultConsoleConfigSyncApplicationService
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.bundle_required");
     }
     List<String> targetTenantIds = request.getTargetTenantIds();
-    boolean targetTenantSelectionIsInvalid =
-        EmptyChecks.isNull(targetTenantIds) || EmptyChecks.isEmpty(targetTenantIds)
+    boolean targetTenantSelectionIsInvalid = EmptyChecks.isNull(targetTenantIds)
+        || EmptyChecks.isEmpty(targetTenantIds)
+        || targetTenantIds.stream().anyMatch(EmptyChecks::isBlank)
         || new HashSet<>(targetTenantIds).size() != targetTenantIds.size();
     if (targetTenantSelectionIsInvalid) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
@@ -143,15 +138,16 @@ public class DefaultConsoleConfigSyncApplicationService
     UUID operationId = UUID.randomUUID();
     String batchOperationId = operationId.toString();
     String requestKeyHash = requestKeyHash(metadata.idempotencyKey());
-    InitialAuditIdentity identity = new InitialAuditIdentity(
-        tenantId, operator, batchOperationId, requestKeyHash);
+    InitialAuditIdentity identity =
+        new InitialAuditIdentity(tenantId, operator, batchOperationId, requestKeyHash);
     Long logId;
     try {
-      logId = auditTransaction(
-          tenantId, () -> createLog(identity, request));
+      logId = auditTransaction(tenantId, () -> createLog(identity, request));
     } catch (DuplicateKeyException duplicateRequest) {
-      Long existingLogId = EmptyChecks.isNull(requestKeyHash) ? null : auditTransaction(
-          tenantId, () -> configSyncLogMapper.selectIdByRequestKey(tenantId, requestKeyHash));
+      Long existingLogId = EmptyChecks.isNull(requestKeyHash)
+          ? null
+          : auditTransaction(
+              tenantId, () -> configSyncLogMapper.selectIdByRequestKey(tenantId, requestKeyHash));
       if (EmptyChecks.isNull(existingLogId)) {
         throw BizException.of(ResultCode.SYSTEM_ERROR, SYSTEM_ERROR, duplicateRequest);
       }
@@ -209,19 +205,34 @@ public class DefaultConsoleConfigSyncApplicationService
   }
 
   @Override
+  public ConfigSyncRequestStatusResponse requestStatus(String tenantId, String requestKey) {
+    String resolvedTenant = tenantGuard.resolveTenant(tenantId);
+    String keyHash = requestKeyHash(requestKey);
+    if (EmptyChecks.isNull(keyHash)) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+    }
+    return auditTransaction(resolvedTenant, () -> {
+      ConfigSyncLogRow row = configSyncLogMapper.selectByRequestKey(resolvedTenant, keyHash);
+      ConfigSyncLogResponse audit = ConfigSyncLogResponse.from(row);
+      return new ConfigSyncRequestStatusResponse(EmptyChecks.isNotNull(row), audit);
+    });
+  }
+
+  @Override
   @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public ConfigSyncLogResponse reconcile(String tenantId, Long logId) {
     String resolvedTenant = tenantGuard.resolveTenant(tenantId);
     String operator = metadataResolver.current().operatorId();
     try {
-      return auditTransaction(resolvedTenant, () -> reconcileLocked(resolvedTenant, logId, operator));
+      return auditTransaction(
+          resolvedTenant, () -> reconcileLocked(resolvedTenant, logId, operator));
     } catch (DataAccessException auditFailure) {
       throw BizException.of(ResultCode.SYSTEM_ERROR, SYSTEM_ERROR, auditFailure);
     }
   }
 
   private ConfigSyncLogResponse reconcileLocked(String tenantId, Long logId, String operator) {
-    Map<String, Object> row = configSyncLogMapper.selectByIdForUpdate(tenantId, logId);
+    ConfigSyncLogRow row = configSyncLogMapper.selectByIdForUpdate(tenantId, logId);
     if (EmptyChecks.isNull(row)) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found");
     }
@@ -235,8 +246,9 @@ public class DefaultConsoleConfigSyncApplicationService
     }
     AuditPlan plan = JsonUtils.fromJson(storedDetail.toString(), AuditPlan.class);
     List<String> targets = plan.targetTenantIds();
-    boolean syncPlanTargetsAreInvalid =
-        EmptyChecks.isNull(targets) || EmptyChecks.isEmpty(targets) || EmptyChecks.isNull(plan.summary())
+    boolean syncPlanTargetsAreInvalid = EmptyChecks.isNull(targets)
+        || EmptyChecks.isEmpty(targets)
+        || EmptyChecks.isNull(plan.summary())
         || targets.size() != new HashSet<>(targets).size();
     if (syncPlanTargetsAreInvalid) {
       return current;
@@ -253,12 +265,12 @@ public class DefaultConsoleConfigSyncApplicationService
     if (!new HashSet<>(targets).equals(new HashSet<>(receiptTenants))) {
       throw new IllegalStateException("Config sync receipts do not match original targets");
     }
-    TenantConfigBatchInitResponse response = ConfigSyncImportExecutor.aggregate(
-        plan.batchOperationId(), plan.dryRun(), receipts);
-    AuditResult auditResult = new AuditResult(
-        logId, tenantId, targets.size(), plan.summary().total(), operator);
+    TenantConfigBatchInitResponse response =
+        ConfigSyncImportExecutor.aggregate(plan.batchOperationId(), plan.dryRun(), receipts);
+    AuditResult auditResult =
+        new AuditResult(logId, tenantId, targets.size(), plan.summary().total(), operator);
     updateLog(auditResult, response);
-    Map<String, Object> updated = configSyncLogMapper.selectByIdForUpdate(tenantId, logId);
+    ConfigSyncLogRow updated = configSyncLogMapper.selectByIdForUpdate(tenantId, logId);
     return ConfigSyncLogResponse.from(updated);
   }
 
@@ -269,7 +281,11 @@ public class DefaultConsoleConfigSyncApplicationService
       List<String> targetTenantIds) {}
 
   private record AuditResult(
-      Long logId, String tenantId, int expectedTenantCount, int itemsPerTenant, String reconciledBy) {}
+      Long logId,
+      String tenantId,
+      int expectedTenantCount,
+      int itemsPerTenant,
+      String reconciledBy) {}
 
   private static String requestKeyHash(String requestKey) {
     if (EmptyChecks.isBlank(requestKey)) {
@@ -281,7 +297,8 @@ public class DefaultConsoleConfigSyncApplicationService
       byte[] hash = digest.digest(bytes);
       return HexFormat.of().formatHex(hash);
     } catch (NoSuchAlgorithmException failure) {
-      throw new IllegalStateException("SHA-256 is required for config sync request identity", failure);
+      throw new IllegalStateException(
+          "SHA-256 is required for config sync request identity", failure);
     }
   }
 
@@ -289,23 +306,16 @@ public class DefaultConsoleConfigSyncApplicationService
     Map<String, Object> unresolvedDetail =
         ConsoleMapSupport.mapOf("error", SYSTEM_ERROR, "outcomeKnown", false);
     String detailJson = JsonUtils.toJson(unresolvedDetail);
-    Map<String, Object> unresolvedResult = ConsoleMapSupport.mapOf(
-        KEY_TENANT_ID,
-        tenantId,
-        "id",
-        logId,
-        "syncStatus",
-        "RUNNING",
-        "successItems",
-        0,
-        "failedItems",
-        0,
-        "skippedItems",
-        0,
-        "mergeDetail",
-        true,
-        "detailJson",
-        detailJson);
+    ConfigSyncLogUpdateParam unresolvedResult = ConfigSyncLogUpdateParam.builder()
+        .tenantId(tenantId)
+        .id(logId)
+        .syncStatus("RUNNING")
+        .successItems(0)
+        .failedItems(0)
+        .skippedItems(0)
+        .mergeDetail(true)
+        .detailJson(detailJson)
+        .build();
     int rows = configSyncLogMapper.updateResult(unresolvedResult);
     requireAuditRow(rows);
     return rows;
@@ -322,8 +332,8 @@ public class DefaultConsoleConfigSyncApplicationService
           int targetTenantCount = request.getTargetTenantIds().size();
           ConfigSyncSummaryResponse summary = ConfigSyncSummaryResponse.from(request.getBundle());
           int totalConfigCount = summary.total();
-          AuditResult auditResult = new AuditResult(
-              logId, tenantId, targetTenantCount, totalConfigCount, null);
+          AuditResult auditResult =
+              new AuditResult(logId, tenantId, targetTenantCount, totalConfigCount, null);
           updateLog(auditResult, response);
           return null;
         });
@@ -335,8 +345,7 @@ public class DefaultConsoleConfigSyncApplicationService
               LogSanitizer.value(tenantId),
               logId,
               transientFailure);
-          throw BizException.of(
-              ResultCode.SYSTEM_ERROR, SYSTEM_ERROR, transientFailure);
+          throw BizException.of(ResultCode.SYSTEM_ERROR, SYSTEM_ERROR, transientFailure);
         }
         log.warn(
             "config sync retrying final audit only tenant={} logId={}",
@@ -386,34 +395,23 @@ public class DefaultConsoleConfigSyncApplicationService
       summaryDetail.put("requestKeyHash", identity.requestKeyHash());
     }
     String detailJson = JsonUtils.toJson(summaryDetail);
-    Map<String, Object> params = ConsoleMapSupport.mapOf(
-        KEY_TENANT_ID,
-        identity.tenantId(),
-        "syncDirection",
-        "IMPORT",
-        "sourceEnv",
-        request.getSourceEnv(),
-        "targetEnv",
-        request.getTargetEnv(),
-        "configTypes",
-        String.join(",", configTypes()),
-        "totalItems",
-        totalItems,
-        "successItems",
-        0,
-        "failedItems",
-        0,
-        "skippedItems",
-        0,
-        "syncStatus",
-        "RUNNING",
-        "detailJson",
-        detailJson,
-        "operatorId",
-        identity.operator());
+    ConfigSyncLogInsertParam params = ConfigSyncLogInsertParam.builder()
+        .tenantId(identity.tenantId())
+        .syncDirection("IMPORT")
+        .sourceEnv(request.getSourceEnv())
+        .targetEnv(request.getTargetEnv())
+        .configTypes(String.join(",", configTypes()))
+        .totalItems(totalItems)
+        .successItems(0)
+        .failedItems(0)
+        .skippedItems(0)
+        .syncStatus("RUNNING")
+        .detailJson(detailJson)
+        .operatorId(identity.operator())
+        .build();
     int inserted = configSyncLogMapper.insert(params);
     requireAuditRow(inserted);
-    Long logId = longValue(params.get("id"));
+    Long logId = params.getId();
     if (EmptyChecks.isNull(logId)) {
       throw new IllegalStateException("Config sync audit insert did not return an id");
     }
@@ -454,23 +452,16 @@ public class DefaultConsoleConfigSyncApplicationService
       detail.put("reconciledBy", audit.reconciledBy());
     }
     String detailJson = JsonUtils.toJson(detail);
-    Map<String, Object> updateFields = ConsoleMapSupport.mapOf(
-        KEY_TENANT_ID,
-        audit.tenantId(),
-        "id",
-        audit.logId(),
-        "syncStatus",
-        syncStatus,
-        "successItems",
-        success,
-        "failedItems",
-        failed,
-        "skippedItems",
-        skipped,
-        "mergeDetail",
-        true,
-        "detailJson",
-        detailJson);
+    ConfigSyncLogUpdateParam updateFields = ConfigSyncLogUpdateParam.builder()
+        .tenantId(audit.tenantId())
+        .id(audit.logId())
+        .syncStatus(syncStatus)
+        .successItems(success)
+        .failedItems(failed)
+        .skippedItems(skipped)
+        .mergeDetail(true)
+        .detailJson(detailJson)
+        .build();
     int rows = configSyncLogMapper.updateResult(updateFields);
     requireAuditRow(rows);
   }
@@ -518,9 +509,5 @@ public class DefaultConsoleConfigSyncApplicationService
         "businessCalendars",
         "quotaPolicies",
         "alertRoutings");
-  }
-
-  private Long longValue(Object value) {
-    return ConsoleMapSupport.longValue(value);
   }
 }

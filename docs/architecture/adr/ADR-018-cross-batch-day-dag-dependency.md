@@ -68,22 +68,17 @@
 
 ### 解析时机
 
-```
-workflow_node 进入 READY_FOR_DISPATCH
-    │
-    ▼
-CrossDayDependencyResolver.resolve(node, workflowRun)
-    │
-    ├── 计算每条依赖的 (jobCode, bizDate, version_no?)
-    ├── 查 result_version (按 ADR-017 contract)
-    │
-    ├──[全部命中]── 把 outputs 注入 node payload (沿用 ADR-009 DSL 的 $.crossDay.<jobCode>.<key>)
-    │                ▼
-    │           节点启动
-    │
-    └──[REQUIRED 缺失]── workflow_node_run.status = WAITING_DEPENDENCY
-                          ▼
-                      CrossDayDependencyReconciler 周期扫描，命中再启动
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+%% 决策示意；实施范围以本文状态记录为准。
+flowchart TB
+  R["节点待派发"] --> D["CrossDayDependencyResolver"]
+  D --> K["计算 jobCode / bizDate / version"]
+  K --> Q["查询 result_version"]
+  Q -->|"全部满足"| I["注入 crossDay 输出"] --> S["启动节点"]
+  Q -->|"必需版本缺失"| W["WAITING_DEPENDENCY"]
+  W --> C["CrossDayDependencyReconciler"]
+  C -->|"周期重新核对"| Q
 ```
 
 ### DSL 扩展（ADR-009 复用）
@@ -105,10 +100,15 @@ $.crossDay.<jobCode>.range.<rangeTag>.outputs    -- List<Map<String,Object>>，�
 
 `workflow_node_run.status` 新增 `WAITING_DEPENDENCY`，用于区分普通 READY 与跨日依赖未齐：
 
-```
-READY → WAITING_DEPENDENCY (跨日依赖未齐) → READY → RUNNING → SUCCESS/FAILED
-                       ▲
-                       └── 由 CrossDayDependencyReconciler 推回 READY
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+%% 决策示意；实施范围以本文状态记录为准。
+stateDiagram-v2
+  READY --> WAITING_DEPENDENCY: 依赖缺失
+  WAITING_DEPENDENCY --> READY: Reconciler 核对齐备
+  READY --> RUNNING: 派发
+  RUNNING --> SUCCESS
+  RUNNING --> FAILED
 ```
 
 ### 调度治理

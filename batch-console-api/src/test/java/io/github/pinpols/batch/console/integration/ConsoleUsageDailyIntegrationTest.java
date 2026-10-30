@@ -1,14 +1,12 @@
 package io.github.pinpols.batch.console.integration;
 
-import io.github.pinpols.batch.console.domain.observability.query.ConsoleUsageDailySummaryQuery;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleUsageDailyMapper;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleUsageDailyMapper.DailyUsageRow;
+import io.github.pinpols.batch.console.domain.observability.query.ConsoleUsageDailySummaryQuery;
 import io.github.pinpols.batch.console.domain.observability.service.ConsoleUsageDailyRecorder;
 import io.github.pinpols.batch.console.domain.observability.service.ConsoleUsageSummaryService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
@@ -139,20 +137,20 @@ class ConsoleUsageDailyIntegrationTest extends AbstractIntegrationTest {
       mapper.setTenantContext(tenantA);
 
       assertThat(mapper.querySummary(ConsoleUsageDailySummaryQuery.builder()
-          .tenantId(tenantB)
-          .from(statDate)
-          .to(statDate)
-          .metricCode("operation.job.run")
-          .pageCode(null)
-          .build()))
+              .tenantId(tenantB)
+              .from(statDate)
+              .to(statDate)
+              .metricCode("operation.job.run")
+              .pageCode(null)
+              .build()))
           .isEmpty();
       assertThat(mapper.querySummary(ConsoleUsageDailySummaryQuery.builder()
-          .tenantId(tenantA)
-          .from(statDate)
-          .to(statDate)
-          .metricCode("operation.job.run")
-          .pageCode(null)
-          .build()))
+              .tenantId(tenantA)
+              .from(statDate)
+              .to(statDate)
+              .metricCode("operation.job.run")
+              .pageCode(null)
+              .build()))
           .hasSize(1);
     });
 
@@ -162,12 +160,12 @@ class ConsoleUsageDailyIntegrationTest extends AbstractIntegrationTest {
       """.formatted(RLS_ROLE);
       jdbcTemplate.execute(setRlsTestRoleSql);
       assertThat(mapper.querySummary(ConsoleUsageDailySummaryQuery.builder()
-          .tenantId(tenantA)
-          .from(statDate)
-          .to(statDate)
-          .metricCode("operation.job.run")
-          .pageCode(null)
-          .build()))
+              .tenantId(tenantA)
+              .from(statDate)
+              .to(statDate)
+              .metricCode("operation.job.run")
+              .pageCode(null)
+              .build()))
           .isEmpty();
     });
   }

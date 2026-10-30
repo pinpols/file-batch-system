@@ -10,7 +10,6 @@ import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.config.ConsolePushProperties;
 import io.github.pinpols.batch.console.config.WebhookRelayProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushSubscriptionEntity;
-import io.github.pinpols.batch.console.domain.notification.view.JobPushDelivery;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsolePushSubscriptionMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.JobPushDeliveryMapper;
 import io.github.pinpols.batch.console.domain.notification.param.JobPushDeliveryClaimParam;
@@ -21,6 +20,7 @@ import io.github.pinpols.batch.console.domain.notification.support.ConsolePushSe
 import io.github.pinpols.batch.console.domain.notification.support.ConsolePushSender.DeliveryOutcome;
 import io.github.pinpols.batch.console.domain.notification.support.ConsolePushSender.DeliveryResult;
 import io.github.pinpols.batch.console.domain.notification.support.ConsolePushSender.PushPayload;
+import io.github.pinpols.batch.console.domain.notification.view.JobPushDelivery;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;

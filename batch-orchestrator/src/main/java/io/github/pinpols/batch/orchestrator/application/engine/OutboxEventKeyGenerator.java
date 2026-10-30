@@ -51,9 +51,9 @@ public final class OutboxEventKeyGenerator {
     return build(tenantId, "wf", String.valueOf(workflowRunId), nodeCode, String.valueOf(taskId));
   }
 
-  /** 文件治理手动重派:{@code <tenant>:file-redispatch:<taskId>}。 */
-  public static String forFileRedispatch(String tenantId, Long taskId) {
-    return build(tenantId, "file-redispatch", String.valueOf(taskId));
+  /** 文件治理重派使用复位前任务版本区分不同的失败尝试。 */
+  public static String forFileRedispatch(String tenantId, Long taskId, Long taskVersion) {
+    return build(tenantId, "file-redispatch", String.valueOf(taskId), String.valueOf(taskVersion));
   }
 
   /**

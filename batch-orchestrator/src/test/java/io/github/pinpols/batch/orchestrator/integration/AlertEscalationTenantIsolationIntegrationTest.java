@@ -1,10 +1,10 @@
 package io.github.pinpols.batch.orchestrator.integration;
 
-import io.github.pinpols.batch.orchestrator.domain.param.AlertEventQueryParam;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.domain.param.AlertEventQueryParam;
 import io.github.pinpols.batch.orchestrator.mapper.AlertEventMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.List;
@@ -49,7 +49,13 @@ class AlertEscalationTenantIsolationIntegrationTest extends AbstractIntegrationT
               .filter(alert -> alert.getId().equals(alertB))
               .map(AlertEventEntity::getTenantId))
           .containsExactly(tenantB);
-      assertThat(alertEventMapper.selectByQuery(AlertEventQueryParam.builder().tenantId(tenantA).severity(null).status(null).alertType(null).limit(20).build()))
+      assertThat(alertEventMapper.selectByQuery(AlertEventQueryParam.builder()
+              .tenantId(tenantA)
+              .severity(null)
+              .status(null)
+              .alertType(null)
+              .limit(20)
+              .build()))
           .extracting(AlertEventEntity::getTenantId)
           .contains(tenantA)
           .doesNotContain(tenantB);
@@ -93,10 +99,6 @@ class AlertEscalationTenantIsolationIntegrationTest extends AbstractIntegrationT
     String escalationTierSql = """
         select escalation_tier from batch.alert_event where id = ? and tenant_id = ?
         """;
-    return jdbcTemplate.queryForObject(
-        escalationTierSql,
-        Integer.class,
-        alertId,
-        tenantId);
+    return jdbcTemplate.queryForObject(escalationTierSql, Integer.class, alertId, tenantId);
   }
 }

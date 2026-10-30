@@ -42,7 +42,7 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.springframework.context.MessageSource;
 
-/** Writes read-only supplementary sheets for tenant configuration package workbooks. */
+/** 为租户配置包工作簿写入只读的补充工作表。 */
 class ConfigPackageWorkbookSupplementWriter {
 
   private static final String EMPTY = "";

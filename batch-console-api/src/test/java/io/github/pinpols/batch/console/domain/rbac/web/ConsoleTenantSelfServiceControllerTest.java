@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.domain.rbac.web;
 
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -17,7 +16,6 @@ import io.github.pinpols.batch.console.application.observability.ConsoleSystemPa
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.Clock;
 import java.util.List;
@@ -25,20 +23,29 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 @DisplayName("租户自助控制器: 配额查询与用量汇总接口")
+@ExtendWith(MockitoExtension.class)
 class ConsoleTenantSelfServiceControllerTest {
 
-  private final ConsoleQuotaPolicyApplicationService quotaPolicyService =
-      mock(ConsoleQuotaPolicyApplicationService.class);
-  private final ConsoleSystemParameterService parameterService =
-      mock(ConsoleSystemParameterService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
-  private final ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
+  @Mock
+  private ConsoleQuotaPolicyApplicationService quotaPolicyService;
+
+  @Mock
+  private ConsoleSystemParameterService parameterService;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
+  @Mock
+  private ConsoleTenantGuard tenantGuard;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -49,10 +56,6 @@ class ConsoleTenantSelfServiceControllerTest {
 
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
-    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
@@ -92,6 +95,7 @@ class ConsoleTenantSelfServiceControllerTest {
   @Test
   @DisplayName("按租户汇总运行作业、日触发与文件数量")
   void shouldReturnUsage() throws Exception {
+    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
     when(parameterService.getValue("t1", "tenant.usage.running-jobs")).thenReturn(Optional.of("5"));
     when(parameterService.getValue("t1", "tenant.usage.daily-triggers"))
         .thenReturn(Optional.of("120"));

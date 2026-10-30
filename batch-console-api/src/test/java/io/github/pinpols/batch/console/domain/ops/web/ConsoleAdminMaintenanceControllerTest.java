@@ -27,6 +27,9 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -39,10 +42,12 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
  * 注解仍写审计(本测试不验证审计写入数据库, 由 AuditAspect 单测覆盖)。
  */
 @DisplayName("维护模式管理接口:查询初始状态, 热更新部分字段并在关闭后恢复, 空服务列表归一为空数组")
+@ExtendWith(MockitoExtension.class)
 class ConsoleAdminMaintenanceControllerTest {
 
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private ConsoleMaintenanceProperties properties;
   private MaintenanceStateMapper mapper;
   private MaintenanceStateHolder stateHolder;
@@ -55,14 +60,9 @@ class ConsoleAdminMaintenanceControllerTest {
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "ta", "tester", null, "127.0.0.1"));
 
     properties = new ConsoleMaintenanceProperties();
     mapper = mock(MaintenanceStateMapper.class);
-    when(mapper.selectSingleton()).thenAnswer(invocation -> entityFromProperties());
-    when(mapper.updateIfVersion(any())).thenReturn(1);
     stateHolder = new MaintenanceStateHolder(properties, mapper, new ObjectMapper());
     // PostConstruct 在 standalone setup 下需手动调
     ReflectionTestUtils.invokeMethod(stateHolder, "initFromProperties");
@@ -90,6 +90,10 @@ class ConsoleAdminMaintenanceControllerTest {
   @Test
   @DisplayName("热更新:部分字段更新后状态就地替换, 服务列表与更新时间一并回填")
   void shouldHotUpdateState_whenUpdating() throws Exception {
+    when(mapper.updateIfVersion(any())).thenReturn(1);
+    when(requestMetadataResolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("req-1", "trace-1", "ta", "tester", null, "127.0.0.1"));
     String startsAt = "2099-05-20T14:00:00Z";
     String body = """
         {"enabled":true,"readOnly":true,"message":"DB 灰度中","etaAt":"2026-05-20T15:00:00Z",
@@ -121,6 +125,10 @@ class ConsoleAdminMaintenanceControllerTest {
   @Test
   @DisplayName("关闭维护:仅传启用为假时状态复位, 查询结果同步为假")
   void shouldRestoreToDisabled_whenEnabledFalse() throws Exception {
+    when(mapper.updateIfVersion(any())).thenReturn(1);
+    when(requestMetadataResolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("req-1", "trace-1", "ta", "tester", null, "127.0.0.1"));
     // 先开
     stateHolder.update(new MaintenanceState(
         true, false, "x", Instant.parse("2026-05-20T16:00:00Z"), List.of("a")));
@@ -137,6 +145,10 @@ class ConsoleAdminMaintenanceControllerTest {
   @Test
   @DisplayName("空列表归一:未提供受影响服务时返回空数组, 长度为 0")
   void shouldNormalizeToEmptyList_whenAffectedServicesAbsent() throws Exception {
+    when(mapper.updateIfVersion(any())).thenReturn(1);
+    when(requestMetadataResolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("req-1", "trace-1", "ta", "tester", null, "127.0.0.1"));
     mockMvc
         .perform(put("/api/console/admin/system/maintenance")
             .contentType(APPLICATION_JSON)
@@ -149,6 +161,10 @@ class ConsoleAdminMaintenanceControllerTest {
   @Test
   @DisplayName("计划开始时间随公告返回且后端报告尚未生效")
   void shouldReportScheduledMaintenanceAsNotActive() throws Exception {
+    when(mapper.updateIfVersion(any())).thenReturn(1);
+    when(requestMetadataResolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("req-1", "trace-1", "ta", "tester", null, "127.0.0.1"));
     Instant startsAt = Instant.now().plusSeconds(3600);
     String body = "{\"enabled\":true,\"readOnly\":true,\"startsAt\":\"" + startsAt + "\"}";
 

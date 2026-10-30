@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.application.contract.response.config;
 
 import java.util.List;
+import lombok.Builder;
 
 /** 租户配置包 10-Sheet 填写说明，用于 Console 页面直接展示模板字段口径。 */
 public record TenantConfigPackageExcelGuideResponse(List<SheetGuide> sheets) {
@@ -9,6 +10,7 @@ public record TenantConfigPackageExcelGuideResponse(List<SheetGuide> sheets) {
   public record SheetGuide(String sheetName, String appliesTo, List<ColumnGuide> columns) {}
 
   /** 单列填写说明。 */
+  @Builder
   public record ColumnGuide(
       String columnName,
       boolean required,

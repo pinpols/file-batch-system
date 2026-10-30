@@ -25,8 +25,8 @@ import io.github.pinpols.batch.orchestrator.application.service.task.Orchestrato
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionLifecycleService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskCreationService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService.DagNodeResolution;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
@@ -314,14 +314,14 @@ class DefaultWorkflowNodeDispatchServiceTest {
     assertThat(service.dispatchNode(jobInstance(), run, resolution("JOB"), "{}", "trace"))
         .isEqualTo(1);
 
-    verify(crossDayDependencyResolver).resolvePinned(
-        "ta",
-        LocalDate.of(2026, 6, 29),
-        "[{\"alias\":\"previous\",\"jobCode\":\"JOB_PREVIOUS\",\"bizDateOffset\":-1}]",
-        false,
-        Map.of("previous", List.of(812L)));
-    verify(crossDayDependencyResolver, never())
-        .resolve(anyString(), any(), anyString(), eq(false));
+    verify(crossDayDependencyResolver)
+        .resolvePinned(
+            "ta",
+            LocalDate.of(2026, 6, 29),
+            "[{\"alias\":\"previous\",\"jobCode\":\"JOB_PREVIOUS\",\"bizDateOffset\":-1}]",
+            false,
+            Map.of("previous", List.of(812L)));
+    verify(crossDayDependencyResolver, never()).resolve(anyString(), any(), anyString(), eq(false));
   }
 
   @Test
@@ -373,14 +373,22 @@ class DefaultWorkflowNodeDispatchServiceTest {
         "jobDefinitionVersion", job.version(),
         "executionDefinition", job);
     Map<String, Object> snapshot = Map.of(
-        "schemaVersion", 2,
-        "workflowDefinitionId", 50L,
-        "workflowVersion", 1,
-        "workflowCalendarCode", "FROZEN_CALENDAR",
-        "replaySessionId", "",
-        "nodes", List.of(node),
-        "edges", List.of(),
-        "jobDefinitions", Map.of("N1", jobIdentity));
+        "schemaVersion",
+        2,
+        "workflowDefinitionId",
+        50L,
+        "workflowVersion",
+        1,
+        "workflowCalendarCode",
+        "FROZEN_CALENDAR",
+        "replaySessionId",
+        "",
+        "nodes",
+        List.of(node),
+        "edges",
+        List.of(),
+        "jobDefinitions",
+        Map.of("N1", jobIdentity));
     return JsonUtils.toJson(snapshot);
   }
 
@@ -402,14 +410,22 @@ class DefaultWorkflowNodeDispatchServiceTest {
         .version(1)
         .build();
     Map<String, Object> jobMetadata = Map.of(
-        "jobDefinitionId", 101L,
-        "jobCode", "JOB_A",
-        "jobType", "ATOMIC",
-        "jobDefinitionVersion", 1,
-        "executionDefinition", definition,
-        "replayExecutionGuard", Map.of(
-            "replayOperationId", 701L,
-            "declaration", Map.of(
+        "jobDefinitionId",
+        101L,
+        "jobCode",
+        "JOB_A",
+        "jobType",
+        "ATOMIC",
+        "jobDefinitionVersion",
+        1,
+        "executionDefinition",
+        definition,
+        "replayExecutionGuard",
+        Map.of(
+            "replayOperationId",
+            701L,
+            "declaration",
+            Map.of(
                 "pluginId", "atomic-plugin",
                 "pluginVersion", "1.0.0",
                 "externalEffectCategories", List.of("DATABASE_WRITE"),
@@ -418,15 +434,24 @@ class DefaultWorkflowNodeDispatchServiceTest {
                 "recoveryProtocolId", "unique-key",
                 "contractVersion", 1)));
     return JsonUtils.toJson(Map.of(
-        "schemaVersion", 2,
-        "workflowDefinitionId", 50L,
-        "workflowVersion", 1,
-        "workflowCalendarCode", "CAL",
-        "replayOperationId", 701L,
-        "nodes", List.of(node),
-        "edges", List.of(),
-        "jobDefinitions", Map.of("N1", jobMetadata),
-        "crossDayDependencyResultVersionIdsByNode", Map.of("N1", Map.of("previous", List.of(812L)))));
+        "schemaVersion",
+        2,
+        "workflowDefinitionId",
+        50L,
+        "workflowVersion",
+        1,
+        "workflowCalendarCode",
+        "CAL",
+        "replayOperationId",
+        701L,
+        "nodes",
+        List.of(node),
+        "edges",
+        List.of(),
+        "jobDefinitions",
+        Map.of("N1", jobMetadata),
+        "crossDayDependencyResultVersionIdsByNode",
+        Map.of("N1", Map.of("previous", List.of(812L)))));
   }
 
   private JobInstanceEntity jobInstance() {

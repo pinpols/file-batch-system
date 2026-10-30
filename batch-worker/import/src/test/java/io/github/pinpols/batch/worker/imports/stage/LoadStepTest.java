@@ -14,9 +14,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.exception.WorkerConfigException;
 import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
-import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.plugin.ImportLoadContext;
 import io.github.pinpols.batch.common.plugin.ImportLoadPlugin;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -108,8 +108,10 @@ class LoadStepTest {
   @DisplayName("回放能力按冻结模板选择 LOAD 插件并传递完整模板配置")
   void replayCapability_usesFrozenLoadTargetAndTemplateConfig() {
     Map<String, Object> frozenTemplateConfig = Map.of(
-        "load_target_ref", WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED,
-        "table_name", "customer_account");
+        "load_target_ref",
+        WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED,
+        "table_name",
+        "customer_account");
     ReplayCapabilityDeclaration expected =
         ReplayCapabilityDeclaration.unknown(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
     when(plugin.replayCapability(frozenTemplateConfig)).thenReturn(expected);
@@ -245,10 +247,73 @@ class LoadStepTest {
     assertThat(result.code()).isEqualTo("IMPORT_LOAD_NO_PAYLOAD");
   }
 
+  @Test
+  @DisplayName("部分记录跳过且暂存路径缺失时不能将其当作全部跳过")
+  void shouldFailWhenSkippedRecordsAndValidatedPathMissing() throws Exception {
+    ImportJobContext ctx = baseContext();
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT, 1L);
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, 1L);
+
+    ImportStageResult result = loadStep.execute(ctx);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("IMPORT_LOAD_NO_PAYLOAD");
+    verify(runtimeRepository, never()).updateFileStatus(any(), any(), any());
+    verify(plugin, never()).loadChunk(any(), any());
+  }
+
+  @Test
+  @DisplayName("部分记录跳过且暂存文件丢失时不能标记加载成功")
+  void shouldFailWhenSkippedRecordsAndValidatedFileMissing() throws Exception {
+    ImportJobContext ctx = streamingContext(tempDir.resolve("lost.ndjson"), null);
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT, 1L);
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, 1L);
+
+    ImportStageResult result = loadStep.execute(ctx);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("IMPORT_LOAD_NO_PAYLOAD");
+    verify(runtimeRepository, never()).updateFileStatus(any(), any(), any());
+    verify(plugin, never()).loadChunk(any(), any());
+  }
+
+  @Test
+  @DisplayName("校验记录大于零但暂存文件为空时不能标记全部跳过")
+  void shouldFailWhenValidatedFileIsEmptyButValidRecordsExist() throws Exception {
+    Path validated = Files.createTempFile("validated-", ".ndjson");
+    tempPaths.add(validated);
+    ImportJobContext ctx = streamingContext(validated, null);
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT, 1L);
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, 1L);
+
+    ImportStageResult result = loadStep.execute(ctx);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("IMPORT_LOAD_NO_PAYLOAD");
+    verify(runtimeRepository, never()).updateFileStatus(any(), any(), any());
+    verify(plugin, never()).loadChunk(any(), any());
+  }
+
+  @Test
+  @DisplayName("无跳过记录且校验记录大于零时空暂存文件不能成功")
+  void shouldFailWhenValidatedFileIsEmptyWithoutSkippedRecords() throws Exception {
+    Path validated = Files.createTempFile("validated-", ".ndjson");
+    tempPaths.add(validated);
+    ImportJobContext ctx = streamingContext(validated, null);
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, 1L);
+
+    ImportStageResult result = loadStep.execute(ctx);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("IMPORT_LOAD_NO_PAYLOAD");
+    verify(runtimeRepository, never()).updateFileStatus(any(), any(), any());
+    verify(plugin, never()).loadChunk(any(), any());
+  }
+
   // ── dry-run ──
 
   @Test
-  @DisplayName("演练模式按暂存文件行数估算加载数,不调用插件")
+  @DisplayName("演练模式按暂存文件行数估算加载数,不调用插件或更新正式文件状态")
   void shouldDryRun_estimateLoadedCountFromValidatedFile() throws Exception {
     Path validated = writeNdjson(List.of(row("C1"), row("C2"), row("C3")));
     ImportJobContext ctx = streamingContext(validated, null);
@@ -259,7 +324,7 @@ class LoadStepTest {
     assertThat(result.success()).isTrue();
     assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 3L);
     verify(plugin, never()).loadChunk(any(), any());
-    verify(runtimeRepository).updateFileStatus(eq(99L), eq(FileStatus.LOADED.code()), any());
+    verify(runtimeRepository, never()).updateFileStatus(any(), any(), any());
   }
 
   @Test

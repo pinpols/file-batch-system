@@ -154,7 +154,10 @@ public class WorkerRegistryCache {
           .tenantId(e.tenantId)
           .workerCode(e.workerCode)
           .workerGroup(e.workerGroup)
-          .capabilityTags(e.capabilityTagsJson == null ? null : new JsonbString(e.capabilityTagsJson))
+          .capabilityTags(
+              EmptyChecks.isNull(e.capabilityTagsJson)
+                  ? null
+                  : new JsonbString(e.capabilityTagsJson))
           .resourceTag(e.resourceTag)
           .status(e.status)
           .heartbeatAt(e.heartbeatMillis == null ? null : Instant.ofEpochMilli(e.heartbeatMillis))

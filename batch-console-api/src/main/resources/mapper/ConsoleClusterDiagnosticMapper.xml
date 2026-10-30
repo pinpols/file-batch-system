@@ -10,6 +10,7 @@
             <arg column="lock_until" javaType="java.time.Instant"/>
             <arg column="locked_at" javaType="java.time.Instant"/>
             <arg column="locked_by" javaType="java.lang.String"/>
+            <arg column="is_active" javaType="java.lang.Boolean"/>
         </constructor>
     </resultMap>
 
@@ -49,7 +50,7 @@
         </constructor>
     </resultMap>
 
-    <resultMap id="StatusCountResultMap" type="io.github.pinpols.batch.console.domain.ops.view.cluster.StatusCountView">
+    <resultMap id="StatusCountResultMap" type="io.github.pinpols.batch.console.domain.ops.view.cluster.ClusterStatusCountView">
         <constructor>
             <arg column="status" javaType="java.lang.String"/>
             <arg column="count" javaType="java.lang.Long"/>
@@ -83,7 +84,8 @@
         select name,
                lock_until,
                locked_at,
-               locked_by
+               locked_by,
+               lock_until &gt; (statement_timestamp() at time zone 'UTC') as is_active
           from batch.shedlock
          order by name
     </select>
@@ -305,8 +307,8 @@
          where tenant_id = #{tenantId}
            and status = 'ONLINE'
            and (
-             (#{workerGroup} is null and worker_group is null)
-             or worker_group = #{workerGroup}
+             (cast(#{workerGroup,jdbcType=VARCHAR} as text) is null and worker_group is null)
+             or lower(worker_group) = lower(#{workerGroup})
            )
     </select>
 

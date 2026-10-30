@@ -43,7 +43,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * </ol>
  *
  * <p>历史：第 3 条 Legacy X-Console-Token 共享密钥路径已于 2026-04-30 物理删除（S5-d）。详见
- * docs/archive/audit/project-assessment-2026-04-29.md §8 S5-d 修订记录。
+ * docs/architecture/security-model.md 的认证边界。
  *
  * <p>{@code finally clearContext()} 回退：不论哪条认证链执行或抛异常，都清理 {@code SecurityContextHolder}， 防止容器线程池复用时
  * ThreadLocal 污染下一个请求。

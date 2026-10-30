@@ -40,13 +40,15 @@ public final class PipelineStepFlowSupport {
       boolean success,
       List<PipelineStepDefinition> steps,
       Map<String, Object> attributes) {
-    boolean terminalOnSuccess =
-        EmptyChecks.isNotNull(current) && success && current.booleanParam("terminalOnSuccess", "stopOnSuccess");
+    boolean terminalOnSuccess = EmptyChecks.isNotNull(current)
+        && success
+        && current.booleanParam("terminalOnSuccess", "stopOnSuccess");
     if (terminalOnSuccess) {
       return null;
     }
-    boolean terminalOnFailure =
-        EmptyChecks.isNotNull(current) && !success && current.booleanParam("terminalOnFailure", "stopOnFailure");
+    boolean terminalOnFailure = EmptyChecks.isNotNull(current)
+        && !success
+        && current.booleanParam("terminalOnFailure", "stopOnFailure");
     if (terminalOnFailure) {
       return null;
     }

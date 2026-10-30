@@ -1,3 +1,5 @@
+> 历史证据（2026-10-25 存量核对）：保留 PROCESS 跨库暂存、watermark 与发布围栏原始缺陷证据。正文仅表示原日期/基线；当前规则与状态见[现行入口](../../design/file-pipeline-design.md)及 TODO，本轮没有重新执行原测试或扫描。
+
 # PROCESS Worker 已知问题与下一步计划
 
 > 文档性质：2026-04-28 的问题快照。本文保留当时的风险分析和决策证据；其中“未修 / 待补”不自动代表当前代码仍有问题，当前有效状态以最新验证记录和 [`../analysis/todo-master.md`](../../plans/todo-master.md) 为准。

@@ -1,11 +1,11 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
-import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.param.WorkflowLaunchWaitInsertParam;
@@ -30,8 +30,14 @@ public class WorkflowLaunchWaitService {
   private final SecretPayloadProtector secretPayloadProtector;
   private static final String FORMAT = "WORKFLOW_CAPACITY_WAIT_V1";
 
-  private record Envelope(String tenantId, String requestId, Long workflowDefinitionId,
-      LocalDate bizDate, boolean dryRun, String format, String sealedSnapshotPayload) {}
+  private record Envelope(
+      String tenantId,
+      String requestId,
+      Long workflowDefinitionId,
+      LocalDate bizDate,
+      boolean dryRun,
+      String format,
+      String sealedSnapshotPayload) {}
 
   @Transactional
   public void defer(LaunchRequest request, WorkflowLaunchWaitSnapshot snapshot) {
@@ -43,8 +49,8 @@ public class WorkflowLaunchWaitService {
     LaunchRequestIdentityGuard.requirePending(request, pendingRequest);
     snapshot.requireSameRequest(request);
     snapshot.validate();
-    WorkflowLaunchWaitClaim previous = waitingMapper.selectWaitingForUpdate(
-        request.tenantId(), request.requestId());
+    WorkflowLaunchWaitClaim previous =
+        waitingMapper.selectWaitingForUpdate(request.tenantId(), request.requestId());
     boolean dryRun = Boolean.TRUE.equals(request.dryRun());
     String launchPayload;
     if (EmptyChecks.isNotNull(previous)) {
@@ -54,8 +60,14 @@ public class WorkflowLaunchWaitService {
     } else {
       String snapshotJson = JsonUtils.toJson(snapshot);
       String sealedSnapshot = secretPayloadProtector.protect(snapshotJson);
-      Envelope envelope = new Envelope(request.tenantId(), request.requestId(),
-          request.workflowDefinitionId(), request.bizDate(), dryRun, FORMAT, sealedSnapshot);
+      Envelope envelope = new Envelope(
+          request.tenantId(),
+          request.requestId(),
+          request.workflowDefinitionId(),
+          request.bizDate(),
+          dryRun,
+          FORMAT,
+          sealedSnapshot);
       launchPayload = JsonUtils.toJson(envelope);
     }
     String tenantId = request.tenantId();
@@ -63,12 +75,7 @@ public class WorkflowLaunchWaitService {
     Long workflowDefinitionId = request.workflowDefinitionId();
     LocalDate bizDate = request.bizDate();
     WorkflowLaunchWaitInsertParam waitInsertParam = new WorkflowLaunchWaitInsertParam(
-        tenantId,
-        requestId,
-        workflowDefinitionId,
-        bizDate,
-        dryRun,
-        launchPayload);
+        tenantId, requestId, workflowDefinitionId, bizDate, dryRun, launchPayload);
     int persisted = waitingMapper.defer(waitInsertParam);
     if (persisted != 1) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.launch_not_pending");
@@ -87,8 +94,8 @@ public class WorkflowLaunchWaitService {
     TriggerRequestEntity original = triggerRequestMapper.selectByTenantAndRequestIdForUpdate(
         request.tenantId(), request.requestId());
     LaunchRequestIdentityGuard.requirePending(request, original);
-    WorkflowLaunchWaitClaim waiting = waitingMapper.selectWaitingForUpdate(
-        request.tenantId(), request.requestId());
+    WorkflowLaunchWaitClaim waiting =
+        waitingMapper.selectWaitingForUpdate(request.tenantId(), request.requestId());
     if (EmptyChecks.isNull(waiting)) {
       return null;
     }
@@ -107,7 +114,8 @@ public class WorkflowLaunchWaitService {
   private WorkflowLaunchWaitSnapshot restore(WorkflowLaunchWaitClaim claim) {
     try {
       Envelope envelope = JsonUtils.fromJsonStrict(claim.launchPayload(), Envelope.class);
-      if (EmptyChecks.isNull(envelope) || !FORMAT.equals(envelope.format())
+      if (EmptyChecks.isNull(envelope)
+          || !FORMAT.equals(envelope.format())
           || !Objects.equals(claim.tenantId(), envelope.tenantId())
           || !Objects.equals(claim.requestId(), envelope.requestId())
           || !Objects.equals(claim.workflowDefinitionId(), envelope.workflowDefinitionId())
@@ -116,7 +124,8 @@ public class WorkflowLaunchWaitService {
         throw WorkflowLaunchWaitSnapshot.invalidSnapshot();
       }
       String plaintext = secretPayloadProtector.revealEncrypted(envelope.sealedSnapshotPayload());
-      WorkflowLaunchWaitSnapshot snapshot = JsonUtils.fromJsonStrict(plaintext, WorkflowLaunchWaitSnapshot.class);
+      WorkflowLaunchWaitSnapshot snapshot =
+          JsonUtils.fromJsonStrict(plaintext, WorkflowLaunchWaitSnapshot.class);
       if (EmptyChecks.isNull(snapshot)) {
         throw WorkflowLaunchWaitSnapshot.invalidSnapshot();
       }

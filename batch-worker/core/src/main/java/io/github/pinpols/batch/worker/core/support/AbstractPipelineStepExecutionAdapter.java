@@ -11,6 +11,7 @@ import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -681,6 +682,9 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
       String errorMessage,
       String errorKey,
       String errorArgs) {
+    if (DryRunGuard.fromAttributes(attributes).isDryRun()) {
+      return;
+    }
     Long fileId = PlatformRuntimeValues.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
     if (fileId == null) {
       return;

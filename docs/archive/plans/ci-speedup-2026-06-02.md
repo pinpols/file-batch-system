@@ -1,3 +1,5 @@
+> 历史原始记录：本轮恢复保留，正文中的结论、参数、状态和操作步骤仅适用于原日期/基线。提炼方法不替代原始证据；当前事实须按[文档治理](../../standards/document-governance.md)重新核实。本轮未执行原测试或扫描。
+
 # CI 激进提速 — C 方案(2026-06-02)
 
 > 状态:已上线 PR `feature/ci-speedup-c-plan-pr-unit-only`

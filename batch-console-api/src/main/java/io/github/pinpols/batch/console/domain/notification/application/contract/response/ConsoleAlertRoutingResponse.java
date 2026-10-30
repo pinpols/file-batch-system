@@ -1,12 +1,11 @@
 package io.github.pinpols.batch.console.domain.notification.application.contract.response;
 
-import lombok.Builder;
-
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
+import io.github.pinpols.batch.console.domain.notification.view.AlertRoutingConfigRow;
 import java.time.Instant;
-import java.util.Map;
+import lombok.Builder;
+
 /**
  * 告警路由配置行响应（{@code AlertRoutingConfigMapper} 投影）。
  *
@@ -44,30 +43,30 @@ public record ConsoleAlertRoutingResponse(
     @JsonProperty("updated_at") Instant updatedAt,
     @JsonProperty("is_deleted") Boolean isDeleted) {
 
-  public static ConsoleAlertRoutingResponse from(Map<String, Object> row) {
+  public static ConsoleAlertRoutingResponse from(AlertRoutingConfigRow row) {
     if (row == null) {
       return null;
     }
     return ConsoleAlertRoutingResponse.builder()
-        .id(ConsoleResponseFieldReader.longValue(row, "id"))
-        .tenantId(ConsoleResponseFieldReader.stringValue(row, "tenant_id"))
-        .routeCode(ConsoleResponseFieldReader.stringValue(row, "route_code"))
-        .routeName(ConsoleResponseFieldReader.stringValue(row, "route_name"))
-        .team(ConsoleResponseFieldReader.stringValue(row, "team"))
-        .alertGroup(ConsoleResponseFieldReader.stringValue(row, "alert_group"))
-        .severity(ConsoleResponseFieldReader.stringValue(row, "severity"))
-        .receiver(ConsoleResponseFieldReader.stringValue(row, "receiver"))
-        .groupBy(ConsoleResponseFieldReader.stringValue(row, "group_by"))
-        .groupWaitSeconds(ConsoleResponseFieldReader.integerValue(row, "group_wait_seconds"))
-        .groupIntervalSeconds(ConsoleResponseFieldReader.integerValue(row, "group_interval_seconds"))
-        .repeatIntervalSeconds(ConsoleResponseFieldReader.integerValue(row, "repeat_interval_seconds"))
-        .enabled(ConsoleResponseFieldReader.booleanValue(row, "enabled"))
-        .description(ConsoleResponseFieldReader.stringValue(row, "description"))
-        .createdBy(ConsoleResponseFieldReader.stringValue(row, "created_by"))
-        .updatedBy(ConsoleResponseFieldReader.stringValue(row, "updated_by"))
-        .createdAt(ConsoleResponseFieldReader.instantValue(row, "created_at"))
-        .updatedAt(ConsoleResponseFieldReader.instantValue(row, "updated_at"))
-        .isDeleted(ConsoleResponseFieldReader.booleanValue(row, "is_deleted"))
+        .id(row.id())
+        .tenantId(row.tenantId())
+        .routeCode(row.routeCode())
+        .routeName(row.routeName())
+        .team(row.team())
+        .alertGroup(row.alertGroup())
+        .severity(row.severity())
+        .receiver(row.receiver())
+        .groupBy(row.groupBy())
+        .groupWaitSeconds(row.groupWaitSeconds())
+        .groupIntervalSeconds(row.groupIntervalSeconds())
+        .repeatIntervalSeconds(row.repeatIntervalSeconds())
+        .enabled(row.enabled())
+        .description(row.description())
+        .createdBy(row.createdBy())
+        .updatedBy(row.updatedBy())
+        .createdAt(row.createdAt())
+        .updatedAt(row.updatedAt())
+        .isDeleted(row.isDeleted())
         .build();
   }
 }

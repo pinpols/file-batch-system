@@ -8,7 +8,9 @@ import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
 import io.github.pinpols.batch.worker.processes.BatchWorkerProcessApplication;
 import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocationFenceMapper;
 import io.github.pinpols.batch.worker.processes.stage.ProcessInvocationFence;
+import java.util.List;
 import javax.sql.DataSource;
+import org.apache.ibatis.session.SqlSessionFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.support.AopUtils;
@@ -66,6 +68,25 @@ class BatchWorkerProcessApplicationIntegrationTest extends AbstractIntegrationTe
   }
 
   @Test
+  @DisplayName("平台库会加载 PROCESS invocation fence 的 XML 语句")
+  void shouldLoadPlatformInvocationFenceXmlStatements() {
+    SqlSessionFactory factory =
+        applicationContext.getBean("processPlatformSqlSessionFactory", SqlSessionFactory.class);
+    String namespace = ProcessInvocationFenceMapper.class.getName() + ".";
+    for (String method : List.of(
+        "listCleanupTenants",
+        "selectTaskInstanceId",
+        "selectTaskCurrentStagingGeneration",
+        "acquireInstanceFence",
+        "selectCurrentInvocationId",
+        "rotateCurrentStagingGeneration",
+        "selectCurrentStagingGeneration")) {
+      var statement = factory.getConfiguration().getMappedStatement(namespace + method);
+      assertThat(statement.getResource()).contains("mapper/ProcessInvocationFenceMapper.xml");
+    }
+  }
+
+  @Test
   @DisplayName("平台库与业务库是两个不同的数据库,且业务库上存在处理暂存表")
   void shouldSeparatePlatformAndBusinessDatabases_whenDataSourcesInspected() {
     JdbcTemplate platform = new JdbcTemplate(platformDataSource);
@@ -85,7 +106,7 @@ class BatchWorkerProcessApplicationIntegrationTest extends AbstractIntegrationTe
     final String selectSqlValue2 = """
         select to_regclass('batch.process_staging')
     """;
-    assertThat(business.queryForObject(selectSqlValue2, String.class))
-        .isEqualTo("batch.process_staging");
+    String selected = business.queryForObject(selectSqlValue2, String.class);
+    assertThat(selected).isEqualTo("batch.process_staging");
   }
 }

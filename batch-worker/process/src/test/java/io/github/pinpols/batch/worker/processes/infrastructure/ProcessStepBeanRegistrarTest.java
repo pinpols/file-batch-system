@@ -68,12 +68,12 @@ class ProcessStepBeanRegistrarTest {
 
       @Override
       public void commit(TransactionStatus status) {
-        // no-op: registrar tests do not need real transaction completion.
+        // 无需执行实际操作：注册器测试不需要真实完成事务。
       }
 
       @Override
       public void rollback(TransactionStatus status) {
-        // no-op: registrar tests do not need real rollback behavior.
+        // 无需执行实际操作：注册器测试不需要真实回滚事务。
       }
     };
 

@@ -4,11 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper;
+import io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper.DirtyCursor;
 import io.github.pinpols.batch.console.domain.file.view.PipelineProgressDirtyView;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -16,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
@@ -31,6 +34,32 @@ class ConsolePipelineProgressDirtyMapperIntegrationTest extends AbstractIntegrat
       JdbcTemplate jdbcTemplate, ConsolePipelineProgressDirtyMapper mapper) {
     this.jdbcTemplate = jdbcTemplate;
     this.mapper = mapper;
+  }
+
+  @Test
+  @Transactional
+  @DisplayName("相同更新时间超过页大小时，下一页仍能读到剩余实例")
+  void shouldReadNextPageWhenManyInstancesShareUpdateTime() {
+    String tenantId = unique("tenant-page");
+    Instant since = Instant.now().plus(1, ChronoUnit.DAYS).truncatedTo(ChronoUnit.MILLIS);
+    Instant sharedUpdate = since.plusSeconds(1);
+    for (int i = 0; i < 3; i++) {
+      long pipelineId = insertPipelineInstance(tenantId, null);
+      insertProgress(tenantId, pipelineId, "LOAD", sharedUpdate);
+    }
+
+    List<PipelineProgressDirtyView> first = mapper.selectUpdatedSince(since, null, 2);
+    PipelineProgressDirtyView last = first.getLast();
+    DirtyCursor after =
+        new DirtyCursor(last.updatedAt(), last.tenantId(), last.pipelineInstanceId());
+    List<PipelineProgressDirtyView> second = mapper.selectUpdatedSince(since, after, 2);
+    HashSet<Long> seen = new HashSet<>();
+    first.forEach(row -> seen.add(row.pipelineInstanceId()));
+    second.forEach(row -> seen.add(row.pipelineInstanceId()));
+
+    assertThat(first).hasSize(2);
+    assertThat(second).hasSize(1);
+    assertThat(seen).hasSize(3);
   }
 
   @Test
@@ -51,9 +80,10 @@ class ConsolePipelineProgressDirtyMapperIntegrationTest extends AbstractIntegrat
     insertProgress(tenantA, pipelineA, "LOAD", older);
     insertProgress(tenantA, pipelineA, "GENERATE", latest);
     insertProgress(tenantB, pipelineB, "LOAD", older);
-    insertProgress(tenantB, pipelineA, "LOAD", latest.plusSeconds(30));
+    // 新复合 FK(tenant_id, pipeline_instance_id) 禁止跨租户进度行；改为同租户第二批次进度。
+    insertProgress(tenantB, pipelineB, "GENERATE", latest.plusSeconds(30));
 
-    List<PipelineProgressDirtyView> rows = mapper.selectUpdatedSince(since, 10);
+    List<PipelineProgressDirtyView> rows = mapper.selectUpdatedSince(since, null, 10);
 
     assertThat(rows)
         .filteredOn(row -> row.pipelineInstanceId() == pipelineA)

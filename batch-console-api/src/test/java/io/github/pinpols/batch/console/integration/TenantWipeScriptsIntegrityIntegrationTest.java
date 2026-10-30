@@ -122,17 +122,12 @@ class TenantWipeScriptsIntegrityIntegrationTest {
     ExecResult result = runScript("wipe-tenants.sql");
 
     assertThat(result.getExitCode()).as(result.getStdout() + result.getStderr()).isZero();
-    assertThat(count(SELECT_EXPLICIT_TENANTS_COUNT_SQL))
-        .isZero();
-    assertThat(count(SELECT_TENANT_COUNT_SQL, keepTenant))
-        .isOne();
+    assertThat(count(SELECT_EXPLICIT_TENANTS_COUNT_SQL)).isZero();
+    assertThat(count(SELECT_TENANT_COUNT_SQL, keepTenant)).isOne();
     assertTenantRuntimeReferencesCleared("ta");
-    assertThat(count(SELECT_JOB_DEFINITION_FOR_TENANT_COUNT_SQL))
-        .isZero();
-    assertThat(count(SELECT_WORKFLOW_DEFINITION_FOR_TENANT_COUNT_SQL))
-        .isZero();
-    assertThat(count(SELECT_RESOURCE_TAG_FOR_TENANT_COUNT_SQL))
-        .isZero();
+    assertThat(count(SELECT_JOB_DEFINITION_FOR_TENANT_COUNT_SQL)).isZero();
+    assertThat(count(SELECT_WORKFLOW_DEFINITION_FOR_TENANT_COUNT_SQL)).isZero();
+    assertThat(count(SELECT_RESOURCE_TAG_FOR_TENANT_COUNT_SQL)).isZero();
   }
 
   @Test
@@ -156,30 +151,20 @@ class TenantWipeScriptsIntegrityIntegrationTest {
     ExecResult result = runScript("wipe-non-system-tenants.sql");
 
     assertThat(result.getExitCode()).as(result.getStdout() + result.getStderr()).isZero();
-    assertThat(count(SELECT_TENANT_COUNT_SQL, "ta"))
+    assertThat(count(SELECT_TENANT_COUNT_SQL, "ta")).isOne();
+    assertThat(count(SELECT_JOB_DEFINITION_BY_TENANT_AND_CODE_COUNT_SQL, keepJobCode))
         .isOne();
-    assertThat(count(
-            SELECT_JOB_DEFINITION_BY_TENANT_AND_CODE_COUNT_SQL,
-            keepJobCode))
+    assertThat(count(SELECT_RESOURCE_TAG_BY_TENANT_AND_CODE_COUNT_SQL, keepJobCode))
         .isOne();
-    assertThat(count(
-            SELECT_RESOURCE_TAG_BY_TENANT_AND_CODE_COUNT_SQL,
-            keepJobCode))
+    assertThat(count(SELECT_JOB_INSTANCE_BY_TENANT_AND_CODE_COUNT_SQL, "ta", keepJobCode))
         .isOne();
-    assertThat(count(
-            SELECT_JOB_INSTANCE_BY_TENANT_AND_CODE_COUNT_SQL,
-            "ta",
-            keepJobCode))
+    assertThat(count(SELECT_JOB_TASK_BY_TENANT_AND_CODE_COUNT_SQL, "ta", keepJobCode))
         .isOne();
-    assertThat(count(SELECT_JOB_TASK_BY_TENANT_AND_CODE_COUNT_SQL, "ta", keepJobCode)).isOne();
-    assertThat(count(SELECT_TENANT_COUNT_SQL, disposableTenant))
-        .isZero();
+    assertThat(count(SELECT_TENANT_COUNT_SQL, disposableTenant)).isZero();
     assertTenantRuntimeReferencesCleared(disposableTenant);
-    assertThat(count(
-            SELECT_JOB_DEFINITION_BY_TENANT_COUNT_SQL, disposableTenant))
+    assertThat(count(SELECT_JOB_DEFINITION_BY_TENANT_COUNT_SQL, disposableTenant))
         .isZero();
-    assertThat(count(
-            SELECT_WORKFLOW_DEFINITION_BY_TENANT_COUNT_SQL, disposableTenant))
+    assertThat(count(SELECT_WORKFLOW_DEFINITION_BY_TENANT_COUNT_SQL, disposableTenant))
         .isZero();
   }
 
@@ -236,10 +221,7 @@ class TenantWipeScriptsIntegrityIntegrationTest {
     assertThat(refused.getStderr()).contains("hot job_partition still references");
     assertThat(count(SELECT_FILE_RECORD_BY_TENANT_AND_ID_COUNT_SQL, tenant, fileId))
         .isOne();
-    assertThat(count(
-            SELECT_FILE_DISPATCH_RECORD_BY_TENANT_AND_ID_COUNT_SQL,
-            tenant,
-            dispatchId))
+    assertThat(count(SELECT_FILE_DISPATCH_RECORD_BY_TENANT_AND_ID_COUNT_SQL, tenant, dispatchId))
         .isOne();
 
     int affectedJobPartitionRows = jdbc.update(deleteJobPartitionSql, tenant, partitionId);
@@ -251,10 +233,7 @@ class TenantWipeScriptsIntegrityIntegrationTest {
         .isZero();
     assertThat(count(SELECT_FILE_RECORD_BY_TENANT_AND_ID_COUNT_SQL, tenant, fileId))
         .isZero();
-    assertThat(count(
-            SELECT_FILE_DISPATCH_RECORD_BY_TENANT_AND_ID_COUNT_SQL,
-            tenant,
-            dispatchId))
+    assertThat(count(SELECT_FILE_DISPATCH_RECORD_BY_TENANT_AND_ID_COUNT_SQL, tenant, dispatchId))
         .isZero();
   }
 

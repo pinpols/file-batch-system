@@ -1,15 +1,14 @@
 package io.github.pinpols.batch.trigger.service;
 
-import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceRecordCoverageParam;
-
-
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceRecordCoverageParam;
 import io.github.pinpols.batch.trigger.infrastructure.QuartzScheduledFireEnumerator;
 import io.github.pinpols.batch.trigger.mapper.ScheduledOccurrenceMapper;
 import io.github.pinpols.batch.trigger.mapper.ScheduledOccurrencePlanBatchParam;
 import io.github.pinpols.batch.trigger.support.CalendarBizDateDefinition;
+import io.github.pinpols.batch.trigger.support.ScheduledFireTimeSource;
 import io.github.pinpols.batch.trigger.support.ScheduledOccurrenceCoverage;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import java.time.Duration;
@@ -19,7 +18,6 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.quartz.Trigger;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,9 +37,9 @@ public class TriggerScheduledOccurrencePlanner {
   private final ScheduledOccurrenceMapper occurrenceMapper;
 
   @Transactional
-  public int materialize(TriggerDescriptor descriptor, Trigger trigger, Instant now) {
-    boolean occurrenceInputIsIncomplete =
-        EmptyChecks.isNull(descriptor)
+  public int materialize(
+      TriggerDescriptor descriptor, ScheduledFireTimeSource trigger, Instant now) {
+    boolean occurrenceInputIsIncomplete = EmptyChecks.isNull(descriptor)
         || EmptyChecks.isNull(trigger)
         || EmptyChecks.isBlank(descriptor.getTenantId())
         || EmptyChecks.isNull(descriptor.getWorkflowDefinitionId())
@@ -109,27 +107,27 @@ public class TriggerScheduledOccurrencePlanner {
       throw new IllegalStateException(
           "Tenant configuration changed during scheduled occurrence materialization");
     }
-    ScheduledOccurrenceRecordCoverageParam scheduledOccurrenceRecordCoverageParam = ScheduledOccurrenceRecordCoverageParam.builder()
-        .tenantId(descriptor.getTenantId())
-        .workflowDefinitionId(descriptor.getWorkflowDefinitionId())
-        .configurationRevision(configurationRevision)
-        .scheduleVersion(scheduleVersion)
-        .calendarCode(calendarCode)
-        .coverageFrom(coverageFrom)
-        .coverageThrough(scanWindow.coverageThrough())
-        .completedAt(now)
-        .build();
-    occurrenceMapper.recordCoverage(
-        scheduledOccurrenceRecordCoverageParam);
+    ScheduledOccurrenceRecordCoverageParam scheduledOccurrenceRecordCoverageParam =
+        ScheduledOccurrenceRecordCoverageParam.builder()
+            .tenantId(descriptor.getTenantId())
+            .workflowDefinitionId(descriptor.getWorkflowDefinitionId())
+            .configurationRevision(configurationRevision)
+            .scheduleVersion(scheduleVersion)
+            .calendarCode(calendarCode)
+            .coverageFrom(coverageFrom)
+            .coverageThrough(scanWindow.coverageThrough())
+            .completedAt(now)
+            .build();
+    occurrenceMapper.recordCoverage(scheduledOccurrenceRecordCoverageParam);
     return fireTimes.size();
   }
 
   private ScanWindow enumerateBoundedWindow(
-      Trigger trigger, Instant scanAfter, Instant requestedCoverageThrough) {
+      ScheduledFireTimeSource trigger, Instant scanAfter, Instant requestedCoverageThrough) {
     Instant coverageThrough = requestedCoverageThrough;
     while (true) {
       try {
-        List<Instant> fireTimes = fireEnumerator.enumerate(
+        List<Instant> fireTimes = fireEnumerator.enumerateFromSource(
             trigger, scanAfter, coverageThrough, MAX_OCCURRENCES_PER_TRIGGER);
         return new ScanWindow(fireTimes, coverageThrough);
       } catch (QuartzScheduledFireEnumerator.OccurrenceLimitExceededException exception) {

@@ -64,11 +64,13 @@ import org.slf4j.MDC;
 public class TaskDispatcher {
 
   private final BatchPlatformClientConfig config;
+  private final PlatformHttpClient httpClient;
   private final Map<String, SdkTaskHandler> handlers;
   private final ExecutorService executor;
 
   private static final String KEY_ERROR_CODE = "errorCode";
   private static final String KEY_WORKER_ID = "workerId";
+  private static final String KEY_PARTITION_INVOCATION_ID = "partitionInvocationId";
   private static final String KEY_MESSAGE = "message";
   private static final ObjectMapper RESULT_SUMMARY_MAPPER = SdkJsonMapperFactory.create();
   private static final ObjectMapper CLAIM_PAYLOAD_MAPPER = SdkJsonMapperFactory.create();
@@ -203,9 +205,10 @@ public class TaskDispatcher {
       PlatformHttpClient httpClient,
       SdkIdempotencyStore idempotencyStore) {
     this.config = config;
+    this.httpClient = httpClient;
     Map<String, SdkTaskHandler> decorated = new HashMap<>(handlers.size());
-    handlers.forEach((type, handler) ->
-        decorated.put(type, decorate(handler, idempotencyStore, httpClient)));
+    handlers.forEach(
+        (type, handler) -> decorated.put(type, decorate(handler, idempotencyStore, httpClient)));
     this.handlers = Map.copyOf(decorated);
     this.retryCoordinator = new TaskDispatcherRetryCoordinator(config, httpClient, throttledLog);
     this.executor = Executors.newFixedThreadPool(
@@ -242,15 +245,18 @@ public class TaskDispatcher {
     @Override
     public SdkTaskResult execute(SdkTaskContext ctx) {
       if (!isSafeToReplay(ctx)) {
-        Object rawInvocation = ctx.runtimeAttributes().get("partitionInvocationId");
+        Object rawInvocation = ctx.runtimeAttributes().get(KEY_PARTITION_INVOCATION_ID);
         if (!(rawInvocation instanceof String invocationId) || invocationId.isBlank()) {
           throw new ExecutionStartNotConfirmedException(
               "claimed non-idempotent execution has no current invocation", null);
         }
         Map<String, Object> body = Map.of(
-            MDC_TENANT_ID, ctx.tenantId(),
-            KEY_WORKER_ID, ctx.workerId(),
-            "partitionInvocationId", invocationId);
+            MDC_TENANT_ID,
+            ctx.tenantId(),
+            KEY_WORKER_ID,
+            ctx.workerId(),
+            KEY_PARTITION_INVOCATION_ID,
+            invocationId);
         try {
           httpClient.markNonIdempotentExecutionStarted(ctx.taskId(), body);
         } catch (IOException ex) {
@@ -430,7 +436,7 @@ public class TaskDispatcher {
         KEY_WORKER_ID, config.getWorkerCode()); // ADR-035 §9:workerId==workerCode(P4 后 server 分配)
     String dispatchedInvocationId = extractPartitionInvocation(msg);
     if (dispatchedInvocationId != null) {
-      claimBody.put("partitionInvocationId", dispatchedInvocationId);
+      claimBody.put(KEY_PARTITION_INVOCATION_ID, dispatchedInvocationId);
     }
     TaskDispatcherRetryCoordinator.ClaimResult claimResult =
         retryCoordinator.claimWithRetry(msg, idemClaim, claimBody);
@@ -441,7 +447,8 @@ public class TaskDispatcher {
     String partitionInvocationId = claimResult.response().partitionInvocationId();
     if (EmptyChecks.isBlank(partitionInvocationId)) {
       // 普通任务必须持有本次 CLAIM 的分区身份；安全动作也不能用消息中的旧身份执行。
-      log.warn("claim returned no current invocation, execution stopped for taskId={}", msg.taskId());
+      log.warn(
+          "claim returned no current invocation, execution stopped for taskId={}", msg.taskId());
       return;
     }
     partitionInvocations.put(msg.taskId(), partitionInvocationId);
@@ -482,10 +489,10 @@ public class TaskDispatcher {
       Map<String, Object> runtimeAttributes = new HashMap<>(
           EmptyChecks.isNull(msg.runtimeAttributes()) ? Map.of() : msg.runtimeAttributes());
       // Kafka 中的旧身份只能用于认领请求；执行、开始确认、续租和回报均使用 CLAIM 当前身份。
-      runtimeAttributes.remove("partitionInvocationId");
+      runtimeAttributes.remove(KEY_PARTITION_INVOCATION_ID);
       String invocationId = partitionInvocations.get(taskId);
       if (!EmptyChecks.isBlank(invocationId)) {
-        runtimeAttributes.put("partitionInvocationId", invocationId);
+        runtimeAttributes.put(KEY_PARTITION_INVOCATION_ID, invocationId);
       }
       SdkSchedulingContext schedulingContext = msg.schedulingContext();
       PlatformHttpClient.TaskClaimResponse dependencyResponse = claimResult.response();
@@ -504,6 +511,26 @@ public class TaskDispatcher {
           progress,
           null,
           dependencyResultSnapshot);
+      if (cancellation.isCancelled()) {
+        return SdkTaskResult.cancelled(Map.of());
+      }
+      Map<String, Object> executionIdentity = Map.of(
+          MDC_TENANT_ID,
+          tenantId,
+          KEY_WORKER_ID,
+          workerCode,
+          KEY_PARTITION_INVOCATION_ID,
+          invocationId);
+      try {
+        boolean cancelled = httpClient.confirmExecutionStarted(taskId, executionIdentity);
+        if (cancelled) {
+          cancellation.cancel();
+          return SdkTaskResult.cancelled(Map.of());
+        }
+      } catch (IOException exception) {
+        throw new ExecutionStartNotConfirmedException(
+            "execution timing start was not confirmed", exception);
+      }
       result = handler.execute(ctx);
       if (result == null) {
         log.warn(
@@ -606,7 +633,7 @@ public class TaskDispatcher {
     if (msg.runtimeAttributes() == null) {
       return null;
     }
-    Object v = msg.runtimeAttributes().get("partitionInvocationId");
+    Object v = msg.runtimeAttributes().get(KEY_PARTITION_INVOCATION_ID);
     return v == null ? null : v.toString();
   }
 
@@ -617,7 +644,7 @@ public class TaskDispatcher {
       pInv = extractPartitionInvocation(msg);
     }
     if (pInv != null) {
-      body.put("partitionInvocationId", pInv);
+      body.put(KEY_PARTITION_INVOCATION_ID, pInv);
     }
   }
 

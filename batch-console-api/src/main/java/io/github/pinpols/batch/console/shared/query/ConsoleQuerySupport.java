@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.page.CursorCodec;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import java.math.BigInteger;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -42,7 +43,8 @@ public final class ConsoleQuerySupport {
       PageRequest pageRequest, List<S> rows, Function<S, T> mapper, ToLongFunction<S> idExtractor) {
     List<T> items = rows.stream().map(mapper).toList();
     String nextCursor = null;
-    if (rows.size() >= pageRequest.pageSize() && !EmptyChecks.isEmpty(Objects.requireNonNull(rows))) {
+    if (rows.size() >= pageRequest.pageSize()
+        && !EmptyChecks.isEmpty(Objects.requireNonNull(rows))) {
       S lastRow = rows.get(rows.size() - 1);
       long lastRowId = idExtractor.applyAsLong(lastRow);
       nextCursor = CursorCodec.encode(Map.of("id", lastRowId));
@@ -50,13 +52,21 @@ public final class ConsoleQuerySupport {
     return PageResponse.cursor(items, pageRequest.pageSize(), nextCursor);
   }
 
+  /** 空游标表示第一页；非空游标必须包含可解析的 id，避免损坏 token 静默回到第一页。 */
   public static Long decodeCursorId(String token) {
     if (token == null || token.isBlank()) {
       return null;
     }
     Object raw = CursorCodec.decode(token).get("id");
-    if (raw instanceof Number number) {
-      return number.longValue();
+    if (raw instanceof Integer || raw instanceof Long) {
+      return ((Number) raw).longValue();
+    }
+    if (raw instanceof BigInteger integer) {
+      try {
+        return integer.longValueExact();
+      } catch (ArithmeticException ignored) {
+        throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
+      }
     }
     if (raw instanceof String string) {
       try {
@@ -66,7 +76,7 @@ public final class ConsoleQuerySupport {
             ConsoleQuerySupport.class, "catch:NumberFormatException", ignored);
       }
     }
-    return null;
+    throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
   }
 
   public static <T> T requireNotNull(T value, String message) {
@@ -74,13 +84,6 @@ public final class ConsoleQuerySupport {
       throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), message);
     }
     return value;
-  }
-
-  public static Map<String, Object> requireRow(Map<String, Object> row, String message) {
-    if (row == null || row.isEmpty()) {
-      throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), message);
-    }
-    return row;
   }
 
   public static String resolveTenant(TenantIdResolver tenantResolver, String requestTenantId) {

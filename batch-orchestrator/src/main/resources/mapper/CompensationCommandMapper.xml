@@ -89,6 +89,12 @@
           and id = #{id}
     </select>
 
+    <select id="lockRunningCommand" resultType="java.lang.Long">
+        select id from batch.compensation_command
+        where tenant_id = #{tenantId} and id = #{id} and command_status = #{runningStatus}
+        for update
+    </select>
+
     <select id="selectByCommandNo" resultMap="CompensationCommandResultMap">
         select *
         from batch.compensation_command
@@ -126,6 +132,14 @@
             finished_at = #{finishedAt}
         where tenant_id = #{tenantId}
           and id = #{id}
+          and command_status = #{expectedStatus}
+        <if test="relatedJobInstanceId != null">
+          and exists (
+              select 1 from batch.job_instance parent
+              where parent.tenant_id = #{tenantId} and parent.id = #{relatedJobInstanceId}
+              for key share
+          )
+        </if>
     </update>
 
     <select id="countRunningByTarget" resultType="int">

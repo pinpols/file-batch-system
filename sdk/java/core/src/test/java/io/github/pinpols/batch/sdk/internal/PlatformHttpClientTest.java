@@ -51,6 +51,58 @@ import org.slf4j.LoggerFactory;
 class PlatformHttpClientTest {
 
   @Test
+  @DisplayName("执行入口确认遇到 HTTP 409 时抛出控制面异常，不能按幂等成功放行业务")
+  void shouldRejectRevokedExecutionTimingOverRealHttp() throws Exception {
+    try (MockWebServer timingServer = new MockWebServer()) {
+      timingServer.enqueue(new MockResponse.Builder()
+          .code(409)
+          .body("{\"cancelRequested\":false}")
+          .build());
+      timingServer.start(InetAddress.getByName("127.0.0.1"), 0);
+      PlatformHttpClient client =
+          new PlatformHttpClient(config("http://127.0.0.1:" + timingServer.getPort()));
+      Map<String, Object> identity =
+          Map.of("tenantId", "tx", "workerId", "w-1", "partitionInvocationId", "inv-stale");
+      try {
+        assertThatThrownBy(() -> client.confirmExecutionStarted(42L, identity))
+            .isInstanceOf(IOException.class);
+      } finally {
+        client.evictIdleConnections();
+      }
+    }
+  }
+
+  @Test
+  @DisplayName("执行入口确认通过真实 HTTP 发送当前身份和布尔标记，并保留取消响应")
+  void shouldSendExecutionTimingViaRenewWithCurrentIdentity() throws Exception {
+    try (MockWebServer timingServer = new MockWebServer()) {
+      timingServer.enqueue(
+          new MockResponse.Builder().body("{\"cancelRequested\":true}").build());
+      timingServer.start(InetAddress.getByName("127.0.0.1"), 0);
+      PlatformHttpClient client =
+          new PlatformHttpClient(config("http://127.0.0.1:" + timingServer.getPort()));
+      Map<String, Object> identity =
+          Map.of("tenantId", "tx", "workerId", "w-1", "partitionInvocationId", "inv-current");
+      try {
+        boolean cancelled = client.confirmExecutionStarted(42L, identity);
+        assertThat(cancelled).isTrue();
+        RecordedRequest request = timingServer.takeRequest(1, TimeUnit.SECONDS);
+        assertThat(request).isNotNull();
+        assertThat(request.getUrl().encodedPath()).isEqualTo("/internal/tasks/42/renew");
+        JsonNode body = SdkJsonMapperFactory.create().readTree(request.getBody().utf8());
+        assertThat(body.path("tenantId").asText()).isEqualTo("tx");
+        assertThat(body.path("workerId").asText()).isEqualTo("w-1");
+        assertThat(body.path("partitionInvocationId").asText()).isEqualTo("inv-current");
+        assertThat(body.path("details").path("executionStarted").isBoolean()).isTrue();
+        assertThat(body.path("details").path("executionStarted").asBoolean()).isTrue();
+        assertThat(identity).doesNotContainKey("details");
+      } finally {
+        client.evictIdleConnections();
+      }
+    }
+  }
+
+  @Test
   @DisplayName("类型化注册使用真实传输序列化，时间字符串与旧 Map 一致且可选字段省略")
   void shouldPreserveLegacyRegistrationJson_whenUsingTypedRequest() throws Exception {
     try (MockWebServer registrationServer = new MockWebServer()) {

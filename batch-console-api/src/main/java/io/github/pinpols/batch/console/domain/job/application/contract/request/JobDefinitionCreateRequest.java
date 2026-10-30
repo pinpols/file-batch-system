@@ -171,19 +171,15 @@ public class JobDefinitionCreateRequest {
     return EmptyChecks.isNull(triggerMode) || SUPPORTED_TRIGGER_MODES.contains(triggerMode);
   }
 
-  @AssertTrue(message = "monitoring thresholds must match the job schedule type and dependency")
+  /** 策略可预先配置给 Workflow 子作业；是否具备执行资格由运行事实决定。 */
+  @AssertTrue(message = "{error.job.monitoring_completion_modes_exclusive}")
   public boolean isScheduledMonitoringConfiguredCorrectly() {
-    boolean cron = "CRON".equals(scheduleType);
-    boolean dependency = EmptyChecks.isNotBlank(dependsOnJobCode);
-    boolean startGraceEnabled = EmptyChecks.isNotNull(startGraceSeconds) && startGraceSeconds > 0;
-    boolean localDeadlineEnabled = Boolean.TRUE.equals(completionDeadlineEnabled)
-        || EmptyChecks.isNotNull(completionDeadlineLocalTime);
+    boolean localDeadlineEnabled = !Boolean.FALSE.equals(completionDeadlineEnabled)
+        && (Boolean.TRUE.equals(completionDeadlineEnabled)
+            || EmptyChecks.isNotNull(completionDeadlineLocalTime));
     boolean dependencyWindowEnabled = EmptyChecks.isNotNull(dependencyCompletionWindowSeconds)
         && dependencyCompletionWindowSeconds > 0;
-    return (cron || dependency || !startGraceEnabled)
-        && (!localDeadlineEnabled || cron && !dependency)
-        && (!dependencyWindowEnabled || dependency)
-        && !(localDeadlineEnabled && dependencyWindowEnabled);
+    return !(localDeadlineEnabled && dependencyWindowEnabled);
   }
 
   @AssertTrue(

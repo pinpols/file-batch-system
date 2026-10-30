@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.domain.job.mapper.BatchDayCatchUpOperationMapper">
+    <select id="setTenantContext" resultType="string" flushCache="true" useCache="false">
+        select set_config('app.tenant_id', #{tenantId}, true)
+    </select>
+
+    <resultMap id="operation" type="io.github.pinpols.batch.console.domain.job.view.BatchDayCatchUpOperation">
+        <constructor>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="request_key_hash" javaType="java.lang.String"/>
+            <arg column="request_hash" javaType="java.lang.String"/>
+            <arg column="request_json" javaType="java.lang.String"/>
+            <arg column="snapshot_json" javaType="java.lang.String"/>
+            <arg column="items_json" javaType="java.lang.String"/>
+            <arg column="operation_status" javaType="java.lang.String"/>
+            <arg column="revision" javaType="_long"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="insertIfAbsent">
+        insert into batch.batch_day_catchup_operation
+            (tenant_id, request_key_hash, request_hash, request_json, snapshot_json, items_json, operation_status)
+        values
+            (#{tenantId}, #{requestKeyHash}, #{requestHash}, cast(#{requestJson} as jsonb),
+             cast(#{snapshotJson} as jsonb), cast(#{itemsJson} as jsonb), 'PREPARED')
+        on conflict (tenant_id, request_key_hash) do nothing
+    </insert>
+
+    <insert id="insertAbandonedIfAbsent">
+        insert into batch.batch_day_catchup_operation
+            (tenant_id, request_key_hash, request_hash, request_json, snapshot_json, items_json, operation_status)
+        values
+            (#{tenantId}, #{requestKeyHash}, #{requestHash}, cast(#{requestJson} as jsonb),
+             cast(#{snapshotJson} as jsonb), cast(#{itemsJson} as jsonb), 'ABANDONED')
+        on conflict (tenant_id, request_key_hash) do nothing
+    </insert>
+
+    <select id="select" resultMap="operation">
+        select tenant_id, request_key_hash, request_hash, request_json::text as request_json,
+               snapshot_json::text as snapshot_json, items_json::text as items_json,
+               operation_status, revision
+        from batch.batch_day_catchup_operation
+        where tenant_id = #{tenantId} and request_key_hash = #{requestKeyHash}
+    </select>
+
+    <update id="transition">
+        update batch.batch_day_catchup_operation
+        set operation_status = #{nextStatus}, items_json = cast(#{itemsJson} as jsonb),
+            revision = revision + 1, updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and request_key_hash = #{requestKeyHash}
+          and revision = #{expectedRevision}
+          and operation_status = #{expectedStatus}
+          and (
+              (operation_status = 'PREPARED' and #{nextStatus} in ('RUNNING', 'COMPLETE'))
+              or (operation_status = 'RUNNING' and #{nextStatus} in ('RUNNING', 'COMPLETE', 'UNKNOWN'))
+              or (operation_status = 'UNKNOWN' and #{nextStatus} in ('UNKNOWN', 'COMPLETE'))
+          )
+    </update>
+
+    <update id="resolveUnknown">
+        update batch.batch_day_catchup_operation
+        set operation_status = 'RUNNING', items_json = cast(#{itemsJson} as jsonb),
+            revision = revision + 1, updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and request_key_hash = #{requestKeyHash}
+          and revision = #{expectedRevision}
+          and operation_status = 'UNKNOWN'
+    </update>
+</mapper>

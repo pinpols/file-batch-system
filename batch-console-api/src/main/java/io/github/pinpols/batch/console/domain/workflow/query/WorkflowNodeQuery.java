@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.domain.workflow.query;
 
+import io.github.pinpols.batch.common.model.PageRequest;
 import lombok.Builder;
 
-import io.github.pinpols.batch.common.model.PageRequest;
 @Builder
 public record WorkflowNodeQuery(
     String tenantId,

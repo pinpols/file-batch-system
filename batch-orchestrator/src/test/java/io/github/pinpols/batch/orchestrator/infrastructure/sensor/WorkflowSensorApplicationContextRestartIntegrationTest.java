@@ -1,12 +1,15 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.sensor;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.task.WorkflowRunResumeProgressor;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowGraphValidator;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunManagementApplicationService;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
@@ -31,6 +34,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -44,6 +48,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -55,7 +60,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 @DisplayName("Workflow 文件等待:完整 Orchestrator 上下文重建后恢复持久化 WAIT")
 class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractIntegrationTest {
 
-  private static final String TENANT = "t1-workflow-sensor-context-restart";
+  private final String tenantId = "t1-wf-sensor-" + UUID.randomUUID().toString().replace("-", "");
 
   @Test
   @DisplayName("DB_ROW_EXISTS WAIT 从租户业务库命中后推进 Workflow")
@@ -104,10 +109,7 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
     businessJdbc.execute(createSchemaSql);
     businessJdbc.execute(createIfSql);
-    businessJdbc.update(
-        insertWorkflowSensorProbeTestSql,
-        TENANT,
-        marker);
+    businessJdbc.update(insertWorkflowSensorProbeTestSql, tenantId, marker);
 
     try (ConfigurableApplicationContext application = applicationContext(true)) {
       JdbcTemplate jdbc = application.getBean(JdbcTemplate.class);
@@ -119,14 +121,10 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
              "sql":"select marker from biz.workflow_sensor_probe_test where tenant_id = :tenantId and marker = :marker limit 1",
              "params":{"tenantId":"%s","marker":"%s"}},
            "timeout_seconds":3600,"poll_interval_seconds":1,"on_timeout":"FAIL"}
-          """.formatted(TENANT, marker);
-      jdbc.update(
-          updateWorkflowNodeSql,
-          dbSensorParams,
-          TENANT,
-          workflowDefinitionId);
+          """.formatted(tenantId, marker);
+      jdbc.update(updateWorkflowNodeSql, dbSensorParams, tenantId, workflowDefinitionId);
       LaunchRequest launchRequest = LaunchRequest.builder()
-          .tenantId(TENANT)
+          .tenantId(tenantId)
           .workflowDefinitionId(workflowDefinitionId)
           .bizDate(bizDate)
           .triggerType(TriggerType.API)
@@ -135,19 +133,14 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
           .params(Map.of())
           .build();
       RlsTenantContextHolder.runWithTenant(
-          TENANT, () -> application.getBean(WorkflowRunLaunchService.class).launch(launchRequest));
-      Long workflowRunId = jdbc.queryForObject(
-          selectIdSql,
-          Long.class,
-          TENANT,
-          workflowDefinitionId,
-          bizDate);
-      jdbc.update(
-          updateWorkflowNodeRunSql,
-          workflowRunId);
+          tenantId,
+          () -> application.getBean(WorkflowRunLaunchService.class).launch(launchRequest));
+      Long workflowRunId =
+          jdbc.queryForObject(selectIdSql, Long.class, tenantId, workflowDefinitionId, bizDate);
+      jdbc.update(updateWorkflowNodeRunSql, workflowRunId);
 
       RlsTenantContextHolder.runWithTenant(
-          TENANT, () -> application.getBean(SensorPollScheduler.class).scan());
+          tenantId, () -> application.getBean(SensorPollScheduler.class).scan());
 
       String selectedNodeStatus =
           jdbc.queryForObject(selectNodeStatusSql, String.class, workflowRunId);
@@ -155,13 +148,83 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
       String selectedOutput = jdbc.queryForObject(selectOutputSql, String.class, workflowRunId);
       assertThat(selectedOutput).contains(marker);
       String selectedRunStatus =
-          jdbc.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
+          jdbc.queryForObject(selectRunStatusSql, String.class, tenantId, workflowRunId);
       assertThat(selectedRunStatus).isEqualTo("SUCCESS");
     } finally {
-      businessJdbc.update(
-          deleteWorkflowSensorProbeTestSql,
-          TENANT,
-          marker);
+      businessJdbc.update(deleteWorkflowSensorProbeTestSql, tenantId, marker);
+    }
+  }
+
+  @Test
+  @DisplayName("数据库传感器异常的模拟凭据不写入 Workflow 节点错误参数")
+  void shouldPersistSanitizedDatabaseSensorFailure() {
+    String createSchema = "create schema if not exists biz";
+    String createProbe =
+        "create table if not exists biz.sensor_error_probe (tenant_id text not null)";
+    String insertProbe = "insert into biz.sensor_error_probe (tenant_id) values (?)";
+    String updateNode =
+        "update batch.workflow_node set node_params = ?::jsonb where tenant_id = ? and workflow_definition_id = ? and node_code = 'WAIT_FILE'";
+    String selectRun =
+        "select id from batch.workflow_run where tenant_id = ? and workflow_definition_id = ? and biz_date = ?";
+    String forceProbe =
+        "update batch.workflow_node_run set sensor_next_probe_at = current_timestamp - interval '1 second' where workflow_run_id = ? and node_code = 'WAIT_FILE'";
+    String selectStatus =
+        "select run_status from batch.workflow_run where tenant_id = ? and id = ?";
+    String deleteProbe = "delete from biz.sensor_error_probe where tenant_id = ?";
+    String selectError = """
+        select node_status, error_code, error_key, error_args::text as error_args
+        from batch.workflow_node_run where workflow_run_id = ? and node_code = 'WAIT_FILE'
+        """;
+    long suffix = System.nanoTime();
+    String requestId = "req-db-error-" + suffix;
+    LocalDate bizDate = LocalDate.of(2026, 10, 24);
+    DriverManagerDataSource businessDataSource = new DriverManagerDataSource(
+        businessJdbcUrl(), businessJdbcUsername(), businessJdbcPassword());
+    JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
+    businessJdbc.execute(createSchema);
+    businessJdbc.execute(createProbe);
+    businessJdbc.update(insertProbe, tenantId);
+    try (ConfigurableApplicationContext application = applicationContext(true)) {
+      JdbcTemplate jdbc = application.getBean(JdbcTemplate.class);
+      Long definitionId = seedWorkflow(
+          jdbc, "WF_DB_ERROR_" + suffix, requestId, "dedup-db-error-" + suffix, requestId, bizDate);
+      String params = """
+          {"sensor_type":"DB_ROW_EXISTS",
+           "sensor_spec":{"schema":"biz",
+             "sql":"select cast('password=sample-secret' as integer) as marker from biz.sensor_error_probe where tenant_id = :tenantId",
+             "params":{"tenantId":"%s"}},
+           "timeout_seconds":3600,"poll_interval_seconds":1,"on_timeout":"FAIL"}
+          """.formatted(tenantId);
+      jdbc.update(updateNode, params, tenantId, definitionId);
+      LaunchRequest request = LaunchRequest.builder()
+          .tenantId(tenantId)
+          .workflowDefinitionId(definitionId)
+          .bizDate(bizDate)
+          .triggerType(TriggerType.API)
+          .requestId(requestId)
+          .traceId(requestId)
+          .params(Map.of())
+          .build();
+      RlsTenantContextHolder.runWithTenant(
+          tenantId, () -> application.getBean(WorkflowRunLaunchService.class).launch(request));
+      Long runId = jdbc.queryForObject(selectRun, Long.class, tenantId, definitionId, bizDate);
+      for (int attempt = 0; attempt < 3; attempt++) {
+        jdbc.update(forceProbe, runId);
+        RlsTenantContextHolder.runWithTenant(
+            tenantId, () -> application.getBean(SensorPollScheduler.class).scan());
+      }
+      Map<String, Object> row = jdbc.queryForMap(selectError, runId);
+      assertThat(row)
+          .containsEntry("node_status", "FAILED")
+          .containsEntry("error_code", "SENSOR_FAIL")
+          .containsEntry("error_key", "error.workflow.sensor_probe_failed");
+      assertThat(row.get("error_args").toString())
+          .contains("DB_ROW_EXISTS", "password=")
+          .doesNotContain("sample-secret");
+      assertThat(jdbc.queryForObject(selectStatus, String.class, tenantId, runId))
+          .isEqualTo("FAILED");
+    } finally {
+      businessJdbc.update(deleteProbe, tenantId);
     }
   }
 
@@ -170,24 +233,24 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
   @DisplayName("DB_ROW_EXISTS WAIT 释放 JOB 与业务日结算竞争时保留唯一执行")
   void dbRowExistsWaitReleaseRacingSettlement_shouldKeepBatchDayInFlight(String firstLockWaiter)
       throws Exception {
-        final String selectAcquireBatchDaySettlementFenceSql = """
+    final String selectAcquireBatchDaySettlementFenceSql = """
             select batch.acquire_batch_day_settlement_fence(?, ?, ?)
         """;
-        final String selectPgBackendPidSql = """
+    final String selectPgBackendPidSql = """
             select pg_backend_pid()
         """;
 
-        final String createSchemaSql = """
+    final String createSchemaSql = """
             create schema if not exists biz
         """;
-        final String createIfSql = """
+    final String createIfSql = """
         create table if not exists biz.workflow_sensor_probe_test (
             tenant_id text not null, marker text not null)
         """;
-        final String insertWorkflowSensorProbeTestSql = """
+    final String insertWorkflowSensorProbeTestSql = """
             insert into biz.workflow_sensor_probe_test (tenant_id, marker) values (?, ?)
         """;
-        final String insertJobDefinitionSql = """
+    final String insertJobDefinitionSql = """
           insert into batch.job_definition (
               tenant_id, job_code, job_name, job_type, biz_type, schedule_type, timezone,
               calendar_code, priority, queue_code, worker_group, trigger_mode, dag_enabled,
@@ -195,65 +258,65 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
           ) values (?, ?, ?, 'GENERAL', 'IT', 'MANUAL', 'UTC', 'JOB_CALENDAR',
               5, 'q-it', ?, 'API', false, 'NONE', 'NONE', 0, 0, true, 1)
           """;
-        final String insertWorkerRegistrySql = """
+    final String insertWorkerRegistrySql = """
           insert into batch.worker_registry (
               tenant_id, worker_code, worker_group, capability_tags, status, heartbeat_at, current_load
           ) values (?, ?, ?, '[]'::jsonb, 'ONLINE', now(), 0)
           """;
-        final String updateWorkflowNodeSql = """
+    final String updateWorkflowNodeSql = """
             update batch.workflow_node set node_params = ?::jsonb where tenant_id = ?\s\
             and workflow_definition_id = ? and node_code = 'WAIT_FILE'\
             """;
-        final String updateWorkflowNodeSql2 = """
+    final String updateWorkflowNodeSql2 = """
           update batch.workflow_node
           set node_code = 'DB_JOB', node_name = 'business row follow-up', node_type = 'JOB',
               related_job_code = ?, node_order = 2
           where tenant_id = ? and workflow_definition_id = ? and node_code = 'END'
           """;
-        final String insertWorkflowNodeSql = """
+    final String insertWorkflowNodeSql = """
           insert into batch.workflow_node (
               tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order,
               retry_policy, retry_max_count, timeout_seconds, enabled
           ) values (?, ?, 'END', 'end', 'END', 3, 'NONE', 0, 0, true)
           """;
-        final String deleteWorkflowEdgeSql = """
+    final String deleteWorkflowEdgeSql = """
             delete from batch.workflow_edge where tenant_id = ? and workflow_definition_id = ?\
             """;
-        final String insertWorkflowEdgeSql = """
+    final String insertWorkflowEdgeSql = """
           insert into batch.workflow_edge (
               tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, enabled
           ) values (?, ?, 'START', 'WAIT_FILE', 'ALWAYS', true),
                    (?, ?, 'WAIT_FILE', 'DB_JOB', 'SUCCESS', true),
                    (?, ?, 'DB_JOB', 'END', 'SUCCESS', true)
           """;
-        final String selectIdSql = """
+    final String selectIdSql = """
             select id from batch.workflow_run where tenant_id = ? and trigger_request_id = (select id\s\
             from batch.trigger_request where tenant_id = ? and request_id = ?)\
             """;
-        final String updateWorkflowNodeRunSql = """
+    final String updateWorkflowNodeRunSql = """
             update batch.workflow_node_run set sensor_next_probe_at = current_timestamp - interval '1 second'\s\
             where workflow_run_id = ? and node_code = 'WAIT_FILE'\
             """;
-        final String selectNodeStatusSql = """
+    final String selectNodeStatusSql = """
             select node_status from batch.workflow_node_run where workflow_run_id = ?\s\
             and node_code = 'WAIT_FILE'\
             """;
-        final String selectRunStatusSql = """
+    final String selectRunStatusSql = """
             select run_status from batch.workflow_run where tenant_id = ? and id = ?
         """;
-        final String selectDayStatusSql = """
+    final String selectDayStatusSql = """
             select day_status from batch.batch_day_instance where tenant_id = ?\s\
             and calendar_code = 'JOB_CALENDAR' and biz_date = ?\
             """;
-        final String selectCountSql = """
+    final String selectCountSql = """
               select count(*) from batch.trigger_request
               where tenant_id = ? and parent_workflow_run_id = ? and parent_node_code = 'DB_JOB'
               """;
-        final String selectJobInstanceIdSql = """
+    final String selectJobInstanceIdSql = """
           select job_instance_id from batch.workflow_node_run
           where workflow_run_id = ? and node_code = 'DB_JOB'
           """;
-        final String selectCountSql2 = """
+    final String selectCountSql2 = """
               select count(*) from batch.job_instance
               where tenant_id = ? and id = ? and job_code = ? and biz_date = ?
               """;
@@ -275,17 +338,14 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
     businessJdbc.execute(createSchemaSql);
     businessJdbc.execute(createIfSql);
-    businessJdbc.update(
-        insertWorkflowSensorProbeTestSql,
-        TENANT,
-        marker);
+    businessJdbc.update(insertWorkflowSensorProbeTestSql, tenantId, marker);
 
     try (ConfigurableApplicationContext application = applicationContext(true, false)) {
       JdbcTemplate jdbc = application.getBean(JdbcTemplate.class);
       Long workflowDefinitionId =
           seedWorkflow(jdbc, workflowCode, requestId, "dedup-" + suffix, requestId, bizDate);
-      jdbc.update(insertJobDefinitionSql, TENANT, jobCode, jobCode, workerGroup);
-      jdbc.update(insertWorkerRegistrySql, TENANT, "wk-db-sensor-r11-" + suffix, workerGroup);
+      jdbc.update(insertJobDefinitionSql, tenantId, jobCode, jobCode, workerGroup);
+      jdbc.update(insertWorkerRegistrySql, tenantId, "wk-db-sensor-r11-" + suffix, workerGroup);
 
       String dbSensorParams = """
           {"sensor_type":"DB_ROW_EXISTS",
@@ -293,29 +353,22 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
              "sql":"select marker from biz.workflow_sensor_probe_test where tenant_id = :tenantId and marker = :marker limit 1",
              "params":{"tenantId":"%s","marker":"%s"}},
            "timeout_seconds":3600,"poll_interval_seconds":1,"on_timeout":"FAIL"}
-          """.formatted(TENANT, marker);
-      jdbc.update(
-          updateWorkflowNodeSql,
-          dbSensorParams,
-          TENANT,
-          workflowDefinitionId);
-      jdbc.update(updateWorkflowNodeSql2, jobCode, TENANT, workflowDefinitionId);
-      jdbc.update(insertWorkflowNodeSql, TENANT, workflowDefinitionId);
-      jdbc.update(
-          deleteWorkflowEdgeSql,
-          TENANT,
-          workflowDefinitionId);
+          """.formatted(tenantId, marker);
+      jdbc.update(updateWorkflowNodeSql, dbSensorParams, tenantId, workflowDefinitionId);
+      jdbc.update(updateWorkflowNodeSql2, jobCode, tenantId, workflowDefinitionId);
+      jdbc.update(insertWorkflowNodeSql, tenantId, workflowDefinitionId);
+      jdbc.update(deleteWorkflowEdgeSql, tenantId, workflowDefinitionId);
       jdbc.update(
           insertWorkflowEdgeSql,
-          TENANT,
+          tenantId,
           workflowDefinitionId,
-          TENANT,
+          tenantId,
           workflowDefinitionId,
-          TENANT,
+          tenantId,
           workflowDefinitionId);
 
       LaunchRequest launchRequest = LaunchRequest.builder()
-          .tenantId(TENANT)
+          .tenantId(tenantId)
           .workflowDefinitionId(workflowDefinitionId)
           .bizDate(bizDate)
           .triggerType(TriggerType.API)
@@ -324,24 +377,18 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
           .params(Map.of())
           .build();
       RlsTenantContextHolder.runWithTenant(
-          TENANT, () -> application.getBean(WorkflowRunLaunchService.class).launch(launchRequest));
-      Long workflowRunId = jdbc.queryForObject(
-          selectIdSql,
-          Long.class,
-          TENANT,
-          TENANT,
-          requestId);
+          tenantId,
+          () -> application.getBean(WorkflowRunLaunchService.class).launch(launchRequest));
+      Long workflowRunId =
+          jdbc.queryForObject(selectIdSql, Long.class, tenantId, tenantId, requestId);
       insertCutoffBatchDay(jdbc, bizDate);
-      jdbc.update(
-          updateWorkflowNodeRunSql,
-          workflowRunId);
+      jdbc.update(updateWorkflowNodeRunSql, workflowRunId);
 
       ExecutorService executor = Executors.newFixedThreadPool(2);
       try (Connection fence = jdbc.getDataSource().getConnection()) {
         fence.setAutoCommit(false);
-        try (var statement =
-            fence.prepareStatement(selectAcquireBatchDaySettlementFenceSql)) {
-          statement.setString(1, TENANT);
+        try (var statement = fence.prepareStatement(selectAcquireBatchDaySettlementFenceSql)) {
+          statement.setString(1, tenantId);
           statement.setString(2, "JOB_CALENDAR");
           statement.setObject(3, bizDate);
           statement.executeQuery().close();
@@ -360,10 +407,10 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
               () -> application.getBean(BatchDaySettleScheduler.class).settle());
           awaitBlockedBy(jdbc, blockerPid, 1);
           sensorRelease = executor.submit(() -> RlsTenantContextHolder.runWithTenant(
-              TENANT, () -> application.getBean(SensorPollScheduler.class).scan()));
+              tenantId, () -> application.getBean(SensorPollScheduler.class).scan()));
         } else {
           sensorRelease = executor.submit(() -> RlsTenantContextHolder.runWithTenant(
-              TENANT, () -> application.getBean(SensorPollScheduler.class).scan()));
+              tenantId, () -> application.getBean(SensorPollScheduler.class).scan()));
           awaitBlockedBy(jdbc, blockerPid, 1);
           settlement = executor.submit(
               () -> application.getBean(BatchDaySettleScheduler.class).settle());
@@ -381,24 +428,21 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
           jdbc.queryForObject(selectNodeStatusSql, String.class, workflowRunId);
       assertThat(selectedNodeStatus).isEqualTo("SUCCESS");
       String selectedRunStatus =
-          jdbc.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
+          jdbc.queryForObject(selectRunStatusSql, String.class, tenantId, workflowRunId);
       assertThat(selectedRunStatus).isEqualTo("RUNNING");
       String selectedDayStatus =
-          jdbc.queryForObject(selectDayStatusSql, String.class, TENANT, bizDate);
+          jdbc.queryForObject(selectDayStatusSql, String.class, tenantId, bizDate);
       assertThat(selectedDayStatus).isEqualTo("IN_FLIGHT");
       Integer selectedTriggerRequestCount =
-          jdbc.queryForObject(selectCountSql, Integer.class, TENANT, workflowRunId);
+          jdbc.queryForObject(selectCountSql, Integer.class, tenantId, workflowRunId);
       assertThat(selectedTriggerRequestCount).isEqualTo(1);
       Long jobInstanceId = jdbc.queryForObject(selectJobInstanceIdSql, Long.class, workflowRunId);
       assertThat(jobInstanceId).isNotNull();
       Integer selectedJobInstanceCount = jdbc.queryForObject(
-          selectCountSql2, Integer.class, TENANT, jobInstanceId, jobCode, bizDate);
+          selectCountSql2, Integer.class, tenantId, jobInstanceId, jobCode, bizDate);
       assertThat(selectedJobInstanceCount).isEqualTo(1);
     } finally {
-      businessJdbc.update(
-          deleteWorkflowSensorProbeTestSql,
-          TENANT,
-          marker);
+      businessJdbc.update(deleteWorkflowSensorProbeTestSql, tenantId, marker);
     }
   }
 
@@ -406,22 +450,22 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
   @ValueSource(strings = {"FAIL", "SKIP_DOWNSTREAM"})
   void shouldSettleTimedOutWaitAccordingToAction_whenSettlementIsBlockedOnBusinessDayFence(
       String timeoutAction) throws Exception {
-        final String selectAcquireBatchDaySettlementFenceSql = """
+    final String selectAcquireBatchDaySettlementFenceSql = """
             select batch.acquire_batch_day_settlement_fence(?, ?, ?)
         """;
-        final String selectPgBackendPidSql = """
+    final String selectPgBackendPidSql = """
             select pg_backend_pid()
         """;
 
-        final String updateWorkflowNodeSql = """
+    final String updateWorkflowNodeSql = """
             update batch.workflow_node set node_params = jsonb_set(node_params, '{on_timeout}',\s\
             to_jsonb(?::text)) where tenant_id = ? and workflow_definition_id = ? and node_code = 'WAIT_FILE'\
             """;
-        final String selectIdSql = """
+    final String selectIdSql = """
             select id from batch.workflow_run where tenant_id = ? and trigger_request_id = (select id\s\
             from batch.trigger_request where tenant_id = ? and request_id = ?)\
             """;
-        final String updateWorkflowNodeRunSql = """
+    final String updateWorkflowNodeRunSql = """
             update batch.workflow_node_run set started_at = current_timestamp - interval '2 hours',\s\
             sensor_next_probe_at = current_timestamp - interval '1 second' where workflow_run_id = ?\s\
             and node_code = 'WAIT_FILE'\
@@ -446,13 +490,9 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
       JdbcTemplate jdbc = application.getBean(JdbcTemplate.class);
       Long workflowDefinitionId =
           seedWorkflow(jdbc, workflowCode, requestId, "dedup-" + suffix, requestId, bizDate);
-      jdbc.update(
-          updateWorkflowNodeSql,
-          timeoutAction,
-          TENANT,
-          workflowDefinitionId);
+      jdbc.update(updateWorkflowNodeSql, timeoutAction, tenantId, workflowDefinitionId);
       LaunchRequest launchRequest = LaunchRequest.builder()
-          .tenantId(TENANT)
+          .tenantId(tenantId)
           .workflowDefinitionId(workflowDefinitionId)
           .bizDate(bizDate)
           .triggerType(TriggerType.API)
@@ -461,24 +501,18 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
           .params(Map.of())
           .build();
       RlsTenantContextHolder.runWithTenant(
-          TENANT, () -> application.getBean(WorkflowRunLaunchService.class).launch(launchRequest));
-      Long workflowRunId = jdbc.queryForObject(
-          selectIdSql,
-          Long.class,
-          TENANT,
-          TENANT,
-          requestId);
+          tenantId,
+          () -> application.getBean(WorkflowRunLaunchService.class).launch(launchRequest));
+      Long workflowRunId =
+          jdbc.queryForObject(selectIdSql, Long.class, tenantId, tenantId, requestId);
       insertCutoffBatchDay(jdbc, bizDate);
-      jdbc.update(
-          updateWorkflowNodeRunSql,
-          workflowRunId);
+      jdbc.update(updateWorkflowNodeRunSql, workflowRunId);
 
       ExecutorService executor = Executors.newSingleThreadExecutor();
       try (Connection fence = jdbc.getDataSource().getConnection()) {
         fence.setAutoCommit(false);
-        try (var statement =
-            fence.prepareStatement(selectAcquireBatchDaySettlementFenceSql)) {
-          statement.setString(1, TENANT);
+        try (var statement = fence.prepareStatement(selectAcquireBatchDaySettlementFenceSql)) {
+          statement.setString(1, tenantId);
           statement.setString(2, "JOB_CALENDAR");
           statement.setObject(3, bizDate);
           statement.executeQuery().close();
@@ -502,14 +536,14 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
             });
 
         RlsTenantContextHolder.runWithTenant(
-            TENANT, () -> application.getBean(SensorPollScheduler.class).scan());
+            tenantId, () -> application.getBean(SensorPollScheduler.class).scan());
         String expectedWaitStatus = "FAIL".equals(timeoutAction) ? "FAILED" : "SKIPPED";
         String expectedRunStatus = "FAIL".equals(timeoutAction) ? "FAILED" : "SUCCESS";
         String selectedNodeStatus =
             jdbc.queryForObject(selectNodeStatusSql, String.class, workflowRunId);
         assertThat(selectedNodeStatus).isEqualTo(expectedWaitStatus);
         String selectedRunStatus =
-            jdbc.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
+            jdbc.queryForObject(selectRunStatusSql, String.class, tenantId, workflowRunId);
         assertThat(selectedRunStatus).isEqualTo(expectedRunStatus);
 
         fence.commit();
@@ -588,22 +622,14 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
       JdbcTemplate jdbc = application.getBean(JdbcTemplate.class);
       Long workflowDefinitionId =
           seedWorkflow(jdbc, workflowCode, requestId, "dedup-" + suffix, requestId, bizDate);
+      jdbc.update(deleteWorkflowEdgeSql, tenantId, workflowDefinitionId);
+      jdbc.update(updateWorkflowNodeSql, tenantId, workflowDefinitionId);
+      jdbc.update(insertWorkflowNodeSql, tenantId, workflowDefinitionId);
       jdbc.update(
-          deleteWorkflowEdgeSql,
-          TENANT,
-          workflowDefinitionId);
-      jdbc.update(
-          updateWorkflowNodeSql,
-          TENANT,
-          workflowDefinitionId);
-      jdbc.update(insertWorkflowNodeSql, TENANT, workflowDefinitionId);
-      jdbc.update(insertWorkflowEdgeSql, TENANT, workflowDefinitionId, TENANT, workflowDefinitionId);
-      jdbc.update(
-          updateWorkflowNodeSql2,
-          TENANT,
-          workflowDefinitionId);
+          insertWorkflowEdgeSql, tenantId, workflowDefinitionId, tenantId, workflowDefinitionId);
+      jdbc.update(updateWorkflowNodeSql2, tenantId, workflowDefinitionId);
       LaunchRequest launchRequest = LaunchRequest.builder()
-          .tenantId(TENANT)
+          .tenantId(tenantId)
           .workflowDefinitionId(workflowDefinitionId)
           .bizDate(bizDate)
           .triggerType(TriggerType.API)
@@ -612,20 +638,15 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
           .params(Map.of())
           .build();
       RlsTenantContextHolder.runWithTenant(
-          TENANT, () -> application.getBean(WorkflowRunLaunchService.class).launch(launchRequest));
-      Long workflowRunId = jdbc.queryForObject(
-          selectIdSql,
-          Long.class,
-          TENANT,
-          TENANT,
-          requestId);
+          tenantId,
+          () -> application.getBean(WorkflowRunLaunchService.class).launch(launchRequest));
+      Long workflowRunId =
+          jdbc.queryForObject(selectIdSql, Long.class, tenantId, tenantId, requestId);
       insertCutoffBatchDay(jdbc, bizDate);
-      jdbc.update(
-          updateWorkflowNodeRunSql,
-          workflowRunId);
+      jdbc.update(updateWorkflowNodeRunSql, workflowRunId);
 
       RlsTenantContextHolder.runWithTenant(
-          TENANT, () -> application.getBean(SensorPollScheduler.class).scan());
+          tenantId, () -> application.getBean(SensorPollScheduler.class).scan());
 
       String selectedNodeStatus =
           jdbc.queryForObject(selectNodeStatusSql, String.class, workflowRunId);
@@ -640,7 +661,7 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
           jdbc.queryForObject(selectCountSql, Integer.class, workflowRunId);
       assertThat(selectedWorkflowNodeRunCount).isZero();
       String selectedRunStatus =
-          jdbc.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
+          jdbc.queryForObject(selectRunStatusSql, String.class, tenantId, workflowRunId);
       assertThat(selectedRunStatus).isEqualTo("SUCCESS");
 
       application.getBean(BatchDaySettleScheduler.class).settle();
@@ -747,53 +768,35 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
       JdbcTemplate jdbc = application.getBean(JdbcTemplate.class);
       Long workflowDefinitionId =
           seedWorkflow(jdbc, workflowCode, requestId, "dedup-" + suffix, requestId, bizDate);
-      jdbc.update(
-          deleteWorkflowEdgeSql,
-          TENANT,
-          workflowDefinitionId);
-      jdbc.update(
-          updateWorkflowNodeSql,
-          TENANT,
-          workflowDefinitionId);
-      jdbc.update(
-          updateWorkflowNodeSql2,
-          TENANT,
-          workflowDefinitionId);
-      jdbc.update(
-          updateWorkflowNodeSql3,
-          TENANT,
-          workflowDefinitionId);
-      jdbc.update(
-          updateWorkflowNodeSql4,
-          TENANT,
-          workflowDefinitionId);
-      jdbc.update(
-          updateWorkflowNodeSql5,
-          TENANT,
-          workflowDefinitionId);
+      jdbc.update(deleteWorkflowEdgeSql, tenantId, workflowDefinitionId);
+      jdbc.update(updateWorkflowNodeSql, tenantId, workflowDefinitionId);
+      jdbc.update(updateWorkflowNodeSql2, tenantId, workflowDefinitionId);
+      jdbc.update(updateWorkflowNodeSql3, tenantId, workflowDefinitionId);
+      jdbc.update(updateWorkflowNodeSql4, tenantId, workflowDefinitionId);
+      jdbc.update(updateWorkflowNodeSql5, tenantId, workflowDefinitionId);
       String secondWaitParams = """
           {"sensor_type":"FILE_ARRIVAL",
            "sensor_spec":{"pattern":"context-restart-any-*.csv","maxAgeSeconds":3600,
              "bindWorkflowBizDate":true,"fileGroupCode":"CONTEXT_RESTART_ANY","requireCompleteGroup":true},
            "timeout_seconds":3600,"poll_interval_seconds":1,"on_timeout":"FAIL"}
           """;
-      jdbc.update(insertWorkflowNodeSql, TENANT, workflowDefinitionId, secondWaitParams);
-      jdbc.update(insertWorkflowNodeSql2, TENANT, workflowDefinitionId);
+      jdbc.update(insertWorkflowNodeSql, tenantId, workflowDefinitionId, secondWaitParams);
+      jdbc.update(insertWorkflowNodeSql2, tenantId, workflowDefinitionId);
       jdbc.update(
           insertWorkflowEdgeSql,
-          TENANT,
+          tenantId,
           workflowDefinitionId,
-          TENANT,
+          tenantId,
           workflowDefinitionId,
-          TENANT,
+          tenantId,
           workflowDefinitionId,
-          TENANT,
+          tenantId,
           workflowDefinitionId,
-          TENANT,
+          tenantId,
           workflowDefinitionId);
 
       LaunchRequest launchRequest = LaunchRequest.builder()
-          .tenantId(TENANT)
+          .tenantId(tenantId)
           .workflowDefinitionId(workflowDefinitionId)
           .bizDate(bizDate)
           .triggerType(TriggerType.API)
@@ -802,19 +805,14 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
           .params(Map.of())
           .build();
       RlsTenantContextHolder.runWithTenant(
-          TENANT, () -> application.getBean(WorkflowRunLaunchService.class).launch(launchRequest));
-      Long workflowRunId = jdbc.queryForObject(
-          selectIdSql,
-          Long.class,
-          TENANT,
-          TENANT,
-          requestId);
-      jdbc.update(
-          updateWorkflowNodeRunSql,
-          workflowRunId);
+          tenantId,
+          () -> application.getBean(WorkflowRunLaunchService.class).launch(launchRequest));
+      Long workflowRunId =
+          jdbc.queryForObject(selectIdSql, Long.class, tenantId, tenantId, requestId);
+      jdbc.update(updateWorkflowNodeRunSql, workflowRunId);
 
       RlsTenantContextHolder.runWithTenant(
-          TENANT, () -> application.getBean(SensorPollScheduler.class).scan());
+          tenantId, () -> application.getBean(SensorPollScheduler.class).scan());
 
       String selectedNodeStatus =
           jdbc.queryForObject(selectNodeStatusSql, String.class, workflowRunId);
@@ -823,16 +821,14 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
           jdbc.queryForObject(selectCountSql, Integer.class, workflowRunId);
       assertThat(selectedWorkflowNodeRunCount).isZero();
       String selectedRunStatus =
-          jdbc.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
+          jdbc.queryForObject(selectRunStatusSql, String.class, tenantId, workflowRunId);
       assertThat(selectedRunStatus).isEqualTo("RUNNING");
 
       String fileName = "context-restart-any-" + suffix + ".csv";
-      jdbc.update(insertFileRecordSql, TENANT, fileName, "s3://test/" + fileName, bizDate);
-      jdbc.update(
-          updateWorkflowNodeRunSql2,
-          workflowRunId);
+      jdbc.update(insertFileRecordSql, tenantId, fileName, "s3://test/" + fileName, bizDate);
+      jdbc.update(updateWorkflowNodeRunSql2, workflowRunId);
       RlsTenantContextHolder.runWithTenant(
-          TENANT, () -> application.getBean(SensorPollScheduler.class).scan());
+          tenantId, () -> application.getBean(SensorPollScheduler.class).scan());
 
       String selectedNodeStatusRead2 =
           jdbc.queryForObject(selectNodeStatusSql2, String.class, workflowRunId);
@@ -844,8 +840,127 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
           jdbc.queryForObject(selectNodeStatusSql4, String.class, workflowRunId);
       assertThat(selectedNodeStatusRead4).isEqualTo("SUCCESS");
       String selectedRunStatusRead2 =
-          jdbc.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
+          jdbc.queryForObject(selectRunStatusSql, String.class, tenantId, workflowRunId);
       assertThat(selectedRunStatusRead2).isEqualTo("SUCCESS");
+    }
+  }
+
+  @Test
+  @DisplayName("N_OF 数学整数阈值在一条分支跳过后仍能由另一条分支释放")
+  void shouldReleaseNOfIntegralThresholdAfterOneBranchSkips() {
+    String deleteEdges =
+        "delete from batch.workflow_edge where tenant_id = ? and workflow_definition_id = ?";
+    String updateEnd =
+        "update batch.workflow_node set node_order = 4 where tenant_id = ? and workflow_definition_id = ? and node_code = 'END'";
+    String updateFirstWait = """
+        update batch.workflow_node set node_params = jsonb_set(node_params, '{on_timeout}', '"SKIP_DOWNSTREAM"'::jsonb)
+        where tenant_id = ? and workflow_definition_id = ? and node_code = 'WAIT_FILE'
+        """;
+    String insertWait = """
+        insert into batch.workflow_node (tenant_id,workflow_definition_id,node_code,node_name,node_type,node_order,
+          node_params,retry_policy,retry_max_count,timeout_seconds,enabled)
+        values (?, ?, 'WAIT_OTHER', 'other wait', 'WAIT', 2, ?::jsonb, 'NONE', 0, 3600, true)
+        """;
+    String insertJoin = """
+        insert into batch.workflow_node (tenant_id,workflow_definition_id,node_code,node_name,node_type,node_order,
+          node_params,retry_policy,retry_max_count,timeout_seconds,enabled)
+        values (?, ?, 'JOIN', 'join', 'GATEWAY', 3, '{"joinMode":"N_OF","joinThreshold":1.0}'::jsonb,
+          'NONE', 0, 0, true)
+        """;
+    String insertEdges = """
+        insert into batch.workflow_edge (tenant_id,workflow_definition_id,from_node_code,to_node_code,edge_type,enabled)
+        values (?, ?, 'START', 'WAIT_FILE', 'ALWAYS', true), (?, ?, 'START', 'WAIT_OTHER', 'ALWAYS', true),
+          (?, ?, 'WAIT_FILE', 'JOIN', 'SUCCESS', true), (?, ?, 'WAIT_OTHER', 'JOIN', 'SUCCESS', true),
+          (?, ?, 'JOIN', 'END', 'SUCCESS', true)
+        """;
+    String selectRun =
+        "select id from batch.workflow_run where tenant_id = ? and workflow_definition_id = ? and biz_date = ?";
+    String expireWait = """
+        update batch.workflow_node_run set started_at = current_timestamp - interval '2 hours',
+          sensor_next_probe_at = current_timestamp - interval '1 second'
+        where workflow_run_id = ? and node_code = 'WAIT_FILE'
+        """;
+    String setProbeTime = """
+        update batch.workflow_node_run set sensor_next_probe_at = current_timestamp + (? * interval '1 second')
+        where workflow_run_id = ? and node_code = 'WAIT_OTHER'
+        """;
+    String selectNode =
+        "select node_status from batch.workflow_node_run where workflow_run_id = ? and node_code = ?";
+    String countJoin =
+        "select count(*) from batch.workflow_node_run where workflow_run_id = ? and node_code = 'JOIN'";
+    String insertFile = """
+        insert into batch.file_record (tenant_id,file_category,file_name,file_format_type,storage_type,
+          storage_path,source_type,file_status,biz_date)
+        values (?, 'INPUT', ?, 'DELIMITED', 'S3', ?, 'SFTP', 'RECEIVED', ?)
+        """;
+    String selectRunStatus =
+        "select run_status from batch.workflow_run where tenant_id = ? and id = ?";
+    String countTerminal = """
+        select count(*) from batch.outbox_event where tenant_id = ? and aggregate_type = 'WORKFLOW_RUN'
+          and aggregate_id = ? and event_type = 'WORKFLOW_TERMINAL'
+        """;
+    long suffix = System.nanoTime();
+    String requestId = "req-n-of-" + suffix;
+    LocalDate bizDate = LocalDate.of(2026, 10, 21);
+    try (ConfigurableApplicationContext application = applicationContext(true)) {
+      JdbcTemplate jdbc = application.getBean(JdbcTemplate.class);
+      Long definitionId = seedWorkflow(
+          jdbc, "WF_N_OF_" + suffix, requestId, "dedup-n-of-" + suffix, requestId, bizDate);
+      jdbc.update(deleteEdges, tenantId, definitionId);
+      jdbc.update(updateEnd, tenantId, definitionId);
+      jdbc.update(updateFirstWait, tenantId, definitionId);
+      String sensorParams = """
+          {"sensor_type":"FILE_ARRIVAL","sensor_spec":{"pattern":"n-of-ready-*.csv","maxAgeSeconds":3600},
+            "timeout_seconds":3600,"poll_interval_seconds":1,"on_timeout":"FAIL"}
+          """;
+      jdbc.update(insertWait, tenantId, definitionId, sensorParams);
+      jdbc.update(insertJoin, tenantId, definitionId);
+      jdbc.update(
+          insertEdges,
+          tenantId,
+          definitionId,
+          tenantId,
+          definitionId,
+          tenantId,
+          definitionId,
+          tenantId,
+          definitionId,
+          tenantId,
+          definitionId);
+      LaunchRequest request = LaunchRequest.builder()
+          .tenantId(tenantId)
+          .workflowDefinitionId(definitionId)
+          .bizDate(bizDate)
+          .triggerType(TriggerType.API)
+          .requestId(requestId)
+          .traceId(requestId)
+          .params(Map.of())
+          .build();
+      RlsTenantContextHolder.runWithTenant(
+          tenantId, () -> application.getBean(WorkflowRunLaunchService.class).launch(request));
+      Long runId = jdbc.queryForObject(selectRun, Long.class, tenantId, definitionId, bizDate);
+      jdbc.update(expireWait, runId);
+      jdbc.update(setProbeTime, 3600, runId);
+      RlsTenantContextHolder.runWithTenant(
+          tenantId, () -> application.getBean(SensorPollScheduler.class).scan());
+      assertThat(jdbc.queryForObject(selectNode, String.class, runId, "WAIT_FILE"))
+          .isEqualTo("SKIPPED");
+      assertThat(jdbc.queryForObject(countJoin, Long.class, runId)).isZero();
+      assertThat(jdbc.queryForObject(selectRunStatus, String.class, tenantId, runId))
+          .isEqualTo("RUNNING");
+      String fileName = "n-of-ready-" + suffix + ".csv";
+      jdbc.update(insertFile, tenantId, fileName, "s3://test/" + fileName, bizDate);
+      jdbc.update(setProbeTime, -1, runId);
+      RlsTenantContextHolder.runWithTenant(
+          tenantId, () -> application.getBean(SensorPollScheduler.class).scan());
+      assertThat(jdbc.queryForObject(selectNode, String.class, runId, "WAIT_OTHER"))
+          .isEqualTo("SUCCESS");
+      assertThat(jdbc.queryForObject(selectNode, String.class, runId, "JOIN")).isEqualTo("SUCCESS");
+      assertThat(jdbc.queryForObject(selectNode, String.class, runId, "END")).isEqualTo("SUCCESS");
+      assertThat(jdbc.queryForObject(selectRunStatus, String.class, tenantId, runId))
+          .isEqualTo("SUCCESS");
+      assertThat(jdbc.queryForObject(countTerminal, Long.class, tenantId, runId))
+          .isEqualTo(1L);
     }
   }
 
@@ -854,11 +969,11 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
   @DisplayName("FILE_ARRIVAL WAIT 终结无 Job Workflow 与空日结算两种顺序均收敛")
   void fileArrivalWaitFinalizationRacingSettlement_shouldSettleOnlyAfterWorkflowCompletes(
       String firstAction) {
-        final String selectIdSql = """
+    final String selectIdSql = """
             select id from batch.workflow_run where tenant_id = ? and workflow_definition_id = ?\s\
             and biz_date = ?\
             """;
-        final String insertFileRecordSql = """
+    final String insertFileRecordSql = """
           insert into batch.file_record (
               tenant_id, file_category, file_name, file_format_type, storage_type, storage_path,
               source_type, file_status, biz_date, metadata_json, created_at
@@ -889,7 +1004,7 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
       Long workflowDefinitionId = seedWorkflow(
           jdbc, workflowCode, requestId, "dedup-file-sensor-r11-" + suffix, requestId, bizDate);
       LaunchRequest launchRequest = LaunchRequest.builder()
-          .tenantId(TENANT)
+          .tenantId(tenantId)
           .workflowDefinitionId(workflowDefinitionId)
           .bizDate(bizDate)
           .triggerType(TriggerType.API)
@@ -898,31 +1013,23 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
           .params(Map.of())
           .build();
       RlsTenantContextHolder.runWithTenant(
-          TENANT,
-          () -> application
-              .getBean(WorkflowRunLaunchService.class)
-              .launch(launchRequest));
-      Long workflowRunId = jdbc.queryForObject(
-          selectIdSql,
-          Long.class,
-          TENANT,
-          workflowDefinitionId,
-          bizDate);
+          tenantId,
+          () -> application.getBean(WorkflowRunLaunchService.class).launch(launchRequest));
+      Long workflowRunId =
+          jdbc.queryForObject(selectIdSql, Long.class, tenantId, workflowDefinitionId, bizDate);
       insertCutoffBatchDay(jdbc, bizDate);
-      jdbc.update(insertFileRecordSql, TENANT, fileName, "s3://test/" + fileName, bizDate);
-      jdbc.update(
-          updateWorkflowNodeRunSql,
-          workflowRunId);
+      jdbc.update(insertFileRecordSql, tenantId, fileName, "s3://test/" + fileName, bizDate);
+      jdbc.update(updateWorkflowNodeRunSql, workflowRunId);
 
       if ("SETTLEMENT_FIRST".equals(firstAction)) {
         application.getBean(BatchDaySettleScheduler.class).settle();
         assertThat(batchDayStatus(jdbc, bizDate)).isEqualTo("IN_FLIGHT");
         assertThat(workflowRunStatus(jdbc, workflowRunId)).isEqualTo("RUNNING");
         RlsTenantContextHolder.runWithTenant(
-            TENANT, () -> application.getBean(SensorPollScheduler.class).scan());
+            tenantId, () -> application.getBean(SensorPollScheduler.class).scan());
       } else {
         RlsTenantContextHolder.runWithTenant(
-            TENANT, () -> application.getBean(SensorPollScheduler.class).scan());
+            tenantId, () -> application.getBean(SensorPollScheduler.class).scan());
       }
 
       String selectedNodeStatus =
@@ -931,7 +1038,7 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
       assertThat(workflowRunStatus(jdbc, workflowRunId)).isEqualTo("SUCCESS");
       application.getBean(BatchDaySettleScheduler.class).settle();
       Long selectedOutboxEventCount =
-          jdbc.queryForObject(selectCountSql, Long.class, TENANT, workflowRunId);
+          jdbc.queryForObject(selectCountSql, Long.class, tenantId, workflowRunId);
       assertThat(selectedOutboxEventCount).isEqualTo(1L);
       assertThat(batchDayStatus(jdbc, bizDate)).isEqualTo("SETTLED");
     }
@@ -942,11 +1049,11 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
   @DisplayName("stuck reconciler 终结已完成节点的 Workflow 与空日结算两种顺序均正确")
   void stuckWorkflowFinalizationRacingSettlement_shouldSettleAfterPersistedNodesComplete(
       String firstAction) {
-        final String selectIdSql = """
+    final String selectIdSql = """
             select id from batch.workflow_run where tenant_id = ? and workflow_definition_id = ?\s\
             and biz_date = ?\
             """;
-        final String updateWorkflowNodeRunSql = """
+    final String updateWorkflowNodeRunSql = """
           update batch.workflow_node_run
           set node_status = 'SUCCESS', finished_at = current_timestamp
           where workflow_run_id = ?
@@ -974,7 +1081,7 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
       Long workflowDefinitionId = seedWorkflow(
           jdbc, workflowCode, requestId, "dedup-stuck-r11-" + suffix, requestId, bizDate);
       LaunchRequest launchRequest = LaunchRequest.builder()
-          .tenantId(TENANT)
+          .tenantId(tenantId)
           .workflowDefinitionId(workflowDefinitionId)
           .bizDate(bizDate)
           .triggerType(TriggerType.API)
@@ -983,24 +1090,15 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
           .params(Map.of())
           .build();
       RlsTenantContextHolder.runWithTenant(
-          TENANT,
-          () -> application
-              .getBean(WorkflowRunLaunchService.class)
-              .launch(launchRequest));
-      Long workflowRunId = jdbc.queryForObject(
-          selectIdSql,
-          Long.class,
-          TENANT,
-          workflowDefinitionId,
-          bizDate);
+          tenantId,
+          () -> application.getBean(WorkflowRunLaunchService.class).launch(launchRequest));
+      Long workflowRunId =
+          jdbc.queryForObject(selectIdSql, Long.class, tenantId, workflowDefinitionId, bizDate);
       insertCutoffBatchDay(jdbc, bizDate);
       // 模拟已持久化的崩溃窗口：所有 DAG 节点都已提交终态，
       // 但进程尚未来得及结束仍为 RUNNING 的根 WorkflowRun。
       jdbc.update(updateWorkflowNodeRunSql, workflowRunId);
-      jdbc.update(
-          updateWorkflowRunSql,
-          TENANT,
-          workflowRunId);
+      jdbc.update(updateWorkflowRunSql, tenantId, workflowRunId);
       assertThat(application
               .getBean(WorkflowRunMapper.class)
               .selectStuckRunningCandidates(Instant.now().minusSeconds(1_800), 100)
@@ -1027,9 +1125,337 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
       assertThat(workflowRunStatus(jdbc, workflowRunId)).isEqualTo("SUCCESS");
       application.getBean(BatchDaySettleScheduler.class).settle();
       Long selectedOutboxEventCount =
-          jdbc.queryForObject(selectCountSql, Long.class, TENANT, workflowRunId);
+          jdbc.queryForObject(selectCountSql, Long.class, tenantId, workflowRunId);
       assertThat(selectedOutboxEventCount).isEqualTo(1L);
       assertThat(batchDayStatus(jdbc, bizDate)).isEqualTo("SETTLED");
+    }
+  }
+
+  @Test
+  @DisplayName("绕过 Console 写入的无效分支汇聚模式不能启动 Workflow")
+  void shouldRejectInvalidBranchJoinModeBeforeLaunch() {
+    long suffix = System.nanoTime();
+    String requestId = "req-invalid-join-" + suffix;
+    LocalDate bizDate = LocalDate.of(2026, 10, 13);
+    String updateNode = """
+        update batch.workflow_node set node_type = 'GATEWAY', node_params = '{"joinMode":"BAD"}'::jsonb
+        where tenant_id = ? and workflow_definition_id = ? and node_code = 'WAIT_FILE'
+        """;
+    String countRuns =
+        "select count(*) from batch.workflow_run where tenant_id = ? and workflow_definition_id = ?";
+    try (ConfigurableApplicationContext application = applicationContext(true)) {
+      JdbcTemplate jdbc = application.getBean(JdbcTemplate.class);
+      Long definitionId = seedWorkflow(
+          jdbc,
+          "WF_INVALID_JOIN_" + suffix,
+          requestId,
+          "dedup-invalid-join-" + suffix,
+          requestId,
+          bizDate);
+      jdbc.update(updateNode, tenantId, definitionId);
+      LaunchRequest request = LaunchRequest.builder()
+          .tenantId(tenantId)
+          .workflowDefinitionId(definitionId)
+          .bizDate(bizDate)
+          .triggerType(TriggerType.API)
+          .requestId(requestId)
+          .traceId(requestId)
+          .params(Map.of())
+          .build();
+      assertThatThrownBy(() -> RlsTenantContextHolder.runWithTenant(
+              tenantId,
+              () -> application.getBean(WorkflowRunLaunchService.class).launch(request)))
+          .isInstanceOfSatisfying(
+              BizException.class,
+              error ->
+                  assertThat(error.getMessageKey()).isEqualTo("error.workflow.definition_invalid"));
+      assertThat(jdbc.queryForObject(countRuns, Long.class, tenantId, definitionId))
+          .isZero();
+    }
+  }
+
+  @Test
+  @DisplayName("绕过 Console 写入的普通节点无效汇聚模式不能启动 Workflow")
+  void shouldRejectInvalidTaskJoinModeBeforeLaunch() {
+    long suffix = System.nanoTime();
+    String requestId = "req-invalid-task-join-" + suffix;
+    LocalDate bizDate = LocalDate.of(2026, 10, 13);
+    String updateNode = """
+        update batch.workflow_node set node_type = 'TASK', node_params = '{"joinMode":"BAD"}'::jsonb
+        where tenant_id = ? and workflow_definition_id = ? and node_code = 'WAIT_FILE'
+        """;
+    String countRuns =
+        "select count(*) from batch.workflow_run where tenant_id = ? and workflow_definition_id = ?";
+    try (ConfigurableApplicationContext application = applicationContext(true)) {
+      JdbcTemplate jdbc = application.getBean(JdbcTemplate.class);
+      Long definitionId = seedWorkflow(
+          jdbc,
+          "WF_INVALID_TASK_JOIN_" + suffix,
+          requestId,
+          "dedup-invalid-task-join-" + suffix,
+          requestId,
+          bizDate);
+      jdbc.update(updateNode, tenantId, definitionId);
+      var validation = RlsTenantContextHolder.runWithTenant(
+          tenantId, () -> application.getBean(WorkflowGraphValidator.class).validate(definitionId));
+      assertThat(validation.errors())
+          .anySatisfy(issue -> assertThat(issue.code()).isEqualTo("V9"));
+      LaunchRequest request = LaunchRequest.builder()
+          .tenantId(tenantId)
+          .workflowDefinitionId(definitionId)
+          .bizDate(bizDate)
+          .triggerType(TriggerType.API)
+          .requestId(requestId)
+          .traceId(requestId)
+          .params(Map.of())
+          .build();
+      assertThatThrownBy(() -> RlsTenantContextHolder.runWithTenant(
+              tenantId,
+              () -> application.getBean(WorkflowRunLaunchService.class).launch(request)))
+          .isInstanceOfSatisfying(
+              BizException.class,
+              error ->
+                  assertThat(error.getMessageKey()).isEqualTo("error.workflow.definition_invalid"));
+      assertThat(jdbc.queryForObject(countRuns, Long.class, tenantId, definitionId))
+          .isZero();
+    }
+  }
+
+  @Test
+  @DisplayName("下一次文件探测跨过截止时间时按时选中并持久化超时")
+  void shouldWakeAtDeadline_whenNextFileProbeWouldBeLater() {
+    long suffix = System.nanoTime();
+    String requestId = "req-deadline-" + suffix;
+    LocalDate bizDate = LocalDate.of(2026, 10, 13);
+    try (ConfigurableApplicationContext application = applicationContext(true)) {
+      JdbcTemplate jdbc = application.getBean(JdbcTemplate.class);
+      Long definitionId = seedWorkflow(
+          jdbc, "WF_DEADLINE_" + suffix, requestId, "dedup-deadline-" + suffix, requestId, bizDate);
+      String updateParamsSql = """
+          update batch.workflow_node set node_params = ?::jsonb
+          where tenant_id = ? and workflow_definition_id = ? and node_code = 'WAIT_FILE'
+          """;
+      String sensorParams = """
+          {"sensor_type":"FILE_ARRIVAL","sensor_spec":{"pattern":"missing-deadline-*.csv","maxAgeSeconds":3600},
+           "timeout_seconds":120,"poll_interval_seconds":30,"on_timeout":"FAIL"}
+          """;
+      jdbc.update(updateParamsSql, sensorParams, tenantId, definitionId);
+      LaunchRequest request = LaunchRequest.builder()
+          .tenantId(tenantId)
+          .workflowDefinitionId(definitionId)
+          .bizDate(bizDate)
+          .triggerType(TriggerType.API)
+          .requestId(requestId)
+          .traceId(requestId)
+          .params(Map.of())
+          .build();
+      RlsTenantContextHolder.runWithTenant(
+          tenantId, () -> application.getBean(WorkflowRunLaunchService.class).launch(request));
+      String selectRunSql = """
+          select id from batch.workflow_run where tenant_id = ? and trigger_request_id =
+            (select id from batch.trigger_request where tenant_id = ? and request_id = ?)
+          """;
+      Long runId = jdbc.queryForObject(selectRunSql, Long.class, tenantId, tenantId, requestId);
+      String setStartSql = """
+          update batch.workflow_node_run
+          set started_at = current_timestamp - interval '100 seconds',
+              sensor_next_probe_at = current_timestamp - interval '1 second'
+          where workflow_run_id = ? and node_code = 'WAIT_FILE'
+          """;
+      jdbc.update(setStartSql, runId);
+      RlsTenantContextHolder.runWithTenant(
+          tenantId, () -> application.getBean(SensorPollScheduler.class).scan());
+      String atDeadlineSql = """
+          select sensor_next_probe_at = started_at + interval '120 seconds'
+          from batch.workflow_node_run where workflow_run_id = ? and node_code = 'WAIT_FILE'
+          """;
+      assertThat(jdbc.queryForObject(atDeadlineSql, Boolean.class, runId)).isTrue();
+      String dueSql = """
+          select sensor_next_probe_at <= current_timestamp
+          from batch.workflow_node_run where workflow_run_id = ? and node_code = 'WAIT_FILE'
+          """;
+      Awaitility.await()
+          .atMost(Duration.ofSeconds(30))
+          .pollInterval(Duration.ofMillis(200))
+          .until(() -> Boolean.TRUE.equals(jdbc.queryForObject(dueSql, Boolean.class, runId)));
+      RlsTenantContextHolder.runWithTenant(
+          tenantId, () -> application.getBean(SensorPollScheduler.class).scan());
+
+      WorkflowNodeRunEntity wait = RlsTenantContextHolder.runWithTenant(
+          tenantId,
+          () -> application
+              .getBean(WorkflowNodeRunMapper.class)
+              .selectLatestByWorkflowRunIdAndNodeCode(runId, "WAIT_FILE"));
+      assertThat(wait.getNodeStatus()).isEqualTo("FAILED");
+      assertThat(wait.getErrorKey()).isEqualTo("error.workflow.sensor_timeout");
+      assertThat(wait.getSensorNextProbeAt()).isNull();
+    }
+  }
+
+  @Test
+  @DisplayName("超范围 WAIT 下次探测转为配置错误并持久化")
+  void shouldPersistFailure_whenNextSensorProbeExceedsTimestampRange() {
+    long suffix = System.nanoTime();
+    String requestId = "req-probe-range-" + suffix;
+    LocalDate bizDate = LocalDate.of(2026, 10, 13);
+    try (ConfigurableApplicationContext application = applicationContext(true)) {
+      JdbcTemplate jdbc = application.getBean(JdbcTemplate.class);
+      String checkBoundarySql = "select ?::timestamptz = timestamptz '294275-12-31 23:59:59+00'";
+      Instant lastAcceptedSecond = Instant.parse("+294276-01-01T00:00:00Z").minusSeconds(1);
+      assertThat(jdbc.queryForObject(
+              checkBoundarySql, Boolean.class, Timestamp.from(lastAcceptedSecond)))
+          .isTrue();
+      Boolean storedBoundaryMatches = jdbc.execute((ConnectionCallback<Boolean>) connection -> {
+        String createProbeTableSql =
+            "create temporary table probe_time_boundary (probe_at timestamptz)";
+        String insertProbeTimeSql = "insert into probe_time_boundary (probe_at) values (?)";
+        String compareProbeTimeSql =
+            "select probe_at = timestamptz '294275-12-31 23:59:59+00' from probe_time_boundary";
+        try (var statement = connection.createStatement()) {
+          statement.execute(createProbeTableSql);
+        }
+        try (var statement = connection.prepareStatement(insertProbeTimeSql)) {
+          statement.setTimestamp(1, Timestamp.from(lastAcceptedSecond));
+          statement.executeUpdate();
+        }
+        try (var statement = connection.createStatement();
+            var result = statement.executeQuery(compareProbeTimeSql)) {
+          return result.next() && result.getBoolean(1);
+        }
+      });
+      assertThat(storedBoundaryMatches).isTrue();
+      Long definitionId = seedWorkflow(
+          jdbc, "WF_RANGE_" + suffix, requestId, "dedup-range-" + suffix, requestId, bizDate);
+      String updateParamsSql = """
+          update batch.workflow_node set node_params = ?::jsonb
+          where tenant_id = ? and workflow_definition_id = ? and node_code = 'WAIT_FILE'
+          """;
+      String sensorParams = """
+          {"sensor_type":"FILE_ARRIVAL","sensor_spec":{"pattern":"missing-range-*.csv","maxAgeSeconds":3600},
+           "timeout_seconds":10000000000001,"poll_interval_seconds":10000000000000,
+           "on_timeout":"FAIL"}
+          """;
+      jdbc.update(updateParamsSql, sensorParams, tenantId, definitionId);
+      LaunchRequest request = LaunchRequest.builder()
+          .tenantId(tenantId)
+          .workflowDefinitionId(definitionId)
+          .bizDate(bizDate)
+          .triggerType(TriggerType.API)
+          .requestId(requestId)
+          .traceId(requestId)
+          .params(Map.of())
+          .build();
+      RlsTenantContextHolder.runWithTenant(
+          tenantId, () -> application.getBean(WorkflowRunLaunchService.class).launch(request));
+      String selectRunSql = """
+          select id from batch.workflow_run where tenant_id = ? and trigger_request_id =
+            (select id from batch.trigger_request where tenant_id = ? and request_id = ?)
+          """;
+      Long runId = jdbc.queryForObject(selectRunSql, Long.class, tenantId, tenantId, requestId);
+      String forceProbeSql = """
+          update batch.workflow_node_run set sensor_next_probe_at = current_timestamp - interval '1 second'
+          where workflow_run_id = ? and node_code = 'WAIT_FILE'
+          """;
+      jdbc.update(forceProbeSql, runId);
+      RlsTenantContextHolder.runWithTenant(
+          tenantId, () -> application.getBean(SensorPollScheduler.class).scan());
+
+      WorkflowNodeRunEntity wait = RlsTenantContextHolder.runWithTenant(
+          tenantId,
+          () -> application
+              .getBean(WorkflowNodeRunMapper.class)
+              .selectLatestByWorkflowRunIdAndNodeCode(runId, "WAIT_FILE"));
+      assertThat(wait.getNodeStatus()).isEqualTo("FAILED");
+      assertThat(wait.getErrorKey()).isEqualTo("error.workflow.sensor_spec_invalid");
+      assertThat(wait.getSensorNextProbeAt()).isNull();
+    }
+  }
+
+  @Test
+  @DisplayName("文件名特殊字符按字面匹配,错误文件不能释放 WAIT")
+  void shouldReleaseFileWaitOnlyForLiteralPatternMatch() {
+    long suffix = System.nanoTime();
+    String requestId = "req-literal-file-" + suffix;
+    LocalDate bizDate = LocalDate.of(2026, 10, 13);
+    String decoy = "invoiceX100wrong.csv";
+    String matching = "invoice_100%ok.csv";
+    Long runId;
+    String insert = """
+        insert into batch.file_record (tenant_id,file_category,file_name,file_format_type,storage_type,
+          storage_path,source_type,file_status,biz_date)
+        values (?, 'INPUT', ?, 'DELIMITED', 'S3', ?, 'SFTP', 'RECEIVED', ?)
+        """;
+    String forceProbe = """
+        update batch.workflow_node_run set sensor_next_probe_at = current_timestamp - interval '1 second'
+        where workflow_run_id = ? and node_code = 'WAIT_FILE'
+        """;
+    String state = """
+        select node_status from batch.workflow_node_run where workflow_run_id = ? and node_code = ?
+        """;
+    String terminalCount = """
+        select count(*) from batch.outbox_event where tenant_id = ? and aggregate_type = 'WORKFLOW_RUN'
+        and aggregate_id = ? and event_type = 'WORKFLOW_TERMINAL'
+        """;
+    try (ConfigurableApplicationContext application = applicationContext(true)) {
+      JdbcTemplate jdbc = application.getBean(JdbcTemplate.class);
+      Long definitionId = seedWorkflow(
+          jdbc, "WF_LITERAL_" + suffix, requestId, "dedup-literal-" + suffix, requestId, bizDate);
+      String updateNodeParamsSql = """
+          update batch.workflow_node set node_params = ?::jsonb
+          where tenant_id = ? and workflow_definition_id = ? and node_code = 'WAIT_FILE'
+          """;
+      jdbc.update(updateNodeParamsSql, """
+          {"sensor_type":"FILE_ARRIVAL",
+           "sensor_spec":{"pattern":"invoice_100%*.csv","maxAgeSeconds":3600},
+           "timeout_seconds":3600,"poll_interval_seconds":1,"on_timeout":"FAIL"}
+          """, tenantId, definitionId);
+      LaunchRequest request = LaunchRequest.builder()
+          .tenantId(tenantId)
+          .workflowDefinitionId(definitionId)
+          .bizDate(bizDate)
+          .triggerType(TriggerType.API)
+          .requestId(requestId)
+          .traceId(requestId)
+          .params(Map.of())
+          .build();
+      RlsTenantContextHolder.runWithTenant(
+          tenantId, () -> application.getBean(WorkflowRunLaunchService.class).launch(request));
+      String selectRunSql = """
+          select id from batch.workflow_run where tenant_id = ? and trigger_request_id =
+            (select id from batch.trigger_request where tenant_id = ? and request_id = ?)
+          """;
+      runId = jdbc.queryForObject(selectRunSql, Long.class, tenantId, tenantId, requestId);
+      jdbc.update(insert, tenantId, decoy, "s3://test/" + decoy, bizDate);
+      jdbc.update(forceProbe, runId);
+      RlsTenantContextHolder.runWithTenant(
+          tenantId, () -> application.getBean(SensorPollScheduler.class).scan());
+      assertThat(jdbc.queryForObject(state, String.class, runId, "WAIT_FILE")).isEqualTo("RUNNING");
+      String countEndSql =
+          "select count(*) from batch.workflow_node_run where workflow_run_id = ? and node_code = 'END'";
+      assertThat(jdbc.queryForObject(countEndSql, Long.class, runId)).isZero();
+      assertThat(jdbc.queryForObject(terminalCount, Long.class, tenantId, runId))
+          .isZero();
+    }
+    try (ConfigurableApplicationContext application = applicationContext(true)) {
+      JdbcTemplate jdbc = application.getBean(JdbcTemplate.class);
+      jdbc.update(insert, tenantId, matching, "s3://test/" + matching, bizDate);
+      jdbc.update(forceProbe, runId);
+      RlsTenantContextHolder.runWithTenant(
+          tenantId, () -> application.getBean(SensorPollScheduler.class).scan());
+      WorkflowNodeRunEntity wait = RlsTenantContextHolder.runWithTenant(
+          tenantId,
+          () -> application
+              .getBean(WorkflowNodeRunMapper.class)
+              .selectLatestByWorkflowRunIdAndNodeCode(runId, "WAIT_FILE"));
+      assertThat(wait.getNodeStatus()).isEqualTo("SUCCESS");
+      assertThat(wait.getOutput()).contains(matching).doesNotContain(decoy);
+      assertThat(jdbc.queryForObject(state, String.class, runId, "END")).isEqualTo("SUCCESS");
+      String selectRunStatusSql =
+          "select run_status from batch.workflow_run where tenant_id = ? and id = ?";
+      assertThat(jdbc.queryForObject(selectRunStatusSql, String.class, tenantId, runId))
+          .isEqualTo("SUCCESS");
+      assertThat(jdbc.queryForObject(terminalCount, Long.class, tenantId, runId))
+          .isEqualTo(1L);
     }
   }
 
@@ -1085,7 +1511,7 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
       workflowDefinitionId = seedWorkflow(jdbc, jobCode, requestId, dedupKey, traceId, bizDate);
       WorkflowRunLaunchService launchService = first.getBean(WorkflowRunLaunchService.class);
       LaunchRequest launchRequest = LaunchRequest.builder()
-          .tenantId(TENANT)
+          .tenantId(tenantId)
           .workflowDefinitionId(workflowDefinitionId)
           .bizDate(bizDate)
           .triggerType(TriggerType.API)
@@ -1093,29 +1519,22 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
           .traceId(traceId)
           .params(Map.of())
           .build();
-      RlsTenantContextHolder.runWithTenant(TENANT, () -> launchService.launch(launchRequest));
+      RlsTenantContextHolder.runWithTenant(tenantId, () -> launchService.launch(launchRequest));
 
-      workflowRunId = jdbc.queryForObject(
-          selectIdSql,
-          Long.class,
-          TENANT,
-          TENANT,
-          requestId);
+      workflowRunId = jdbc.queryForObject(selectIdSql, Long.class, tenantId, tenantId, requestId);
       insertCutoffBatchDay(jdbc, bizDate);
       first.getBean(BatchDaySettleScheduler.class).settle();
       assertThat(batchDayStatus(jdbc, bizDate)).isEqualTo("IN_FLIGHT");
       WorkflowNodeRunEntity waitRun = RlsTenantContextHolder.runWithTenant(
-          TENANT,
+          tenantId,
           () -> first
               .getBean(WorkflowNodeRunMapper.class)
               .selectLatestByWorkflowRunIdAndNodeCode(workflowRunId, "WAIT_FILE"));
       assertThat(waitRun).isNotNull();
       assertThat(waitRun.getNodeStatus()).isEqualTo("RUNNING");
-      jdbc.update(
-          updateWorkflowNodeRunSql,
-          waitRun.getId());
+      jdbc.update(updateWorkflowNodeRunSql, waitRun.getId());
       Long selectedJobTaskCount =
-          jdbc.queryForObject(selectCountSql, Long.class, TENANT, workflowRunId);
+          jdbc.queryForObject(selectCountSql, Long.class, tenantId, workflowRunId);
       assertThat(selectedJobTaskCount).isZero();
     }
 
@@ -1123,10 +1542,8 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
     // 均已关闭。第二个上下文继续使用同一外部 PostgreSQL 状态。
     try (ConfigurableApplicationContext restarted = applicationContext(true)) {
       JdbcTemplate jdbc = restarted.getBean(JdbcTemplate.class);
-      jdbc.update(insertFileRecordSql, TENANT, fileName, "s3://test/" + fileName, bizDate);
-      jdbc.update(
-          updateWorkflowNodeRunSql2,
-          workflowRunId);
+      jdbc.update(insertFileRecordSql, tenantId, fileName, "s3://test/" + fileName, bizDate);
+      jdbc.update(updateWorkflowNodeRunSql2, workflowRunId);
 
       ExecutorService executor = Executors.newFixedThreadPool(2);
       CountDownLatch start = new CountDownLatch(1);
@@ -1134,7 +1551,7 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
         var sensorScan = executor.submit(() -> {
           start.await();
           RlsTenantContextHolder.runWithTenant(
-              TENANT, () -> restarted.getBean(SensorPollScheduler.class).scan());
+              tenantId, () -> restarted.getBean(SensorPollScheduler.class).scan());
           return null;
         });
         var settlementScan = executor.submit(() -> {
@@ -1150,7 +1567,7 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
       }
 
       WorkflowNodeRunMapper nodeRunMapper = restarted.getBean(WorkflowNodeRunMapper.class);
-      RlsTenantContextHolder.runWithTenant(TENANT, () -> {
+      RlsTenantContextHolder.runWithTenant(tenantId, () -> {
         WorkflowNodeRunEntity waitRun =
             nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(workflowRunId, "WAIT_FILE");
         WorkflowNodeRunEntity endRun =
@@ -1160,13 +1577,13 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
         assertThat(endRun.getNodeStatus()).isEqualTo("SUCCESS");
       });
       String selectedRunStatus =
-          jdbc.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
+          jdbc.queryForObject(selectRunStatusSql, String.class, tenantId, workflowRunId);
       assertThat(selectedRunStatus).isEqualTo("SUCCESS");
       Long selectedRelatedJobInstanceId =
-          jdbc.queryForObject(selectRelatedJobInstanceIdSql, Long.class, TENANT, workflowRunId);
+          jdbc.queryForObject(selectRelatedJobInstanceIdSql, Long.class, tenantId, workflowRunId);
       assertThat(selectedRelatedJobInstanceId).isNull();
       Long selectedOutboxEventCount =
-          jdbc.queryForObject(selectCountSql2, Long.class, TENANT, workflowRunId);
+          jdbc.queryForObject(selectCountSql2, Long.class, tenantId, workflowRunId);
       assertThat(selectedOutboxEventCount).isEqualTo(1L);
       restarted.getBean(BatchDaySettleScheduler.class).settle();
       assertThat(batchDayStatus(jdbc, bizDate)).isEqualTo("SETTLED");
@@ -1258,21 +1675,21 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
       JdbcTemplate jdbc = application.getBean(JdbcTemplate.class);
       Long workflowDefinitionId = seedWorkflow(
           jdbc, rootJobCode, requestId, "dedup-terminated-wait-" + suffix, requestId, bizDate);
-      jdbc.update(insertJobDefinitionSql, TENANT, childJobCode, childJobCode, childWorkerGroup);
-      jdbc.update(updateWorkflowNodeSql, childJobCode, TENANT, workflowDefinitionId);
-      jdbc.update(insertWorkflowNodeSql, TENANT, workflowDefinitionId);
-      jdbc.update(updateWorkflowEdgeSql, TENANT, workflowDefinitionId);
-      jdbc.update(insertWorkflowEdgeSql, TENANT, workflowDefinitionId);
+      jdbc.update(insertJobDefinitionSql, tenantId, childJobCode, childJobCode, childWorkerGroup);
+      jdbc.update(updateWorkflowNodeSql, childJobCode, tenantId, workflowDefinitionId);
+      jdbc.update(insertWorkflowNodeSql, tenantId, workflowDefinitionId);
+      jdbc.update(updateWorkflowEdgeSql, tenantId, workflowDefinitionId);
+      jdbc.update(insertWorkflowEdgeSql, tenantId, workflowDefinitionId);
       jdbc.update(updateWorkflowNodeSql2, """
           {"sensor_type":"FILE_ARRIVAL",
            "sensor_spec":{"pattern":"terminated-wait-r11-*.csv","maxAgeSeconds":3600,
              "bindWorkflowBizDate":true,"fileGroupCode":"CONTEXT_RESTART",
              "requireCompleteGroup":true},
            "timeout_seconds":3600,"poll_interval_seconds":1,"on_timeout":"FAIL"}
-          """, TENANT, workflowDefinitionId);
+          """, tenantId, workflowDefinitionId);
 
       LaunchRequest launchRequest = LaunchRequest.builder()
-          .tenantId(TENANT)
+          .tenantId(tenantId)
           .workflowDefinitionId(workflowDefinitionId)
           .bizDate(bizDate)
           .triggerType(TriggerType.API)
@@ -1281,36 +1698,30 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
           .params(Map.of())
           .build();
       RlsTenantContextHolder.runWithTenant(
-          TENANT,
-          () -> application
-              .getBean(WorkflowRunLaunchService.class)
-              .launch(launchRequest));
-      Long workflowRunId = jdbc.queryForObject(
-          selectIdSql,
-          Long.class,
-          TENANT,
-          TENANT,
-          requestId);
+          tenantId,
+          () -> application.getBean(WorkflowRunLaunchService.class).launch(launchRequest));
+      Long workflowRunId =
+          jdbc.queryForObject(selectIdSql, Long.class, tenantId, tenantId, requestId);
       insertCutoffBatchDay(jdbc, bizDate);
       application.getBean(BatchDaySettleScheduler.class).settle();
       assertThat(batchDayStatus(jdbc, bizDate)).isEqualTo("IN_FLIGHT");
 
       RlsTenantContextHolder.runWithTenant(
-          TENANT,
+          tenantId,
           () -> application
               .getBean(WorkflowRunManagementApplicationService.class)
-              .terminate(TENANT, workflowRunId));
-      jdbc.update(insertFileRecordSql, TENANT, fileName, "s3://test/" + fileName, bizDate);
+              .terminate(tenantId, workflowRunId));
+      jdbc.update(insertFileRecordSql, tenantId, fileName, "s3://test/" + fileName, bizDate);
       jdbc.update(updateWorkflowNodeRunSql, workflowRunId);
 
       RlsTenantContextHolder.runWithTenant(
-          TENANT, () -> application.getBean(SensorPollScheduler.class).scan());
+          tenantId, () -> application.getBean(SensorPollScheduler.class).scan());
 
       String selectedRunStatus =
-          jdbc.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
+          jdbc.queryForObject(selectRunStatusSql, String.class, tenantId, workflowRunId);
       assertThat(selectedRunStatus).isEqualTo("TERMINATED");
       Integer selectedTriggerRequestCount =
-          jdbc.queryForObject(selectCountSql, Integer.class, TENANT, workflowRunId);
+          jdbc.queryForObject(selectCountSql, Integer.class, tenantId, workflowRunId);
       assertThat(selectedTriggerRequestCount).isZero();
       String selectedNodeStatus =
           jdbc.queryForObject(selectNodeStatusSql, String.class, workflowRunId);
@@ -1365,7 +1776,7 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
       Long workflowDefinitionId =
           seedWorkflow(jdbc, jobCode, requestId, dedupKey, traceId, bizDate);
       LaunchRequest launchRequest = LaunchRequest.builder()
-          .tenantId(TENANT)
+          .tenantId(tenantId)
           .workflowDefinitionId(workflowDefinitionId)
           .bizDate(bizDate)
           .triggerType(TriggerType.API)
@@ -1374,62 +1785,55 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
           .params(Map.of())
           .build();
       RlsTenantContextHolder.runWithTenant(
-          TENANT, () -> first.getBean(WorkflowRunLaunchService.class).launch(launchRequest));
-      workflowRunId = jdbc.queryForObject(
-          selectIdSql,
-          Long.class,
-          TENANT,
-          TENANT,
-          requestId);
+          tenantId, () -> first.getBean(WorkflowRunLaunchService.class).launch(launchRequest));
+      workflowRunId = jdbc.queryForObject(selectIdSql, Long.class, tenantId, tenantId, requestId);
       insertCutoffBatchDay(jdbc, bizDate);
-      jdbc.update(
-          updateWorkflowNodeRunSql,
-          workflowRunId);
+      jdbc.update(updateWorkflowNodeRunSql, workflowRunId);
       Integer selectedWorkflowNodeRunCount =
           jdbc.queryForObject(selectCountSql, Integer.class, workflowRunId);
       assertThat(selectedWorkflowNodeRunCount).isEqualTo(1);
       Integer selectedJobInstanceCount =
-          jdbc.queryForObject(selectCountSql2, Integer.class, TENANT, jobCode);
+          jdbc.queryForObject(selectCountSql2, Integer.class, tenantId, jobCode);
       assertThat(selectedJobInstanceCount).isZero();
     }
 
     try (ConfigurableApplicationContext restarted = applicationContext(true)) {
       JdbcTemplate jdbc = restarted.getBean(JdbcTemplate.class);
       RlsTenantContextHolder.runWithTenant(
-          TENANT, () -> restarted.getBean(SensorPollScheduler.class).scan());
+          tenantId, () -> restarted.getBean(SensorPollScheduler.class).scan());
 
       WorkflowNodeRunMapper nodeRunMapper = restarted.getBean(WorkflowNodeRunMapper.class);
       WorkflowNodeRunEntity timedOut = RlsTenantContextHolder.runWithTenant(
-          TENANT,
+          tenantId,
           () -> nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(workflowRunId, "WAIT_FILE"));
       assertThat(timedOut.getNodeStatus()).isEqualTo("FAILED");
       assertThat(timedOut.getErrorCode()).isEqualTo("SENSOR_FAIL");
       String selectedRunStatus =
-          jdbc.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
+          jdbc.queryForObject(selectRunStatusSql, String.class, tenantId, workflowRunId);
       assertThat(selectedRunStatus).isEqualTo("FAILED");
 
       RlsTenantContextHolder.runWithTenant(
-          TENANT,
+          tenantId,
           () -> restarted
               .getBean(WorkflowRunManagementApplicationService.class)
-              .skipNode(TENANT, workflowRunId, "WAIT_FILE", "operator-r08", "approved timeout"));
+              .skipNode(tenantId, workflowRunId, "WAIT_FILE", "operator-r08", "approved timeout"));
       WorkflowNodeRunEntity skipped = RlsTenantContextHolder.runWithTenant(
-          TENANT,
+          tenantId,
           () -> nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(workflowRunId, "WAIT_FILE"));
       assertThat(skipped.getNodeStatus()).isEqualTo("SKIPPED");
       assertThat(skipped.getSkipReasonCode()).isEqualTo("OPERATOR_SKIPPED");
       assertThat(skipped.getSkipReason()).isEqualTo("approved timeout");
       String selectedRunStatusRead2 =
-          jdbc.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
+          jdbc.queryForObject(selectRunStatusSql, String.class, tenantId, workflowRunId);
       assertThat(selectedRunStatusRead2).isEqualTo("FAILED");
 
       restarted.getBean(BatchDaySettleScheduler.class).settle();
       assertThat(batchDayStatus(jdbc, bizDate)).isEqualTo("FAILED");
       Long selectedOutboxEventCount =
-          jdbc.queryForObject(selectCountSql3, Long.class, TENANT, workflowRunId);
+          jdbc.queryForObject(selectCountSql3, Long.class, tenantId, workflowRunId);
       assertThat(selectedOutboxEventCount).isEqualTo(1L);
       Integer selectedJobInstanceCountRead2 =
-          jdbc.queryForObject(selectCountSql2, Integer.class, TENANT, jobCode);
+          jdbc.queryForObject(selectCountSql2, Integer.class, tenantId, jobCode);
       assertThat(selectedJobInstanceCountRead2).isZero();
     }
   }
@@ -1491,9 +1895,9 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
     try (ConfigurableApplicationContext first = applicationContext(true)) {
       JdbcTemplate jdbc = first.getBean(JdbcTemplate.class);
       seed = LaunchIntegrationFixture.prepareBundleLaunchWithWorker(
-          jdbc, TENANT, "BUNDLE_IMPORT", "IMPORT");
+          jdbc, tenantId, "BUNDLE_IMPORT", "IMPORT");
       String workflowCode = "WF-" + seed.jobCode();
-      requestId = bundleRequestId(TENANT, seed.workflowDefinitionId(), groupCode, bizDate);
+      requestId = bundleRequestId(tenantId, seed.workflowDefinitionId(), groupCode, bizDate);
       insertBundleArrivalFile(
           first, jdbc, groupCode, fileName, workflowCode, templateCode, bizDate);
       jdbc.execute(createFunctionSql);
@@ -1501,13 +1905,13 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
       try {
         first.getBean(FileGovernanceScheduler.class).manageFileArrivalGroups();
         String selectedRequestStatus =
-            jdbc.queryForObject(selectRequestStatusSql, String.class, TENANT, requestId);
+            jdbc.queryForObject(selectRequestStatusSql, String.class, tenantId, requestId);
         assertThat(selectedRequestStatus).isEqualTo("ACCEPTED");
         Integer selectedWorkflowRunCount =
-            jdbc.queryForObject(selectCountSql, Integer.class, TENANT, TENANT, requestId);
+            jdbc.queryForObject(selectCountSql, Integer.class, tenantId, tenantId, requestId);
         assertThat(selectedWorkflowRunCount).isZero();
         String selectedCoalesce =
-            jdbc.queryForObject(selectCoalesceSql, String.class, TENANT, fileName);
+            jdbc.queryForObject(selectCoalesceSql, String.class, tenantId, fileName);
         assertThat(selectedCoalesce).isEqualTo("WAITING_ARRIVAL");
       } finally {
         jdbc.execute(dropTriggerSql);
@@ -1520,21 +1924,21 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
       restarted.getBean(FileGovernanceScheduler.class).manageFileArrivalGroups();
 
       Integer selectedTriggerRequestCount =
-          jdbc.queryForObject(selectCountSql2, Integer.class, TENANT, requestId);
+          jdbc.queryForObject(selectCountSql2, Integer.class, tenantId, requestId);
       assertThat(selectedTriggerRequestCount).isEqualTo(1);
       Integer selectedWorkflowRunCountRead2 =
-          jdbc.queryForObject(selectCountSql3, Integer.class, TENANT, TENANT, requestId);
+          jdbc.queryForObject(selectCountSql3, Integer.class, tenantId, tenantId, requestId);
       assertThat(selectedWorkflowRunCountRead2).isEqualTo(1);
       Integer selectedJobInstanceCount =
-          jdbc.queryForObject(selectCountSql4, Integer.class, TENANT, seed.jobCode());
+          jdbc.queryForObject(selectCountSql4, Integer.class, tenantId, seed.jobCode());
       assertThat(selectedJobInstanceCount).isEqualTo(1);
       String selectedMetadataJson =
-          jdbc.queryForObject(selectMetadataJsonSql, String.class, TENANT, fileName);
+          jdbc.queryForObject(selectMetadataJsonSql, String.class, tenantId, fileName);
       assertThat(selectedMetadataJson).isEqualTo("TRIGGERED");
       String selectedOccurrenceStatus = jdbc.queryForObject(
           selectOccurrenceStatusSql,
           String.class,
-          TENANT,
+          tenantId,
           seed.workflowDefinitionId(),
           groupCode,
           bizDate);
@@ -1636,7 +2040,7 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
     try (ConfigurableApplicationContext application = applicationContext(true)) {
       JdbcTemplate jdbc = application.getBean(JdbcTemplate.class);
       WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareBundleLaunchWithWorker(
-          jdbc, TENANT, "BUNDLE_IMPORT", "IMPORT");
+          jdbc, tenantId, "BUNDLE_IMPORT", "IMPORT");
       String workflowCode = "WF-" + seed.jobCode();
       String sensorParams = """
           {"sensor_type":"FILE_ARRIVAL",
@@ -1644,30 +2048,22 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
              "bindWorkflowBizDate":true,"fileGroupCode":"%s","requireCompleteGroup":true},
            "timeout_seconds":3600,"poll_interval_seconds":1,"on_timeout":"FAIL"}
           """.formatted(groupCode);
-      jdbc.update(
-          updateWorkflowNodeSql,
-          TENANT,
-          seed.workflowDefinitionId());
-      jdbc.update(
-          updateWorkflowNodeSql2,
-          TENANT,
-          seed.workflowDefinitionId());
-      jdbc.update(insertWorkflowNodeSql, TENANT, seed.workflowDefinitionId(), sensorParams);
-      jdbc.update(
-          deleteWorkflowEdgeSql,
-          TENANT,
-          seed.workflowDefinitionId());
+      jdbc.update(updateWorkflowNodeSql, tenantId, seed.workflowDefinitionId());
+      jdbc.update(updateWorkflowNodeSql2, tenantId, seed.workflowDefinitionId());
+      jdbc.update(insertWorkflowNodeSql, tenantId, seed.workflowDefinitionId(), sensorParams);
+      jdbc.update(deleteWorkflowEdgeSql, tenantId, seed.workflowDefinitionId());
       jdbc.update(
           insertWorkflowEdgeSql,
-          TENANT,
+          tenantId,
           seed.workflowDefinitionId(),
-          TENANT,
+          tenantId,
           seed.workflowDefinitionId(),
-          TENANT,
+          tenantId,
           seed.workflowDefinitionId());
       insertBundleArrivalFile(
           application, jdbc, groupCode, fileName, workflowCode, templateCode, bizDate);
-      final String createFunctionSql = """
+      final String createFunctionSql =
+          """
           create function batch.%s() returns trigger language plpgsql as $$ begin if new.file_name = '%s' then\s\
           perform pg_advisory_lock(%s); perform pg_advisory_unlock(%s); end if; return new; end $$\
           """.formatted(functionName, fileName, advisoryKey, advisoryKey);
@@ -1703,13 +2099,9 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
             });
 
         RlsTenantContextHolder.runWithTenant(
-            TENANT, () -> application.getBean(SensorPollScheduler.class).scan());
+            tenantId, () -> application.getBean(SensorPollScheduler.class).scan());
         Long workflowRunId = jdbc.queryForObject(
-            selectIdSql,
-            Long.class,
-            TENANT,
-            seed.workflowDefinitionId(),
-            bizDate);
+            selectIdSql, Long.class, tenantId, seed.workflowDefinitionId(), bizDate);
         String selectedNodeStatus =
             jdbc.queryForObject(selectNodeStatusSql, String.class, workflowRunId);
         assertThat(selectedNodeStatus).isEqualTo("RUNNING");
@@ -1717,7 +2109,7 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
             jdbc.queryForObject(selectCountSql2, Integer.class, workflowRunId);
         assertThat(selectedWorkflowNodeRunCount).isZero();
         Integer selectedJobInstanceCount =
-            jdbc.queryForObject(selectCountSql3, Integer.class, TENANT, seed.jobCode());
+            jdbc.queryForObject(selectCountSql3, Integer.class, tenantId, seed.jobCode());
         assertThat(selectedJobInstanceCount).isZero();
 
         try (var statement = fence.prepareStatement(selectPgAdvisoryUnlockSql)) {
@@ -1727,7 +2119,7 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
         scanner.get(30, TimeUnit.SECONDS);
 
         String selectedMetadataJson =
-            jdbc.queryForObject(selectMetadataJsonSql, String.class, TENANT, fileName);
+            jdbc.queryForObject(selectMetadataJsonSql, String.class, tenantId, fileName);
         assertThat(selectedMetadataJson).isEqualTo("TRIGGERED");
         assertThat(application
                 .getBean(S3Client.class)
@@ -1737,13 +2129,11 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
                     .build())
                 .contentLength())
             .isPositive();
-        jdbc.update(
-            updateWorkflowNodeRunSql,
-            workflowRunId);
+        jdbc.update(updateWorkflowNodeRunSql, workflowRunId);
         RlsTenantContextHolder.runWithTenant(
-            TENANT, () -> application.getBean(SensorPollScheduler.class).scan());
+            tenantId, () -> application.getBean(SensorPollScheduler.class).scan());
         RlsTenantContextHolder.runWithTenant(
-            TENANT, () -> application.getBean(SensorPollScheduler.class).scan());
+            tenantId, () -> application.getBean(SensorPollScheduler.class).scan());
 
         String selectedNodeStatusRead2 =
             jdbc.queryForObject(selectNodeStatusSql, String.class, workflowRunId);
@@ -1752,13 +2142,18 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
             jdbc.queryForObject(selectCountSql2, Integer.class, workflowRunId);
         assertThat(selectedWorkflowNodeRunCountRead2).isEqualTo(1);
         Integer selectedJobInstanceCountRead2 =
-            jdbc.queryForObject(selectCountSql3, Integer.class, TENANT, seed.jobCode());
+            jdbc.queryForObject(selectCountSql3, Integer.class, tenantId, seed.jobCode());
         assertThat(selectedJobInstanceCountRead2).isEqualTo(1);
-        Integer selectedOutboxEventCount =
-            jdbc.queryForObject(selectCountSql4, Integer.class, TENANT, TENANT, TENANT, workflowRunId);
+        Integer selectedOutboxEventCount = jdbc.queryForObject(
+            selectCountSql4, Integer.class, tenantId, tenantId, tenantId, workflowRunId);
         assertThat(selectedOutboxEventCount).isEqualTo(1);
         Integer selectedExpectedWorkOccurrenceCount = jdbc.queryForObject(
-            selectCountSql5, Integer.class, TENANT, seed.workflowDefinitionId(), groupCode, bizDate);
+            selectCountSql5,
+            Integer.class,
+            tenantId,
+            seed.workflowDefinitionId(),
+            groupCode,
+            bizDate);
         assertThat(selectedExpectedWorkOccurrenceCount).isEqualTo(1);
       } finally {
         executor.shutdownNow();
@@ -1782,12 +2177,11 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
         values (?, 'JOB_CALENDAR', ?, 'CUTOFF', current_timestamp, current_timestamp, 0, 0, 'UTC',\s\
         'gap=RUN_AT_NEXT_VALID_TIME;overlap=RUN_ONCE_EARLIER_OFFSET', false, 0, current_timestamp,\s\
         current_timestamp, false)\
+        on conflict (tenant_id, calendar_code, biz_date) do update\s\
+        set day_status = 'CUTOFF', cutoff_at = current_timestamp, updated_at = current_timestamp\
         """;
 
-    jdbc.update(
-        insertBatchDayInstanceSql,
-        TENANT,
-        bizDate);
+    jdbc.update(insertBatchDayInstanceSql, tenantId, bizDate);
   }
 
   private void reconcileStuckWorkflow(ConfigurableApplicationContext application) {
@@ -1822,11 +2216,7 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
         and biz_date = ?\
         """;
 
-    return jdbc.queryForObject(
-        selectDayStatusSql,
-        String.class,
-        TENANT,
-        bizDate);
+    return jdbc.queryForObject(selectDayStatusSql, String.class, tenantId, bizDate);
   }
 
   private String workflowRunStatus(JdbcTemplate jdbc, Long workflowRunId) {
@@ -1834,11 +2224,7 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
         select run_status from batch.workflow_run where tenant_id = ? and id = ?
     """;
 
-    return jdbc.queryForObject(
-        selectRunStatusSql,
-        String.class,
-        TENANT,
-        workflowRunId);
+    return jdbc.queryForObject(selectRunStatusSql, String.class, tenantId, workflowRunId);
   }
 
   private ConfigurableApplicationContext applicationContext(boolean sensorEnabled) {
@@ -1898,30 +2284,30 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
       String dedupKey,
       String traceId,
       LocalDate bizDate) {
-        final String insertBusinessCalendarSql = """
+    final String insertBusinessCalendarSql = """
         insert into batch.business_calendar (
             tenant_id, calendar_code, calendar_name, timezone, enabled
         ) values (?, 'JOB_CALENDAR', 'Integration Job Calendar', 'UTC', true)
         on conflict (tenant_id, calendar_code) do nothing
         """;
-        final String insertWorkflowDefinitionSql = """
+    final String insertWorkflowDefinitionSql = """
         insert into batch.workflow_definition (
             tenant_id, workflow_code, workflow_name, workflow_type, version, enabled, calendar_code
         ) values (?, ?, ?, 'DAG', 1, true, 'JOB_CALENDAR') returning id
         """;
-        final String insertWorkflowNodeSql = """
+    final String insertWorkflowNodeSql = """
         insert into batch.workflow_node (
             tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order,
             retry_policy, retry_max_count, timeout_seconds, enabled
         ) values (?, ?, 'START', 'start', 'START', 0, 'NONE', 0, 0, true)
         """;
-        final String insertWorkflowNodeSql2 = """
+    final String insertWorkflowNodeSql2 = """
         insert into batch.workflow_node (
             tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order,
             node_params, retry_policy, retry_max_count, timeout_seconds, enabled
         ) values (?, ?, 'WAIT_FILE', 'wait for file', 'WAIT', 1, ?::jsonb, 'NONE', 0, 3600, true)
         """;
-        final String insertWorkflowNodeSql3 = """
+    final String insertWorkflowNodeSql3 = """
         insert into batch.workflow_node (
             tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order,
             retry_policy, retry_max_count, timeout_seconds, enabled
@@ -1940,19 +2326,21 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
         ) values (?, ?, 'API', ?, ?, ?, 'ACCEPTED', ?)
         """;
 
-    jdbc.update(insertBusinessCalendarSql, TENANT);
-    Long definitionId = jdbc.queryForObject(insertWorkflowDefinitionSql, Long.class, TENANT, jobCode, jobCode);
-    jdbc.update(insertWorkflowNodeSql, TENANT, definitionId);
+    jdbc.update(insertBusinessCalendarSql, tenantId);
+    Long definitionId =
+        jdbc.queryForObject(insertWorkflowDefinitionSql, Long.class, tenantId, jobCode, jobCode);
+    jdbc.update(insertWorkflowNodeSql, tenantId, definitionId);
     String nodeParams = """
         {"sensor_type":"FILE_ARRIVAL",
          "sensor_spec":{"pattern":"context-restart-*.csv","maxAgeSeconds":3600,
            "bindWorkflowBizDate":true,"fileGroupCode":"CONTEXT_RESTART","requireCompleteGroup":true},
          "timeout_seconds":3600,"poll_interval_seconds":1,"on_timeout":"FAIL"}
         """;
-    jdbc.update(insertWorkflowNodeSql2, TENANT, definitionId, nodeParams);
-    jdbc.update(insertWorkflowNodeSql3, TENANT, definitionId);
-    jdbc.update(insertWorkflowEdgeSql, TENANT, definitionId, TENANT, definitionId);
-    jdbc.update(insertTriggerRequestSql, TENANT, requestId, definitionId, bizDate, dedupKey, traceId);
+    jdbc.update(insertWorkflowNodeSql2, tenantId, definitionId, nodeParams);
+    jdbc.update(insertWorkflowNodeSql3, tenantId, definitionId);
+    jdbc.update(insertWorkflowEdgeSql, tenantId, definitionId, tenantId, definitionId);
+    jdbc.update(
+        insertTriggerRequestSql, tenantId, requestId, definitionId, bizDate, dedupKey, traceId);
     return definitionId;
   }
 
@@ -1993,7 +2381,7 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
         """.formatted(groupCode, fileName, workflowCode, templateCode);
     jdbc.update(
         insertFileRecordSql,
-        TENANT,
+        tenantId,
         fileName,
         fileName,
         storageKey,

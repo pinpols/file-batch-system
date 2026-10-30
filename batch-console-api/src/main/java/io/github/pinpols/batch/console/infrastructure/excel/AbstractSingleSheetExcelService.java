@@ -3,8 +3,6 @@ package io.github.pinpols.batch.console.infrastructure.excel;
 import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.setWidths;
 import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.writeTemplateHeaders;
 
-import lombok.Builder;
-
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;

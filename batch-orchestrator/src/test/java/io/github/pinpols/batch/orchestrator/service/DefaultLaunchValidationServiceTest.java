@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.orchestrator.service;
 
-import io.github.pinpols.batch.orchestrator.domain.param.TriggerRequestIsValidParentWorkflowNodeLaunchParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -23,6 +20,7 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.context.TriggerLaunchPersistenceContext;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.TriggerRequestIsValidParentWorkflowNodeLaunchParam;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
@@ -33,8 +31,9 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * Launch 入口校验与配置加载守护:
@@ -48,6 +47,7 @@ import org.mockito.MockitoAnnotations;
  * </ul>
  */
 @DisplayName("启动入口校验: 必填字段与定义缺失时的拒绝行为,以及合法启动的加载结果")
+@ExtendWith(MockitoExtension.class)
 class DefaultLaunchValidationServiceTest {
 
   @Mock
@@ -63,7 +63,6 @@ class DefaultLaunchValidationServiceTest {
 
   @BeforeEach
   void setUp() {
-    MockitoAnnotations.openMocks(this);
     service = new DefaultLaunchValidationService(
         triggerRequestMapper, configCacheService, workflowRunMapper);
   }
@@ -147,7 +146,6 @@ class DefaultLaunchValidationServiceTest {
         .thenReturn(persistenceContext(triggerRequestEntity(), null));
     when(configCacheService.findEnabledJobDefinition("ta", "job_ok"))
         .thenReturn(jobDefinitionEntity(JobType.GENERAL.code()));
-    when(configCacheService.findEnabledSingleJobWorkflowDefinition("ta", 1L)).thenReturn(null);
 
     assertThatThrownBy(() -> service.load(req)).isInstanceOf(BizException.class);
     verify(triggerRequestMapper)
@@ -277,13 +275,14 @@ class DefaultLaunchValidationServiceTest {
     when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
         .thenReturn(persistenceContext(trigger, null));
     when(workflowRunMapper.selectById("ta", 50L)).thenReturn(run);
-    when(triggerRequestMapper.isValidParentWorkflowNodeLaunch(TriggerRequestIsValidParentWorkflowNodeLaunchParam.builder()
-        .tenantId("ta")
-        .parentWorkflowRunId(50L)
-        .parentNodeCode("IMPORT_NODE")
-        .existingChildJobInstanceId(null)
-        .frozenWorkflowSnapshot(true)
-        .build()))
+    when(triggerRequestMapper.isValidParentWorkflowNodeLaunch(
+            TriggerRequestIsValidParentWorkflowNodeLaunchParam.builder()
+                .tenantId("ta")
+                .parentWorkflowRunId(50L)
+                .parentNodeCode("IMPORT_NODE")
+                .existingChildJobInstanceId(null)
+                .frozenWorkflowSnapshot(true)
+                .build()))
         .thenReturn(true);
 
     LaunchValidationService.LaunchLoadResult result = service.load(req);
@@ -293,13 +292,14 @@ class DefaultLaunchValidationServiceTest {
     assertThat(result.workflowDefinition()).isNull();
     verify(configCacheService, never()).findEnabledJobDefinition("ta", "job_ok");
     verify(triggerRequestMapper)
-        .isValidParentWorkflowNodeLaunch(TriggerRequestIsValidParentWorkflowNodeLaunchParam.builder()
-            .tenantId("ta")
-            .parentWorkflowRunId(50L)
-            .parentNodeCode("IMPORT_NODE")
-            .existingChildJobInstanceId(null)
-            .frozenWorkflowSnapshot(true)
-            .build());
+        .isValidParentWorkflowNodeLaunch(
+            TriggerRequestIsValidParentWorkflowNodeLaunchParam.builder()
+                .tenantId("ta")
+                .parentWorkflowRunId(50L)
+                .parentNodeCode("IMPORT_NODE")
+                .existingChildJobInstanceId(null)
+                .frozenWorkflowSnapshot(true)
+                .build());
   }
 
   @Test
@@ -383,13 +383,14 @@ class DefaultLaunchValidationServiceTest {
     when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
         .thenReturn(persistenceContext(trigger, null));
     when(workflowRunMapper.selectById("ta", 50L)).thenReturn(run);
-    when(triggerRequestMapper.isValidParentWorkflowNodeLaunch(TriggerRequestIsValidParentWorkflowNodeLaunchParam.builder()
-        .tenantId("ta")
-        .parentWorkflowRunId(50L)
-        .parentNodeCode("IMPORT_NODE")
-        .existingChildJobInstanceId(null)
-        .frozenWorkflowSnapshot(true)
-        .build()))
+    when(triggerRequestMapper.isValidParentWorkflowNodeLaunch(
+            TriggerRequestIsValidParentWorkflowNodeLaunchParam.builder()
+                .tenantId("ta")
+                .parentWorkflowRunId(50L)
+                .parentNodeCode("IMPORT_NODE")
+                .existingChildJobInstanceId(null)
+                .frozenWorkflowSnapshot(true)
+                .build()))
         .thenReturn(true);
 
     LaunchValidationService.LaunchLoadResult result = service.load(req);
@@ -424,6 +425,8 @@ class DefaultLaunchValidationServiceTest {
     TriggerRequestEntity entity = new TriggerRequestEntity();
     entity.setTenantId("ta");
     entity.setRequestId("req-001");
+    entity.setJobCode("job_ok");
+    entity.setBizDate(LocalDate.of(2026, Month.MAY, 20));
     entity.setDedupKey("dedup-1");
     return entity;
   }

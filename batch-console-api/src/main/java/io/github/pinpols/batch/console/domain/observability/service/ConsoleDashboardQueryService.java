@@ -124,9 +124,7 @@ public class ConsoleDashboardQueryService {
     String resolved = tenantGuard.resolveTenant(tenantId);
     List<ExecutionProgressView> progressRows =
         repository.executionProgress(resolved, jobCode, bizDate);
-    return progressRows.stream()
-        .map(ExecutionProgressView::withDerivedProgress)
-        .toList();
+    return progressRows.stream().map(ExecutionProgressView::withDerivedProgress).toList();
   }
 
   public TenantUsageView tenantUsage(String tenantId, int days) {

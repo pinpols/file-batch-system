@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
+import io.github.pinpols.batch.common.utils.CodeNormalizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleClusterDiagnosticResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleInstanceDiagnosisResponse;
@@ -19,9 +21,10 @@ import io.github.pinpols.batch.console.domain.ops.application.contract.response.
 import io.github.pinpols.batch.console.domain.ops.mapper.ConsoleClusterDiagnosticMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.WorkerRegistryMapper;
 import io.github.pinpols.batch.console.domain.ops.view.cluster.ActiveTaskWorkerIssueView;
+import io.github.pinpols.batch.console.domain.ops.view.cluster.ClusterStatusCountView;
 import io.github.pinpols.batch.console.domain.ops.view.cluster.JobInstanceDiagnosticView;
 import io.github.pinpols.batch.console.domain.ops.view.cluster.OutboxStatusCountView;
-import io.github.pinpols.batch.console.domain.ops.view.cluster.StatusCountView;
+import io.github.pinpols.batch.console.domain.ops.view.cluster.ShedLockView;
 import io.github.pinpols.batch.console.domain.ops.view.cluster.WorkerGroupCapacityView;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
@@ -32,7 +35,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -89,23 +91,14 @@ public class ConsoleClusterDiagnosticService {
   }
 
   private ConsoleShedLockStatusResponse loadShedLockStatus(String resolved) {
-    List<Map<String, Object>> locks = diagnosticMapper.shedlockAll().stream()
-        .map(v -> {
-          Map<String, Object> row = new LinkedHashMap<>();
-          row.put("name", v.getName());
-          row.put("lockUntil", v.getLockUntil());
-          row.put("lockedAt", v.getLockedAt());
-          row.put("lockedBy", v.getLockedBy());
-          return row;
-        })
-        .collect(Collectors.toList());
+    List<ShedLockView> rows = diagnosticMapper.shedlockAll();
     long activeLocks =
-        locks.stream().filter(row -> row.get("lockUntil") != null).count();
-    Map<String, Object> result = new LinkedHashMap<>();
-    result.put("totalLocks", locks.size());
-    result.put("activeLocks", activeLocks);
-    result.put("locks", locks);
-    return ConsoleShedLockStatusResponse.from(result);
+        rows.stream().filter(row -> Boolean.TRUE.equals(row.active())).count();
+    List<ConsoleShedLockStatusResponse.LockEntry> locks = rows.stream()
+        .map(v -> new ConsoleShedLockStatusResponse.LockEntry(
+            v.name(), v.lockUntil(), v.lockedAt(), v.lockedBy()))
+        .toList();
+    return new ConsoleShedLockStatusResponse(locks.size(), activeLocks, locks);
   }
 
   public ConsoleWorkerConsistencyResponse workerConsistency(String tenantId) {
@@ -141,12 +134,11 @@ public class ConsoleClusterDiagnosticService {
         diagnosticMapper.workerGroupCapacity(resolved).stream()
             .map(ConsoleClusterDiagnosticService::workerGroupCapacity)
             .toList();
-    boolean healthy =
-        (online > 0 || running == 0)
-            && staleOnline == 0
-            && drainingOverdue == 0
-            && decommissionedActive == 0
-            && invalidCapabilityTags == 0;
+    boolean healthy = (online > 0 || running == 0)
+        && staleOnline == 0
+        && drainingOverdue == 0
+        && decommissionedActive == 0
+        && invalidCapabilityTags == 0;
     return new ConsoleWorkerConsistencyResponse(
         online,
         draining,
@@ -171,14 +163,10 @@ public class ConsoleClusterDiagnosticService {
   }
 
   private ConsoleOutboxHealthResponse loadOutboxHealth(String resolved) {
-    List<Map<String, Object>> stats = diagnosticMapper.eventDeliveryStatusCounts(resolved).stream()
-        .map(v -> {
-          Map<String, Object> row = new LinkedHashMap<>();
-          row.put("deliveryStatus", v.getDeliveryStatus());
-          row.put("cnt", v.getCnt());
-          return row;
-        })
-        .collect(Collectors.toList());
+    List<ConsoleOutboxHealthResponse.DeliveryStat> stats =
+        diagnosticMapper.eventDeliveryStatusCounts(resolved).stream()
+            .map(v -> new ConsoleOutboxHealthResponse.DeliveryStat(v.deliveryStatus(), v.cnt()))
+            .toList();
     long pendingCount = diagnosticMapper.countPendingOutboxEvents(resolved);
     List<String> activeStatuses = List.of(
         OutboxPublishStatus.NEW.code(),
@@ -189,13 +177,12 @@ public class ConsoleClusterDiagnosticService {
     Long stalePublishingCount = diagnosticMapper.countStalePublishingOutboxEvents(
         resolved, OutboxPublishStatus.PUBLISHING.code(), OUTBOX_STALE_SECONDS);
     long stalePublishing = valueOrZero(stalePublishingCount);
-    Map<String, Object> result = new LinkedHashMap<>();
-    result.put("pendingEvents", pendingCount);
-    result.put("activeEvents", activeCount);
-    result.put("stalePublishingEvents", stalePublishing);
-    result.put("deliveryStats", stats);
-    result.put("healthy", pendingCount < 1000 && stalePublishing == 0);
-    return ConsoleOutboxHealthResponse.from(result);
+    return new ConsoleOutboxHealthResponse(
+        pendingCount,
+        activeCount,
+        stalePublishing,
+        stats,
+        pendingCount < 1000 && stalePublishing == 0);
   }
 
   public ConsoleTerminalChildrenHealthResponse terminalChildrenHealth(String tenantId) {
@@ -213,27 +200,27 @@ public class ConsoleClusterDiagnosticService {
         diagnosticMapper.countTerminalInstancesWithActiveChildren(resolved);
     long terminalInstancesWithActiveChildren =
         valueOrZero(terminalInstancesWithActiveChildrenCount);
-    Map<String, Object> result = new LinkedHashMap<>();
-    result.put("terminalInstancesWithActiveChildren", terminalInstancesWithActiveChildren);
-    result.put("healthy", terminalInstancesWithActiveChildren == 0);
-    return ConsoleTerminalChildrenHealthResponse.from(result);
+    return new ConsoleTerminalChildrenHealthResponse(
+        terminalInstancesWithActiveChildren, terminalInstancesWithActiveChildren == 0);
   }
 
   public ConsoleInstanceDiagnosisResponse instanceDiagnosis(String tenantId, Long instanceId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     JobInstanceDiagnosticView instance = Guard.requireFound(
         diagnosticMapper.selectJobInstanceSummary(resolved, instanceId), "job instance not found");
-    List<StatusCountView> partitionStatusCounts =
+    List<ClusterStatusCountView> partitionStatusCounts =
         diagnosticMapper.partitionStatusCounts(resolved, instanceId);
-    List<StatusCountView> taskStatusCounts =
+    List<ClusterStatusCountView> taskStatusCounts =
         diagnosticMapper.taskStatusCounts(resolved, instanceId);
     List<OutboxStatusCountView> outboxStatusCounts =
         diagnosticMapper.outboxStatusCountsForInstance(resolved, instanceId);
     List<ActiveTaskWorkerIssueView> workerIssues =
         diagnosticMapper.activeTaskWorkerIssues(resolved, instanceId, TASK_HEARTBEAT_STALE_SECONDS);
     String workerGroup = instance.workerGroup();
-    Long onlineWorkerCount = diagnosticMapper.countOnlineWorkersForGroup(resolved, workerGroup);
-    long onlineWorkersForGroup = valueOrZero(onlineWorkerCount);
+    String normalizedWorkerGroup = CodeNormalizer.toUpperOrNull(workerGroup);
+    Long onlineWorkersForGroup = EmptyChecks.isNull(normalizedWorkerGroup)
+        ? null
+        : valueOrZero(diagnosticMapper.countOnlineWorkersForGroup(resolved, normalizedWorkerGroup));
 
     List<Finding> findings = new ArrayList<>();
     long totalPartitions = totalCount(partitionStatusCounts);
@@ -272,8 +259,9 @@ public class ConsoleClusterDiagnosticService {
           recommendations,
           evidence));
     }
-    boolean activeInstanceWithoutOnlineWorker =
-        isActive(instanceStatus) && onlineWorkersForGroup == 0;
+    boolean activeInstanceWithoutOnlineWorker = isActive(instanceStatus)
+        && EmptyChecks.isNotNull(onlineWorkersForGroup)
+        && onlineWorkersForGroup == 0;
     if (activeInstanceWithoutOnlineWorker) {
       List<String> recommendations = List.of(
           "Start or recover a worker in that workerGroup",
@@ -337,12 +325,12 @@ public class ConsoleClusterDiagnosticService {
     return TERMINAL_INSTANCE_STATUSES.contains(status);
   }
 
-  private static long totalCount(Collection<StatusCountView> rows) {
+  private static long totalCount(Collection<ClusterStatusCountView> rows) {
     return rows.stream().mapToLong(row -> valueOrZero(row.count())).sum();
   }
 
   private static long countStatuses(
-      Collection<? extends StatusCountView> rows, Set<String> statuses) {
+      Collection<? extends ClusterStatusCountView> rows, Set<String> statuses) {
     return rows.stream()
         .filter(row -> statuses.contains(row.status()))
         .mapToLong(row -> valueOrZero(row.count()))
@@ -386,10 +374,10 @@ public class ConsoleClusterDiagnosticService {
   }
 
   private static DiagnosisSummary summary(
-      List<StatusCountView> partitionStatusCounts,
-      List<StatusCountView> taskStatusCounts,
+      List<ClusterStatusCountView> partitionStatusCounts,
+      List<ClusterStatusCountView> taskStatusCounts,
       List<OutboxStatusCountView> outboxStatusCounts,
-      long onlineWorkersForGroup) {
+      Long onlineWorkersForGroup) {
     List<StatusCount> partitionCounts = partitionStatusCounts.stream()
         .map(row -> new StatusCount(row.status(), row.count()))
         .toList();

@@ -100,10 +100,10 @@ class WaitRequestRetentionIntegrationTest {
     definition = jdbc.queryForObject(insertWorkflowDefinitionSql, Long.class, tenant);
     rootRequestId = "root-" + UUID.randomUUID();
     long rootId = insertRequest(rootRequestId, "LAUNCHED", false);
-    parentId = jdbc.queryForObject(insertWorkflowRunSql, Long.class, tenant, definition, rootId, DATE);
+    parentId =
+        jdbc.queryForObject(insertWorkflowRunSql, Long.class, tenant, definition, rootId, DATE);
     // 根请求不参与本轮旧请求候选。
-    jdbc.update(
-        updateTriggerRequestSql, rootId);
+    jdbc.update(updateTriggerRequestSql, rootId);
   }
 
   @ParameterizedTest
@@ -117,8 +117,7 @@ class WaitRequestRetentionIntegrationTest {
     String request = "fk-parent-" + UUID.randomUUID();
     insertRequest(request, "REJECTED", kind == Kind.JOB);
     insertWait(kind, tenant, request, kind == Kind.JOB ? "CANCELLED" : "REJECTED");
-    assertForeignKeyFailure(() -> jdbc.update(
-        deleteTriggerRequestSql, tenant, request));
+    assertForeignKeyFailure(() -> jdbc.update(deleteTriggerRequestSql, tenant, request));
     assertThat(count(waitTable(kind), "request_id", request)).isEqualTo(1);
   }
 
@@ -162,8 +161,7 @@ class WaitRequestRetentionIntegrationTest {
     insertRequest(request, "LAUNCHED", false);
     insertExpectedWork(request);
     insertScheduledOccurrence(request);
-    assertForeignKeyFailure(() -> jdbc.update(
-        deleteTriggerRequestSql, tenant, request));
+    assertForeignKeyFailure(() -> jdbc.update(deleteTriggerRequestSql, tenant, request));
     assertThat(count("batch.expected_work_occurrence", "trigger_request_id", request))
         .isEqualTo(1);
     assertThat(count("batch.scheduled_occurrence", "request_id", request)).isEqualTo(1);
@@ -286,10 +284,9 @@ class WaitRequestRetentionIntegrationTest {
     String request = "recent-audit-" + UUID.randomUUID();
     insertRequest(request, "REJECTED", false);
     insertWait(Kind.WORKFLOW, tenant, request, "REJECTED");
-    String updateRecentAuditEvidenceSql =
-        "request".equals(recent)
-            ? "update batch.trigger_request set updated_at=now() where tenant_id=? and request_id=?"
-            : "update batch.workflow_launch_wait set updated_at=now() where tenant_id=? and request_id=?";
+    String updateRecentAuditEvidenceSql = "request".equals(recent)
+        ? "update batch.trigger_request set updated_at=now() where tenant_id=? and request_id=?"
+        : "update batch.workflow_launch_wait set updated_at=now() where tenant_id=? and request_id=?";
     jdbc.update(updateRecentAuditEvidenceSql, tenant, request);
     assertSuccessfulCleanup("failure");
     assertThat(count("batch.trigger_request", "request_id", request)).isEqualTo(1);
@@ -340,8 +337,7 @@ class WaitRequestRetentionIntegrationTest {
       parent.setAutoCommit(false);
       JdbcTemplate parentJdbc = new JdbcTemplate(new SingleConnectionDataSource(parent, true));
       Integer parentPid = parentJdbc.queryForObject(selectPgBackendPidSql, Integer.class);
-      parentJdbc.update(
-          deleteTriggerRequestSql, tenant, request);
+      parentJdbc.update(deleteTriggerRequestSql, tenant, request);
       AtomicInteger childPid = new AtomicInteger();
       CountDownLatch childReady = new CountDownLatch(1);
       Future<?> child = executor.submit(() -> {
@@ -357,17 +353,12 @@ class WaitRequestRetentionIntegrationTest {
       });
       try {
         assertThat(childReady.await(10, TimeUnit.SECONDS)).isTrue();
-        Awaitility.await()
-            .atMost(Duration.ofSeconds(5))
-            .untilAsserted(() -> {
-              Integer childBackendPid = childPid.get();
-              Boolean parentBlockedByChild = jdbc.queryForObject(
-                  selectCoalesceSql,
-                  Boolean.class,
-                  parentPid,
-                  childBackendPid);
-              assertThat(parentBlockedByChild).isTrue();
-            });
+        Awaitility.await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+          Integer childBackendPid = childPid.get();
+          Boolean parentBlockedByChild =
+              jdbc.queryForObject(selectCoalesceSql, Boolean.class, parentPid, childBackendPid);
+          assertThat(parentBlockedByChild).isTrue();
+        });
         parent.commit();
         assertThatThrownBy(() -> child.get(10, TimeUnit.SECONDS))
             .rootCause()
@@ -507,28 +498,29 @@ class WaitRequestRetentionIntegrationTest {
           """;
 
     Long job = insertOldJob("FAILED");
-    Long jobDefinition = jdbc.queryForObject(
-        selectJobDefinitionIdSql, Long.class, job);
-    jdbc.update(
-        updateWorkflowDefinitionSql,
-        "JOB-WF-" + jobDefinition,
-        jobDefinition,
-        definition);
+    Long jobDefinition = jdbc.queryForObject(selectJobDefinitionIdSql, Long.class, job);
+    jdbc.update(updateWorkflowDefinitionSql, "JOB-WF-" + jobDefinition, jobDefinition, definition);
     String child = "sdk-child-" + UUID.randomUUID();
     long childId = insertRequest(child, "REJECTED", true);
     jdbc.update(updateJobInstanceSql, childId, job);
-    jdbc.update(
-        updateTriggerRequestSql, job, childId);
+    jdbc.update(updateTriggerRequestSql, job, childId);
     insertWait(Kind.JOB, tenant, child, "CANCELLED");
     insertWait(Kind.WORKFLOW, tenant, rootRequestId, "RESUMED");
     jdbc.update(insertWorkflowNodeRunSql, parentId, job);
     List<Long> controlRequests = new ArrayList<>();
     for (String controlTenant : List.of(tenant, otherTenant)) {
       if (!controlTenant.equals(tenant)) jdbc.update(insertBusinessCalendarSql, controlTenant);
-      Long controlDefinition = jdbc.queryForObject(insertWorkflowDefinitionSql, Long.class, controlTenant);
+      Long controlDefinition =
+          jdbc.queryForObject(insertWorkflowDefinitionSql, Long.class, controlTenant);
       String request = "sdk-control-" + UUID.randomUUID();
       controlRequests.add(jdbc.queryForObject(
-          insertTriggerRequestSql, Long.class, controlTenant, request, controlDefinition, DATE, request));
+          insertTriggerRequestSql,
+          Long.class,
+          controlTenant,
+          request,
+          controlDefinition,
+          DATE,
+          request));
       jdbc.update(insertWorkflowLaunchWaitSql, controlTenant, request, controlDefinition, DATE);
     }
     Path script = Path.of(System.getProperty("user.dir"))
@@ -608,7 +600,8 @@ class WaitRequestRetentionIntegrationTest {
         values (?, 'CAL', ?, ?, 'WORKFLOW', ?, 1, 'EXPECTED', ?)
         """;
 
-    jdbc.update(insertExpectedWorkOccurrenceSql, tenant, DATE, definition, "expected-" + request, request);
+    jdbc.update(
+        insertExpectedWorkOccurrenceSql, tenant, DATE, definition, "expected-" + request, request);
   }
 
   private void insertScheduledOccurrence(String request) {
@@ -708,8 +701,7 @@ class WaitRequestRetentionIntegrationTest {
     final String selectCountSql = """
         select count(*) from %s where %s=?\
         """.formatted(table, column);
-    return jdbc.queryForObject(
-        selectCountSql, Integer.class, value);
+    return jdbc.queryForObject(selectCountSql, Integer.class, value);
   }
 
   private void assertForeignKeyFailure(Runnable action) {
@@ -771,13 +763,9 @@ class WaitRequestRetentionIntegrationTest {
       jdbc.update(deleteScheduledOccurrenceSql, scoped);
       jdbc.update(deleteJobDependencyWaitingLaunchSql, scoped);
       jdbc.update(deleteWorkflowLaunchWaitSql, scoped);
-      jdbc.update(
-          deleteWorkflowNodeRunArchiveSql,
-          scoped);
+      jdbc.update(deleteWorkflowNodeRunArchiveSql, scoped);
       jdbc.update(deleteWorkflowRunArchiveSql, scoped);
-      jdbc.update(
-          deleteWorkflowNodeRunSql,
-          scoped);
+      jdbc.update(deleteWorkflowNodeRunSql, scoped);
       jdbc.update(deleteJobInstanceSql, scoped);
       jdbc.update(deleteWorkflowRunSql, scoped);
       jdbc.update(deleteTriggerRequestSql, scoped);

@@ -576,7 +576,9 @@ public class ParseStep implements ImportStageStep {
     Integer partitionNo = intOrNull(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_NO));
     Integer partitionCount =
         intOrNull(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT));
-    boolean inputIsNotPartitioned = partitionNo == null || partitionCount == null || partitionCount <= 1;
+    boolean inputIsNotPartitioned = EmptyChecks.isNull(partitionNo)
+        || EmptyChecks.isNull(partitionCount)
+        || partitionCount <= 1;
     if (inputIsNotPartitioned) {
       return totalCount;
     }

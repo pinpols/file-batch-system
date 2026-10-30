@@ -99,12 +99,8 @@ class TenantConfigInitTenantExecutor {
     invalidateRuntimeCaches(
         tenantId,
         dryRun,
-        jobStats,
-        workflowStats,
-        windowStats,
-        calendarStats,
-        quotaStats,
-        queueStats,
+        new ItemStatsBundle(
+            jobStats, workflowStats, windowStats, calendarStats, quotaStats, queueStats),
         !EmptyChecks.isEmpty(jobSpecs));
     return TenantInitResult.builder()
         .tenantId(tenantId)
@@ -122,16 +118,25 @@ class TenantConfigInitTenantExecutor {
         .build();
   }
 
-  private void invalidateRuntimeCaches(
-      String tenantId,
-      boolean dryRun,
+  private record ItemStatsBundle(
       ItemStats jobStats,
       ItemStats workflowStats,
       ItemStats windowStats,
       ItemStats calendarStats,
       ItemStats quotaStats,
-      ItemStats queueStats,
+      ItemStats queueStats) {}
+
+  private void invalidateRuntimeCaches(
+      String tenantId,
+      boolean dryRun,
+      ItemStatsBundle stats,
       boolean managedWorkflowProvisioningMayRun) {
+    ItemStats jobStats = stats.jobStats();
+    ItemStats workflowStats = stats.workflowStats();
+    ItemStats windowStats = stats.windowStats();
+    ItemStats calendarStats = stats.calendarStats();
+    ItemStats quotaStats = stats.quotaStats();
+    ItemStats queueStats = stats.queueStats();
     if (dryRun) {
       return;
     }

@@ -8,13 +8,14 @@ import io.github.pinpols.batch.sdk.task.SdkDependencyResultReference;
 import io.github.pinpols.batch.sdk.wire.RegisterRequest;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import okhttp3.MediaType;
 import okhttp3.Call;
+import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
@@ -135,6 +136,18 @@ public class PlatformHttpClient {
   /** POST /internal/tasks/{taskId}/renew — body=TaskClaimRequest(同 claim 字段集)。 */
   public TaskRenewResponse renew(Long taskId, Map<String, Object> body) throws IOException {
     return postJson("/internal/tasks/" + taskId + "/renew", body, null, TaskRenewResponse.class);
+  }
+
+  /** 确认执行线程已到达业务入口；响应未知时禁止执行业务，返回值表示平台是否已请求取消。 */
+  public boolean confirmExecutionStarted(Long taskId, Map<String, Object> identity)
+      throws IOException {
+    Map<String, Object> body = new HashMap<>(identity);
+    body.put("details", Map.of("executionStarted", true));
+    TaskRenewResponse response = renew(taskId, body);
+    if (EmptyChecks.isNull(response)) {
+      throw new IOException("execution start response was empty");
+    }
+    return response.cancelRequested();
   }
 
   private <T> T postJson(String path, Object body, String idempotencyKey, Class<T> responseType)

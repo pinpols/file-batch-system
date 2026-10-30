@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.job.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -27,18 +26,24 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 /** P1: ConsoleBatchWindowController CRUD 行为(原 ValidationTest 仅守 @ValidResourceCode)。 */
 @DisplayName("批量窗口控制器: 列表查询、新建、更新与启停的路由转发行为")
+@ExtendWith(MockitoExtension.class)
 class ConsoleBatchWindowControllerBehaviorTest {
 
-  private final ConsoleBatchWindowApplicationService service =
-      mock(ConsoleBatchWindowApplicationService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleBatchWindowApplicationService service;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach

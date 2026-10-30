@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.support.notification;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
-/** Shared small helpers used by notification provider signing implementations. */
+/** 通知提供方签名实现共用的小型辅助方法。 */
 public final class ConsoleNotificationCryptoSupport {
 
   private ConsoleNotificationCryptoSupport() {}

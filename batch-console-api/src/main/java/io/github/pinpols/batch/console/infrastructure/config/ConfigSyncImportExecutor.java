@@ -19,7 +19,8 @@ class ConfigSyncImportExecutor {
 
   private final ConfigSyncTargetExecutor targetExecutor;
 
-  record ImportContext(String auditTenantId, Long logId, String operator, String batchOperationId) {}
+  record ImportContext(
+      String auditTenantId, Long logId, String operator, String batchOperationId) {}
 
   TenantConfigBatchInitResponse execute(
       ImportContext context, TenantConfigBatchInitRequest request) {
@@ -47,12 +48,13 @@ class ConfigSyncImportExecutor {
     return aggregate(context.batchOperationId(), request.isDryRun(), results);
   }
 
-  List<TenantInitResult> readReceipts(String auditTenantId, Long logId, List<String> targetTenantIds) {
+  List<TenantInitResult> readReceipts(
+      String auditTenantId, Long logId, List<String> targetTenantIds) {
     List<TenantInitResult> results = new ArrayList<>();
     for (String tenantId : targetTenantIds) {
       Target target = new Target(auditTenantId, logId, tenantId);
-      TenantInitResult result = RlsTenantContextHolder.runWithTenant(
-          tenantId, () -> targetExecutor.findReceipt(target));
+      TenantInitResult result =
+          RlsTenantContextHolder.runWithTenant(tenantId, () -> targetExecutor.findReceipt(target));
       if (EmptyChecks.isNotNull(result)) {
         results.add(result);
       }

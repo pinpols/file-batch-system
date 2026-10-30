@@ -1,3 +1,3 @@
 interface:
-  display_name: "代码审查与质量门禁"
-  short_description: "按严重程度复核代码变更的正确性、安全性、数据完整性和适用验证门禁"
+  display_name: "代码Bug与变更审查"
+  short_description: "按指定代码范围定位真实Bug并审查变更，分别记录缺陷、规约与验证结果"

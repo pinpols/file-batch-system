@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
-import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
-
-
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -18,6 +15,7 @@ import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
+import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity;
@@ -122,12 +120,14 @@ public final class RetryRequeueCoordinator {
           .findFirst()
           .orElseThrow(() -> BizException.of(ResultCode.NOT_FOUND, "error.task.retry_not_found"));
       List<JobTaskEntity> unknownOutcomeTasks = tasks.stream()
-          .filter(candidate ->
-              TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN.equals(candidate.getErrorCode()))
+          .filter(
+              candidate -> TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN.equals(candidate.getErrorCode()))
           .toList();
-      if (allowVerifiedUnknownOutcome && EmptyChecks.isEmpty(Objects.requireNonNull(unknownOutcomeTasks))) {
+      if (allowVerifiedUnknownOutcome
+          && EmptyChecks.isEmpty(Objects.requireNonNull(unknownOutcomeTasks))) {
         throw BizException.of(
-            ResultCode.STATE_CONFLICT, "error.dead_letter.external_outcome_resolution_not_applicable");
+            ResultCode.STATE_CONFLICT,
+            "error.dead_letter.external_outcome_resolution_not_applicable");
       }
       if (allowVerifiedUnknownOutcome) {
         if (unknownOutcomeTasks.size() != 1) {
@@ -139,8 +139,7 @@ public final class RetryRequeueCoordinator {
           throw BizException.of(
               ResultCode.STATE_CONFLICT, "error.dead_letter.external_outcome_source_mismatch");
         }
-        if (jobTaskMapper.markExternalOutcomeResolution(
-                tenantId, task.getId(), task.getVersion())
+        if (jobTaskMapper.markExternalOutcomeResolution(tenantId, task.getId(), task.getVersion())
             <= 0) {
           throw new TransientConflictException(
               "external outcome resolution already consumed or task version changed: taskId="
@@ -178,8 +177,7 @@ public final class RetryRequeueCoordinator {
           .eventKey(eventKey)
           .runModeOverride(RunMode.RETRY)
           .build();
-      taskDispatchOutboxService.writeDispatchEvent(
-          dispatchCommand);
+      taskDispatchOutboxService.writeDispatchEvent(dispatchCommand);
     } finally {
       if (injectMdc) {
         BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
@@ -213,8 +211,7 @@ public final class RetryRequeueCoordinator {
         .eventKey(eventKey)
         .runModeOverride(RunMode.RETRY)
         .build();
-    taskDispatchOutboxService.writeDispatchEvent(
-        dispatchCommand);
+    taskDispatchOutboxService.writeDispatchEvent(dispatchCommand);
   }
 
   private static void requireResolvedExternalOutcome(List<JobTaskEntity> tasks) {
@@ -244,9 +241,10 @@ public final class RetryRequeueCoordinator {
     if (workflowIsNotActive) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.partition.retry_execution_closed");
     }
-    boolean retryTargetIsPaused = JobInstanceStatus.PAUSED.code().equals(instance.getInstanceStatus())
-        || (EmptyChecks.isNotNull(workflow)
-            && WorkflowRunStatus.PAUSED.code().equals(workflow.getRunStatus()));
+    boolean retryTargetIsPaused =
+        JobInstanceStatus.PAUSED.code().equals(instance.getInstanceStatus())
+            || (EmptyChecks.isNotNull(workflow)
+                && WorkflowRunStatus.PAUSED.code().equals(workflow.getRunStatus()));
     if (retryTargetIsPaused) {
       throw new ExecutionPausedException();
     }

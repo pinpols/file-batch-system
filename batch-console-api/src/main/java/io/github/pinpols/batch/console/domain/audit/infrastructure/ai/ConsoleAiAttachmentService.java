@@ -1,22 +1,19 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
-import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentBindingInput;
-
-import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentBindParam;
-import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentMarkDraftParam;
-
-
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentBindingInput;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentUseCase;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentUseCase.AttachmentView;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentUseCase.ImageContent;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAttachmentEntity;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAttachmentMapper;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentBindParam;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentMarkDraftParam;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -62,12 +59,12 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
       ConsoleAiProperties.Image limits = aiProperties.getImage();
       boolean uploadWouldExceedQuota =
           mapper.activeDraftCount(tenantId, ownerUserId) >= limits.getMaxDraftsPerUser()
-          || mapper.activeDraftBytes(tenantId, ownerUserId) + image.bytes().length
-              > limits.getMaxDraftBytesPerUser()
-          || mapper.retainedBytesForUser(tenantId, ownerUserId) + image.bytes().length
-              > limits.getMaxRetainedBytesPerUser()
-          || mapper.retainedBytesForTenant(tenantId) + image.bytes().length
-              > limits.getMaxRetainedBytesPerTenant();
+              || mapper.activeDraftBytes(tenantId, ownerUserId) + image.bytes().length
+                  > limits.getMaxDraftBytesPerUser()
+              || mapper.retainedBytesForUser(tenantId, ownerUserId) + image.bytes().length
+                  > limits.getMaxRetainedBytesPerUser()
+              || mapper.retainedBytesForTenant(tenantId) + image.bytes().length
+                  > limits.getMaxRetainedBytesPerTenant();
       if (uploadWouldExceedQuota) {
         throw BizException.of(ResultCode.RATE_LIMITED, "error.ai.rate_limited");
       }
@@ -112,16 +109,16 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
       int imageByteSize = normalizedImageBytes.length;
       int imageWidth = image.width();
       int imageHeight = image.height();
-      ConsoleAiAttachmentMarkDraftParam consoleAiAttachmentMarkDraftParam = ConsoleAiAttachmentMarkDraftParam.builder()
-          .tenantId(tenantId)
-          .id(attachmentId)
-          .mediaType(mediaType)
-          .byteSize(imageByteSize)
-          .width(imageWidth)
-          .height(imageHeight)
-          .build();
-      return mapper.markDraft(
-          consoleAiAttachmentMarkDraftParam);
+      ConsoleAiAttachmentMarkDraftParam consoleAiAttachmentMarkDraftParam =
+          ConsoleAiAttachmentMarkDraftParam.builder()
+              .tenantId(tenantId)
+              .id(attachmentId)
+              .mediaType(mediaType)
+              .byteSize(imageByteSize)
+              .width(imageWidth)
+              .height(imageHeight)
+              .build();
+      return mapper.markDraft(consoleAiAttachmentMarkDraftParam);
     });
     if (updated != 1) throw unavailable();
     ConsoleAiAttachmentEntity refreshedRow = template().execute(status -> {
@@ -207,9 +204,8 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
           return row;
         })
         .toList();
-    long totalAttachmentBytes = rows.stream()
-        .mapToLong(ConsoleAiAttachmentEntity::getByteSize)
-        .sum();
+    long totalAttachmentBytes =
+        rows.stream().mapToLong(ConsoleAiAttachmentEntity::getByteSize).sum();
     if (totalAttachmentBytes > aiProperties.getImage().getMaxTotalBytes()) {
       throw invalid();
     }
@@ -226,14 +222,15 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
     Instant expiresAt = input.expiresAt();
     validateDrafts(tenantId, ownerUserId, ids);
     for (UUID id : ids) {
-      ConsoleAiAttachmentBindParam consoleAiAttachmentBindParam = ConsoleAiAttachmentBindParam.builder()
-          .tenantId(tenantId)
-          .id(id)
-          .ownerUserId(ownerUserId)
-          .conversationId(conversationId)
-          .turnNo(turnNo)
-          .expiresAt(expiresAt)
-          .build();
+      ConsoleAiAttachmentBindParam consoleAiAttachmentBindParam =
+          ConsoleAiAttachmentBindParam.builder()
+              .tenantId(tenantId)
+              .id(id)
+              .ownerUserId(ownerUserId)
+              .conversationId(conversationId)
+              .turnNo(turnNo)
+              .expiresAt(expiresAt)
+              .build();
       if (mapper.bind(consoleAiAttachmentBindParam) != 1) {
         throw BizException.of(ResultCode.CONFLICT, "error.common.state_conflict");
       }

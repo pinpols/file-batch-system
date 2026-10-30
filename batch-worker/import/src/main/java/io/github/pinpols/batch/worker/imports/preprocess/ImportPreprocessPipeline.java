@@ -262,8 +262,8 @@ public final class ImportPreprocessPipeline {
       Map<String, Object> payloadMetadata = payload.metadata();
       if (EmptyChecks.isNotNull(payloadMetadata)) {
         Object metadataEntryName = payloadMetadata.get("zipEntryName");
-        boolean hasMetadataEntryName =
-            EmptyChecks.isNotNull(metadataEntryName) && Texts.hasText(String.valueOf(metadataEntryName));
+        boolean hasMetadataEntryName = EmptyChecks.isNotNull(metadataEntryName)
+            && Texts.hasText(String.valueOf(metadataEntryName));
         if (hasMetadataEntryName) {
           entryName = String.valueOf(metadataEntryName);
         }
@@ -306,8 +306,8 @@ public final class ImportPreprocessPipeline {
       Map<String, Object> payloadMetadata = payload.metadata();
       if (EmptyChecks.isNotNull(payloadMetadata)) {
         Object metadataEntryName = payloadMetadata.get("tarEntryName");
-        boolean hasMetadataEntryName =
-            EmptyChecks.isNotNull(metadataEntryName) && Texts.hasText(String.valueOf(metadataEntryName));
+        boolean hasMetadataEntryName = EmptyChecks.isNotNull(metadataEntryName)
+            && Texts.hasText(String.valueOf(metadataEntryName));
         if (hasMetadataEntryName) {
           entryName = String.valueOf(metadataEntryName);
         }
@@ -445,8 +445,7 @@ public final class ImportPreprocessPipeline {
 
   private static String digestAlgorithm(Map<String, Object> template, ImportPayload payload) {
     String payloadChecksumType = EmptyChecks.isNull(payload) ? null : payload.checksumType();
-    if (Texts.hasText(payloadChecksumType)
-        && !POLICY_NONE.equalsIgnoreCase(payloadChecksumType)) {
+    if (Texts.hasText(payloadChecksumType) && !POLICY_NONE.equalsIgnoreCase(payloadChecksumType)) {
       return normalizeDigestName(payloadChecksumType);
     }
     String fromTemplate = stringProp(template, "checksum_type");
@@ -489,7 +488,8 @@ public final class ImportPreprocessPipeline {
       throws GeneralSecurityException, SignatureException {
     String pem = stringProp(step, "publicKeyPem");
     String stepSignature = stringProp(step, "signatureBase64");
-    Map<String, Object> payloadMetadata = EmptyChecks.isNull(payload) ? Map.of() : payload.metadata();
+    Map<String, Object> payloadMetadata =
+        EmptyChecks.isNull(payload) ? Map.of() : payload.metadata();
     String metadataSignature = metaString(payloadMetadata, "signatureBase64");
     String signatureB64 = firstNonBlank(stepSignature, metadataSignature);
     pem = trimToNull(pem);

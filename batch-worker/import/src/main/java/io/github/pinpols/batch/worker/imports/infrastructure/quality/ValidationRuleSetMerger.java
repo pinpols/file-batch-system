@@ -55,22 +55,20 @@ public class ValidationRuleSetMerger {
     if (!(raw instanceof List<?> list)) {
       return Map.of();
     }
-    Stream<Map<String, Object>> nonEmptyFieldMappings = list.stream()
-        .map(configSupport::toMap)
-        .filter(EmptyChecks::isNotEmpty);
+    Stream<Map<String, Object>> nonEmptyFieldMappings =
+        list.stream().map(configSupport::toMap).filter(EmptyChecks::isNotEmpty);
     Stream<Map<String, Object>> namedFieldMappings = nonEmptyFieldMappings.filter(mapping -> {
       String fieldName = stringValue(mapping.get("name"));
       return Texts.hasText(fieldName);
     });
     Stream<Map<String, Object>> requiredFieldMappings = namedFieldMappings.filter(mapping -> {
-      Object rawRequiredValue =
-          firstNonNull(mapping.get(KEY_REQUIRED), mapping.get("notNull"));
+      Object rawRequiredValue = firstNonNull(mapping.get(KEY_REQUIRED), mapping.get("notNull"));
       return booleanValue(rawRequiredValue, false);
     });
     return requiredFieldMappings.collect(Collectors.toMap(
         mapping -> stringValue(mapping.get("name")),
-        mapping -> Map.of(
-            KEY_REQUIRED, true, KEY_ERROR_CODE, ImportValidationErrorCode.REQUIRED.code()),
+        mapping ->
+            Map.of(KEY_REQUIRED, true, KEY_ERROR_CODE, ImportValidationErrorCode.REQUIRED.code()),
         (previous, next) -> next,
         LinkedHashMap::new));
   }

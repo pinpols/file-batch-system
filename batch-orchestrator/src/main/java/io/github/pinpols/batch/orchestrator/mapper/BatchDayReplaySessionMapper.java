@@ -1,9 +1,7 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplaySessionUpdateCountsParam;
-
-
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplaySessionUpdateCountsParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplaySessionStatusParam;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -11,7 +9,6 @@ import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
 /** ADR-020 batch_day_replay_session MyBatis 映射。 */
-
 public interface BatchDayReplaySessionMapper {
 
   int insert(BatchDayReplaySessionEntity entity);
@@ -43,8 +40,7 @@ public interface BatchDayReplaySessionMapper {
       @Param("targetStatus") String targetStatus);
 
   /** 写计数（succeeded/failed/inFlight/total）。 */
-  int updateCounts(
-      BatchDayReplaySessionUpdateCountsParam parameters);
+  int updateCounts(BatchDayReplaySessionUpdateCountsParam parameters);
 
   /** 列出 RUNNING 状态的 session，dispatcher / reconciler 用。 */
   List<BatchDayReplaySessionEntity> selectByStatus(

@@ -9,25 +9,22 @@
 
 ## 1. 双通道分工
 
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart LR
+  subgraph Tenant["租户环境"]
+    SDK["Worker SDK"] --> Handler["业务 Handler"]
+  end
+  subgraph Platform["平台控制面"]
+    API["Orchestrator<br/>/internal/*"] --> State[("平台状态与 Outbox")]
+    State -->|"发布器异步投递"| Kafka["Kafka 任务主题"]
+  end
+  SDK -->|"注册 / 心跳 / CLAIM / 续租 / REPORT"| API
+  API -->|"执行配置 / 指令 / 回执"| SDK
+  Kafka -->|"异步派发"| SDK
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│            HTTP /internal/*  ── 控制面,同步,SDK HTTP transport       │
-│   register / heartbeat / deactivate / claim / report / renew(lease)      │
-└──────────────────────────────────────────────────────────────────────────┘
-                              ▲                            │
-                              │                            ▼
-                  ┌─────────────────┐         ┌────────────────────────┐
-   self-hosted    │  SDK worker     │ ◄──────── Orchestrator           │
-   worker (租户)  │  BatchPlatform- │           WorkerController +     │
-                  │  Client          │           TaskController         │
-                  └─────────────────┘         └────────────────────────┘
-                              ▲                            │
-                              │                            ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  Kafka topic `batch.task.dispatch.<taskType>[.<route>][.node.<workerId>]` ── 数据面,异步,单向投递   │
-│  consumer group 独立 per tenant,wildcard 订阅 + capacity-aware pause     │
-└──────────────────────────────────────────────────────────────────────────┘
-```
+
+SDK 在 CLAIM 成功并确认当前执行入口后调用业务，REPORT 由 Orchestrator 收敛平台状态；租户 SDK 不直连平台数据库。
 
 | 通道 | 方向 | 谁主动 | 频次 | SDK 实现 | Orch 实现 |
 |---|---|---|---|---|---|
@@ -36,7 +33,7 @@
 | `POST /internal/workers/{code}/deactivate` | SDK → orch | SDK `stop()` | 1 | `BatchPlatformClient.stop()` 收尾 | `WorkerController.deactivate()` |
 | `POST /internal/tasks/{id}/claim` | SDK → orch | 收 Kafka 消息后 | 每 task 1 | `TaskDispatcher.claim()` | `TaskController.claim()` |
 | `POST /internal/tasks/{id}/report` | SDK → orch | task 终态时 | 每 task 1 | `TaskDispatcher.report()` | `TaskController.report()` |
-| `POST /internal/tasks/{id}/renew` | SDK → orch | `LeaseRenewalScheduler` | 60s 默认 | `LeaseRenewalScheduler.tick()` | `TaskController.renew()` |
+| `POST /internal/tasks/{id}/renew` | SDK → orch | 业务入口确认及周期续租 | 入口一次，周期默认 60s | 各语言派发器/执行桥与 `LeaseRenewalScheduler` | `TaskController.renew()` |
 | Kafka `batch.task.dispatch.<taskType>[.<route>][.node.<workerId>]` | orch → SDK | orch 投递 → SDK poll | 持续 | `KafkaTaskConsumer.poll()` | producer in `*OrchestratorService` |
 
 注册体中的可选 `maxConcurrent` 是 Worker 本地执行器的物理并发上限。五语言 SDK 的默认
@@ -55,7 +52,24 @@
 
 CLAIM 返回完整 `EffectiveTaskConfig`：身份/任务载荷取自持久化任务，执行模式、重试、超时来自实例冻结快照，分区计划包含 shard/range/expectedRows，数据区间沿根运行继承。`dependencyResultSnapshot` 是闸门证据，业务消费者须显式固定/校验读取版本。
 
-批量 claim/report 保留逐项身份与结果；上报逐项独立事务，不能把 HTTP 200 当整批业务成功。批量优化与 Workflow 多选运行、BUNDLE manifest 分区分别属于不同层次。
+批量 claim/report 保留逐项身份与结果；服务端上报逐项独立事务，不能把 HTTP 200 当整批业务成功。平台 Worker 当前只合并 CLAIM，执行和上报仍逐任务进行；五语言 SDK 的实际支持以支持矩阵为准。批量优化与 Workflow 多选运行、BUNDLE manifest 分区分别属于不同层次，详见 [ADR-046](../architecture/adr/ADR-046-file-bundle-aggregation.md)。
+
+### Kafka 消费确认与背压
+
+可提交的任务消息必须先取得持久化 CLAIM 归属或明确的幂等/终结处置。仅创建后台协程、加入本地队列,
+不能确认消费。认领失败且请求未落库时不存在可供超时恢复的租约, 必须保留原 offset 的重读入口。
+Python 消息入口等待 CLAIM 屏障后返回, 业务处理仍异步; 并发重复消息共享认领结果。
+
+容量背压必须保留已经取出的消息, 不能仅 Pause 后继续拉取并提交后续 offset。Go Worker 在当前记录处
+等待既有低水位条件, 恢复后优先处理该记录; 停机退出等待并保留未提交状态。
+
+### 实际执行入口计时
+
+Job 的 `started_at` 保留派发时间；`execution_started_at` 由执行入口确认首次写入。SDK 在执行线程或业务协程即将调用处理器时，向原 `POST /internal/tasks/{id}/renew` 提交当前租户、Worker、CLAIM 返回的当前 `partitionInvocationId`，并携带 `details: {"executionStarted": true}`。认领成功、消息入队或等待执行名额均不能提前提交该标记。无当前响应身份时，仅按该 SDK 已支持的非分区任务兼容规则处理，不能用旧消息身份覆盖 CLAIM 当前身份。
+
+服务端先确认租约及当前所有者，再记录首次入口。开始确认被拒绝、传输失败或响应未知时，SDK 不调用业务处理器，也不将其转换为业务失败 REPORT；原租约恢复机制继续负责收敛。明确返回取消指令时不进入业务，并通过既有取消结果路径收敛任务。续租的 HTTP 409 表示租约失效，不能套用 CLAIM 的幂等成功语义。
+
+计时信号与 `non-idempotent-started` 的外部副作用证据独立：安全 GET、带业务幂等键的处理和普通业务同样需要执行计时，但不能因此被标为非幂等动作。Java、Go、Python、TypeScript 的默认派发器已接入；Rust 自定义执行桥应在 CLAIM 载荷应用到 `TaskContext` 后使用 `execute_after_start_confirmation`，并分别处理执行结果、取消结果和控制面错误，见 [Rust 接入说明](../../sdk/rust/README.md)。这项改造不意味着通用 Replay 能力已经开放。
 
 ### Replay 的附加能力合同
 
@@ -174,7 +188,9 @@ SDK 收到后 `TaskDispatcher.applyPlatformDirective()`:
 
 **最常见配错**:`leaseRenewInterval >= orch lease ttl`,可能导致任务被回收。Java SDK 启动时会校验 heartbeat、lease renew 和 HTTP timeout 之间的时序关系，但 SDK 不知道服务端实际 lease TTL，无法跨服务校验该值；部署时仍须按服务端 TTL 配置并复核。运维排查见 [`troubleshooting.md`](troubleshooting.md)。
 
-## 6. 已知限制与持续治理项(初始清单来自历史深度审查 [`docs/archive/audit/sdk-atomic-fe-deep-review-2026-06-02.md`](../archive/audit/sdk-atomic-fe-deep-review-2026-06-02.md))
+## 6. 已知限制与持续治理项
+
+当前能力与差异对照[SDK 支持矩阵](sdk-parity-matrix.md)维护，历史审查结果不直接表示当前状态。
 
 | 短板 | 现状 | 改进进度 |
 |---|---|---|

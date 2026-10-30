@@ -118,19 +118,13 @@ final class WorkflowGraphTopologyValidator {
       Map<String, String> first = byCode.values().iterator().next();
       int issueRowNo = excelRowNo(first, fallbackRowNo);
       issues.add(new WorkbookIssue(
-          WF_NODE_SHEET,
-          issueRowNo,
-          COL_NODE_TYPE,
-          "workflow graph missing START node"));
+          WF_NODE_SHEET, issueRowNo, COL_NODE_TYPE, "workflow graph missing START node"));
     }
     if (EmptyChecks.isEmpty(endCodes) && EmptyChecks.isNotEmpty(byCode)) {
       Map<String, String> first = byCode.values().iterator().next();
       int issueRowNo = excelRowNo(first, fallbackRowNo);
       issues.add(new WorkbookIssue(
-          WF_NODE_SHEET,
-          issueRowNo,
-          COL_NODE_TYPE,
-          "workflow graph requires at least 1 END node"));
+          WF_NODE_SHEET, issueRowNo, COL_NODE_TYPE, "workflow graph requires at least 1 END node"));
     }
     if (startCodes.size() > 1) {
       for (String s : startCodes) {
@@ -159,10 +153,7 @@ final class WorkflowGraphTopologyValidator {
         Map<String, String> n = byCode.get(e);
         int issueRowNo = excelRowNo(n, fallbackRowNo);
         issues.add(new WorkbookIssue(
-            WF_NODE_SHEET,
-            issueRowNo,
-            COL_NODE_TYPE,
-            "END node cannot have outgoing edges: " + e));
+            WF_NODE_SHEET, issueRowNo, COL_NODE_TYPE, "END node cannot have outgoing edges: " + e));
       }
     }
     // V1 — self-loop + cycle
@@ -173,10 +164,7 @@ final class WorkflowGraphTopologyValidator {
       if (Texts.hasText(f) && f.equals(t)) {
         int issueRowNo = excelRowNo(e, fallbackEdgeRow);
         issues.add(new WorkbookIssue(
-            WF_EDGE_SHEET,
-            issueRowNo,
-            COL_TO_NODE_CODE,
-            "self-loop edge on node: " + f));
+            WF_EDGE_SHEET, issueRowNo, COL_TO_NODE_CODE, "self-loop edge on node: " + f));
       }
       fallbackEdgeRow++;
     }
@@ -186,7 +174,7 @@ final class WorkflowGraphTopologyValidator {
         dfsCycle(n, outgoing, color, byCode, fallbackRowNo, issues);
       }
     }
-    // V2 — unreachable from START
+    // V2——从 START 状态不可达。
     Set<String> reachFromStart = new HashSet<>();
     for (String s : startCodes) {
       dfsCollect(s, outgoing, reachFromStart);
@@ -197,10 +185,7 @@ final class WorkflowGraphTopologyValidator {
           Map<String, String> n = byCode.get(code);
           int issueRowNo = excelRowNo(n, fallbackRowNo);
           issues.add(new WorkbookIssue(
-              WF_NODE_SHEET,
-              issueRowNo,
-              COL_NODE_CODE,
-              "node unreachable from START: " + code));
+              WF_NODE_SHEET, issueRowNo, COL_NODE_CODE, "node unreachable from START: " + code));
         }
       }
     }
@@ -217,10 +202,7 @@ final class WorkflowGraphTopologyValidator {
           Map<String, String> n = byCode.get(code);
           int issueRowNo = excelRowNo(n, fallbackRowNo);
           issues.add(new WorkbookIssue(
-              WF_NODE_SHEET,
-              issueRowNo,
-              COL_NODE_CODE,
-              "node cannot reach any END: " + code));
+              WF_NODE_SHEET, issueRowNo, COL_NODE_CODE, "node cannot reach any END: " + code));
         }
       }
     }

@@ -23,8 +23,7 @@ public record OutboundHttpRequest(
     Objects.requireNonNull(connectTimeout, "connectTimeout");
     Objects.requireNonNull(requestTimeout, "requestTimeout");
     Objects.requireNonNull(addressPolicy, "addressPolicy");
-    boolean timeoutIsNotPositive =
-        connectTimeout.isNegative()
+    boolean timeoutIsNotPositive = connectTimeout.isNegative()
         || connectTimeout.isZero()
         || requestTimeout.isNegative()
         || requestTimeout.isZero();

@@ -19,30 +19,34 @@ import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClien
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalSubmitResponse;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalTargetBinding;
 import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
+import io.github.pinpols.batch.console.shared.command.ConsoleCatchUpApprovalRequest;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.client.RestClient;
 
 /** 共享审批客户端单测：目标绑定、空响应、状态校验、入参清洗。 */
 @DisplayName("编排审批客户端: 目标绑定校验、审批提交结果与入参清洗")
+@ExtendWith(MockitoExtension.class)
 class OrchestratorApprovalClientTest {
 
-  private final OrchestratorInternalRestClient orchestratorInternalRestClient =
-      mock(OrchestratorInternalRestClient.class);
-  private final ConsoleRequestMetadataResolver metadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private OrchestratorInternalRestClient orchestratorInternalRestClient;
+
+  @Mock
+  private ConsoleRequestMetadataResolver metadataResolver;
 
   private OrchestratorApprovalClient client;
 
   @BeforeEach
   void setUp() {
     client = new OrchestratorApprovalClient(orchestratorInternalRestClient, metadataResolver);
-    when(metadataResolver.current())
-        .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "op-1", null, null));
   }
 
   private void stubApprovalRecord(String status, String targetType, String targetId) {
@@ -139,8 +143,39 @@ class OrchestratorApprovalClientTest {
   // ── submitApproval ──────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("批日审批绑定日历身份，修改日历不能复用已批准载荷")
+  void shouldBindBatchDayCalendarToApprovedCatchUp() {
+    ConsoleCatchUpApprovalRequest approved = new ConsoleCatchUpApprovalRequest();
+    approved.setTenantId("t1");
+    approved.setJobCode("JOB_A");
+    approved.setBizDate("2026-10-14");
+    approved.setBatchDayCalendarCode("CAL_A");
+    RestClient restClient = mock(RestClient.class, RETURNS_DEEP_STUBS);
+    when(orchestratorInternalRestClient.client()).thenReturn(restClient);
+    when(restClient
+            .get()
+            .uri(anyString(), any(Object[].class))
+            .retrieve()
+            .body(ApprovalRecordResponse.class))
+        .thenReturn(new ApprovalRecordResponse(new ApprovalRecord(
+            "APPROVED", "CATCH_UP", null, "CATCH_UP", JsonUtils.toJson(approved))));
+    ConsoleCatchUpApprovalRequest execution =
+        JsonUtils.fromJsonStrict(JsonUtils.toJson(approved), ConsoleCatchUpApprovalRequest.class);
+    execution.setApprovalId("AP-1");
+    assertThatCode(() -> client.requireApprovedExecution("t1", "AP-1", "CATCH_UP", execution))
+        .doesNotThrowAnyException();
+    execution.setBatchDayCalendarCode("CAL_B");
+    assertThatThrownBy(() -> client.requireApprovedExecution("t1", "AP-1", "CATCH_UP", execution))
+        .isInstanceOfSatisfying(
+            BizException.class,
+            error -> assertThat(error.getCode()).isEqualTo(ResultCode.FORBIDDEN));
+  }
+
+  @Test
   @DisplayName("提交审批成功时,应返回服务端生成的审批编号")
   void shouldReturnApprovalNo_onSuccessfulSubmit() {
+    when(metadataResolver.current())
+        .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "op-1", null, null));
     stubSubmit(new ApprovalSubmitResponse("APR-9"));
     String approvalNo = client.submitApproval(ApprovalSubmitCommand.builder()
         .tenantId("t1")
@@ -156,6 +191,8 @@ class OrchestratorApprovalClientTest {
   @Test
   @DisplayName("提交审批返回空响应时,应使用默认错误消息键抛出业务异常")
   void shouldThrowDefaultKey_whenSubmitResponseEmpty() {
+    when(metadataResolver.current())
+        .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "op-1", null, null));
     stubSubmit(null);
     assertThatThrownBy(() -> client.submitApproval(
             ApprovalSubmitCommand.builder().tenantId("t1").idempotencyKey("i").build()))
@@ -166,6 +203,8 @@ class OrchestratorApprovalClientTest {
   @Test
   @DisplayName("调用方给出自定义消息键且响应为空时,应使用调用方提供的消息键")
   void shouldThrowCallerKey_whenSubmitResponseEmptyAndCustomKeyGiven() {
+    when(metadataResolver.current())
+        .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "op-1", null, null));
     stubSubmit(new ApprovalSubmitResponse("  "));
     assertThatThrownBy(() -> client.submitApproval(ApprovalSubmitCommand.builder()
             .tenantId("t1")
@@ -179,6 +218,8 @@ class OrchestratorApprovalClientTest {
   @Test
   @DisplayName("提交审批时应清除申请人标识与审批理由中的空白与控制字符")
   void shouldSanitizeRequesterIdAndReason() {
+    when(metadataResolver.current())
+        .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "op-1", null, null));
     RestClient.RequestBodySpec bodySpec = stubSubmit(new ApprovalSubmitResponse("APR-10"));
     client.submitApproval(ApprovalSubmitCommand.builder()
         .tenantId("t1")
@@ -201,6 +242,8 @@ class OrchestratorApprovalClientTest {
   @Test
   @DisplayName("未提供申请人标识时,应回退为当前操作人并带上来源追踪与幂等标识")
   void shouldFallbackRequesterIdToOperator_whenNotProvided() {
+    when(metadataResolver.current())
+        .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "op-1", null, null));
     RestClient.RequestBodySpec bodySpec = stubSubmit(new ApprovalSubmitResponse("APR-11"));
     client.submitApproval(
         ApprovalSubmitCommand.builder().tenantId("t1").idempotencyKey("idem-3").build());

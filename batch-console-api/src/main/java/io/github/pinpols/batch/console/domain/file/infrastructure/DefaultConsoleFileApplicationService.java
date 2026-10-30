@@ -1,26 +1,30 @@
 package io.github.pinpols.batch.console.domain.file.infrastructure;
 
-import lombok.Builder;
-
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.enums.FileTemplateType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.contract.response.file.ConsolePresignDownloadResponse;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileApplicationService;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.ArchiveFileRequest;
+import io.github.pinpols.batch.console.domain.file.application.contract.request.ConsoleFileUploadBindingRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.DeleteFileRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.FileArrivalGroupActionRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.PresignDownloadFileRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.RedispatchFileRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileOperationResponse;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFilePresignUploadResponse;
+import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileUploadTargetResponse;
 import io.github.pinpols.batch.console.domain.file.mapper.FileRecordMapper;
+import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.view.FileRecordStorageView;
+import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalSubmitCommand;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalTargetBinding;
@@ -30,8 +34,11 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.LocalDate;
+import java.util.List;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.multipart.MultipartFile;
@@ -63,6 +70,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
   // 非全局角色账号若 body tenantId 与 JWT 不一致直接 FORBIDDEN，跨租户操作被拦截。
   private final TenantIdResolver tenantGuard;
   private final FileRecordMapper fileRecordMapper;
+  private final FileTemplateConfigMapper fileTemplateConfigMapper;
   private final BatchObjectStore objectStore;
   private final S3StorageProperties s3StorageProperties;
 
@@ -176,7 +184,11 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
 
   @Override
   public ConsoleFilePresignUploadResponse presignUpload(
-      String tenantId, String channelCode, String fileName, String idempotencyKey) {
+      String tenantId,
+      String channelCode,
+      String fileName,
+      ConsoleFileUploadBindingRequest binding,
+      String idempotencyKey) {
     String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     RestClient restClient = orchestratorInternalRestClient.client();
@@ -184,8 +196,30 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     String safeFileName = ConsoleTextSanitizer.safeInput(fileName, 255);
     String operatorId = ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64);
     String traceId = requestMetadata.traceId();
+    if (EmptyChecks.isNotNull(binding)) {
+      FileTemplateConfigQueryView template = fileTemplateConfigMapper.selectEnabledByTenantAndCode(
+          resolvedTenantId, binding.bundleTemplateCode());
+      if (EmptyChecks.isNull(template)
+          || !Boolean.TRUE.equals(template.enabled())
+          || !FileTemplateType.IMPORT.code().equals(template.templateType())) {
+        throw BizException.of(
+            ResultCode.INVALID_ARGUMENT,
+            ResultCode.INVALID_ARGUMENT.detailKey(),
+            "manual upload template must be enabled for the selected tenant");
+      }
+    }
     PresignUploadRequest body = new PresignUploadRequest(
-        resolvedTenantId, safeChannelCode, safeFileName, operatorId, traceId);
+        resolvedTenantId,
+        safeChannelCode,
+        safeFileName,
+        operatorId,
+        traceId,
+        EmptyChecks.isNull(binding) ? null : binding.calendarCode(),
+        EmptyChecks.isNull(binding) ? null : binding.workflowDefinitionId(),
+        EmptyChecks.isNull(binding) ? null : binding.fileGroupCode(),
+        EmptyChecks.isNull(binding) ? null : binding.bizDate(),
+        EmptyChecks.isNull(binding) ? null : binding.requiredFileNames(),
+        EmptyChecks.isNull(binding) ? null : binding.bundleTemplateCode());
     return restClient
         .post()
         .uri("/internal/files/presign-upload")
@@ -197,8 +231,32 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
         .body(ConsoleFilePresignUploadResponse.class);
   }
 
+  @Override
+  public List<ConsoleFileUploadTargetResponse> listManualUploadTargets(String tenantId) {
+    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+    List<ConsoleFileUploadTargetResponse> targets = orchestratorInternalRestClient
+        .client()
+        .get()
+        .uri(
+            "/internal/file-group-expectations/upload-targets?tenantId={tenantId}",
+            resolvedTenantId)
+        .retrieve()
+        .body(new ParameterizedTypeReference<>() {});
+    return EmptyChecks.isNull(targets) ? List.of() : targets;
+  }
+
   private record PresignUploadRequest(
-      String tenantId, String channelCode, String fileName, String operatorId, String traceId) {}
+      String tenantId,
+      String channelCode,
+      String fileName,
+      String operatorId,
+      String traceId,
+      String calendarCode,
+      Long workflowDefinitionId,
+      String fileGroupCode,
+      LocalDate bizDate,
+      List<String> requiredFileNames,
+      String bundleTemplateCode) {}
 
   @Override
   public ConsoleFileOperationResponse uploadContent(
@@ -288,14 +346,8 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     String traceId = requestMetadata.traceId();
     String sanitizedReason = ConsoleTextSanitizer.safeInput(ctx.reason(), 512);
     String approvalId = ctx.approvalId();
-    FileOperationRequest fileOperation =
-        new FileOperationRequest(
-            tenantId,
-            sanitizedChannelCode,
-            sanitizedOperatorId,
-            traceId,
-            sanitizedReason,
-            approvalId);
+    FileOperationRequest fileOperation = new FileOperationRequest(
+        tenantId, sanitizedChannelCode, sanitizedOperatorId, traceId, sanitizedReason, approvalId);
     FileOperationResponse response = restClient
         .post()
         .uri("/internal/files/{fileId}/" + ctx.operation(), ctx.fileId())
@@ -315,12 +367,13 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     Object approvalPayload = ctx.payload();
     String requestedTenantId = extractTenantId(approvalPayload);
     String tenantId = tenantGuard.resolveTenant(requestedTenantId);
-    OrchestratorApprovalClient.ApprovalSubmitCommand.ApprovalSubmitCommandBuilder approvalCommandBuilder = ApprovalSubmitCommand.builder()
-        .tenantId(tenantId)
-        .approvalType(ctx.approvalType())
-        .actionType(ctx.actionType())
-        .targetType(ctx.targetType())
-        .targetId(ctx.targetId());
+    OrchestratorApprovalClient.ApprovalSubmitCommand.ApprovalSubmitCommandBuilder
+        approvalCommandBuilder = ApprovalSubmitCommand.builder()
+            .tenantId(tenantId)
+            .approvalType(ctx.approvalType())
+            .actionType(ctx.actionType())
+            .targetType(ctx.targetType())
+            .targetId(ctx.targetId());
     String payloadJson = JsonUtils.toJson(ctx.payload());
     ApprovalSubmitCommand approvalCommand = approvalCommandBuilder
         .payloadJson(payloadJson)

@@ -30,7 +30,9 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
 import org.springframework.boot.security.autoconfigure.SecurityAutoConfiguration;
 import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.actuate.web.servlet.ManagementWebSecurityAutoConfiguration;
 import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
@@ -42,8 +44,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 /**
- * Orchestrator-only e2e application context. Scans only the orchestrator package to avoid conflicts
- * with worker modules on the test classpath. Used by tests that launch worker processes externally
+ * 仅加载 Orchestrator 的 E2E 应用上下文。扫描范围限定为 Orchestrator 包，以避免与
+ * 测试类路径中的 Worker 模块冲突。用于在外部启动 Worker 进程的测试。
  * (e.g. WorkerProcessRestartRecoveryE2eIT).
  */
 @Configuration
@@ -60,10 +62,8 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
       SecurityAutoConfiguration.class,
       UserDetailsServiceAutoConfiguration.class,
       SecurityFilterAutoConfiguration.class,
-      org.springframework.boot.security.autoconfigure.web.servlet
-          .ServletWebSecurityAutoConfiguration.class,
-      org.springframework.boot.security.autoconfigure.actuate.web.servlet
-          .ManagementWebSecurityAutoConfiguration.class,
+      ServletWebSecurityAutoConfiguration.class,
+      ManagementWebSecurityAutoConfiguration.class,
     })
 @EnableKafka
 @Import({

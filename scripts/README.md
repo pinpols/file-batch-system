@@ -107,7 +107,6 @@ Python 脚本依赖由 `scripts/requirements.txt` 统一管理。本地首次使
 
 | 文件 | 用途 / 调用归属 |
 |---|---|
-| [fix-fixture-xlsx.py](fix-fixture-xlsx.py) | 校验或修复 SIM 配置包 Excel 的结构与场景约束。 |
 | [python.sh](python.sh) | 仓库统一 Python 入口：优先使用 .venv，并校验 Python 3 版本。 |
 
 - [codegen 目录](codegen/README.md)：可复现契约和文档生成入口与使用说明。

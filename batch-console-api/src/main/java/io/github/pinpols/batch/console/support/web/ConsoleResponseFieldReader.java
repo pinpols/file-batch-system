@@ -14,7 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Shared conversion helpers for map-backed console responses. */
+/** Map 型 Console 响应共用的转换辅助方法。 */
 public class ConsoleResponseFieldReader {
 
   protected ConsoleResponseFieldReader() {}
@@ -146,21 +146,6 @@ public class ConsoleResponseFieldReader {
       }
     }
     return result;
-  }
-
-  @SuppressWarnings("unchecked")
-  public static List<Map<String, Object>> mapList(Object value) {
-    return value == null ? List.of() : (List<Map<String, Object>>) value;
-  }
-
-  @SuppressWarnings("unchecked")
-  public static List<Map<String, Object>> mapList(Map<String, ?> row, String... keys) {
-    return mapList(value(row, keys));
-  }
-
-  @SuppressWarnings("unchecked")
-  public static Map<String, Object> asMap(Object value) {
-    return value == null ? null : (Map<String, Object>) value;
   }
 
   @SuppressWarnings("unchecked")

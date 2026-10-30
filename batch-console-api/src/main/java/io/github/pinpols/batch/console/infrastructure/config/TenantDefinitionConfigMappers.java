@@ -7,7 +7,7 @@ import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-/** 租户初始化中作业和工作流定义使用的 Mapper 集合。 */
+/** Workflow 初始化读取托管 Job 并写入定义、节点和边所需的 Mapper 集合。 */
 @Component
 @RequiredArgsConstructor
 final class TenantDefinitionConfigMappers {

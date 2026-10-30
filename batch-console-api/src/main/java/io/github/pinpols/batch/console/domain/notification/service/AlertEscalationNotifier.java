@@ -1,10 +1,5 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
-import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkFailedParam;
-import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkGiveUpParam;
-import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkPublishingParam;
-
-
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.i18n.BizExceptionUtils;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
@@ -17,6 +12,9 @@ import io.github.pinpols.batch.console.config.AlertEscalationNotifyProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.AlertEscalationNotificationOutboxEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEscalationNotificationOutboxMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
+import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkFailedParam;
+import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkGiveUpParam;
+import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkPublishingParam;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -313,15 +311,16 @@ public class AlertEscalationNotifier {
   }
 
   private void publishOne(AlertEscalationNotificationOutboxEntity row) {
-    AlertEscalationNotificationOutboxMarkPublishingParam alertEscalationNotificationOutboxMarkPublishingParam = AlertEscalationNotificationOutboxMarkPublishingParam.builder()
-        .id(row.getId())
-        .tenantId(row.getTenantId())
-        .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
-        .pendingStatus1(OutboxPublishStatus.NEW.code())
-        .pendingStatus2(OutboxPublishStatus.FAILED.code())
-        .build();
-    int claimed = outboxMapper.markPublishing(
-        alertEscalationNotificationOutboxMarkPublishingParam);
+    AlertEscalationNotificationOutboxMarkPublishingParam
+        alertEscalationNotificationOutboxMarkPublishingParam =
+            AlertEscalationNotificationOutboxMarkPublishingParam.builder()
+                .id(row.getId())
+                .tenantId(row.getTenantId())
+                .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+                .pendingStatus1(OutboxPublishStatus.NEW.code())
+                .pendingStatus2(OutboxPublishStatus.FAILED.code())
+                .build();
+    int claimed = outboxMapper.markPublishing(alertEscalationNotificationOutboxMarkPublishingParam);
     if (claimed == 0) {
       return;
     }
@@ -348,15 +347,16 @@ public class AlertEscalationNotifier {
     int nextAttempt = zeroIfNull(row.getAttemptCount()) + 1;
     String error = BizExceptionUtils.ofLiteral(ex.getMessage()).renderedMessage();
     if (nextAttempt >= MAX_PUBLISH_ATTEMPTS) {
-      AlertEscalationNotificationOutboxMarkGiveUpParam alertEscalationNotificationOutboxMarkGiveUpParam = AlertEscalationNotificationOutboxMarkGiveUpParam.builder()
-          .id(row.getId())
-          .tenantId(row.getTenantId())
-          .giveUpStatus(OutboxPublishStatus.GIVE_UP.code())
-          .lastError(error)
-          .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
-          .build();
-      outboxMapper.markGiveUp(
-          alertEscalationNotificationOutboxMarkGiveUpParam);
+      AlertEscalationNotificationOutboxMarkGiveUpParam
+          alertEscalationNotificationOutboxMarkGiveUpParam =
+              AlertEscalationNotificationOutboxMarkGiveUpParam.builder()
+                  .id(row.getId())
+                  .tenantId(row.getTenantId())
+                  .giveUpStatus(OutboxPublishStatus.GIVE_UP.code())
+                  .lastError(error)
+                  .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+                  .build();
+      outboxMapper.markGiveUp(alertEscalationNotificationOutboxMarkGiveUpParam);
       log.error(
           "AlertEscalationNotifier GIVE_UP: outboxId={} alertId={} tenantId={} attempt={} error={}",
           row.getId(),
@@ -367,16 +367,17 @@ public class AlertEscalationNotifier {
       return;
     }
     Instant nextPublishAt = BatchDateTimeSupport.utcNow().plusSeconds(RETRY_DELAY_SECONDS);
-    AlertEscalationNotificationOutboxMarkFailedParam alertEscalationNotificationOutboxMarkFailedParam = AlertEscalationNotificationOutboxMarkFailedParam.builder()
-        .id(row.getId())
-        .tenantId(row.getTenantId())
-        .failedStatus(OutboxPublishStatus.FAILED.code())
-        .nextPublishAt(nextPublishAt)
-        .lastError(error)
-        .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
-        .build();
-    outboxMapper.markFailed(
-        alertEscalationNotificationOutboxMarkFailedParam);
+    AlertEscalationNotificationOutboxMarkFailedParam
+        alertEscalationNotificationOutboxMarkFailedParam =
+            AlertEscalationNotificationOutboxMarkFailedParam.builder()
+                .id(row.getId())
+                .tenantId(row.getTenantId())
+                .failedStatus(OutboxPublishStatus.FAILED.code())
+                .nextPublishAt(nextPublishAt)
+                .lastError(error)
+                .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+                .build();
+    outboxMapper.markFailed(alertEscalationNotificationOutboxMarkFailedParam);
     log.warn(
         "AlertEscalationNotifier publish failed: outboxId={} alertId={} tenantId={} attempt={} "
             + "nextPublishAt={} error={}",

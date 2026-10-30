@@ -173,15 +173,14 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     preCleanParams.put(PARAM_TENANT_ID, context.getTenantId());
     preCleanParams.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
     preCleanParams.put(PARAM_TARGET_TABLE, spec.targetTable());
-    int leftover = jdbc.update(
-        "DELETE FROM "
-            + STAGING_TABLE
-            + " WHERE batch_key = :batchKey"
-            + " AND staging_generation_id = :stagingGenerationId"
-            + " AND tenant_id = :tenantId"
-            + " AND target_schema = :targetSchema"
-            + " AND target_table = :targetTable",
-        preCleanParams);
+    String preCleanSql = "DELETE FROM "
+        + STAGING_TABLE
+        + " WHERE batch_key = :batchKey"
+        + " AND staging_generation_id = :stagingGenerationId"
+        + " AND tenant_id = :tenantId"
+        + " AND target_schema = :targetSchema"
+        + " AND target_table = :targetTable";
+    int leftover = jdbc.update(preCleanSql, preCleanParams);
     if (leftover > 0) {
       String warningKey = context.getTenantId()
           + ':'
@@ -222,15 +221,14 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
       cleanParams.put(PARAM_TENANT_ID, context.getTenantId());
       cleanParams.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
       cleanParams.put(PARAM_TARGET_TABLE, spec.targetTable());
-      jdbc.update(
-          "DELETE FROM "
-              + STAGING_TABLE
-              + " WHERE batch_key = :batchKey"
-              + " AND staging_generation_id = :stagingGenerationId"
-              + " AND tenant_id = :tenantId"
-              + " AND target_schema = :targetSchema"
-              + " AND target_table = :targetTable",
-          cleanParams);
+      String overflowCleanupSql = "DELETE FROM "
+          + STAGING_TABLE
+          + " WHERE batch_key = :batchKey"
+          + " AND staging_generation_id = :stagingGenerationId"
+          + " AND tenant_id = :tenantId"
+          + " AND target_schema = :targetSchema"
+          + " AND target_table = :targetTable";
+      jdbc.update(overflowCleanupSql, cleanParams);
       log.warn(
           "sqlTransformCompute staged rows exceeded limit: tenantId={}, batchKey={}, target={}.{},"
               + " stagedRows={}, maxStagedRows={}, cleaned",
@@ -573,12 +571,13 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   private void ensureOpenStagingGeneration(ProcessJobContext context, String batchKey) {
     String generationId = requireStagingGenerationId(context);
     Map<String, Object> params = stagingGenerationParams(context, batchKey);
-    jdbc.update("""
+    String insertGenerationSql = """
         INSERT INTO batch.process_staging_generation (
             generation_id, tenant_id, job_task_id, batch_key, generation_status)
         VALUES (CAST(:generationId AS uuid), :tenantId, :taskId, :batchKey, 'OPEN')
         ON CONFLICT (generation_id) DO NOTHING
-        """, params);
+        """;
+    jdbc.update(insertGenerationSql, params);
     assertOpenStagingGeneration(context, batchKey);
   }
 
@@ -586,7 +585,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     Map<String, Object> params = stagingGenerationParams(context, batchKey);
     String state;
     try {
-      state = jdbc.queryForObject("""
+      String selectGenerationStatusSql = """
           SELECT generation_status
           FROM batch.process_staging_generation
           WHERE generation_id = CAST(:generationId AS uuid)
@@ -594,7 +593,8 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
             AND job_task_id IS NOT DISTINCT FROM :taskId
             AND batch_key = :batchKey
           FOR SHARE
-          """, params, String.class);
+          """;
+      state = jdbc.queryForObject(selectGenerationStatusSql, params, String.class);
     } catch (EmptyResultDataAccessException exception) {
       SwallowedExceptionLogger.info(
           SqlTransformComputePlugin.class, "catch:EmptyResultDataAccessException", exception);
@@ -620,10 +620,9 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   private void applyStagingGenerationScope(ProcessJobContext context) {
     JdbcTemplate jdbcTemplate = jdbc.getJdbcTemplate();
     String stagingGenerationId = requireStagingGenerationId(context);
-    jdbcTemplate.queryForObject(
-        "select set_config('app.process_staging_generation_id', ?, true)",
-        String.class,
-        stagingGenerationId);
+    String setGenerationScopeSql =
+        "select set_config('app.process_staging_generation_id', ?, true)";
+    jdbcTemplate.queryForObject(setGenerationScopeSql, String.class, stagingGenerationId);
   }
 
   private static BizException stagingGenerationClosed() {
@@ -634,11 +633,11 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("schema", spec.targetSchema());
     params.put("table", spec.targetTable());
-    Boolean exists = jdbc.queryForObject(
-        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = :schema"
-            + " AND table_name = :table)",
-        params,
-        Boolean.class);
+    String targetTableExistsSql = """
+        SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = :schema
+          AND table_name = :table)
+        """;
+    Boolean exists = jdbc.queryForObject(targetTableExistsSql, params, Boolean.class);
     if (!Boolean.TRUE.equals(exists)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,

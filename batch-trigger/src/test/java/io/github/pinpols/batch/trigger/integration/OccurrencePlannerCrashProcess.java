@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.integration;
 
 import io.github.pinpols.batch.trigger.BatchTriggerApplication;
+import io.github.pinpols.batch.trigger.infrastructure.QuartzScheduledFireEnumerator;
 import io.github.pinpols.batch.trigger.service.TriggerScheduledOccurrencePlanner;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import java.io.InputStream;
@@ -77,7 +78,7 @@ public final class OccurrencePlannerCrashProcess {
           .build();
       context
           .getBean(TriggerScheduledOccurrencePlanner.class)
-          .materialize(descriptor, trigger, scanAt);
+          .materialize(descriptor, QuartzScheduledFireEnumerator.fireTimeSource(trigger), scanAt);
     }
   }
 }

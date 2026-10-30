@@ -84,6 +84,7 @@ public class AlertmanagerAlertRenderer {
     structured.put("truncatedAlerts", payload.truncatedAlerts());
     structured.put(LABEL_SEVERITY, severity);
     structured.put("alertnames", alertnames);
+    structured.put("alerts", List.copyOf(alerts.subList(0, shown)));
     String renderedBody = body.toString();
     structured.put("text", renderedBody);
 

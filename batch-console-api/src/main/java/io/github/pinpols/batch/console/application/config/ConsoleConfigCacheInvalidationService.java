@@ -105,14 +105,12 @@ public class ConsoleConfigCacheInvalidationService {
     String sanitizedTenantId = safe(tenantId);
     String workflowDefinitionPattern =
         "config:%s:workflow-definition:*".formatted(sanitizedTenantId);
-    evictByPatternAfterCommit(
-        tenantId, "workflow-definition", "*", workflowDefinitionPattern);
+    evictByPatternAfterCommit(tenantId, "workflow-definition", "*", workflowDefinitionPattern);
   }
 
   public void evictAllBusinessCalendars(String tenantId) {
     String sanitizedTenantId = safe(tenantId);
-    String businessCalendarPattern =
-        "config:%s:business-calendar:*".formatted(sanitizedTenantId);
+    String businessCalendarPattern = "config:%s:business-calendar:*".formatted(sanitizedTenantId);
     evictByPatternAfterCommit(tenantId, "business-calendar", "*", businessCalendarPattern);
   }
 

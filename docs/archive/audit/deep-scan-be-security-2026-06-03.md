@@ -1,3 +1,5 @@
+> 历史证据（2026-10-25 存量核对）：API key、CORS、RLS、HTTP 脱敏实现与测试引用的原始安全审计依据。正文仅表示原日期/基线；当前规则与状态见[现行入口](../../architecture/security-model.md)及 TODO，本轮没有重新执行原测试或扫描。
+
 # BE 安全审计 — 深度扫描报告 (2026-06-03)
 
 > 范围:`batch-common` · `batch-trigger` · `batch-orchestrator` · `batch-console-api` · `batch-worker-core` · `batch-worker-atomic` · `batch-worker-import/export/process/dispatch`(10 模块)。基准 `origin/main`。本次只覆盖后端 + 部署/依赖维度,FE 已另出报告。

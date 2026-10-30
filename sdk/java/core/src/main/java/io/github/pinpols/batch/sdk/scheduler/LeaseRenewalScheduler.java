@@ -127,8 +127,7 @@ public class LeaseRenewalScheduler implements AutoCloseable {
     log.info("LeaseRenewalScheduler stopping");
     scheduler.shutdown();
     try {
-      long requestedTimeoutMillis =
-          EmptyChecks.isNull(timeout) ? 0L : timeout.toMillis();
+      long requestedTimeoutMillis = EmptyChecks.isNull(timeout) ? 0L : timeout.toMillis();
       long timeoutMillis = Math.max(0L, requestedTimeoutMillis);
       if (!scheduler.awaitTermination(timeoutMillis, TimeUnit.MILLISECONDS)) {
         scheduler.shutdownNow();

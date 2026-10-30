@@ -8,15 +8,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionDispatchService;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
@@ -25,8 +25,8 @@ import io.github.pinpols.batch.orchestrator.service.LaunchValidationService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import org.assertj.core.api.Assertions;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatchers;
@@ -37,14 +37,19 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("滞留创建态启动恢复调度: 结构空实例与历史重复实例的恢复口径")
 class StaleCreatedLaunchRecoverySchedulerTest {
 
-  @Mock private LaunchValidationService launchValidationService;
+  @Mock
+  private LaunchValidationService launchValidationService;
 
   @BeforeEach
   void setUpFrozenDefinition() {
     when(launchValidationService.load(any())).thenAnswer(invocation -> {
       LaunchRequest request = invocation.getArgument(0);
       JobDefinitionEntity definition = JobDefinitionEntity.builder()
-          .id(1L).tenantId(request.tenantId()).jobCode(request.jobCode()).version(1).build();
+          .id(1L)
+          .tenantId(request.tenantId())
+          .jobCode(request.jobCode())
+          .version(1)
+          .build();
       return new LaunchValidationService.LaunchLoadResult(null, definition, null, null);
     });
   }

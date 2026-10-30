@@ -3,11 +3,9 @@ package io.github.pinpols.batch.console.infrastructure.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -21,22 +19,23 @@ import io.github.pinpols.batch.console.application.contract.response.config.Conf
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.ItemStats;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.TenantInitResult;
+import io.github.pinpols.batch.console.domain.config.param.ConfigSyncLogInsertParam;
+import io.github.pinpols.batch.console.domain.config.param.ConfigSyncLogUpdateParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.mapper.ConfigSyncLogMapper;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.InjectMocks;
-import org.mockito.junit.jupiter.MockitoExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -44,20 +43,34 @@ import org.springframework.transaction.PlatformTransactionManager;
 @DisplayName("配置同步包: 所有导出配置类别都传入目标租户初始化并计入汇总")
 class DefaultConsoleConfigSyncBundleMappingTest {
 
-  @Mock private ConsoleTenantGuard tenantGuard;
-  @Mock private ConsoleTenantConfigCopyService copyService;
-  @Mock private ConfigSyncImportExecutor importExecutor;
-  @Mock private ConsoleRequestMetadataResolver metadataResolver;
-  @Mock private ConfigSyncLogMapper logMapper;
-  @Mock private PlatformTransactionManager transactionManager;
-  @InjectMocks private DefaultConsoleConfigSyncApplicationService service;
+  @Mock
+  private ConsoleTenantGuard tenantGuard;
+
+  @Mock
+  private ConsoleTenantConfigCopyService copyService;
+
+  @Mock
+  private ConfigSyncImportExecutor importExecutor;
+
+  @Mock
+  private ConsoleRequestMetadataResolver metadataResolver;
+
+  @Mock
+  private ConfigSyncLogMapper logMapper;
+
+  @Mock
+  private PlatformTransactionManager transactionManager;
+
+  @InjectMocks
+  private DefaultConsoleConfigSyncApplicationService service;
 
   @BeforeEach
   void prepareSuccessfulAuditWrites() {
     // 汇总与初始审计拒绝场景不触达全部审计步骤，仅此两个共享 stub 允许未使用。
-    lenient().doAnswer(invocation -> {
-          Map<String, Object> params = invocation.getArgument(0);
-          params.put("id", 1L);
+    lenient()
+        .doAnswer(invocation -> {
+          ConfigSyncLogInsertParam params = invocation.getArgument(0);
+          params.setId(1L);
           return 1;
         })
         .when(logMapper)
@@ -164,17 +177,16 @@ class DefaultConsoleConfigSyncBundleMappingTest {
 
     service.importBundle(request);
 
-    ArgumentCaptor<Map<String, Object>> insert = ArgumentCaptor.captor();
+    ArgumentCaptor<ConfigSyncLogInsertParam> insert = ArgumentCaptor.captor();
     verify(logMapper).insert(insert.capture());
-    assertThat(insert.getValue().get("totalItems")).isEqualTo(18);
+    assertThat(insert.getValue().getTotalItems()).isEqualTo(18);
 
-    ArgumentCaptor<Map<String, Object>> update = ArgumentCaptor.captor();
+    ArgumentCaptor<ConfigSyncLogUpdateParam> update = ArgumentCaptor.captor();
     verify(logMapper).updateResult(update.capture());
-    assertThat(update.getValue())
-        .containsEntry("syncStatus", "PARTIAL_FAILED")
-        .containsEntry("successItems", 17)
-        .containsEntry("failedItems", 1)
-        .containsEntry("skippedItems", 0);
+    assertThat(update.getValue().syncStatus()).isEqualTo("PARTIAL_FAILED");
+    assertThat(update.getValue().successItems()).isEqualTo(17);
+    assertThat(update.getValue().failedItems()).isEqualTo(1);
+    assertThat(update.getValue().skippedItems()).isEqualTo(0);
   }
 
   @Test
@@ -202,17 +214,16 @@ class DefaultConsoleConfigSyncBundleMappingTest {
 
     service.importBundle(request);
 
-    ArgumentCaptor<Map<String, Object>> insert = ArgumentCaptor.captor();
+    ArgumentCaptor<ConfigSyncLogInsertParam> insert = ArgumentCaptor.captor();
     verify(logMapper).insert(insert.capture());
-    assertThat(insert.getValue().get("totalItems")).isEqualTo(9);
+    assertThat(insert.getValue().getTotalItems()).isEqualTo(9);
 
-    ArgumentCaptor<Map<String, Object>> update = ArgumentCaptor.captor();
+    ArgumentCaptor<ConfigSyncLogUpdateParam> update = ArgumentCaptor.captor();
     verify(logMapper).updateResult(update.capture());
-    assertThat(update.getValue())
-        .containsEntry("syncStatus", "PARTIAL_FAILED")
-        .containsEntry("successItems", 0)
-        .containsEntry("failedItems", 9)
-        .containsEntry("skippedItems", 0);
+    assertThat(update.getValue().syncStatus()).isEqualTo("PARTIAL_FAILED");
+    assertThat(update.getValue().successItems()).isEqualTo(0);
+    assertThat(update.getValue().failedItems()).isEqualTo(9);
+    assertThat(update.getValue().skippedItems()).isEqualTo(0);
   }
 
   private static ItemStats created() {
@@ -235,15 +246,14 @@ class DefaultConsoleConfigSyncBundleMappingTest {
           assertThat(error.getCause()).isSameAs(failure);
         });
 
-    ArgumentCaptor<Map<String, Object>> update = ArgumentCaptor.captor();
+    ArgumentCaptor<ConfigSyncLogUpdateParam> update = ArgumentCaptor.captor();
     verify(logMapper).updateResult(update.capture());
-    assertThat(update.getValue())
-        .containsEntry("syncStatus", "RUNNING")
-        .containsEntry("successItems", 0)
-        .containsEntry("failedItems", 0)
-        .containsEntry("skippedItems", 0)
-        .containsEntry("mergeDetail", true);
-    assertThat(update.getValue().get("detailJson").toString())
+    assertThat(update.getValue().syncStatus()).isEqualTo("RUNNING");
+    assertThat(update.getValue().successItems()).isEqualTo(0);
+    assertThat(update.getValue().failedItems()).isEqualTo(0);
+    assertThat(update.getValue().skippedItems()).isEqualTo(0);
+    assertThat(update.getValue().mergeDetail()).isEqualTo(true);
+    assertThat(update.getValue().detailJson())
         .contains("error.common.system_error", "outcomeKnown")
         .doesNotContain("SQL ", "Mapper.xml");
   }
@@ -256,6 +266,19 @@ class DefaultConsoleConfigSyncBundleMappingTest {
 
     assertThatThrownBy(() -> service.importBundle(request))
         .isInstanceOf(IllegalStateException.class);
+
+    verify(importExecutor, never()).execute(any(), any());
+  }
+
+  @Test
+  @DisplayName("插入成功但没有生成审计主键时拒绝开始业务导入")
+  void shouldRejectImportWhenAuditIdWasNotGenerated() {
+    ConfigSyncImportRequest request = importRequest();
+    doReturn(1).when(logMapper).insert(any());
+
+    assertThatThrownBy(() -> service.importBundle(request))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("did not return an id");
 
     verify(importExecutor, never()).execute(any(), any());
   }
@@ -281,9 +304,9 @@ class DefaultConsoleConfigSyncBundleMappingTest {
 
     service.importBundle(request);
 
-    ArgumentCaptor<Map<String, Object>> inserted = ArgumentCaptor.captor();
+    ArgumentCaptor<ConfigSyncLogInsertParam> inserted = ArgumentCaptor.captor();
     verify(logMapper).insert(inserted.capture());
-    String detailJson = inserted.getValue().get("detailJson").toString();
+    String detailJson = inserted.getValue().getDetailJson();
     assertThat(detailJson).contains("targetTenantIds", "tenant-a");
   }
 
@@ -296,9 +319,9 @@ class DefaultConsoleConfigSyncBundleMappingTest {
 
     service.importBundle(request);
 
-    ArgumentCaptor<Map<String, Object>> update = ArgumentCaptor.captor();
+    ArgumentCaptor<ConfigSyncLogUpdateParam> update = ArgumentCaptor.captor();
     verify(logMapper).updateResult(update.capture());
-    assertThat(update.getValue()).containsEntry("mergeDetail", true);
+    assertThat(update.getValue().mergeDetail()).isEqualTo(true);
   }
 
   private ConfigSyncImportRequest importRequest() {

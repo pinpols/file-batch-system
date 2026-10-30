@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.domain.ops.web;
 
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -17,6 +16,9 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -25,12 +27,15 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  * annotation / 响应 envelope 结构。
  */
 @DisplayName("原子运行时状态接口:Worker 可用时返回各分组明细, 反向通道关闭时返回不可用原因")
+@ExtendWith(MockitoExtension.class)
 class ConsoleAtomicRuntimeStatusControllerTest {
 
-  private final ConsoleAtomicRuntimeStatusService runtimeStatusService =
-      mock(ConsoleAtomicRuntimeStatusService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleAtomicRuntimeStatusService runtimeStatusService;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach

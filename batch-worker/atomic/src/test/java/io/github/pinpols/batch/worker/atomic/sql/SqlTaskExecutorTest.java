@@ -12,22 +12,28 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import java.math.BigInteger;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.BeanFactory;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 /** {@link SqlTaskExecutor} 单测 — validation / SQL split / type 识别 / 执行路径(mocked JDBC)。 */
 @DisplayName("数据库执行器: 参数校验, 语句切分, 类型识别与执行路径")
+@ExtendWith(OutputCaptureExtension.class)
 class SqlTaskExecutorTest {
 
   private SqlExecutorProperties props;
@@ -47,6 +53,32 @@ class SqlTaskExecutorTest {
 
   private TaskContext ctxWithParams(Map<String, Object> params) {
     return new TaskContext("t1", "job-1", "ti-1", "w-1", params, Map.of());
+  }
+
+  @Test
+  @DisplayName("无效语句超时不得静默使用默认值并连接数据库")
+  void shouldRejectNonIntegralOrNonNumericStatementTimeout() throws Exception {
+    for (Object value : List.of("1", 1.5d, new BigInteger("18446744073709551617"))) {
+      TaskResult result = executor.execute(
+          ctxWithParams(Map.of("sql", "SELECT 1", "statementTimeoutSeconds", value)));
+      assertThat(result.output())
+          .as("timeout=%s", value)
+          .containsEntry("error_code", "CONFIG_INVALID");
+    }
+    verify(ds, never()).getConnection();
+  }
+
+  @Test
+  @DisplayName("数据库连接抛运行时异常时日志不得输出原始凭据")
+  void shouldMaskUnexpectedConnectionErrorInLog(CapturedOutput output) throws Exception {
+    when(ds.getConnection()).thenThrow(new RuntimeException("connect token=probe-secret"));
+
+    TaskResult result = executor.execute(ctxWithParams(Map.of("sql", "SELECT 1")));
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.output()).containsEntry("error_code", "EXECUTION_FAILED");
+    assertThat(result.error()).hasMessageContaining("probe-secret");
+    assertThat(output.getOut()).doesNotContain("probe-secret");
   }
 
   // ─── Validation ──────────────────────────────────────────────────────────────

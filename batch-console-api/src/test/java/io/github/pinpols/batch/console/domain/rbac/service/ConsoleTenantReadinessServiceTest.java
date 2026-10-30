@@ -14,12 +14,13 @@ import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMappe
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigReadinessView;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigReadinessView;
-import io.github.pinpols.batch.console.domain.job.view.JobDefinitionQueueRefView;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionQueueRefView;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.TenantReadinessResponse;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.domain.rbac.view.TenantRow;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -33,7 +34,8 @@ import org.mockito.quality.Strictness;
 
 /** 租户就绪自检:验证 template / channel / queue 三类阻断与警告判定。 */
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT) // 各用例只触发部分 mapper,共享 setUp stub
+// LENIENT 原因：各用例只触发部分 Mapper，共享准备桩覆盖不同的就绪阻断分支。
+@MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("租户就绪自检服务: 模板、通道与队列配置的阻断与警告判定")
 class ConsoleTenantReadinessServiceTest {
 
@@ -60,7 +62,8 @@ class ConsoleTenantReadinessServiceTest {
 
   @BeforeEach
   void setUp() {
-    when(tenantMapper.selectByTenantId("t1")).thenReturn(Map.of("tenant_id", "t1"));
+    when(tenantMapper.selectByTenantId("t1"))
+        .thenReturn(new TenantRow(null, "t1", null, null, null, null, null, null));
     when(templateMapper.selectReadinessRows("t1")).thenReturn(List.of());
     when(channelMapper.selectReadinessRows("t1")).thenReturn(List.of());
     when(resourceQueueMapper.selectQueueCodes("t1")).thenReturn(List.of());

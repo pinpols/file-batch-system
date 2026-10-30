@@ -1,14 +1,11 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
-import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiTurnStartInput;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -27,6 +24,7 @@ import io.github.pinpols.batch.console.application.ops.ConsoleClusterDiagnosticS
 import io.github.pinpols.batch.console.config.ConsoleAiClients;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiTurnStartInput;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
 import io.github.pinpols.batch.console.domain.audit.command.AiAuditCommand;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiMonthlyUsageMapper;
@@ -52,6 +50,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.chat.client.ChatClient;
@@ -774,13 +773,14 @@ class DefaultConsoleAiApplicationServiceTest {
             new ConsoleAiClients.ProviderClient("openai", mock(ChatClient.class)), null));
     ConsoleAiConversationService.StartedTurn turn =
         new ConsoleAiConversationService.StartedTurn("conversation-1", 1L, List.of());
-    when(conversationService.beginTurn(org.mockito.ArgumentMatchers.argThat((ConsoleAiTurnStartInput input) -> input != null
-        && input.tenantId() != null
-        && input.ownerUserId() != null
-        && input.contextVersion() != null
-        && input.prompt() != null
-        && input.clientTurnId() == null
-        && input.attachmentIds() == null)))
+    when(conversationService.beginTurn(
+            ArgumentMatchers.argThat((ConsoleAiTurnStartInput input) -> input != null
+                && input.tenantId() != null
+                && input.ownerUserId() != null
+                && input.contextVersion() != null
+                && input.prompt() != null
+                && input.clientTurnId() == null
+                && input.attachmentIds() == null)))
         .thenReturn(turn);
     BizException budgetDenied =
         BizException.of(ResultCode.RATE_LIMITED, "error.common.rate_limited_detail");

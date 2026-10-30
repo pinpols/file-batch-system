@@ -10,7 +10,8 @@
         VALUES (
             #{p.tenantId}, #{p.taskId}, #{p.partitionInvocationId}, #{p.traceId}, #{p.payloadJson},
             #{p.publishStatus}, 0, #{p.nextAttemptAt}, #{p.createdAt}, #{p.updatedAt})
-        ON CONFLICT(tenant_id, task_id) DO UPDATE SET
+        ON CONFLICT(tenant_id, task_id, partition_invocation_id) DO UPDATE SET
+            claim_token = NULL,
             partition_invocation_id = excluded.partition_invocation_id,
             trace_id = excluded.trace_id,
             payload_json = excluded.payload_json,
@@ -26,33 +27,34 @@
         ORDER BY id ASC LIMIT 1
     </select>
 
-    <select id="updateClaimReturning" resultType="io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxRow">
+    <select id="updateClaimReturning" affectData="true" flushCache="true" resultType="io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxRow">
         UPDATE worker_report_outbox
-        SET publish_status = #{statusPublishing}, updated_at = #{now}
+        SET publish_status = #{statusPublishing}, updated_at = #{now}, claim_token = #{claimToken}
         WHERE id = #{id} AND publish_status = #{statusNew}
-        RETURNING id, payload_json AS payload_json
+        RETURNING id, payload_json AS payload_json, claim_token
     </select>
 
     <select id="selectAttemptCount" resultType="java.lang.Integer">
         SELECT attempt_count FROM worker_report_outbox WHERE id = #{id}
+          AND publish_status = #{statusPublishing} AND claim_token = #{claimToken}
     </select>
 
     <update id="updateGiveUp">
         UPDATE worker_report_outbox
-        SET publish_status = #{publishStatus}, attempt_count = #{attemptCount}, updated_at = #{updatedAt}
-        WHERE id = #{id}
+        SET publish_status = #{publishStatus}, attempt_count = #{attemptCount}, updated_at = #{updatedAt}, claim_token = NULL
+        WHERE id = #{id} AND publish_status = #{statusPublishing} AND claim_token = #{claimToken}
     </update>
 
     <update id="updateRetry">
         UPDATE worker_report_outbox
-        SET attempt_count = #{attemptCount}, next_attempt_at = #{nextAttemptAt}, updated_at = #{updatedAt},
+        SET attempt_count = #{attemptCount}, next_attempt_at = #{nextAttemptAt}, updated_at = #{updatedAt}, claim_token = NULL,
             publish_status = #{publishStatus}
-        WHERE id = #{id}
+        WHERE id = #{id} AND publish_status = #{statusPublishing} AND claim_token = #{claimToken}
     </update>
 
     <update id="resetStalePublishing">
         UPDATE worker_report_outbox
-        SET publish_status = #{statusNew}, updated_at = #{now}
+        SET publish_status = #{statusNew}, updated_at = #{now}, claim_token = NULL
         WHERE publish_status = #{statusPublishing} AND updated_at &lt; #{cutoff}
     </update>
 
@@ -67,12 +69,12 @@
     </select>
 
     <delete id="deleteById">
-        DELETE FROM worker_report_outbox WHERE id = #{id}
+        DELETE FROM worker_report_outbox WHERE id = #{id} AND publish_status = #{statusPublishing} AND claim_token = #{claimToken}
     </delete>
 
     <update id="giveUpRow">
-        UPDATE worker_report_outbox SET publish_status = #{publishStatus}, updated_at = #{now}, attempt_count =
+        UPDATE worker_report_outbox SET publish_status = #{publishStatus}, updated_at = #{now}, claim_token = NULL, attempt_count =
             CASE WHEN attempt_count &lt; #{maxAttempts} THEN #{maxAttempts} ELSE attempt_count END
-        WHERE id = #{id}
+        WHERE id = #{id} AND publish_status = #{statusPublishing} AND claim_token = #{claimToken}
     </update>
 </mapper>

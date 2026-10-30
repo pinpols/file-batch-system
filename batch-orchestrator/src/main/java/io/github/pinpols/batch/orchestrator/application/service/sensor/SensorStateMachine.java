@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service.sensor;
 
-import io.github.pinpols.batch.orchestrator.domain.param.WorkflowNodeRunUpdateSensorProbeStateParam;
-
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,9 +27,11 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateNodeRunStatusParam;
+import io.github.pinpols.batch.orchestrator.domain.param.WorkflowNodeRunUpdateSensorProbeStateParam;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
+import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -65,6 +64,10 @@ public class SensorStateMachine {
 
   /** 连续 ERROR 多少次后视为失败终态。 */
   static final int MAX_CONSECUTIVE_ERRORS = 3;
+
+  // 保守地使用 PostgreSQL timestamp 最大年份的起点作为排他上界。
+  private static final Instant PROBE_TIME_EXCLUSIVE_UPPER_BOUND =
+      Instant.parse("+294276-01-01T00:00:00Z");
 
   private final SensorPolicyRegistry registry;
   private final WorkflowNodeRunMapper nodeRunMapper;
@@ -108,12 +111,7 @@ public class SensorStateMachine {
       Object configuredSensorType = params.get("sensor_type");
       String sensorType = String.valueOf(configuredSensorType);
       List<String> errorArguments = List.of(sensorType, "node_params not valid");
-      finishFailure(
-          wfRun,
-          nodeRun,
-          now,
-          "error.workflow.sensor_spec_invalid",
-          errorArguments);
+      finishFailure(wfRun, nodeRun, now, "error.workflow.sensor_spec_invalid", errorArguments);
       return;
     }
 
@@ -172,11 +170,10 @@ public class SensorStateMachine {
       String exceptionClassName = e.getClass().getSimpleName();
       String failureMessage = Objects.requireNonNullElse(exceptionMessage, exceptionClassName);
       result = SensorProbeResult.error(
-          "error.workflow.sensor_probe_failed",
-          List.of(sensorTypeCode, failureMessage));
+          "error.workflow.sensor_probe_failed", List.of(sensorTypeCode, failureMessage));
     }
 
-    apply(wfRun, nodeRun, cfg, result, now);
+    apply(wfRun, nodeRun, cfg, result, now, startedAt);
   }
 
   private void apply(
@@ -184,11 +181,10 @@ public class SensorStateMachine {
       WorkflowNodeRunEntity nodeRun,
       SensorConfig cfg,
       SensorProbeResult result,
-      Instant now) {
+      Instant now,
+      Instant startedAt) {
     int probeCount = safe(nodeRun.getSensorProbeCount()) + 1;
     int errorCount = safe(nodeRun.getSensorErrorCount());
-    Instant next = now.plusSeconds(cfg.pollIntervalSeconds);
-
     switch (result.status()) {
       case MATCHED -> {
         log.info(
@@ -198,17 +194,22 @@ public class SensorStateMachine {
             probeCount);
         finishSuccess(wfRun, nodeRun, now, result.output());
       }
-      case NOT_YET ->
-        {
-          WorkflowNodeRunUpdateSensorProbeStateParam workflowNodeRunUpdateSensorProbeStateParam = WorkflowNodeRunUpdateSensorProbeStateParam.builder()
-              .id(nodeRun.getId())
-              .nextProbeAt(next)
-              .lastProbeAt(now)
-              .probeCount(probeCount)
-              .errorCount(0)
-              .build();
-          nodeRunMapper.updateSensorProbeState(workflowNodeRunUpdateSensorProbeStateParam);
+      case NOT_YET -> {
+        Instant next = nextProbeOrDeadline(now, startedAt, cfg, 1);
+        if (EmptyChecks.isNull(next)) {
+          failInvalidProbeTime(wfRun, nodeRun, cfg, now);
+          return;
         }
+        WorkflowNodeRunUpdateSensorProbeStateParam workflowNodeRunUpdateSensorProbeStateParam =
+            WorkflowNodeRunUpdateSensorProbeStateParam.builder()
+                .id(nodeRun.getId())
+                .nextProbeAt(next)
+                .lastProbeAt(now)
+                .probeCount(probeCount)
+                .errorCount(0)
+                .build();
+        nodeRunMapper.updateSensorProbeState(workflowNodeRunUpdateSensorProbeStateParam);
+      }
       case ERROR -> {
         int newErrors = errorCount + 1;
         if (newErrors >= MAX_CONSECUTIVE_ERRORS) {
@@ -222,19 +223,52 @@ public class SensorStateMachine {
           // 指数退避：每次 error 翻倍 poll_interval（上限 5x）
           int boundedBackoffExponent = Math.min(newErrors, 3);
           long cappedBackoffMultiplier = Math.min(1L << boundedBackoffExponent, 5L);
-          Instant retryAt = now.plusSeconds(cfg.pollIntervalSeconds * cappedBackoffMultiplier);
-          WorkflowNodeRunUpdateSensorProbeStateParam workflowNodeRunUpdateSensorProbeStateParam2 = WorkflowNodeRunUpdateSensorProbeStateParam.builder()
-              .id(nodeRun.getId())
-              .nextProbeAt(retryAt)
-              .lastProbeAt(now)
-              .probeCount(probeCount)
-              .errorCount(newErrors)
-              .build();
-          nodeRunMapper.updateSensorProbeState(
-              workflowNodeRunUpdateSensorProbeStateParam2);
+          Instant retryAt = nextProbeOrDeadline(now, startedAt, cfg, cappedBackoffMultiplier);
+          if (EmptyChecks.isNull(retryAt)) {
+            failInvalidProbeTime(wfRun, nodeRun, cfg, now);
+            return;
+          }
+          WorkflowNodeRunUpdateSensorProbeStateParam workflowNodeRunUpdateSensorProbeStateParam2 =
+              WorkflowNodeRunUpdateSensorProbeStateParam.builder()
+                  .id(nodeRun.getId())
+                  .nextProbeAt(retryAt)
+                  .lastProbeAt(now)
+                  .probeCount(probeCount)
+                  .errorCount(newErrors)
+                  .build();
+          nodeRunMapper.updateSensorProbeState(workflowNodeRunUpdateSensorProbeStateParam2);
         }
       }
     }
+  }
+
+  private static Instant nextProbeOrDeadline(
+      Instant now, Instant startedAt, SensorConfig cfg, long multiplier) {
+    Instant next = nextProbeTime(now, cfg.pollIntervalSeconds, multiplier);
+    Instant deadline = nextProbeTime(startedAt, cfg.timeoutSeconds, 1);
+    if (EmptyChecks.isNull(deadline)) {
+      return next;
+    }
+    return EmptyChecks.isNull(next) || deadline.isBefore(next) ? deadline : next;
+  }
+
+  private static Instant nextProbeTime(Instant now, long intervalSeconds, long multiplier) {
+    try {
+      Instant next = now.plusSeconds(Math.multiplyExact(intervalSeconds, multiplier));
+      return next.isBefore(PROBE_TIME_EXCLUSIVE_UPPER_BOUND) ? next : null;
+    } catch (ArithmeticException | DateTimeException outOfRange) {
+      return null;
+    }
+  }
+
+  private void failInvalidProbeTime(
+      WorkflowRunEntity wfRun, WorkflowNodeRunEntity nodeRun, SensorConfig cfg, Instant now) {
+    finishFailure(
+        wfRun,
+        nodeRun,
+        now,
+        "error.workflow.sensor_spec_invalid",
+        List.of(cfg.sensorType.code(), "next probe time exceeds supported timestamp range"));
   }
 
   private void finishSuccess(
@@ -242,25 +276,23 @@ public class SensorStateMachine {
       WorkflowNodeRunEntity nodeRun,
       Instant now,
       Map<String, Object> output) {
-    NodeRunOutcome.NodeRunOutcomeBuilder outcomeBuilder = NodeRunOutcome.builder()
-        .success(true)
-        .startedAt(nodeRun.getStartedAt())
-        .finishedAt(now);
+    NodeRunOutcome.NodeRunOutcomeBuilder outcomeBuilder =
+        NodeRunOutcome.builder().success(true).startedAt(nodeRun.getStartedAt()).finishedAt(now);
     String outputJson = serializeOutput(output);
     NodeRunOutcome outcome = outcomeBuilder.outputJson(outputJson).build();
     NodeRunKey key = new NodeRunKey(wfRun.getId(), nodeRun.getNodeCode(), "WAIT");
     taskOutcomeService.recordNodeRunFinish(NodeRunFinishCommand.of(key, outcome));
     // 探测状态归零（之后归档/审计读到的快照不带遗留 next_probe_at）
     int nextProbeCount = safe(nodeRun.getSensorProbeCount()) + 1;
-    WorkflowNodeRunUpdateSensorProbeStateParam workflowNodeRunUpdateSensorProbeStateParam3 = WorkflowNodeRunUpdateSensorProbeStateParam.builder()
-        .id(nodeRun.getId())
-        .nextProbeAt(null)
-        .lastProbeAt(now)
-        .probeCount(nextProbeCount)
-        .errorCount(0)
-        .build();
-    nodeRunMapper.updateSensorProbeState(
-        workflowNodeRunUpdateSensorProbeStateParam3);
+    WorkflowNodeRunUpdateSensorProbeStateParam workflowNodeRunUpdateSensorProbeStateParam3 =
+        WorkflowNodeRunUpdateSensorProbeStateParam.builder()
+            .id(nodeRun.getId())
+            .nextProbeAt(null)
+            .lastProbeAt(now)
+            .probeCount(nextProbeCount)
+            .errorCount(0)
+            .build();
+    nodeRunMapper.updateSensorProbeState(workflowNodeRunUpdateSensorProbeStateParam3);
     advanceDownstream(wfRun, nodeRun.getNodeCode(), true, now);
   }
 
@@ -270,10 +302,8 @@ public class SensorStateMachine {
       Instant now,
       String errorKey,
       List<String> errorArgs) {
-    NodeRunOutcome.NodeRunOutcomeBuilder outcomeBuilder = NodeRunOutcome.builder()
-        .success(false)
-        .errorCode("SENSOR_FAIL")
-        .errorKey(errorKey);
+    NodeRunOutcome.NodeRunOutcomeBuilder outcomeBuilder =
+        NodeRunOutcome.builder().success(false).errorCode("SENSOR_FAIL").errorKey(errorKey);
     String serializedErrorArgs = serializeArgs(errorArgs);
     NodeRunOutcome outcome = outcomeBuilder
         .errorArgs(serializedErrorArgs)
@@ -283,15 +313,15 @@ public class SensorStateMachine {
     NodeRunKey key = new NodeRunKey(wfRun.getId(), nodeRun.getNodeCode(), "WAIT");
     taskOutcomeService.recordNodeRunFinish(NodeRunFinishCommand.of(key, outcome));
     int nextProbeCount = safe(nodeRun.getSensorProbeCount()) + 1;
-    WorkflowNodeRunUpdateSensorProbeStateParam workflowNodeRunUpdateSensorProbeStateParam4 = WorkflowNodeRunUpdateSensorProbeStateParam.builder()
-        .id(nodeRun.getId())
-        .nextProbeAt(null)
-        .lastProbeAt(now)
-        .probeCount(nextProbeCount)
-        .errorCount(0)
-        .build();
-    nodeRunMapper.updateSensorProbeState(
-        workflowNodeRunUpdateSensorProbeStateParam4);
+    WorkflowNodeRunUpdateSensorProbeStateParam workflowNodeRunUpdateSensorProbeStateParam4 =
+        WorkflowNodeRunUpdateSensorProbeStateParam.builder()
+            .id(nodeRun.getId())
+            .nextProbeAt(null)
+            .lastProbeAt(now)
+            .probeCount(nextProbeCount)
+            .errorCount(0)
+            .build();
+    nodeRunMapper.updateSensorProbeState(workflowNodeRunUpdateSensorProbeStateParam4);
     advanceDownstream(wfRun, nodeRun.getNodeCode(), false, now);
   }
 
@@ -299,34 +329,32 @@ public class SensorStateMachine {
       WorkflowRunEntity wfRun, WorkflowNodeRunEntity nodeRun, Instant now, long timeoutSeconds) {
     UpdateNodeRunStatusParam.UpdateNodeRunStatusParamBuilder updateParamBuilder =
         UpdateNodeRunStatusParam.builder()
-        .id(nodeRun.getId())
-        .nodeStatus(WorkflowNodeRunStatus.SKIPPED.code())
-        .errorCode(null)
-        .errorMessage(null)
-        .errorKey(null)
-        .errorArgs(null)
-        .skipReasonCode("SENSOR_TIMEOUT_SKIP_DOWNSTREAM")
-        .skipReason("Sensor timed out after " + timeoutSeconds + " seconds; downstream skipped");
+            .id(nodeRun.getId())
+            .nodeStatus(WorkflowNodeRunStatus.SKIPPED.code())
+            .errorCode(null)
+            .errorMessage(null)
+            .errorKey(null)
+            .errorArgs(null)
+            .skipReasonCode("SENSOR_TIMEOUT_SKIP_DOWNSTREAM")
+            .skipReason(
+                "Sensor timed out after " + timeoutSeconds + " seconds; downstream skipped");
     long durationMs = resolveDuration(nodeRun.getStartedAt(), now);
-    UpdateNodeRunStatusParam updateParam = updateParamBuilder
-        .durationMs(durationMs)
-        .finishedAt(now)
-        .output(null)
-        .build();
+    UpdateNodeRunStatusParam updateParam =
+        updateParamBuilder.durationMs(durationMs).finishedAt(now).output(null).build();
     int updated = nodeRunMapper.updateStatus(updateParam);
     if (updated <= 0) {
       return;
     }
     int nextProbeCount = safe(nodeRun.getSensorProbeCount()) + 1;
-    WorkflowNodeRunUpdateSensorProbeStateParam workflowNodeRunUpdateSensorProbeStateParam5 = WorkflowNodeRunUpdateSensorProbeStateParam.builder()
-        .id(nodeRun.getId())
-        .nextProbeAt(null)
-        .lastProbeAt(now)
-        .probeCount(nextProbeCount)
-        .errorCount(0)
-        .build();
-    nodeRunMapper.updateSensorProbeState(
-        workflowNodeRunUpdateSensorProbeStateParam5);
+    WorkflowNodeRunUpdateSensorProbeStateParam workflowNodeRunUpdateSensorProbeStateParam5 =
+        WorkflowNodeRunUpdateSensorProbeStateParam.builder()
+            .id(nodeRun.getId())
+            .nextProbeAt(null)
+            .lastProbeAt(now)
+            .probeCount(nextProbeCount)
+            .errorCount(0)
+            .build();
+    nodeRunMapper.updateSensorProbeState(workflowNodeRunUpdateSensorProbeStateParam5);
     String sourcePayload = resolveSourcePayloadForDownstream(wfRun, nodeRun.getNodeCode());
     workflowDagService.cascadeSkipDownstreamForRun(wfRun, nodeRun.getNodeCode(), sourcePayload);
     workflowNodeTerminalFinalizer.finalizeIfAllNodesTerminal(wfRun);
@@ -335,28 +363,26 @@ public class SensorStateMachine {
   private void finishSkippedForTerminalWorkflow(WorkflowNodeRunEntity nodeRun, Instant now) {
     UpdateNodeRunStatusParam.UpdateNodeRunStatusParamBuilder updateParamBuilder =
         UpdateNodeRunStatusParam.builder()
-        .id(nodeRun.getId())
-        .nodeStatus(WorkflowNodeRunStatus.SKIPPED.code())
-        .skipReasonCode("PARENT_WORKFLOW_TERMINAL")
-        .skipReason("Parent WorkflowRun is already terminal; sensor probing stopped");
+            .id(nodeRun.getId())
+            .nodeStatus(WorkflowNodeRunStatus.SKIPPED.code())
+            .skipReasonCode("PARENT_WORKFLOW_TERMINAL")
+            .skipReason("Parent WorkflowRun is already terminal; sensor probing stopped");
     long durationMs = resolveDuration(nodeRun.getStartedAt(), now);
-    UpdateNodeRunStatusParam updateParam = updateParamBuilder
-        .durationMs(durationMs)
-        .finishedAt(now)
-        .build();
+    UpdateNodeRunStatusParam updateParam =
+        updateParamBuilder.durationMs(durationMs).finishedAt(now).build();
     int updated = nodeRunMapper.updateStatus(updateParam);
     if (updated > 0) {
       int probeCount = safe(nodeRun.getSensorProbeCount());
       int errorCount = safe(nodeRun.getSensorErrorCount());
-      WorkflowNodeRunUpdateSensorProbeStateParam workflowNodeRunUpdateSensorProbeStateParam6 = WorkflowNodeRunUpdateSensorProbeStateParam.builder()
-          .id(nodeRun.getId())
-          .nextProbeAt(null)
-          .lastProbeAt(now)
-          .probeCount(probeCount)
-          .errorCount(errorCount)
-          .build();
-      nodeRunMapper.updateSensorProbeState(
-          workflowNodeRunUpdateSensorProbeStateParam6);
+      WorkflowNodeRunUpdateSensorProbeStateParam workflowNodeRunUpdateSensorProbeStateParam6 =
+          WorkflowNodeRunUpdateSensorProbeStateParam.builder()
+              .id(nodeRun.getId())
+              .nextProbeAt(null)
+              .lastProbeAt(now)
+              .probeCount(probeCount)
+              .errorCount(errorCount)
+              .build();
+      nodeRunMapper.updateSensorProbeState(workflowNodeRunUpdateSensorProbeStateParam6);
     }
   }
 
@@ -504,12 +530,11 @@ public class SensorStateMachine {
       String typeCode = stringOf(params.get("sensor_type"));
       SensorType type = typeCode == null ? null : tryParseType(typeCode);
       Object spec = params.get("sensor_spec");
-      Long timeout = longOf(params.get("timeout_seconds"));
-      Long interval = longOf(params.get("poll_interval_seconds"));
+      Long timeout = SensorSpecs.longValue(params, "timeout_seconds");
+      Long interval = SensorSpecs.longValue(params, "poll_interval_seconds");
       String onTimeoutCode = stringOf(params.get("on_timeout"));
       SensorTimeoutAction onTimeout = onTimeoutCode == null ? null : tryParseAction(onTimeoutCode);
-      boolean sensorConfigIsInvalid =
-          EmptyChecks.isNull(type)
+      boolean sensorConfigIsInvalid = EmptyChecks.isNull(type)
           || !(spec instanceof Map)
           || timeout == null
           || timeout <= 0
@@ -540,21 +565,6 @@ public class SensorStateMachine {
 
     private static String stringOf(Object v) {
       return v == null ? null : v.toString();
-    }
-
-    private static Long longOf(Object v) {
-      if (v == null) {
-        return null;
-      }
-      if (v instanceof Number n) {
-        return n.longValue();
-      }
-      try {
-        String trimmedValue = v.toString().trim();
-        return Long.parseLong(trimmedValue);
-      } catch (NumberFormatException e) {
-        return null;
-      }
     }
   }
 }

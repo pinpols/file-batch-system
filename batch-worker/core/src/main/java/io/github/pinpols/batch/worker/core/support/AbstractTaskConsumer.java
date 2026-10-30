@@ -241,7 +241,7 @@ public abstract class AbstractTaskConsumer
             workerConfiguration().workerType(),
             result.taskId(),
             result.success(),
-            result.message());
+            SwallowedExceptionLogger.safeMessage(result.message()));
         return true;
       } catch (Exception ex) {
         // R1-P2-7 / S1-7：区分 orchestrator 5xx（transient，不该进 DLQ）vs 业务 4xx/不可恢复（DLQ）。
@@ -261,8 +261,7 @@ public abstract class AbstractTaskConsumer
             "{} task execution failed — publishing to DLQ: taskId={}, error={}",
             workerConfiguration().workerType(),
             message.taskId(),
-            SwallowedExceptionLogger.summary(ex),
-            ex);
+            SwallowedExceptionLogger.summary(ex));
         // #4-3: 先确认 DLQ 写入成功再提交偏移量，避免消息双重丢失
         if (!publishToDlqSafely(payload, ex.getMessage())) {
           // DLQ 写入失败：不提交偏移量，Kafka 将重新投递该消息
@@ -280,8 +279,7 @@ public abstract class AbstractTaskConsumer
       log.error(
           "{} pre-dispatch failed — publishing to DLQ: error={}",
           workerConfiguration().workerType(),
-          SwallowedExceptionLogger.summary(parseOrStartupEx),
-          parseOrStartupEx);
+          SwallowedExceptionLogger.summary(parseOrStartupEx));
       return publishToDlqSafely(payload, parseOrStartupEx.getMessage());
     } finally {
       // 无论处理成功/失败/抛异常，都必须释放 permit；
@@ -349,8 +347,7 @@ public abstract class AbstractTaskConsumer
           "{} batch execution failed — publishing {} payloads to DLQ: error={}",
           workerConfiguration().workerType(),
           n,
-          SwallowedExceptionLogger.summary(ex),
-          ex);
+          SwallowedExceptionLogger.summary(ex));
       boolean allDlq = true;
       for (String payload : payloads) {
         if (!publishToDlqSafely(payload, ex.getMessage())) {
@@ -402,14 +399,16 @@ public abstract class AbstractTaskConsumer
     }
     try {
       dlq.publish(
-          payload, workerConfiguration().topic(), workerConfiguration().workerType(), errorMessage);
+          payload,
+          workerConfiguration().topic(),
+          workerConfiguration().workerType(),
+          SwallowedExceptionLogger.safeMessage(errorMessage, 2000));
       return true;
     } catch (Exception dlqEx) {
       log.error(
           "{} failed to publish to the DLQ: dlqError={}",
           workerConfiguration().workerType(),
-          SwallowedExceptionLogger.summary(dlqEx),
-          dlqEx);
+          SwallowedExceptionLogger.summary(dlqEx));
       return false;
     }
   }

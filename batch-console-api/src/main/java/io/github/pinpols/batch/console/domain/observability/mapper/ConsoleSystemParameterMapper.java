@@ -1,9 +1,7 @@
 package io.github.pinpols.batch.console.domain.observability.mapper;
 
-import io.github.pinpols.batch.console.domain.observability.param.ConsoleSystemParameterUpsertParam;
-
-
 import io.github.pinpols.batch.console.domain.observability.entity.SystemParameterEntity;
+import io.github.pinpols.batch.console.domain.observability.param.ConsoleSystemParameterUpsertParam;
 import java.util.List;
 import java.util.Optional;
 import org.apache.ibatis.annotations.Param;
@@ -18,8 +16,7 @@ public interface ConsoleSystemParameterMapper {
   Optional<SystemParameterEntity> findByTenantAndKey(
       @Param("tenantId") String tenantId, @Param("paramKey") String paramKey);
 
-  void upsert(
-      ConsoleSystemParameterUpsertParam parameters);
+  void upsert(ConsoleSystemParameterUpsertParam parameters);
 
   void deleteByTenantAndKey(@Param("tenantId") String tenantId, @Param("paramKey") String paramKey);
 }

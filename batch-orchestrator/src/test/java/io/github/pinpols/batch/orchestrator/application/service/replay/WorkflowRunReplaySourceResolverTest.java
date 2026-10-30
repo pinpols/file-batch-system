@@ -14,6 +14,7 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -86,7 +87,8 @@ class WorkflowRunReplaySourceResolverTest {
     assertThat(source.run()).isSameAs(sourceRun);
     assertThat(source.executionSnapshot().workflowDefinitionId()).isEqualTo(701L);
     assertThat(source.executionSnapshot().workflowVersion()).isEqualTo(4);
-    assertThat(source.executionSnapshot().jobDefinition("IMPORT_NODE").version()).isEqualTo(2);
+    assertThat(source.executionSnapshot().jobDefinition("IMPORT_NODE").version())
+        .isEqualTo(2);
     assertThat(source.executionSnapshot().systemPipeline("IMPORT_NODE").code()).isEqualTo("IMPORT");
     assertThat(source.rootParams())
         .containsEntry("businessDate", "2026-10-20")
@@ -105,31 +107,51 @@ class WorkflowRunReplaySourceResolverTest {
     run.setWorkflowVersionSnapshot(4);
     run.setRunStatus(status);
     run.setExecutionSnapshot(JsonUtils.toJson(Map.of(
-        "schemaVersion", 2,
-        "workflowDefinitionId", 701,
-        "workflowVersion", 4,
-        "workflowCalendarCode", "CALENDAR",
-        "nodes", java.util.List.of(Map.of(
+        "schemaVersion",
+        2,
+        "workflowDefinitionId",
+        701,
+        "workflowVersion",
+        4,
+        "workflowCalendarCode",
+        "CALENDAR",
+        "nodes",
+        List.of(Map.of(
             "nodeCode", "IMPORT_NODE",
             "nodeType", "JOB",
             "tenantId", TENANT,
             "workflowDefinitionId", 701,
             "relatedJobCode", "LOAD_CUSTOMERS")),
-        "edges", java.util.List.of(),
-        "jobDefinitions", Map.of(
-            "IMPORT_NODE", Map.of(
-                "systemPipelineCode", "IMPORT",
-                "systemPipelineVersion", 1,
-                "executionDefinition", Map.of(
-                    "id", 711,
-                    "tenantId", TENANT,
-                    "jobCode", "LOAD_CUSTOMERS",
-                    "jobType", "IMPORT",
-                    "version", 2),
-                "jobDefinitionId", 711,
-                "jobCode", "LOAD_CUSTOMERS",
-                "jobType", "IMPORT",
-                "jobDefinitionVersion", 2)))));
+        "edges",
+        List.of(),
+        "jobDefinitions",
+        Map.of(
+            "IMPORT_NODE",
+            Map.of(
+                "systemPipelineCode",
+                "IMPORT",
+                "systemPipelineVersion",
+                1,
+                "executionDefinition",
+                Map.of(
+                    "id",
+                    711,
+                    "tenantId",
+                    TENANT,
+                    "jobCode",
+                    "LOAD_CUSTOMERS",
+                    "jobType",
+                    "IMPORT",
+                    "version",
+                    2),
+                "jobDefinitionId",
+                711,
+                "jobCode",
+                "LOAD_CUSTOMERS",
+                "jobType",
+                "IMPORT",
+                "jobDefinitionVersion",
+                2)))));
     return run;
   }
 }

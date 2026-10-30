@@ -33,20 +33,20 @@ public final class LaunchIntegrationFixture {
       String suffix,
       LocalDate bizDate,
       TriggerType rootTriggerType) {
-        final String insertBusinessCalendarSql = """
+    final String insertBusinessCalendarSql = """
         insert into batch.business_calendar (
             tenant_id, calendar_code, calendar_name, timezone, enabled
         ) values (?, 'JOB_CALENDAR', 'Integration Job Calendar', 'UTC', true)
         on conflict (tenant_id, calendar_code) do nothing
         """;
-        final String insertWorkflowDefinitionSql = """
+    final String insertWorkflowDefinitionSql = """
         insert into batch.workflow_definition (
             tenant_id, workflow_code, workflow_name, workflow_type, version, enabled,
             calendar_code
         ) values (?, ?, ?, 'DAG', 1, true, 'JOB_CALENDAR')
         returning id
         """;
-        final String insertWorkflowNodeSql = """
+    final String insertWorkflowNodeSql = """
         insert into batch.workflow_node (
             tenant_id, workflow_definition_id, node_code, node_name, node_type,
             related_job_code, node_order, retry_policy, retry_max_count, timeout_seconds, enabled
@@ -55,26 +55,26 @@ public final class LaunchIntegrationFixture {
             (?, ?, 'JOB', 'Job', 'JOB', ?, 1, 'NONE', 0, 0, true),
             (?, ?, 'END', 'End', 'END', null, 2, 'NONE', 0, 0, true)
         """;
-        final String insertWorkflowEdgeSql = """
+    final String insertWorkflowEdgeSql = """
         insert into batch.workflow_edge (
             tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, enabled
         ) values
             (?, ?, 'START', 'JOB', 'ALWAYS', true),
             (?, ?, 'JOB', 'END', 'SUCCESS', true)
         """;
-        final String insertTriggerRequestSql = """
+    final String insertTriggerRequestSql = """
         insert into batch.trigger_request (
             tenant_id, request_id, trigger_type, workflow_definition_id, biz_date,
             dedup_key, request_status
         ) values (?, ?, ?, ?, ?, ?, 'LAUNCHED') returning id
         """;
-        final String insertWorkflowRunSql = """
+    final String insertWorkflowRunSql = """
         insert into batch.workflow_run (
             tenant_id, workflow_definition_id, trigger_request_id, biz_date,
             run_status, current_node_code, workflow_version_snapshot
         ) values (?, ?, ?, ?, 'RUNNING', 'JOB', 1) returning id
         """;
-        final String insertTriggerRequestSql2 = """
+    final String insertTriggerRequestSql2 = """
         insert into batch.trigger_request (
             tenant_id, request_id, trigger_type, job_code, biz_date, dedup_key,
             request_status, parent_workflow_run_id, parent_node_code
@@ -82,8 +82,8 @@ public final class LaunchIntegrationFixture {
         """;
 
     jdbc.update(insertBusinessCalendarSql, tenantId);
-    Long workflowDefinitionId =
-        jdbc.queryForObject(insertWorkflowDefinitionSql, Long.class, tenantId, "WF_" + suffix, "integration " + suffix);
+    Long workflowDefinitionId = jdbc.queryForObject(
+        insertWorkflowDefinitionSql, Long.class, tenantId, "WF_" + suffix, "integration " + suffix);
     jdbc.update(
         insertWorkflowNodeSql,
         tenantId,
@@ -93,7 +93,8 @@ public final class LaunchIntegrationFixture {
         jobCode,
         tenantId,
         workflowDefinitionId);
-    jdbc.update(insertWorkflowEdgeSql, tenantId, workflowDefinitionId, tenantId, workflowDefinitionId);
+    jdbc.update(
+        insertWorkflowEdgeSql, tenantId, workflowDefinitionId, tenantId, workflowDefinitionId);
     String rootRequestId = "req-" + suffix;
     Long rootTriggerRequestId = jdbc.queryForObject(
         insertTriggerRequestSql,
@@ -105,7 +106,12 @@ public final class LaunchIntegrationFixture {
         bizDate,
         "dedup-" + suffix);
     Long workflowRunId = jdbc.queryForObject(
-        insertWorkflowRunSql, Long.class, tenantId, workflowDefinitionId, rootTriggerRequestId, bizDate);
+        insertWorkflowRunSql,
+        Long.class,
+        tenantId,
+        workflowDefinitionId,
+        rootTriggerRequestId,
+        bizDate);
     Long childTriggerRequestId = jdbc.queryForObject(
         insertTriggerRequestSql2,
         Long.class,
@@ -125,7 +131,7 @@ public final class LaunchIntegrationFixture {
       WorkflowLaunchSeed workflow,
       LocalDate bizDate,
       TriggerType rootTriggerType) {
-        final String updateTriggerRequestSql = """
+    final String updateTriggerRequestSql = """
         update batch.trigger_request
            set request_status = 'LAUNCHED', trigger_type = ?, biz_date = ?, updated_at = current_timestamp
          where tenant_id = ? and request_id = ? and workflow_definition_id = ?
@@ -154,13 +160,15 @@ public final class LaunchIntegrationFixture {
         tenantId,
         workflow.requestId(),
         workflow.workflowDefinitionId());
-    Long rootTriggerRequestId = jdbc.queryForObject(
-        selectIdSql,
+    Long rootTriggerRequestId =
+        jdbc.queryForObject(selectIdSql, Long.class, tenantId, workflow.requestId());
+    Long workflowRunId = jdbc.queryForObject(
+        insertWorkflowRunSql,
         Long.class,
         tenantId,
-        workflow.requestId());
-    Long workflowRunId = jdbc.queryForObject(
-        insertWorkflowRunSql, Long.class, tenantId, workflow.workflowDefinitionId(), rootTriggerRequestId, bizDate);
+        workflow.workflowDefinitionId(),
+        rootTriggerRequestId,
+        bizDate);
     Long childTriggerRequestId = jdbc.queryForObject(
         insertTriggerRequestSql,
         Long.class,
@@ -194,13 +202,13 @@ public final class LaunchIntegrationFixture {
       String workerGroup,
       TriggerType triggerType,
       LocalDate bizDate) {
-        final String insertBusinessCalendarSql = """
+    final String insertBusinessCalendarSql = """
         insert into batch.business_calendar (
             tenant_id, calendar_code, calendar_name, timezone, enabled
         ) values (?, 'JOB_CALENDAR', 'Integration Job Calendar', 'UTC', true)
         on conflict (tenant_id, calendar_code) do nothing
         """;
-        final String insertJobDefinitionSql = """
+    final String insertJobDefinitionSql = """
         insert into batch.job_definition (
             tenant_id, job_code, job_name, job_type, biz_type, schedule_type, timezone,
             calendar_code, priority, queue_code, worker_group, trigger_mode, dag_enabled,
@@ -209,7 +217,7 @@ public final class LaunchIntegrationFixture {
             5, 'q-it', ?, 'API', false, 'NONE', 'NONE', 0, 0, true, 1)
         returning id
         """;
-        final String insertWorkflowDefinitionSql = """
+    final String insertWorkflowDefinitionSql = """
         insert into batch.workflow_definition (
             tenant_id, workflow_code, workflow_name, workflow_type, version, enabled,
             calendar_code, single_job_definition_id
@@ -217,7 +225,7 @@ public final class LaunchIntegrationFixture {
             'JOB_CALENDAR', ?)
         returning id
         """;
-        final String insertWorkflowNodeSql = """
+    final String insertWorkflowNodeSql = """
         insert into batch.workflow_node (
             tenant_id, workflow_definition_id, node_code, node_name, node_type,
             related_job_code, node_order, retry_policy, retry_max_count, timeout_seconds, enabled
@@ -253,9 +261,15 @@ public final class LaunchIntegrationFixture {
     String workerCode = "wk-" + suffix;
     jdbc.update(insertBusinessCalendarSql, tenantId);
     Long jobDefinitionId = jdbc.queryForObject(
-        insertJobDefinitionSql, Long.class, tenantId, jobCode, "integration " + jobCode, jobType, workerGroup);
-    Long workflowDefinitionId =
-        jdbc.queryForObject(insertWorkflowDefinitionSql, Long.class, tenantId, workflowCode, jobDefinitionId);
+        insertJobDefinitionSql,
+        Long.class,
+        tenantId,
+        jobCode,
+        "integration " + jobCode,
+        jobType,
+        workerGroup);
+    Long workflowDefinitionId = jdbc.queryForObject(
+        insertWorkflowDefinitionSql, Long.class, tenantId, workflowCode, jobDefinitionId);
     jdbc.update(
         insertWorkflowNodeSql,
         tenantId,
@@ -265,9 +279,16 @@ public final class LaunchIntegrationFixture {
         jobCode,
         tenantId,
         workflowDefinitionId);
-    jdbc.update(insertWorkflowEdgeSql, tenantId, workflowDefinitionId, tenantId, workflowDefinitionId);
     jdbc.update(
-        insertTriggerRequestSql, tenantId, requestId, triggerType.code(), workflowDefinitionId, bizDate, dedupKey);
+        insertWorkflowEdgeSql, tenantId, workflowDefinitionId, tenantId, workflowDefinitionId);
+    jdbc.update(
+        insertTriggerRequestSql,
+        tenantId,
+        requestId,
+        triggerType.code(),
+        workflowDefinitionId,
+        bizDate,
+        dedupKey);
     jdbc.update(insertWorkerRegistrySql, tenantId, workerCode, workerGroup);
     return new WorkflowLaunchSeed(jobCode, workflowDefinitionId, requestId, dedupKey, workerCode);
   }
@@ -295,10 +316,7 @@ public final class LaunchIntegrationFixture {
 
     WorkflowLaunchSeed seed =
         prepareWorkflowLaunchWithWorker(jdbc, tenantId, jobType, workerGroup, triggerType, bizDate);
-    jdbc.update(
-        deleteWorkerRegistrySql,
-        tenantId,
-        seed.workerCode());
+    jdbc.update(deleteWorkerRegistrySql, tenantId, seed.workerCode());
     return seed;
   }
 
@@ -312,7 +330,7 @@ public final class LaunchIntegrationFixture {
       String jobType,
       String workerGroup,
       TriggerType triggerType) {
-        final String insertJobDefinitionSql = """
+    final String insertJobDefinitionSql = """
         insert into batch.job_definition (
             tenant_id, job_code, job_name, job_type, biz_type, schedule_type, timezone,
             priority, queue_code, worker_group, trigger_mode, dag_enabled, shard_strategy,
@@ -343,11 +361,19 @@ public final class LaunchIntegrationFixture {
     String dedupKey = "dedup-" + suffix;
     String workerCode = "wk-" + suffix;
 
-    jdbc.update(insertJobDefinitionSql, tenantId, jobCode, "integration " + jobCode, jobType, "IT", workerGroup);
+    jdbc.update(
+        insertJobDefinitionSql,
+        tenantId,
+        jobCode,
+        "integration " + jobCode,
+        jobType,
+        "IT",
+        workerGroup);
 
     jdbc.update(insertWorkflowDefinitionSql, tenantId, jobCode);
 
-    jdbc.update(insertTriggerRequestSql, tenantId, requestId, triggerType.code(), jobCode, dedupKey);
+    jdbc.update(
+        insertTriggerRequestSql, tenantId, requestId, triggerType.code(), jobCode, dedupKey);
 
     jdbc.update(insertWorkerRegistrySql, tenantId, workerCode, workerGroup);
 
@@ -361,7 +387,7 @@ public final class LaunchIntegrationFixture {
    */
   public static WorkflowLaunchSeed prepareBundleLaunchWithWorker(
       JdbcTemplate jdbc, String tenantId, String bundleJobType, String workerGroup) {
-        final String insertJobDefinitionSql = """
+    final String insertJobDefinitionSql = """
         insert into batch.job_definition (
             tenant_id, job_code, job_name, job_type, biz_type, schedule_type, timezone, calendar_code,
             priority, queue_code, worker_group, trigger_mode, dag_enabled, shard_strategy,
@@ -370,17 +396,17 @@ public final class LaunchIntegrationFixture {
             5, 'q-it', ?, 'API', false, 'DYNAMIC',
             'NONE', 0, 0, true, 1)
         """;
-        final String selectIdSql = """
+    final String selectIdSql = """
             select id from batch.job_definition where tenant_id = ? and job_code = ?
         """;
-        final String insertWorkflowDefinitionSql = """
+    final String insertWorkflowDefinitionSql = """
         insert into batch.workflow_definition (
             tenant_id, workflow_code, workflow_name, workflow_type, version, enabled,
             calendar_code, single_job_definition_id
         ) values (?, ?, 'integration bundle wf', 'DAG', 1, true, 'IT_CALENDAR', ?)
         returning id
         """;
-        final String insertWorkflowNodeSql = """
+    final String insertWorkflowNodeSql = """
         insert into batch.workflow_node (
             tenant_id, workflow_definition_id, node_code, node_name, node_type,
             related_job_code, node_order, retry_policy, retry_max_count, timeout_seconds, enabled
@@ -414,15 +440,18 @@ public final class LaunchIntegrationFixture {
     String dedupKey = "dedup-" + suffix;
     String workerCode = "wk-" + suffix;
 
-    jdbc.update(insertJobDefinitionSql, tenantId, jobCode, "integration " + jobCode, bundleJobType, "IT", workerGroup);
-
-    Long jobDefinitionId = jdbc.queryForObject(
-        selectIdSql,
-        Long.class,
+    jdbc.update(
+        insertJobDefinitionSql,
         tenantId,
-        jobCode);
-    Long workflowDefinitionId =
-        jdbc.queryForObject(insertWorkflowDefinitionSql, Long.class, tenantId, "WF-" + jobCode, jobDefinitionId);
+        jobCode,
+        "integration " + jobCode,
+        bundleJobType,
+        "IT",
+        workerGroup);
+
+    Long jobDefinitionId = jdbc.queryForObject(selectIdSql, Long.class, tenantId, jobCode);
+    Long workflowDefinitionId = jdbc.queryForObject(
+        insertWorkflowDefinitionSql, Long.class, tenantId, "WF-" + jobCode, jobDefinitionId);
     jdbc.update(
         insertWorkflowNodeSql,
         tenantId,
@@ -432,7 +461,8 @@ public final class LaunchIntegrationFixture {
         jobCode,
         tenantId,
         workflowDefinitionId);
-    jdbc.update(insertWorkflowEdgeSql, tenantId, workflowDefinitionId, tenantId, workflowDefinitionId);
+    jdbc.update(
+        insertWorkflowEdgeSql, tenantId, workflowDefinitionId, tenantId, workflowDefinitionId);
 
     jdbc.update(insertTriggerRequestSql, tenantId, requestId, workflowDefinitionId, dedupKey);
 
@@ -489,11 +519,19 @@ public final class LaunchIntegrationFixture {
     String requestId = "req-" + suffix;
     String dedupKey = "dedup-" + suffix;
 
-    jdbc.update(insertJobDefinitionSql, tenantId, jobCode, "integration " + jobCode, jobType, "IT", orphanWorkerGroup);
+    jdbc.update(
+        insertJobDefinitionSql,
+        tenantId,
+        jobCode,
+        "integration " + jobCode,
+        jobType,
+        "IT",
+        orphanWorkerGroup);
 
     jdbc.update(insertWorkflowDefinitionSql, tenantId, jobCode);
 
-    jdbc.update(insertTriggerRequestSql, tenantId, requestId, triggerType.code(), jobCode, dedupKey);
+    jdbc.update(
+        insertTriggerRequestSql, tenantId, requestId, triggerType.code(), jobCode, dedupKey);
 
     return new LaunchSeed(jobCode, requestId, dedupKey, null);
   }
@@ -503,11 +541,7 @@ public final class LaunchIntegrationFixture {
         select count(*) from batch.outbox_event where tenant_id = ? and event_type = ?
     """;
 
-    Long n = jdbc.queryForObject(
-        selectCountSql,
-        Long.class,
-        tenantId,
-        eventType);
+    Long n = jdbc.queryForObject(selectCountSql, Long.class, tenantId, eventType);
     return n == null ? 0L : n;
   }
 
@@ -523,7 +557,8 @@ public final class LaunchIntegrationFixture {
           and node_run.job_instance_id is not null
         """;
 
-    return jdbc.queryForObject(selectJobInstanceIdSql, Long.class, tenantId, Long.valueOf(workflowRunId));
+    return jdbc.queryForObject(
+        selectJobInstanceIdSql, Long.class, tenantId, Long.valueOf(workflowRunId));
   }
 
   public static long countOutboxForJobInstance(
@@ -533,12 +568,7 @@ public final class LaunchIntegrationFixture {
         and oe.aggregate_id = jt.id where oe.tenant_id = ? and jt.tenant_id = ? and jt.job_instance_id = ?\
         """;
 
-    Long n = jdbc.queryForObject(
-        selectCountSql,
-        Long.class,
-        tenantId,
-        tenantId,
-        jobInstanceId);
+    Long n = jdbc.queryForObject(selectCountSql, Long.class, tenantId, tenantId, jobInstanceId);
     return n == null ? 0L : n;
   }
 }

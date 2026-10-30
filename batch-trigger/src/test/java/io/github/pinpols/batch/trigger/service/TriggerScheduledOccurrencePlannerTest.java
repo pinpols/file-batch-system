@@ -1,17 +1,16 @@
 package io.github.pinpols.batch.trigger.service;
 
-import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceRecordCoverageParam;
-
-
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceRecordCoverageParam;
 import io.github.pinpols.batch.trigger.infrastructure.QuartzScheduledFireEnumerator;
 import io.github.pinpols.batch.trigger.mapper.ScheduledOccurrenceMapper;
 import io.github.pinpols.batch.trigger.mapper.ScheduledOccurrencePlanBatchParam;
+import io.github.pinpols.batch.trigger.support.ScheduledFireTimeSource;
 import io.github.pinpols.batch.trigger.support.ScheduledOccurrenceCoverage;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import java.time.Instant;
@@ -25,7 +24,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.quartz.Trigger;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Quartz 预期 occurrence 物化：复用共享业务日解析并按计划版本幂等写入")
@@ -44,7 +42,7 @@ class TriggerScheduledOccurrencePlannerTest {
   private ScheduledOccurrenceMapper occurrenceMapper;
 
   @Mock
-  private Trigger quartzTrigger;
+  private ScheduledFireTimeSource quartzTrigger;
 
   @Test
   @DisplayName("Quartz 窗口中的每个 fire 使用同一业务日 resolver，并投影租户日历和定义版本")
@@ -73,7 +71,7 @@ class TriggerScheduledOccurrencePlannerTest {
     when(occurrenceMapper.isCoverageCurrentForTenantConfiguration("t1", 701L)).thenReturn(true);
     when(occurrenceMapper.selectTenantConfigurationRevision("t1")).thenReturn(11L);
     when(occurrenceMapper.lockTenantConfigurationRevision("t1")).thenReturn(11L);
-    when(fireEnumerator.enumerate(any(), any(), any(), anyInt()))
+    when(fireEnumerator.enumerateFromSource(any(), any(), any(), anyInt()))
         .thenReturn(List.of(firstFire, secondFire));
     when(timezoneProvider.resolveOrDefault("Asia/Shanghai")).thenReturn(ZoneId.of("Asia/Shanghai"));
 
@@ -82,7 +80,7 @@ class TriggerScheduledOccurrencePlannerTest {
     LocalDate expectedDate = LocalDate.of(2026, 10, 14);
     verify(calendarDefinitionProvider).load("t1", "biz_day");
     verify(fireEnumerator)
-        .enumerate(
+        .enumerateFromSource(
             quartzTrigger,
             previousCoverageThrough.minusMillis(1),
             now.plusSeconds(172800),
@@ -97,17 +95,16 @@ class TriggerScheduledOccurrencePlannerTest {
             new ScheduledOccurrencePlanBatchParam.Fire(secondFire, LocalDate.of(2026, 10, 15)));
     verify(occurrenceMapper).supersedeFuturePlanned("t1", 701L, 7, now);
     verify(occurrenceMapper)
-        .recordCoverage(
-            ScheduledOccurrenceRecordCoverageParam.builder()
-                .tenantId("t1")
-                .workflowDefinitionId(701L)
-                .configurationRevision(11L)
-                .scheduleVersion(7)
-                .calendarCode("biz_day")
-                .coverageFrom(previousCoverageFrom)
-                .coverageThrough(now.plusSeconds(172800))
-                .completedAt(now)
-                .build());
+        .recordCoverage(ScheduledOccurrenceRecordCoverageParam.builder()
+            .tenantId("t1")
+            .workflowDefinitionId(701L)
+            .configurationRevision(11L)
+            .scheduleVersion(7)
+            .calendarCode("biz_day")
+            .coverageFrom(previousCoverageFrom)
+            .coverageThrough(now.plusSeconds(172800))
+            .completedAt(now)
+            .build());
     Assertions.assertThat(materialized).isEqualTo(2);
   }
 
@@ -137,27 +134,26 @@ class TriggerScheduledOccurrencePlannerTest {
     when(occurrenceMapper.lockTenantConfigurationRevision("t1")).thenReturn(12L);
     when(occurrenceMapper.selectTenantConfigurationUpdatedAt("t1"))
         .thenReturn(configurationEffectiveAt);
-    when(fireEnumerator.enumerate(any(), any(), any(), anyInt())).thenReturn(List.of());
+    when(fireEnumerator.enumerateFromSource(any(), any(), any(), anyInt())).thenReturn(List.of());
 
     planner.materialize(descriptor, quartzTrigger, now);
 
     verify(fireEnumerator)
-        .enumerate(
+        .enumerateFromSource(
             quartzTrigger,
             configurationEffectiveAt.minusMillis(1),
             now.plusSeconds(172800),
             100_000);
     verify(occurrenceMapper)
-        .recordCoverage(
-            ScheduledOccurrenceRecordCoverageParam.builder()
-                .tenantId("t1")
-                .workflowDefinitionId(701L)
-                .configurationRevision(12L)
-                .scheduleVersion(7)
-                .calendarCode("biz_day")
-                .coverageFrom(previousCoverageFrom)
-                .coverageThrough(now.plusSeconds(172800))
-                .completedAt(now)
-                .build());
+        .recordCoverage(ScheduledOccurrenceRecordCoverageParam.builder()
+            .tenantId("t1")
+            .workflowDefinitionId(701L)
+            .configurationRevision(12L)
+            .scheduleVersion(7)
+            .calendarCode("biz_day")
+            .coverageFrom(previousCoverageFrom)
+            .coverageThrough(now.plusSeconds(172800))
+            .completedAt(now)
+            .build());
   }
 }

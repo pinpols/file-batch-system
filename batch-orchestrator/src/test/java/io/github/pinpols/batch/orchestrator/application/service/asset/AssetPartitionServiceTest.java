@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service.asset;
 
-import io.github.pinpols.batch.orchestrator.domain.param.DataAssetUpsertParam;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -11,6 +10,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionQueryService;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.DataAssetUpsertParam;
 import io.github.pinpols.batch.orchestrator.mapper.AssetPartitionMapper;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -215,21 +215,29 @@ class AssetPartitionServiceTest {
     service.materializeEffectiveJobPartition(instance, version);
     service.materializeEffectiveJobPartition(instance, version);
 
-    verify(assetPartitionMapper, times(1)).upsertDataAsset(DataAssetUpsertParam.builder().tenantId("t1").assetCode("JOB_A").assetType("JOB").displayName("JOB_A").ownerJobCode("JOB_A").build());
+    verify(assetPartitionMapper, times(1))
+        .upsertDataAsset(DataAssetUpsertParam.builder()
+            .tenantId("t1")
+            .assetCode("JOB_A")
+            .assetType("JOB")
+            .displayName("JOB_A")
+            .ownerJobCode("JOB_A")
+            .build());
     verify(assetPartitionMapper, times(1)).selectDataAssetId("t1", "JOB_A", "JOB");
     verify(assetPartitionMapper, times(2))
-        .upsertEffectiveJobPartition(new AssetPartitionMaterializationCommand(
-            "t1",
-            10L,
-            "JOB_A",
-            "2026-06-30",
-            LocalDate.of(2026, Month.JUNE, 30),
-            900L,
-            "job:JOB_A:2026-06-30",
-            100L,
-            effectiveAt,
-            "INLINE_JSON",
-            "s3://bucket/key"));
+        .upsertEffectiveJobPartition(AssetPartitionMaterializationCommand.builder()
+            .tenantId("t1")
+            .assetId(10L)
+            .assetCode("JOB_A")
+            .partitionKey("2026-06-30")
+            .bizDate(LocalDate.of(2026, Month.JUNE, 30))
+            .resultVersionId(900L)
+            .businessKey("job:JOB_A:2026-06-30")
+            .jobInstanceId(100L)
+            .effectiveAt(effectiveAt)
+            .payloadStorage("INLINE_JSON")
+            .payloadRef("s3://bucket/key")
+            .build());
   }
 
   @Test
@@ -249,6 +257,13 @@ class AssetPartitionServiceTest {
 
     service.materializeEffectiveJobPartition(instance, version);
 
-    verify(assetPartitionMapper, never()).upsertDataAsset(DataAssetUpsertParam.builder().tenantId("t1").assetCode("JOB_A").assetType("JOB").displayName("JOB_A").ownerJobCode("JOB_A").build());
+    verify(assetPartitionMapper, never())
+        .upsertDataAsset(DataAssetUpsertParam.builder()
+            .tenantId("t1")
+            .assetCode("JOB_A")
+            .assetType("JOB")
+            .displayName("JOB_A")
+            .ownerJobCode("JOB_A")
+            .build());
   }
 }

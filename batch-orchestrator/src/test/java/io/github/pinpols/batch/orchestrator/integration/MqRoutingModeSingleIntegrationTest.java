@@ -74,10 +74,8 @@ class MqRoutingModeSingleIntegrationTest extends AbstractIntegrationTest {
           String outboxPublishStatusSql = """
               select publish_status from batch.outbox_event where id = ?
               """;
-          String status = jdbcTemplate.queryForObject(
-              outboxPublishStatusSql,
-              String.class,
-              event.getId());
+          String status =
+              jdbcTemplate.queryForObject(outboxPublishStatusSql, String.class, event.getId());
           assertThat(status).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
         });
 

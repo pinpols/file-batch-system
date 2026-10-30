@@ -24,8 +24,11 @@ class ResourceQueueQuerySqlTest {
     String sql = statement.getSql().replaceAll("\\s+", " ").trim();
 
     assertThat(sql).contains("where tenant_id = ?").contains("order by id desc");
-    assertThat(sql).doesNotContain("limit", "offset");
-    assertThat(statement.getParameterMappings()).extracting(ParameterMapping::getProperty)
+    // burst_limit 列名含子串 limit，按分页关键字（limit ? / offset ?）断言。
+    assertThat(sql).doesNotContainPattern("(?i)\\blimit\\s+\\?");
+    assertThat(sql).doesNotContainPattern("(?i)\\boffset\\s+\\?");
+    assertThat(statement.getParameterMappings())
+        .extracting(ParameterMapping::getProperty)
         .containsExactly("tenantId");
     assertThat(query.tenantId()).isEqualTo("tenant-export");
   }
@@ -39,7 +42,8 @@ class ResourceQueueQuerySqlTest {
     String sql = statement.getSql().replaceAll("\\s+", " ").trim();
 
     assertThat(sql).contains("where tenant_id = ?").contains("limit ?").contains("offset ?");
-    assertThat(statement.getParameterMappings()).extracting(ParameterMapping::getProperty)
+    assertThat(statement.getParameterMappings())
+        .extracting(ParameterMapping::getProperty)
         .containsExactly("tenantId", "pageRequest.pageSize", "offset");
     assertThat(statement.getAdditionalParameter("offset")).isEqualTo(25);
     assertThat(query.pageRequest()).isSameAs(page);
@@ -49,25 +53,29 @@ class ResourceQueueQuerySqlTest {
   @DisplayName("导出仍要求租户身份，分页入口仍要求页条件")
   void shouldRejectIncompleteQueryIdentity_whenRequiredInputIsMissing() {
     assertThatThrownBy(() -> ResourceQueueQuery.allForTenant(null))
-        .isInstanceOf(NullPointerException.class).hasMessage("tenantId");
+        .isInstanceOf(NullPointerException.class)
+        .hasMessage("tenantId");
     assertThatThrownBy(() -> ResourceQueueQuery.forTenant("tenant-list", null))
-        .isInstanceOf(NullPointerException.class).hasMessage("pageRequest");
+        .isInstanceOf(NullPointerException.class)
+        .hasMessage("pageRequest");
   }
 
   private BoundSql queueStatement(ResourceQueueQuery query) throws Exception {
     Configuration configuration = new Configuration();
     parseMapper(configuration, "mapper/CommonFragments.xml");
     parseMapper(configuration, "mapper/ResourceQueueMapper.xml");
-    return configuration.getMappedStatement(
-        "io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper.selectByQuery")
+    return configuration
+        .getMappedStatement(
+            "io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper.selectByQuery")
         .getBoundSql(query);
   }
 
   private void parseMapper(Configuration configuration, String resource) throws Exception {
     ClassLoader loader = getClass().getClassLoader();
-    try (InputStream stream = Objects.requireNonNull(loader.getResourceAsStream(resource), resource)) {
-      XMLMapperBuilder parser = new XMLMapperBuilder(
-          stream, configuration, resource, configuration.getSqlFragments());
+    try (InputStream stream =
+        Objects.requireNonNull(loader.getResourceAsStream(resource), resource)) {
+      XMLMapperBuilder parser =
+          new XMLMapperBuilder(stream, configuration, resource, configuration.getSqlFragments());
       parser.parse();
     }
   }

@@ -2,7 +2,7 @@
 
 > **当前适用范围**：原子任务 SPI 与文件 Pipeline 分层继续适用。当前 JobType 为 GENERAL、四类文件/加工类型、ATOMIC 与三类 BUNDLE，没有 WORKFLOW；顶层编排由 WorkflowRun 承载。下文带阶段排期和旧类型数量的章节是立项背景，不能据此恢复旧 Job wrapper 或租户自定义阶段。
 
-> 立项:[p0-p1-p2-roadmap §P0](../archive/plans/p0-p1-p2-roadmap-2026-05-29.md#p0-任务类型-spi--plugin-化)
+> 立项所涉工程治理要求已并入[工程成熟度路线图](../architecture/engineering-maturity-roadmap.md)。
 >
 > 目标:让"加新任务类型"从"开新 worker module + 改 BE"降到"实现 1 个 SPI 类 + 1 行注册"。
 
@@ -40,25 +40,16 @@
 
 不要把 Pipeline SPI 和原子任务 SPI 揉成一个,会变成"什么都是又什么都不是"的接口。
 
-```
-                       ┌─────────────────────────┐
-                       │  StepExecutionAdapter   │   ← 已有,不动
-                       │  (worker 单步入口)       │
-                       └───────────┬─────────────┘
-                                   │
-                      ┌────────────┴────────────┐
-                      │                         │
-                      ▼                         ▼
-        ┌────────────────────────┐    ┌────────────────────────┐
-        │ AbstractPipeline       │    │ BatchTaskExecutor SPI  │  ← 本次新加
-        │ StepExecutionAdapter   │    │ (原子任务,无 stage)     │
-        │ (已有,Pipeline 形态)    │    │                        │
-        ├────────────────────────┤    ├────────────────────────┤
-        │ Import / Export /      │    │ Shell / SQL /          │
-        │ Process / Dispatch     │    │ StoredProc / HTTP /    │
-        │ (4 个 worker 实现)      │    │ SFTP / Kafka / ...     │
-        │                        │    │ (按 jar 装载)           │
-        └────────────────────────┘    └────────────────────────┘
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  E[StepExecutionAdapter：单步入口] --> P[AbstractPipelineStepExecutionAdapter]
+  E --> A[DefaultStepExecutionAdapter]
+  P --> F[IMPORT / EXPORT / PROCESS / DISPATCH]
+  A --> R[Executor Registry：按 taskType 路由]
+  R --> B[BatchTaskExecutor SPI]
+  B --> I[Shell / SQL / StoredProc / HTTP 等]
+  F -. 多阶段模板 .-> S[Stage SPI]
 ```
 
 ### 2.1 分层职责
@@ -221,6 +212,7 @@ public class BatchTaskExecutorRegistry {
 
 - `IMPORT / EXPORT / PROCESS / DISPATCH / ATOMIC` 这类大 Worker 类型是平台固定主链,插件不能绕过 claim、lease、progress、report、dry-run 和幂等契约直接替换整条链路。
 - 插件只挂在固定步骤内部,例如 Import 的 load、Export 的 data/format、Process 的 compute、Dispatch 的 channel delivery。
+- Import LOAD 的 `loadChunk` 正常返回值是已确认处理的逻辑行数，须等于整批输入；幂等重放中已确认存在的行也计入。数量不一致时 LOAD 失败且不推进该分块位点，插件异常后的外部副作用仍受幂等声明和执行围栏约束。
 - 默认实现不是"被外部插件优先接管",而是由配置 id、格式或渠道类型显式选择;重复实现必须 fail-fast。
 - 如果确实需要生产覆盖默认实现,应新增显式开关或独立 id,不得依赖 Spring bean 顺序、`@Order` 或 classpath 顺序。
 
@@ -269,7 +261,7 @@ official channel_type -> exactly one DispatchChannelAdapter
 
 > 实现订正:原设计曾提议把 4 件套放进 `batch-worker-core`(理由:所有 worker 启动即加载 core,builtin 自动可用)。落地时按 [ADR-029 专用 SPI worker](../architecture/adr/ADR-029-dedicated-spi-worker.md)改为**独立隔离在 `batch-worker/atomic` 子模块**——特权执行器(shell/sql/stored-proc/http)有 RCE 风险面,必须与普通 worker 进程隔离、独立开关与审批,不随 core 默认进每个 worker。
 
-**安全 / 隔离硬约束**:见 [roadmap §P0 Phase 3](../archive/plans/p0-p1-p2-roadmap-2026-05-29.md#phase-3通用执行能力-4-件套-builtin)。
+**安全 / 隔离硬约束**:见 [工程路线的安全与租户隔离要求](../architecture/engineering-maturity-roadmap.md)。
 
 ---
 
@@ -371,7 +363,7 @@ batch.worker.enabled-task-types:
 |---|---|
 | 双路抽象造成"什么是 Pipeline 什么是 Task"模糊 | 文档明确:多 stage / 文件生命周期 = Pipeline;单步无生命周期 = Atomic。中间形态不存在,有就硬归一类 |
 | 第三方 jar 引错 batch-common 版本 → ServiceLoader 加载 ClassCastException | `BatchTaskExecutorRegistry` 启动期校验 classloader 一致性 + 日志显式提示 |
-| Builtin Shell 被滥用执行 `rm -rf` | 安全硬约束(白名单 + 隔离 + 审计)见 [roadmap §P0 Phase 3](../archive/plans/p0-p1-p2-roadmap-2026-05-29.md) |
+| Builtin Shell 被滥用执行 `rm -rf` | 安全硬约束(白名单 + 隔离 + 审计)见 [工程路线的安全与租户隔离要求](../architecture/engineering-maturity-roadmap.md) |
 | Spring bean + ServiceLoader 重复注册 | Registry 启动期 fail-fast,清晰报错 |
 
 ### 不做的
@@ -428,8 +420,8 @@ batch.worker.enabled-task-types:
 
 ## 10. 关联文档
 
-- 路线全景:[p0-p1-p2-roadmap-2026-05-29.md](../archive/plans/p0-p1-p2-roadmap-2026-05-29.md)
-- 缺陷盘点(P0 对应缺陷 1+2):[deficiencies-2026-05-30.md](../archive/audit/deficiencies-2026-05-30.md)
+- 路线全景:[engineering-maturity-roadmap.md](../architecture/engineering-maturity-roadmap.md)
+- 当前治理事项：[TODO Master](../plans/todo-master.md)
 - 现有 Pipeline 设计:[file-pipeline-design.md](file-pipeline-design.md)
 - Pipeline vs Workflow 边界:[pipeline-vs-workflow-definition.md](pipeline-vs-workflow-definition.md)
 - 后续 builtin 用法手册(随 PR-2 落地):`docs/design/builtin-task-executors.md`

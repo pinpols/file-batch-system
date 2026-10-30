@@ -10,6 +10,7 @@ public class UpdateCompensationStatusParam {
   private final String tenantId;
   private final Long id;
   private final String commandStatus;
+  private final String expectedStatus;
   private final Long relatedJobInstanceId;
   private final Long relatedFileId;
   private final String resultSummary;

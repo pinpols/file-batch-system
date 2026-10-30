@@ -42,7 +42,8 @@ public class AckDispatchStep implements DispatchStageStep {
   @Override
   public DispatchStageResult execute(DispatchJobContext context) {
     // ADR-026: 演练模式不更新 file_dispatch_record，跳过 ack。
-    Map<String, Object> dryRunAttributes = EmptyChecks.isNull(context) ? null : context.getAttributes();
+    Map<String, Object> dryRunAttributes =
+        EmptyChecks.isNull(context) ? null : context.getAttributes();
     if (DryRunGuard.fromAttributes(dryRunAttributes).isDryRun()) {
       return DispatchStageResult.success(stage());
     }
@@ -66,14 +67,16 @@ public class AckDispatchStep implements DispatchStageStep {
             : null;
     String receiptCode = dispatchPayload.receiptCode();
     boolean dispatchResultCanSupplyReceiptCode =
-        (EmptyChecks.isNull(receiptCode) || EmptyChecks.isBlank(receiptCode)) && EmptyChecks.isNotNull(dispatchResult);
+        (EmptyChecks.isNull(receiptCode) || EmptyChecks.isBlank(receiptCode))
+            && EmptyChecks.isNotNull(dispatchResult);
     if (dispatchResultCanSupplyReceiptCode) {
       receiptCode = dispatchResult.receiptCode();
     }
     boolean acknowledged = dispatchResult != null && dispatchResult.acknowledged();
     boolean pending = dispatchResult != null && dispatchResult.receiptPending();
-    boolean hasAcknowledgementEvidence =
-        acknowledged || (EmptyChecks.isNotNull(receiptCode) && !EmptyChecks.isBlank(Objects.requireNonNull(receiptCode)));
+    boolean hasAcknowledgementEvidence = acknowledged
+        || (EmptyChecks.isNotNull(receiptCode)
+            && !EmptyChecks.isBlank(Objects.requireNonNull(receiptCode)));
     if (hasAcknowledgementEvidence) {
       int updated = fileDispatchRepository.markAcked(
           context.getTenantId(),
@@ -84,9 +87,7 @@ public class AckDispatchStep implements DispatchStageStep {
         String nextStage = Boolean.TRUE.equals(attrs.get(DispatchRuntimeKeys.RETRY_REQUESTED))
             ? DispatchStage.RETRY.name()
             : DispatchStage.COMPENSATE.name();
-        attrs.put(
-            PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE,
-            nextStage);
+        attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, nextStage);
         return DispatchStageResult.failure(
             stage(),
             "DISPATCH_ACK_FAILED",

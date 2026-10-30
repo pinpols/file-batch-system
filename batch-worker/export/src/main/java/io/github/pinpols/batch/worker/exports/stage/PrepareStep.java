@@ -100,8 +100,8 @@ public class PrepareStep implements ExportStageStep {
       String finalObjectName =
           resolveObjectName(context, payload, fileName, partitionNo, partitionCount);
       Long jobInstanceId = ExportArtifactIdentity.jobInstanceId(context);
-      String temporaryFileName = EmptyChecks.isNull(jobInstanceId)
-          ? fileName : "job-" + jobInstanceId + "-" + fileName;
+      String temporaryFileName =
+          EmptyChecks.isNull(jobInstanceId) ? fileName : "job-" + jobInstanceId + "-" + fileName;
       String tempObjectName =
           BatchFileConstants.tempObjectName(context.getTenantId(), bizDate, temporaryFileName);
       Map<String, Object> exportSnapshot = buildExportSnapshot(payload, templateConfig);
@@ -133,9 +133,8 @@ public class PrepareStep implements ExportStageStep {
   Map<String, Object> resolveTemplateConfig(ExportJobContext context) {
     Map<String, Object> attrs = context.getAttributes();
     Object payloadValue = attrs.get(ExportRuntimeKeys.EXPORT_PAYLOAD);
-    ExportPayload payload = payloadValue instanceof ExportPayload typed
-        ? typed
-        : readPayload(context.getRawPayload());
+    ExportPayload payload =
+        payloadValue instanceof ExportPayload typed ? typed : readPayload(context.getRawPayload());
     attrs.put(ExportRuntimeKeys.EXPORT_PAYLOAD, payload);
     return resolveTemplateConfig(context, payload);
   }
@@ -211,7 +210,8 @@ public class PrepareStep implements ExportStageStep {
     String batchNo = defaultText(payload.batchNo(), "batch");
     Long jobInstanceId = ExportArtifactIdentity.jobInstanceId(context);
     String artifactVersion = EmptyChecks.isNull(jobInstanceId) ? "v1" : "job-" + jobInstanceId;
-    return BatchFileConstants.outboundObjectName(bizType, bizDate, batchNo, artifactVersion, fileName);
+    return BatchFileConstants.outboundObjectName(
+        bizType, bizDate, batchNo, artifactVersion, fileName);
   }
 
   private String resolveBizDate(ExportJobContext context, ExportPayload payload) {

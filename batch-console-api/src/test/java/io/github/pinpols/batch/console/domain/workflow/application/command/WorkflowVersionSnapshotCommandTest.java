@@ -16,7 +16,8 @@ class WorkflowVersionSnapshotCommandTest {
   @ValueSource(strings = {"tenantId", "definitionId", "workflowCode", "version", "body"})
   @DisplayName("构造时拒绝缺失快照身份或定义内容")
   void shouldRejectMissingRequiredSnapshotField_whenRequiredIdentityIsNull(String missingField) {
-    WorkflowVersionSnapshotCommand.WorkflowVersionSnapshotCommandBuilder builder = completeBuilder();
+    WorkflowVersionSnapshotCommand.WorkflowVersionSnapshotCommandBuilder builder =
+        completeBuilder();
     switch (missingField) {
       case "tenantId" -> builder.tenantId(null);
       case "definitionId" -> builder.definitionId(null);
@@ -34,7 +35,8 @@ class WorkflowVersionSnapshotCommandTest {
   @Test
   @DisplayName("保留调用方未指定调度开关或审计操作者的原语义")
   void shouldAllowUnspecifiedScheduleAndOperator_whenCallerOmitsOptionalFields() {
-    WorkflowVersionSnapshotCommand.WorkflowVersionSnapshotCommandBuilder builder = completeBuilder();
+    WorkflowVersionSnapshotCommand.WorkflowVersionSnapshotCommandBuilder builder =
+        completeBuilder();
 
     WorkflowVersionSnapshotCommand command = builder.build();
 

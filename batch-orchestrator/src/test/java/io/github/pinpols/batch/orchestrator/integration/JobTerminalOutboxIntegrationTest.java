@@ -82,7 +82,13 @@ class JobTerminalOutboxIntegrationTest extends AbstractIntegrationTest {
     tenant = "jterm_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
     Long definition = jdbc.queryForObject(insertJobDefinitionSql, Long.class, tenant);
     id = jdbc.queryForObject(
-        insertJobInstanceSql, Long.class, tenant, definition, tenant, LocalDate.of(2026, 10, 19), tenant);
+        insertJobInstanceSql,
+        Long.class,
+        tenant,
+        definition,
+        tenant,
+        LocalDate.of(2026, 10, 19),
+        tenant);
   }
 
   @AfterEach
@@ -95,7 +101,7 @@ class JobTerminalOutboxIntegrationTest extends AbstractIntegrationTest {
         "job_execution_log",
         "job_instance",
         "job_definition")) {
-          final String deleteStatementSql = """
+      final String deleteStatementSql = """
               delete from batch.%s where tenant_id=?\
               """.formatted(table);
       jdbc.update(deleteStatementSql, tenant);
@@ -121,8 +127,7 @@ class JobTerminalOutboxIntegrationTest extends AbstractIntegrationTest {
         and NEW.event_type='JOB_TERMINAL' then raise exception 'injected Job terminal failure'; end if; return\s\
         NEW; end $$\
         """.formatted(trigger, tenant);
-    jdbc.execute(
-        createFunctionSql);
+    jdbc.execute(createFunctionSql);
     final String createTriggerSql = """
         create trigger %s before insert on batch.outbox_event for each row execute function batch.%s()\
         """.formatted(trigger, trigger);
@@ -171,10 +176,7 @@ class JobTerminalOutboxIntegrationTest extends AbstractIntegrationTest {
 
     assertThat(terminals.updateTerminalStatusAndReconcileChildren(command("FAILED", 0L)))
         .isEqualTo(1);
-    String original = jdbc.queryForObject(
-        selectPayloadJsonSql,
-        String.class,
-        tenant);
+    String original = jdbc.queryForObject(selectPayloadJsonSql, String.class, tenant);
     assertThat(terminals.updateTerminalStatusAndReconcileChildren(command("FAILED", 1L)))
         .isEqualTo(1);
     assertThat(events()).isEqualTo(1);
@@ -238,10 +240,7 @@ class JobTerminalOutboxIntegrationTest extends AbstractIntegrationTest {
         and id=?
     """;
 
-    jdbc.update(
-        updateJobInstanceSql,
-        tenant,
-        id);
+    jdbc.update(updateJobInstanceSql, tenant, id);
     var request = LaunchRequest.builder()
         .tenantId(tenant)
         .jobCode("JOB_TERMINAL")
@@ -270,6 +269,43 @@ class JobTerminalOutboxIntegrationTest extends AbstractIntegrationTest {
         .containsEntry("terminated_partition_count", 0);
   }
 
+  @Test
+  @DisplayName("演练派发被业务规则拒绝时，实例与终态事件均标记演练失败")
+  void shouldProduceDryRunTerminalFactForDispatchBusinessRejection() {
+    final String prepareSql = """
+        update batch.job_instance set instance_status='CREATED', started_at=null, dry_run=true
+        where tenant_id=? and id=?
+        """;
+    final String statusSql =
+        "select instance_status from batch.job_instance where tenant_id=? and id=?";
+    final String payloadSql =
+        "select payload_json->>'instanceStatus' from batch.outbox_event where tenant_id=? and event_type='JOB_TERMINAL'";
+    jdbc.update(prepareSql, tenant, id);
+    var request = LaunchRequest.builder()
+        .tenantId(tenant)
+        .jobCode("JOB_TERMINAL")
+        .bizDate(LocalDate.of(2026, 10, 19))
+        .triggerType(TriggerType.MANUAL)
+        .requestId("dry-rejected-" + tenant)
+        .traceId("dry-reject")
+        .dryRun(true)
+        .params(Map.of())
+        .build();
+
+    launches.finalizeDispatchFailure(
+        request,
+        jobs.selectById(tenant, id),
+        BizException.of(
+            ResultCode.INVALID_ARGUMENT,
+            "error.partition.dispatch_business_error",
+            "POLICY_REJECTED",
+            "policy rejected"));
+
+    assertThat(jdbc.queryForObject(statusSql, String.class, tenant, id))
+        .isEqualTo("FAILED_DRY_RUN");
+    assertThat(jdbc.queryForObject(payloadSql, String.class, tenant)).isEqualTo("FAILED_DRY_RUN");
+  }
+
   private JobInstanceTerminalStatusCommand command(String status, long version) {
     return new JobInstanceTerminalStatusCommand(tenant, id, status, Instant.now(), version);
   }
@@ -279,9 +315,6 @@ class JobTerminalOutboxIntegrationTest extends AbstractIntegrationTest {
         select count(*) from batch.outbox_event where tenant_id=? and event_type='JOB_TERMINAL'
     """;
 
-    return jdbc.queryForObject(
-        selectCountSql,
-        Integer.class,
-        tenant);
+    return jdbc.queryForObject(selectCountSql, Integer.class, tenant);
   }
 }

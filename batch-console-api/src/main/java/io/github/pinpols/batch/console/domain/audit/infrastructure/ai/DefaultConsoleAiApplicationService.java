@@ -1,9 +1,5 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
-import lombok.Builder;
-
-import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiTurnStartInput;
-
 import com.anthropic.errors.AnthropicIoException;
 import com.anthropic.errors.AnthropicRetryableException;
 import com.anthropic.errors.AnthropicServiceException;
@@ -31,6 +27,7 @@ import io.github.pinpols.batch.console.config.ConsoleAiClients;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentUseCase;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiTurnStartInput;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiSourceResponse;
 import io.github.pinpols.batch.console.domain.audit.command.AiAuditCommand;
@@ -54,6 +51,7 @@ import java.time.YearMonth;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CancellationException;
@@ -81,8 +79,8 @@ import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
-import org.springframework.util.MimeTypeUtils;
 import org.springframework.util.MimeType;
+import org.springframework.util.MimeTypeUtils;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientResponseException;
 import reactor.core.publisher.Flux;
@@ -193,8 +191,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
           .prompt(prompt)
           .gateResult(gateResult)
           .build();
-      return recordRejectedRequest(
-          rejectedRequestContext);
+      return recordRejectedRequest(rejectedRequestContext);
     }
 
     String contextJson = ConsoleAiContextSanitizer.sanitize(
@@ -223,8 +220,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         .contextVersion(request.getContextVersion())
         .history(EmptyChecks.isNull(persistedTurn) ? List.of() : persistedTurn.history())
         .build();
-    String promptPayload = buildPrompt(
-        promptAssemblyContext);
+    String promptPayload = buildPrompt(promptAssemblyContext);
     boolean toolsEnabled = EmptyChecks.isNotNull(tools);
     String systemPrompt = buildSystemPrompt(snippets, toolsEnabled);
     List<ConsoleAiAttachmentUseCase.ImageContent> images;
@@ -271,13 +267,13 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       if (EmptyChecks.isNotNull(persistedTurn)) {
         ConsoleAiConversationService.TurnCompletion failedTurnCompletion =
             ConsoleAiConversationService.TurnCompletion.builder()
-            .tenantId(tenantId)
-            .conversationId(persistedTurn.conversationId())
-            .turnNo(persistedTurn.turnNo())
-            .response(degraded.getAnswer())
-            .decision(AiPromptDecision.FAILED.code())
-            .estimatedCostUsd(failedCost.amount())
-            .build();
+                .tenantId(tenantId)
+                .conversationId(persistedTurn.conversationId())
+                .turnNo(persistedTurn.turnNo())
+                .response(degraded.getAnswer())
+                .decision(AiPromptDecision.FAILED.code())
+                .estimatedCostUsd(failedCost.amount())
+                .build();
         conversationService.completeTurn(failedTurnCompletion);
       }
       return degraded;
@@ -378,9 +374,10 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       String tenantId, String ownerUserId, String cursor, int limit) {
     PageResponse<ConsoleAiConversationService.ConversationView> page =
         conversationService.page(tenantId, ownerUserId, cursor, limit);
-    List<ConsoleAiApplicationService.ConversationSummary> conversationSummaries = page.items().stream()
-        .map(DefaultConsoleAiApplicationService::toConversationSummary)
-        .toList();
+    List<ConsoleAiApplicationService.ConversationSummary> conversationSummaries =
+        page.items().stream()
+            .map(DefaultConsoleAiApplicationService::toConversationSummary)
+            .toList();
     return PageResponse.cursor(conversationSummaries, page.pageSize(), page.nextCursor());
   }
 
@@ -421,26 +418,26 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       String tenantId, String conversationId, ConsoleAiConversationService.TurnView view) {
     List<ConsoleAiAttachmentUseCase.AttachmentView> turnAttachments =
         attachmentService.byTurn(tenantId, conversationId, view.turnNo());
-    List<ConsoleAiApplicationService.AttachmentSummary> attachments =
-        turnAttachments.stream()
-            .map(item -> new ConsoleAiApplicationService.AttachmentSummary(
-                item.id(), item.mediaType(), item.byteSize(), item.width(), item.height()))
-            .toList();
-    return new ConsoleAiApplicationService.TurnSummary(
-        view.turnNo(),
-        view.clientTurnId(),
-        view.contextVersion(),
-        view.prompt(),
-        view.response(),
-        view.status(),
-        view.promptDecision(),
-        view.modelName(),
-        view.promptTokens(),
-        view.completionTokens(),
-        view.estimatedCostUsd(),
-        view.createdAt(),
-        view.completedAt(),
-        attachments);
+    List<ConsoleAiApplicationService.AttachmentSummary> attachments = turnAttachments.stream()
+        .map(item -> new ConsoleAiApplicationService.AttachmentSummary(
+            item.id(), item.mediaType(), item.byteSize(), item.width(), item.height()))
+        .toList();
+    return ConsoleAiApplicationService.TurnSummary.builder()
+        .turnNo(view.turnNo())
+        .clientTurnId(view.clientTurnId())
+        .contextVersion(view.contextVersion())
+        .prompt(view.prompt())
+        .response(view.response())
+        .status(view.status())
+        .promptDecision(view.promptDecision())
+        .modelName(view.modelName())
+        .promptTokens(view.promptTokens())
+        .completionTokens(view.completionTokens())
+        .estimatedCostUsd(view.estimatedCostUsd())
+        .createdAt(view.createdAt())
+        .completedAt(view.completedAt())
+        .attachments(attachments)
+        .build();
   }
 
   @Override
@@ -576,8 +573,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
           .observer(observer)
           .deadlineNanos(effectivePrimaryDeadlineNanos)
           .build();
-      return callProvider(
-          providerInvocation);
+      return callProvider(providerInvocation);
     } catch (Exception primaryFailure) {
       boolean fallbackProviderIsMissing = EmptyChecks.isNull(providers.fallback());
       if (fallbackProviderIsMissing) {
@@ -588,8 +584,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       if (fallbackProviderCannotHandleImages) {
         throw primaryFailure;
       }
-      boolean streamObserverPreventsFallback = EmptyChecks.isNotNull(observer)
-          && (observer.isCancelled() || observer.hasEmitted());
+      boolean streamObserverPreventsFallback =
+          EmptyChecks.isNotNull(observer) && (observer.isCancelled() || observer.hasEmitted());
       if (streamObserverPreventsFallback) {
         throw primaryFailure;
       }
@@ -613,8 +609,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
             .observer(observer)
             .deadlineNanos(deadlineNanos)
             .build();
-        return callProvider(
-            providerInvocation);
+        return callProvider(providerInvocation);
       } catch (Exception fallbackFailure) {
         fallbackFailure.addSuppressed(primaryFailure);
         throw fallbackFailure;
@@ -622,8 +617,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     }
   }
 
-  private ModelCallResult callProvider(
-      ProviderInvocation invocation)
+  private ModelCallResult callProvider(ProviderInvocation invocation)
       throws InterruptedException, ExecutionException, TimeoutException {
     ConsoleAiClients.ProviderClient provider = invocation.provider();
     List<ConsoleAiKnowledgeBase.Snippet> snippets = invocation.snippets();
@@ -732,8 +726,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       if (cause instanceof RestClientResponseException responseFailure) {
         return isRetryableStatus(responseFailure.getStatusCode().value());
       }
-      if (isRetryableProviderTransportFailure(cause)
-          || isTransientTransportFailure(cause)) {
+      if (isRetryableProviderTransportFailure(cause) || isTransientTransportFailure(cause)) {
         return true;
       }
     }
@@ -900,8 +893,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     return response;
   }
 
-  private AiChatResponse recordRejectedRequest(
-      RejectedRequestContext context) {
+  private AiChatResponse recordRejectedRequest(RejectedRequestContext context) {
     String tenantId = context.tenantId();
     ConsoleRequestMetadata metadata = context.metadata();
     String requestId = context.requestId();
@@ -970,29 +962,29 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         ? "UNPRICED"
         : context.result().costStatus();
     Instant auditedAt = BatchDateTimeSupport.utcNow();
-    return new AiAuditCommand(
-        tenantId,
-        requestId,
-        traceId,
-        sessionId,
-        operatorId,
-        promptCategoryCode,
-        decisionCode,
-        modelName,
-        promptDigest,
-        promptPreview,
-        responseDigest,
-        responsePreview,
-        refusalReason,
-        promptTokens,
-        completionTokens,
-        estimatedCostUsd,
-        costStatus,
-        auditedAt);
+    return AiAuditCommand.builder()
+        .tenantId(tenantId)
+        .requestId(requestId)
+        .traceId(traceId)
+        .sessionId(sessionId)
+        .operatorId(operatorId)
+        .promptCategory(promptCategoryCode)
+        .promptDecision(decisionCode)
+        .modelName(modelName)
+        .promptHash(promptDigest)
+        .promptPreview(promptPreview)
+        .responseHash(responseDigest)
+        .responsePreview(responsePreview)
+        .refusalReason(refusalReason)
+        .promptTokens(promptTokens)
+        .completionTokens(completionTokens)
+        .estimatedCostUsd(estimatedCostUsd)
+        .costStatus(costStatus)
+        .createdAt(auditedAt)
+        .build();
   }
 
-  private String buildPrompt(
-      PromptAssemblyContext context) {
+  private String buildPrompt(PromptAssemblyContext context) {
     String tenantId = context.tenantId();
     String sessionId = context.sessionId();
     String prompt = context.prompt();
@@ -1160,7 +1152,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
 
   private record PreparedChatClients(ConsoleAiClients clients, boolean hasImages) {
     private PreparedChatClients {
-      java.util.Objects.requireNonNull(clients, "clients");
+      Objects.requireNonNull(clients, "clients");
     }
 
     @Override
@@ -1197,7 +1189,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       long deadlineNanos) {
 
     private ProviderInvocation {
-      java.util.Objects.requireNonNull(provider, "provider");
+      Objects.requireNonNull(provider, "provider");
     }
 
     @Override
@@ -1218,8 +1210,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       AiPromptGateResult gateResult) {
 
     private RejectedRequestContext {
-      java.util.Objects.requireNonNull(metadata, "metadata");
-      java.util.Objects.requireNonNull(gateResult, "gateResult");
+      Objects.requireNonNull(metadata, "metadata");
+      Objects.requireNonNull(gateResult, "gateResult");
     }
 
     @Override
@@ -1240,8 +1232,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       List<ConsoleAiTurnEntity> history) {
 
     private PromptAssemblyContext {
-      java.util.Objects.requireNonNull(category, "category");
-      java.util.Objects.requireNonNull(history, "history");
+      Objects.requireNonNull(category, "category");
+      Objects.requireNonNull(history, "history");
     }
 
     @Override

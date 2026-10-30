@@ -93,11 +93,10 @@ public class TriggerStatusQueryFacade implements TriggerStatusQueryService {
 
   private static WorkflowIdentity parseWorkflowIdentity(JobKey jobKey) {
     String[] parts = jobKey.getName().split(":", 3);
-    boolean partsDoNotDescribeWorkflowIdentity =
-        parts.length != 3
-            || EmptyChecks.isBlank(parts[0])
-            || !"WF".equals(parts[1])
-            || EmptyChecks.isBlank(parts[2]);
+    boolean partsDoNotDescribeWorkflowIdentity = parts.length != 3
+        || EmptyChecks.isBlank(parts[0])
+        || !"WF".equals(parts[1])
+        || EmptyChecks.isBlank(parts[2]);
     if (partsDoNotDescribeWorkflowIdentity) {
       return null;
     }

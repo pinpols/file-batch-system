@@ -67,8 +67,9 @@ public final class ImportPreprocessObjectSource {
   }
 
   void assertObjectBelongsToTenant(ImportJobContext context, ImportPayload importPayload) {
-    boolean hasRequiredObjectOwnershipContext =
-        EmptyChecks.isNotNull(context) && EmptyChecks.isNotNull(importPayload) && Texts.hasText(importPayload.storagePath());
+    boolean hasRequiredObjectOwnershipContext = EmptyChecks.isNotNull(context)
+        && EmptyChecks.isNotNull(importPayload)
+        && Texts.hasText(importPayload.storagePath());
     if (!hasRequiredObjectOwnershipContext) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_OBJECT_FORBIDDEN",
@@ -263,7 +264,9 @@ public final class ImportPreprocessObjectSource {
       Integer partitionNo,
       Integer partitionCount,
       Charset charset) {
-    boolean inputIsNotPartitioned = partitionNo == null || partitionCount == null || partitionCount <= 1;
+    boolean inputIsNotPartitioned = EmptyChecks.isNull(partitionNo)
+        || EmptyChecks.isNull(partitionCount)
+        || partitionCount <= 1;
     if (inputIsNotPartitioned) {
       return false;
     }

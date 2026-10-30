@@ -30,7 +30,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 /**
- * Integration test: DispatchChannelHealthService records outcomes to the real business DB and
+ * 集成测试：DispatchChannelHealthService 将结果写入真实业务数据库，且
  * retrieves consistent health snapshots.
  */
 @SpringBootTest(
@@ -133,7 +133,7 @@ class DispatchChannelHealthServiceIntegrationTest extends AbstractIntegrationTes
   @DisplayName("渠道尚无健康快照时默认放行投递")
   void shouldAllowDispatchWhenNoHealthSnapshotExists() {
     Map<String, Object> channelConfig = channelConfig("t1", "ch-new-999", "API");
-    // no prior health record — should default to allow
+    // 此前没有健康记录时，默认应允许通过。
     assertThat(healthService.allowDispatch(channelConfig)).isTrue();
   }
 
@@ -150,15 +150,62 @@ class DispatchChannelHealthServiceIntegrationTest extends AbstractIntegrationTes
   @DisplayName("渠道连续失败进入不健康且退避尚未到期时,投递被拒绝放行")
   void shouldBlockDispatchForUnhealthyChannelBeforeBackoffExpires() {
     Map<String, Object> channelConfig = channelConfig("t1", "ch-005", "API");
-    // trigger enough failures to set UNHEALTHY (default threshold is 5)
+    // 触发足够多的失败，使状态变为 UNHEALTHY（默认阈值为 5）。
     for (int i = 0; i < 5; i++) {
       healthService.recordDispatchOutcome(channelConfig, false, "error", null);
     }
 
     DispatchChannelHealthSnapshot snapshot = healthRepository.findHealth("t1", "ch-005");
     assertThat(snapshot.healthStatus()).isIn("UNHEALTHY", "DEGRADED");
-    // backoff has not expired, so dispatch should be blocked
+    // 退避时间尚未结束，因此应阻止分发。
     assertThat(healthService.allowDispatch(channelConfig)).isFalse();
+  }
+
+  @Test
+  @DisplayName("具名快照写入保留全部字段、可空时间和租户隔离，半开探针只允许一次抢占")
+  void shouldPersistSnapshotAndFenceHalfOpenClaims() {
+    String tenantId = "typed-health-owner";
+    String channelCode = "typed-half-open";
+    insertChannelConfig(platformJdbcTemplate(), tenantId, channelCode);
+    Instant now = Instant.parse("2026-10-27T00:00:00Z");
+    Instant previousProbe = now.minusSeconds(2);
+    Instant previousSuccess = now.minusSeconds(30);
+    Instant expiredBackoff = now.minusSeconds(1);
+    Instant hold = now.plusSeconds(60);
+    DispatchChannelHealthSnapshot unhealthy = new DispatchChannelHealthSnapshot(
+        tenantId,
+        channelCode,
+        "API",
+        "UNHEALTHY",
+        5,
+        previousProbe,
+        previousSuccess,
+        previousProbe,
+        expiredBackoff,
+        "probe failed",
+        "probe evidence");
+
+    healthRepository.upsertHealth(unhealthy);
+
+    assertThat(healthRepository.findHealth(tenantId, channelCode)).isEqualTo(unhealthy);
+    assertThat(healthRepository.tryClaimHalfOpenProbe("other-tenant", channelCode, now, hold))
+        .isFalse();
+    assertThat(healthRepository.tryClaimHalfOpenProbe(tenantId, channelCode, now, hold))
+        .isTrue();
+    assertThat(healthRepository.tryClaimHalfOpenProbe(tenantId, channelCode, now, hold))
+        .isFalse();
+    DispatchChannelHealthSnapshot claimed = healthRepository.findHealth(tenantId, channelCode);
+    assertThat(claimed.nextProbeAt()).isEqualTo(hold);
+    assertThat(claimed.consecutiveFailures()).isEqualTo(5);
+    assertThat(claimed.lastFailureAt()).isEqualTo(previousProbe);
+
+    DispatchChannelHealthSnapshot healthy = new DispatchChannelHealthSnapshot(
+        tenantId, channelCode, "API", "HEALTHY", 0, null, null, null, null, null, null);
+    healthRepository.upsertHealth(healthy);
+
+    assertThat(healthRepository.findHealth(tenantId, channelCode)).isEqualTo(healthy);
+    assertThat(healthRepository.tryClaimHalfOpenProbe(tenantId, channelCode, now, hold))
+        .isFalse();
   }
 
   @Test
@@ -180,39 +227,27 @@ class DispatchChannelHealthServiceIntegrationTest extends AbstractIntegrationTes
     final String selectBatchFileChannelHealthSql = """
         select count(*) from batch.file_channel_health where tenant_id = ? and channel_code = ?
     """;
-    assertThat(platform.queryForObject(
-            selectBatchFileChannelHealthSql,
-            Integer.class,
-            "fk-health-owner",
-            code))
-        .isEqualTo(1);
+    Integer selectedBatchFileChannelHealth = platform.queryForObject(
+        selectBatchFileChannelHealthSql, Integer.class, "fk-health-owner", code);
+    assertThat(selectedBatchFileChannelHealth).isEqualTo(1);
 
     final String deleteBatchFileChannelConfigSql = """
         delete from batch.file_channel_config where tenant_id = ? and channel_code = ?
     """;
-    platform.update(
-        deleteBatchFileChannelConfigSql,
-        "fk-health-owner",
-        code);
+    platform.update(deleteBatchFileChannelConfigSql, "fk-health-owner", code);
 
     final String selectBatchFileChannelHealthSqlValue1 = """
         select count(*) from batch.file_channel_health where tenant_id = ? and channel_code = ?
     """;
-    assertThat(platform.queryForObject(
-            selectBatchFileChannelHealthSqlValue1,
-            Integer.class,
-            "fk-health-owner",
-            code))
-        .isZero();
+    Integer selectedBatchFileChannelHealth2 = platform.queryForObject(
+        selectBatchFileChannelHealthSqlValue1, Integer.class, "fk-health-owner", code);
+    assertThat(selectedBatchFileChannelHealth2).isZero();
     final String selectBatchFileChannelConfigSql = """
         select count(*) from batch.file_channel_config where tenant_id = ? and channel_code = ?
     """;
-    assertThat(platform.queryForObject(
-            selectBatchFileChannelConfigSql,
-            Integer.class,
-            "fk-health-other",
-            code))
-        .isEqualTo(1);
+    Integer selectedBatchFileChannelConfig = platform.queryForObject(
+        selectBatchFileChannelConfigSql, Integer.class, "fk-health-other", code);
+    assertThat(selectedBatchFileChannelConfig).isEqualTo(1);
   }
 
   @Test
@@ -237,17 +272,17 @@ class DispatchChannelHealthServiceIntegrationTest extends AbstractIntegrationTes
       final String updateBatchFileChannelHealthSql = """
           update batch.file_channel_health set next_probe_at = now() - interval '1 minute' where tenant_id = ?
       """;
-      platform.update(
-          updateBatchFileChannelHealthSql,
-          tenant);
+      platform.update(updateBatchFileChannelHealthSql, tenant);
     }
     assertThat(healthRepository.countByHealthStatus("UNHEALTHY")).isEqualTo(unhealthyBefore + 2);
     assertThat(healthRepository.countProbeOverdue(Instant.now())).isEqualTo(overdueBefore + 2);
 
     Path cleanupSql =
         Path.of("..", "..", "scripts", "local", "sql", "disable-stage5b-fault-channel.sql");
-    platform.execute(Files.readString(cleanupSql));
-    platform.execute(Files.readString(cleanupSql));
+    String selectStatementSql = Files.readString(cleanupSql);
+    platform.execute(selectStatementSql);
+    String selectStatementSql2 = Files.readString(cleanupSql);
+    platform.execute(selectStatementSql2);
 
     assertThat(healthRepository.countByHealthStatus("UNHEALTHY")).isEqualTo(unhealthyBefore + 1);
     assertThat(healthRepository.countProbeOverdue(Instant.now())).isEqualTo(overdueBefore + 1);
@@ -259,16 +294,14 @@ class DispatchChannelHealthServiceIntegrationTest extends AbstractIntegrationTes
         select enabled from batch.file_channel_config where tenant_id = 'unrelated-tenant'\s\
         and channel_code = 'tb_api_fail'
     """;
-    assertThat(platform.queryForObject(
-            selectBatchFileChannelConfigSqlValue2,
-            Boolean.class))
-        .isTrue();
+    Boolean selectedBatchFileChannelConfig =
+        platform.queryForObject(selectBatchFileChannelConfigSqlValue2, Boolean.class);
+    assertThat(selectedBatchFileChannelConfig).isTrue();
     final String updateBatchFileChannelConfigSql = """
         update batch.file_channel_config set is_deleted = true where tenant_id = 'unrelated-tenant'\s\
         and channel_code = 'tb_api_fail'
     """;
-    platform.update(
-        updateBatchFileChannelConfigSql);
+    platform.update(updateBatchFileChannelConfigSql);
     assertThat(healthRepository.countByHealthStatus("UNHEALTHY")).isEqualTo(unhealthyBefore);
     assertThat(healthRepository.countProbeOverdue(Instant.now())).isEqualTo(overdueBefore);
   }

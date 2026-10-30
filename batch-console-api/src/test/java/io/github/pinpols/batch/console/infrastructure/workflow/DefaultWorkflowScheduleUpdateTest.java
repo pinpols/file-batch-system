@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.infrastructure.workflow;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -16,6 +17,7 @@ import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.support.JobResourceAssignmentGuard;
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.ActiveCalendarRow;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowScheduleUpdateRequest;
@@ -28,8 +30,6 @@ import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionV
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowScheduleUpdateParam;
 import io.github.pinpols.batch.console.domain.workflow.validation.WorkflowDagValidator;
 import java.util.List;
-import java.util.Map;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -142,8 +142,8 @@ class DefaultWorkflowScheduleUpdateTest {
     ArgumentCaptor<WorkflowDefinitionVersionInsertParam> snapshotCaptor =
         ArgumentCaptor.forClass(WorkflowDefinitionVersionInsertParam.class);
     verify(versionMapper).insertVersionSnapshot(snapshotCaptor.capture());
-    assertEquals(5, snapshotCaptor.getValue().getVersion());
-    assertEquals("CRON", snapshotCaptor.getValue().getScheduleType());
+    assertThat(snapshotCaptor.getValue().getVersion()).isEqualTo(5);
+    assertThat(snapshotCaptor.getValue().getScheduleType()).isEqualTo("CRON");
     verify(nodeMapper, never()).deleteByWorkflowDefinitionId(any());
     verify(edgeMapper, never()).deleteByWorkflowDefinitionId(any());
   }
@@ -158,7 +158,8 @@ class DefaultWorkflowScheduleUpdateTest {
     when(definitionMapper.selectById("tenant-a", 17L)).thenReturn(current);
     when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "missing_job")).thenReturn(null);
 
-    assertThrows(BizException.class, () -> service.updateSchedule(17L, request, "operator"));
+    assertThatThrownBy(() -> service.updateSchedule(17L, request, "operator"))
+        .isInstanceOf(BizException.class);
 
     verify(definitionMapper, never())
         .updateScheduleConfiguration(any(WorkflowScheduleUpdateParam.class));
@@ -175,7 +176,8 @@ class DefaultWorkflowScheduleUpdateTest {
     when(definitionMapper.selectById("tenant-a", 17L)).thenReturn(current);
     when(businessCalendarMapper.selectActiveByTenantAndCalendarCode("tenant-a", "missing_calendar"))
         .thenReturn(null);
-    assertThrows(BizException.class, () -> service.updateSchedule(17L, request, "operator"));
+    assertThatThrownBy(() -> service.updateSchedule(17L, request, "operator"))
+        .isInstanceOf(BizException.class);
 
     verify(definitionMapper, never())
         .updateScheduleConfiguration(any(WorkflowScheduleUpdateParam.class));
@@ -192,13 +194,15 @@ class DefaultWorkflowScheduleUpdateTest {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     when(definitionMapper.selectById("tenant-a", 17L)).thenReturn(current);
     when(businessCalendarMapper.selectActiveByTenantAndCalendarCode("tenant-a", "new_calendar"))
-        .thenReturn(Map.of());
+        .thenReturn(new ActiveCalendarRow(
+            1L, "tenant-a", "new_calendar", null, null, null, null, null, null));
     when(definitionMapper.hasCalendarScopedExpectations("tenant-a", 17L)).thenReturn(true);
 
-    BizException failure = Assertions.assertThrows(
+    BizException failure = catchThrowableOfType(
         BizException.class, () -> service.updateSchedule(17L, request, "operator"));
+    assertThat(failure).isNotNull();
 
-    assertEquals(ResultCode.STATE_CONFLICT, failure.getCode());
+    assertThat(failure.getCode()).isEqualTo(ResultCode.STATE_CONFLICT);
     verify(definitionMapper, never())
         .updateScheduleConfiguration(any(WorkflowScheduleUpdateParam.class));
     verify(versionMapper, never()).insertVersionSnapshot(any());
@@ -216,7 +220,8 @@ class DefaultWorkflowScheduleUpdateTest {
     when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "managed_job"))
         .thenReturn(jobDefinition(91L, "managed_job"));
 
-    assertThrows(BizException.class, () -> service.updateSchedule(17L, request, "operator"));
+    assertThatThrownBy(() -> service.updateSchedule(17L, request, "operator"))
+        .isInstanceOf(BizException.class);
 
     verify(definitionMapper, never())
         .updateScheduleConfiguration(any(WorkflowScheduleUpdateParam.class));
@@ -232,8 +237,8 @@ class DefaultWorkflowScheduleUpdateTest {
             "tenant-a", 17L, 4, "CRON", "0 0 2 * * *", "Asia/Shanghai", "SCHEDULED", null, null)))
         .thenReturn(0);
 
-    assertThrows(
-        BizException.class, () -> service.updateSchedule(17L, scheduleRequest(), "operator"));
+    assertThatThrownBy(() -> service.updateSchedule(17L, scheduleRequest(), "operator"))
+        .isInstanceOf(BizException.class);
 
     verify(versionMapper, never()).insertVersionSnapshot(any());
   }

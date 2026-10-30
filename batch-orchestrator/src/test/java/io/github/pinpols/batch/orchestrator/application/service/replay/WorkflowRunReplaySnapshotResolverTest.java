@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.enums.ReplayOperationType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
@@ -69,17 +70,17 @@ class WorkflowRunReplaySnapshotResolverTest {
         .containsEntry("password", "private-root-secret")
         .containsEntry("_rerunResultPolicy", "CREATE_NEW_VERSION")
         .containsEntry("_rerunConfigVersionPolicy", "USE_ORIGINAL_CONFIG");
-    Map<String, Object> executionSnapshot = JsonUtils.fromJson(
-        resolved.executionSnapshotJson(),
-        new com.fasterxml.jackson.core.type.TypeReference<>() {});
+    Map<String, Object> executionSnapshot =
+        JsonUtils.fromJson(resolved.executionSnapshotJson(), new TypeReference<>() {});
     assertThat(executionSnapshot)
         .containsEntry("triggerRequestId", "workflow-replay-808")
         .containsEntry("replaySessionId", null);
-    assertThat(((Number) executionSnapshot.get("replayOperationId")).longValue()).isEqualTo(808L);
+    assertThat(((Number) executionSnapshot.get("replayOperationId")).longValue())
+        .isEqualTo(808L);
     assertThat(((Number) executionSnapshot.get("sourceWorkflowRunId")).longValue())
         .isEqualTo(SOURCE_RUN_ID);
-    Map<?, ?> selectedJob = (Map<?, ?>) ((Map<?, ?>) executionSnapshot.get("jobDefinitions"))
-        .get("FIRST");
+    Map<?, ?> selectedJob =
+        (Map<?, ?>) ((Map<?, ?>) executionSnapshot.get("jobDefinitions")).get("FIRST");
     assertThat(selectedJob.get("jobDefinitionVersion")).isEqualTo(3);
     Map<?, ?> replayGuard = (Map<?, ?>) selectedJob.get("replayExecutionGuard");
     assertThat(((Number) replayGuard.get("replayOperationId")).longValue()).isEqualTo(808L);
@@ -95,17 +96,16 @@ class WorkflowRunReplaySnapshotResolverTest {
   void shouldRestorePinnedCrossDayResultVersionIds_whenOperationSnapshotIsAuthentic()
       throws Exception {
     Fixture fixture = fixture();
-    Map<String, Object> operationSnapshot = JsonUtils.fromJson(
-        fixture.snapshotJson(), new com.fasterxml.jackson.core.type.TypeReference<>() {});
+    Map<String, Object> operationSnapshot =
+        JsonUtils.fromJson(fixture.snapshotJson(), new TypeReference<>() {});
     Map<String, Object> sourceExecutionSnapshot = JsonUtils.fromJson(
-        String.valueOf(operationSnapshot.get("sourceExecutionSnapshot")),
-        new com.fasterxml.jackson.core.type.TypeReference<>() {});
+        String.valueOf(operationSnapshot.get("sourceExecutionSnapshot")), new TypeReference<>() {});
     Map<String, Object> firstNode = node("FIRST", "JOB", "COMPUTE_A");
     firstNode.put(
         "crossDayDependencies",
         "[{\"alias\":\"previous\",\"jobCode\":\"COMPUTE_PREVIOUS\",\"bizDateOffset\":-1}]");
-    sourceExecutionSnapshot.put("nodes", List.of(
-        node("START", "START", null), firstNode, node("END", "END", null)));
+    sourceExecutionSnapshot.put(
+        "nodes", List.of(node("START", "START", null), firstNode, node("END", "END", null)));
     operationSnapshot.put("sourceExecutionSnapshot", JsonUtils.toJson(sourceExecutionSnapshot));
     operationSnapshot.put(
         "selectedCrossDayDependencyResultVersionIdsByNode",
@@ -116,19 +116,16 @@ class WorkflowRunReplaySnapshotResolverTest {
         .build();
     when(secretPayloadProtector.revealEncrypted("sealed-operation-snapshot"))
         .thenReturn(updatedSnapshotJson);
-    when(secretPayloadProtector.revealEncrypted("sealed-root-params"))
-        .thenReturn("{}");
+    when(secretPayloadProtector.revealEncrypted("sealed-root-params")).thenReturn("{}");
 
     WorkflowRunReplaySnapshotResolver.Snapshot resolved =
         resolver.resolve(operation, "workflow-replay-808");
 
-    Map<String, Object> executionSnapshot = JsonUtils.fromJson(
-        resolved.executionSnapshotJson(),
-        new com.fasterxml.jackson.core.type.TypeReference<>() {});
+    Map<String, Object> executionSnapshot =
+        JsonUtils.fromJson(resolved.executionSnapshotJson(), new TypeReference<>() {});
     Map<?, ?> crossDayResultVersionIds =
         (Map<?, ?>) executionSnapshot.get("crossDayDependencyResultVersionIdsByNode");
-    assertThat(crossDayResultVersionIds.get("FIRST"))
-        .isEqualTo(Map.of("previous", List.of(907)));
+    assertThat(crossDayResultVersionIds.get("FIRST")).isEqualTo(Map.of("previous", List.of(907)));
   }
 
   @Test
@@ -137,33 +134,33 @@ class WorkflowRunReplaySnapshotResolverTest {
     Fixture fixture = dispatchFixture();
     when(secretPayloadProtector.revealEncrypted("sealed-operation-snapshot"))
         .thenReturn(fixture.snapshotJson());
-    when(secretPayloadProtector.revealEncrypted("sealed-root-params"))
-        .thenReturn("{}");
+    when(secretPayloadProtector.revealEncrypted("sealed-root-params")).thenReturn("{}");
 
     WorkflowRunReplaySnapshotResolver.Snapshot resolved =
         resolver.resolve(fixture.operation(), "workflow-replay-808");
 
-    Map<String, Object> executionSnapshot = JsonUtils.fromJson(
-        resolved.executionSnapshotJson(),
-        new com.fasterxml.jackson.core.type.TypeReference<>() {});
-    Map<?, ?> selectedJob = (Map<?, ?>) ((Map<?, ?>) executionSnapshot.get("jobDefinitions"))
-        .get("FIRST");
+    Map<String, Object> executionSnapshot =
+        JsonUtils.fromJson(resolved.executionSnapshotJson(), new TypeReference<>() {});
+    Map<?, ?> selectedJob =
+        (Map<?, ?>) ((Map<?, ?>) executionSnapshot.get("jobDefinitions")).get("FIRST");
     assertThat(selectedJob.get("frozenDispatchChannelSnapshots"))
         .isEqualTo(Map.of("CHANNEL_A", "sealed-dispatch-channel"));
     Map<?, ?> restoredBindings = (Map<?, ?>) selectedJob.get("dispatchSecretBindings");
-    assertThat(restoredBindings).isEqualTo(Map.of("CHANNEL_A", Map.of(
-        "secretRef", "dispatch/key",
-        "secretVersionId", 72,
-        "versionNo", 4)));
+    assertThat(restoredBindings)
+        .isEqualTo(Map.of(
+            "CHANNEL_A",
+            Map.of(
+                "secretRef", "dispatch/key",
+                "secretVersionId", 72,
+                "versionNo", 4)));
   }
 
   @Test
   @DisplayName("快照哈希不符时失败关闭")
   void shouldRejectSnapshot_whenHashDoesNotMatchDecryptedPayload() throws Exception {
     Fixture fixture = fixture();
-    ReplayOperationEntity tampered = fixture.operation().toBuilder()
-        .snapshotHash("0".repeat(64))
-        .build();
+    ReplayOperationEntity tampered =
+        fixture.operation().toBuilder().snapshotHash("0".repeat(64)).build();
     when(secretPayloadProtector.revealEncrypted("sealed-operation-snapshot"))
         .thenReturn(fixture.snapshotJson());
 
@@ -175,13 +172,11 @@ class WorkflowRunReplaySnapshotResolverTest {
   @DisplayName("租户、来源或业务日身份与操作记录不一致时拒绝恢复")
   void shouldRejectSnapshot_whenOperationIdentityDiffersFromFrozenPreview() throws Exception {
     Fixture fixture = fixture();
-    ReplayOperationEntity wrongSource = fixture.operation().toBuilder()
-        .sourceWorkflowRunId(SOURCE_RUN_ID + 1)
-        .build();
+    ReplayOperationEntity wrongSource =
+        fixture.operation().toBuilder().sourceWorkflowRunId(SOURCE_RUN_ID + 1).build();
     when(secretPayloadProtector.revealEncrypted("sealed-operation-snapshot"))
         .thenReturn(fixture.snapshotJson());
-    when(secretPayloadProtector.revealEncrypted("sealed-root-params"))
-        .thenReturn("{}");
+    when(secretPayloadProtector.revealEncrypted("sealed-root-params")).thenReturn("{}");
 
     assertThatThrownBy(() -> resolver.resolve(wrongSource, "workflow-replay-808"))
         .isInstanceOf(BizException.class);
@@ -201,28 +196,27 @@ class WorkflowRunReplaySnapshotResolverTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {
-      "selectedFileTemplateSnapshots",
-      "selectedDispatchChannelSnapshots",
-      "selectedDispatchSecretBindings",
-      "selectedCrossDayDependencyResultVersionIdsByNode"
-  })
+  @ValueSource(
+      strings = {
+        "selectedFileTemplateSnapshots",
+        "selectedDispatchChannelSnapshots",
+        "selectedDispatchSecretBindings",
+        "selectedCrossDayDependencyResultVersionIdsByNode"
+      })
   @DisplayName("已批准配置绑定不能引用未选入重放的节点")
   void shouldRejectSnapshot_whenConfigurationBindingTargetsUnselectedNode(String bindingField)
       throws Exception {
     Fixture fixture = fixture();
-    Map<String, Object> snapshot = JsonUtils.fromJson(
-        fixture.snapshotJson(), new com.fasterxml.jackson.core.type.TypeReference<>() {});
+    Map<String, Object> snapshot =
+        JsonUtils.fromJson(fixture.snapshotJson(), new TypeReference<>() {});
     snapshot.put(bindingField, Map.of("OUTSIDE_REPLAY", Map.of()));
     String snapshotJson = JsonUtils.toJson(snapshot);
     String snapshotHash = sha256(snapshotJson);
-    ReplayOperationEntity operation = fixture.operation().toBuilder()
-        .snapshotHash(snapshotHash)
-        .build();
+    ReplayOperationEntity operation =
+        fixture.operation().toBuilder().snapshotHash(snapshotHash).build();
     when(secretPayloadProtector.revealEncrypted("sealed-operation-snapshot"))
         .thenReturn(snapshotJson);
-    when(secretPayloadProtector.revealEncrypted("sealed-root-params"))
-        .thenReturn("{}");
+    when(secretPayloadProtector.revealEncrypted("sealed-root-params")).thenReturn("{}");
 
     assertThatThrownBy(() -> resolver.resolve(operation, "workflow-replay-808"))
         .isInstanceOf(BizException.class);
@@ -244,9 +238,10 @@ class WorkflowRunReplaySnapshotResolverTest {
         .jobCode("COMPUTE_A")
         .jobType(jobType)
         .version(3)
-        .defaultParams(jobType.equals("DISPATCH")
-            ? Map.of("dispatchChannelCode", "CHANNEL_A")
-            : Map.of("taskType", "root-sql"))
+        .defaultParams(
+            jobType.equals("DISPATCH")
+                ? Map.of("dispatchChannelCode", "CHANNEL_A")
+                : Map.of("taskType", "root-sql"))
         .build();
     Map<String, Object> firstNode = node("FIRST", "JOB", "COMPUTE_A");
     Map<String, Object> sourceDefinition = definition(2, jobType);
@@ -256,10 +251,9 @@ class WorkflowRunReplaySnapshotResolverTest {
     sourceSnapshot.put("workflowVersion", 4);
     sourceSnapshot.put("workflowCalendarCode", "SOURCE_CALENDAR");
     sourceSnapshot.put("replaySessionId", 77L);
-    sourceSnapshot.put("nodes", List.of(
-        node("START", "START", null), firstNode, node("END", "END", null)));
-    sourceSnapshot.put("edges", List.of(
-        edge("START", "FIRST"), edge("FIRST", "END")));
+    sourceSnapshot.put(
+        "nodes", List.of(node("START", "START", null), firstNode, node("END", "END", null)));
+    sourceSnapshot.put("edges", List.of(edge("START", "FIRST"), edge("FIRST", "END")));
     Map<String, Object> sourceJobDefinition = new LinkedHashMap<>(sourceDefinition);
     sourceJobDefinition.put("systemPipelineCode", jobType);
     sourceJobDefinition.put("systemPipelineVersion", 1);
@@ -287,29 +281,37 @@ class WorkflowRunReplaySnapshotResolverTest {
       operationSnapshot.put(
           "selectedDispatchChannelSnapshots",
           Map.of("FIRST", Map.of("CHANNEL_A", "sealed-dispatch-channel")));
-      operationSnapshot.put("selectedDispatchSecretBindings", Map.of("FIRST", Map.of(
-          "CHANNEL_A",
-          Map.of("secretRef", "dispatch/key", "secretVersionId", 72, "versionNo", 4))));
+      operationSnapshot.put(
+          "selectedDispatchSecretBindings",
+          Map.of(
+              "FIRST",
+              Map.of(
+                  "CHANNEL_A",
+                  Map.of("secretRef", "dispatch/key", "secretVersionId", 72, "versionNo", 4))));
     } else {
       operationSnapshot.put(
           "selectedFileTemplateSnapshots",
           Map.of("FIRST", Map.of("TPL_IMPORT", "sealed-template-snapshot")));
     }
-    operationSnapshot.put("selectedReplayCapabilities", Map.of("FIRST", Map.of(
-        "pluginId",
-        jobType.equals("DISPATCH") ? "DISPATCH" : "root-sql",
-        "pluginVersion",
-        "1.0.0",
-        "externalEffectCategories",
-        List.of("BUSINESS_DATABASE"),
-        "idempotencyCapability",
-        "IDEMPOTENT_BY_PLUGIN_LOGIC",
-        "idempotencyKeyScope",
-        "tenant+business-key",
-        "recoveryProtocolId",
-        "SQL_V1",
-        "contractVersion",
-        1)));
+    operationSnapshot.put(
+        "selectedReplayCapabilities",
+        Map.of(
+            "FIRST",
+            Map.of(
+                "pluginId",
+                jobType.equals("DISPATCH") ? "DISPATCH" : "root-sql",
+                "pluginVersion",
+                "1.0.0",
+                "externalEffectCategories",
+                List.of("BUSINESS_DATABASE"),
+                "idempotencyCapability",
+                "IDEMPOTENT_BY_PLUGIN_LOGIC",
+                "idempotencyKeyScope",
+                "tenant+business-key",
+                "recoveryProtocolId",
+                "SQL_V1",
+                "contractVersion",
+                1)));
     operationSnapshot.put("dryRun", false);
     operationSnapshot.put("singleJobDefinitionId", null);
     String snapshotJson = JsonUtils.toJson(operationSnapshot);
@@ -327,8 +329,8 @@ class WorkflowRunReplaySnapshotResolverTest {
         .configVersion(null)
         .sourceWorkflowRunId(SOURCE_RUN_ID)
         .snapshotHash(snapshotHash)
-        .snapshotPayload(JsonUtils.toJson(Map.of(
-            "sealedSnapshotPayload", "sealed-operation-snapshot")))
+        .snapshotPayload(
+            JsonUtils.toJson(Map.of("sealedSnapshotPayload", "sealed-operation-snapshot")))
         .build();
     return new Fixture(operation, snapshotJson);
   }
@@ -340,9 +342,10 @@ class WorkflowRunReplaySnapshotResolverTest {
         .jobCode("COMPUTE_A")
         .jobType(jobType)
         .version(version)
-        .defaultParams(jobType.equals("DISPATCH")
-            ? Map.of("dispatchChannelCode", "CHANNEL_A")
-            : Map.of("taskType", "root-sql"))
+        .defaultParams(
+            jobType.equals("DISPATCH")
+                ? Map.of("dispatchChannelCode", "CHANNEL_A")
+                : Map.of("taskType", "root-sql"))
         .build();
     return Map.of(
         "jobDefinitionId", 101L,
@@ -367,17 +370,23 @@ class WorkflowRunReplaySnapshotResolverTest {
 
   private Map<String, Object> edge(String from, String to) {
     return Map.of(
-        "tenantId", TENANT,
-        "workflowDefinitionId", 81L,
-        "fromNodeCode", from,
-        "toNodeCode", to,
-        "edgeType", "SUCCESS",
-        "enabled", true);
+        "tenantId",
+        TENANT,
+        "workflowDefinitionId",
+        81L,
+        "fromNodeCode",
+        from,
+        "toNodeCode",
+        to,
+        "edgeType",
+        "SUCCESS",
+        "enabled",
+        true);
   }
 
   private String sha256(String value) throws Exception {
-    byte[] digest = MessageDigest.getInstance("SHA-256")
-        .digest(value.getBytes(StandardCharsets.UTF_8));
+    byte[] digest =
+        MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
     return HexFormat.of().formatHex(digest);
   }
 

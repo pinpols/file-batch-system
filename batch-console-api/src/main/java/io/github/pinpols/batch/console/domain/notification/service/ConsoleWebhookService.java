@@ -1,11 +1,5 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
-import lombok.Builder;
-
-import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookSubscriptionInsertParam;
-import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookSubscriptionUpdateParam;
-
-
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -14,14 +8,16 @@ import io.github.pinpols.batch.console.domain.notification.entity.WebhookDeliver
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookSubscriptionMapper;
+import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookSubscriptionInsertParam;
+import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookSubscriptionUpdateParam;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.CallbackUrlValidator;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
-import java.util.stream.Stream;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Stream;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -58,17 +54,17 @@ public class ConsoleWebhookService {
     String name = command.name();
     String callbackUrl = command.callbackUrl();
     String normalizedEventTypes = normalizeEventTypes(command.eventTypes());
-    ConsoleWebhookSubscriptionInsertParam consoleWebhookSubscriptionInsertParam = ConsoleWebhookSubscriptionInsertParam.builder()
-        .tenantId(resolved)
-        .name(name)
-        .callbackUrl(callbackUrl)
-        .eventTypes(normalizedEventTypes)
-        .secret(command.secret())
-        .enabled(command.enabled())
-        .operator(command.operator())
-        .build();
-    subscriptionRepository.insert(
-        consoleWebhookSubscriptionInsertParam);
+    ConsoleWebhookSubscriptionInsertParam consoleWebhookSubscriptionInsertParam =
+        ConsoleWebhookSubscriptionInsertParam.builder()
+            .tenantId(resolved)
+            .name(name)
+            .callbackUrl(callbackUrl)
+            .eventTypes(normalizedEventTypes)
+            .secret(command.secret())
+            .enabled(command.enabled())
+            .operator(command.operator())
+            .build();
+    subscriptionRepository.insert(consoleWebhookSubscriptionInsertParam);
     return subscriptionRepository
         .findByTenantAndName(resolved, command.name())
         .orElseThrow(() -> BizException.of(
@@ -86,17 +82,17 @@ public class ConsoleWebhookService {
     Long subscriptionId = command.id();
     String callbackUrl = command.callbackUrl();
     String normalizedEventTypes = normalizeEventTypes(command.eventTypes());
-    ConsoleWebhookSubscriptionUpdateParam consoleWebhookSubscriptionUpdateParam = ConsoleWebhookSubscriptionUpdateParam.builder()
-        .tenantId(resolved)
-        .id(subscriptionId)
-        .callbackUrl(callbackUrl)
-        .eventTypes(normalizedEventTypes)
-        .secret(command.secret())
-        .enabled(command.enabled())
-        .operator(command.operator())
-        .build();
-    subscriptionRepository.update(
-        consoleWebhookSubscriptionUpdateParam);
+    ConsoleWebhookSubscriptionUpdateParam consoleWebhookSubscriptionUpdateParam =
+        ConsoleWebhookSubscriptionUpdateParam.builder()
+            .tenantId(resolved)
+            .id(subscriptionId)
+            .callbackUrl(callbackUrl)
+            .eventTypes(normalizedEventTypes)
+            .secret(command.secret())
+            .enabled(command.enabled())
+            .operator(command.operator())
+            .build();
+    subscriptionRepository.update(consoleWebhookSubscriptionUpdateParam);
     return subscriptionRepository
         .findByTenantAndId(resolved, command.id())
         .orElseThrow(() -> BizException.of(
@@ -130,7 +126,8 @@ public class ConsoleWebhookService {
     NotificationEventTypePolicy.requireBusinessEventTypes(eventTypes);
     Stream<String> eventTypeTokens = Arrays.stream(eventTypes.split(","));
     Stream<String> trimmedEventTypes = eventTypeTokens.map(String::trim);
-    Stream<String> nonBlankEventTypes = trimmedEventTypes.filter(value -> !EmptyChecks.isBlank(Objects.requireNonNull(value)));
+    Stream<String> nonBlankEventTypes =
+        trimmedEventTypes.filter(value -> !EmptyChecks.isBlank(Objects.requireNonNull(value)));
     Stream<String> normalizedEventTypes =
         nonBlankEventTypes.map(value -> value.toUpperCase(Locale.ROOT));
     Stream<String> distinctEventTypes = normalizedEventTypes.distinct();

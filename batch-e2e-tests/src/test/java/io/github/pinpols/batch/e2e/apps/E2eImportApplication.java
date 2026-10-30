@@ -36,7 +36,9 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
 import org.springframework.boot.security.autoconfigure.SecurityAutoConfiguration;
 import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.actuate.web.servlet.ManagementWebSecurityAutoConfiguration;
 import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
@@ -61,10 +63,8 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
       SecurityAutoConfiguration.class,
       UserDetailsServiceAutoConfiguration.class,
       SecurityFilterAutoConfiguration.class,
-      org.springframework.boot.security.autoconfigure.web.servlet
-          .ServletWebSecurityAutoConfiguration.class,
-      org.springframework.boot.security.autoconfigure.actuate.web.servlet
-          .ManagementWebSecurityAutoConfiguration.class,
+      ServletWebSecurityAutoConfiguration.class,
+      ManagementWebSecurityAutoConfiguration.class,
     })
 @EnableKafka
 @Import({

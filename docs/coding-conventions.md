@@ -276,9 +276,14 @@ class ConsoleKafkaConfiguration {
 
 核心服务均采用 `XxxService` 接口 + `DefaultXxxService` 实现的分离模式：
 
-```
-ConsoleFileChannelApplicationService           ← 接口（应用层）
-└── DefaultConsoleFileChannelApplicationService ← 实现（基础设施层）
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+classDiagram
+  class ConsoleFileChannelApplicationService {
+    <<interface>>
+  }
+  class DefaultConsoleFileChannelApplicationService
+  ConsoleFileChannelApplicationService <|.. DefaultConsoleFileChannelApplicationService
 ```
 
 实际命名示例：
@@ -361,10 +366,13 @@ SQL 和配置不能随意混进 shell / service 代码。按以下边界执行�
 
 ### 5.1 异常层次
 
-```
-RuntimeException
-├── BizException      ← 业务异常（用户可感知，如参数校验失败、资源冲突）
-└── SystemException   ← 系统异常（内部错误、第三方故障）
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+classDiagram
+  RuntimeException <|-- BizException
+  RuntimeException <|-- SystemException
+  note for BizException "业务异常：业务可感知的失败"
+  note for SystemException "系统异常：内部或外部依赖故障"
 ```
 
 两者均携带 `ResultCode` 枚举：
@@ -455,8 +463,8 @@ public CommonResponse<List<JobDefinitionDto>> listJobs(...) {
 
 | 操作         | HTTP 方法        | 适用场景            |
 | ---------- | -------------- | --------------- |
-| 物理删除       | `DELETE /{id}` | 叶子节点，无其他表 FK 引用 |
-| 软删除（禁用/启用） | `PATCH /{id}`  | 有运行时 FK 引用的配置实体 |
+| 物理删除       | `DELETE /{id}` | 经依赖和留存策略核对后允许删除的实体 |
+| 软删除（禁用/启用） | `PATCH /{id}`  | 存在运行态外键或稳定业务标识引用的配置实体 |
 | 批量软删除/启用   | `PATCH /batch` | 同上，批量版本         |
 
 
@@ -466,10 +474,14 @@ public CommonResponse<List<JobDefinitionDto>> listJobs(...) {
 
 新增删除功能时先检查 DDL：如果有其他表通过 `REFERENCES` 外键引用该表主键，**必须使用软删除**，否则硬删除会导致历史运行记录孤儿化。
 
-```
-有运行时 FK 引用（如 job_instance → job_definition）？
-├── 是 → 软删除（PATCH enabled=false）
-└── 否 → 物理删除（DELETE）
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TD
+  Reference{"存在运行态引用？<br/>外键或稳定业务标识"}
+  Reference -->|"是"| Disable["禁用并保留历史关联<br/>PATCH enabled=false"]
+  Reference -->|"否"| Policy["核对实体删除策略与其他依赖"]
+  Policy -->|"允许物理删除"| Delete["DELETE"]
+  Policy -->|"需要留存"| Disable
 ```
 
 ### 7.3 软删除的 Request 复用
@@ -506,6 +518,7 @@ public CommonResponse<...> delete(
 
 ### 7.6 Mapper XML 标签约定
 
+MyBatis Mapper 的 SQL 写在对应 XML 中；Java 接口保留方法签名和参数绑定，不使用 `@Select`、`@Insert`、`@Update`、`@Delete` 或对应 Provider 注解承载 SQL。独立运维 SQL、迁移和动态 SQL 引擎仍遵循 §4.5 的各自边界。
 
 | 操作              | XML 标签     |
 | --------------- | ---------- |
@@ -805,6 +818,13 @@ public class DefaultTriggerService {
 - Orchestrator 是唯一状态主机；Worker 不能直接改写 `job_instance` / `workflow_run` / `workflow_node_run`
 
 ---
+
+
+### 10.4 只读事务与异步上下文的选择
+
+查询是否需要 `@Transactional(readOnly = true)` 由一致性快照、连接生命周期和主从路由决定；不为统一注解给所有 MyBatis/JdbcTemplate 查询机械开启事务。新增事务必须说明连接占用及调用边界。
+
+租户、RLS、MDC 和路由提示具有线程或事务作用域。跨线程回调按现有上下文传播器显式绑定并在结束时释放；不得假设 `ThreadLocal`、事务或 `@RouteToPrimary` 自动跨线程。结构整理不得改变 after-commit、重试代理和状态/Outbox 同事务边界。
 
 ## 11. 参数校验
 
@@ -1259,7 +1279,7 @@ batch-console-api       ← 控制台 BFF（面向前端）
 
 说明性注释统一使用简体中文，保留必要的 API 名称、协议字段、状态常量和标准术语。许可证文本、编译器/分析器指令、生成标记以及可执行代码示例保持原样。新增注释应简洁完整，解释约束或原因，不逐行翻译代码。
 
-Shell/Python 使用 `#`，SQL/Flyway 使用 `--`。解释性注释单独成行，不写行尾自然语言注释。Flyway 文件头按“迁移目的、关键约束/执行注意事项”的顺序分段；无额外注意事项时只保留目的说明，不添加空洞的 `Notes:` 标题。修改已提交迁移会改变 Flyway checksum，必须在发布前协调已部署数据库的重建或 `repair` 方案。SQL 示例保持可复制执行，注释与语句之间空一行。
+Shell/Python 使用 `#`，SQL/Flyway 使用 `--`。解释性注释单独成行，不写行尾自然语言注释。Flyway 文件头按“迁移目的、关键约束/执行注意事项”的顺序分段；无额外注意事项时只保留目的说明，不添加空洞的 `Notes:` 标题。修改已提交迁移会改变 Flyway checksum；本项目部署从全新空库开始，不支持旧库原位升级。静态校验只放行有效 SQL 未变化的注释修改（包括 `COMMENT ON` 元数据），其他改动必须追加新版本迁移。SQL 示例保持可复制执行，注释与语句之间空一行。
 
 `scripts/ci/check-comment-language.py --staged` 由本地 pre-commit 对暂存改动做增量检查；存量目录可手动扫描。Flyway 文件结构/checksum 校验与 diff-only 迁移安全 lint 在 PR CI 对应文件域阻断。机器指令和代码示例按检查器规则豁免，不得用豁免标记绕过自然语言注释要求。
 
@@ -1280,7 +1300,7 @@ Shell/Python 使用 `#`，SQL/Flyway 使用 `--`。解释性注释单独成行�
 - 状态机或关键流程（必要时附简要流程说明）
 - 与相邻类的协议约定（如事务边界、并发安全假设）
 
-接口、简单 DTO / record、Spring 配置类、枚举不需要 Javadoc。
+接口、简单 DTO / record、枚举不需要 Javadoc。应用入口及标注 `@Configuration`、`@AutoConfiguration`、`@ConfigurationProperties` 的 Spring 配置类型，应以简短类级 Javadoc 说明架构职责；由 `check-required-java-docs.sh` 守护。
 
 ### 19.3 方法级注释
 

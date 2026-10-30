@@ -122,19 +122,15 @@ class JdbcMappedImportCompensatorIntegrationTest {
     final String insertBizImportCustomerSql = """
         INSERT INTO biz.import_customer VALUES (?,?,?,?)
     """;
-    jdbcTemplate.update(
-        insertBizImportCustomerSql, tenantId, batchNo, customerNo, name);
+    jdbcTemplate.update(insertBizImportCustomerSql, tenantId, batchNo, customerNo, name);
   }
 
   private int countRows(String tenantId, String batchNo) {
     final String selectBizImportCustomerSql = """
         SELECT count(*) FROM biz.import_customer WHERE tenant_id=? AND source_batch_no=?
     """;
-    Integer count = jdbcTemplate.queryForObject(
-        selectBizImportCustomerSql,
-        Integer.class,
-        tenantId,
-        batchNo);
+    Integer count =
+        jdbcTemplate.queryForObject(selectBizImportCustomerSql, Integer.class, tenantId, batchNo);
     return count == null ? 0 : count;
   }
 

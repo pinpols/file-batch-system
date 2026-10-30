@@ -1,3 +1,5 @@
+> 历史原始记录：本轮恢复保留，正文中的结论、参数、状态和操作步骤仅适用于原日期/基线。提炼方法不替代原始证据；当前事实须按[文档治理](../../standards/document-governance.md)重新核实。本轮未执行原测试或扫描。
+
 # 设计模式评估报告
 
 > 分析范围：全部模块（batch-common / batch-orchestrator / batch-worker-core / batch-worker-import / batch-worker-export / batch-worker-dispatch / batch-trigger / batch-console-api）

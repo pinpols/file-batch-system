@@ -179,15 +179,12 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
     JobTaskEntity task = jobTaskMapper.selectByQuery(taskQuery).getFirst();
     JobPartitionQuery partitionQuery =
         new JobPartitionQuery(TENANT, jobInstance.getId(), null, null);
-    JobPartitionEntity partition = jobPartitionMapper.selectByQuery(partitionQuery).getFirst();
+    JobPartitionEntity partition =
+        jobPartitionMapper.selectByQuery(partitionQuery).getFirst();
     String updateAssignedWorkerCodeSql = """
         update batch.job_task set assigned_worker_code = ? where tenant_id = ? and id = ?
         """;
-    jdbcTemplate.update(
-        updateAssignedWorkerCodeSql,
-        workerPoolCode,
-        TENANT,
-        task.getId());
+    jdbcTemplate.update(updateAssignedWorkerCodeSql, workerPoolCode, TENANT, task.getId());
 
     JobTaskEntity claimed =
         taskExecutionService.assignWorker(TENANT, task.getId(), workerInstanceId);
@@ -228,15 +225,12 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
     JobTaskEntity task = jobTaskMapper.selectByQuery(taskQuery).getFirst();
     JobPartitionQuery partitionQuery =
         new JobPartitionQuery(TENANT, jobInstance.getId(), null, null);
-    JobPartitionEntity partition = jobPartitionMapper.selectByQuery(partitionQuery).getFirst();
+    JobPartitionEntity partition =
+        jobPartitionMapper.selectByQuery(partitionQuery).getFirst();
     String updateAssignedWorkerCodeSql = """
         update batch.job_task set assigned_worker_code = ? where tenant_id = ? and id = ?
         """;
-    jdbcTemplate.update(
-        updateAssignedWorkerCodeSql,
-        workerPoolCode,
-        TENANT,
-        task.getId());
+    jdbcTemplate.update(updateAssignedWorkerCodeSql, workerPoolCode, TENANT, task.getId());
 
     CountDownLatch startGate = new CountDownLatch(1);
     ExecutorService pool = Executors.newFixedThreadPool(2);

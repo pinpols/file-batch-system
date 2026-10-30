@@ -36,9 +36,9 @@ const HAPPY_EYEBALLS_ATTEMPT_TIMEOUT_MS = 250;
 
 /** Effective task config returned by claim. */
 export interface ClaimResponse {
-  /** Persisted task business parameters resolved by the current Orchestrator at claim time. */
+  /** 当前 Orchestrator 在任务认领时解析出的持久化任务业务参数。 */
   payload?: string | null;
-  /** Legacy compatibility field; handlers should receive the authoritative payload when present. */
+  /** 历史兼容字段；权威载荷存在时，处理器应优先使用该载荷。 */
   effectiveConfig?: Record<string, unknown>;
   leaseUntil?: string | null;
   traceId?: string | null;

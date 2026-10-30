@@ -62,8 +62,8 @@ public class WorkflowScheduleUpdateRequest {
     }
     boolean scheduledTriggerModeIsIncompatible =
         ("CRON".equals(scheduleType) || "FIXED_RATE".equals(scheduleType))
-        && !"SCHEDULED".equals(effectiveTriggerMode)
-        && !"MIXED".equals(effectiveTriggerMode);
+            && !"SCHEDULED".equals(effectiveTriggerMode)
+            && !"MIXED".equals(effectiveTriggerMode);
     if (scheduledTriggerModeIsIncompatible) {
       return false;
     }
@@ -73,8 +73,7 @@ public class WorkflowScheduleUpdateRequest {
     if (eventScheduleHasIncompatibleTriggerMode) {
       return false;
     }
-    boolean manualTriggerModeIsIncompatible =
-        "MANUAL".equals(scheduleType)
+    boolean manualTriggerModeIsIncompatible = "MANUAL".equals(scheduleType)
         && !"MANUAL".equals(effectiveTriggerMode)
         && !"API".equals(effectiveTriggerMode)
         && !"MIXED".equals(effectiveTriggerMode);

@@ -1,3 +1,5 @@
+> 历史证据（2026-10-25 存量核对）：与原始 CSV 配对的扫描环境、指标和当日处置说明。正文仅表示原日期/基线；当前规则与状态见[现行入口](../../standards/static-analysis-governance.md)及 TODO，本轮没有重新执行原测试或扫描。
+
 # SonarQube Scan Report — File Batch System
 
 扫描时间：2026-08-05 21:38   |   SonarQube: http://localhost:9001/dashboard?id=file-batch-system

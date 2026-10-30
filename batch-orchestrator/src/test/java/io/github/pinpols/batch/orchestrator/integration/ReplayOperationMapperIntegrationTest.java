@@ -1,15 +1,13 @@
 package io.github.pinpols.batch.orchestrator.integration;
 
-import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplaySessionUpdateCountsParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationPreviewTokenEntity;
-import io.github.pinpols.batch.orchestrator.domain.param.ReplayOperationWorkflowOutcomeParam;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplaySessionUpdateCountsParam;
 import io.github.pinpols.batch.orchestrator.domain.param.ReplayOperationStartParam;
+import io.github.pinpols.batch.orchestrator.domain.param.ReplayOperationWorkflowOutcomeParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplaySessionStatusParam;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper;
@@ -39,8 +37,8 @@ import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -104,7 +102,8 @@ class ReplayOperationMapperIntegrationTest {
         ReplayOperationMapper operationMapper = sqlSession.getMapper(ReplayOperationMapper.class);
         String appliedTenantContext = operationMapper.setTenantContext(tenantId);
         assertThat(appliedTenantContext).isEqualTo(tenantId);
-        BatchDayReplaySessionMapper childMapper = sqlSession.getMapper(BatchDayReplaySessionMapper.class);
+        BatchDayReplaySessionMapper childMapper =
+            sqlSession.getMapper(BatchDayReplaySessionMapper.class);
         Instant now = Instant.parse("2026-10-22T12:00:00Z");
         String operationKey = UUID.randomUUID().toString();
         ReplayOperationEntity operation = ReplayOperationEntity.builder()
@@ -132,17 +131,19 @@ class ReplayOperationMapperIntegrationTest {
             .updatedAt(now)
             .build();
         operationMapper.insert(operation);
-        ReplayOperationEntity persistedOperation = operationMapper.selectByIdentity(tenantId, operationKey);
+        ReplayOperationEntity persistedOperation =
+            operationMapper.selectByIdentity(tenantId, operationKey);
         assertThat(persistedOperation).isNotNull();
-        List<ReplayOperationEntity> recentOperations = operationMapper.selectRecentByTenant(tenantId, 10);
+        List<ReplayOperationEntity> recentOperations =
+            operationMapper.selectRecentByTenant(tenantId, 10);
         assertThat(recentOperations)
             .extracting(ReplayOperationEntity::id)
             .containsExactly(persistedOperation.id());
 
         String otherTenantId = "replay-mapper-other-tenant";
         operationMapper.setTenantContext(otherTenantId);
-        ReplayOperationEntity crossTenantOperation = operationMapper.selectById(
-            tenantId, persistedOperation.id());
+        ReplayOperationEntity crossTenantOperation =
+            operationMapper.selectById(tenantId, persistedOperation.id());
         assertThat(crossTenantOperation).isNull();
         operationMapper.setTenantContext(tenantId);
 
@@ -172,22 +173,22 @@ class ReplayOperationMapperIntegrationTest {
             tenantId, "CAL-TEST", LocalDate.of(2026, 10, 20));
         assertThat(persistedChild).isNotNull();
         assertThat(persistedChild.replayOperationId()).isEqualTo(persistedOperation.id());
-        List<BatchDayReplaySessionEntity> childSessions = childMapper.selectByReplayOperation(
-            tenantId, persistedOperation.id());
+        List<BatchDayReplaySessionEntity> childSessions =
+            childMapper.selectByReplayOperation(tenantId, persistedOperation.id());
         assertThat(childSessions)
             .extracting(BatchDayReplaySessionEntity::id)
             .containsExactly(persistedChild.id());
-        List<Long> childSessionIds = operationMapper.selectChildSessionIds(
-            tenantId, persistedOperation.id());
-        assertThat(childSessionIds)
-            .containsExactly(persistedChild.id());
+        List<Long> childSessionIds =
+            operationMapper.selectChildSessionIds(tenantId, persistedOperation.id());
+        assertThat(childSessionIds).containsExactly(persistedChild.id());
 
         int updatedChildCount = jdbc.update(updateChildStatusSql, tenantId, persistedChild.id());
         assertThat(updatedChildCount).isEqualTo(1);
         int refreshedOperationCount = operationMapper.refreshFromChildSessions(
             tenantId, persistedOperation.id(), now.plusSeconds(1));
         assertThat(refreshedOperationCount).isEqualTo(1);
-        ReplayOperationEntity completedOperation = operationMapper.selectById(tenantId, persistedOperation.id());
+        ReplayOperationEntity completedOperation =
+            operationMapper.selectById(tenantId, persistedOperation.id());
         assertThat(completedOperation.status()).isEqualTo("SUCCEEDED");
         assertThat(completedOperation.totalCount()).isEqualTo(1);
         assertThat(completedOperation.succeededCount()).isEqualTo(1);
@@ -224,8 +225,8 @@ class ReplayOperationMapperIntegrationTest {
         operationMapper.insert(nodeOperation);
         ReplayOperationEntity persistedNodeOperation =
             operationMapper.selectByIdentity(tenantId, nodeOperationKey);
-        ReplayOperationEntity operationByTargetRequest = operationMapper.selectByTargetRequest(
-            tenantId, targetRequestId);
+        ReplayOperationEntity operationByTargetRequest =
+            operationMapper.selectByTargetRequest(tenantId, targetRequestId);
         assertThat(operationByTargetRequest.id()).isEqualTo(persistedNodeOperation.id());
 
         int attachedRunCount = operationMapper.attachTargetWorkflowRun(
@@ -282,14 +283,16 @@ class ReplayOperationMapperIntegrationTest {
             .updatedAt(now)
             .build();
         operationMapper.insert(pendingNodeOperation);
-        ReplayOperationEntity persistedPendingOperation = operationMapper.selectByIdentity(
-            tenantId, pendingOperationKey);
+        ReplayOperationEntity persistedPendingOperation =
+            operationMapper.selectByIdentity(tenantId, pendingOperationKey);
         assertThat(operationMapper.rejectPendingApproval(
-            tenantId, persistedPendingOperation.id(), now.plusSeconds(5))).isEqualTo(1);
+                tenantId, persistedPendingOperation.id(), now.plusSeconds(5)))
+            .isEqualTo(1);
         assertThat(operationMapper.rejectPendingApproval(
-            tenantId, persistedPendingOperation.id(), now.plusSeconds(6))).isZero();
-        ReplayOperationEntity rejectedOperation = operationMapper.selectById(
-            tenantId, persistedPendingOperation.id());
+                tenantId, persistedPendingOperation.id(), now.plusSeconds(6)))
+            .isZero();
+        ReplayOperationEntity rejectedOperation =
+            operationMapper.selectById(tenantId, persistedPendingOperation.id());
         assertThat(rejectedOperation.status()).isEqualTo("REJECTED");
         assertThat(rejectedOperation.inFlightCount()).isZero();
         assertThat(rejectedOperation.completedAt()).isEqualTo(now.plusSeconds(5));
@@ -304,8 +307,8 @@ class ReplayOperationMapperIntegrationTest {
             .updatedAt(now)
             .build();
         operationMapper.insert(startNodeOperation);
-        ReplayOperationEntity persistedStartOperation = operationMapper.selectByIdentity(
-            tenantId, startOperationKey);
+        ReplayOperationEntity persistedStartOperation =
+            operationMapper.selectByIdentity(tenantId, startOperationKey);
         ReplayOperationStartParam startParam = ReplayOperationStartParam.builder()
             .tenantId(tenantId)
             .operationId(persistedStartOperation.id())
@@ -317,8 +320,8 @@ class ReplayOperationMapperIntegrationTest {
         int duplicateStartedCount = operationMapper.startApprovedWorkflowNodeReplay(startParam);
         assertThat(startedCount).isEqualTo(1);
         assertThat(duplicateStartedCount).isZero();
-        ReplayOperationEntity startedOperation = operationMapper.selectById(
-            tenantId, persistedStartOperation.id());
+        ReplayOperationEntity startedOperation =
+            operationMapper.selectById(tenantId, persistedStartOperation.id());
         assertThat(startedOperation.status()).isEqualTo("RUNNING");
         assertThat(startedOperation.targetRequestId()).isEqualTo("approved-node-replay-request");
         assertThat(startedOperation.approvedBy()).isEqualTo("approver");
@@ -335,8 +338,8 @@ class ReplayOperationMapperIntegrationTest {
             .updatedAt(now)
             .build();
         operationMapper.insert(pendingWorkflowRun);
-        ReplayOperationEntity persistedWorkflowRun = operationMapper.selectByIdentity(
-            tenantId, startWorkflowRunOperationKey);
+        ReplayOperationEntity persistedWorkflowRun =
+            operationMapper.selectByIdentity(tenantId, startWorkflowRunOperationKey);
         ReplayOperationStartParam workflowStartParam = ReplayOperationStartParam.builder()
             .tenantId(tenantId)
             .operationId(persistedWorkflowRun.id())
@@ -344,13 +347,14 @@ class ReplayOperationMapperIntegrationTest {
             .approver("workflow-approver")
             .now(now.plusSeconds(8))
             .build();
-        int startedWorkflowCount = operationMapper.startApprovedWorkflowRunReplay(workflowStartParam);
+        int startedWorkflowCount =
+            operationMapper.startApprovedWorkflowRunReplay(workflowStartParam);
         int duplicateStartedWorkflowCount =
             operationMapper.startApprovedWorkflowRunReplay(workflowStartParam);
         assertThat(startedWorkflowCount).isEqualTo(1);
         assertThat(duplicateStartedWorkflowCount).isZero();
-        ReplayOperationEntity startedWorkflowOperation = operationMapper.selectById(
-            tenantId, persistedWorkflowRun.id());
+        ReplayOperationEntity startedWorkflowOperation =
+            operationMapper.selectById(tenantId, persistedWorkflowRun.id());
         assertThat(startedWorkflowOperation.status()).isEqualTo("RUNNING");
         assertThat(startedWorkflowOperation.targetRequestId())
             .isEqualTo("approved-workflow-replay-request");
@@ -386,21 +390,24 @@ class ReplayOperationMapperIntegrationTest {
 
     try (SqlSession session = sessionFactory.openSession(false)) {
       ReplayOperationMapper operationMapper = session.getMapper(ReplayOperationMapper.class);
-      BatchDayReplaySessionMapper childMapper = session.getMapper(BatchDayReplaySessionMapper.class);
+      BatchDayReplaySessionMapper childMapper =
+          session.getMapper(BatchDayReplaySessionMapper.class);
       String appliedTenantContext = operationMapper.setTenantContext(tenantId);
       assertThat(appliedTenantContext).isEqualTo(tenantId);
 
-      ReplayOperationEntity operation = rangeOperation(tenantId, operationKey, startedAt).toBuilder()
-          .calendarCode(calendarCode)
-          .fromDate(firstBizDate)
-          .throughDate(secondBizDate)
-          .status("RUNNING")
-          .totalCount(2)
-          .inFlightCount(2)
-          .startedAt(startedAt)
-          .build();
+      ReplayOperationEntity operation =
+          rangeOperation(tenantId, operationKey, startedAt).toBuilder()
+              .calendarCode(calendarCode)
+              .fromDate(firstBizDate)
+              .throughDate(secondBizDate)
+              .status("RUNNING")
+              .totalCount(2)
+              .inFlightCount(2)
+              .startedAt(startedAt)
+              .build();
       operationMapper.insert(operation);
-      ReplayOperationEntity persistedOperation = operationMapper.selectByIdentity(tenantId, operationKey);
+      ReplayOperationEntity persistedOperation =
+          operationMapper.selectByIdentity(tenantId, operationKey);
       assertThat(persistedOperation).isNotNull();
 
       BatchDayReplaySessionEntity succeededChild = BatchDayReplaySessionEntity.builder()
@@ -457,8 +464,8 @@ class ReplayOperationMapperIntegrationTest {
       int partialRefreshCount = operationMapper.refreshFromChildSessions(
           tenantId, persistedOperation.id(), partialFailedAt);
       assertThat(partialRefreshCount).isEqualTo(1);
-      ReplayOperationEntity partialFailedOperation = operationMapper.selectById(
-          tenantId, persistedOperation.id());
+      ReplayOperationEntity partialFailedOperation =
+          operationMapper.selectById(tenantId, persistedOperation.id());
       assertThat(partialFailedOperation.status()).isEqualTo("PARTIAL_FAILED");
       assertThat(partialFailedOperation.totalCount()).isEqualTo(2);
       assertThat(partialFailedOperation.succeededCount()).isEqualTo(1);
@@ -468,8 +475,8 @@ class ReplayOperationMapperIntegrationTest {
       session.commit();
 
       operationMapper.setTenantContext(tenantId);
-      List<BatchDayReplaySessionEntity> childSessions = childMapper.selectByReplayOperation(
-          tenantId, persistedOperation.id());
+      List<BatchDayReplaySessionEntity> childSessions =
+          childMapper.selectByReplayOperation(tenantId, persistedOperation.id());
       assertThat(childSessions)
           .extracting(BatchDayReplaySessionEntity::bizDate)
           .containsExactly(firstBizDate, secondBizDate);
@@ -477,8 +484,8 @@ class ReplayOperationMapperIntegrationTest {
       int reopenedChildCount = childMapper.reopenPartialFailedForRetry(
           tenantId, failedSessionForRetry.id(), retryStartedAt);
       assertThat(reopenedChildCount).isEqualTo(1);
-      int resetChildCounts = childMapper.updateCounts(
-          BatchDayReplaySessionUpdateCountsParam.builder()
+      int resetChildCounts =
+          childMapper.updateCounts(BatchDayReplaySessionUpdateCountsParam.builder()
               .tenantId(tenantId)
               .id(failedSessionForRetry.id())
               .succeededCount(0)
@@ -491,8 +498,8 @@ class ReplayOperationMapperIntegrationTest {
       int runningRefreshCount = operationMapper.refreshFromChildSessions(
           tenantId, persistedOperation.id(), retryStartedAt);
       assertThat(runningRefreshCount).isEqualTo(1);
-      ReplayOperationEntity runningOperation = operationMapper.selectById(
-          tenantId, persistedOperation.id());
+      ReplayOperationEntity runningOperation =
+          operationMapper.selectById(tenantId, persistedOperation.id());
       assertThat(runningOperation.status()).isEqualTo("RUNNING");
       assertThat(runningOperation.totalCount()).isEqualTo(2);
       assertThat(runningOperation.succeededCount()).isEqualTo(1);
@@ -502,8 +509,8 @@ class ReplayOperationMapperIntegrationTest {
       session.commit();
 
       operationMapper.setTenantContext(tenantId);
-      int completedChildCounts = childMapper.updateCounts(
-          BatchDayReplaySessionUpdateCountsParam.builder()
+      int completedChildCounts =
+          childMapper.updateCounts(BatchDayReplaySessionUpdateCountsParam.builder()
               .tenantId(tenantId)
               .id(failedSessionForRetry.id())
               .succeededCount(1)
@@ -525,8 +532,8 @@ class ReplayOperationMapperIntegrationTest {
       int succeededRefreshCount = operationMapper.refreshFromChildSessions(
           tenantId, persistedOperation.id(), retryCompletedAt);
       assertThat(succeededRefreshCount).isEqualTo(1);
-      ReplayOperationEntity succeededOperation = operationMapper.selectById(
-          tenantId, persistedOperation.id());
+      ReplayOperationEntity succeededOperation =
+          operationMapper.selectById(tenantId, persistedOperation.id());
       assertThat(succeededOperation.status()).isEqualTo("SUCCEEDED");
       assertThat(succeededOperation.totalCount()).isEqualTo(2);
       assertThat(succeededOperation.succeededCount()).isEqualTo(2);
@@ -556,8 +563,7 @@ class ReplayOperationMapperIntegrationTest {
     String operationKey = UUID.randomUUID().toString();
     String tokenHash = "e".repeat(64);
     Instant now = Instant.parse("2026-10-23T12:00:00Z");
-    ReplayOperationPreviewTokenEntity token = previewToken(
-        tenantId, tokenHash, operationKey, now);
+    ReplayOperationPreviewTokenEntity token = previewToken(tenantId, tokenHash, operationKey, now);
     try (SqlSession session = sessionFactory.openSession(false)) {
       ReplayOperationPreviewTokenMapper tokenMapper =
           session.getMapper(ReplayOperationPreviewTokenMapper.class);
@@ -588,7 +594,8 @@ class ReplayOperationMapperIntegrationTest {
           int consumedCount = tokenMapper.consume(tenantId, tokenHash, now);
           assertThat(consumedCount).isEqualTo(1);
           operationMapper.insert(rangeOperation(tenantId, operationKey, now));
-          ReplayOperationEntity persisted = operationMapper.selectByIdentity(tenantId, operationKey);
+          ReplayOperationEntity persisted =
+              operationMapper.selectByIdentity(tenantId, operationKey);
           tokenMapper.linkOperation(tenantId, tokenHash, persisted.id());
           session.commit();
           return persisted.id();
@@ -612,8 +619,8 @@ class ReplayOperationMapperIntegrationTest {
           ReplayOperationPreviewTokenEntity consumedToken =
               tokenMapper.selectForUpdate(tenantId, tokenHash);
           assertThat(consumedToken.consumedAt()).isEqualTo(now);
-          ReplayOperationEntity persisted = operationMapper.selectById(
-              tenantId, consumedToken.operationId());
+          ReplayOperationEntity persisted =
+              operationMapper.selectById(tenantId, consumedToken.operationId());
           session.commit();
           return persisted.id();
         }
@@ -634,8 +641,8 @@ class ReplayOperationMapperIntegrationTest {
 
       String rollbackOperationKey = UUID.randomUUID().toString();
       String rollbackTokenHash = "f".repeat(64);
-      ReplayOperationPreviewTokenEntity rollbackToken = previewToken(
-          tenantId, rollbackTokenHash, rollbackOperationKey, now);
+      ReplayOperationPreviewTokenEntity rollbackToken =
+          previewToken(tenantId, rollbackTokenHash, rollbackOperationKey, now);
       try (SqlSession session = sessionFactory.openSession(false)) {
         ReplayOperationMapper operationMapper = session.getMapper(ReplayOperationMapper.class);
         ReplayOperationPreviewTokenMapper tokenMapper =
@@ -710,8 +717,8 @@ class ReplayOperationMapperIntegrationTest {
   }
 
   private static SqlSessionFactory sqlSessionFactory(DataSource dataSource) throws Exception {
-    Configuration configuration = new Configuration(new Environment(
-        "test", new JdbcTransactionFactory(), dataSource));
+    Configuration configuration =
+        new Configuration(new Environment("test", new JdbcTransactionFactory(), dataSource));
     ClassLoader previousDefaultClassLoader = Resources.getDefaultClassLoader();
     try {
       Resources.setDefaultClassLoader(ReplayOperationMapperIntegrationTest.class.getClassLoader());
@@ -725,9 +732,10 @@ class ReplayOperationMapperIntegrationTest {
   }
 
   private static void parse(Configuration configuration, String resource) throws Exception {
-    try (InputStream input = ReplayOperationMapperIntegrationTest.class.getResourceAsStream(resource)) {
-      XMLMapperBuilder parser = new XMLMapperBuilder(
-          input, configuration, resource, configuration.getSqlFragments());
+    try (InputStream input =
+        ReplayOperationMapperIntegrationTest.class.getResourceAsStream(resource)) {
+      XMLMapperBuilder parser =
+          new XMLMapperBuilder(input, configuration, resource, configuration.getSqlFragments());
       parser.parse();
     }
   }

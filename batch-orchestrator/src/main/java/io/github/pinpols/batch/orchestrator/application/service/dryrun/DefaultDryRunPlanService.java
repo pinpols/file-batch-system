@@ -23,7 +23,7 @@ import org.springframework.stereotype.Service;
  * <ul>
  *   <li>L1 CONFIG_VALIDATE — 仅检查所选 Job 的启用定义和参数；Workflow 日程与图不由 Job 编码推断
  *   <li>L2 SCHEDULE_PLAN — 复用 SchedulePlanBuilder 算预计 partition / worker route，但不写 instance
- *   <li>L3 EXECUTION_PLAN — 在 L2 基础上叠加 task 级 SQL explain / 文件路径 / endpoint reachability stub
+ *   <li>L3 EXECUTION_PLAN — 在 L2 基础上叠加 task 级 SQL 静态检查 / 文件路径 / endpoint reachability stub
  * </ul>
  *
  * <p><b>不做（FULL_SIMULATION 红线）</b>：真执行 + 事务回滚 / 真写文件后删 / 真发 Kafka 不消费。
@@ -56,7 +56,8 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
   @Override
   public DryRunPlanResult plan(DryRunPlanRequest request) {
     requireRequest(request);
-    DryRunLevel level = EmptyChecks.isNull(request.level()) ? DryRunLevel.CONFIG_VALIDATE : request.level();
+    DryRunLevel level =
+        EmptyChecks.isNull(request.level()) ? DryRunLevel.CONFIG_VALIDATE : request.level();
     return switch (level) {
       case CONFIG_VALIDATE -> validateConfig(request);
       case SCHEDULE_PLAN -> planSchedule(request);
@@ -75,8 +76,8 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       return DryRunPlanResult.of(DryRunLevel.CONFIG_VALIDATE, findings, summary);
     }
     // Job 与 Workflow 的编码空间独立；日程和 DAG 只能在明确的 Workflow 目标下校验。
-    findings.add(DryRunFinding.pass(
-        "JOB_DEFINITION_OK", SCOPE_JOB, "enabled Job definition resolved"));
+    findings.add(
+        DryRunFinding.pass("JOB_DEFINITION_OK", SCOPE_JOB, "enabled Job definition resolved"));
     validateJobParams(jobDef, request, findings);
     summary.put("jobCode", jobDef.jobCode());
     return DryRunPlanResult.of(DryRunLevel.CONFIG_VALIDATE, findings, summary);
@@ -209,5 +210,4 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.dryrun.job_code_required");
     }
   }
-
 }

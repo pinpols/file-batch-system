@@ -76,12 +76,15 @@ public class KafkaOffsetSensorPolicy implements SensorPolicy {
     String topic = SensorSpecs.string(spec, "topic");
     Integer partition = SensorSpecs.intValue(spec, "partition");
     Long minOffset = SensorSpecs.longValue(spec, "minOffset");
-    boolean kafkaOffsetTargetIsIncomplete =
-        !Texts.hasText(topic) || partition == null || minOffset == null;
+    boolean kafkaOffsetTargetIsIncomplete = !Texts.hasText(topic)
+        || EmptyChecks.isNull(partition)
+        || partition < 0
+        || EmptyChecks.isNull(minOffset)
+        || minOffset < 0;
     if (kafkaOffsetTargetIsIncomplete) {
       return SensorProbeResult.error(
           "error.workflow.sensor_spec_invalid",
-          List.of("KAFKA_OFFSET", "topic/partition/minOffset required"));
+          List.of("KAFKA_OFFSET", "topic and non-negative integer partition/minOffset required"));
     }
 
     TopicPartition tp = new TopicPartition(topic, partition);
@@ -128,8 +131,8 @@ public class KafkaOffsetSensorPolicy implements SensorPolicy {
   }
 
   private static SensorProbeResult sensorFailure(Exception error) {
-    String errorDetail = Objects.requireNonNullElse(
-        error.getMessage(), error.getClass().getSimpleName());
+    String errorDetail =
+        Objects.requireNonNullElse(error.getMessage(), error.getClass().getSimpleName());
     List<String> messageArguments = List.of("KAFKA_OFFSET", errorDetail);
     return SensorProbeResult.error("error.workflow.sensor_probe_failed", messageArguments);
   }

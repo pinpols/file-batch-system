@@ -319,10 +319,8 @@ impl Transport for FakeTransport {
     }
 }
 
-// CLAIM response decoding is available behind `serde`, which is enabled by the
-// real `http` and `kafka` features. Heartbeat/renew response decoding remains
-// the responsibility of the consuming runtime; their decision tests use typed
-// projections and the default core stays free of JSON dependencies.
+// CLAIM 响应解码由 `serde` 特性提供；实际的 `http` 和 `kafka` 特性会启用该依赖。
+// 心跳与续租响应仍由消费端运行时解码；相应决策测试使用类型化投影，默认核心不依赖 JSON 库。
 
 #[cfg(test)]
 mod tests {

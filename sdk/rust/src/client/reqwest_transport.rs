@@ -535,6 +535,27 @@ mod tests {
     }
 
     #[test]
+    fn execution_entry_guard_sends_real_http_before_business() {
+        use crate::client::execution_start::{
+            execute_after_start_confirmation, ExecutionStartOutcome,
+        };
+        use crate::client::handler::TaskContext;
+        let (base, requests) = one_shot_server(200, r#"{"cancelRequested":false}"#);
+        let transport = transport(&base);
+        let context = TaskContext::new("42", "tenant-42", "echo")
+            .with_partition_invocation_id(Some("inv-current".into()));
+        let outcome = execute_after_start_confirmation(&transport, &context, "w1", || {
+            let request = requests.recv_timeout(Duration::from_secs(2)).expect("开始确认请求");
+            assert_eq!(request.method, "POST");
+            assert_eq!(request.path, "/internal/tasks/42/renew");
+            let body: Value = serde_json::from_str(&request.body).expect("确认 JSON");
+            assert_eq!(body, serde_json::json!({"tenantId":"tenant-42", "workerId":"w1", "partitionInvocationId":"inv-current", "details":{"executionStarted":true}}));
+            42
+        }).expect("入口确认");
+        assert_eq!(outcome, ExecutionStartOutcome::Executed(42));
+    }
+
+    #[test]
     fn claim_sends_path_auth_and_idempotency_headers() {
         let (base, rx) = one_shot_server(200, r#"{"leaseUntil":"2026-01-01T00:00:00Z"}"#);
         let t = transport(&base);

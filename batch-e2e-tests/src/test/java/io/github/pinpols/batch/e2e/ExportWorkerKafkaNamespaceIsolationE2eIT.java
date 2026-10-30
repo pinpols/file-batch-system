@@ -14,7 +14,8 @@ import org.springframework.boot.test.context.SpringBootTest;
     })
 @Tag("critical")
 @SuppressWarnings("PMD.TestClassWithoutTestCases")
-class ExportWorkerKafkaNamespaceIsolationE2eIT extends AbstractWorkerKafkaNamespaceIsolationE2eIT {
+class ExportWorkerKafkaNamespaceIsolationE2eIT
+    extends AbstractWorkerKafkaNamespaceIsolationSupport {
 
   @Override
   protected String legacyTopic() {

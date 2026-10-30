@@ -63,7 +63,7 @@ orchestrator 可通过 `batch.asset_freshness_policy` 配置 JOB asset 的 `expe
 | `job_dependency` | 空关系集 | 多上游关系；全部同 bizDate 的 EFFECTIVE asset partition 就绪才放行 scheduled fire |
 | `job_definition.depends_on_job_code` | NULL | 首个上游的旧字段投影；用于兼容旧配置读取 |
 | `batch.trigger.readiness-gate.enabled` | `true` | 全局 emergency switch;设 `false` 时一律放行(等价关闭依赖感知,应急用) |
-| `batch.trigger.runtime.readiness-window-seconds` | `7200`(2h) | 等上游就绪的最长容忍窗口；超窗后停止 retry 并记录 ERROR |
+| `batch.trigger.runtime.readiness-window-seconds` | `7200`(2h) | 等上游就绪的最长容忍窗口；首次等待时固定截止时间，配置变更仅作用于新等待，超窗后停止 retry 并记录 ERROR |
 | `batch.trigger.runtime.readiness-recheck-interval-seconds` | `30` | Quartz one-shot retry 的重检间隔 |
 | `batch.asset-freshness.enabled` | `true` | asset freshness SLA 扫描开关 |
 | `batch.asset-freshness.scan-interval-millis` | `60000` | freshness policy 扫描间隔 |

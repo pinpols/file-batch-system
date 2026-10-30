@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.domain.workflow.param;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import lombok.Builder;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 /** 带版本比较的全量更新；缺版本必须在构造边界拒绝，不能移除 SQL 的 CAS 条件。 */
 @Builder(toBuilder = true)
 public record WorkflowDefinitionVersionUpdateParam(
@@ -18,7 +18,8 @@ public record WorkflowDefinitionVersionUpdateParam(
     String timezone,
     String triggerMode,
     String calendarCode,
-    String dependsOnJobCode) {
+    String dependsOnJobCode,
+    String description) {
 
   public WorkflowDefinitionVersionUpdateParam {
     if (EmptyChecks.isBlank(tenantId)

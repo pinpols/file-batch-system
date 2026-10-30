@@ -56,12 +56,7 @@ public class BatchDayTimePolicyResolver {
     String overlapPolicy = effectiveCutoffOverlapPolicy(calendar);
     LocalDate cutoffBoundaryDate = bizDate.plusDays(1);
     String gapPolicy = normalize(calendar.dstGapPolicy(), DEFAULT_GAP_POLICY);
-    return resolveLocalBoundary(
-        cutoffBoundaryDate,
-        cutoffTime,
-        zoneId,
-        gapPolicy,
-        overlapPolicy);
+    return resolveLocalBoundary(cutoffBoundaryDate, cutoffTime, zoneId, gapPolicy, overlapPolicy);
   }
 
   public String snapshot(BusinessCalendarEntity calendar) {
@@ -95,7 +90,8 @@ public class BatchDayTimePolicyResolver {
     ZoneRules rules = zoneId.getRules();
     List<ZoneOffset> offsets = rules.getValidOffsets(localDateTime);
     if (offsets.size() == 1) {
-      ZonedDateTime zonedBoundary = ZonedDateTime.ofLocal(localDateTime, zoneId, offsets.getFirst());
+      ZonedDateTime zonedBoundary =
+          ZonedDateTime.ofLocal(localDateTime, zoneId, offsets.getFirst());
       Instant boundaryInstant = zonedBoundary.toInstant();
       return boundaryInstant;
     }

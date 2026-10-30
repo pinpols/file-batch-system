@@ -4,7 +4,7 @@
 
 已修正或补注 **32 个内容文件：13 个 Java（12 个生产类、1 个测试类）、17 个 Markdown、2 个 Shell**。另更新本审查、索引、Changelog 和 TODO。重点问题是共享模板漏列 PROCESS、旧定义表来源残留、IMPORT 阶段顺序错误以及扫描器/部署职责误述。
 
-工作树为 `/Users/dengchao/.codex/worktrees/workflow-daily-integration/file-batch-system`，分支 `feature/workflow-daily-integration`，HEAD `ee01e97515b04fd167ed17977535ec5cab8572f8`；范围包含当前暂存、未暂存和未跟踪内容，未使用冻结主分支替代。沿用 `documentation-governance` 和代码审查流程，不丢弃既有改动。
+工作树为 `~/.codex/worktrees/workflow-daily-integration/file-batch-system`，分支 `feature/workflow-daily-integration`，HEAD `ee01e97515b04fd167ed17977535ec5cab8572f8`；范围包含当前暂存、未暂存和未跟踪内容，未使用冻结主分支替代。沿用 `documentation-governance` 和代码审查流程，不丢弃既有改动。
 
 > **后续门禁收口**：用户要求继续修复后，重新分类原5条命中为2处真实键混用、3处扫描器误报。两处代码和扫描器均已修复，14个相关Java的Spotless、摘要键全仓扫描及28项守卫测试通过，另有55项Java定向回归通过。下方初轮失败保留为历史证据，当前状态见[后续修复](#后续摘要键与格式修复2026-10-24)。
 

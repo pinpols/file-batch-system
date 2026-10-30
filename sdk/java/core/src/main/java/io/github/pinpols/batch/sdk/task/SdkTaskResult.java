@@ -39,13 +39,10 @@ public record SdkTaskResult(
   public static SdkTaskResult fail(Throwable error) {
     Objects.requireNonNull(error, "error");
     String exceptionMessage = error.getMessage();
-    String failureMessage =
-        EmptyChecks.isNull(exceptionMessage) ? error.getClass().getSimpleName() : error.getMessage();
-    return new SdkTaskResult(
-        false,
-        failureMessage,
-        Map.of(),
-        error);
+    String failureMessage = EmptyChecks.isNull(exceptionMessage)
+        ? error.getClass().getSimpleName()
+        : error.getMessage();
+    return new SdkTaskResult(false, failureMessage, Map.of(), error);
   }
 
   public static SdkTaskResult fail(String message, Throwable error) {

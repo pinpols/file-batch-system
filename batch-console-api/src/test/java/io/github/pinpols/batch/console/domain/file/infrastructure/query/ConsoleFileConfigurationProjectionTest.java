@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.i18n.LocalizedErrorRenderer;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.domain.file.application.contract.query.FileChannelQueryRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.query.FilePipelineStepQueryRequest;
@@ -25,6 +26,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 
 @DisplayName("文件配置查询: Mapper 结果投影为稳定响应类型")
 class ConsoleFileConfigurationProjectionTest {
@@ -47,13 +49,14 @@ class ConsoleFileConfigurationProjectionTest {
         mappers,
         mock(BatchSecurityProperties.class),
         mock(LocalizedErrorRenderer.class),
-        mock(ConsoleOrchestratorPort.class));
+        mock(ConsoleOrchestratorPort.class),
+        mock(BatchDateTimeSupport.class));
   }
 
   @Test
   @DisplayName("渠道和模板查询使用具名投影映射并保留响应标识")
   void shouldProjectChannelAndTemplateRows() {
-    when(channelMapper.selectByQuery(org.mockito.ArgumentMatchers.argThat(
+    when(channelMapper.selectByQuery(ArgumentMatchers.argThat(
             parameters -> parameters != null && parameters.tenantId() != null)))
         .thenReturn(List.of(FileChannelConfigQueryView.builder()
             .id(11L)

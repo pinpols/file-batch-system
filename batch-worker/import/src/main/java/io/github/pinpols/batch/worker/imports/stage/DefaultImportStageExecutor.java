@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.imports.stage;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -91,7 +92,8 @@ public class DefaultImportStageExecutor
         try {
           stagingFiles.close();
         } catch (Exception exception) {
-          log.warn("failed to clean up import staging files", exception);
+          SwallowedExceptionLogger.warn(
+              DefaultImportStageExecutor.class, "import-staging-cleanup", exception);
         }
       }
     }
@@ -101,18 +103,14 @@ public class DefaultImportStageExecutor
     try {
       recordImportRowsMetrics(context);
     } catch (Exception exception) {
-      log.warn(
-          "failed to record import row metrics: {}",
-          SwallowedExceptionLogger.summary(exception),
-          exception);
+      SwallowedExceptionLogger.warn(
+          DefaultImportStageExecutor.class, "import-row-metrics", exception);
     }
     try {
       recordGovernanceService.finalizeErrorOutput(context);
     } catch (Exception exception) {
-      log.warn(
-          "failed to finalize import error output: {}",
-          SwallowedExceptionLogger.summary(exception),
-          exception);
+      SwallowedExceptionLogger.warn(
+          DefaultImportStageExecutor.class, "import-error-output-finalize", exception);
     }
   }
 
@@ -188,7 +186,7 @@ public class DefaultImportStageExecutor
     } catch (BizException exception) {
       // 业务级错误(state_conflict / 字段缺失 / 模板未配 等)由 orchestrator 端 retry/dead-letter 政策处理,
       // worker 这里只是局部失败转 BUSINESS_ERROR,记 WARN 不带 stack 即可;
-      // 真正的 infra 异常走下面的 catch(Exception),仍保留 ERROR + stack
+      // 真正的 infra 异常走下面的 catch(Exception),仍保留 ERROR 分类及净化摘要。
       log.warn(
           "import stage business error (will be governed by orchestrator retry policy):"
               + " stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}, cause={}",
@@ -201,22 +199,21 @@ public class DefaultImportStageExecutor
       return ImportStageResult.failure(
           stage, StageFailureCode.BUSINESS_ERROR.name(), exception, ERROR_OBJECT_MAPPER);
     } catch (Exception exception) {
+      String failureSummary = SwallowedExceptionLogger.summary(exception);
       log.error(
-          "import stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
+          "import stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}, cause={}",
           stage,
-          step.stepCode(),
-          step.implCode(),
-          context.getTenantId(),
-          context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
-          exception);
-      String localizedMessageArgument = exception.getMessage();
-      String fallbackMessage = exception.getMessage();
+          LogSanitizer.value(step.stepCode()),
+          LogSanitizer.value(step.implCode()),
+          LogSanitizer.value(context.getTenantId()),
+          LogSanitizer.value(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
+          failureSummary);
       return ImportStageResult.failure(
           stage,
           StageFailureCode.INFRA_ERROR.name(),
           "error.worker.stage_infra_error",
-          new Object[] {localizedMessageArgument},
-          fallbackMessage,
+          new Object[] {failureSummary},
+          failureSummary,
           ERROR_OBJECT_MAPPER);
     }
   }

@@ -1,3 +1,3 @@
 interface:
-  display_name: "项目工程审查"
-  short_description: "评估后端项目架构、质量、系统风险和维护性并形成可复核的整改建议"
+  display_name: "后端工程与规约治理"
+  short_description: "统筹后端架构、全量规约与工程治理，按清单记录范围、整改与验证证据"

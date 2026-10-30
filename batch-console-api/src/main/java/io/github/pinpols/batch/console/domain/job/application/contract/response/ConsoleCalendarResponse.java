@@ -1,15 +1,15 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarQueryRow;
 import java.time.Instant;
-import java.util.Map;
 import lombok.Builder;
 
 /**
  * 业务日历响应（BusinessCalendarMapper 行投影，键为 camelCase 别名）。
  *
- * <p>MyBatis {@code resultType="map"} 会省略 null 列，历史 wire 不含 null 键 → {@code NON_NULL} 保键集对等。
+ * <p>历史 Map 响应会省略 null 列，使用 {@code NON_NULL} 保持相同键集。
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Builder
@@ -27,23 +27,23 @@ public record ConsoleCalendarResponse(
     Instant createdAt,
     Instant updatedAt) {
 
-  public static ConsoleCalendarResponse from(Map<String, Object> row) {
-    if (row == null) {
+  public static ConsoleCalendarResponse from(CalendarQueryRow row) {
+    if (EmptyChecks.isNull(row)) {
       return null;
     }
     return ConsoleCalendarResponse.builder()
-        .id(ConsoleResponseFieldReader.longValue(row, "id"))
-        .tenantId(ConsoleResponseFieldReader.stringValue(row, "tenantId", "tenant_id"))
-        .calendarCode(ConsoleResponseFieldReader.stringValue(row, "calendarCode", "calendar_code"))
-        .calendarName(ConsoleResponseFieldReader.stringValue(row, "calendarName", "calendar_name"))
-        .timezone(ConsoleResponseFieldReader.stringValue(row, "timezone"))
-        .holidayRollRule(ConsoleResponseFieldReader.stringValue(row, "holidayRollRule", "holiday_roll_rule"))
-        .catchUpPolicy(ConsoleResponseFieldReader.stringValue(row, "catchUpPolicy", "catch_up_policy"))
-        .catchUpMaxDays(ConsoleResponseFieldReader.integerValue(row, "catchUpMaxDays", "catch_up_max_days"))
-        .enabled(ConsoleResponseFieldReader.booleanValue(row, "enabled"))
-        .description(ConsoleResponseFieldReader.stringValue(row, "description"))
-        .createdAt(ConsoleResponseFieldReader.instantValue(row, "createdAt", "created_at"))
-        .updatedAt(ConsoleResponseFieldReader.instantValue(row, "updatedAt", "updated_at"))
+        .id(row.id())
+        .tenantId(row.tenantId())
+        .calendarCode(row.calendarCode())
+        .calendarName(row.calendarName())
+        .timezone(row.timezone())
+        .holidayRollRule(row.holidayRollRule())
+        .catchUpPolicy(row.catchUpPolicy())
+        .catchUpMaxDays(row.catchUpMaxDays())
+        .enabled(row.enabled())
+        .description(row.description())
+        .createdAt(row.createdAt())
+        .updatedAt(row.updatedAt())
         .build();
   }
 }

@@ -1,3 +1,5 @@
+> 历史证据（2026-10-25 存量核对）：保留FixedDelay调度器实现与聚焦测试引用的原始SDK复核来源。正文仅表示原日期/基线；当前规则与状态见[现行入口](../../sdk/wire-protocol.md)及 TODO，本轮没有重新执行原测试或扫描。
+
 # Java + Python SDK 联合深度代码审查
 
 **日期**:2026-06-02
@@ -130,7 +132,7 @@
 - P2(9-10)≈ 0.25d
 - **完成 P0+P1 ≈ 3 天,SDK 可进生产灰度**
 
-执行细节见 [`sdk-fix-execution-plan-2026-06-02.md`](../plans/sdk-fix-execution-plan-2026-06-02.md)。
+执行细节见 [sdk-parity-matrix.md](../../sdk/sdk-parity-matrix.md)。
 
 ---
 

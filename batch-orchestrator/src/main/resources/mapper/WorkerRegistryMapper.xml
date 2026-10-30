@@ -2,6 +2,13 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper">
 
+    <resultMap id="tenantWorkerCountView" type="io.github.pinpols.batch.orchestrator.domain.view.TenantWorkerCountView">
+        <constructor>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="cnt" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
     <!--
       heartbeat_at 由 DB 服务器时间（current_timestamp）驱动，<b>不再接受 worker / orchestrator 提供的 wall clock</b>。
       原因：worker NTP 漂移会让 heartbeat_at 异常（早 N 秒 → 提前判定 OFFLINE / 晚 N 秒 → 误延寿），
@@ -160,7 +167,7 @@
            and status &lt;&gt; 'DECOMMISSIONED'
     </select>
 
-    <select id="countByTenantsAndStatus" resultType="java.util.Map">
+    <select id="countByTenantsAndStatus" resultMap="tenantWorkerCountView">
         select tenant_id, count(1) as cnt
           from batch.worker_registry
          where status = #{status}

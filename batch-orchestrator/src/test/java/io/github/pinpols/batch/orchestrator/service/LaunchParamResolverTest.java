@@ -38,6 +38,15 @@ class LaunchParamResolverTest {
 
   private LaunchParamResolver resolver;
 
+  @Test
+  @DisplayName("解析文件和父实例身份时不截断小数")
+  void shouldNotTruncateFileOrParentIdentity() {
+    assertThat(resolver.resolveRelatedFileId(Map.of("fileId", 42.9))).isNull();
+    assertThat(resolver.resolveParentInstanceId(Map.of("parentInstanceId", 42.9)))
+        .isNull();
+    assertThat(resolver.resolveRelatedFileId(Map.of("fileId", 42))).isEqualTo(42L);
+  }
+
   @BeforeEach
   void setUp() {
     lenient()
@@ -125,7 +134,11 @@ class LaunchParamResolverTest {
   @DisplayName("作业定义缺失时参数快照保留空执行策略")
   void shouldBuildSnapshotWithoutExecutionPolicy_whenJobDefinitionIsMissing() {
     String snapshot = resolver.buildParamsSnapshot(
-        null, launchRequest(Map.of(), LocalDate.of(2026, Month.APRIL, 10)), Map.of(), "trace-1", null);
+        null,
+        launchRequest(Map.of(), LocalDate.of(2026, Month.APRIL, 10)),
+        Map.of(),
+        "trace-1",
+        null);
 
     assertThat(snapshot).contains("\"executionPolicy\":{}");
   }
@@ -266,6 +279,31 @@ class LaunchParamResolverTest {
   }
 
   // ===== mergeLaunchParams: descriptor.defaults 注入 + 优先级 (SDK Phase 3 M3.1) =====
+
+  @Test
+  @DisplayName("启动参数不能注入仅由分区绑定生成的文件束字段")
+  void shouldRemoveCallerBundleBindings_whenMergingLaunchParams() {
+    JobDefinitionEntity definition = jobDef("DISPATCH", Map.of("bundleSourceFileId", 91));
+    LaunchRequest request = launchRequest(
+        Map.of(
+            "fileId",
+            10,
+            "channelCode",
+            "CH1",
+            "bundleTargetRef",
+            "OTHER",
+            "metadata",
+            Map.of("bundleTargetRef", "business-value")),
+        LocalDate.of(2026, 10, 14));
+
+    Map<String, Object> params = resolver.mergeLaunchParams(definition, request);
+
+    assertThat(params)
+        .containsEntry("fileId", 10)
+        .containsEntry("channelCode", "CH1")
+        .containsEntry("metadata", Map.of("bundleTargetRef", "business-value"))
+        .doesNotContainKeys("bundleSourceFileId", "bundleTargetRef");
+  }
 
   @Test
   @DisplayName("描述符默认参数优先级最低,作业默认参数与请求参数依次覆盖")

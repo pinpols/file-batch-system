@@ -28,24 +28,25 @@ public record ExportKeysetRange(
    */
   static ExportKeysetRange equalWidth(
       BigDecimal lo, BigDecimal hi, int partitionCount, int partitionNo) {
-    boolean keysetRangeCannotBePartitioned =
-        EmptyChecks.isNull(lo) || EmptyChecks.isNull(hi) || lo.compareTo(hi) >= 0 || partitionCount <= 1;
+    boolean keysetRangeCannotBePartitioned = EmptyChecks.isNull(lo)
+        || EmptyChecks.isNull(hi)
+        || lo.compareTo(hi) >= 0
+        || partitionCount <= 1;
     if (keysetRangeCannotBePartitioned) {
       return inactiveFor(partitionCount, partitionNo);
     }
     BigDecimal span = hi.subtract(lo);
     long lowerPartitionOffset = partitionNo - 1L;
-    BigDecimal lowerPartitionNumerator =
-        span.multiply(BigDecimal.valueOf(lowerPartitionOffset));
-    BigDecimal lowerPartitionWidth = lowerPartitionNumerator.divide(
-        BigDecimal.valueOf(partitionCount), MathContext.DECIMAL64);
+    BigDecimal lowerPartitionNumerator = span.multiply(BigDecimal.valueOf(lowerPartitionOffset));
+    BigDecimal lowerPartitionWidth =
+        lowerPartitionNumerator.divide(BigDecimal.valueOf(partitionCount), MathContext.DECIMAL64);
     BigDecimal loN = lo.add(lowerPartitionWidth);
     boolean last = partitionNo == partitionCount;
     BigDecimal hiN = hi;
     if (!last) {
       BigDecimal upperPartitionNumerator = span.multiply(BigDecimal.valueOf(partitionNo));
-      BigDecimal upperPartitionWidth = upperPartitionNumerator.divide(
-          BigDecimal.valueOf(partitionCount), MathContext.DECIMAL64);
+      BigDecimal upperPartitionWidth =
+          upperPartitionNumerator.divide(BigDecimal.valueOf(partitionCount), MathContext.DECIMAL64);
       hiN = lo.add(upperPartitionWidth);
     }
     return new ExportKeysetRange(true, loN, hiN, last, partitionCount, partitionNo);

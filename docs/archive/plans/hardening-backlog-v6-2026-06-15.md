@@ -1,3 +1,5 @@
+> 历史原始记录：本轮恢复保留，正文中的结论、参数、状态和操作步骤仅适用于原日期/基线。提炼方法不替代原始证据；当前事实须按[文档治理](../../standards/document-governance.md)重新核实。本轮未执行原测试或扫描。
+
 # 硬化与遗留问题 Backlog —— v6 归档快照（2026-06-15 封存）
 
 > **这是 v6 的完整封存快照（含已完成清账）**。活清单已滚动到 v7：[`docs/plans/hardening-backlog.md`](../../plans/hardening-backlog.md)。

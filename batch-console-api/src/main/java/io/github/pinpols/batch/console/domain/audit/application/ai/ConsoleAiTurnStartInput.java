@@ -1,11 +1,11 @@
 package io.github.pinpols.batch.console.domain.audit.application.ai;
 
-import lombok.Builder;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import lombok.Builder;
+
 /** 会话开始的原始输入；开关、所有者和版本仍由服务按原顺序校验，空提示仍由原清洗器处理。 */
 @Builder
 public record ConsoleAiTurnStartInput(

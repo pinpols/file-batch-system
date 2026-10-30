@@ -74,7 +74,7 @@ class QueuedBatchClaimLeaseFenceTest {
         timeout,
         meterProvider,
         mock(TaskScheduler.class),
-        10_000L);
+        new WorkerLeaseProperties());
     WorkerTaskLeaseRenewer renewer =
         new WorkerTaskLeaseRenewer(leases, client, meterProvider, new WorkerLeaseProperties());
     renewer.subscribeLeaseRemoval();

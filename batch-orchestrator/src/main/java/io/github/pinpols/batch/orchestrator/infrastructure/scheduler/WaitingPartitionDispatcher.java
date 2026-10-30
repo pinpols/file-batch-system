@@ -1,15 +1,12 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
-import io.github.pinpols.batch.orchestrator.domain.param.WorkflowRunMarkRunningParam;
-
-
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
-import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
@@ -25,6 +22,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkInstanceRunningParam;
+import io.github.pinpols.batch.orchestrator.domain.param.WorkflowRunMarkRunningParam;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
@@ -61,6 +59,18 @@ class WaitingPartitionDispatcher {
       ResourceSchedulingDecision decision) {
     jobMappers.jobInstanceMapper.acquireInstanceAdvisoryLock(
         jobInstance.getTenantId(), jobInstance.getId());
+    WorkflowRunEntity parentRun = workflowMappers.workflowRunMapper.selectByNodeJobInstanceId(
+        jobInstance.getTenantId(), jobInstance.getId());
+    if (EmptyChecks.isNotNull(parentRun)) {
+      // 与任务回报保持实例锁在前、Workflow 行锁在后的顺序，并与暂停提交串行化。
+      WorkflowRunEntity lockedRun = workflowMappers.workflowRunMapper.selectByTenantAndIdForUpdate(
+          jobInstance.getTenantId(), parentRun.getId());
+      if (EmptyChecks.isNull(lockedRun)
+          || !(WorkflowRunStatus.CREATED.code().equals(lockedRun.getRunStatus())
+              || WorkflowRunStatus.RUNNING.code().equals(lockedRun.getRunStatus()))) {
+        return;
+      }
+    }
     JobInstanceEntity currentInstance =
         jobMappers.jobInstanceMapper.selectById(jobInstance.getTenantId(), jobInstance.getId());
     if (!isDispatchableParent(currentInstance)) {
@@ -147,7 +157,6 @@ class WaitingPartitionDispatcher {
         .currentNodeCode(workflowRun.getCurrentNodeCode())
         .startedAt(BatchDateTimeSupport.utcNow())
         .build();
-    workflowMappers.workflowRunMapper.markRunning(
-        workflowRunMarkRunningParam);
+    workflowMappers.workflowRunMapper.markRunning(workflowRunMarkRunningParam);
   }
 }

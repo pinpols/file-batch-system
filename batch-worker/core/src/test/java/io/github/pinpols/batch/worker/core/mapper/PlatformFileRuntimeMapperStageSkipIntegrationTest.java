@@ -6,16 +6,30 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.testing.TestPostgresContainers;
+import io.github.pinpols.batch.worker.core.infrastructure.CreatePipelineInstanceParam;
+import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
+import io.github.pinpols.batch.worker.core.infrastructure.FileErrorRecordParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
+import io.github.pinpols.batch.worker.core.param.PlatformFileAuditInsertParam;
+import io.github.pinpols.batch.worker.core.param.PlatformFileErrorInsertParam;
+import io.github.pinpols.batch.worker.core.param.PlatformPipelineInsertParam;
+import io.github.pinpols.batch.worker.core.param.PlatformStepRunFinishParam;
+import io.github.pinpols.batch.worker.core.param.PlatformStepRunInsertParam;
 import java.io.InputStream;
-import java.util.HashMap;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.sql.DataSource;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
@@ -46,7 +60,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * ProcessStageSkipCrashResumeIntegrationTest} 的裸 PG + JdbcTemplate 惯例,只是额外用 MyBatis
  * SqlSessionFactory 直加载真 XML,以覆盖 SQL 真伪(窗口函数、tie-break、分区取最新)。
  */
-@DisplayName("selectSucceededStepCodes:每个 step 最新一次 run 为 SUCCESS 才可跳过")
+@DisplayName("平台文件运行态Mapper：租户引用、步骤续跑、主键回填及错误审计持久化")
 class PlatformFileRuntimeMapperStageSkipIntegrationTest {
 
   private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.create();
@@ -88,6 +102,12 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
           run_seq              integer      not null default 1,
           step_status          varchar(32)  not null,
           input_summary        jsonb,
+          output_summary       jsonb,
+          error_code           varchar(64),
+          error_message        varchar(1024),
+          error_key            varchar(256),
+          error_args           jsonb,
+          duration_ms          bigint default 0,
           started_at           timestamptz,
           finished_at          timestamptz,
           constraint uk_pipeline_step_run unique (pipeline_instance_id, step_code, run_seq)
@@ -182,6 +202,34 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
   }
 
   @Test
+  @DisplayName("中断终态步骤拒绝旧 Worker 的迟到成功写回，当前运行尝试仍可正常结束")
+  void shouldRejectLateStepCompletion_whenPriorAttemptAlreadyInterrupted() {
+    String seedSql = """
+        insert into batch.pipeline_step_run
+          (id, pipeline_instance_id, step_code, stage_code, run_seq, step_status, error_code, started_at)
+        values (1, 100, 'LOAD', 'LOAD', 1, 'FAILED', 'PIPELINE_ATTEMPT_INTERRUPTED', current_timestamp),
+               (2, 100, 'LOAD', 'LOAD', 2, 'RUNNING', null, current_timestamp)
+        """;
+    jdbcTemplate.update(seedSql);
+    PlatformStepRunFinishParam completion =
+        PlatformStepRunFinishParam.builder().stepRunId(1L).status("SUCCESS").build();
+    try (SqlSession session = sqlSessionFactory.openSession(true)) {
+      PlatformFileRuntimeMapper mapper = session.getMapper(PlatformFileRuntimeMapper.class);
+      int staleRows = mapper.finishStepRun(completion);
+      completion = completion.toBuilder().stepRunId(2L).build();
+      int currentRows = mapper.finishStepRun(completion);
+      int repeatedRows = mapper.finishStepRun(completion);
+      assertThat(staleRows).isZero();
+      assertThat(currentRows).isEqualTo(1);
+      assertThat(repeatedRows).isZero();
+    }
+    String historySql =
+        "select step_status || ':' || coalesce(error_code, '') from batch.pipeline_step_run order by id";
+    List<String> history = jdbcTemplate.queryForList(historySql, String.class);
+    assertThat(history).containsExactly("FAILED:PIPELINE_ATTEMPT_INTERRUPTED", "SUCCESS:");
+  }
+
+  @Test
   @DisplayName("Pipeline 文件绑定要求 Pipeline 与文件均属于调用租户")
   void bindFileToPipelineInstance_rejectsCrossTenantRows() {
     final String insertBatchPipelineInstanceSql = """
@@ -195,17 +243,11 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
         """;
     jdbcTemplate.update(insertBatchFileRecordSql);
 
-    Map<String, Object> own = Map.of("tenantId", "t1", "pipelineInstanceId", 1L, "fileId", 10L);
-    Map<String, Object> foreignFile =
-        Map.of("tenantId", "t1", "pipelineInstanceId", 1L, "fileId", 20L);
-    Map<String, Object> foreignPipeline =
-        Map.of("tenantId", "t1", "pipelineInstanceId", 2L, "fileId", 10L);
-
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
       PlatformFileRuntimeMapper mapper = session.getMapper(PlatformFileRuntimeMapper.class);
-      assertThat(mapper.bindFileToPipelineInstance(own)).isEqualTo(1);
-      assertThat(mapper.bindFileToPipelineInstance(foreignFile)).isZero();
-      assertThat(mapper.bindFileToPipelineInstance(foreignPipeline)).isZero();
+      assertThat(mapper.bindFileToPipelineInstance("t1", 1L, 10L)).isEqualTo(1);
+      assertThat(mapper.bindFileToPipelineInstance("t1", 1L, 20L)).isZero();
+      assertThat(mapper.bindFileToPipelineInstance("t1", 2L, 10L)).isZero();
     }
     final String selectBatchPipelineInstanceSql = """
         select file_id from batch.pipeline_instance where id = 1
@@ -218,6 +260,69 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
     Long selectedFileIdRead2 =
         jdbcTemplate.queryForObject(selectBatchPipelineInstanceSqlValue3, Long.class);
     assertThat(selectedFileIdRead2).isNull();
+  }
+
+  @Test
+  @DisplayName("归档锁住父实例期间迟到 Pipeline 写入等待并在父实例删除后拒绝")
+  void shouldFencePipelineCreation_whenParentIsArchived() throws Exception {
+    String insertParentSql = "insert into batch.job_instance(id, tenant_id) values (100, 't1')";
+    String lockParentSql = "select id from batch.job_instance where id = 100 for update";
+    String deleteParentSql = "delete from batch.job_instance where id = 100";
+    String pidSql = "select pg_backend_pid()";
+    String blockersSql = "select ? = any(pg_blocking_pids(?))";
+    String countSql =
+        "select count(*) from batch.pipeline_instance where related_job_instance_id = 100";
+    jdbcTemplate.update(insertParentSql);
+    AtomicReference<Integer> writerPid = new AtomicReference<>();
+    try (ExecutorService executor = Executors.newSingleThreadExecutor();
+        Connection archive =
+            Objects.requireNonNull(jdbcTemplate.getDataSource()).getConnection()) {
+      archive.setAutoCommit(false);
+      int archivePid;
+      try (PreparedStatement pid = archive.prepareStatement(pidSql);
+          ResultSet result = pid.executeQuery()) {
+        assertThat(result.next()).isTrue();
+        archivePid = result.getInt(1);
+      }
+      try (PreparedStatement lock = archive.prepareStatement(lockParentSql);
+          ResultSet result = lock.executeQuery()) {
+        assertThat(result.next()).isTrue();
+      }
+      Future<Integer> insert = executor.submit(() -> {
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+          try (PreparedStatement pid = session.getConnection().prepareStatement(pidSql);
+              ResultSet result = pid.executeQuery()) {
+            if (!result.next()) throw new IllegalStateException("missing backend pid");
+            writerPid.set(result.getInt(1));
+          }
+          return session
+              .getMapper(PlatformFileRuntimeMapper.class)
+              .insertPipelineInstance(pipelineParams(null, 100L));
+        }
+      });
+      long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+      boolean blocked = false;
+      while (System.nanoTime() < deadline && !insert.isDone()) {
+        Integer pid = writerPid.get();
+        Boolean waiting = pid == null
+            ? false
+            : jdbcTemplate.queryForObject(blockersSql, Boolean.class, archivePid, pid);
+        if (Boolean.TRUE.equals(waiting)) {
+          blocked = true;
+          break;
+        }
+        Thread.sleep(10);
+      }
+      try (PreparedStatement delete = archive.prepareStatement(deleteParentSql)) {
+        assertThat(delete.executeUpdate()).isEqualTo(1);
+      }
+      archive.commit();
+      int inserted = insert.get(10, TimeUnit.SECONDS);
+      assertThat(blocked).as("pipeline creation waits for the parent row lock").isTrue();
+      assertThat(inserted).isZero();
+      Integer count = jdbcTemplate.queryForObject(countSql, Integer.class);
+      assertThat(count).isZero();
+    }
   }
 
   @Test
@@ -274,19 +379,19 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
     assertThat(selectedPipelineInstanceCount).isEqualTo(3);
   }
 
-  private static Map<String, Object> pipelineParams(Long fileId, Long jobInstanceId) {
-    Map<String, Object> params = new HashMap<>();
-    params.put("tenantId", "t1");
-    params.put("systemPipelineCode", "IMPORT");
-    params.put("systemPipelineVersion", 1);
-    params.put("jobCode", "JOB_TEST");
-    params.put("pipelineType", "IMPORT");
-    params.put("fileId", fileId);
-    params.put("relatedJobInstanceId", jobInstanceId);
-    params.put("currentStage", "RECEIVE");
-    params.put("runStatus", "RUNNING");
-    params.put("traceId", "trace-test");
-    return params;
+  private static PlatformPipelineInsertParam pipelineParams(Long fileId, Long jobInstanceId) {
+    return PlatformPipelineInsertParam.builder()
+        .tenantId("t1")
+        .systemPipelineCode("IMPORT")
+        .systemPipelineVersion(1)
+        .jobCode("JOB_TEST")
+        .pipelineType("IMPORT")
+        .fileId(fileId)
+        .relatedJobInstanceId(jobInstanceId)
+        .currentStage("RECEIVE")
+        .runStatus("RUNNING")
+        .traceId("trace-test")
+        .build();
   }
 
   @Test
@@ -308,42 +413,33 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
         'SUCCESS')\
         """;
     jdbcTemplate.update(insertBatchPipelineStepRunSql);
-    Map<String, Object> error = new HashMap<>(Map.of(
-        "tenantId",
-        "t1",
-        "fileId",
-        11L,
-        "pipelineInstanceId",
-        101L,
-        "pipelineStepRunId",
-        301L,
-        "recordNo",
-        1L,
-        "isSkipped",
-        false));
-    Map<String, Object> audit = new HashMap<>(Map.of(
-        "tenantId",
-        "t1",
-        "fileId",
-        11L,
-        "operationType",
-        "TEST",
-        "operationResult",
-        "SUCCESS",
-        "operatorType",
-        "SYSTEM"));
+    PlatformFileErrorInsertParam error = PlatformFileErrorInsertParam.builder()
+        .tenantId("t1")
+        .fileId(11L)
+        .pipelineInstanceId(101L)
+        .pipelineStepRunId(301L)
+        .recordNo(1L)
+        .isSkipped(false)
+        .build();
+    PlatformFileAuditInsertParam audit = PlatformFileAuditInsertParam.builder()
+        .tenantId("t1")
+        .fileId(11L)
+        .operationType("TEST")
+        .operationResult("SUCCESS")
+        .operatorType("SYSTEM")
+        .build();
 
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
       PlatformFileRuntimeMapper mapper = session.getMapper(PlatformFileRuntimeMapper.class);
       assertThat(mapper.insertFileErrorRecord(error)).isEqualTo(1);
-      error.put("fileId", 21L);
+      error = error.toBuilder().fileId(21L).build();
       assertThat(mapper.insertFileErrorRecord(error)).isZero();
-      error.put("fileId", 11L);
-      error.put("pipelineInstanceId", 201L);
-      error.put("pipelineStepRunId", 401L);
+      error = error.toBuilder().fileId(11L).build();
+      error = error.toBuilder().pipelineInstanceId(201L).build();
+      error = error.toBuilder().pipelineStepRunId(401L).build();
       assertThat(mapper.insertFileErrorRecord(error)).isZero();
       assertThat(mapper.insertFileAuditLog(audit)).isEqualTo(1);
-      audit.put("fileId", 21L);
+      audit = audit.toBuilder().fileId(21L).build();
       assertThat(mapper.insertFileAuditLog(audit)).isZero();
     }
     final String selectBatchFileErrorRecordSql = """
@@ -367,23 +463,26 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
         insert into batch.file_record(id, tenant_id, file_status) values (31, 't1', 'GENERATED')\
         """;
     jdbcTemplate.update(insertBatchFileRecordSqlValue11);
-    Map<String, Object> audit = new HashMap<>(Map.of(
-        "tenantId", "t1",
-        "fileId", 31L,
-        "operationType", "DISPATCH_COMPLETE",
-        "operationResult", "SUCCESS",
-        "operatorType", "SYSTEM",
-        "evidenceRef", "external-request-1",
-        "detailSummaryJson", "{\"channelCode\":\"channel-a\"}"));
+    PlatformFileAuditInsertParam audit = PlatformFileAuditInsertParam.builder()
+        .tenantId("t1")
+        .fileId(31L)
+        .operationType("DISPATCH_COMPLETE")
+        .operationResult("SUCCESS")
+        .operatorType("SYSTEM")
+        .evidenceRef("external-request-1")
+        .detailSummaryJson("{\"channelCode\":\"channel-a\"}")
+        .build();
 
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
       PlatformFileRuntimeMapper mapper = session.getMapper(PlatformFileRuntimeMapper.class);
       assertThat(mapper.insertFileAuditLog(audit)).isEqualTo(1);
       assertThat(mapper.insertFileAuditLog(audit)).isZero();
-      audit.put("detailSummaryJson", "{\"channelCode\":\"channel-b\"}");
+      audit =
+          audit.toBuilder().detailSummaryJson("{\"channelCode\":\"channel-b\"}").build();
       assertThat(mapper.insertFileAuditLog(audit)).isEqualTo(1);
-      audit.put("detailSummaryJson", "{\"channelCode\":\"channel-a\"}");
-      audit.put("evidenceRef", "external-request-2");
+      audit =
+          audit.toBuilder().detailSummaryJson("{\"channelCode\":\"channel-a\"}").build();
+      audit = audit.toBuilder().evidenceRef("external-request-2").build();
       assertThat(mapper.insertFileAuditLog(audit)).isEqualTo(1);
     }
 
@@ -398,13 +497,14 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
   @Test
   @DisplayName("文件错误记录允许可选文件和运行引用为空")
   void insertFileErrorRecord_acceptsNullableReferences() {
-    Map<String, Object> error = new HashMap<>();
-    error.put("tenantId", "t1");
-    error.put("fileId", null);
-    error.put("pipelineInstanceId", null);
-    error.put("pipelineStepRunId", null);
-    error.put("recordNo", 1L);
-    error.put("isSkipped", false);
+    PlatformFileErrorInsertParam error = PlatformFileErrorInsertParam.builder()
+        .tenantId("t1")
+        .fileId(null)
+        .pipelineInstanceId(null)
+        .pipelineStepRunId(null)
+        .recordNo(1L)
+        .isSkipped(false)
+        .build();
 
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
       assertThat(session.getMapper(PlatformFileRuntimeMapper.class).insertFileErrorRecord(error))
@@ -419,6 +519,111 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
     assertThat(selectedFileErrorRecordCount).isEqualTo(1);
   }
 
+  @Test
+  @DisplayName("具名命令保留真实主键回填、步骤错误三元组、JSON和文件审计引用")
+  void shouldPersistGeneratedIdsAndStructuredResultsWithTypedCommands() {
+    String seedFileSql = """
+        insert into batch.file_record(id, tenant_id, file_status) values (10, 't1', 'RECEIVED')
+        """;
+    jdbcTemplate.update(seedFileSql);
+    Long pipelineId;
+    Long stepRunId;
+    Long errorId;
+    try (SqlSession session = sqlSessionFactory.openSession(false)) {
+      PlatformFileRuntimeMapper mapper = session.getMapper(PlatformFileRuntimeMapper.class);
+      PlatformPipelineRunRepository runs = new PlatformPipelineRunRepository(mapper);
+      PlatformFileAuditRepository audits = new PlatformFileAuditRepository(mapper);
+      pipelineId = runs.createPipelineInstance(new CreatePipelineInstanceParam(
+          "t1", "IMPORT", 1, "JOB_TYPED", "IMPORT", 10L, null, "RECEIVE", "trace-typed"));
+      assertThat(pipelineId).isNotNull();
+      session.commit();
+      stepRunId = runs.startStepRun(pipelineId, "LOAD", "LOAD", Map.of("sourceRows", 2));
+      assertThat(stepRunId).isNotNull();
+      session.commit();
+
+      runs.finishStepRunFailure(
+          stepRunId,
+          "LOAD_FAILED",
+          "x".repeat(1100),
+          "error.load.failed",
+          "[\"amount\"]",
+          Map.of("loadedRows", 1));
+      runs.updatePipelineStage(pipelineId, "LOAD", "VALIDATE");
+      runs.markPipelineCompensating(pipelineId);
+      session.commit();
+      String compensatingStatusSql = "select run_status from batch.pipeline_instance where id = ?";
+      assertThat(jdbcTemplate.queryForObject(compensatingStatusSql, String.class, pipelineId))
+          .isEqualTo("COMPENSATING");
+      runs.markPipelineFailed(pipelineId, "LOAD", "VALIDATE");
+      FileErrorRecordParam error = FileErrorRecordParam.builder()
+          .tenantId("t1")
+          .fileId(10L)
+          .pipelineInstanceId(pipelineId)
+          .pipelineStepRunId(stepRunId)
+          .recordNo(2L)
+          .errorCode("ROW_INVALID")
+          .errorMessage("y".repeat(1100))
+          .errorStage("LOAD")
+          .skipped(true)
+          .skipAction("SKIP_ROW")
+          .rawRecord(Map.of("amount", "invalid"))
+          .sourceRowNum(3L)
+          .sourceColumn("amount")
+          .build();
+      errorId = audits.insertFileErrorRecord(error);
+      assertThat(errorId).isNotNull();
+      FileAuditParam audit = FileAuditParam.builder()
+          .tenantId("t1")
+          .fileId(10L)
+          .operationType("TEST")
+          .operationResult("SUCCESS")
+          .detailSummary(Map.of("rows", 2))
+          .build();
+      audits.appendAudit(audit);
+      session.commit();
+    }
+
+    String stepResultSql = """
+        select step_status, run_seq, input_summary ->> 'sourceRows' as source_rows,
+               output_summary ->> 'loadedRows' as loaded_rows,
+               error_code, length(error_message) as message_length, error_key, error_args ->> 0 as first_arg
+        from batch.pipeline_step_run where id = ?
+        """;
+    Map<String, Object> step = jdbcTemplate.queryForMap(stepResultSql, stepRunId);
+    assertThat(step)
+        .containsEntry("step_status", "FAILED")
+        .containsEntry("run_seq", 1)
+        .containsEntry("source_rows", "2")
+        .containsEntry("loaded_rows", "1")
+        .containsEntry("error_code", "LOAD_FAILED")
+        .containsEntry("message_length", 1024)
+        .containsEntry("error_key", "error.load.failed")
+        .containsEntry("first_arg", "amount");
+    String errorResultSql = """
+        select pipeline_instance_id, pipeline_step_run_id, is_skipped,
+               length(error_message) as message_length, raw_record ->> 'amount' as amount,
+               error_key, error_args, source_row_num, source_column
+        from batch.file_error_record where id = ?
+        """;
+    Map<String, Object> persistedError = jdbcTemplate.queryForMap(errorResultSql, errorId);
+    assertThat(persistedError)
+        .containsEntry("pipeline_instance_id", pipelineId)
+        .containsEntry("pipeline_step_run_id", stepRunId)
+        .containsEntry("is_skipped", true)
+        .containsEntry("message_length", 1024)
+        .containsEntry("amount", "invalid")
+        .containsEntry("error_key", null)
+        .containsEntry("error_args", null)
+        .containsEntry("source_row_num", 3L)
+        .containsEntry("source_column", "amount");
+    String auditResultSql = """
+        select count(*) from batch.file_audit_log
+        where tenant_id = 't1' and file_id = 10 and operator_type = 'SYSTEM'
+          and detail_summary ->> 'rows' = '2'
+        """;
+    assertThat(jdbcTemplate.queryForObject(auditResultSql, Integer.class)).isEqualTo(1);
+  }
+
   private void insertRun(long instanceId, String stepCode, int runSeq, String status) {
     final String insertBatchPipelineStepRunSqlValue14 = """
         insert into batch.pipeline_step_run (pipeline_instance_id, step_code, stage_code, run_seq, step_status)\s\
@@ -429,10 +634,10 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
   }
 
   private List<String> succeededStepCodes(long instanceId) {
-    Map<String, Object> params = new HashMap<>();
-    params.put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, instanceId);
     try (SqlSession session = sqlSessionFactory.openSession()) {
-      return session.getMapper(PlatformFileRuntimeMapper.class).selectSucceededStepCodes(params);
+      return session
+          .getMapper(PlatformFileRuntimeMapper.class)
+          .selectSucceededStepCodes(instanceId);
     }
   }
 
@@ -507,8 +712,9 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
     try (SqlSession firstSession = sqlSessionFactory.openSession(false)) {
       PlatformFileRuntimeMapper firstMapper =
           firstSession.getMapper(PlatformFileRuntimeMapper.class);
-      Map<String, Object> firstParams = stepRunParams(900L);
-      firstMapper.lockStepRunSequence(firstParams);
+      PlatformStepRunInsertParam firstParams = stepRunParams(900L);
+      firstMapper.lockStepRunSequence(
+          firstParams.getPipelineInstanceId(), firstParams.getStepCode());
       insertStepRun(firstMapper, firstParams, 1);
 
       Future<Integer> contender = executor.submit(() -> {
@@ -519,10 +725,12 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
           secondSession.getConnection().createStatement().execute(selectSql);
           PlatformFileRuntimeMapper secondMapper =
               secondSession.getMapper(PlatformFileRuntimeMapper.class);
-          Map<String, Object> secondParams = stepRunParams(900L);
+          PlatformStepRunInsertParam secondParams = stepRunParams(900L);
           contenderStarted.countDown();
-          secondMapper.lockStepRunSequence(secondParams);
-          int nextRunSeq = secondMapper.selectNextStepRunSeq(secondParams);
+          secondMapper.lockStepRunSequence(
+              secondParams.getPipelineInstanceId(), secondParams.getStepCode());
+          int nextRunSeq = secondMapper.selectNextStepRunSeq(
+              secondParams.getPipelineInstanceId(), secondParams.getStepCode());
           insertStepRun(secondMapper, secondParams, nextRunSeq);
           secondSession.commit();
           return nextRunSeq;
@@ -564,19 +772,19 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
     throw new AssertionError("contender did not block on the advisory transaction lock");
   }
 
-  private Map<String, Object> stepRunParams(long pipelineInstanceId) {
-    Map<String, Object> params = new HashMap<>();
-    params.put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, pipelineInstanceId);
-    params.put("stepCode", "COMPUTE");
-    params.put("stageCode", "COMPUTE");
-    params.put("stepStatus", "RUNNING");
-    params.put("inputSummaryJson", "{}");
-    return params;
+  private PlatformStepRunInsertParam stepRunParams(long pipelineInstanceId) {
+    return PlatformStepRunInsertParam.builder()
+        .pipelineInstanceId(pipelineInstanceId)
+        .stepCode("COMPUTE")
+        .stageCode("COMPUTE")
+        .stepStatus("RUNNING")
+        .inputSummaryJson("{}")
+        .build();
   }
 
   private void insertStepRun(
-      PlatformFileRuntimeMapper mapper, Map<String, Object> params, int runSeq) {
-    params.put("runSeq", runSeq);
+      PlatformFileRuntimeMapper mapper, PlatformStepRunInsertParam params, int runSeq) {
+    params.setRunSeq(runSeq);
     mapper.insertStepRun(params);
   }
 
@@ -597,12 +805,10 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
         }
         """.stripTrailing());
 
-    Map<String, Object> params = new HashMap<>();
-    params.put(PipelineRuntimeKeys.FILE_ID, 700L);
-    params.put("fileStatus", FileStatus.LOADED.code());
-    params.put("metadataJson", "{\"loadedCount\":800000}");
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
-      session.getMapper(PlatformFileRuntimeMapper.class).updateFileRecordStatus(params);
+      session
+          .getMapper(PlatformFileRuntimeMapper.class)
+          .updateFileRecordStatus(700L, FileStatus.LOADED.code(), "{\"loadedCount\":800000}");
     }
 
     final String selectBatchFileRecordSql = """

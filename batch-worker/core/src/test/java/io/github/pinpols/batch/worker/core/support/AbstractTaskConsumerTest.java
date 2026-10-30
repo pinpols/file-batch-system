@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.core.support;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -36,23 +37,27 @@ import java.util.regex.Pattern;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.web.client.ResourceAccessException;
 
 /**
- * Tests for AbstractTaskConsumer covering: - malformed message dropped silently - worker type
- * mismatch → message skipped without execution - selectedWorkerId mismatch → message skipped -
- * executor returns null (CLAIM race lost) → treated as skip - executor throws exception → DLQ
- * published, returns true (no requeue) - executor throws exception with no DLQ → still returns true
- * - MDC fields cleared after processing - topics() resolution logic
+ * AbstractTaskConsumer 测试覆盖：格式错误的消息被静默丢弃；Worker 类型
+ * 不匹配时跳过消息且不执行；selectedWorkerId 不匹配时跳过消息；
+ * 执行器返回 null（认领竞争失败）时按跳过处理；执行器抛异常时发送到 DLQ，
+ * 发布后返回 true（不重新入队）；执行器抛异常但未配置 DLQ 时仍返回 true；
+ * 处理后清除 MDC 字段；topics() 解析逻辑。
  */
 @DisplayName("任务消费者基类: 消息过滤, 批量消费与死信转投及订阅主题解析")
+@ExtendWith(OutputCaptureExtension.class)
 class AbstractTaskConsumerTest {
 
   @Test
@@ -199,7 +204,7 @@ class AbstractTaskConsumerTest {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
     AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, null, "worker-A");
 
-    // Message targets worker-B, but this consumer is worker-A
+    // 消息目标是 worker-B，而当前 Consumer 属于 worker-A。
     TaskDispatchMessage msg = new TaskDispatchMessage(
         "v2", "t1", 1L, null, 1L, null, null, "IMPORT", "worker-B", null, "tr", "k", null, null);
     boolean result = consumer.doConsume(JsonUtils.toJson(msg));
@@ -246,6 +251,79 @@ class AbstractTaskConsumerTest {
 
     assertThat(result).isTrue();
     verify(dlq).publish(any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("单条执行失败不把原始异常凭据写入日志或死信摘要")
+  void doConsume_masksFailureInLogAndDlq(CapturedOutput output) {
+    TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
+    when(executor.execute(any(), any()))
+        .thenThrow(new RuntimeException("execution token=probe-secret"));
+    DeadLetterPublisher dlq = mock(DeadLetterPublisher.class);
+    AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, dlq);
+
+    boolean canCommit = consumer.doConsume(buildImportMessage());
+
+    assertThat(canCommit).isTrue();
+    verify(dlq).publish(any(), any(), any(), ArgumentMatchers.eq("execution token=****"));
+    assertThat(output.getOut()).doesNotContain("probe-secret");
+  }
+
+  @Test
+  @DisplayName("批量执行失败只转投失败项且不把原始异常凭据写入日志或死信摘要")
+  void doConsumeBatch_masksFailureInLogAndDlq(CapturedOutput output) {
+    TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
+    DeadLetterPublisher dlq = mock(DeadLetterPublisher.class);
+    AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, dlq);
+    TaskDispatchMessage message = buildMessage(1L, "t1", "IMPORT", null);
+    when(executor.executeBatchDetailed(any(), anyString()))
+        .thenReturn(List.of(BatchItemExecution.failed(
+            0, message, new IllegalArgumentException("batch token=probe-secret"))));
+    String payload = JsonUtils.toJson(message);
+
+    boolean canCommit = consumer.doConsumeBatch(List.of(payload));
+
+    assertThat(canCommit).isTrue();
+    verify(dlq)
+        .publish(
+            ArgumentMatchers.eq(payload), any(), any(), ArgumentMatchers.eq("batch token=****"));
+    assertThat(output.getOut()).doesNotContain("probe-secret");
+  }
+
+  @Test
+  @DisplayName("死信发布失败时不提交偏移量且日志不输出原始凭据")
+  void doConsume_dlqPublishFailureMasksLogAndRequiresRedelivery(CapturedOutput output) {
+    TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
+    when(executor.execute(any(), any())).thenThrow(new IllegalArgumentException("bad task"));
+    DeadLetterPublisher dlq = mock(DeadLetterPublisher.class);
+    doThrow(new IllegalStateException("dlq password=probe-secret"))
+        .when(dlq)
+        .publish(any(), any(), any(), any());
+    AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, dlq);
+
+    boolean canCommit = consumer.doConsume(buildImportMessage());
+
+    assertThat(canCommit).isFalse();
+    assertThat(output.getOut()).doesNotContain("probe-secret");
+  }
+
+  @Test
+  @DisplayName("整批执行抛异常时逐条转投且日志不输出原始凭据")
+  void doConsumeBatch_unexpectedFailureMasksLog(CapturedOutput output) {
+    TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
+    when(executor.executeBatchDetailed(any(), anyString()))
+        .thenThrow(new IllegalArgumentException("batch token=probe-secret"));
+    DeadLetterPublisher dlq = mock(DeadLetterPublisher.class);
+    AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, dlq);
+    String payload = JsonUtils.toJson(buildMessage(1L, "t1", "IMPORT", null));
+
+    boolean canCommit = consumer.doConsumeBatch(List.of(payload));
+
+    assertThat(canCommit).isTrue();
+    verify(dlq)
+        .publish(
+            ArgumentMatchers.eq(payload), any(), any(), ArgumentMatchers.eq("batch token=****"));
+    assertThat(output.getOut()).doesNotContain("probe-secret");
   }
 
   @Test

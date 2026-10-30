@@ -191,6 +191,22 @@ class WorkerTaskLeaseRenewerTest {
     verify(client, never()).renewLeasesBatch(anyList());
   }
 
+  @Test
+  @DisplayName("最后租约移除后半开检查解除熔断, 允许发件箱独立恢复")
+  void shouldReleaseCircuit_whenLastLeaseRemoved() {
+    ActiveTaskLeaseRegistry.ActiveTaskLease lease = lease("t1", "100", "w1");
+    when(registry.snapshot()).thenReturn(List.of(lease));
+    when(client.renewLeasesBatch(anyList())).thenThrow(new IllegalStateException("offline"));
+    renewer.renewActiveTaskLeases();
+    assertThat(renewer.isRenewCircuitOpen()).isTrue();
+    when(registry.snapshot()).thenReturn(List.of());
+
+    renewer.renewActiveTaskLeases();
+
+    assertThat(renewer.isRenewCircuitOpen()).isFalse();
+    verify(client, times(1)).renewLeasesBatch(anyList());
+  }
+
   private static ActiveTaskLeaseRegistry.ActiveTaskLease lease(
       String tenantId, String taskId, String workerId) {
     return new ActiveTaskLeaseRegistry.ActiveTaskLease(taskId, tenantId, workerId, null);

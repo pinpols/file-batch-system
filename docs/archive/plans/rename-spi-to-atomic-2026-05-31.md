@@ -1,3 +1,5 @@
+> 历史原始记录：本轮恢复保留，正文中的结论、参数、状态和操作步骤仅适用于原日期/基线。提炼方法不替代原始证据；当前事实须按[文档治理](../../standards/document-governance.md)重新核实。本轮未执行原测试或扫描。
+
 # 重命名计划:`batch-worker-spi` → `batch-worker-atomic`(spi → atomic)
 
 > 2026-05-31 立。目标:把"那个跑 sql/stored-proc/http 原子任务的 worker"从机制名 `spi` 改成能力名 `atomic`。

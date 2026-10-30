@@ -7,7 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 等此状态转换事务提交后再重放 DAG，避免子事务 */
+/** 持有平台库实例围栏并确认候选已被当前代际替换后，调用业务库执行观测或回收。 */
 @Service
 @RequiredArgsConstructor
 public class ProcessStagingGenerationCleanupFence {
@@ -21,9 +21,7 @@ public class ProcessStagingGenerationCleanupFence {
       return 0;
     }
 
-    // 等待当前请求事务释放实例锁，再确认 staging generation 仍可安全清理。
-    // 与 TaskOutcomeDagProgressor 保持一致：终态结果必须先完成 DAG 推进，避免
-    // 状态收敛与代际清理交错执行。
+    // 持有实例围栏直到业务库操作结束，避免当前代际在核对后被并发切换。
     return businessCleanup.sealAndDelete(candidate, batchSize);
   }
 
@@ -44,7 +42,7 @@ public class ProcessStagingGenerationCleanupFence {
     }
     platformMapper.acquireInstanceFence(candidate.getTenantId(), instanceId);
 
-    // 触发的分支，避免运维人员跳过节点后条件/失败分支不可见。
+    // 围栏内重新读取任务的当前代际；不能确认当前代际时不回收。
     String currentGeneration = platformMapper.selectTaskCurrentStagingGeneration(
         candidate.getTenantId(), candidate.getTaskId());
     if (EmptyChecks.isNull(currentGeneration) || EmptyChecks.isBlank(currentGeneration)) {

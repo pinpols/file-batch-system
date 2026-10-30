@@ -28,7 +28,7 @@ INSERT INTO batch.trigger_request (id, tenant_id, request_id, workflow_definitio
 UPDATE batch.trigger_request
 SET launch_payload = jsonb_build_object('params', jsonb_build_object('metadata',
     jsonb_build_object('runId', CASE WHEN id IN (1, 2) THEN 'metrics-run' ELSE 'metrics-run-child' END)));
--- A real child launch inherits the runId but has no Workflow definition of its own.
+-- 真实的子任务启动会继承 runId，但自身没有对应的 Workflow 定义。
 INSERT INTO batch.trigger_request (id,tenant_id,request_id,workflow_definition_id,biz_date,launch_payload)
 VALUES (5,'tenant-a','metrics-owned-child',NULL,'2026-10-18',
 '{"params":{"metadata":{"runId":"metrics-run"},"_parentWorkflowRunId":10}}');

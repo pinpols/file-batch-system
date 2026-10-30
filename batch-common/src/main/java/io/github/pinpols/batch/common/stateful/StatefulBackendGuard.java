@@ -8,10 +8,10 @@ import java.sql.SQLException;
 import javax.sql.DataSource;
 
 /**
- * Persists and validates the backend identity of a stateful pluggable feature.
+ * 持久化并校验有状态可插拔功能的后端身份。
  *
  * <p>The first deployment records a baseline. A later backend or location change requires a
- * non-reused cutover id; otherwise startup fails before the application becomes ready.
+ * 必须使用未复用的切换 ID，否则应用就绪前启动会失败。
  */
 public final class StatefulBackendGuard {
 
@@ -84,7 +84,7 @@ public final class StatefulBackendGuard {
     }
 
     long generation = current.generation() + 1L;
-    try (PreparedStatement statement = connection.prepareStatement("""
+    String updateBindingSql = """
             UPDATE batch.stateful_backend_binding
                SET backend = ?,
                    backend_identity = ?,
@@ -93,7 +93,8 @@ public final class StatefulBackendGuard {
                    updated_by = ?,
                    updated_at = CURRENT_TIMESTAMP
              WHERE feature_key = ?
-            """)) {
+            """;
+    try (PreparedStatement statement = connection.prepareStatement(updateBindingSql)) {
       statement.setString(1, desired.backend());
       statement.setString(2, desired.backendIdentity());
       statement.setLong(3, generation);
@@ -107,11 +108,12 @@ public final class StatefulBackendGuard {
   }
 
   private void insertBaseline(Connection connection, DesiredBackend desired) throws SQLException {
-    try (PreparedStatement statement = connection.prepareStatement("""
+    String insertBindingSql = """
             INSERT INTO batch.stateful_backend_binding
                 (feature_key, backend, backend_identity, generation, updated_by)
             VALUES (?, ?, ?, 0, ?)
-            """)) {
+            """;
+    try (PreparedStatement statement = connection.prepareStatement(insertBindingSql)) {
       statement.setString(1, desired.featureKey());
       statement.setString(2, desired.backend());
       statement.setString(3, desired.backendIdentity());
@@ -128,13 +130,14 @@ public final class StatefulBackendGuard {
       long generation,
       String action)
       throws SQLException {
-    try (PreparedStatement statement = connection.prepareStatement("""
+    String insertHistorySql = """
             INSERT INTO batch.stateful_backend_cutover_history
                 (feature_key, generation, action,
                  previous_backend, previous_backend_identity,
                  target_backend, target_backend_identity, cutover_id, changed_by)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """)) {
+            """;
+    try (PreparedStatement statement = connection.prepareStatement(insertHistorySql)) {
       statement.setString(1, desired.featureKey());
       statement.setLong(2, generation);
       statement.setString(3, action);
@@ -150,12 +153,13 @@ public final class StatefulBackendGuard {
 
   private CurrentBinding selectCurrent(Connection connection, String featureKey)
       throws SQLException {
-    try (PreparedStatement statement = connection.prepareStatement("""
+    String selectBindingSql = """
             SELECT backend, backend_identity, generation
               FROM batch.stateful_backend_binding
              WHERE feature_key = ?
              FOR UPDATE
-            """)) {
+            """;
+    try (PreparedStatement statement = connection.prepareStatement(selectBindingSql)) {
       statement.setString(1, featureKey);
       try (ResultSet resultSet = statement.executeQuery()) {
         if (!resultSet.next()) {
@@ -171,11 +175,12 @@ public final class StatefulBackendGuard {
 
   private boolean cutoverIdWasUsed(Connection connection, String featureKey, String cutoverId)
       throws SQLException {
-    try (PreparedStatement statement = connection.prepareStatement("""
+    String selectCutoverSql = """
             SELECT 1
               FROM batch.stateful_backend_cutover_history
              WHERE feature_key = ? AND cutover_id = ?
-            """)) {
+            """;
+    try (PreparedStatement statement = connection.prepareStatement(selectCutoverSql)) {
       statement.setString(1, featureKey);
       statement.setString(2, cutoverId);
       try (ResultSet resultSet = statement.executeQuery()) {
@@ -185,8 +190,8 @@ public final class StatefulBackendGuard {
   }
 
   private void lockFeature(Connection connection, String featureKey) throws SQLException {
-    try (PreparedStatement statement =
-        connection.prepareStatement("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))")) {
+    String lockFeatureSql = "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))";
+    try (PreparedStatement statement = connection.prepareStatement(lockFeatureSql)) {
       statement.setString(1, featureKey);
       statement.execute();
     }

@@ -51,6 +51,27 @@ PAUSED worker stops claiming without leaving its consumer group; clearing the
 pause gate resumes polling. `run(in_flight, keep_running)` remains available for
 workers that do not need an external platform-pause gate.
 
+## 实际执行入口确认
+
+Rust 的 `MessageHandler` 由宿主自定义。启用 `http` 或 `kafka` 特性后，在 CLAIM 成功并将权威响应应用到 `TaskContext` 后，使用 `client::execute_after_start_confirmation` 包裹实际业务调用；不能在消费入队或等待名额时提前确认。
+
+```rust,no_run
+use batch_worker_sdk::client::{
+    execute_after_start_confirmation, ExecutionStartError, ExecutionStartOutcome,
+    TaskContext, TaskHandler, TaskResult, Transport,
+};
+
+fn execute_claimed<T: Transport, H: TaskHandler>(
+    transport: &T, handler: &H, context: &TaskContext, worker_code: &str,
+) -> Result<ExecutionStartOutcome<TaskResult>, ExecutionStartError> {
+    execute_after_start_confirmation(transport, context, worker_code, || {
+        handler.execute(context)
+    })
+}
+```
+
+该入口通过原续租端点发送当前租户、Worker、invocation 和 `details.executionStarted=true`，仅在确认成功后执行闭包；取消结果不调用闭包，租约拒绝、传输失败或无效响应返回 `ExecutionStartError`。宿主遇到该错误应保留原租约恢复流程，不发送伪造的业务失败回报。该计时信号不代替非幂等外部副作用开始标记，也不授权 Replay。
+
 ## P1 retry / idempotency
 
 The runtime stays thin: retry and idempotency are explicit handler wrappers, not

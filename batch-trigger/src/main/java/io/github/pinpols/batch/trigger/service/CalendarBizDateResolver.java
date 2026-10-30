@@ -5,9 +5,14 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.support.CalendarBizDateDefinition;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.time.zone.ZoneOffsetTransition;
+import java.time.zone.ZoneRules;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
@@ -20,8 +25,8 @@ import org.springframework.stereotype.Component;
  *
  * <ol>
  *   <li>以日历时区（缺省 fallbackZoneId）将 fireTime 转为本地日期和本地时间。
- *   <li>若 localTime {@code <} cutoffTime（默认 06:00）→ rawBizDate = 昨天；否则 = 今天。 例：02:00
- *       触发时，业务上仍属前一天的批处理批次。
+ *   <li>在当日日切实际时间点（默认本地 06:00）之前归昨天，否则归今天；夏令时重复日切取第一次，
+ *       缺失日切取跳时后的首个有效时间点，避免业务日期在回拨期间倒退。
  *   <li>若 rawBizDate 是节假日，按 {@code holidayRollRule} 调整： {@code SKIP} → 返回 {@code null}（调用方跳过本次调度）；
  *       {@code PREV_WORKDAY} / {@code NEXT_WORKDAY} → 向前/后搜索最近工作日（上限 365 天）。
  *   <li>{@code workdayOverrides} 可将节假日强制转为工作日（优先级高于 holidays）。
@@ -53,11 +58,24 @@ public class CalendarBizDateResolver {
       return zonedFireTime.toLocalDate();
     }
     LocalDate localDate = zonedFireTime.toLocalDate();
-    LocalTime localTime = zonedFireTime.toLocalTime();
     LocalTime cutoffTime = resolveCutoffTime(calendar);
-    boolean cutoffHasNotBeenReached = localTime.isBefore(cutoffTime);
+    Instant cutoffInstant = resolveCutoffInstant(localDate, cutoffTime, zoneId);
+    boolean cutoffHasNotBeenReached = fireTime.isBefore(cutoffInstant);
     LocalDate rawBizDate = cutoffHasNotBeenReached ? localDate.minusDays(1) : localDate;
     return adjustForHoliday(rawBizDate, calendar);
+  }
+
+  /** 重复时段只切换一次；日切落在跳时缺口时沿用首个有效本地时刻的边界。 */
+  private Instant resolveCutoffInstant(LocalDate date, LocalTime cutoff, ZoneId zoneId) {
+    LocalDateTime localCutoff = date.atTime(cutoff);
+    ZoneRules rules = zoneId.getRules();
+    List<ZoneOffset> offsets = rules.getValidOffsets(localCutoff);
+    if (EmptyChecks.isEmpty(offsets)) {
+      ZoneOffsetTransition transition = rules.getTransition(localCutoff);
+      return transition.getInstant();
+    }
+    // 重叠时 getValidOffsets 按较早偏移量在前返回，与既有首次日切语义一致。
+    return localCutoff.toInstant(offsets.getFirst());
   }
 
   private ZoneId resolveZoneId(ZoneId fallbackZoneId, CalendarBizDateDefinition calendar) {

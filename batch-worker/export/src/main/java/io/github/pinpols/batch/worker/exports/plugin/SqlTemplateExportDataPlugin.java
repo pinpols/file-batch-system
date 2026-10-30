@@ -67,7 +67,8 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
       ExportWorkerConfiguration workerConfiguration) {
     this.businessDataSource = businessDataSource;
     JdbcTemplate template = new JdbcTemplate(businessDataSource);
-    int configuredQueryTimeoutSeconds = EmptyChecks.isNull(security) ? 30 : security.getQueryTimeoutSeconds();
+    int configuredQueryTimeoutSeconds =
+        EmptyChecks.isNull(security) ? 30 : security.getQueryTimeoutSeconds();
     int effectiveQueryTimeoutSeconds = Math.max(1, configuredQueryTimeoutSeconds);
     template.setQueryTimeout(effectiveQueryTimeoutSeconds);
     this.jdbc = new NamedParameterJdbcTemplate(template);
@@ -129,8 +130,9 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     baseParams.put("region", regionFromSnapshot(context));
 
     // 首页（cursor == null）时执行 EXPLAIN 预检
-    boolean shouldRunExplainCheck =
-        EmptyChecks.isNull(cursor) && EmptyChecks.isNotNull(security) && security.isExplainCheckEnabled();
+    boolean shouldRunExplainCheck = EmptyChecks.isNull(cursor)
+        && EmptyChecks.isNotNull(security)
+        && security.isExplainCheckEnabled();
     if (shouldRunExplainCheck) {
       runExplainCheck(baseSql, baseParams, context);
     }
@@ -176,7 +178,8 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
 
   private NamedParameterJdbcTemplate namedJdbc(int fetchSize) {
     JdbcTemplate template = new JdbcTemplate(businessDataSource);
-    int configuredQueryTimeout = EmptyChecks.isNull(security) ? 30 : security.getQueryTimeoutSeconds();
+    int configuredQueryTimeout =
+        EmptyChecks.isNull(security) ? 30 : security.getQueryTimeoutSeconds();
     int effectiveQueryTimeout = Math.max(1, configuredQueryTimeout);
     template.setQueryTimeout(effectiveQueryTimeout);
     template.setFetchSize(fetchSize);
@@ -291,8 +294,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
       String upperBoundOperator = range.includeUpper() ? "<=" : "<";
       where.append("AND base.%s %s :__hiN%n".formatted(cursorIdent, upperBoundOperator));
     } else if (range != null && range.partitionCount() > 1) {
-      String partitionPredicate =
-          "WHERE ((hashtext(base.%s::text) %% %d) + %d) %% %d = %d%n"
+      String partitionPredicate = "WHERE ((hashtext(base.%s::text) %% %d) + %d) %% %d = %d%n"
           .formatted(
               cursorIdent,
               range.partitionCount(),

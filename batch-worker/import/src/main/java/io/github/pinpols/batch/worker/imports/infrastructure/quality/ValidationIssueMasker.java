@@ -99,6 +99,10 @@ public class ValidationIssueMasker {
       return ContentMaskingUtils.maskPlainText(text, ruleSet);
     }
     String serializedRawRecord = JsonUtils.toJson(raw);
-    return ContentMaskingUtils.maskPlainText(serializedRawRecord, ruleSet);
+    String masked = ContentMaskingUtils.maskPlainText(serializedRawRecord, ruleSet);
+    if (serializedRawRecord.startsWith("{") || serializedRawRecord.startsWith("[")) {
+      return JsonUtils.fromJson(masked, Object.class);
+    }
+    return masked;
   }
 }

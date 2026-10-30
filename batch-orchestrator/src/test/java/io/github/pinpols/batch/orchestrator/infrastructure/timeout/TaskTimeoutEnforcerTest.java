@@ -53,6 +53,7 @@ class TaskTimeoutEnforcerTest {
     t.setId(id);
     t.setTenantId(tenantId);
     t.setTaskTimeoutSeconds(60);
+    t.setVersion(0L);
     return t;
   }
 
@@ -75,7 +76,7 @@ class TaskTimeoutEnforcerTest {
 
     enforcer.enforce();
 
-    verify(jobTaskMapper, never()).requestCancel(anyString(), anyLong());
+    verify(jobTaskMapper, never()).requestCancelIfTimedOut(anyString(), anyLong(), anyLong());
   }
 
   @Test
@@ -85,13 +86,13 @@ class TaskTimeoutEnforcerTest {
     when(governance.timeout()).thenReturn(timeoutProps);
     when(jobTaskMapper.selectTaskTimeoutCandidates(anyInt()))
         .thenReturn(List.of(task(1L, "t1"), task(2L, "t1")));
-    when(jobTaskMapper.requestCancel("t1", 1L)).thenReturn(1);
-    when(jobTaskMapper.requestCancel("t1", 2L)).thenReturn(1);
+    when(jobTaskMapper.requestCancelIfTimedOut("t1", 1L, 0L)).thenReturn(1);
+    when(jobTaskMapper.requestCancelIfTimedOut("t1", 2L, 0L)).thenReturn(1);
 
     enforcer.enforce();
 
-    verify(jobTaskMapper).requestCancel("t1", 1L);
-    verify(jobTaskMapper).requestCancel("t1", 2L);
+    verify(jobTaskMapper).requestCancelIfTimedOut("t1", 1L, 0L);
+    verify(jobTaskMapper).requestCancelIfTimedOut("t1", 2L, 0L);
     assertThat(meterRegistry.counter("batch.task.timeout.cancel.total").count()).isEqualTo(2.0);
   }
 
@@ -108,12 +109,12 @@ class TaskTimeoutEnforcerTest {
           return 1;
         })
         .when(jobTaskMapper)
-        .requestCancel(anyString(), anyLong());
+        .requestCancelIfTimedOut(anyString(), anyLong(), anyLong());
 
     enforcer.enforce();
 
-    verify(jobTaskMapper).requestCancel("t1", 1L);
-    verify(jobTaskMapper).requestCancel("t2", 2L);
+    verify(jobTaskMapper).requestCancelIfTimedOut("t1", 1L, 0L);
+    verify(jobTaskMapper).requestCancelIfTimedOut("t2", 2L, 0L);
     assertThat(RlsTenantContextHolder.get()).isNull();
   }
 }

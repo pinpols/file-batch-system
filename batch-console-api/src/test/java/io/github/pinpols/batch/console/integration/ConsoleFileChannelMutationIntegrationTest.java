@@ -187,7 +187,7 @@ class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrat
         """;
     Long id = jdbcTemplate.queryForObject(findChannelIdSql, Long.class, code);
 
-    // act: PUT changing channelType to an unknown value → must reject
+    // 执行：PUT 请求将 channelType 改为未知值，服务必须拒绝。
     String updateBody =
         "{" + "\"tenantId\":\"int-fc-ta\"," + "\"channelType\":\"WEBHOOK_RAW\"" + "}";
     client

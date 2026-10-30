@@ -146,8 +146,8 @@ class OutboxPublishCircuitBreakerKafkaFailureIntegrationTest extends AbstractInt
       ScheduleForwarderResult failed = scheduleForwarder.advance(plan());
       assertThat(failed.totalFailures()).isGreaterThanOrEqualTo(1);
       assertStatus(event.getId(), OutboxPublishStatus.FAILED.code());
-      Integer failedRetryCount = jdbcTemplate.queryForObject(
-          failedOutboxRetryCountSql, Integer.class, event.getId());
+      Integer failedRetryCount =
+          jdbcTemplate.queryForObject(failedOutboxRetryCountSql, Integer.class, event.getId());
       assertThat(failedRetryCount).isEqualTo(1);
     } finally {
       KAFKA.getDockerClient().unpauseContainerCmd(KAFKA.getContainerId()).exec();
@@ -162,8 +162,8 @@ class OutboxPublishCircuitBreakerKafkaFailureIntegrationTest extends AbstractInt
     String outboxPublishAttemptSql = """
         select publish_attempt from batch.outbox_event where id = ?
     """;
-    Integer attempt = jdbcTemplate.queryForObject(
-        outboxPublishAttemptSql, Integer.class, event.getId());
+    Integer attempt =
+        jdbcTemplate.queryForObject(outboxPublishAttemptSql, Integer.class, event.getId());
     assertThat(attempt).isGreaterThanOrEqualTo(2);
     try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(Map.of(
         ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
@@ -195,8 +195,8 @@ class OutboxPublishCircuitBreakerKafkaFailureIntegrationTest extends AbstractInt
       });
     }
     scheduleForwarder.advance(plan());
-    Integer publishAttemptAfterRetry = jdbcTemplate.queryForObject(
-        outboxPublishAttemptSql, Integer.class, event.getId());
+    Integer publishAttemptAfterRetry =
+        jdbcTemplate.queryForObject(outboxPublishAttemptSql, Integer.class, event.getId());
     assertThat(publishAttemptAfterRetry).isEqualTo(attempt);
     String matchingOutboxEventCountSql = """
         select count(*) from batch.outbox_event where tenant_id = ? and event_key = ?

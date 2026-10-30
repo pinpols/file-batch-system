@@ -14,17 +14,22 @@ import io.github.pinpols.batch.orchestrator.application.service.governance.JobMo
 import io.github.pinpols.batch.orchestrator.application.service.governance.JobMonitoringAlertEmissionService.Violation;
 import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
 import io.github.pinpols.batch.orchestrator.domain.view.JobMonitoringAlertCandidate;
+import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
@@ -61,6 +66,12 @@ class JobMonitoringAlertEmissionRecoveryIntegrationTest extends AbstractIntegrat
   private AlertEventService alertEventService;
 
   @Autowired
+  private JobInstanceMapper jobInstanceMapper;
+
+  @Autowired
+  private PlatformTransactionManager transactionManager;
+
+  @Autowired
   JobMonitoringAlertEmissionRecoveryIntegrationTest(
       JdbcTemplate jdbcTemplate, JobMonitoringAlertEmissionService emissionService) {
     this.jdbcTemplate = jdbcTemplate;
@@ -71,12 +82,11 @@ class JobMonitoringAlertEmissionRecoveryIntegrationTest extends AbstractIntegrat
   @DisplayName("告警持久化失败回滚幂等 claim，恢复后只写入一次")
   void shouldRollbackClaimAndEmitOnceAfterPersistenceRecovery() {
     String tenantId = "monitor-alert-recovery-" + UUID.randomUUID().toString().replace("-", "");
-    long jobInstanceId = 9_000_001L;
+    long jobInstanceId = createRuntimeViolation(tenantId);
     Violation violation = Violation.RUNNING_TOO_LONG;
     JobMonitoringAlertCandidate candidate = candidate(tenantId, jobInstanceId);
     String resourceKey = Long.toString(jobInstanceId);
-    String fingerprint = io.github.pinpols.batch.common.utils.AlertFingerprints.build(
-        tenantId, violation.alertType(), resourceKey);
+    String fingerprint = AlertFingerprints.build(tenantId, violation.alertType(), resourceKey);
 
     try {
       doThrow(new IllegalStateException("injected alert persistence failure"))
@@ -95,10 +105,12 @@ class JobMonitoringAlertEmissionRecoveryIntegrationTest extends AbstractIntegrat
 
       assertThat(countClaims(tenantId, jobInstanceId, violation)).isEqualTo(1);
       assertThat(countAlerts(tenantId, violation, fingerprint)).isEqualTo(1);
-      assertThat(jobMonitoringMapper.claimAlert(tenantId, jobInstanceId, violation.name())).isZero();
+      assertThat(jobMonitoringMapper.claimAlert(tenantId, jobInstanceId, violation.name()))
+          .isZero();
     } finally {
       jdbcTemplate.update(DELETE_ALERTS_SQL, tenantId);
       jdbcTemplate.update(DELETE_CLAIMS_SQL, tenantId);
+      cleanupRuntimeFixture(tenantId);
       reset(alertEventService);
     }
   }
@@ -135,6 +147,77 @@ class JobMonitoringAlertEmissionRecoveryIntegrationTest extends AbstractIntegrat
       jdbcTemplate.update(DELETE_ALERTS_SQL, tenantId);
       jdbcTemplate.update(DELETE_CLAIMS_SQL, tenantId);
     }
+  }
+
+  @Test
+  @DisplayName("同实例事务繁忙时不等待且不声明幂等键，事务释放后下一轮可以发送")
+  void shouldSkipBusyInstanceAndEmitOnNextScan() throws Exception {
+    String tenantId = "monitor-lock-" + UUID.randomUUID().toString().replace("-", "");
+    long jobInstanceId = createRuntimeViolation(tenantId);
+    JobMonitoringAlertCandidate candidate = candidate(tenantId, jobInstanceId);
+    try (var executor = Executors.newSingleThreadExecutor()) {
+      var transaction = new TransactionTemplate(transactionManager);
+      transaction.executeWithoutResult(status -> {
+        jobMonitoringMapper.setTenantContext(tenantId);
+        jobInstanceMapper.acquireInstanceAdvisoryLock(tenantId, jobInstanceId);
+        var pending = executor.submit(() -> emit(candidate, Violation.RUNNING_TOO_LONG));
+        try {
+          assertThat(pending.get(5, TimeUnit.SECONDS)).isFalse();
+        } catch (Exception failure) {
+          throw new IllegalStateException("繁忙实例不应阻塞监控发送", failure);
+        }
+        assertThat(countClaims(tenantId, jobInstanceId, Violation.RUNNING_TOO_LONG))
+            .isZero();
+      });
+      assertThat(emit(candidate, Violation.RUNNING_TOO_LONG)).isTrue();
+      assertThat(countClaims(tenantId, jobInstanceId, Violation.RUNNING_TOO_LONG))
+          .isEqualTo(1);
+    } finally {
+      jdbcTemplate.update(DELETE_ALERTS_SQL, tenantId);
+      jdbcTemplate.update(DELETE_CLAIMS_SQL, tenantId);
+      cleanupRuntimeFixture(tenantId);
+    }
+  }
+
+  private long createRuntimeViolation(String tenantId) {
+    String insertDefinitionSql = """
+        insert into batch.job_definition (
+            tenant_id, job_code, job_name, job_type, schedule_type, timezone, trigger_mode)
+        values (?, 'MONITOR_ALERT_RECOVERY', '告警恢复验证', 'GENERAL', 'MANUAL', 'UTC', 'API')
+        returning id
+        """;
+    Long definitionId = jdbcTemplate.queryForObject(insertDefinitionSql, Long.class, tenantId);
+    String insertPolicySql = """
+        insert into batch.job_monitoring_policy (
+            tenant_id, job_definition_id, soft_runtime_seconds, soft_runtime_updated_at)
+        values (?, ?, 30, current_timestamp - interval '1 day')
+        """;
+    jdbcTemplate.update(insertPolicySql, tenantId, definitionId);
+    String insertInstanceSql = """
+        insert into batch.job_instance (
+            tenant_id, job_definition_id, job_code, instance_no, biz_date, trigger_type,
+            instance_status, dedup_key, started_at, execution_started_at, dry_run)
+        values (?, ?, 'MONITOR_ALERT_RECOVERY', ?, current_date, 'MANUAL', 'RUNNING', ?,
+            current_timestamp - interval '2 minutes', current_timestamp - interval '100 seconds', false)
+        returning id
+        """;
+    return jdbcTemplate.queryForObject(
+        insertInstanceSql, Long.class, tenantId, definitionId, tenantId, tenantId);
+  }
+
+  private void cleanupRuntimeFixture(String tenantId) {
+    String deleteInstancesSql = """
+        delete from batch.job_instance where tenant_id = ?
+        """;
+    String deletePoliciesSql = """
+        delete from batch.job_monitoring_policy where tenant_id = ?
+        """;
+    String deleteDefinitionsSql = """
+        delete from batch.job_definition where tenant_id = ?
+        """;
+    jdbcTemplate.update(deleteInstancesSql, tenantId);
+    jdbcTemplate.update(deletePoliciesSql, tenantId);
+    jdbcTemplate.update(deleteDefinitionsSql, tenantId);
   }
 
   private boolean emit(JobMonitoringAlertCandidate candidate, Violation violation) {

@@ -1,7 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service;
 
-import io.github.pinpols.batch.orchestrator.domain.param.RejectCommandDecisionParam;
-import io.github.pinpols.batch.orchestrator.domain.param.ApproveCommandDecisionParam;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -15,6 +13,8 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.application.service.governance.ApprovalWorkflowService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.DefaultApprovalWorkflowService;
 import io.github.pinpols.batch.orchestrator.domain.entity.ApprovalCommandEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.ApproveCommandDecisionParam;
+import io.github.pinpols.batch.orchestrator.domain.param.RejectCommandDecisionParam;
 import io.github.pinpols.batch.orchestrator.mapper.ApprovalCommandMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -150,6 +150,7 @@ class DefaultApprovalWorkflowServiceTest {
     existing.setPayloadJson("{}");
     existing.setRequesterId("op");
     existing.setApprovalReason("reason");
+    existing.setSourceApprovalReason("reason");
     when(approvalCommandMapper.selectByTenantAndSourceIdempotencyKey("t1", "idem"))
         .thenReturn(existing);
 
@@ -177,6 +178,7 @@ class DefaultApprovalWorkflowServiceTest {
     existing.setPayloadJson("{}");
     existing.setRequesterId("op");
     existing.setApprovalReason("reason");
+    existing.setSourceApprovalReason("reason");
     when(approvalCommandMapper.selectByTenantAndSourceIdempotencyKey("t1", "idem"))
         .thenReturn(existing);
 
@@ -245,7 +247,14 @@ class DefaultApprovalWorkflowServiceTest {
     when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-002"))
         .thenReturn(entity)
         .thenReturn(approved);
-    when(approvalCommandMapper.markApproved(ApproveCommandDecisionParam.builder().tenantId("t1").approvalNo("apr-002").approverId("approver-001").approvalReason("approved").approvedStatus(ApprovalCommandStatus.APPROVED.code()).pendingStatus(ApprovalCommandStatus.PENDING.code()).build()))
+    when(approvalCommandMapper.markApproved(ApproveCommandDecisionParam.builder()
+            .tenantId("t1")
+            .approvalNo("apr-002")
+            .approverId("approver-001")
+            .approvalReason("approved")
+            .approvedStatus(ApprovalCommandStatus.APPROVED.code())
+            .pendingStatus(ApprovalCommandStatus.PENDING.code())
+            .build()))
         .thenReturn(1);
 
     ApprovalWorkflowService.ApprovalRecord result =
@@ -277,7 +286,14 @@ class DefaultApprovalWorkflowServiceTest {
     when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-003"))
         .thenReturn(entity)
         .thenReturn(rejected);
-    when(approvalCommandMapper.markRejected(RejectCommandDecisionParam.builder().tenantId("t1").approvalNo("apr-003").approverId("approver-001").approvalReason("data incorrect").rejectedStatus(ApprovalCommandStatus.REJECTED.code()).pendingStatus(ApprovalCommandStatus.PENDING.code()).build()))
+    when(approvalCommandMapper.markRejected(RejectCommandDecisionParam.builder()
+            .tenantId("t1")
+            .approvalNo("apr-003")
+            .approverId("approver-001")
+            .approvalReason("data incorrect")
+            .rejectedStatus(ApprovalCommandStatus.REJECTED.code())
+            .pendingStatus(ApprovalCommandStatus.PENDING.code())
+            .build()))
         .thenReturn(1);
 
     ApprovalWorkflowService.ApprovalRecord result =

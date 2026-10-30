@@ -102,7 +102,8 @@ class ExportDataPluginRegistryTest {
     when(plugin.replayCapability(frozenConfig)).thenReturn(declaredCapability);
     ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of(plugin));
 
-    ReplayCapabilityDeclaration actualCapability = registry.replayCapability("SETTLEMENT", frozenConfig);
+    ReplayCapabilityDeclaration actualCapability =
+        registry.replayCapability("SETTLEMENT", frozenConfig);
 
     assertThat(actualCapability).isEqualTo(declaredCapability);
   }

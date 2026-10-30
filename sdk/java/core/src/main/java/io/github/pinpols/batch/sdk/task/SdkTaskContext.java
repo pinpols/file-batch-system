@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import lombok.Builder;
 
 /**
  * 任务执行上下文 — 由 SDK 框架从派单消息构造,传给 {@link SdkTaskHandler#execute(SdkTaskContext)}。
@@ -34,6 +35,7 @@ import java.util.Objects;
  *     null-safe)
  * @param dependencyResultSnapshot Orchestrator 依赖门禁证据；使用结果前，消费者必须显式固定或校验读取版本。
  */
+@Builder
 public record SdkTaskContext(
     String tenantId,
     String jobCode,
@@ -314,7 +316,7 @@ public record SdkTaskContext(
     return cancellation.isCancelled();
   }
 
-  /** 本次任务是否为无业务副作用演练；平台属性优先，兼容旧调用方放在 parameters 的标记。 */
+  /** 本次任务是否为无业务副作用演练；运行属性或兼容参数任一为 true 即视为演练。 */
   public boolean isDryRun() {
     boolean runtimeDryRun = booleanAttribute(runtimeAttributes.get("dryRun"));
     if (runtimeDryRun) {

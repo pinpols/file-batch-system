@@ -47,7 +47,8 @@ public class CompleteStep implements ExportStageStep {
   @Override
   public ExportStageResult execute(ExportJobContext context) {
     // ADR-026: 演练模式不更新 file_record 状态 / 不写 audit。
-    Map<String, Object> dryRunAttributes = EmptyChecks.isNull(context) ? null : context.getAttributes();
+    Map<String, Object> dryRunAttributes =
+        EmptyChecks.isNull(context) ? null : context.getAttributes();
     boolean dryRun = DryRunGuard.fromAttributes(dryRunAttributes).isDryRun();
     if (dryRun) {
       return ExportStageResult.success(stage());

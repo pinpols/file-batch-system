@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -163,7 +164,8 @@ func createTopic(t *testing.T, broker, topic string) {
 	wait := time.Now().Add(15 * time.Second)
 	for time.Now().Before(wait) {
 		parts, err := conn.ReadPartitions(topic)
-		if err == nil && len(parts) > 0 {
+		// 新主题元数据可能先于分区 leader 生效; 等待可路由后再写入, 避免竞态误报。
+		if err == nil && len(parts) > 0 && parts[0].Leader.ID >= 0 && parts[0].Leader.Host != "" {
 			return
 		}
 		time.Sleep(300 * time.Millisecond)
@@ -193,7 +195,11 @@ func deleteTopic(broker, topic string) {
 // produce writes the given dispatch messages as JSON to the topic.
 func produce(t *testing.T, brokers []string, topic string, msgs ...client.TaskDispatchMessage) {
 	t.Helper()
+	// 每个测试写入器拥有自己的元数据缓存, 避免前一主题的全局缓存隐藏新建主题。
+	transport := &kgo.Transport{}
+	defer transport.CloseIdleConnections()
 	w := &kgo.Writer{
+		Transport:    transport,
 		Addr:         kgo.TCP(brokers...),
 		Topic:        topic,
 		Balancer:     &kgo.LeastBytes{},
@@ -214,4 +220,75 @@ func produce(t *testing.T, brokers []string, topic string, msgs ...client.TaskDi
 	if err := w.WriteMessages(ctx, records...); err != nil {
 		t.Fatalf("produce: %v", err)
 	}
+}
+
+// 独立主题上的真实 Kafka 背压回归: 已拉取的第二条不得被后续提交跨过。
+func TestWorkerBackpressureRetainsKafkaRecord(t *testing.T) {
+	bootstrap := os.Getenv("BATCH_SDK_KAFKA_BOOTSTRAP")
+	if bootstrap == "" {
+		t.Skip("BATCH_SDK_KAFKA_BOOTSTRAP not set")
+	}
+	brokers := strings.Split(bootstrap, ",")
+	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
+	workerCode := "backpressure-" + suffix
+	topic := "batch.task.dispatch.http.node." + workerCode
+	createTopic(t, brokers[0], topic)
+	t.Cleanup(func() { deleteTopic(brokers[0], topic) })
+	logger := log.New(io.Discard, "", 0)
+	consumer, err := NewConsumer(Config{Brokers: brokers, TenantID: "acme", WorkerCode: workerCode, FetchMaxWait: 100 * time.Millisecond, Logger: logger})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(consumer.Close)
+	platform := client.NewFakePlatform()
+	releaseFirst := make(chan struct{})
+	handler := client.HandlerFunc(func(ctx *client.TaskContext) client.TaskResult {
+		if ctx.TaskID == "first" {
+			<-releaseFirst
+		}
+		return client.Success(nil, "done")
+	})
+	worker := client.NewWorker(client.Config{TenantID: "acme", WorkerCode: workerCode,
+		MaxConcurrentTasks: 1, HeartbeatInterval: time.Hour, LeaseRenewInterval: time.Hour,
+		StopTimeout: time.Second}, platform, consumer, handler, nil, logger)
+	t.Cleanup(func() { worker.Stop(time.Second) })
+	t.Cleanup(func() {
+		select {
+		case <-releaseFirst:
+		default:
+			close(releaseFirst)
+		}
+	})
+	produce(t, brokers, topic,
+		client.TaskDispatchMessage{TaskID: "first", TenantID: "acme", SchemaVersion: "v2"},
+		client.TaskDispatchMessage{TaskID: "deferred", TenantID: "acme", SchemaVersion: "v2"},
+		client.TaskDispatchMessage{TaskID: "later", TenantID: "acme", SchemaVersion: "v2"})
+	if err := worker.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(20 * time.Second)
+	paused := false
+	for time.Now().Before(deadline) {
+		consumer.mu.Lock()
+		paused = consumer.paused
+		consumer.mu.Unlock()
+		if paused {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !paused {
+		t.Fatal("expected capacity pause while first task occupies the only slot")
+	}
+	close(releaseFirst)
+	deadline = time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		_, deferred := platform.ReportFor("deferred")
+		_, later := platform.ReportFor("later")
+		if deferred && later {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("all fetched Kafka records must be claimed, executed and reported after resume")
 }

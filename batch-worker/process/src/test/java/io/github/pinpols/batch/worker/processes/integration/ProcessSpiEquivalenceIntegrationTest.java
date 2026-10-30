@@ -2,16 +2,16 @@ package io.github.pinpols.batch.worker.processes.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutorRegistry;
-import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
 import io.github.pinpols.batch.worker.processes.BatchWorkerProcessApplication;
 import io.github.pinpols.batch.worker.processes.infrastructure.ProcessStepExecutionAdapter;
 import io.github.pinpols.batch.worker.processes.infrastructure.ProcessTaskExecutor;
-import io.github.pinpols.batch.worker.processes.stage.DefaultProcessStageExecutor;
 import io.github.pinpols.batch.worker.processes.sql.SqlTransformComputePlugin;
+import io.github.pinpols.batch.worker.processes.stage.DefaultProcessStageExecutor;
 import java.lang.reflect.Field;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

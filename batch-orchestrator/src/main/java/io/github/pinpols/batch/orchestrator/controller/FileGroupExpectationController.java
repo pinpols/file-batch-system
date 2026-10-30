@@ -2,12 +2,16 @@ package io.github.pinpols.batch.orchestrator.controller;
 
 import io.github.pinpols.batch.orchestrator.application.service.batchday.FileGroupExpectationService;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.FileGroupExpectationService.DefinitionRequest;
+import io.github.pinpols.batch.orchestrator.domain.query.FileGroupUploadTarget;
 import java.time.LocalTime;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 周期性文件组预期内部配置端点。 */
@@ -17,6 +21,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class FileGroupExpectationController {
 
   private final FileGroupExpectationService expectationService;
+
+  @GetMapping("/upload-targets")
+  public List<FileGroupUploadTarget> listUploadTargets(@RequestParam String tenantId) {
+    return expectationService.listEnabledUploadTargets(tenantId);
+  }
 
   @PutMapping
   public ConfigureResponse configure(@RequestBody ConfigureRequest request) {

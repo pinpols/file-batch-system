@@ -132,18 +132,18 @@ class JobPushProcessRecoveryE2eIT extends AbstractIntegrationTest {
   @DisplayName("真实 IMPORT 到 Job Kafka 和加密 Push，在途强杀后原义务自然转人工核对")
   void shouldRequireManualReconciliation_whenConsoleDiesAfterProviderReceivesRequest()
       throws Exception {
-        final String insertTenantSql = """
+    final String insertTenantSql = """
             insert into batch.tenant (tenant_id,tenant_name,status,created_by)\s\
             values (?,?,'ACTIVE','push-process-test') on conflict (tenant_id) do nothing
         """;
-        final String updateJobDefinitionSql = """
+    final String updateJobDefinitionSql = """
             update batch.job_definition set default_params=?::jsonb where tenant_id=? and job_code=?
         """;
-        final String insertConsolePushSubscriptionSql = """
+    final String insertConsolePushSubscriptionSql = """
         insert into batch.console_push_subscription (tenant_id,username,endpoint,p256dh_key,auth_secret)
         values (?,?,?,?,?)
         """;
-        final String selectJobInstanceIdSql = """
+    final String selectJobInstanceIdSql = """
             select n.job_instance_id from batch.workflow_node_run n\s\
             join batch.workflow_run r on r.id=n.workflow_run_id where r.tenant_id=? and r.id=?\s\
             and n.node_code='JOB'
@@ -160,10 +160,7 @@ class JobPushProcessRecoveryE2eIT extends AbstractIntegrationTest {
 
     // 模拟外部服务接收加密请求，但不返回 ACK。
     // 共享旧版 E2E Job 夹具使用 t1，但不会创建对应的租户登记行。
-    int registered = jdbc.update(
-        insertTenantSql,
-        TENANT,
-        TENANT);
+    int registered = jdbc.update(insertTenantSql, TENANT, TENANT);
     var seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbc, TENANT, "IMPORT", "import", TriggerType.API);
     String customer = "PUSH" + Long.toUnsignedString(System.nanoTime());
@@ -187,11 +184,7 @@ class JobPushProcessRecoveryE2eIT extends AbstractIntegrationTest {
         "CUSTOMER",
         "content",
         content));
-    jdbc.update(
-        updateJobDefinitionSql,
-        parameters,
-        TENANT,
-        seed.jobCode());
+    jdbc.update(updateJobDefinitionSql, parameters, TENANT, seed.jobCode());
     var deviceKeys = keyPair();
     jdbc.update(
         insertConsolePushSubscriptionSql,
@@ -219,11 +212,7 @@ class JobPushProcessRecoveryE2eIT extends AbstractIntegrationTest {
           .isTrue();
       first.kill();
       RELEASE_RESPONSE.countDown();
-      long job = jdbc.queryForObject(
-          selectJobInstanceIdSql,
-          Long.class,
-          TENANT,
-          run);
+      long job = jdbc.queryForObject(selectJobInstanceIdSql, Long.class, TENANT, run);
       String eventKey = TENANT + ":job:" + job + ":terminal:SUCCESS";
       var interrupted = deviceRow(eventKey);
       assertThat(interrupted.get("delivery_status")).isEqualTo("IN_FLIGHT");
@@ -272,18 +261,9 @@ class JobPushProcessRecoveryE2eIT extends AbstractIntegrationTest {
     } finally {
       RELEASE_RESPONSE.countDown();
       for (Child child : children) child.close();
-      jdbc.update(
-          deleteConsolePushJobDeliverySql,
-          TENANT,
-          USER);
-      jdbc.update(
-          deleteConsolePushSubscriptionSql,
-          TENANT,
-          USER);
-      if (registered == 1)
-        jdbc.update(
-            deleteTenantSql,
-            TENANT);
+      jdbc.update(deleteConsolePushJobDeliverySql, TENANT, USER);
+      jdbc.update(deleteConsolePushSubscriptionSql, TENANT, USER);
+      if (registered == 1) jdbc.update(deleteTenantSql, TENANT);
     }
   }
 
@@ -293,10 +273,7 @@ class JobPushProcessRecoveryE2eIT extends AbstractIntegrationTest {
         and record_type='DEVICE'
     """;
 
-    return jdbc.queryForMap(
-        selectStatementSql,
-        TENANT,
-        key);
+    return jdbc.queryForMap(selectStatementSql, TENANT, key);
   }
 
   private void assertBusinessAndIntake(long run, long job, String customer, String key) {

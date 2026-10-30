@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.sensor;
 
-import io.github.pinpols.batch.orchestrator.domain.query.SensorFileArrivalLatestArrivalQuery;
-
-
 import io.github.pinpols.batch.common.enums.SensorType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -12,6 +9,8 @@ import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorCon
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorPolicy;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorProbeResult;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorSpecs;
+import io.github.pinpols.batch.orchestrator.domain.query.SensorFileArrivalLatestArrivalQuery;
+import io.github.pinpols.batch.orchestrator.domain.view.SensorFileArrivalView;
 import io.github.pinpols.batch.orchestrator.mapper.SensorFileArrivalMapper;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -69,8 +68,7 @@ public class FileArrivalSensorPolicy implements SensorPolicy {
         !Texts.hasText(pattern) || maxAgeSeconds == null || maxAgeSeconds <= 0;
     if (fileArrivalFreshnessCheckIsUnavailable) {
       return SensorProbeResult.error(
-          SENSOR_SPEC_INVALID,
-          List.of(SENSOR_TYPE_CODE, "pattern/maxAgeSeconds required"));
+          SENSOR_SPEC_INVALID, List.of(SENSOR_TYPE_CODE, "pattern/maxAgeSeconds required"));
     }
 
     String configuredBizDate = SensorSpecs.string(spec, "bizDate");
@@ -83,8 +81,7 @@ public class FileArrivalSensorPolicy implements SensorPolicy {
         bindWorkflowBizDate ? Objects.toString(ctx.workflowRunVars().get("bizDate"), null) : null;
     if (bindWorkflowBizDate && !Texts.hasText(workflowBizDate)) {
       return SensorProbeResult.error(
-          SENSOR_SPEC_INVALID,
-          List.of(SENSOR_TYPE_CODE, "Workflow run bizDate is required"));
+          SENSOR_SPEC_INVALID, List.of(SENSOR_TYPE_CODE, "Workflow run bizDate is required"));
     }
     LocalDate bizDate;
     try {
@@ -93,8 +90,7 @@ public class FileArrivalSensorPolicy implements SensorPolicy {
       bizDate = Texts.hasText(effectiveBizDate) ? LocalDate.parse(effectiveBizDate) : null;
     } catch (DateTimeParseException invalidDate) {
       return SensorProbeResult.error(
-          SENSOR_SPEC_INVALID,
-          List.of(SENSOR_TYPE_CODE, "bizDate must be ISO-8601"));
+          SENSOR_SPEC_INVALID, List.of(SENSOR_TYPE_CODE, "bizDate must be ISO-8601"));
     }
     if (requireCompleteGroup && !Texts.hasText(fileGroupCode)) {
       return SensorProbeResult.error(
@@ -114,28 +110,30 @@ public class FileArrivalSensorPolicy implements SensorPolicy {
           List.of(SENSOR_TYPE_CODE, "Workflow definition is required for a complete file group"));
     }
 
-    String sqlPattern = pattern.replace('*', '%');
+    // SQL LIKE 的通配符和转义符必须按字面处理,只有 sensor 的星号表示任意字符。
+    String sqlPattern =
+        pattern.replace("!", "!!").replace("%", "!%").replace("_", "!_").replace('*', '%');
     String sourceType = mapChannelToSourceType(SensorSpecs.string(spec, "channelCode"));
     OffsetDateTime since =
         BatchDateTimeSupport.utcNow().minusSeconds(maxAgeSeconds).atOffset(ZoneOffset.UTC);
 
     try {
-      SensorFileArrivalLatestArrivalQuery sensorFileArrivalLatestArrivalQuery = SensorFileArrivalLatestArrivalQuery.builder()
-          .tenantId(ctx.tenantId())
-          .namePattern(sqlPattern)
-          .sourceType(sourceType)
-          .since(since)
-          .bizDate(bizDate)
-          .fileGroupCode(fileGroupCode)
-          .workflowDefinitionId(ctx.workflowDefinitionId())
-          .requireCompleteGroup(requireCompleteGroup)
-          .build();
-      Map<String, Object> hit = mapper.selectLatestArrival(
-          sensorFileArrivalLatestArrivalQuery);
+      SensorFileArrivalLatestArrivalQuery sensorFileArrivalLatestArrivalQuery =
+          SensorFileArrivalLatestArrivalQuery.builder()
+              .tenantId(ctx.tenantId())
+              .namePattern(sqlPattern)
+              .sourceType(sourceType)
+              .since(since)
+              .bizDate(bizDate)
+              .fileGroupCode(fileGroupCode)
+              .workflowDefinitionId(ctx.workflowDefinitionId())
+              .requireCompleteGroup(requireCompleteGroup)
+              .build();
+      SensorFileArrivalView hit = mapper.selectLatestArrival(sensorFileArrivalLatestArrivalQuery);
       if (hit == null) {
         return SensorProbeResult.notYet();
       }
-      return SensorProbeResult.matched(hit);
+      return SensorProbeResult.matched(hit.toProbeOutput());
     } catch (Exception e) {
       log.warn(
           "FILE_ARRIVAL probe error tenant={} pattern={} err={}",

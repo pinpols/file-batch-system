@@ -101,8 +101,7 @@ public class BatchTaskExecutorRegistry {
       BatchTaskExecutor exec,
       String source) {
     String type = exec.taskType();
-    boolean taskTypeIsExcludedByEnabledFilter =
-        EmptyChecks.isNotNull(type)
+    boolean taskTypeIsExcludedByEnabledFilter = EmptyChecks.isNotNull(type)
         && !type.isBlank()
         && !enabledFilter.isEmpty()
         && !enabledFilter.contains(type);

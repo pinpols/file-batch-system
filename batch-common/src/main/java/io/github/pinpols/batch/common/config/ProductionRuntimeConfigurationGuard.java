@@ -11,7 +11,11 @@ import org.springframework.core.env.Environment;
 
 /** 阻止生产环境静默使用本地开发地址或不可发现的管理端口。 */
 @AutoConfiguration
-@EnableConfigurationProperties({StorageBackendProperties.class, ConsoleReadReplicaProperties.class})
+@EnableConfigurationProperties({
+  StorageBackendProperties.class,
+  ConsoleReadReplicaProperties.class,
+  KafkaNamespaceProperties.class
+})
 public class ProductionRuntimeConfigurationGuard implements SmartInitializingSingleton {
 
   private static final Pattern LOOPBACK_ENDPOINT =
@@ -30,14 +34,17 @@ public class ProductionRuntimeConfigurationGuard implements SmartInitializingSin
   private final Environment environment;
   private final StorageBackendProperties storageProperties;
   private final ConsoleReadReplicaProperties readReplicaProperties;
+  private final KafkaNamespaceProperties kafkaNamespaceProperties;
 
   public ProductionRuntimeConfigurationGuard(
       Environment environment,
       StorageBackendProperties storageProperties,
-      ConsoleReadReplicaProperties readReplicaProperties) {
+      ConsoleReadReplicaProperties readReplicaProperties,
+      KafkaNamespaceProperties kafkaNamespaceProperties) {
     this.environment = environment;
     this.storageProperties = storageProperties;
     this.readReplicaProperties = readReplicaProperties;
+    this.kafkaNamespaceProperties = kafkaNamespaceProperties;
   }
 
   @Override
@@ -48,7 +55,7 @@ public class ProductionRuntimeConfigurationGuard implements SmartInitializingSin
 
     REQUIRED_ENDPOINTS.forEach(this::requireRemoteEndpoint);
 
-    if (EmptyChecks.isBlank(environment.getProperty("batch.kafka.namespace"))) {
+    if (EmptyChecks.isBlank(kafkaNamespaceProperties.getNamespace())) {
       throw new IllegalStateException(
           "FATAL: production Kafka topic namespace must be explicitly configured: batch.kafka.namespace");
     }

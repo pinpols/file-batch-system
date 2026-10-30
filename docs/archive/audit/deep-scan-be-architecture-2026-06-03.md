@@ -1,3 +1,5 @@
+> 历史原始记录：本轮恢复保留，正文中的结论、参数、状态和操作步骤仅适用于原日期/基线。提炼方法不替代原始证据；当前事实须按[文档治理](../../standards/document-governance.md)重新核实。本轮未执行原测试或扫描。
+
 # BE 架构 + 维护性 深度扫描报告(2026-06-03)
 
 > **范围**:`batch-common` · `batch-trigger` · `batch-orchestrator` · `batch-worker-core/-import/-export/-process/-dispatch/-atomic` · `batch-console-api` 10 模块 + `docs/architecture/adr/` 39 份 ADR + `db/migration/V1..V165` + 测试基础设施。

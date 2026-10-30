@@ -1,21 +1,17 @@
 package io.github.pinpols.batch.worker.processes.stage;
 
-import io.github.pinpols.batch.worker.processes.domain.ProcessInvocationIdentity;
-
-
-import io.github.pinpols.batch.worker.processes.query.ProcessInvocationFenceCurrentInvocationIdQuery;
-
-
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
+import io.github.pinpols.batch.worker.processes.domain.ProcessInvocationIdentity;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
 import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocationFenceMapper;
+import io.github.pinpols.batch.worker.processes.query.ProcessInvocationFenceCurrentInvocationIdQuery;
 import java.util.Map;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
@@ -59,13 +55,14 @@ public class PlatformProcessInvocationFence implements ProcessInvocationFence {
     }
 
     mapper.acquireInstanceFence(tenantId, jobInstanceId);
-    ProcessInvocationFenceCurrentInvocationIdQuery processInvocationFenceCurrentInvocationIdQuery = ProcessInvocationFenceCurrentInvocationIdQuery.builder()
-        .tenantId(tenantId)
-        .taskId(taskId)
-        .jobInstanceId(jobInstanceId)
-        .jobPartitionId(jobPartitionId)
-        .workerId(workerId)
-        .build();
+    ProcessInvocationFenceCurrentInvocationIdQuery processInvocationFenceCurrentInvocationIdQuery =
+        ProcessInvocationFenceCurrentInvocationIdQuery.builder()
+            .tenantId(tenantId)
+            .taskId(taskId)
+            .jobInstanceId(jobInstanceId)
+            .jobPartitionId(jobPartitionId)
+            .workerId(workerId)
+            .build();
     String currentInvocationId =
         mapper.selectCurrentInvocationId(processInvocationFenceCurrentInvocationIdQuery);
     if (!invocationId.equals(currentInvocationId)) {

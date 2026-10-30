@@ -166,8 +166,8 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  @DisplayName("扫描候选后真实 Job 成功提交,旧 SLA 候选不能标记或产生告警")
-  void shouldRejectStaleSlaCandidateAfterJobCompleted() {
+  @DisplayName("扫描候选后真实 Job 超时完成,终态提交后仍补发旧 SLA 告警")
+  void shouldBackfillLateSlaViolationAfterJobCompleted() {
     final String selectVersionSql = """
         select version from batch.job_instance where tenant_id=? and id=?
     """;
@@ -180,18 +180,14 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
           .filter(row -> tenant.equals(row.getTenantId()) && row.getId().equals(id))
           .findFirst()
           .orElseThrow();
-      Long version = jdbcTemplate.queryForObject(
-          selectVersionSql,
-          Long.class,
-          tenant,
-          id);
+      Long version = jdbcTemplate.queryForObject(selectVersionSql, Long.class, tenant, id);
       assertThat(terminals.updateTerminalStatusAndReconcileChildren(
               new JobInstanceTerminalStatusCommand(tenant, id, "SUCCESS", Instant.now(), version)))
           .isEqualTo(1);
-      assertThat(violationProcessor.process(candidate, Instant.now())).isFalse();
-      assertThat(slaAlertedAt(tenant, id)).isNull();
-      assertThat(alertCount(tenant)).isZero();
-      assertThat(executionLogCount(tenant, id)).isZero();
+      assertThat(violationProcessor.process(candidate, Instant.now())).isTrue();
+      assertThat(slaAlertedAt(tenant, id)).isNotNull();
+      assertThat(alertCount(tenant)).isEqualTo(1);
+      assertThat(executionLogCount(tenant, id)).isEqualTo(2);
     } finally {
       cleanTenant(tenant);
     }
@@ -200,10 +196,10 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("dry-run 不进入正式 SLA 首次/升级扫描,旧候选也不能补写告警")
   void shouldExcludeDryRunFromSlaScanAndFinalClaim() {
-  final String updateJobInstanceSql = """
+    final String updateJobInstanceSql = """
       update batch.job_instance set dry_run=true where tenant_id=? and id=?
   """;
-  final String updateJobInstanceSql2 = """
+    final String updateJobInstanceSql2 = """
       update batch.job_instance set sla_alerted_at=current_timestamp-interval '1 hour' where tenant_id=?\s\
       and id=?
   """;
@@ -216,8 +212,7 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
           .filter(row -> tenant.equals(row.getTenantId()) && row.getId().equals(id))
           .findFirst()
           .orElseThrow();
-      jdbcTemplate.update(
-          updateJobInstanceSql, tenant, id);
+      jdbcTemplate.update(updateJobInstanceSql, tenant, id);
       assertThat(monitoring.selectSlaViolationCandidates(100))
           .extracting(JobInstanceEntity::getId)
           .doesNotContain(id);
@@ -227,10 +222,7 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
       assertThat(alertCount(tenant)).isZero();
       assertThat(executionLogCount(tenant, id)).isZero();
       // 写入持久化的根 Workflow 请求和子 Job 请求夹具，但不派发 Job。
-      jdbcTemplate.update(
-          updateJobInstanceSql2,
-          tenant,
-          id);
+      jdbcTemplate.update(updateJobInstanceSql2, tenant, id);
       assertThat(monitoring.selectSlaEscalationCandidates(Instant.now(), 100))
           .extracting(JobInstanceEntity::getId)
           .doesNotContain(id);
@@ -257,11 +249,7 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
           .findFirst()
           .orElseThrow();
       // 创建 Job、受管单作业 Workflow 和明确目标为 Workflow 的 Trigger 记录。
-      jdbcTemplate.update(
-          updateJobInstanceSql,
-          state.code(),
-          tenant,
-          id);
+      jdbcTemplate.update(updateJobInstanceSql, state.code(), tenant, id);
       boolean eligible = Set.of("WAITING", "READY", "RUNNING").contains(state.code());
       assertThat(violationProcessor.process(observed, Instant.now())).isEqualTo(eligible);
       assertThat(alertCount(tenant)).isEqualTo(eligible ? 1 : 0);
@@ -272,8 +260,8 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  @DisplayName("真实终态事务持行锁时 SLA 等待,提交 SUCCESS 后重新判定为无告警")
-  void shouldRejectSlaClaimAfterWaitingForTerminalCommit() throws Exception {
+  @DisplayName("真实终态事务持行锁时 SLA 等待,提交超时 SUCCESS 后补发告警")
+  void shouldBackfillLateSlaViolationAfterWaitingForTerminalCommit() throws Exception {
     final String selectVersionSql = """
         select version from batch.job_instance where tenant_id=? and id=?
     """;
@@ -295,11 +283,7 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
           .filter(row -> tenant.equals(row.getTenantId()))
           .findFirst()
           .orElseThrow();
-      Long version = jdbcTemplate.queryForObject(
-          selectVersionSql,
-          Long.class,
-          tenant,
-          id);
+      Long version = jdbcTemplate.queryForObject(selectVersionSql, Long.class, tenant, id);
       Future<?> terminal = executor.submit(() -> new TransactionTemplate(transactions)
           .executeWithoutResult(status -> {
             assertThat(terminals.updateTerminalStatusAndReconcileChildren(
@@ -317,26 +301,23 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
       assertThat(terminalWritten.await(10, TimeUnit.SECONDS)).isTrue();
       Future<Boolean> sla =
           executor.submit(() -> new TransactionTemplate(transactions).execute(status -> {
-            jdbcTemplate.queryForObject(
-                selectSetConfigSql, String.class, application);
+            jdbcTemplate.queryForObject(selectSetConfigSql, String.class, application);
             return violationProcessor.process(observed, Instant.now());
           }));
       try {
-        await()
-            .atMost(Duration.ofSeconds(10))
-            .untilAsserted(() -> {
-              Integer selectedPgStatActivityCount =
-                  jdbcTemplate.queryForObject(selectCountSql, Integer.class, application);
-              assertThat(selectedPgStatActivityCount).isEqualTo(1);
-            });
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+          Integer selectedPgStatActivityCount =
+              jdbcTemplate.queryForObject(selectCountSql, Integer.class, application);
+          assertThat(selectedPgStatActivityCount).isEqualTo(1);
+        });
       } finally {
         releaseCommit.countDown();
       }
       terminal.get(15, TimeUnit.SECONDS);
-      assertThat(sla.get(15, TimeUnit.SECONDS)).isFalse();
-      assertThat(slaAlertedAt(tenant, id)).isNull();
-      assertThat(alertCount(tenant)).isZero();
-      assertThat(executionLogCount(tenant, id)).isZero();
+      assertThat(sla.get(15, TimeUnit.SECONDS)).isTrue();
+      assertThat(slaAlertedAt(tenant, id)).isNotNull();
+      assertThat(alertCount(tenant)).isEqualTo(1);
+      assertThat(executionLogCount(tenant, id)).isEqualTo(2);
     } finally {
       releaseCommit.countDown();
       cleanTenant(tenant);
@@ -346,17 +327,17 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("SLA 升级用当前实体:正常运行可发,已完成或 dry-run 的旧候选不可发")
   void shouldRecheckCurrentJobBeforeEscalation() {
-  final String updateJobInstanceSql = """
+    final String updateJobInstanceSql = """
       update batch.job_instance set sla_alerted_at=current_timestamp-interval '1 hour' where tenant_id=?\s\
       and id=?
   """;
-  final String deleteAlertEventSql = """
+    final String deleteAlertEventSql = """
       delete from batch.alert_event where tenant_id=?
   """;
-  final String updateJobInstanceSql2 = """
+    final String updateJobInstanceSql2 = """
       update batch.job_instance set dry_run=true where tenant_id=? and id=?
   """;
-  final String updateJobInstanceSql3 = """
+    final String updateJobInstanceSql3 = """
       update batch.job_instance set dry_run=false where tenant_id=? and id=?
   """;
     final String selectVersionSql = """
@@ -367,10 +348,7 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
     long definition = insertDefinition(tenant);
     long id = insertOverdueInstance(tenant, definition);
     try {
-      jdbcTemplate.update(
-          updateJobInstanceSql,
-          tenant,
-          id);
+      jdbcTemplate.update(updateJobInstanceSql, tenant, id);
       JobInstanceEntity observed =
           monitoring.selectSlaEscalationCandidates(Instant.now(), 100).stream()
               .filter(row -> tenant.equals(row.getTenantId()))
@@ -380,17 +358,11 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
           .isTrue();
       assertThat(escalationCount(tenant)).isEqualTo(1);
       jdbcTemplate.update(deleteAlertEventSql, tenant);
-      jdbcTemplate.update(
-          updateJobInstanceSql2, tenant, id);
+      jdbcTemplate.update(updateJobInstanceSql2, tenant, id);
       assertThat(violationProcessor.processEscalation(observed, Instant.now(), 300, "ERROR"))
           .isFalse();
-      jdbcTemplate.update(
-          updateJobInstanceSql3, tenant, id);
-      Long version = jdbcTemplate.queryForObject(
-          selectVersionSql,
-          Long.class,
-          tenant,
-          id);
+      jdbcTemplate.update(updateJobInstanceSql3, tenant, id);
+      Long version = jdbcTemplate.queryForObject(selectVersionSql, Long.class, tenant, id);
       assertThat(terminals.updateTerminalStatusAndReconcileChildren(
               new JobInstanceTerminalStatusCommand(tenant, id, "SUCCESS", Instant.now(), version)))
           .isEqualTo(1);
@@ -435,7 +407,8 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
           returning id
           """;
 
-    return jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, tenantId, "SLA_RECOVERY_" + tenantId);
+    return jdbcTemplate.queryForObject(
+        insertJobDefinitionSql, Long.class, tenantId, "SLA_RECOVERY_" + tenantId);
   }
 
   private long insertOverdueInstance(String tenantId, long definitionId) {
@@ -461,7 +434,7 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
 
   private void createAlertInsertFailureTrigger(
       String tenantId, String triggerName, String functionName) {
-        final String createFunctionSql = """
+    final String createFunctionSql = """
     create function batch.%s() returns trigger language plpgsql as $$
     begin
     if new.tenant_id = '%s' and new.alert_type = 'JOB_SLA_VIOLATION' then
@@ -471,12 +444,12 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
     end
     $$
     """.formatted(functionName, tenantId);
-        jdbcTemplate.execute(createFunctionSql);
-        final String createTriggerSql = """
+    jdbcTemplate.execute(createFunctionSql);
+    final String createTriggerSql = """
     create trigger %s before insert or update on batch.alert_event
     for each row execute function batch.%s()
     """.formatted(triggerName, functionName);
-        jdbcTemplate.execute(createTriggerSql);
+    jdbcTemplate.execute(createTriggerSql);
   }
 
   private void dropAlertInsertFailureTrigger(String triggerName, String functionName) {
@@ -526,10 +499,7 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
     """;
 
     return jdbcTemplate.queryForObject(
-        selectSlaAlertedAtSql,
-        Timestamp.class,
-        tenantId,
-        instanceId);
+        selectSlaAlertedAtSql, Timestamp.class, tenantId, instanceId);
   }
 
   private int executionLogCount(String tenantId, long instanceId) {
@@ -537,11 +507,7 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
         select count(*) from batch.job_execution_log where tenant_id = ? and job_instance_id = ?
     """;
 
-    return jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        tenantId,
-        instanceId);
+    return jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId, instanceId);
   }
 
   private int escalationCount(String tenant) {
@@ -549,10 +515,7 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
         select count(*) from batch.alert_event where tenant_id=? and alert_type='JOB_SLA_VIOLATION_ESCALATED'
     """;
 
-    return jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        tenant);
+    return jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenant);
   }
 
   private int alertCount(String tenantId) {
@@ -560,9 +523,6 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
         select count(*) from batch.alert_event where tenant_id = ? and alert_type = 'JOB_SLA_VIOLATION'
     """;
 
-    return jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        tenantId);
+    return jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId);
   }
 }

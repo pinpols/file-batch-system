@@ -50,11 +50,8 @@ public final class ShedLockLeaseHolderChildProcess {
       throw new IllegalStateException("could not acquire the reconciler lease for the test");
     }
     SimpleLock heldLock = acquired.orElseThrow();
-    String leaseSnapshot = new JdbcTemplate(dataSource)
-        .queryForObject(
-            selectConcatSql,
-            String.class,
-            LOCK_NAME);
+    String leaseSnapshot =
+        new JdbcTemplate(dataSource).queryForObject(selectConcatSql, String.class, LOCK_NAME);
     Files.writeString(readyMarker, "lease-acquired; " + leaseSnapshot);
     try {
       while (!Files.exists(stopMarker)) {

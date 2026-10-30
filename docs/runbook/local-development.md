@@ -178,6 +178,8 @@ bash scripts/local/stop-all.sh
 bash scripts/docker/down-apps.sh
 ```
 
+本地裸 JVM 的 `stop-all.sh` 为开发便利保留默认每阶段等待 30 秒、随后强制结束残留进程的例外；长任务可能被中断，需延长时设置 `STOP_WAIT_SEC`。应用容器使用独立的 `BATCH_APP_STOP_GRACE_PERIOD`（默认 `300s`），详见[容器停机宽限](docker-deployment.md#应用容器停机宽限)。
+
 如果需要连数据卷一起清理：
 
 ```bash

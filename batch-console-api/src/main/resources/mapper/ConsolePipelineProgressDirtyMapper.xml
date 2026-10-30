@@ -23,7 +23,11 @@
            and pi.id = pr.pipeline_instance_id
          where pr.updated_at &gt;= #{since}
          group by pr.tenant_id, pr.pipeline_instance_id, pi.related_job_instance_id
-         order by max(pr.updated_at) asc
+         <if test="after != null">
+         having (max(pr.updated_at), pr.tenant_id, pr.pipeline_instance_id)
+                &gt; (#{after.updatedAt}, #{after.tenantId}, #{after.pipelineInstanceId})
+         </if>
+         order by max(pr.updated_at) asc, pr.tenant_id asc, pr.pipeline_instance_id asc
          limit #{limit}
     </select>
 

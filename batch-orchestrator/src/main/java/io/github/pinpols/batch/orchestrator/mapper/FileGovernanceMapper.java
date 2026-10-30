@@ -1,63 +1,119 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import io.github.pinpols.batch.orchestrator.domain.param.FileGovernanceAuditInsertParam;
+import io.github.pinpols.batch.orchestrator.domain.param.FileGovernanceReconcileInsertParam;
+import io.github.pinpols.batch.orchestrator.domain.param.FileGovernanceStalePipelineParam;
+import io.github.pinpols.batch.orchestrator.domain.param.FileGovernanceStaleStepParam;
+import io.github.pinpols.batch.orchestrator.domain.param.FileGovernanceStatusUpdateParam;
+import io.github.pinpols.batch.orchestrator.domain.query.FileGovernanceActivePipelineQuery;
+import io.github.pinpols.batch.orchestrator.domain.query.FileGovernanceOrphanUploadQuery;
+import io.github.pinpols.batch.orchestrator.domain.query.FileGovernancePendingDispatchQuery;
+import io.github.pinpols.batch.orchestrator.domain.query.FileGovernanceProcessingDelayQuery;
+import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews;
+import java.time.Instant;
 import java.util.List;
-import java.util.Map;
+import org.apache.ibatis.annotations.Param;
 
 public interface FileGovernanceMapper {
 
-  Map<String, Object> selectFileRecord(Map<String, Object> params);
+  FileGovernanceViews.FileRecordRow selectFileRecord(
+      @Param("tenantId") String tenantId, @Param("fileId") Long fileId);
 
-  Map<String, Object> selectFileTemplateSecurity(Map<String, Object> params);
+  FileGovernanceViews.TemplateSecurityRow selectFileTemplateSecurity(
+      @Param("tenantId") String tenantId, @Param("fileId") Long fileId);
 
-  Long countActivePipelineInstances(Map<String, Object> params);
+  Long countActivePipelineInstances(FileGovernanceActivePipelineQuery params);
 
-  Long countPendingDispatchRecords(Map<String, Object> params);
+  Long countPendingDispatchRecords(FileGovernancePendingDispatchQuery params);
 
-  Map<String, Object> selectLatestDispatchRecord(Map<String, Object> params);
+  FileGovernanceViews.DispatchRecordRow selectLatestDispatchRecord(
+      @Param("tenantId") String tenantId,
+      @Param("fileId") Long fileId,
+      @Param("channelCode") String channelCode);
 
-  Long selectRelatedJobInstanceId(Map<String, Object> params);
+  Long selectRelatedJobInstanceId(@Param("pipelineInstanceId") Long pipelineInstanceId);
 
-  int resetDispatchRecordForRedispatch(Map<String, Object> params);
+  int resetDispatchRecordForRedispatch(
+      @Param("tenantId") String tenantId,
+      @Param("dispatchRecordId") Long dispatchRecordId,
+      @Param("dispatchFailedStatus") String dispatchFailedStatus,
+      @Param("receiptNoneStatus") String receiptNoneStatus);
 
-  List<Map<String, Object>> selectArchivedFilesForCleanup(Map<String, Object> params);
+  List<FileGovernanceViews.ArchivedFileCleanupRow> selectArchivedFilesForCleanup(
+      @Param("cutoff") Instant cutoff,
+      @Param("limit") Integer limit,
+      @Param("archivedStatus") String archivedStatus);
 
-  List<Map<String, Object>> selectOrphanUploadSessions(Map<String, Object> params);
+  List<FileGovernanceViews.OrphanUploadSessionRow> selectOrphanUploadSessions(
+      FileGovernanceOrphanUploadQuery params);
 
-  List<Map<String, Object>> selectArrivalGovernanceCandidates(Map<String, Object> params);
+  List<FileGovernanceViews.ArrivalCandidateRow> selectArrivalGovernanceCandidates(
+      @Param("limit") Integer limit);
 
-  Map<String, Object> selectArrivalGroupBacklogMetrics();
+  FileGovernanceViews.ArrivalGroupBacklogRow selectArrivalGroupBacklogMetrics();
 
-  List<Map<String, Object>> selectArrivalGroupSummaries(Map<String, Object> params);
+  List<FileGovernanceViews.ArrivalGroupSummaryRow> selectArrivalGroupSummaries(
+      @Param("tenantId") String tenantId,
+      @Param("fileGroupCode") String fileGroupCode,
+      @Param("arrivalState") String arrivalState);
 
-  List<Map<String, Object>> selectArrivalGroupFiles(Map<String, Object> params);
+  List<FileGovernanceViews.ArrivalGroupFileRow> selectArrivalGroupFiles(
+      @Param("tenantId") String tenantId,
+      @Param("fileGroupCode") String fileGroupCode,
+      @Param("bizDate") String bizDate);
 
-  Long countArrivalDelayViolations(Map<String, Object> params);
+  Long countArrivalDelayViolations(
+      @Param("tenantId") String tenantId, @Param("thresholdSeconds") Long thresholdSeconds);
 
-  Long selectMaxArrivalDelaySeconds(Map<String, Object> params);
+  Long selectMaxArrivalDelaySeconds(@Param("tenantId") String tenantId);
 
-  List<Map<String, Object>> selectArrivalDelaySamples(Map<String, Object> params);
+  List<FileGovernanceViews.ArrivalDelaySampleRow> selectArrivalDelaySamples(
+      @Param("tenantId") String tenantId,
+      @Param("thresholdSeconds") Long thresholdSeconds,
+      @Param("limit") Integer limit);
 
-  Long countProcessingDelayViolations(Map<String, Object> params);
+  Long countProcessingDelayViolations(
+      @Param("tenantId") String tenantId,
+      @Param("thresholdSeconds") Long thresholdSeconds,
+      @Param("maxAgeSeconds") Long maxAgeSeconds,
+      @Param("runningStatus") String runningStatus);
 
-  Long selectMaxProcessingDelaySeconds(Map<String, Object> params);
+  Long selectMaxProcessingDelaySeconds(
+      @Param("tenantId") String tenantId,
+      @Param("maxAgeSeconds") Long maxAgeSeconds,
+      @Param("runningStatus") String runningStatus);
 
-  List<Map<String, Object>> selectProcessingDelaySamples(Map<String, Object> params);
+  List<FileGovernanceViews.ProcessingDelaySampleRow> selectProcessingDelaySamples(
+      FileGovernanceProcessingDelayQuery params);
 
-  Long countFileRecordByStoragePath(Map<String, Object> params);
+  Long countFileRecordByStoragePath(
+      @Param("tenantId") String tenantId,
+      @Param("storageBucket") String storageBucket,
+      @Param("storagePath") String storagePath);
 
-  int insertReconciledFileRecord(Map<String, Object> params);
+  int insertReconciledFileRecord(FileGovernanceReconcileInsertParam params);
 
-  int updateFileStatus(Map<String, Object> params);
+  int updateFileStatus(FileGovernanceStatusUpdateParam params);
 
-  int updateFileMetadata(Map<String, Object> params);
+  int updateFileMetadata(
+      @Param("tenantId") String tenantId,
+      @Param("fileId") Long fileId,
+      @Param("metadataJson") String metadataJson);
 
-  int updateArrivalGroupMetadataIfNonTerminal(Map<String, Object> params);
+  int updateArrivalGroupMetadataIfNonTerminal(
+      @Param("tenantId") String tenantId,
+      @Param("fileId") Long fileId,
+      @Param("metadataJson") String metadataJson);
 
-  int markFileArrivalConfirmed(Map<String, Object> params);
+  int markFileArrivalConfirmed(
+      @Param("tenantId") String tenantId,
+      @Param("fileId") Long fileId,
+      @Param("fileSizeBytes") Long fileSizeBytes,
+      @Param("metadataJson") String metadataJson);
 
-  int insertFileAuditLog(Map<String, Object> params);
+  int insertFileAuditLog(FileGovernanceAuditInsertParam params);
 
-  List<Long> markStaleRunningPipelineInstancesFailed(Map<String, Object> params);
+  List<Long> markStaleRunningPipelineInstancesFailed(FileGovernanceStalePipelineParam params);
 
-  int markRunningPipelineStepsFailedForInstances(Map<String, Object> params);
+  int markRunningPipelineStepsFailedForInstances(FileGovernanceStaleStepParam params);
 }

@@ -14,6 +14,11 @@ public record FileDispatchRecordQuery(
     Instant toTime,
     PageRequest pageRequest) {
 
+  /** 按租户与文件查询分发记录，其余筛选和分页均不启用。 */
+  public static FileDispatchRecordQuery ofFile(String tenantId, Long fileId) {
+    return new FileDispatchRecordQuery(tenantId, null, fileId, null, null, null, null, null, null);
+  }
+
   public FileDispatchRecordQuery withoutPage() {
     return new FileDispatchRecordQuery(
         tenantId,

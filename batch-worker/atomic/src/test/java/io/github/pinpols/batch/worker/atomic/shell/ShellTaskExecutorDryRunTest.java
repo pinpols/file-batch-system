@@ -14,13 +14,17 @@ import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 /**
  * ADR-026 §dry-run 守护:dry-run 上下文下 Shell executor 必须不 fork 进程、不建 workdir,直接回 success +
  * plannedAction。
  */
 @DisplayName("命令执行器 dry-run 短路: 不启动进程与工作目录")
+@ExtendWith(OutputCaptureExtension.class)
 class ShellTaskExecutorDryRunTest {
 
   @TempDir
@@ -71,5 +75,52 @@ class ShellTaskExecutorDryRunTest {
     assertThat(result.output().values()).noneMatch(v -> "secret-value".equals(String.valueOf(v)));
     // workdir 没有被创建
     assertThat(Files.exists(props.getWorkdirBase())).isFalse();
+  }
+
+  @Test
+  @DisplayName("参数列表含内联令牌时即使 dry-run 也拒绝执行且不泄漏")
+  void shouldRejectCredentialInPlannedArguments(CapturedOutput output) {
+    TaskContext ctx = new TaskContext(
+        "t1",
+        "job-1",
+        "ti-1",
+        "w-1",
+        Map.of(
+            "command",
+            "/definitely/not/here/should-not-be-forked",
+            "args",
+            List.of("--token=probe-secret", "--mode=summary")),
+        Map.of(PipelineRuntimeKeys.DRY_RUN, true));
+
+    TaskResult result = executor.execute(ctx);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.output()).containsEntry("error_code", "SECURITY_REJECTED");
+    assertThat(result.message()).doesNotContain("probe-secret");
+    assertThat(output.getOut()).doesNotContain("probe-secret");
+    assertThat(Files.exists(props.getWorkdirBase())).isFalse();
+  }
+
+  @Test
+  @DisplayName("带令牌查询参数的 Shell 实参先拒入，不由字符校验回显原值")
+  void shouldRejectCredentialBeforeArgumentRegex(CapturedOutput output) {
+    TaskContext ctx = new TaskContext(
+        "t1",
+        "job-1",
+        "ti-1",
+        "w-1",
+        Map.of(
+            "command",
+            "/definitely/not/here/should-not-be-forked",
+            "args",
+            List.of("https://example.com?token=probe-secret")),
+        Map.of(PipelineRuntimeKeys.DRY_RUN, true));
+
+    TaskResult result = executor.execute(ctx);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.output()).containsEntry("error_code", "SECURITY_REJECTED");
+    assertThat(result.message()).doesNotContain("probe-secret");
+    assertThat(output.getOut()).doesNotContain("probe-secret");
   }
 }

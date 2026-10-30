@@ -43,6 +43,57 @@ class ConsoleClusterDiagnosticMapperIntegrationTest extends AbstractIntegrationT
 
   private final List<String> ownedTenants = new ArrayList<>();
 
+  @Test
+  @DisplayName("空 Worker 组的诊断计数能够正常查询")
+  void shouldCountOnlineWorkers_whenGroupIsNull() {
+    String tenantId = ownTenant("ta-null-group-");
+    String otherTenant = ownTenant("tb-null-group-");
+    String insert = """
+        insert into batch.worker_registry (tenant_id,worker_code,worker_group,status,heartbeat_at)
+        values (?, ?, 'IMPORT', ?, current_timestamp)
+        """;
+    String delete = "delete from batch.worker_registry where tenant_id in (?,?)";
+    try {
+      jdbcTemplate.update(insert, tenantId, "online", "ONLINE");
+      jdbcTemplate.update(insert, tenantId, "offline", "OFFLINE");
+      jdbcTemplate.update(insert, otherTenant, "other", "ONLINE");
+      assertThat(mapper.countOnlineWorkersForGroup(tenantId, null)).isZero();
+      assertThat(mapper.countOnlineWorkersForGroup(tenantId, "IMPORT")).isEqualTo(1L);
+      assertThat(mapper.countOnlineWorkersForGroup(tenantId, "import")).isEqualTo(1L);
+    } finally {
+      jdbcTemplate.update(delete, tenantId, otherTenant);
+    }
+  }
+
+  @Test
+  @DisplayName("锁诊断按数据库 UTC 时间区分生效与已过期的租约")
+  void shedlockQuery_distinguishesActiveAndExpiredLeases() {
+    String suffix = UUID.randomUUID().toString();
+    String activeName = "active-" + suffix;
+    String expiredName = "expired-" + suffix;
+    final String insertLockSql = """
+        insert into batch.shedlock (name, lock_until, locked_at, locked_by)
+        values (?, (statement_timestamp() at time zone 'UTC') + (? * interval '1 second'),
+                statement_timestamp() at time zone 'UTC', 'test')
+        """;
+    final String deleteLocksSql = "delete from batch.shedlock where name in (?, ?)";
+    try {
+      jdbcTemplate.update(insertLockSql, activeName, 3600);
+      jdbcTemplate.update(insertLockSql, expiredName, -3600);
+      var rows = mapper.shedlockAll();
+      assertThat(rows)
+          .filteredOn(row -> activeName.equals(row.name()))
+          .singleElement()
+          .satisfies(row -> assertThat(row.active()).isTrue());
+      assertThat(rows)
+          .filteredOn(row -> expiredName.equals(row.name()))
+          .singleElement()
+          .satisfies(row -> assertThat(row.active()).isFalse());
+    } finally {
+      jdbcTemplate.update(deleteLocksSql, activeName, expiredName);
+    }
+  }
+
   @AfterEach
   void removeOwnedFixture() {
     final String deleteOutboxEventSql = """

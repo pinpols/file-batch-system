@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.support.web;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Small shared conversions for map-backed console application services. */
+/** Console 应用服务共用的轻量 Map 转换逻辑。 */
 public final class ConsoleMapSupport {
 
   private ConsoleMapSupport() {}

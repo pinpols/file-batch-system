@@ -1,9 +1,5 @@
 package io.github.pinpols.batch.console.integration;
 
-import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentBindParam;
-import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentMarkDraftParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -13,6 +9,8 @@ import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAttachmentEn
 import io.github.pinpols.batch.console.domain.audit.infrastructure.ai.ConsoleAiAttachmentService;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAttachmentMapper;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiConversationMapper;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentBindParam;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentMarkDraftParam;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
 import java.util.UUID;
@@ -90,33 +88,31 @@ class ConsoleAiAttachmentIntegrationTest extends AbstractIntegrationTest {
       assertThat(attachments.retainedBytesForTenant(tenant)).isEqualTo(100L);
       assertThat(attachments.lockUploadQuota(tenant)).isEqualTo(1);
       assertThat(attachments.markDraft(ConsoleAiAttachmentMarkDraftParam.builder()
-          .tenantId(tenant)
-          .id(attachmentId)
-          .mediaType("image/png")
-          .byteSize(100)
-          .width(16)
-          .height(16)
-          .build()))
+              .tenantId(tenant)
+              .id(attachmentId)
+              .mediaType("image/png")
+              .byteSize(100)
+              .width(16)
+              .height(16)
+              .build()))
           .isEqualTo(1);
-      assertThat(attachments.bind(
-              ConsoleAiAttachmentBindParam.builder()
-                  .tenantId(tenant)
-                  .id(attachmentId)
-                  .ownerUserId("owner-b")
-                  .conversationId("conversation-1")
-                  .turnNo(1)
-                  .expiresAt(Instant.now().plusSeconds(3600))
-                  .build()))
+      assertThat(attachments.bind(ConsoleAiAttachmentBindParam.builder()
+              .tenantId(tenant)
+              .id(attachmentId)
+              .ownerUserId("owner-b")
+              .conversationId("conversation-1")
+              .turnNo(1)
+              .expiresAt(Instant.now().plusSeconds(3600))
+              .build()))
           .isZero();
-      assertThat(attachments.bind(
-              ConsoleAiAttachmentBindParam.builder()
-                  .tenantId(tenant)
-                  .id(attachmentId)
-                  .ownerUserId("owner-a")
-                  .conversationId("conversation-1")
-                  .turnNo(1)
-                  .expiresAt(Instant.now().plusSeconds(3600))
-                  .build()))
+      assertThat(attachments.bind(ConsoleAiAttachmentBindParam.builder()
+              .tenantId(tenant)
+              .id(attachmentId)
+              .ownerUserId("owner-a")
+              .conversationId("conversation-1")
+              .turnNo(1)
+              .expiresAt(Instant.now().plusSeconds(3600))
+              .build()))
           .isEqualTo(1);
       assertThat(attachments.byTurn(tenant, "conversation-1", 1)).hasSize(1);
       assertThat(attachments.byClientId(tenant, "owner-a", clientId).getId())
@@ -156,13 +152,14 @@ class ConsoleAiAttachmentIntegrationTest extends AbstractIntegrationTest {
       row.setExpiresAt(Instant.now().plusSeconds(3600));
       assertThat(attachments.insert(row)).isEqualTo(1);
       assertThat(attachments.markDraft(ConsoleAiAttachmentMarkDraftParam.builder()
-          .tenantId(tenant)
-          .id(id)
-          .mediaType("image/png")
-          .byteSize(100)
-          .width(16)
-          .height(16)
-          .build())).isEqualTo(1);
+              .tenantId(tenant)
+              .id(id)
+              .mediaType("image/png")
+              .byteSize(100)
+              .width(16)
+              .height(16)
+              .build()))
+          .isEqualTo(1);
     });
 
     assertThatThrownBy(() -> attachmentService.content(tenant, "owner-a", id))

@@ -4,8 +4,6 @@ import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceI
 import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceTransitionStatusByGenerationParam;
 import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceTransitionStatusByIdentityParam;
 import io.github.pinpols.batch.orchestrator.domain.query.ExpectedWorkOccurrenceDueExpectedWithoutMissingAlertQuery;
-
-
 import io.github.pinpols.batch.orchestrator.domain.query.ExpectedWorkOccurrenceOverride;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -22,19 +20,16 @@ public interface ExpectedWorkOccurrenceMapper {
       @Param("calendarCode") String calendarCode,
       @Param("bizDate") LocalDate bizDate);
 
-  int insertIfAbsent(
-      ExpectedWorkOccurrenceInsertIfAbsentParam parameters);
+  int insertIfAbsent(ExpectedWorkOccurrenceInsertIfAbsentParam parameters);
 
   int insertNextGenerationForCancelledByCalendarBizDate(
       @Param("tenantId") String tenantId,
       @Param("calendarCode") String calendarCode,
       @Param("bizDate") LocalDate bizDate);
 
-  int transitionStatus(
-      ExpectedWorkOccurrenceTransitionStatusByGenerationParam parameters);
+  int transitionStatus(ExpectedWorkOccurrenceTransitionStatusByGenerationParam parameters);
 
-  default int transitionStatus(
-      ExpectedWorkOccurrenceTransitionStatusByIdentityParam parameters) {
+  default int transitionStatus(ExpectedWorkOccurrenceTransitionStatusByIdentityParam parameters) {
     String tenantId = parameters.tenantId();
     String calendarCode = parameters.calendarCode();
     Long workflowDefinitionId = parameters.workflowDefinitionId();
@@ -45,20 +40,21 @@ public interface ExpectedWorkOccurrenceMapper {
     String newStatus = parameters.newStatus();
     String triggerRequestId = parameters.triggerRequestId();
 
-    ExpectedWorkOccurrenceTransitionStatusByGenerationParam expectedWorkOccurrenceTransitionStatusByGenerationParam = ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
-        .tenantId(tenantId)
-        .calendarCode(calendarCode)
-        .workflowDefinitionId(workflowDefinitionId)
-        .sourceType(sourceType)
-        .sourceKey(sourceKey)
-        .bizDate(bizDate)
-        .generation(null)
-        .expectedStatus(expectedStatus)
-        .newStatus(newStatus)
-        .triggerRequestId(triggerRequestId)
-        .build();
-    return transitionStatus(
-        expectedWorkOccurrenceTransitionStatusByGenerationParam);
+    ExpectedWorkOccurrenceTransitionStatusByGenerationParam
+        expectedWorkOccurrenceTransitionStatusByGenerationParam =
+            ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
+                .tenantId(tenantId)
+                .calendarCode(calendarCode)
+                .workflowDefinitionId(workflowDefinitionId)
+                .sourceType(sourceType)
+                .sourceKey(sourceKey)
+                .bizDate(bizDate)
+                .generation(null)
+                .expectedStatus(expectedStatus)
+                .newStatus(newStatus)
+                .triggerRequestId(triggerRequestId)
+                .build();
+    return transitionStatus(expectedWorkOccurrenceTransitionStatusByGenerationParam);
   }
 
   int countBlockingByCalendarBizDate(

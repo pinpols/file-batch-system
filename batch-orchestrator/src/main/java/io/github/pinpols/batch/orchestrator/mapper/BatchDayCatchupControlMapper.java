@@ -1,9 +1,8 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayCatchupControlEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.BatchDayCatchupEventParam;
 import io.github.pinpols.batch.orchestrator.domain.param.BatchDayCatchupPauseStateParam;
-import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayCatchupControlEntity;
-import java.time.Instant;
 import org.apache.ibatis.annotations.Param;
 
 /** 批次日自动补扫的租户级控制及不可变审计历史。 */

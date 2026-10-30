@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.validation.ValidTenantId;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.InitMode;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -18,7 +19,7 @@ public class JobBundleImportRequest {
 
   @NotEmpty
   @Size(max = 50)
-  private List<@Size(min = 1, max = 64) String> targetTenantIds;
+  private List<@NotBlank @Size(min = 1, max = 64) String> targetTenantIds;
 
   private InitMode mode = InitMode.UPSERT;
 

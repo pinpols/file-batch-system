@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.job.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -31,6 +30,9 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -39,12 +41,15 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
  * P1: ConsoleCalendarController CRUD + holiday 子表行为测试(原 ValidationTest 仅守 @ValidResourceCode 约束)。
  */
 @DisplayName("日历控制器: 日历与节假日子资源的增改查删转发行为")
+@ExtendWith(MockitoExtension.class)
 class ConsoleCalendarControllerBehaviorTest {
 
-  private final ConsoleCalendarApplicationService service =
-      mock(ConsoleCalendarApplicationService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleCalendarApplicationService service;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach

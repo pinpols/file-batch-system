@@ -44,8 +44,8 @@ public class ImportInternalAuthFilter extends OncePerRequestFilter {
       throws ServletException, IOException {
 
     String path = ServletRequestPaths.applicationPath(request);
-    boolean isInternalPath = "/internal".equals(path)
-        || (EmptyChecks.isNotNull(path) && path.startsWith("/internal/"));
+    boolean isInternalPath =
+        "/internal".equals(path) || (EmptyChecks.isNotNull(path) && path.startsWith("/internal/"));
     if (!isInternalPath) {
       chain.doFilter(request, response);
       return;

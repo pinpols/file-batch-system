@@ -1,7 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
-import io.github.pinpols.batch.orchestrator.domain.param.RejectCommandDecisionParam;
-import io.github.pinpols.batch.orchestrator.domain.param.ApproveCommandDecisionParam;
 import io.github.pinpols.batch.common.enums.ApprovalCommandStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -10,6 +8,8 @@ import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.ApprovalCommandEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.ApproveCommandDecisionParam;
+import io.github.pinpols.batch.orchestrator.domain.param.RejectCommandDecisionParam;
 import io.github.pinpols.batch.orchestrator.mapper.ApprovalCommandMapper;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -56,6 +56,7 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
     entity.setSourceIdempotencyKey(
         Texts.hasText(command.sourceIdempotencyKey()) ? command.sourceIdempotencyKey() : null);
     entity.setApprovalReason(command.approvalReason());
+    entity.setSourceApprovalReason(command.approvalReason());
     int inserted = approvalCommandMapper.insert(entity);
     if (inserted == 0 && Texts.hasText(command.sourceIdempotencyKey())) {
       ApprovalCommandEntity existing = findBySourceIdempotencyKey(command);
@@ -75,8 +76,7 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
         command.tenantId(), command.sourceIdempotencyKey());
   }
 
-  private void ensureSameSubmission(
-      ApprovalSubmitCommand command, ApprovalCommandEntity existing) {
+  private void ensureSameSubmission(ApprovalSubmitCommand command, ApprovalCommandEntity existing) {
     String payloadJson = Texts.hasText(command.payloadJson()) ? command.payloadJson() : "{}";
     Object submittedPayload = JsonUtils.fromJson(payloadJson, Object.class);
     Object existingPayload = JsonUtils.fromJson(existing.getPayloadJson(), Object.class);
@@ -86,7 +86,7 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
         && command.targetType().equals(existing.getTargetType())
         && Objects.equals(command.targetId(), existing.getTargetId())
         && Objects.equals(command.requesterId(), existing.getRequesterId())
-        && Objects.equals(command.approvalReason(), existing.getApprovalReason())
+        && Objects.equals(command.approvalReason(), existing.getSourceApprovalReason())
         && samePayload;
     if (!sameCommand) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.idempotency_conflict");
@@ -109,8 +109,7 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
         .approvedStatus(ApprovalCommandStatus.APPROVED.code())
         .pendingStatus(ApprovalCommandStatus.PENDING.code())
         .build();
-    if (approvalCommandMapper.markApproved(approveCommandDecisionParam)
-        <= 0) {
+    if (approvalCommandMapper.markApproved(approveCommandDecisionParam) <= 0) {
       ApprovalCommandEntity refreshedApproval = require(tenantId, approvalNo);
       return toRecord(refreshedApproval);
     }
@@ -134,8 +133,7 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
         .rejectedStatus(ApprovalCommandStatus.REJECTED.code())
         .pendingStatus(ApprovalCommandStatus.PENDING.code())
         .build();
-    if (approvalCommandMapper.markRejected(rejectCommandDecisionParam)
-        <= 0) {
+    if (approvalCommandMapper.markRejected(rejectCommandDecisionParam) <= 0) {
       ApprovalCommandEntity refreshedApproval = require(tenantId, approvalNo);
       return toRecord(refreshedApproval);
     }
@@ -182,6 +180,20 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
     return toRecord(approval);
   }
 
+  @Override
+  @Transactional(readOnly = true)
+  public ApprovalRecord getBySourceKey(String tenantId, String sourceIdempotencyKey) {
+    if (!Texts.hasText(tenantId) || !Texts.hasText(sourceIdempotencyKey)) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+    }
+    ApprovalCommandEntity entity =
+        approvalCommandMapper.selectByTenantAndSourceIdempotencyKey(tenantId, sourceIdempotencyKey);
+    if (EmptyChecks.isNull(entity)) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.approval.not_found");
+    }
+    return toRecord(entity);
+  }
+
   private ApprovalCommandEntity require(String tenantId, String approvalNo) {
     ApprovalCommandEntity entity =
         approvalCommandMapper.selectByTenantAndApprovalNo(tenantId, approvalNo);
@@ -211,7 +223,7 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
         entity.getRequesterId(),
         entity.getSourceTraceId(),
         entity.getSourceIdempotencyKey(),
-        entity.getApprovalReason());
+        entity.getSourceApprovalReason());
     return ApprovalRecord.of(identity, target, outcome, source);
   }
 }

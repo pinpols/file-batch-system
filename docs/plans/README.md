@@ -6,6 +6,8 @@
 
 | 文档 | 用途 |
 |---|---|
+| [WDI 分阶段 PR 交付准备](wdi-pr-delivery-readiness-2026-10-30.md) | 前后端工作树、迁移与契约依赖的交付快照及待验证事项 |
+| [作业与 Workflow 时限告警补齐计划](job-workflow-sla-completion-plan-2026-10-25.md) | 两层三类告警、实际计时、漏扫补报、通知与自动解除的完整实施和验收台账 |
 | [当前专用工作树工程治理台账](development-worktree-governance-2026-10-24.md) | 用户 19 项范围、可读性集中整改、静态规则证据和未关闭项；不编译、不运行应用测试 |
 | [Workflow 与每日连续性隔离整合计划](./workflow-daily-integration-plan-2026-10-14.md) | ADR-048 / 契约 2026-10-14.2；全新数据库、单一运行模型、既有批调度语义与跨域影响迁移、I0–I6 门槛；实现尚未验收 |
 | [数据完整性、索引与分区治理整改方案](database-integrity-index-partition-remediation-2026-10-18.md) | P0/P1优先；全新数据库、外键与应用守护逐关系对齐、归档/清理、索引及分区联合验收；沿用REF/IDX/PART任务，不重复计数 |

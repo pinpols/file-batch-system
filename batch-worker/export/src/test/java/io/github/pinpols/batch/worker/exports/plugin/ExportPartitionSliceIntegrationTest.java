@@ -120,7 +120,8 @@ class ExportPartitionSliceIT extends AbstractIntegrationTest {
 
       // --- jdbc_mapped 测试：biz.settlement_batch + biz.settlement_detail ---
       // 插入一条 batch（id = BATCH_ID_SEED 确保不与其他 IT 冲突）
-      final String insertBizSettlementBatchSql = """
+      final String insertBizSettlementBatchSql =
+          """
           INSERT INTO biz.settlement_batch
               (id, tenant_id, batch_no, biz_date, accounting_period)
           VALUES

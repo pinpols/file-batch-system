@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.testing.TestPostgresContainers;
 import io.github.pinpols.batch.worker.processes.mapper.business.ProcessStagingMapper;
+import io.github.pinpols.batch.worker.processes.query.ProcessStagingExpiredScanQuery;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -149,8 +150,7 @@ class ProcessStagingMapperIntegrationTest {
     final String grantSqlValue5 = """
         GRANT SELECT, INSERT, UPDATE, DELETE ON batch.process_staging_generation TO process_staging_probe
     """;
-    jdbcTemplate.execute(
-        grantSqlValue5);
+    jdbcTemplate.execute(grantSqlValue5);
     final String insertBatchProcessStagingSql = """
         insert into batch.process_staging values
           ('old-a', cast(? as uuid), 1, 't1', 'biz', 'target', '{}', '2026-10-12 00:00:00+00'),
@@ -160,7 +160,12 @@ class ProcessStagingMapperIntegrationTest {
           ('foreign', cast(? as uuid), 3, 't2', 'biz', 'target', '{}', '2026-10-12 02:00:00+00')
         """;
     jdbcTemplate.update(
-        insertBatchProcessStagingSql, GENERATION_A, GENERATION_A, GENERATION_A_OTHER, GENERATION_B, GENERATION_C);
+        insertBatchProcessStagingSql,
+        GENERATION_A,
+        GENERATION_A,
+        GENERATION_A_OTHER,
+        GENERATION_B,
+        GENERATION_C);
     final String insertBatchProcessStagingGenerationSql = """
         insert into batch.process_staging_generation
           (generation_id, tenant_id, job_task_id, batch_key, generation_status, created_at)
@@ -170,7 +175,12 @@ class ProcessStagingMapperIntegrationTest {
           (cast(? as uuid), 't1', 103, 'fresh', 'OPEN', now()),
           (cast(? as uuid), 't2', 201, 'foreign', 'OPEN', now() - interval '3 days')
         """;
-    jdbcTemplate.update(insertBatchProcessStagingGenerationSql, GENERATION_A, GENERATION_A_OTHER, GENERATION_B, GENERATION_C);
+    jdbcTemplate.update(
+        insertBatchProcessStagingGenerationSql,
+        GENERATION_A,
+        GENERATION_A_OTHER,
+        GENERATION_B,
+        GENERATION_C);
 
     SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
     factoryBean.setDataSource(dataSource);
@@ -294,6 +304,47 @@ class ProcessStagingMapperIntegrationTest {
     assertThat(overdueRows).isEqualTo(2L);
   }
 
+  @Test
+  @DisplayName("候选回收后按创建时间和代际续扫，不跳过同时间代际或其他租户")
+  void shouldResumeExpiredGenerationScanAfterReclaimedCandidate() {
+    String tenantSql = "select set_config('app.tenant_id', ?, true)";
+    String reclaimSql = """
+        update batch.process_staging_generation set generation_status = 'RECLAIMED', sealed_at = now()
+        where tenant_id = ? and generation_id = cast(? as uuid)
+        """;
+    TransactionTemplate transaction =
+        new TransactionTemplate(new DataSourceTransactionManager(dataSource));
+    List<ProcessStagingGenerationCandidate> firstPage = transaction.execute(status -> {
+      jdbcTemplate.queryForObject(tenantSql, String.class, "t1");
+      return mapper.listExpiredGenerationsAfter(
+          new ProcessStagingExpiredScanQuery("t1", 24, 1, null, null));
+    });
+    assertThat(firstPage).hasSize(1);
+    ProcessStagingGenerationCandidate first = firstPage.getFirst();
+    assertThat(first.getGenerationId()).isEqualTo(GENERATION_A);
+    assertThat(first.getCreatedAt()).isNotNull();
+    transaction.executeWithoutResult(status -> {
+      jdbcTemplate.queryForObject(tenantSql, String.class, "t1");
+      assertThat(jdbcTemplate.update(reclaimSql, "t1", GENERATION_A)).isEqualTo(1);
+    });
+    List<ProcessStagingGenerationCandidate> secondPage = transaction.execute(status -> {
+      jdbcTemplate.queryForObject(tenantSql, String.class, "t1");
+      return mapper.listExpiredGenerationsAfter(new ProcessStagingExpiredScanQuery(
+          "t1", 24, 1, first.getCreatedAt(), first.getGenerationId()));
+    });
+    assertThat(secondPage)
+        .extracting(ProcessStagingGenerationCandidate::getGenerationId)
+        .containsExactly(GENERATION_A_OTHER);
+    assertThat(secondPage.getFirst().getCreatedAt()).isEqualTo(first.getCreatedAt());
+    List<ProcessStagingGenerationCandidate> afterSecond = transaction.execute(status -> {
+      jdbcTemplate.queryForObject(tenantSql, String.class, "t1");
+      ProcessStagingGenerationCandidate second = secondPage.getFirst();
+      return mapper.listExpiredGenerationsAfter(new ProcessStagingExpiredScanQuery(
+          "t1", 24, 1, second.getCreatedAt(), second.getGenerationId()));
+    });
+    assertThat(afterSecond).isEmpty();
+  }
+
   @DisplayName("最老行观测按租户和 generation GUC 扫描全部活动代次")
   @Test
   void shouldObserveOldestStagedAtAcrossActiveGenerationsUnderStrictRls() {
@@ -359,8 +410,7 @@ class ProcessStagingMapperIntegrationTest {
               select distinct tenant_id from batch.process_staging_generation order by tenant_id
           """;
           return jdbcTemplate.queryForList(
-              selectBatchProcessStagingGenerationSqlValue14,
-              String.class);
+              selectBatchProcessStagingGenerationSqlValue14, String.class);
         });
 
     assertThat(visibleTenants).containsExactly("t1");
@@ -384,7 +434,9 @@ class ProcessStagingMapperIntegrationTest {
                     (generation_id, tenant_id, job_task_id, batch_key, generation_status)
                   values (cast(? as uuid), 't2', 202, 'cross-tenant', 'OPEN')
                   """;
-              jdbcTemplate.update(insertBatchProcessStagingGenerationSqlValue15, "40000000-0000-0000-0000-000000000001");
+              jdbcTemplate.update(
+                  insertBatchProcessStagingGenerationSqlValue15,
+                  "40000000-0000-0000-0000-000000000001");
             }))
         .hasRootCauseInstanceOf(SQLException.class);
   }
@@ -401,8 +453,7 @@ class ProcessStagingMapperIntegrationTest {
           final String selectSqlValue16 = """
               select set_config('app.tenant_id', 't1', true)
           """;
-          jdbcTemplate.queryForObject(
-              selectSqlValue16, String.class);
+          jdbcTemplate.queryForObject(selectSqlValue16, String.class);
           mapper.selectGenerationStatusForUpdate(candidate);
           mapper.sealOpenGeneration(candidate);
           mapper.setGenerationRlsContext(GENERATION_A);
@@ -438,7 +489,8 @@ class ProcessStagingMapperIntegrationTest {
           ('tenant-a-other-generation', cast(? as uuid), 13, 'tenant-a', 'biz', 'target', '{}', now()),
           ('tenant-b-key', cast(? as uuid), 12, 'tenant-b', 'biz', 'target', '{}', now())
         """;
-    jdbcTemplate.update(insertBatchProcessStagingSqlValue19, GENERATION_A, GENERATION_A_OTHER, GENERATION_B);
+    jdbcTemplate.update(
+        insertBatchProcessStagingSqlValue19, GENERATION_A, GENERATION_A_OTHER, GENERATION_B);
     final String grantSqlValue20 = """
         GRANT SELECT ON batch.process_staging_current TO process_staging_probe
     """;
@@ -477,13 +529,11 @@ class ProcessStagingMapperIntegrationTest {
           final String sqlSqlValue6 = """
               SET LOCAL app.process_staging_generation_id = '%s'\
               """.formatted(GENERATION_A);
-          jdbcTemplate.execute(
-              sqlSqlValue6);
+          jdbcTemplate.execute(sqlSqlValue6);
           final String selectBatchProcessStagingCurrentSql = """
               select count(*) from batch.process_staging_current
           """;
-          return jdbcTemplate.queryForObject(
-              selectBatchProcessStagingCurrentSql, Long.class);
+          return jdbcTemplate.queryForObject(selectBatchProcessStagingCurrentSql, Long.class);
         });
     assertThat(visible).isEqualTo(1L);
   }
@@ -494,8 +544,7 @@ class ProcessStagingMapperIntegrationTest {
     final String alterBatchProcessStagingSqlValue21 = """
         ALTER TABLE batch.process_staging DETACH PARTITION batch.process_staging_current
     """;
-    jdbcTemplate.execute(
-        alterBatchProcessStagingSqlValue21);
+    jdbcTemplate.execute(alterBatchProcessStagingSqlValue21);
     ProcessStagingMapper transactionalMapper =
         new SqlSessionTemplate(sqlSessionFactory).getMapper(ProcessStagingMapper.class);
     TransactionTemplate transaction =
@@ -508,7 +557,8 @@ class ProcessStagingMapperIntegrationTest {
     final String selectSqlValue22 = """
         select to_regclass('batch.process_staging_p20261016')::text
     """;
-    String resolvedStagingPartitionName = jdbcTemplate.queryForObject(selectSqlValue22, String.class);
+    String resolvedStagingPartitionName =
+        jdbcTemplate.queryForObject(selectSqlValue22, String.class);
     assertThat(resolvedStagingPartitionName).isNull();
 
     transactionalMapper.createDailyPartition(
@@ -520,7 +570,8 @@ class ProcessStagingMapperIntegrationTest {
           '2026-10-16 01:00:00+00'),
           ('new-b', cast(? as uuid), 2, 'tenant-b', 'biz', 'target', '{}', '2026-10-16 01:00:00+00')
         """;
-    jdbcTemplate.update(insertBatchProcessStagingSqlValue23, GENERATION_A, GENERATION_A_OTHER, GENERATION_B);
+    jdbcTemplate.update(
+        insertBatchProcessStagingSqlValue23, GENERATION_A, GENERATION_A_OTHER, GENERATION_B);
     final String grantSqlValue24 = """
         GRANT SELECT, INSERT, UPDATE, DELETE ON batch.process_staging_p20261016
         TO process_staging_probe

@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.console.domain.rbac.service;
 
-import io.github.pinpols.batch.console.domain.rbac.param.ConsoleOidcIdentityInsertParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
@@ -17,6 +14,7 @@ import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleOidcIdentityEnt
 import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleOidcIdentityMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleOidcIdentityInsertParam;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -75,13 +73,14 @@ class ConsoleOidcIdentityServiceTest {
 
     assertThat(response.id()).isEqualTo(7L);
     assertThat(response.subject()).isEqualTo("subject-1");
-    verify(identityMapper).insert(ConsoleOidcIdentityInsertParam.builder()
-        .tenantId(TENANT_ID)
-        .accountId(42L)
-        .issuer(ISSUER)
-        .subject("subject-1")
-        .linkedBy("admin")
-        .build());
+    verify(identityMapper)
+        .insert(ConsoleOidcIdentityInsertParam.builder()
+            .tenantId(TENANT_ID)
+            .accountId(42L)
+            .issuer(ISSUER)
+            .subject("subject-1")
+            .linkedBy("admin")
+            .build());
   }
 
   @Test
@@ -94,13 +93,14 @@ class ConsoleOidcIdentityServiceTest {
             TENANT_ID, new ConsoleOidcIdentityRequest("operator", "subject-1"), "admin"))
         .isInstanceOf(BizException.class);
 
-    verify(identityMapper, never()).insert(ConsoleOidcIdentityInsertParam.builder()
-        .tenantId(TENANT_ID)
-        .accountId(42L)
-        .issuer(ISSUER)
-        .subject("subject-1")
-        .linkedBy("admin")
-        .build());
+    verify(identityMapper, never())
+        .insert(ConsoleOidcIdentityInsertParam.builder()
+            .tenantId(TENANT_ID)
+            .accountId(42L)
+            .issuer(ISSUER)
+            .subject("subject-1")
+            .linkedBy("admin")
+            .build());
   }
 
   @Test

@@ -1,5 +1,7 @@
 # Checkpoint / 断点续跑 设计与分期施工规划（2026-07）
 
+> **当前适用性（2026-10-30）**：本文保留当时的阶段规划；当前 Import LOAD 位点为物理行号加文件 SHA-256，重试前核验文件身份，默认配置及运行限制以[续跑运行手册](../runbook/platform-worker-checkpoint-howto.md)为准。
+
 > 文件日期沿革：原文件为 `checkpoint-resume-design-2026-07.md`；完整日期依据Git 首次提交日期；H2/月份为原规划周期，保留在主题或正文。本次仅统一命名，不表示重新评估或验收。
 
 > 后端 P2 最大单项(粗估见 [`backend-borrowings-and-improvements-2026-07-10.md`](backend-borrowings-and-improvements-2026-07-10.md) §2.2,15–25 人天)。文档先行、过评审再动工。
@@ -40,7 +42,7 @@ DDL:`db/migration/V164__create_pipeline_progress.sql:25-42`。关键结构:
 
 - 主键**单列** `id BIGSERIAL`(`V164:26`);逻辑幂等键是 `UNIQUE (tenant_id, pipeline_instance_id, stage)`(`V164:36-37`),即 **UPSERT 冲突目标**。
 - 一行 = 一个 `(tenant_id, pipeline_instance_id, stage)` 的位点,即**每 pipeline 实例每 stage 一行**(粒度不是 chunk、不是 partition)。
-- `position_marker VARCHAR(512)`:LOAD=已处理到的**物理行号**(staging 文件 append-only,行号稳定);GENERATE=`<byteOffset>@<typed-cursor>` 序列化(`V164:12-14`, `:50-51`)。
+- `position_marker VARCHAR(512)`:LOAD=已处理物理行号及文件 SHA-256；GENERATE=`<byteOffset>@<typed-cursor>` 序列化(`V164:12-14`, `:50-51`)。
 - `processed_count BIGINT`:已成功处理记录数,chunk/page 提交时累加。
 - `completed BOOLEAN` + `completed_at`:该 stage 整体完成标记,用于幂等跳过。
 - **CHECK 约束 `stage IN ('LOAD','GENERATE')`**(`V164:38-39`)——**这是关键设计边界**:表结构在 DDL 层就把续跑范围固化在两个 stage。新增 PROCESS/DISPATCH 续跑必须 `ALTER` 这个 CHECK(是迁移、是语义变更,不是运维操作)。
@@ -324,7 +326,7 @@ DDL:`db/migration/V164__create_pipeline_progress.sql:25-42`。关键结构:
 - PROCESS WAP:`db/migration/V75__add_process_staging_table.sql`、`batch-worker/process/.../stage/{PrepareStep,ComputeStep,CommitStep}.java`
 - 分区级续跑:`db/migration/V5__create_runtime_tables.sql:59-83`(job_partition)、`TaskControllerApplicationService.java`(claim/claimBatch/reportBatch)
 - 边界机制:`DefaultTaskOutcomeService.java`(retry/终态)、`DefaultCompensationService.java`、`BatchDayReplayDispatcher.java`、`db/migration/V110__batch_day_replay_session.sql`
-- ADR/运维:`docs/architecture/adr/ADR-038-platform-worker-checkpoint-resume.md`、`docs/runbook/platform-worker-checkpoint-howto.md`、`docs/archive/design/export-file-recovery-options-2026-06-05.md`
+- ADR/运维:`docs/architecture/adr/ADR-038-platform-worker-checkpoint-resume.md`、`docs/runbook/platform-worker-checkpoint-howto.md`
 
 ---
 

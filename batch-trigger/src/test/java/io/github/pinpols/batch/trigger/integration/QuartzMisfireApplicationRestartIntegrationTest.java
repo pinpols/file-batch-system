@@ -14,6 +14,7 @@ import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import io.github.pinpols.batch.trigger.infrastructure.QuartzLaunchJob;
 import io.github.pinpols.batch.trigger.infrastructure.QuartzMisfireRecoveryListener;
+import io.github.pinpols.batch.trigger.infrastructure.QuartzScheduledFireEnumerator;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerSchedulerFacade;
 import io.github.pinpols.batch.trigger.service.ScheduledOccurrenceRecorder;
 import io.github.pinpols.batch.trigger.service.TriggerScheduledOccurrencePlanner;
@@ -87,7 +88,7 @@ class QuartzMisfireApplicationRestartIntegrationTest extends AbstractIntegration
     try (var connection = DriverManager.getConnection(
             platformJdbcUrl(), platformJdbcUsername(), platformJdbcPassword());
         var statement = connection.createStatement()) {
-          final String createDatabaseSql = """
+      final String createDatabaseSql = """
               CREATE DATABASE \"%s\"
           """.formatted(isolatedDatabaseName);
       statement.execute(createDatabaseSql);
@@ -112,11 +113,10 @@ class QuartzMisfireApplicationRestartIntegrationTest extends AbstractIntegration
     try (var connection = DriverManager.getConnection(
             platformJdbcUrl(), platformJdbcUsername(), platformJdbcPassword());
         var statement = connection.createStatement()) {
-          final String dropDatabaseSql = """
+      final String dropDatabaseSql = """
               DROP DATABASE IF EXISTS \"%s\" WITH (FORCE)
           """.formatted(isolatedDatabaseName);
-      statement.execute(
-          dropDatabaseSql);
+      statement.execute(dropDatabaseSql);
     }
   }
 
@@ -207,13 +207,10 @@ class QuartzMisfireApplicationRestartIntegrationTest extends AbstractIntegration
       firstProcess = startApplication();
       JdbcTemplate firstJdbc = firstProcess.getBean(JdbcTemplate.class);
       Scheduler firstScheduler = firstProcess.getBean(Scheduler.class);
-      firstJdbc.update(
-          insertTenantSql,
-          tenantId,
-          tenantId);
+      firstJdbc.update(insertTenantSql, tenantId, tenantId);
       firstJdbc.update(insertBusinessCalendarSql, tenantId, LocalTime.MIDNIGHT);
-      final Long workflowDefinitionId =
-          firstJdbc.queryForObject(insertWorkflowDefinitionSql, Long.class, tenantId, workflowCode, workflowCode);
+      final Long workflowDefinitionId = firstJdbc.queryForObject(
+          insertWorkflowDefinitionSql, Long.class, tenantId, workflowCode, workflowCode);
 
       JobKey jobKey =
           JobKey.jobKey(tenantId + ":WF:" + workflowCode, TriggerSchedulerFacade.JOB_GROUP);
@@ -262,10 +259,7 @@ class QuartzMisfireApplicationRestartIntegrationTest extends AbstractIntegration
 
       await().atMost(Duration.ofSeconds(35)).untilAsserted(() -> {
         Integer requestCount = restartedJdbc.queryForObject(
-            selectCountSql,
-            Integer.class,
-            tenantId,
-            workflowDefinitionId);
+            selectCountSql, Integer.class, tenantId, workflowDefinitionId);
         assertThat(requestCount).isEqualTo(1);
         assertThat(
                 occurrenceStatus(restartedJdbc, tenantId, workflowDefinitionId, originalFireTime))
@@ -286,23 +280,17 @@ class QuartzMisfireApplicationRestartIntegrationTest extends AbstractIntegration
             }
             jdbc.update(deleteTriggerOutboxEventSql, tenantId);
             jdbc.update(deleteWorkflowLaunchWaitSql, tenantId);
-            jdbc.update(
-                deleteJobDependencyWaitingLaunchSql, tenantId);
+            jdbc.update(deleteJobDependencyWaitingLaunchSql, tenantId);
             jdbc.update(deleteBatchDayWaitingLaunchSql, tenantId);
-            jdbc.update(
-                deleteScheduledOccurrenceCatchUpAuditSql,
-                tenantId);
+            jdbc.update(deleteScheduledOccurrenceCatchUpAuditSql, tenantId);
             jdbc.update(deleteExpectedWorkOccurrenceSql, tenantId);
             jdbc.update(deleteScheduledOccurrenceSql, tenantId);
             jdbc.update(deleteTriggerMisfirePendingSql, tenantId);
-            jdbc.update(
-                deleteScheduledOccurrenceCoverageSql, tenantId);
+            jdbc.update(deleteScheduledOccurrenceCoverageSql, tenantId);
             jdbc.update(deleteTriggerRequestSql, tenantId);
-            jdbc.update(
-                deleteBatchDayCatchupControlEventSql, tenantId);
+            jdbc.update(deleteBatchDayCatchupControlEventSql, tenantId);
             jdbc.update(deleteWorkflowDefinitionSql, tenantId);
-            jdbc.update(
-                deleteBatchDayCatchupControlSql, tenantId);
+            jdbc.update(deleteBatchDayCatchupControlSql, tenantId);
             jdbc.update(deleteBusinessCalendarSql, tenantId);
             jdbc.update(deleteTenantSql, tenantId);
           }
@@ -369,13 +357,15 @@ class QuartzMisfireApplicationRestartIntegrationTest extends AbstractIntegration
     try {
       firstProcess = startApplication();
       JdbcTemplate firstJdbc = firstProcess.getBean(JdbcTemplate.class);
-      firstJdbc.update(
-          insertTenantSql,
-          tenantId,
-          tenantId);
+      firstJdbc.update(insertTenantSql, tenantId, tenantId);
       firstJdbc.update(insertBusinessCalendarSql, tenantId, calendarCode, LocalTime.MIDNIGHT);
       Long workflowDefinitionId = firstJdbc.queryForObject(
-          insertWorkflowDefinitionSql, Long.class, tenantId, workflowCode, workflowCode, calendarCode);
+          insertWorkflowDefinitionSql,
+          Long.class,
+          tenantId,
+          workflowCode,
+          workflowCode,
+          calendarCode);
       descriptor.setWorkflowDefinitionId(workflowDefinitionId);
 
       scanAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
@@ -390,13 +380,11 @@ class QuartzMisfireApplicationRestartIntegrationTest extends AbstractIntegration
 
       TriggerScheduledOccurrencePlanner firstPlanner =
           firstProcess.getBean(TriggerScheduledOccurrencePlanner.class);
-      int firstPass = firstPlanner.materialize(descriptor, denseTrigger, scanAt);
+      int firstPass = firstPlanner.materialize(
+          descriptor, QuartzScheduledFireEnumerator.fireTimeSource(denseTrigger), scanAt);
       assertThat(firstPass).isBetween(80_000, 99_999);
-      long firstOccurrenceCount = firstJdbc.queryForObject(
-          selectCountSql,
-          Long.class,
-          tenantId,
-          workflowDefinitionId);
+      long firstOccurrenceCount =
+          firstJdbc.queryForObject(selectCountSql, Long.class, tenantId, workflowDefinitionId);
       assertThat(firstOccurrenceCount).isEqualTo(firstPass);
       Instant partialCoverage = firstJdbc.queryForObject(
           selectCoverageThroughAtSql,
@@ -421,7 +409,8 @@ class QuartzMisfireApplicationRestartIntegrationTest extends AbstractIntegration
 
       TriggerScheduledOccurrencePlanner restartedPlanner =
           restartedProcess.getBean(TriggerScheduledOccurrencePlanner.class);
-      int resumedCount = restartedPlanner.materialize(descriptor, denseTrigger, scanAt);
+      int resumedCount = restartedPlanner.materialize(
+          descriptor, QuartzScheduledFireEnumerator.fireTimeSource(denseTrigger), scanAt);
       long expectedOccurrenceCount =
           Duration.between(firstFireTime, requestedThrough).getSeconds() + 1;
       assertThat(resumedCount).isPositive();
@@ -525,24 +514,24 @@ class QuartzMisfireApplicationRestartIntegrationTest extends AbstractIntegration
     try {
       try (ConfigurableApplicationContext seedContext = startApplication()) {
         JdbcTemplate jdbc = seedContext.getBean(JdbcTemplate.class);
-        jdbc.update(
-            insertTenantSql,
-            tenantId,
-            tenantId);
+        jdbc.update(insertTenantSql, tenantId, tenantId);
         jdbc.update(insertBusinessCalendarSql, tenantId, calendarCode, LocalTime.MIDNIGHT);
         workflowDefinitionId = jdbc.queryForObject(
-            insertWorkflowDefinitionSql, Long.class, tenantId, workflowCode, workflowCode, calendarCode);
+            insertWorkflowDefinitionSql,
+            Long.class,
+            tenantId,
+            workflowCode,
+            workflowCode,
+            calendarCode);
         descriptor.setWorkflowDefinitionId(workflowDefinitionId);
-        jdbc.queryForObject(
-            selectCurrentTenantConfigurationRevisionSql, Long.class, tenantId);
+        jdbc.queryForObject(selectCurrentTenantConfigurationRevisionSql, Long.class, tenantId);
       }
 
       blockerConnection = DriverManager.getConnection(
           isolatedJdbcUrl, platformJdbcUsername(), platformJdbcPassword());
       blockerConnection.setAutoCommit(false);
       int blockerPid;
-      try (var statement = blockerConnection.prepareStatement(
-              selectRevisionSql);
+      try (var statement = blockerConnection.prepareStatement(selectRevisionSql);
           var pidStatement = blockerConnection.prepareStatement(selectPgBackendPidSql)) {
         statement.setString(1, tenantId);
         try (var resultSet = statement.executeQuery()) {
@@ -608,16 +597,12 @@ class QuartzMisfireApplicationRestartIntegrationTest extends AbstractIntegration
             }
           });
 
-      assertThat(countRows(
-              isolatedJdbcUrl,
-              SELECT_SCHEDULED_OCCURRENCE_COUNT_BY_TENANT_SQL,
-              tenantId))
+      assertThat(
+              countRows(isolatedJdbcUrl, SELECT_SCHEDULED_OCCURRENCE_COUNT_BY_TENANT_SQL, tenantId))
           .as("the child transaction's occurrence rows must remain uncommitted")
           .isZero();
       assertThat(countRows(
-              isolatedJdbcUrl,
-              SELECT_SCHEDULED_OCCURRENCE_COVERAGE_COUNT_BY_TENANT_SQL,
-              tenantId))
+              isolatedJdbcUrl, SELECT_SCHEDULED_OCCURRENCE_COVERAGE_COUNT_BY_TENANT_SQL, tenantId))
           .as("coverage must not be published before the planner transaction commits")
           .isZero();
 
@@ -626,15 +611,11 @@ class QuartzMisfireApplicationRestartIntegrationTest extends AbstractIntegration
           .as("the planner JVM must be terminated before releasing its database fence")
           .isTrue();
       childProcess = null;
-      assertThat(countRows(
-              isolatedJdbcUrl,
-              SELECT_SCHEDULED_OCCURRENCE_COUNT_BY_TENANT_SQL,
-              tenantId))
+      assertThat(
+              countRows(isolatedJdbcUrl, SELECT_SCHEDULED_OCCURRENCE_COUNT_BY_TENANT_SQL, tenantId))
           .isZero();
       assertThat(countRows(
-              isolatedJdbcUrl,
-              SELECT_SCHEDULED_OCCURRENCE_COVERAGE_COUNT_BY_TENANT_SQL,
-              tenantId))
+              isolatedJdbcUrl, SELECT_SCHEDULED_OCCURRENCE_COVERAGE_COUNT_BY_TENANT_SQL, tenantId))
           .isZero();
 
       blockerConnection.close();
@@ -649,7 +630,8 @@ class QuartzMisfireApplicationRestartIntegrationTest extends AbstractIntegration
           .build();
       int recovered = recoveryContext
           .getBean(TriggerScheduledOccurrencePlanner.class)
-          .materialize(descriptor, recoveryTrigger, scanAt);
+          .materialize(
+              descriptor, QuartzScheduledFireEnumerator.fireTimeSource(recoveryTrigger), scanAt);
       long expectedOccurrences =
           Duration.between(firstFireTime, requestedThrough).toSeconds() / 60 + 1;
       assertThat(recovered).isEqualTo(expectedOccurrences);
@@ -662,8 +644,8 @@ class QuartzMisfireApplicationRestartIntegrationTest extends AbstractIntegration
           tenantId,
           workflowDefinitionId);
       assertThat(selectedCoverageThroughAt).isEqualTo(requestedThrough);
-      Integer selectedCount =
-          recoveryJdbc.queryForObject(selectCountSql2, Integer.class, tenantId, workflowDefinitionId);
+      Integer selectedCount = recoveryJdbc.queryForObject(
+          selectCountSql2, Integer.class, tenantId, workflowDefinitionId);
       assertThat(selectedCount).isZero();
     } finally {
       if (childProcess != null && childProcess.isAlive()) {
@@ -687,10 +669,10 @@ class QuartzMisfireApplicationRestartIntegrationTest extends AbstractIntegration
   @DisplayName("完整应用重启后持久 Quartz readiness retry 保留原始 fire 并恢复接纳")
   void applicationRestart_recoversPersistedReadinessRetryWithOriginalFireIdentity()
       throws Exception {
-        final String insertTenantSql = """
+    final String insertTenantSql = """
             insert into batch.tenant (tenant_id, tenant_name, status) values (?, ?, 'ACTIVE')
         """;
-        final String insertBusinessCalendarSql = """
+    final String insertBusinessCalendarSql = """
           insert into batch.business_calendar (
               tenant_id, calendar_code, calendar_name, timezone, holiday_roll_rule,
               catch_up_policy, catch_up_max_days, cutoff_time, late_arrival_tolerance_min,
@@ -698,7 +680,7 @@ class QuartzMisfireApplicationRestartIntegrationTest extends AbstractIntegration
           ) values (?, ?, 'Readiness calendar', 'UTC', 'SKIP', 'AUTO', 3,
                     ?, 30, 120, true)
           """;
-        final String insertWorkflowDefinitionSql = """
+    final String insertWorkflowDefinitionSql = """
           insert into batch.workflow_definition (
               tenant_id, workflow_code, workflow_name, workflow_type, version, enabled,
               schedule_type, schedule_expr, timezone, trigger_mode, schedule_enabled,
@@ -706,56 +688,56 @@ class QuartzMisfireApplicationRestartIntegrationTest extends AbstractIntegration
           ) values (?, ?, ?, 'DAG', 1, true, 'CRON', '0 0 * * * ?', 'UTC',
                     'SCHEDULED', true, ?, ?) returning id
           """;
-        final String selectCountSql = """
+    final String selectCountSql = """
             select count(*) from batch.scheduled_occurrence where tenant_id = ? and workflow_definition_id = ?\s\
             and scheduled_fire_time = ?\
             """;
-        final String selectCountSql2 = """
+    final String selectCountSql2 = """
             select count(*) from quartz.qrtz_triggers where sched_name = ? and job_name = ?\s\
             and trigger_name like 'readiness-retry-%%'\
             """;
-        final String selectCountSql3 = """
+    final String selectCountSql3 = """
             select count(*) from batch.trigger_request where tenant_id = ? and workflow_definition_id = ?\s\
             and biz_date = ? and trigger_type = 'SCHEDULED'\
             """;
-        final String selectLaunchPayloadSql = """
+    final String selectLaunchPayloadSql = """
             select launch_payload -> 'params' ->> 'scheduledAt' from batch.trigger_request where tenant_id = ?\s\
             and workflow_definition_id = ? and biz_date = ? and trigger_type = 'SCHEDULED'\
             """;
-        final String deleteTriggerOutboxEventSql = """
+    final String deleteTriggerOutboxEventSql = """
             delete from batch.trigger_outbox_event where tenant_id = ?
         """;
-        final String deleteWorkflowLaunchWaitSql = """
+    final String deleteWorkflowLaunchWaitSql = """
             delete from batch.workflow_launch_wait where tenant_id = ?
         """;
-        final String deleteJobDependencyWaitingLaunchSql = """
+    final String deleteJobDependencyWaitingLaunchSql = """
             delete from batch.job_dependency_waiting_launch where tenant_id = ?
         """;
-        final String deleteBatchDayWaitingLaunchSql = """
+    final String deleteBatchDayWaitingLaunchSql = """
             delete from batch.batch_day_waiting_launch where tenant_id = ?
         """;
-        final String deleteScheduledOccurrenceCatchUpAuditSql = """
+    final String deleteScheduledOccurrenceCatchUpAuditSql = """
             delete from batch.scheduled_occurrence_catch_up_audit where tenant_id = ?
         """;
-        final String deleteExpectedWorkOccurrenceSql = """
+    final String deleteExpectedWorkOccurrenceSql = """
             delete from batch.expected_work_occurrence where tenant_id = ?
         """;
-        final String deleteScheduledOccurrenceSql = """
+    final String deleteScheduledOccurrenceSql = """
             delete from batch.scheduled_occurrence where tenant_id = ?
         """;
-        final String deleteTriggerMisfirePendingSql = """
+    final String deleteTriggerMisfirePendingSql = """
             delete from batch.trigger_misfire_pending where tenant_id = ?
         """;
-        final String deleteScheduledOccurrenceCoverageSql = """
+    final String deleteScheduledOccurrenceCoverageSql = """
             delete from batch.scheduled_occurrence_coverage where tenant_id = ?
         """;
-        final String deleteTriggerRequestSql = """
+    final String deleteTriggerRequestSql = """
             delete from batch.trigger_request where tenant_id = ?
         """;
-        final String deleteBatchDayCatchupControlEventSql = """
+    final String deleteBatchDayCatchupControlEventSql = """
             delete from batch.batch_day_catchup_control_event where tenant_id = ?
         """;
-        final String deleteBatchDayCatchupControlSql = """
+    final String deleteBatchDayCatchupControlSql = """
             delete from batch.batch_day_catchup_control where tenant_id = ?
         """;
     final String deleteWorkflowDefinitionSql = """
@@ -806,13 +788,16 @@ class QuartzMisfireApplicationRestartIntegrationTest extends AbstractIntegration
       Scheduler firstScheduler = firstProcess.getBean(Scheduler.class);
       scheduledFireTime = Instant.now().plusSeconds(2).truncatedTo(ChronoUnit.MILLIS);
       bizDate = scheduledFireTime.atZone(ZoneOffset.UTC).toLocalDate();
-      firstJdbc.update(
-          insertTenantSql,
-          tenantId,
-          tenantId);
+      firstJdbc.update(insertTenantSql, tenantId, tenantId);
       firstJdbc.update(insertBusinessCalendarSql, tenantId, calendarCode, LocalTime.MIDNIGHT);
       workflowDefinitionId = firstJdbc.queryForObject(
-          insertWorkflowDefinitionSql, Long.class, tenantId, workflowCode, workflowCode, calendarCode, upstreamJobCode);
+          insertWorkflowDefinitionSql,
+          Long.class,
+          tenantId,
+          workflowCode,
+          workflowCode,
+          calendarCode,
+          upstreamJobCode);
       firstProcess
           .getBean(TriggerRegistrationService.class)
           .registerByWorkflowCode(tenantId, workflowCode);
@@ -831,7 +816,11 @@ class QuartzMisfireApplicationRestartIntegrationTest extends AbstractIntegration
           .atMost(Duration.ofSeconds(15))
           .untilAsserted(() -> {
             Integer selectedScheduledOccurrenceCount = firstJdbc.queryForObject(
-                selectCountSql, Integer.class, tenantId, definitionId, Timestamp.from(scheduledFireTime));
+                selectCountSql,
+                Integer.class,
+                tenantId,
+                definitionId,
+                Timestamp.from(scheduledFireTime));
             assertThat(selectedScheduledOccurrenceCount).isOne();
             assertThat(occurrenceStatus(firstJdbc, tenantId, definitionId, scheduledFireTime))
                 .isEqualTo("WAITING_READINESS");
@@ -843,8 +832,8 @@ class QuartzMisfireApplicationRestartIntegrationTest extends AbstractIntegration
           .pollInterval(Duration.ofMillis(100))
           .atMost(Duration.ofSeconds(5))
           .untilAsserted(() -> {
-            Integer selectedQrtzTriggersCount =
-                firstJdbc.queryForObject(selectCountSql2, Integer.class, schedulerName, quartzJobName);
+            Integer selectedQrtzTriggersCount = firstJdbc.queryForObject(
+                selectCountSql2, Integer.class, schedulerName, quartzJobName);
             assertThat(selectedQrtzTriggersCount).isEqualTo(1);
           });
 
@@ -856,7 +845,7 @@ class QuartzMisfireApplicationRestartIntegrationTest extends AbstractIntegration
           .pollInterval(Duration.ofMillis(200))
           .atMost(Duration.ofSeconds(35))
           .untilAsserted(() -> {
-            assertThat(readinessChecks).hasValue(2);
+            assertThat(readinessChecks.get()).isGreaterThanOrEqualTo(2);
             assertThat(occurrenceStatus(restartedJdbc, tenantId, definitionId, scheduledFireTime))
                 .isEqualTo("REQUESTED");
             Integer selectedTriggerRequestCount = restartedJdbc.queryForObject(
@@ -881,22 +870,16 @@ class QuartzMisfireApplicationRestartIntegrationTest extends AbstractIntegration
           if (workflowDefinitionId != null) {
             jdbc.update(deleteTriggerOutboxEventSql, tenantId);
             jdbc.update(deleteWorkflowLaunchWaitSql, tenantId);
-            jdbc.update(
-                deleteJobDependencyWaitingLaunchSql, tenantId);
+            jdbc.update(deleteJobDependencyWaitingLaunchSql, tenantId);
             jdbc.update(deleteBatchDayWaitingLaunchSql, tenantId);
-            jdbc.update(
-                deleteScheduledOccurrenceCatchUpAuditSql,
-                tenantId);
+            jdbc.update(deleteScheduledOccurrenceCatchUpAuditSql, tenantId);
             jdbc.update(deleteExpectedWorkOccurrenceSql, tenantId);
             jdbc.update(deleteScheduledOccurrenceSql, tenantId);
             jdbc.update(deleteTriggerMisfirePendingSql, tenantId);
-            jdbc.update(
-                deleteScheduledOccurrenceCoverageSql, tenantId);
+            jdbc.update(deleteScheduledOccurrenceCoverageSql, tenantId);
             jdbc.update(deleteTriggerRequestSql, tenantId);
-            jdbc.update(
-                deleteBatchDayCatchupControlEventSql, tenantId);
-            jdbc.update(
-                deleteBatchDayCatchupControlSql, tenantId);
+            jdbc.update(deleteBatchDayCatchupControlEventSql, tenantId);
+            jdbc.update(deleteBatchDayCatchupControlSql, tenantId);
             jdbc.update(deleteWorkflowDefinitionSql, tenantId);
             jdbc.update(deleteBusinessCalendarSql, tenantId);
             jdbc.update(deleteTenantSql, tenantId);

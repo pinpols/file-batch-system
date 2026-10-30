@@ -21,14 +21,18 @@ import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewResult;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
+import jakarta.annotation.PreDestroy;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -46,6 +50,7 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 /** 调用 orchestrator 内部任务 API，带超时、瞬态失败有限重试及 Micrometer 失败计数。 */
 @Component
@@ -61,6 +66,7 @@ public class HttpTaskExecutionClient
   private final ObjectProvider<WorkerReportOutboxCoordinator> reportOutboxCoordinator;
   private final int renewBatchMaxItems;
   private final int claimBatchMaxItems;
+  private final TaskReportBatcher reportBatcher;
   // L-2: AtomicReference 保证多端点客户端列表的懒初始化发布安全，避免其他线程读到半构造状态。
   private final AtomicReference<List<RestClient>> restClients = new AtomicReference<>();
   private final AtomicInteger endpointCursor = new AtomicInteger();
@@ -88,6 +94,12 @@ public class HttpTaskExecutionClient
     this.reportOutboxCoordinator = reportOutboxCoordinator;
     this.renewBatchMaxItems = Math.max(1, leaseProperties.getRenewBatchMaxItems());
     this.claimBatchMaxItems = batchClaimProperties.effectiveBatchSize();
+    this.reportBatcher = properties.isReportBatchEnabled()
+        ? new TaskReportBatcher(
+            claimBatchMaxItems,
+            properties.getReportBatchWaitMillis(),
+            this::submitReportBatchOverHttp)
+        : null;
   }
 
   /**
@@ -178,6 +190,13 @@ public class HttpTaskExecutionClient
             SwallowedExceptionLogger.summary(ex));
         sleepBackoff(state.backoff());
         state = state.advance();
+      } catch (RestClientException ex) {
+        // HTTP/IO/status 已由上方分支处理；剩余响应解码/转换异常属于协议未知，只回原单条核对。
+        String exceptionType = ex.getClass().getSimpleName();
+        log.debug(
+            "claim-batch response could not be decoded, using single claim: exceptionType={}",
+            exceptionType);
+        return fallbackClaimChunk(chunk);
       }
     }
     return fallbackClaimChunk(chunk);
@@ -185,7 +204,8 @@ public class HttpTaskExecutionClient
 
   private List<TaskClaimResult> mapClaimChunkOrFallback(
       List<TaskClaimItem> chunk, ClaimBatchHttpResponse response) {
-    List<ClaimBatchHttpResult> responseResults = EmptyChecks.isNull(response) ? null : response.results();
+    List<ClaimBatchHttpResult> responseResults =
+        EmptyChecks.isNull(response) ? null : response.results();
     if (EmptyChecks.isNull(responseResults) || responseResults.size() != chunk.size()) {
       log.warn(
           "claim-batch response mismatch: chunk size {}, response results {}",
@@ -193,15 +213,40 @@ public class HttpTaskExecutionClient
           EmptyChecks.isNull(responseResults) ? null : responseResults.size());
       return fallbackClaimChunk(chunk);
     }
+    Map<Long, ClaimBatchHttpResult> resultsByTaskId = new LinkedHashMap<>();
+    for (ClaimBatchHttpResult row : responseResults) {
+      boolean responseIdentityIsInvalid = EmptyChecks.isNull(row)
+          || EmptyChecks.isNull(row.taskId())
+          || EmptyChecks.isNull(row.claimed())
+          || resultsByTaskId.containsKey(row.taskId());
+      if (responseIdentityIsInvalid) {
+        return fallbackClaimChunk(chunk);
+      }
+      Long returnedTaskId = row.taskId();
+      resultsByTaskId.put(returnedTaskId, row);
+    }
     List<TaskClaimResult> out = new ArrayList<>(chunk.size());
-    for (int i = 0; i < chunk.size(); i++) {
-      ClaimBatchHttpResult row = responseResults.get(i);
-      Long taskId = chunk.get(i).taskId();
-      boolean claimed = row != null && row.claimed();
-      EffectiveTaskConfig claimedConfig = claimed ? row.config() : null;
-      out.add(new TaskClaimResult(taskId, claimed, claimedConfig));
+    for (TaskClaimItem requested : chunk) {
+      ClaimBatchHttpResult row = resultsByTaskId.get(requested.taskId());
+      if (EmptyChecks.isNull(row) || !claimConfigMatchesRequest(requested, row)) {
+        return fallbackClaimChunk(chunk);
+      }
+      EffectiveTaskConfig claimedConfig = row.claimed() ? row.config() : null;
+      out.add(new TaskClaimResult(requested.taskId(), row.claimed(), claimedConfig));
     }
     return out;
+  }
+
+  private boolean claimConfigMatchesRequest(TaskClaimItem requested, ClaimBatchHttpResult result) {
+    EffectiveTaskConfig config = result.config();
+    if (EmptyChecks.isNull(config)) {
+      return !Boolean.TRUE.equals(result.claimed());
+    }
+    boolean taskIdentityMatches =
+        EmptyChecks.isNull(config.taskId()) || Objects.equals(requested.taskId(), config.taskId());
+    boolean tenantIdentityMatches = EmptyChecks.isNull(config.tenantId())
+        || Objects.equals(requested.tenantId(), config.tenantId());
+    return taskIdentityMatches && tenantIdentityMatches;
   }
 
   /** 降级:逐条 {@link #claim},结果语义与批量一致。 */
@@ -252,6 +297,14 @@ public class HttpTaskExecutionClient
   private TaskLeaseRenewResult renewLeaseWithResult(TaskLeaseRenewItem item) {
     String traceId = currentTraceId();
     String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+    Object request;
+    if (item.executionStarted()) {
+      ExecutionStartedDetails details = new ExecutionStartedDetails(true);
+      request = new ExecutionStartHttpRequest(
+          item.tenantId(), item.workerId(), item.partitionInvocationId(), details);
+    } else {
+      request = new ClaimRequest(item.tenantId(), item.workerId(), item.partitionInvocationId());
+    }
     ClaimOutcome<TaskHeartbeatHttpResponse> outcome = executeClaimLike(
         "renew",
         () -> client()
@@ -260,7 +313,7 @@ public class HttpTaskExecutionClient
             .contentType(MediaType.APPLICATION_JSON)
             .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, item.tenantId())
             .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
-            .body(new ClaimRequest(item.tenantId(), item.workerId(), item.partitionInvocationId()))
+            .body(request)
             .retrieve()
             .body(TaskHeartbeatHttpResponse.class));
     TaskHeartbeatHttpResponse heartbeat = outcome.body();
@@ -274,9 +327,19 @@ public class HttpTaskExecutionClient
       return Map.of();
     }
     Map<Long, TaskLeaseRenewResult> out = new LinkedHashMap<>();
-    for (int i = 0; i < items.size(); i += renewBatchMaxItems) {
-      int end = Math.min(i + renewBatchMaxItems, items.size());
-      List<TaskLeaseRenewItem> chunk = items.subList(i, end);
+    List<TaskLeaseRenewItem> ordinaryItems = new ArrayList<>();
+    for (TaskLeaseRenewItem item : items) {
+      if (item.executionStarted()) {
+        // 执行起点需要携带详情并独立确认，不能降级成丢失标记的普通批量续租。
+        TaskLeaseRenewResult result = renewLeaseWithResult(item);
+        out.put(item.taskId(), result);
+      } else {
+        ordinaryItems.add(item);
+      }
+    }
+    for (int i = 0; i < ordinaryItems.size(); i += renewBatchMaxItems) {
+      int end = Math.min(i + renewBatchMaxItems, ordinaryItems.size());
+      List<TaskLeaseRenewItem> chunk = ordinaryItems.subList(i, end);
       out.putAll(renewBatchChunkHttpOrFallback(chunk));
     }
     return out;
@@ -330,6 +393,13 @@ public class HttpTaskExecutionClient
             SwallowedExceptionLogger.summary(ex));
         sleepBackoff(state.backoff());
         state = state.advance();
+      } catch (RestClientException ex) {
+        // HTTP/IO/status 已由上方分支处理；剩余响应解码/转换异常属于协议未知，只回原单条核对。
+        String exceptionType = ex.getClass().getSimpleName();
+        log.debug(
+            "renew-batch response could not be decoded, using single renew: exceptionType={}",
+            exceptionType);
+        return fallbackRenewChunk(chunk);
       }
     }
     return fallbackRenewChunk(chunk);
@@ -337,7 +407,8 @@ public class HttpTaskExecutionClient
 
   private Map<Long, TaskLeaseRenewResult> mapChunkOrFallback(
       List<TaskLeaseRenewItem> chunk, BatchRenewHttpResponse response) {
-    List<BatchRenewHttpResult> responseResults = EmptyChecks.isNull(response) ? null : response.results();
+    List<BatchRenewHttpResult> responseResults =
+        EmptyChecks.isNull(response) ? null : response.results();
     if (EmptyChecks.isNull(responseResults) || responseResults.size() != chunk.size()) {
       log.warn(
           "renew-batch response mismatch: chunk size {}, response results {}",
@@ -345,15 +416,30 @@ public class HttpTaskExecutionClient
           EmptyChecks.isNull(responseResults) ? null : responseResults.size());
       return fallbackRenewChunk(chunk);
     }
-    Map<Long, TaskLeaseRenewResult> m = new LinkedHashMap<>();
-    for (int i = 0; i < chunk.size(); i++) {
-      BatchRenewHttpResult row = responseResults.get(i);
-      Long taskId = chunk.get(i).taskId();
-      boolean renewed = row != null && row.renewed();
-      boolean cancelRequested = row != null && Boolean.TRUE.equals(row.cancelRequested());
-      m.put(taskId, new TaskLeaseRenewResult(taskId, renewed, cancelRequested));
+    Map<Long, BatchRenewHttpResult> resultsByTaskId = new LinkedHashMap<>();
+    for (BatchRenewHttpResult row : responseResults) {
+      boolean responseIdentityOrOutcomeIsInvalid = EmptyChecks.isNull(row)
+          || EmptyChecks.isNull(row.taskId())
+          || EmptyChecks.isNull(row.renewed())
+          || resultsByTaskId.containsKey(row.taskId());
+      if (responseIdentityOrOutcomeIsInvalid) {
+        return fallbackRenewChunk(chunk);
+      }
+      Long returnedTaskId = row.taskId();
+      resultsByTaskId.put(returnedTaskId, row);
     }
-    return m;
+    Map<Long, TaskLeaseRenewResult> results = new LinkedHashMap<>();
+    for (TaskLeaseRenewItem requested : chunk) {
+      Long taskId = requested.taskId();
+      BatchRenewHttpResult row = resultsByTaskId.get(taskId);
+      if (EmptyChecks.isNull(row)) {
+        return fallbackRenewChunk(chunk);
+      }
+      boolean renewed = Boolean.TRUE.equals(row.renewed());
+      boolean cancelRequested = Boolean.TRUE.equals(row.cancelRequested());
+      results.put(taskId, new TaskLeaseRenewResult(taskId, renewed, cancelRequested));
+    }
+    return results;
   }
 
   private Map<Long, TaskLeaseRenewResult> fallbackRenewChunk(List<TaskLeaseRenewItem> chunk) {
@@ -390,7 +476,16 @@ public class HttpTaskExecutionClient
     long reportStartNanos = System.nanoTime();
     String outcome = "success";
     try {
-      submitReportOverHttp(report);
+      boolean reportCanBeBatched = EmptyChecks.isNotNull(reportBatcher)
+          && EmptyChecks.isNotNull(report)
+          && EmptyChecks.isNotNull(report.getTaskId());
+      TaskReportBatcher.SubmissionResult batchResult = reportCanBeBatched
+          ? reportBatcher.submit(report)
+          : TaskReportBatcher.SubmissionResult.NOT_SUBMITTED;
+      if (batchResult != TaskReportBatcher.SubmissionResult.CONFIRMED) {
+        boolean batchAttempted = batchResult == TaskReportBatcher.SubmissionResult.UNCONFIRMED;
+        reportInternal(report, batchAttempted);
+      }
     } catch (RuntimeException rex) {
       WorkerReportOutboxCoordinator coordinator = reportOutboxCoordinator.getIfAvailable();
       boolean reportWasDeferredToOutbox =
@@ -415,6 +510,71 @@ public class HttpTaskExecutionClient
     }
   }
 
+  /** 关闭微批接纳，唤醒尚未提交的调用者，使其继续走单条交付而非丢弃内存结果。 */
+  @PreDestroy
+  void closeReportBatcher() {
+    if (EmptyChecks.isNotNull(reportBatcher)) {
+      reportBatcher.close();
+    }
+  }
+
+  /**
+   * 只确认具有唯一 taskId 且 ok=true 的响应项。未确认项由各自 report 调用走原单条有限重试，
+   * 不重试已确认项，更不重新执行业务。批响应不提供 invocation，因此批内已按租户和唯一 taskId 隔离。
+   */
+  private Set<Long> submitReportBatchOverHttp(List<TaskExecutionReport> reports) {
+    TaskExecutionReport first = reports.getFirst();
+    String traceId = firstNonBlank(first.getTraceId(), currentTraceId());
+    String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+    try {
+      ReportBatchHttpRequest request = new ReportBatchHttpRequest(reports);
+      ReportBatchHttpResponse response = client()
+          .post()
+          .uri("/internal/tasks/report-batch")
+          .contentType(MediaType.APPLICATION_JSON)
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, first.getTenantId())
+          .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
+          .body(request)
+          .retrieve()
+          .body(ReportBatchHttpResponse.class);
+      return confirmedReportTaskIds(reports, response);
+    } catch (RestClientException ex) {
+      // 批传输尚未确认不代表业务失败；调用者仍会逐项重试及持久化，最终失败沿用现有 ERROR/指标。
+      log.debug(
+          "report-batch not confirmed, using per-item report: items={}, error={}",
+          reports.size(),
+          SwallowedExceptionLogger.summary(ex));
+      return Set.of();
+    }
+  }
+
+  private Set<Long> confirmedReportTaskIds(
+      List<TaskExecutionReport> reports, ReportBatchHttpResponse response) {
+    if (EmptyChecks.isNull(response) || EmptyChecks.isNull(response.results())) {
+      return Set.of();
+    }
+    Set<Long> requestedIds = new HashSet<>();
+    for (TaskExecutionReport report : reports) {
+      requestedIds.add(report.getTaskId());
+    }
+    Set<Long> seenIds = new HashSet<>();
+    Set<Long> duplicateIds = new HashSet<>();
+    Set<Long> acceptedIds = new HashSet<>();
+    for (ReportBatchHttpResult item : response.results()) {
+      if (EmptyChecks.isNull(item) || !requestedIds.contains(item.taskId())) {
+        continue;
+      }
+      if (!seenIds.add(item.taskId())) {
+        duplicateIds.add(item.taskId());
+      }
+      if (Boolean.TRUE.equals(item.ok())) {
+        acceptedIds.add(item.taskId());
+      }
+    }
+    acceptedIds.removeAll(duplicateIds);
+    return acceptedIds;
+  }
+
   private void recordReportDropped(String reason) {
     meterRegistry.ifPresent(registry ->
         registry.counter("worker.report.dropped.total", "reason", reason).increment());
@@ -422,7 +582,7 @@ public class HttpTaskExecutionClient
 
   @Override
   public void submitReportOverHttp(TaskExecutionReport report) {
-    reportInternal(report);
+    reportInternal(report, false);
   }
 
   private void recordReportDuration(
@@ -435,11 +595,8 @@ public class HttpTaskExecutionClient
         .record(durationNanos, TimeUnit.NANOSECONDS));
   }
 
-  private void reportInternal(TaskExecutionReport report) {
-    RetryState state = RetryState.initial(
-        properties.getReportMaxAttempts(),
-        properties.getReportInitialBackoffMillis(),
-        properties.getReportMaxBackoffMillis());
+  private void reportInternal(TaskExecutionReport report, boolean batchAttempted) {
+    RetryState state = reportRetryState(batchAttempted);
     String traceFallback = currentTraceId();
     while (state.canAttempt()) {
       String traceId = firstNonBlank(report.getTraceId(), traceFallback);
@@ -486,6 +643,24 @@ public class HttpTaskExecutionClient
     }
   }
 
+  /** 批请求也是该项的一次真实 HTTP 尝试，不能在回退单条时重置总预算。 */
+  private RetryState reportRetryState(boolean batchAttempted) {
+    RetryState state = RetryState.initial(
+        properties.getReportMaxAttempts(),
+        properties.getReportInitialBackoffMillis(),
+        properties.getReportMaxBackoffMillis());
+    if (!batchAttempted) {
+      return state;
+    }
+    recordReportFailure("BATCH_UNCONFIRMED");
+    if (state.isLastAttempt()) {
+      throw new IllegalStateException(
+          "report batch not confirmed; report HTTP attempt budget exhausted");
+    }
+    sleepBackoff(state.backoff());
+    return state.advance();
+  }
+
   /**
    * 记录失败指标；若已达最大尝试次数直接抛；否则等待退避并返回下次 attempt 的 state。 {@code reasonCode} 进 metrics，{@code retryHint}
    * 进 log。
@@ -521,7 +696,7 @@ public class HttpTaskExecutionClient
     while (state.canAttempt()) {
       try {
         // body 可能为 null(旧 orchestrator 返 bodyless;或 renew 路径用 toBodilessEntity)。
-        // 这里只用 success() 区分"4xx 失败"vs"成功(body 是 null 还是 record 由 caller 处理)"。
+        // 仅404/409是明确业务拒绝；其他HTTP错误向上传播，成功响应体由调用方处理。
         return ClaimOutcome.success(call.get());
       } catch (HttpClientErrorException ex) {
         if (ex.getStatusCode() == HttpStatus.CONFLICT
@@ -551,7 +726,7 @@ public class HttpTaskExecutionClient
     throw new IllegalStateException(operation + " exhausted retries without outcome");
   }
 
-  /** claim/renew 调用结果:success=false 即 HTTP 4xx;body 仅 success=true 时有效,可能为 null。 */
+  /** claim/renew调用结果：success=false只表示HTTP 404/409；成功响应的body仍可能为空。 */
   private record ClaimOutcome<T>(boolean success, T body) {
     static <T> ClaimOutcome<T> failed() {
       return new ClaimOutcome<>(false, null);
@@ -704,6 +879,14 @@ public class HttpTaskExecutionClient
 
   private record ClaimRequest(String tenantId, String workerId, String partitionInvocationId) {}
 
+  private record ExecutionStartHttpRequest(
+      String tenantId,
+      String workerId,
+      String partitionInvocationId,
+      ExecutionStartedDetails details) {}
+
+  private record ExecutionStartedDetails(boolean executionStarted) {}
+
   private record BatchRenewHttpRequest(List<BatchRenewHttpItem> items) {}
 
   private record BatchRenewHttpItem(
@@ -711,7 +894,7 @@ public class HttpTaskExecutionClient
 
   private record BatchRenewHttpResponse(List<BatchRenewHttpResult> results) {}
 
-  private record BatchRenewHttpResult(Long taskId, boolean renewed, Boolean cancelRequested) {}
+  private record BatchRenewHttpResult(Long taskId, Boolean renewed, Boolean cancelRequested) {}
 
   private record TaskHeartbeatHttpResponse(boolean cancelRequested) {}
 
@@ -723,5 +906,11 @@ public class HttpTaskExecutionClient
 
   private record ClaimBatchHttpResponse(List<ClaimBatchHttpResult> results) {}
 
-  private record ClaimBatchHttpResult(Long taskId, boolean claimed, EffectiveTaskConfig config) {}
+  private record ClaimBatchHttpResult(Long taskId, Boolean claimed, EffectiveTaskConfig config) {}
+
+  private record ReportBatchHttpRequest(List<TaskExecutionReport> items) {}
+
+  private record ReportBatchHttpResponse(List<ReportBatchHttpResult> results) {}
+
+  private record ReportBatchHttpResult(Long taskId, Boolean ok, String error) {}
 }

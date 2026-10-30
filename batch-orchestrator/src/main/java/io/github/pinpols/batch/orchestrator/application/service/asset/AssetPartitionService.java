@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service.asset;
 
-import io.github.pinpols.batch.orchestrator.domain.param.DataAssetUpsertParam;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -8,6 +7,7 @@ import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionQueryService;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.DataAssetUpsertParam;
 import io.github.pinpols.batch.orchestrator.mapper.AssetPartitionMapper;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -66,8 +66,8 @@ public class AssetPartitionService {
     if (materialized != null && latest.isEmpty()) {
       return Optional.of(materialized);
     }
-    boolean materializedMatchesLatestVersion =
-        EmptyChecks.isNotNull(materialized) && Objects.equals(latest.get().id(), materialized.resultVersionId());
+    boolean materializedMatchesLatestVersion = EmptyChecks.isNotNull(materialized)
+        && Objects.equals(latest.get().id(), materialized.resultVersionId());
     if (materializedMatchesLatestVersion) {
       return Optional.of(materialized);
     }
@@ -101,18 +101,19 @@ public class AssetPartitionService {
     String partitionKey = toPartitionKey(partitionBizDate);
     LocalDate materializationBizDate = instance.getBizDate();
     AssetPartitionMaterializationCommand materializationCommand =
-        new AssetPartitionMaterializationCommand(
-            tenantId,
-            assetId,
-            jobCode,
-            partitionKey,
-            materializationBizDate,
-            version.id(),
-            version.businessKey(),
-            version.jobInstanceId(),
-            version.effectiveAt(),
-            version.payloadStorage(),
-            version.payloadRef());
+        AssetPartitionMaterializationCommand.builder()
+            .tenantId(tenantId)
+            .assetId(assetId)
+            .assetCode(jobCode)
+            .partitionKey(partitionKey)
+            .bizDate(materializationBizDate)
+            .resultVersionId(version.id())
+            .businessKey(version.businessKey())
+            .jobInstanceId(version.jobInstanceId())
+            .effectiveAt(version.effectiveAt())
+            .payloadStorage(version.payloadStorage())
+            .payloadRef(version.payloadRef())
+            .build();
     assetPartitionMapper.upsertEffectiveJobPartition(materializationCommand);
   }
 

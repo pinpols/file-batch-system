@@ -90,7 +90,7 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
     params.put("fileFormatType", "JSON");
     params.put("templateCode", "IMP-CUSTOMER-JSON-ARRAY");
     params.put("bizType", "CUSTOMER");
-    // Intentionally invalid JSON — ParseStep will throw and return IMPORT_PARSE_FAILED
+    // 故意提供无效 JSON；ParseStep 应抛出异常并返回 IMPORT_PARSE_FAILED。
     params.put("content", "THIS_IS_NOT_VALID_JSON_CONTENT");
 
     launchService.launch(new LaunchRequest(
@@ -108,16 +108,14 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String status = jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
+          String status = jdbcTemplate.queryForObject(
+              selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
           assertThat(status).isEqualTo("FAILED");
         });
 
-    // Verify job_instance also reflects the failure
-    String instanceStatus = jdbcTemplate.queryForObject(
-        selectInstanceStatusSql,
-        String.class,
-        TENANT,
-        seed.dedupKey());
+    // 校验 job_instance 状态也已反映此次失败。
+    String instanceStatus =
+        jdbcTemplate.queryForObject(selectInstanceStatusSql, String.class, TENANT, seed.dedupKey());
     assertThat(instanceStatus).isIn("FAILED", "PARTIAL_FAILED");
   }
 
@@ -167,7 +165,8 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          Map<String, Object> row = jdbcTemplate.queryForMap(selectTaskStatusSql, TENANT, seed.dedupKey());
+          Map<String, Object> row =
+              jdbcTemplate.queryForMap(selectTaskStatusSql, TENANT, seed.dedupKey());
           assertThat(row.get("task_status")).isEqualTo("FAILED");
           assertThat(row.get("instance_status")).isIn("FAILED", "PARTIAL_FAILED");
           assertThat(String.valueOf(row.get("error_code")))
@@ -175,12 +174,8 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
         });
 
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
-    Integer importedRows = businessJdbc.queryForObject(
-        selectCountSql,
-        Integer.class,
-        TENANT,
-        "CTL-1",
-        "CTL-2");
+    Integer importedRows =
+        businessJdbc.queryForObject(selectCountSql, Integer.class, TENANT, "CTL-1", "CTL-2");
     assertThat(importedRows).isZero();
   }
 

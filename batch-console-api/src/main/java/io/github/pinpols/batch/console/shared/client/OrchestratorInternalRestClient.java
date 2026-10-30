@@ -1,13 +1,11 @@
 package io.github.pinpols.batch.console.shared.client;
 
-import lombok.Builder;
-
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.common.i18n.AcceptLanguageRequestInterceptor;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.i18n.AcceptLanguageRequestInterceptor;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.config.ConsoleOrchestratorClientProperties;

@@ -54,6 +54,18 @@ final class TenantConfigMatrixBuilder {
       }
       rowsByTenantAndJob.put(tenantId, tenantRows);
     }
+    if (!rowsByTenantAndJob.containsKey(baselineTenantId)) {
+      // 显式基准不必出现在展示范围中；仍须加载其事实，不能把未比较显示为无差异。
+      ConfigSyncBundlePayload baselineBundle =
+          bundleLoader.apply(baselineTenantId, MATRIX_CONFIG_TYPES);
+      Map<String, JobMatrixRow> baselineRows = new LinkedHashMap<>();
+      for (String jobCode : request.getJobCodes()) {
+        JobMatrixRow baselineRow =
+            matrixRow(baselineTenantId, jobCode, baselineBundle, referenceResolver);
+        baselineRows.put(jobCode, baselineRow);
+      }
+      rowsByTenantAndJob.put(baselineTenantId, baselineRows);
+    }
     rows = rows.stream()
         .map(row -> {
           Map<String, JobMatrixRow> baselineTenantRows =

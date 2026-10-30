@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
-import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -22,28 +19,39 @@ import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.storage.ObjectNotFoundException;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
+import io.github.pinpols.batch.orchestrator.application.service.batchday.FileGroupExpectationService;
 import io.github.pinpols.batch.orchestrator.config.FileGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.command.ArrivalGroupGovernanceCommand;
 import io.github.pinpols.batch.orchestrator.domain.command.FileGovernanceCommand;
 import io.github.pinpols.batch.orchestrator.domain.command.FileUploadSessionCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
+import io.github.pinpols.batch.orchestrator.domain.query.FileGroupUploadTarget;
 import io.github.pinpols.batch.orchestrator.domain.query.JobTaskQuery;
+import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews.DispatchRecordRow;
+import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews.FileRecordRow;
+import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews.TemplateSecurityRow;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceArrivalViews;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.S3GovernanceStorage;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
+import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -63,6 +71,9 @@ class DefaultFileGovernanceServiceTest {
   private JobTaskMapper jobTaskMapper;
 
   @Mock
+  private JobStepInstanceMapper jobStepInstanceMapper;
+
+  @Mock
   private JobPartitionMapper jobPartitionMapper;
 
   @Mock
@@ -77,6 +88,9 @@ class DefaultFileGovernanceServiceTest {
   @Mock
   private FileGovernanceCommitService fileGovernanceCommitService;
 
+  @Mock
+  private FileGroupExpectationService fileGroupExpectationService;
+
   private final FileGovernanceProperties fileGovernanceProperties = new FileGovernanceProperties();
   private final BatchSecurityProperties batchSecurityProperties = new BatchSecurityProperties();
 
@@ -87,13 +101,15 @@ class DefaultFileGovernanceServiceTest {
     service = new DefaultFileGovernanceService(
         fileGovernanceRepository,
         jobTaskMapper,
+        jobStepInstanceMapper,
         jobPartitionMapper,
         jobInstanceMapper,
         taskDispatchOutboxService,
         fileGovernanceProperties,
         s3GovernanceStorage,
         batchSecurityProperties,
-        fileGovernanceCommitService);
+        fileGovernanceCommitService,
+        fileGroupExpectationService);
   }
 
   // ── validateCommand / validateArrivalGroupCommand ────────────────────────
@@ -144,7 +160,7 @@ class DefaultFileGovernanceServiceTest {
   void shouldArchiveFile_whenStatusTransitionAllowed() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
-        .thenReturn(Map.of("file_status", FileStatus.LOADED.code()));
+        .thenReturn(fileRow(FileStatus.LOADED.code(), null, null));
     when(fileGovernanceRepository.countActivePipelineInstances("t1", 1L)).thenReturn(0L);
     when(fileGovernanceRepository.countPendingDispatchRecords("t1", 1L)).thenReturn(0L);
     when(fileGovernanceRepository.updateFileStatus(
@@ -171,7 +187,7 @@ class DefaultFileGovernanceServiceTest {
     // 把干净的业务流程/错误掩盖成 500。见 DefaultFileGovernanceService#changeFileStatus。
     FileGovernanceCommand cmd = baseCommand().reason(null).build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
-        .thenReturn(Map.of("file_status", FileStatus.LOADED.code()));
+        .thenReturn(fileRow(FileStatus.LOADED.code(), null, null));
     when(fileGovernanceRepository.countActivePipelineInstances("t1", 1L)).thenReturn(0L);
     when(fileGovernanceRepository.countPendingDispatchRecords("t1", 1L)).thenReturn(0L);
     when(fileGovernanceRepository.updateFileStatus(
@@ -189,7 +205,7 @@ class DefaultFileGovernanceServiceTest {
   void shouldDeleteFile_whenArchivedToDeletedTransitionAllowed() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
-        .thenReturn(Map.of("file_status", FileStatus.ARCHIVED.code()));
+        .thenReturn(fileRow(FileStatus.ARCHIVED.code(), null, null));
     when(fileGovernanceRepository.countActivePipelineInstances("t1", 1L)).thenReturn(0L);
     when(fileGovernanceRepository.countPendingDispatchRecords("t1", 1L)).thenReturn(0L);
     when(fileGovernanceRepository.updateFileStatus(
@@ -207,7 +223,7 @@ class DefaultFileGovernanceServiceTest {
   @DisplayName("文件记录不存在时抛出业务异常, 且不写审计")
   void shouldThrowAndWriteFailedAudit_whenFileRecordMissing() {
     FileGovernanceCommand cmd = baseCommand().build();
-    when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(Map.of());
+    when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(null);
 
     assertThatThrownBy(() -> service.archiveFile(cmd))
         .isInstanceOf(BizException.class)
@@ -222,7 +238,7 @@ class DefaultFileGovernanceServiceTest {
   void shouldThrowStateConflictAndAuditFailure_whenActivePipelinesExist() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
-        .thenReturn(Map.of("file_status", FileStatus.LOADED.code()));
+        .thenReturn(fileRow(FileStatus.LOADED.code(), null, null));
     when(fileGovernanceRepository.countActivePipelineInstances("t1", 1L)).thenReturn(2L);
 
     assertThatThrownBy(() -> service.archiveFile(cmd))
@@ -241,7 +257,7 @@ class DefaultFileGovernanceServiceTest {
   void shouldThrowAndAuditFailure_whenPendingDispatchesExist() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
-        .thenReturn(Map.of("file_status", FileStatus.LOADED.code()));
+        .thenReturn(fileRow(FileStatus.LOADED.code(), null, null));
     when(fileGovernanceRepository.countActivePipelineInstances("t1", 1L)).thenReturn(0L);
     when(fileGovernanceRepository.countPendingDispatchRecords("t1", 1L)).thenReturn(3L);
 
@@ -258,7 +274,7 @@ class DefaultFileGovernanceServiceTest {
     // DELETED 是终态,不能转 ARCHIVED
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
-        .thenReturn(Map.of("file_status", FileStatus.DELETED.code()));
+        .thenReturn(fileRow(FileStatus.DELETED.code(), null, null));
     when(fileGovernanceRepository.countActivePipelineInstances("t1", 1L)).thenReturn(0L);
     when(fileGovernanceRepository.countPendingDispatchRecords("t1", 1L)).thenReturn(0L);
 
@@ -276,7 +292,7 @@ class DefaultFileGovernanceServiceTest {
   void shouldThrowStateConflictAndAuditFailure_whenUpdateReturnsZero() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
-        .thenReturn(Map.of("file_status", FileStatus.LOADED.code()));
+        .thenReturn(fileRow(FileStatus.LOADED.code(), null, null));
     when(fileGovernanceRepository.countActivePipelineInstances("t1", 1L)).thenReturn(0L);
     when(fileGovernanceRepository.countPendingDispatchRecords("t1", 1L)).thenReturn(0L);
     when(fileGovernanceRepository.updateFileStatus(
@@ -300,10 +316,8 @@ class DefaultFileGovernanceServiceTest {
   void shouldReturnPresignedUrl_forPlainFile() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
-        .thenReturn(Map.of(
-            "storage_bucket", "bucket-a",
-            "storage_path", "path/to/file.csv"));
-    when(fileGovernanceRepository.loadTemplateSecurityForFile("t1", 1L)).thenReturn(Map.of());
+        .thenReturn(fileRow(null, "bucket-a", "path/to/file.csv"));
+    when(fileGovernanceRepository.loadTemplateSecurityForFile("t1", 1L)).thenReturn(null);
     when(s3GovernanceStorage.createPresignedDownloadUrl(
             eq("bucket-a"), eq("path/to/file.csv"), anyInt()))
         .thenReturn("https://objectStore/presigned/url");
@@ -319,9 +333,8 @@ class DefaultFileGovernanceServiceTest {
   void shouldEnforceMinimum60sExpiry_whenPropConfiguredTooLow() {
     FileGovernanceCommand cmd = baseCommand().build();
     fileGovernanceProperties.getAccess().setPresignExpirySeconds(10); // 低于 60
-    when(fileGovernanceRepository.loadFileRecord("t1", 1L))
-        .thenReturn(Map.of("storage_bucket", "b", "storage_path", "p"));
-    when(fileGovernanceRepository.loadTemplateSecurityForFile("t1", 1L)).thenReturn(Map.of());
+    when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(fileRow(null, "b", "p"));
+    when(fileGovernanceRepository.loadTemplateSecurityForFile("t1", 1L)).thenReturn(null);
     when(s3GovernanceStorage.createPresignedDownloadUrl("b", "p", 60)).thenReturn("u");
 
     String url = service.presignFileDownload(cmd);
@@ -334,13 +347,9 @@ class DefaultFileGovernanceServiceTest {
   @DisplayName("开启内容加密时返回控制台代理地址, 不走对象存储直连")
   void shouldReturnConsoleProxyUrl_whenContentEncryptionEnabled() {
     FileGovernanceCommand cmd = baseCommand().approvalId("appr-1").build();
-    when(fileGovernanceRepository.loadFileRecord("t1", 1L))
-        .thenReturn(Map.of("storage_bucket", "b", "storage_path", "p"));
+    when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(fileRow(null, "b", "p"));
     when(fileGovernanceRepository.loadTemplateSecurityForFile("t1", 1L))
-        .thenReturn(Map.of(
-            "content_encryption_enabled", true,
-            "download_requires_approval", true,
-            "encryption_key_ref", "kms-1"));
+        .thenReturn(securityRow(true, "kms-1", true));
 
     String url = service.presignFileDownload(cmd);
 
@@ -356,7 +365,7 @@ class DefaultFileGovernanceServiceTest {
   @DisplayName("文件记录不存在时生成下载地址抛出未找到异常")
   void shouldThrowNotFound_whenFileRecordMissingOnPresign() {
     FileGovernanceCommand cmd = baseCommand().build();
-    when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(Map.of());
+    when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(null);
     assertThatThrownBy(() -> service.presignFileDownload(cmd))
         .isInstanceOf(BizException.class)
         .extracting(e -> ((BizException) e).getCode())
@@ -367,10 +376,9 @@ class DefaultFileGovernanceServiceTest {
   @DisplayName("模板要求下载审批但审批缺失时抛出业务异常")
   void shouldThrowBusinessError_whenApprovalRequiredButMissing() {
     FileGovernanceCommand cmd = baseCommand().approvalId(null).build();
-    when(fileGovernanceRepository.loadFileRecord("t1", 1L))
-        .thenReturn(Map.of("storage_bucket", "b", "storage_path", "p"));
+    when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(fileRow(null, "b", "p"));
     when(fileGovernanceRepository.loadTemplateSecurityForFile("t1", 1L))
-        .thenReturn(Map.of("download_requires_approval", true));
+        .thenReturn(securityRow(false, null, true));
 
     assertThatThrownBy(() -> service.presignFileDownload(cmd))
         .isInstanceOf(BizException.class)
@@ -383,8 +391,8 @@ class DefaultFileGovernanceServiceTest {
   void shouldThrowStateConflict_whenStoragePathMissing() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
-        .thenReturn(Map.of("storage_bucket", "b")); // 没 storage_path
-    when(fileGovernanceRepository.loadTemplateSecurityForFile("t1", 1L)).thenReturn(Map.of());
+        .thenReturn(fileRow(null, "b", null)); // 没 storage_path
+    when(fileGovernanceRepository.loadTemplateSecurityForFile("t1", 1L)).thenReturn(null);
 
     assertThatThrownBy(() -> service.presignFileDownload(cmd))
         .isInstanceOf(BizException.class)
@@ -397,12 +405,9 @@ class DefaultFileGovernanceServiceTest {
   void shouldBypassApprovalAndEncryption_whenBypassModeEnabled() {
     batchSecurityProperties.setBypassMode(true);
     FileGovernanceCommand cmd = baseCommand().build();
-    when(fileGovernanceRepository.loadFileRecord("t1", 1L))
-        .thenReturn(Map.of("storage_bucket", "b", "storage_path", "p"));
+    when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(fileRow(null, "b", "p"));
     when(fileGovernanceRepository.loadTemplateSecurityForFile("t1", 1L))
-        .thenReturn(Map.of(
-            "content_encryption_enabled", true,
-            "download_requires_approval", true));
+        .thenReturn(securityRow(true, null, true));
     when(s3GovernanceStorage.createPresignedDownloadUrl(eq("b"), eq("p"), anyInt()))
         .thenReturn("https://direct-objectStore");
 
@@ -415,12 +420,140 @@ class DefaultFileGovernanceServiceTest {
   // ── redispatchFile ───────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("单个分发任务已关联其他文件时不得重派")
+  void shouldRejectRedispatchWhenSingleTaskReferencesAnotherFile() {
+    FileGovernanceCommand cmd = baseCommand().channelCode("CH1").build();
+    when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(fileRow(null, null, null));
+    when(fileGovernanceRepository.loadLatestDispatchRecord("t1", 1L, "CH1"))
+        .thenReturn(new DispatchRecordRow(100L, 200L, "CH1"));
+    when(fileGovernanceRepository.loadRelatedJobInstanceId(200L)).thenReturn(300L);
+    JobInstanceEntity job = new JobInstanceEntity();
+    job.setId(300L);
+    when(jobInstanceMapper.selectById("t1", 300L)).thenReturn(job);
+    JobTaskEntity task = new JobTaskEntity();
+    task.setId(400L);
+    task.setTaskType("DISPATCH");
+    when(jobTaskMapper.selectByQuery(any(JobTaskQuery.class))).thenReturn(List.of(task));
+    JobStepInstanceEntity step = new JobStepInstanceEntity();
+    step.setJobTaskId(400L);
+    step.setRelatedFileId(2L);
+    when(jobStepInstanceMapper.selectByJobInstanceId("t1", 300L)).thenReturn(List.of(step));
+
+    assertThatThrownBy(() -> service.redispatchFile(cmd))
+        .isInstanceOf(BizException.class)
+        .hasMessage("error.dispatch.redispatch_task_ambiguous");
+    verify(taskDispatchOutboxService, never()).writeDispatchEvent(any());
+    verify(fileGovernanceRepository, never()).appendAudit(any());
+  }
+
+  @Test
+  @DisplayName("单个分发任务缺少文件关联时不得凭任务数量重派")
+  void shouldRejectRedispatchWhenSingleTaskHasNoFileAssociation() {
+    FileGovernanceCommand cmd = baseCommand().channelCode("CH1").build();
+    when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(fileRow(null, null, null));
+    when(fileGovernanceRepository.loadLatestDispatchRecord("t1", 1L, "CH1"))
+        .thenReturn(new DispatchRecordRow(100L, 200L, "CH1"));
+    when(fileGovernanceRepository.loadRelatedJobInstanceId(200L)).thenReturn(300L);
+    JobInstanceEntity job = new JobInstanceEntity();
+    job.setId(300L);
+    when(jobInstanceMapper.selectById("t1", 300L)).thenReturn(job);
+    JobTaskEntity task = new JobTaskEntity();
+    task.setId(400L);
+    task.setJobPartitionId(500L);
+    task.setTaskType("DISPATCH");
+    task.setTaskStatus("FAILED");
+    task.setTaskPayload("{\"fileId\":2,\"channelCode\":\"CH1\"}");
+    when(jobTaskMapper.selectByQuery(any(JobTaskQuery.class))).thenReturn(List.of(task));
+
+    assertThatThrownBy(() -> service.redispatchFile(cmd))
+        .isInstanceOf(BizException.class)
+        .hasMessage("error.dispatch.redispatch_task_ambiguous");
+    verify(fileGovernanceRepository, never()).resetDispatchRecordForRedispatch(any(), any());
+    verify(taskDispatchOutboxService, never()).writeDispatchEvent(any());
+  }
+
+  @Test
+  @DisplayName("分区状态无法复位时拒绝重派，不写派发事件和成功审计")
+  void shouldRejectRedispatchWhenPartitionResetMisses() {
+    FileGovernanceCommand cmd = baseCommand().channelCode("CH1").build();
+    when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(fileRow(null, null, null));
+    when(fileGovernanceRepository.loadLatestDispatchRecord("t1", 1L, "CH1"))
+        .thenReturn(new DispatchRecordRow(100L, 200L, "CH1"));
+    when(fileGovernanceRepository.loadRelatedJobInstanceId(200L)).thenReturn(300L);
+    JobInstanceEntity job = new JobInstanceEntity();
+    job.setId(300L);
+    when(jobInstanceMapper.selectById("t1", 300L)).thenReturn(job);
+    JobTaskEntity task = new JobTaskEntity();
+    task.setId(400L);
+    task.setTenantId("t1");
+    task.setJobPartitionId(500L);
+    task.setTaskType("DISPATCH");
+    task.setTaskStatus("FAILED");
+    task.setTaskPayload("{\"fileId\":1,\"channelCode\":\"CH1\"}");
+    task.setVersion(1L);
+    task.setTaskSeq(1);
+    when(jobTaskMapper.selectByQuery(any(JobTaskQuery.class))).thenReturn(List.of(task));
+    JobStepInstanceEntity step = new JobStepInstanceEntity();
+    step.setJobTaskId(400L);
+    step.setRelatedFileId(1L);
+    when(jobStepInstanceMapper.selectByJobInstanceId("t1", 300L)).thenReturn(List.of(step));
+    JobPartitionEntity partition = new JobPartitionEntity();
+    partition.setId(500L);
+    partition.setVersion(2L);
+    when(jobPartitionMapper.selectById("t1", 500L)).thenReturn(partition);
+    when(fileGovernanceRepository.resetDispatchRecordForRedispatch("t1", 100L)).thenReturn(1);
+    when(jobPartitionMapper.resetForDispatch("t1", 500L, "READY", 2L)).thenReturn(0);
+
+    assertThatThrownBy(() -> service.redispatchFile(cmd)).isInstanceOf(BizException.class);
+    verify(taskDispatchOutboxService, never()).writeDispatchEvent(any());
+    verify(fileGovernanceRepository, never()).appendAudit(any());
+  }
+
+  @Test
+  @DisplayName("任务版本竞争导致复位失败时拒绝重派")
+  void shouldRejectRedispatchWhenTaskResetMisses() {
+    FileGovernanceCommand cmd = baseCommand().channelCode("CH1").build();
+    when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(fileRow(null, null, null));
+    when(fileGovernanceRepository.loadLatestDispatchRecord("t1", 1L, "CH1"))
+        .thenReturn(new DispatchRecordRow(100L, 200L, "CH1"));
+    when(fileGovernanceRepository.loadRelatedJobInstanceId(200L)).thenReturn(300L);
+    JobInstanceEntity job = new JobInstanceEntity();
+    job.setId(300L);
+    when(jobInstanceMapper.selectById("t1", 300L)).thenReturn(job);
+    JobTaskEntity task = new JobTaskEntity();
+    task.setId(400L);
+    task.setTenantId("t1");
+    task.setJobPartitionId(500L);
+    task.setTaskType("DISPATCH");
+    task.setTaskStatus("FAILED");
+    task.setTaskPayload("{\"fileId\":1,\"channelCode\":\"CH1\"}");
+    task.setVersion(1L);
+    task.setTaskSeq(1);
+    when(jobTaskMapper.selectByQuery(any(JobTaskQuery.class))).thenReturn(List.of(task));
+    JobStepInstanceEntity step = new JobStepInstanceEntity();
+    step.setJobTaskId(400L);
+    step.setRelatedFileId(1L);
+    when(jobStepInstanceMapper.selectByJobInstanceId("t1", 300L)).thenReturn(List.of(step));
+    JobPartitionEntity partition = new JobPartitionEntity();
+    partition.setId(500L);
+    partition.setVersion(2L);
+    when(jobPartitionMapper.selectById("t1", 500L)).thenReturn(partition);
+    when(fileGovernanceRepository.resetDispatchRecordForRedispatch("t1", 100L)).thenReturn(1);
+    when(jobPartitionMapper.resetForDispatch("t1", 500L, "READY", 2L)).thenReturn(1);
+    when(jobTaskMapper.resetForRetry("t1", 400L, "READY", 1L)).thenReturn(0);
+
+    assertThatThrownBy(() -> service.redispatchFile(cmd)).isInstanceOf(BizException.class);
+    verify(taskDispatchOutboxService, never()).writeDispatchEvent(any());
+    verify(fileGovernanceRepository, never()).appendAudit(any());
+  }
+
+  @Test
   @DisplayName("相关资源均可解析时重置派发记录与分区任务, 并写成功审计")
   void shouldRedispatch_whenAllResourcesResolvable() {
     FileGovernanceCommand cmd = baseCommand().channelCode("CH1").build();
-    when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(Map.of("id", 1L));
+    when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(fileRow(null, null, null));
     when(fileGovernanceRepository.loadLatestDispatchRecord("t1", 1L, "CH1"))
-        .thenReturn(Map.of("id", 100L, "pipeline_instance_id", 200L, "channel_code", "CH1"));
+        .thenReturn(new DispatchRecordRow(100L, 200L, "CH1"));
     when(fileGovernanceRepository.loadRelatedJobInstanceId(200L)).thenReturn(300L);
 
     JobInstanceEntity jobInstance = new JobInstanceEntity();
@@ -432,6 +565,9 @@ class DefaultFileGovernanceServiceTest {
     task.setTenantId("t1");
     task.setJobPartitionId(500L);
     task.setTaskType("DISPATCH");
+    task.setTaskStatus("FAILED");
+    task.setTaskPayload(
+        "{\"fileId\":2,\"channelCode\":\"CH2\",\"bundleSourceFileId\":1,\"bundleTargetRef\":\"CH1\"}");
     task.setVersion(1L);
     task.setTaskSeq(1);
     JobTaskEntity nonDispatch = new JobTaskEntity();
@@ -441,10 +577,17 @@ class DefaultFileGovernanceServiceTest {
     when(jobTaskMapper.selectByQuery(any(JobTaskQuery.class)))
         .thenReturn(List.of(nonDispatch, task));
 
+    JobStepInstanceEntity step = new JobStepInstanceEntity();
+    step.setJobTaskId(400L);
+    step.setRelatedFileId(1L);
+    when(jobStepInstanceMapper.selectByJobInstanceId("t1", 300L)).thenReturn(List.of(step));
     JobPartitionEntity partition = new JobPartitionEntity();
     partition.setId(500L);
     partition.setVersion(2L);
     when(jobPartitionMapper.selectById("t1", 500L)).thenReturn(partition);
+    when(fileGovernanceRepository.resetDispatchRecordForRedispatch("t1", 100L)).thenReturn(1);
+    when(jobPartitionMapper.resetForDispatch("t1", 500L, "READY", 2L)).thenReturn(1);
+    when(jobTaskMapper.resetForRetry("t1", 400L, "READY", 1L)).thenReturn(1);
 
     String result = service.redispatchFile(cmd);
 
@@ -453,8 +596,12 @@ class DefaultFileGovernanceServiceTest {
     verify(jobPartitionMapper).resetForDispatch("t1", 500L, "READY", 2L);
     verify(jobTaskMapper).resetForRetry("t1", 400L, "READY", 1L);
     verify(taskDispatchOutboxService)
-        .writeDispatchEvent(
-            org.mockito.ArgumentMatchers.argThat(command -> command != null && java.util.Objects.equals(command.jobInstance(), jobInstance) && java.util.Objects.equals(command.task(), task) && java.util.Objects.equals(command.partition(), partition) && command.eventKey() != null && java.util.Objects.equals(command.runModeOverride(), RunMode.COMPENSATE)));
+        .writeDispatchEvent(ArgumentMatchers.argThat(command -> command != null
+            && Objects.equals(command.jobInstance(), jobInstance)
+            && Objects.equals(command.task(), task)
+            && Objects.equals(command.partition(), partition)
+            && command.eventKey() != null
+            && Objects.equals(command.runModeOverride(), RunMode.COMPENSATE)));
     ArgumentCaptor<FileGovernanceRepository.FileAuditCommand> auditCaptor =
         ArgumentCaptor.forClass(FileGovernanceRepository.FileAuditCommand.class);
     verify(fileGovernanceRepository).appendAudit(auditCaptor.capture());
@@ -466,7 +613,7 @@ class DefaultFileGovernanceServiceTest {
   @DisplayName("重新派发时文件记录不存在则抛出未找到异常")
   void shouldThrowNotFound_whenFileRecordMissingOnRedispatch() {
     FileGovernanceCommand cmd = baseCommand().build();
-    when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(Map.of());
+    when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(null);
     assertThatThrownBy(() -> service.redispatchFile(cmd))
         .isInstanceOf(BizException.class)
         .extracting(e -> ((BizException) e).getCode())
@@ -477,8 +624,8 @@ class DefaultFileGovernanceServiceTest {
   @DisplayName("重新派发时派发记录不存在则抛出未找到异常")
   void shouldThrowNotFound_whenDispatchRecordMissing() {
     FileGovernanceCommand cmd = baseCommand().channelCode("CH1").build();
-    when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(Map.of("id", 1L));
-    when(fileGovernanceRepository.loadLatestDispatchRecord("t1", 1L, "CH1")).thenReturn(Map.of());
+    when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(fileRow(null, null, null));
+    when(fileGovernanceRepository.loadLatestDispatchRecord("t1", 1L, "CH1")).thenReturn(null);
     assertThatThrownBy(() -> service.redispatchFile(cmd))
         .isInstanceOf(BizException.class)
         .extracting(e -> ((BizException) e).getCode())
@@ -489,9 +636,9 @@ class DefaultFileGovernanceServiceTest {
   @DisplayName("派发记录未关联作业实例时重新派发抛出状态冲突")
   void shouldThrowStateConflict_whenPipelineUnbound() {
     FileGovernanceCommand cmd = baseCommand().channelCode("CH1").build();
-    when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(Map.of("id", 1L));
+    when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(fileRow(null, null, null));
     when(fileGovernanceRepository.loadLatestDispatchRecord("t1", 1L, "CH1"))
-        .thenReturn(Map.of("id", 100L, "pipeline_instance_id", 200L));
+        .thenReturn(new DispatchRecordRow(100L, 200L, null));
     when(fileGovernanceRepository.loadRelatedJobInstanceId(200L)).thenReturn(null);
 
     assertThatThrownBy(() -> service.redispatchFile(cmd))
@@ -504,9 +651,9 @@ class DefaultFileGovernanceServiceTest {
   @DisplayName("作业任务中没有派发任务时重新派发抛出未找到异常")
   void shouldThrowNotFound_whenNoDispatchTaskAmongJobTasks() {
     FileGovernanceCommand cmd = baseCommand().channelCode("CH1").build();
-    when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(Map.of("id", 1L));
+    when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(fileRow(null, null, null));
     when(fileGovernanceRepository.loadLatestDispatchRecord("t1", 1L, "CH1"))
-        .thenReturn(Map.of("id", 100L, "pipeline_instance_id", 200L));
+        .thenReturn(new DispatchRecordRow(100L, 200L, null));
     when(fileGovernanceRepository.loadRelatedJobInstanceId(200L)).thenReturn(300L);
 
     JobInstanceEntity jobInstance = new JobInstanceEntity();
@@ -670,7 +817,7 @@ class DefaultFileGovernanceServiceTest {
     // 验证 toLong(null) 时 continue 分支
     ArrivalGroupGovernanceCommand cmd = arrivalCmd("CONTINUE_WAITING");
     FileGovernanceArrivalViews.ArrivalGroupFileView noId =
-        FileGovernanceArrivalViews.arrivalGroupFile(new LinkedHashMap<>());
+        new FileGovernanceArrivalViews.ArrivalGroupFileView(null, null, false, false, null);
     FileGovernanceArrivalViews.ArrivalGroupFileView withId = fileMap(99L, Map.of());
     when(fileGovernanceRepository.selectArrivalGroupFiles("t1", "grp"))
         .thenReturn(List.of(noId, withId));
@@ -734,11 +881,49 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("绑定人工上传时校验文件组目标并持久化业务日与束模板元数据")
+  void shouldPersistValidatedUploadGroupBinding() {
+    LocalDate bizDate = LocalDate.of(2026, 10, 26);
+    when(s3GovernanceStorage.defaultBucket()).thenReturn("bucket-a");
+    when(fileGroupExpectationService.requireEnabledUploadTarget("t1", "CAL", 18L, "GROUP_A"))
+        .thenReturn(new FileGroupUploadTarget("t1", "CAL", 18L, "WF_IMPORT", "Import", "GROUP_A"));
+    when(fileGovernanceRepository.createReconciledFileRecord(any(), eq(bizDate)))
+        .thenReturn(43L);
+    FileUploadSessionCommand command = FileUploadSessionCommand.builder()
+        .tenantId("t1")
+        .channelCode("ch-1")
+        .fileName("orders.csv")
+        .operatorId("op")
+        .traceId("trace")
+        .calendarCode("CAL")
+        .workflowDefinitionId(18L)
+        .fileGroupCode("GROUP_A")
+        .bizDate(bizDate)
+        .requiredFileNames(List.of("customers.csv", "orders.csv"))
+        .bundleTemplateCode("ORDERS")
+        .build();
+
+    service.createUploadSession(command);
+
+    ArgumentCaptor<FileGovernanceRepository.ReconciledFileRecordCommand> captor =
+        ArgumentCaptor.forClass(FileGovernanceRepository.ReconciledFileRecordCommand.class);
+    verify(fileGovernanceRepository).createReconciledFileRecord(captor.capture(), eq(bizDate));
+    assertThat(captor.getValue().metadata())
+        .isInstanceOf(Map.class)
+        .asInstanceOf(InstanceOfAssertFactories.MAP)
+        .containsEntry("fileGroupCode", "GROUP_A")
+        .containsEntry("bizDate", "2026-10-26")
+        .containsEntry("requiredFileSet", "customers.csv,orders.csv")
+        .containsEntry("bundleWorkflowCode", "WF_IMPORT")
+        .containsEntry("bundleTemplateCode", "ORDERS");
+  }
+
+  @Test
   @DisplayName("文件已存在于对象存储时确认到达并回写文件大小")
   void shouldConfirmFileArrivalAfterObjectExists() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
-        .thenReturn(Map.of("storage_bucket", "bucket-a", "storage_path", "uploads/t1/a.csv"));
+        .thenReturn(fileRow(null, "bucket-a", "uploads/t1/a.csv"));
     when(s3GovernanceStorage.objectSize("bucket-a", "uploads/t1/a.csv")).thenReturn(123L);
 
     String result = service.confirmFileArrival(cmd);
@@ -752,7 +937,7 @@ class DefaultFileGovernanceServiceTest {
   void shouldRejectConfirmArrivalWhenContentMissing() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
-        .thenReturn(Map.of("storage_bucket", "bucket-a", "storage_path", "uploads/t1/a.csv"));
+        .thenReturn(fileRow(null, "bucket-a", "uploads/t1/a.csv"));
     when(s3GovernanceStorage.objectSize("bucket-a", "uploads/t1/a.csv"))
         .thenThrow(new ObjectNotFoundException("missing"));
 
@@ -765,6 +950,16 @@ class DefaultFileGovernanceServiceTest {
   }
 
   // ── helpers ──────────────────────────────────────────────────────────────
+
+  private static FileRecordRow fileRow(String status, String bucket, String path) {
+    return new FileRecordRow(1L, status, bucket, path);
+  }
+
+  private static TemplateSecurityRow securityRow(
+      boolean encrypted, String encryptionKeyRef, boolean approvalRequired) {
+    return new TemplateSecurityRow(
+        null, null, null, encrypted, encryptionKeyRef, approvalRequired, null);
+  }
 
   private FileGovernanceCommand.FileGovernanceCommandBuilder baseCommand() {
     return FileGovernanceCommand.builder()
@@ -791,6 +986,11 @@ class DefaultFileGovernanceServiceTest {
     Map<String, Object> map = new LinkedHashMap<>();
     map.put("id", id);
     map.putAll(extra);
-    return FileGovernanceArrivalViews.arrivalGroupFile(map);
+    return new FileGovernanceArrivalViews.ArrivalGroupFileView(
+        id,
+        (String) map.get("biz_date"),
+        Boolean.parseBoolean(String.valueOf(map.get("allow_empty_run"))),
+        Boolean.parseBoolean(String.valueOf(map.get("allow_skip_biz_date"))),
+        (String) map.get("latest_tolerable_time"));
   }
 }

@@ -7,6 +7,7 @@ import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -39,6 +40,8 @@ class RlsScriptPartitionIntegrationTest {
       TestPostgresContainers.business().withInitScript("db/create_biz_tables.sql");
 
   private JdbcTemplate admin;
+  private UUID tenantAGenerationId;
+  private UUID tenantBGenerationId;
 
   @BeforeEach
   void seedRealBusinessPartitions() {
@@ -50,20 +53,33 @@ class RlsScriptPartitionIntegrationTest {
         insert into biz.customer_account (tenant_id, customer_no, customer_name) values
           ('tenant-a', 'a-001', 'Customer A'), ('tenant-b', 'b-001', 'Customer B')
         """;
+    final String insertProcessGenerationSql = """
+        insert into batch.process_staging_generation (
+          generation_id, tenant_id, batch_key, generation_status
+        ) values (?, 'tenant-a', 'a-daily', 'OPEN'), (?, 'tenant-b', 'b-daily', 'OPEN')
+        """;
     final String insertProcessStagingSql = """
         insert into batch.process_staging (
-          batch_key, row_seq, tenant_id, target_schema, target_table, payload, staged_at
+          batch_key, staging_generation_id, row_seq, tenant_id, target_schema, target_table, payload, staged_at
         ) values
-          ('a-daily', 1, 'tenant-a', 'biz', 'target', '{}', '2026-10-18 01:00:00+00'),
-          ('b-daily', 2, 'tenant-b', 'biz', 'target', '{}', '2026-10-18 01:00:00+00'),
-          ('a-default', 3, 'tenant-a', 'biz', 'target', '{}', '2026-10-20 01:00:00+00'),
-          ('b-default', 4, 'tenant-b', 'biz', 'target', '{}', '2026-10-20 01:00:00+00')
+          ('a-daily', ?, 1, 'tenant-a', 'biz', 'target', '{}', '2026-10-18 01:00:00+00'),
+          ('b-daily', ?, 2, 'tenant-b', 'biz', 'target', '{}', '2026-10-18 01:00:00+00'),
+          ('a-daily', ?, 3, 'tenant-a', 'biz', 'target', '{}', '2026-10-20 01:00:00+00'),
+          ('b-daily', ?, 4, 'tenant-b', 'biz', 'target', '{}', '2026-10-20 01:00:00+00')
         """;
 
     admin = new JdbcTemplate(dataSource(postgres.getUsername(), postgres.getPassword()));
     admin.execute(createProcessStagingProbeSql);
     admin.update(insertCustomerAccountSql);
-    admin.update(insertProcessStagingSql);
+    tenantAGenerationId = UUID.randomUUID();
+    tenantBGenerationId = UUID.randomUUID();
+    admin.update(insertProcessGenerationSql, tenantAGenerationId, tenantBGenerationId);
+    admin.update(
+        insertProcessStagingSql,
+        tenantAGenerationId,
+        tenantBGenerationId,
+        tenantAGenerationId,
+        tenantBGenerationId);
   }
 
   @Test
@@ -91,9 +107,15 @@ class RlsScriptPartitionIntegrationTest {
       final String selectCountSql = """
           select count(*) from %s\
           """.formatted(table);
-      assertThat(writer.queryForObject(selectCountSql, Long.class))
-          .as("transition direct read: " + table)
-          .isEqualTo(admin.queryForObject(selectCountSql, Long.class));
+      Long selectedCount = writer.queryForObject(selectCountSql, Long.class);
+      Long selectedCount2 = admin.queryForObject(selectCountSql, Long.class);
+      if (isProcessStagingPartition(table)) {
+        assertThat(selectedCount)
+            .as("transition retains generation fence: " + table)
+            .isZero();
+      } else {
+        assertThat(selectedCount).as("transition direct read: " + table).isEqualTo(selectedCount2);
+      }
     }
     assertScriptSuccess(STRICT);
     assertScriptSuccess(STRICT);
@@ -187,7 +209,8 @@ class RlsScriptPartitionIntegrationTest {
           final String selectCountSql = """
               select count(*) from %s where tenant_id = 'tenant-b'\
               """.formatted(leaf);
-          assertThat(writer.queryForObject(selectCountSql, Long.class)).isEqualTo(1L);
+          Long selectedCount = writer.queryForObject(selectCountSql, Long.class);
+          assertThat(selectedCount).isEqualTo(1L);
         });
 
     RlsClosedWorldChecker.Result result =
@@ -197,10 +220,18 @@ class RlsScriptPartitionIntegrationTest {
     assertThat(result.missingPolicy()).contains(leaf);
   }
 
+  private boolean isProcessStagingPartition(String table) {
+    return table.startsWith("batch.process_staging")
+        && !table.equals("batch.process_staging_generation");
+  }
+
   private void verifyStrictReadsAndHiddenWrites(DataSource writerSource) {
     final String setLocalSql = """
         set local app.tenant_id = 'tenant-a'
     """;
+    final String setGenerationContextSql = """
+        select set_config('app.process_staging_generation_id', ?, true)
+        """;
     final String updateCustomerAccountSql = """
         update biz.customer_account set customer_name = 'updated' where tenant_id = 'tenant-a'
     """;
@@ -230,33 +261,44 @@ class RlsScriptPartitionIntegrationTest {
       final String selectCountSql = """
           select count(*) from %s\
           """.formatted(table);
-      assertThat(writer.queryForObject(selectCountSql, Long.class)).isZero();
+      Long selectedCount = writer.queryForObject(selectCountSql, Long.class);
+      assertThat(selectedCount).isZero();
       final String selectTenantACountSql = """
           select count(*) from %s where tenant_id = 'tenant-a'\
           """.formatted(table);
       Long expected = admin.queryForObject(selectTenantACountSql, Long.class);
       transaction.executeWithoutResult(status -> {
         writer.execute(setLocalSql);
+        if (isProcessStagingPartition(table)) {
+          Long rowsWithoutGeneration = writer.queryForObject(selectCountSql, Long.class);
+          assertThat(rowsWithoutGeneration).as("tenant context alone: " + table).isZero();
+        }
+        writer.queryForObject(
+            setGenerationContextSql, String.class, tenantAGenerationId.toString());
         final String selectTenantIdSql = """
             select tenant_id from %s\
             """.formatted(table);
-        assertThat(writer.queryForList(selectTenantIdSql, String.class))
+        List<String> selectedTenantId = writer.queryForList(selectTenantIdSql, String.class);
+        assertThat(selectedTenantId)
             .as(table)
             .hasSize(expected.intValue())
             .allMatch("tenant-a"::equals);
         final String updateStatementSql = """
             update %s set tenant_id = tenant_id where tenant_id = 'tenant-b'\
             """.formatted(table);
-        assertThat(writer.update(updateStatementSql)).isZero();
+        int updatedRows = writer.update(updateStatementSql);
+        assertThat(updatedRows).isZero();
         final String deleteStatementSql = """
             delete from %s where tenant_id = 'tenant-b'\
             """.formatted(table);
-        assertThat(writer.update(deleteStatementSql)).isZero();
+        int updatedRows2 = writer.update(deleteStatementSql);
+        assertThat(updatedRows2).isZero();
       });
     }
     transaction.executeWithoutResult(status -> {
       writer.execute(setLocalSql);
-      assertThat(writer.update(updateCustomerAccountSql)).isEqualTo(1);
+      int updatedRows3 = writer.update(updateCustomerAccountSql);
+      assertThat(updatedRows3).isEqualTo(1);
     });
     assertThatThrownBy(() -> transaction.executeWithoutResult(status -> {
           writer.execute(setLocalSql);

@@ -176,6 +176,8 @@ class TaskDispatcher:
             for task_type, handler in (handlers or {}).items()
         }
         self._in_flight: dict[int, asyncio.Task[None]] = {}
+        # 消费提交必须等待认领结果; 同一任务的并发重复消息共享该屏障。
+        self._claim_outcomes: dict[int, asyncio.Future[DispatchDisposition]] = {}
         # task_id → CancellationSignal,handler 在 ctx 上持有同一引用;
         # LeaseRenewalScheduler 通过 mark_cancel_requested(task_id, reason)
         # 翻其 asyncio.Event。普通 dict;**single-event-loop only;not
@@ -327,8 +329,8 @@ class TaskDispatcher:
     async def on_message(self, msg: dict[str, Any]) -> DispatchDisposition:  # noqa: PLR0911
         """处理一条解码后的 ``TaskDispatchMessage`` 信封,返回 offset 处置决定。
 
-        必须尽快返回:实际任务执行被丢到后台 ``asyncio.Task``,确保 Kafka
-        poll 循环永不阻塞。返回的 :class:`DispatchDisposition` 由
+        等待 CLAIM 确认归属后返回, 业务执行仍由后台任务完成。返回的
+        :class:`DispatchDisposition` 由
         ``KafkaTaskConsumer`` 据此决定该条 offset 是否提交——**不再无差别
         commit**(对齐 Java/Go 契约)。
         """
@@ -398,7 +400,10 @@ class TaskDispatcher:
         task_id: int = task_id_raw
 
         if task_id in self._in_flight:
-            logger.debug("taskId=%s already in-flight, committing duplicate", task_id)
+            logger.debug("taskId=%s already in-flight, awaiting claim disposition", task_id)
+            existing_outcome = self._claim_outcomes.get(task_id)
+            if existing_outcome is not None:
+                return await asyncio.shield(existing_outcome)
             return DispatchDisposition.ACCEPTED
 
         # 先建 CancellationSignal:_process 未来构造 SdkTaskContext 时会从
@@ -406,24 +411,34 @@ class TaskDispatcher:
         # LeaseRenewalScheduler 同步翻其 event,handler 通过 ctx 拿到 True。
         self._cancel_signals[task_id] = CancellationSignal()
 
-        task = asyncio.create_task(self._process(task_id, msg), name=f"task-{task_id}")
+        outcome: asyncio.Future[DispatchDisposition] = asyncio.get_running_loop().create_future()
+        self._claim_outcomes[task_id] = outcome
+        task = asyncio.create_task(self._process(task_id, msg, outcome), name=f"task-{task_id}")
         self._in_flight[task_id] = task
 
         def _cleanup(_t: asyncio.Task[None], tid: int = task_id) -> None:
+            if not outcome.done():
+                outcome.set_result(DispatchDisposition.RETRY_LATER)
+            self._claim_outcomes.pop(tid, None)
             self._in_flight.pop(tid, None)
             self._cancel_signals.pop(tid, None)
             self._partition_invocation_ids.pop(tid, None)
 
         task.add_done_callback(_cleanup)
-        return DispatchDisposition.ACCEPTED
+        return await asyncio.shield(outcome)
 
     # ─── 单任务流水线 ────────────────────────────────────────────────
 
-    async def _process(self, task_id: int, msg: dict[str, Any]) -> None:
+    async def _process(
+        self,
+        task_id: int,
+        msg: dict[str, Any],
+        outcome: asyncio.Future[DispatchDisposition],
+    ) -> None:
         """单个任务的 CLAIM → 执行 → REPORT 流水线。
 
         异常被吸收:``AuthError`` 设 fatal 并停止后续摄入;其他
-        ``PlatformError``(CLAIM 阶段)让任务自然等待租约超时重投递。
+        ``PlatformError``(CLAIM 阶段)返回可重试处置, 保留原消费 offset。
         handler 抛错走 REPORT failure 路径(不让异常从后台 asyncio.Task
         泄漏)。CLAIM 命中 409(已被自己/他人 claim)按 wire-protocol §B 视
         为幂等成功:**直接返回**,既不执行 handler 也不 REPORT(否则会污染
@@ -456,10 +471,12 @@ class TaskDispatcher:
             return
         except PlatformError as ex:
             logger.warning(
-                "CLAIM failed for taskId=%s, leaving to lease redelivery: %s", task_id, ex
+                "CLAIM failed for taskId=%s, retaining Kafka offset for retry: %s", task_id, ex
             )
             return
 
+        # 仅确认新认领或明确已认领后允许提交; 传输失败由 cleanup 解除为可重试。
+        outcome.set_result(DispatchDisposition.ACCEPTED)
         if status == 409:
             # 幂等已被 claim(Kafka at-least-once 重投 / 对端 worker 抢先)。
             # 按 fixture 08:INFO 记录,提交 offset,**不** 执行 handler、
@@ -474,6 +491,16 @@ class TaskDispatcher:
             runtime_attrs = dict(runtime_attrs)
             runtime_attrs["partitionInvocationId"] = p_inv
 
+        await self._execute_claimed(task_id, msg, runtime_attrs, claim_resp)
+
+    async def _execute_claimed(
+        self,
+        task_id: int,
+        msg: dict[str, Any],
+        runtime_attrs: dict[str, Any],
+        claim_resp: dict[str, Any],
+    ) -> None:
+        """使用认领载荷路由业务,在独立确认执行入口后调用处理器并回报。"""
         # 路由键 = 平台 JSON 字段 `workerType`(v2);v1 旧名 `taskType` 经回退兼容,与 Java
         # @JsonAlias("taskType") / Rust serde alias 跨语言对齐(防漂移)。平台 v2 已只发 workerType,
         # 此回退是 belt-and-suspenders;守护见 test_dispatcher 的 workerType→handler 绑定用例。
@@ -500,12 +527,18 @@ class TaskDispatcher:
                 parameters = json.loads(payload) if isinstance(payload, str) else payload
             except (TypeError, json.JSONDecodeError):
                 logger.exception("invalid claim payload for taskId=%s", task_id)
-                await self._report_failure(task_id, msg, "invalid claim payload: expected JSON object")
+                await self._report_failure(
+                    task_id, msg, "invalid claim payload: expected JSON object"
+                )
                 return
             if not isinstance(parameters, dict):
-                await self._report_failure(task_id, msg, "invalid claim payload: expected JSON object")
+                await self._report_failure(
+                    task_id, msg, "invalid claim payload: expected JSON object"
+                )
                 return
         ctx = self._build_context(task_id, msg, worker_type, runtime_attrs, parameters)
+        if not await self._confirm_execution_entry(task_id, msg, ctx):
+            return
         try:
             raw = handler.execute(ctx)
             result: Any = await raw if asyncio.iscoroutine(raw) else raw
@@ -531,6 +564,41 @@ class TaskDispatcher:
         else:
             reason = result.message or "handler reported failure"
             await self._report_failure(task_id, msg, reason, result=result)
+
+    async def _confirm_execution_entry(
+        self,
+        task_id: int,
+        msg: dict[str, Any],
+        ctx: SdkTaskContext,
+    ) -> bool:
+        """确认当前执行身份,并在取消时保留既有取消回报路径。"""
+        # 执行入口属于控制面确认,失败时保留租约恢复,不转换为业务失败回报。
+        start_body: dict[str, Any] = {
+            "tenantId": self._config.tenant_id,
+            "workerId": self._config.worker_code,
+            "details": {"executionStarted": True},
+        }
+        p_inv = self._partition_invocation_ids.get(task_id)
+        if p_inv is not None:
+            start_body["partitionInvocationId"] = p_inv
+        try:
+            start_response = await self._http.renew(task_id, start_body)
+        except AuthError:
+            self._fatal = True
+            logger.error("execution start auth failed for taskId=%s", task_id)
+            return False
+        except PlatformError as ex:
+            logger.warning("execution start was not confirmed for taskId=%s: %s", task_id, ex)
+            return False
+        if start_response.get("cancelRequested") is True or ctx.is_cancelled():
+            if ctx.cancel_signal is not None:
+                ctx.cancel_signal.mark_cancelled()
+            cancelled = SdkTaskResult.cancelled(message="task cancelled before handler entry")
+            await self._report_failure(
+                task_id, msg, cancelled.message or "task cancelled", cancelled
+            )
+            return False
+        return True
 
     def _build_context(
         self,

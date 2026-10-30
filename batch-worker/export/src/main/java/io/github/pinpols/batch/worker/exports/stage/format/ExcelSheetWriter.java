@@ -87,11 +87,7 @@ final class ExcelSheetWriter {
       Cell cell = row.createCell(i);
       ColumnLayout column = columns.get(i);
       Object resolvedValue = helper.resolveDelimitedValue(batch, detail, column.source());
-      writeTypedCell(
-          cell,
-          column,
-          resolvedValue,
-          i);
+      writeTypedCell(cell, column, resolvedValue, i);
     }
     rowsInCurrentSheet++;
   }

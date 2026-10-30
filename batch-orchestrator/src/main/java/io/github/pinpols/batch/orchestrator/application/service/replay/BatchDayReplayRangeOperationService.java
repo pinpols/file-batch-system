@@ -68,7 +68,9 @@ public class BatchDayReplayRangeOperationService {
     Instant now = dateTimeSupport.nowInstant();
     List<PreparedDay> preparedDays = prepareDays(command, now, false);
     List<ReplayOperationPreviewResponse.DayPreview> days = previewDays(preparedDays);
-    int candidateCount = days.stream().mapToInt(ReplayOperationPreviewResponse.DayPreview::candidateCount).sum();
+    int candidateCount = days.stream()
+        .mapToInt(ReplayOperationPreviewResponse.DayPreview::candidateCount)
+        .sum();
     String requestHash = requestHash(command);
     String snapshotPayload = JsonUtils.toJson(days);
     String snapshotHash = sha256(snapshotPayload);
@@ -86,9 +88,19 @@ public class BatchDayReplayRangeOperationService {
         .expiresAt(expiresAt)
         .createdAt(now)
         .build());
-    return new ReplayOperationPreviewResponse(
-        command.tenantId(), operationKey, OPERATION_TYPE, command.calendarCode(), command.fromDate(),
-        command.throughDate(), command.scope(), candidateCount, rawToken, expiresAt, days);
+    return ReplayOperationPreviewResponse.builder()
+        .tenantId(command.tenantId())
+        .operationKey(operationKey)
+        .operationType(OPERATION_TYPE)
+        .calendarCode(command.calendarCode())
+        .fromDate(command.fromDate())
+        .throughDate(command.throughDate())
+        .scope(command.scope())
+        .totalCandidateCount(candidateCount)
+        .previewToken(rawToken)
+        .expiresAt(expiresAt)
+        .days(days)
+        .build();
   }
 
   /**
@@ -117,10 +129,9 @@ public class BatchDayReplayRangeOperationService {
     } catch (PessimisticLockingFailureException concurrentConsumption) {
       throw invalidPreview();
     }
-    boolean previewTokenMatchesRequest =
-        EmptyChecks.isNotNull(token)
-            && command.operationKey().toString().equals(token.operationKey())
-            && requestHash.equals(token.requestHash());
+    boolean previewTokenMatchesRequest = EmptyChecks.isNotNull(token)
+        && command.operationKey().toString().equals(token.operationKey())
+        && requestHash.equals(token.requestHash());
     if (!previewTokenMatchesRequest) {
       throw invalidPreview();
     }
@@ -128,8 +139,8 @@ public class BatchDayReplayRangeOperationService {
       ReplayOperationEntity consumedOperation = EmptyChecks.isNull(token.operationId())
           ? null
           : operationMapper.selectById(command.tenantId(), token.operationId());
-      boolean requestMatchesConsumedOperation =
-          EmptyChecks.isNotNull(consumedOperation) && requestHash.equals(consumedOperation.requestHash());
+      boolean requestMatchesConsumedOperation = EmptyChecks.isNotNull(consumedOperation)
+          && requestHash.equals(consumedOperation.requestHash());
       if (requestMatchesConsumedOperation) {
         return consumedOperation;
       }
@@ -164,28 +175,35 @@ public class BatchDayReplayRangeOperationService {
     ReplayOperationEntity persisted = operationMapper.selectByIdentity(
         command.tenantId(), command.operationKey().toString());
     if (EmptyChecks.isNull(persisted) || EmptyChecks.isNull(persisted.id())) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.batch_day_replay.active_session_lost");
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT, "error.batch_day_replay.active_session_lost");
     }
 
     for (PreparedDay preparedDay : executableDays) {
-      BatchDayReplaySubmitCommand childCommand = commandForDate(
-          command, preparedDay.bizDate(), preparedDay.preview().previewToken());
-      BatchDayReplaySessionEntity child = singleDayReplayService.submitForOperation(
-          childCommand, persisted.id());
+      BatchDayReplaySubmitCommand childCommand =
+          commandForDate(command, preparedDay.bizDate(), preparedDay.preview().previewToken());
+      BatchDayReplaySessionEntity child =
+          singleDayReplayService.submitForOperation(childCommand, persisted.id());
       boolean childSessionIsMissingOrLinkedToAnotherOperation = EmptyChecks.isNull(child)
           || EmptyChecks.isNull(child.id())
           || !persisted.id().equals(child.replayOperationId());
       if (childSessionIsMissingOrLinkedToAnotherOperation) {
-        throw BizException.of(ResultCode.STATE_CONFLICT, "error.batch_day_replay.active_session_lost");
+        throw BizException.of(
+            ResultCode.STATE_CONFLICT, "error.batch_day_replay.active_session_lost");
       }
     }
     if (previewTokenMapper.linkOperation(command.tenantId(), tokenHash, persisted.id()) != 1) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.batch_day_replay.active_session_lost");
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT, "error.batch_day_replay.active_session_lost");
     }
     operationMapper.refreshFromChildSessions(command.tenantId(), persisted.id(), now);
     ReplayOperationEntity result = operationMapper.selectById(command.tenantId(), persisted.id());
-    log.info("batch day replay operation accepted: tenantId={}, operationId={}, operationKey={}, days={}",
-        command.tenantId(), persisted.id(), command.operationKey(), executableDays.size());
+    log.info(
+        "batch day replay operation accepted: tenantId={}, operationId={}, operationKey={}, days={}",
+        command.tenantId(),
+        persisted.id(),
+        command.operationKey(),
+        executableDays.size());
     return result;
   }
 
@@ -228,14 +246,16 @@ public class BatchDayReplayRangeOperationService {
       if (approver.equals(operation.approvedBy())) {
         return operation;
       }
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.batch_day_replay.approve_state_invalid");
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT, "error.batch_day_replay.approve_state_invalid");
     }
     for (Long sessionId : operationMapper.selectChildSessionIds(tenantId, operationId)) {
       singleDayReplayService.approve(tenantId, sessionId, approver);
     }
     Instant now = dateTimeSupport.nowInstant();
     if (operationMapper.recordApproval(tenantId, operationId, approver, now) != 1) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.batch_day_replay.approve_state_invalid");
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT, "error.batch_day_replay.approve_state_invalid");
     }
     operationMapper.refreshFromChildSessions(tenantId, operationId, now);
     return operationMapper.selectById(tenantId, operationId);
@@ -250,10 +270,9 @@ public class BatchDayReplayRangeOperationService {
     }
     for (Long sessionId : operationMapper.selectChildSessionIds(tenantId, operationId)) {
       BatchDayReplaySessionEntity child = sessionMapper.selectForUpdate(tenantId, sessionId);
-      boolean childCanBeCancelled =
-          EmptyChecks.isNotNull(child)
-              && (BatchLifecycleStatus.RUNNING.code().equals(child.status())
-                  || ConfigLifecycleStatus.PENDING_APPROVAL.code().equals(child.status()));
+      boolean childCanBeCancelled = EmptyChecks.isNotNull(child)
+          && (BatchLifecycleStatus.RUNNING.code().equals(child.status())
+              || ConfigLifecycleStatus.PENDING_APPROVAL.code().equals(child.status()));
       if (childCanBeCancelled) {
         singleDayReplayService.cancel(tenantId, sessionId);
       }
@@ -271,15 +290,16 @@ public class BatchDayReplayRangeOperationService {
     String initialStatus = command.autoApprove()
         ? BatchLifecycleStatus.RUNNING.code()
         : ConfigLifecycleStatus.PENDING_APPROVAL.code();
-    ReplayOperationEntity.ReplayOperationEntityBuilder operationBuilder = ReplayOperationEntity.builder()
-        .tenantId(command.tenantId())
-        .operationKey(command.operationKey().toString())
-        .operationType(OPERATION_TYPE)
-        .status(initialStatus)
-        .calendarCode(command.calendarCode())
-        .fromDate(command.fromDate())
-        .throughDate(command.throughDate())
-        .scope(command.scope());
+    ReplayOperationEntity.ReplayOperationEntityBuilder operationBuilder =
+        ReplayOperationEntity.builder()
+            .tenantId(command.tenantId())
+            .operationKey(command.operationKey().toString())
+            .operationType(OPERATION_TYPE)
+            .status(initialStatus)
+            .calendarCode(command.calendarCode())
+            .fromDate(command.fromDate())
+            .throughDate(command.throughDate())
+            .scope(command.scope());
     String executionMode = firstNonBlank(command.executionMode(), "REPLAY");
     operationBuilder.executionMode(executionMode);
     String candidateSource = firstNonBlank(command.candidateSource(), "EXISTING_INSTANCES");
@@ -312,9 +332,12 @@ public class BatchDayReplayRangeOperationService {
       BatchDayReplayRangeCommand command, Instant now, boolean issueChildPreviewTokens) {
     long inclusiveSpan = ChronoUnit.DAYS.between(command.fromDate(), command.throughDate()) + 1;
     List<PreparedDay> days = new ArrayList<>((int) inclusiveSpan);
-    for (LocalDate date = command.fromDate(); !date.isAfter(command.throughDate()); date = date.plusDays(1)) {
-      boolean calendarBlocked = EmptyChecks.isNotNull(disasterDayOverrideMapper.selectActiveByCalendarBizDate(
-          command.tenantId(), command.calendarCode(), date, now));
+    for (LocalDate date = command.fromDate();
+        !date.isAfter(command.throughDate());
+        date = date.plusDays(1)) {
+      boolean calendarBlocked =
+          EmptyChecks.isNotNull(disasterDayOverrideMapper.selectActiveByCalendarBizDate(
+              command.tenantId(), command.calendarCode(), date, now));
       if (!calendarBlocked) {
         String effectiveDayType = planCalendarMapper.selectEffectiveDayType(
             command.tenantId(), command.calendarCode(), date);
@@ -327,26 +350,41 @@ public class BatchDayReplayRangeOperationService {
         BatchDayReplayPreviewResponse preview = issueChildPreviewTokens
             ? singleDayReplayService.preview(childCommand)
             : singleDayReplayService.previewImpact(childCommand);
-        String disposition = preview.totalCount() == 0
-            ? DISPOSITION_NO_CANDIDATES
-            : DISPOSITION_READY;
+        String disposition =
+            preview.totalCount() == 0 ? DISPOSITION_NO_CANDIDATES : DISPOSITION_READY;
         days.add(new PreparedDay(date, preview, disposition));
       }
     }
     return List.copyOf(days);
   }
 
-  private static List<ReplayOperationPreviewResponse.DayPreview> previewDays(List<PreparedDay> preparedDays) {
-    return preparedDays.stream().map(prepared -> {
-      BatchDayReplayPreviewResponse day = prepared.preview();
-      if (EmptyChecks.isNull(day)) {
-        return new ReplayOperationPreviewResponse.DayPreview(
-            prepared.bizDate(), prepared.disposition(), 0, List.of(), List.of(), List.of(), List.of(), List.of());
-      }
-      return new ReplayOperationPreviewResponse.DayPreview(
-          day.bizDate(), prepared.disposition(), day.totalCount(), day.entries(),
-          day.resultVersionImpacts(), day.assetPartitionImpacts(), day.dispatchImpacts(), day.warnings());
-    }).toList();
+  private static List<ReplayOperationPreviewResponse.DayPreview> previewDays(
+      List<PreparedDay> preparedDays) {
+    return preparedDays.stream()
+        .map(prepared -> {
+          BatchDayReplayPreviewResponse day = prepared.preview();
+          if (EmptyChecks.isNull(day)) {
+            return new ReplayOperationPreviewResponse.DayPreview(
+                prepared.bizDate(),
+                prepared.disposition(),
+                0,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of());
+          }
+          return new ReplayOperationPreviewResponse.DayPreview(
+              day.bizDate(),
+              prepared.disposition(),
+              day.totalCount(),
+              day.entries(),
+              day.resultVersionImpacts(),
+              day.assetPartitionImpacts(),
+              day.dispatchImpacts(),
+              day.warnings());
+        })
+        .toList();
   }
 
   private static BatchDayReplaySubmitCommand commandForDate(
@@ -408,8 +446,8 @@ public class BatchDayReplayRangeOperationService {
     if (properties.getMaxRangeDays() <= 0 || inclusiveSpan > properties.getMaxRangeDays()) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.range_too_large");
     }
-    boolean replaySubmissionIdentityIsIncomplete =
-        submitting && (EmptyChecks.isNull(command.operationKey()) || !Texts.hasText(command.previewToken()));
+    boolean replaySubmissionIdentityIsIncomplete = submitting
+        && (EmptyChecks.isNull(command.operationKey()) || !Texts.hasText(command.previewToken()));
     if (replaySubmissionIdentityIsIncomplete) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REPLAY_INVALID_ARGUMENT);
     }
@@ -417,10 +455,21 @@ public class BatchDayReplayRangeOperationService {
 
   private String requestHash(BatchDayReplayRangeCommand command) {
     RequestFingerprint fingerprint = new RequestFingerprint(
-        command.tenantId(), command.calendarCode(), command.fromDate(), command.throughDate(),
-        command.scope(), command.jobCodes(), command.versionIds(), command.resultPolicy(),
-        command.configVersionPolicy(), command.configVersion(), command.reason(), command.requestedBy(),
-        command.autoApprove(), command.executionMode(), command.candidateSource());
+        command.tenantId(),
+        command.calendarCode(),
+        command.fromDate(),
+        command.throughDate(),
+        command.scope(),
+        command.jobCodes(),
+        command.versionIds(),
+        command.resultPolicy(),
+        command.configVersionPolicy(),
+        command.configVersion(),
+        command.reason(),
+        command.requestedBy(),
+        command.autoApprove(),
+        command.executionMode(),
+        command.candidateSource());
     String fingerprintJson = JsonUtils.toJson(fingerprint);
     return sha256(fingerprintJson);
   }

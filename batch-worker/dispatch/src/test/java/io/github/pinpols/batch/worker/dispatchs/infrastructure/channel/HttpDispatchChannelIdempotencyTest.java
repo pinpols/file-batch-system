@@ -152,15 +152,37 @@ class HttpDispatchChannelIdempotencyTest {
     assertThat(idempotencyKeys.getFirst()).hasSize(36);
   }
 
+  @Test
+  @DisplayName("HTTP 投递结果不保存端点中的凭据")
+  void dispatch_masksCredentialsInPersistedEvidence() {
+    releaseFirstResponse.countDown();
+    String endpoint = "http://probe-user:probe-password@127.0.0.1:"
+        + server.getAddress().getPort()
+        + "/dispatch?token=probe-token&mode=push";
+    Map<String, Object> channelConfig = Map.of(
+        "channel_type", "API", "target_endpoint", endpoint, "receiver_idempotency_supported", true);
+    DispatchCommand command = command("dispatch-secret-1", endpoint, channelConfig);
+
+    DispatchResult success = adapter.dispatch(command);
+    responseStatus.set(503);
+    DispatchResult failure = adapter.dispatch(command);
+
+    assertThat(success.success()).isTrue();
+    assertThat(failure.success()).isFalse();
+    assertThat(failure.externalOutcomeUnknown()).isFalse();
+    assertThat(success.evidenceRef()).contains("/dispatch?token=****&mode=push");
+    assertThat(failure.evidenceRef()).contains("/dispatch?token=****&mode=push");
+    assertThat(success.evidenceRef()).doesNotContain("probe-user", "probe-password", "probe-token");
+    assertThat(failure.evidenceRef()).doesNotContain("probe-user", "probe-password", "probe-token");
+  }
+
   private DispatchCommand command() {
     return command("dispatch-identity-1");
   }
 
   private DispatchCommand command(String externalRequestId) {
     String endpoint = "http://127.0.0.1:" + server.getAddress().getPort() + "/dispatch";
-    Map<String, Object> channelConfig = Map.of(
-        "channel_type", "API",
-        "target_endpoint", endpoint);
+    Map<String, Object> channelConfig = Map.of("channel_type", "API", "target_endpoint", endpoint);
     return command(externalRequestId, endpoint, channelConfig);
   }
 
@@ -177,11 +199,6 @@ class HttpDispatchChannelIdempotencyTest {
       String externalRequestId, String endpoint, Map<String, Object> channelConfig) {
     DispatchPayload payload = new DispatchPayload(
         "10", null, "CH1", "target", externalRequestId, null, null, null, null, null);
-    return new DispatchCommand(
-        "tenant-a",
-        "trace-1",
-        Map.of("id", 10L),
-        channelConfig,
-        payload);
+    return new DispatchCommand("tenant-a", "trace-1", Map.of("id", 10L), channelConfig, payload);
   }
 }

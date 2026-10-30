@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.trigger.application;
 
-import io.github.pinpols.batch.trigger.domain.param.TriggerOutboxEventMarkFailedParam;
-
-
 import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
@@ -11,6 +8,8 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
+import io.github.pinpols.batch.trigger.domain.param.TriggerOutboxEventMarkFailedParam;
+import io.github.pinpols.batch.trigger.domain.param.TriggerOutboxEventMarkPublishingBatchParam;
 import io.github.pinpols.batch.trigger.mapper.TriggerOutboxEventMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -21,6 +20,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -41,11 +41,11 @@ import org.springframework.stereotype.Component;
 /**
  * ADR-010 §Stage 2: trigger_outbox_event 周期发布器。
  *
- * <p>循环步骤(每轮持 ShedLock 串行,多 trigger 实例间互斥):
+ * <p>循环步骤(通常由 ShedLock 串行；锁过期后旧实例与新实例仍可能重叠):
  *
  * <ol>
- *   <li>{@code selectPending} 拿一批 NEW/FAILED 行(FOR UPDATE SKIP LOCKED 防多实例重发)
- *   <li>一条 {@code markPublishingBatch ... RETURNING} 批量 CAS 抢占
+ *   <li>{@code selectPending} 读取一批 NEW/FAILED 候选行
+ *   <li>一条 {@code markPublishingBatch ... RETURNING} 批量 CAS 抢占并写入领取 token
  *   <li>反序列化 payload → {@link TriggerEventPublisher#publishAsync} 发起整批 Kafka 投递
  *   <li>等齐 ACK 后一条 {@code markPublishedBatch} 回写成功；失败事件按原退避规则单独更新
  * </ol>
@@ -245,7 +245,7 @@ public class TriggerOutboxRelay {
             SwallowedExceptionLogger.summary(t));
         return;
       }
-      log.error("TriggerOutboxRelay failed", t);
+      log.error("TriggerOutboxRelay failed: {}", SwallowedExceptionLogger.summary(t));
     } finally {
       running.set(false);
     }
@@ -305,14 +305,20 @@ public class TriggerOutboxRelay {
    *
    * <p>不能在 Kafka callback 线程中直接更新 DB：一是 callback 线程会被慢 SQL 拖住，二是无法把同批成功事件合并为一条 UPDATE。
    * relay 线程只在所有 ACK 完成后做一次成功回写；Kafka 成功但 JVM 在回写前崩溃仍会重投，维持 outbox 的至少一次语义。
+   * ShedLock 过期后旧线程仍可能返回；每批领取 token 同时约束 ACK 和失败回写，阻止旧线程覆盖超时回收后的新领取。
    */
   private void publishBatch(List<TriggerOutboxEventEntity> batch) {
     List<Long> pendingIds = batch.stream().map(TriggerOutboxEventEntity::getId).toList();
-    List<Long> claimed = mapper.markPublishingBatch(
-        pendingIds,
-        OutboxPublishStatus.PUBLISHING.code(),
-        OutboxPublishStatus.NEW.code(),
-        OutboxPublishStatus.FAILED.code());
+    String claimToken = UUID.randomUUID().toString();
+    TriggerOutboxEventMarkPublishingBatchParam claim =
+        TriggerOutboxEventMarkPublishingBatchParam.builder()
+            .ids(pendingIds)
+            .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+            .pendingStatus1(OutboxPublishStatus.NEW.code())
+            .pendingStatus2(OutboxPublishStatus.FAILED.code())
+            .claimToken(claimToken)
+            .build();
+    List<Long> claimed = mapper.markPublishingBatch(claim);
     if (EmptyChecks.isEmpty(claimed)) {
       return;
     }
@@ -324,7 +330,7 @@ public class TriggerOutboxRelay {
         continue;
       }
       long startedNanos = System.nanoTime();
-      LaunchEnvelope envelope = deserializeOrGiveUp(event, startedNanos);
+      LaunchEnvelope envelope = deserializeOrGiveUp(event, claimToken, startedNanos);
       if (EmptyChecks.isNull(envelope)) {
         continue;
       }
@@ -333,14 +339,17 @@ public class TriggerOutboxRelay {
       try {
         future = publisher.publishAsync(event.getTopic(), messageKey, envelope, event.getTraceId());
       } catch (RuntimeException ex) {
+        String failureSummary = SwallowedExceptionLogger.summary(ex);
         log.error(
-            "TriggerOutboxRelay failed to initiate Kafka publish: id={} tenantId={} requestId={}",
+            "TriggerOutboxRelay failed to initiate Kafka publish: id={} tenantId={} requestId={} cause={}",
             event.getId(),
             event.getTenantId(),
             event.getRequestId(),
-            ex);
-        future = CompletableFuture.completedFuture(
-            TriggerEventPublisher.PublishResult.fail("kafka send init: " + ex.getMessage()));
+            failureSummary);
+        String publishError = "kafka send init: " + failureSummary;
+        TriggerEventPublisher.PublishResult failedResult =
+            TriggerEventPublisher.PublishResult.fail(publishError);
+        future = CompletableFuture.completedFuture(failedResult);
       }
       CompletableFuture<TriggerEventPublisher.PublishResult> resolvedFuture =
           EmptyChecks.isNotNull(future)
@@ -351,21 +360,22 @@ public class TriggerOutboxRelay {
     }
 
     awaitAcknowledgements(inFlight);
-    flushOutcomes(inFlight);
+    flushOutcomes(inFlight, claimToken);
   }
 
-  private LaunchEnvelope deserializeOrGiveUp(TriggerOutboxEventEntity event, long startedNanos) {
+  private LaunchEnvelope deserializeOrGiveUp(
+      TriggerOutboxEventEntity event, String claimToken, long startedNanos) {
     try {
       String payloadJson = event.getPayload();
       LaunchEnvelope envelope = JsonUtils.fromJson(payloadJson, LaunchEnvelope.class);
       return envelope;
     } catch (IllegalArgumentException ex) {
       log.error(
-          "TriggerOutboxRelay failed to deserialize payload; marking GIVE_UP: id={} requestId={}",
+          "TriggerOutboxRelay failed to deserialize payload; attempting GIVE_UP: id={} requestId={} cause={}",
           event.getId(),
           event.getRequestId(),
-          ex);
-      markGiveUp(event, "payload deserialize: " + ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
+      markGiveUp(event, claimToken, "payload deserialize: " + SwallowedExceptionLogger.summary(ex));
       recordPublishLatency(false, startedNanos);
       return null;
     }
@@ -383,7 +393,7 @@ public class TriggerOutboxRelay {
     }
   }
 
-  private void flushOutcomes(List<InFlight> inFlight) {
+  private void flushOutcomes(List<InFlight> inFlight, String claimToken) {
     List<Long> publishedIds = new ArrayList<>();
     for (InFlight item : inFlight) {
       TriggerEventPublisher.PublishResult result = completedResult(item.future());
@@ -392,14 +402,15 @@ public class TriggerOutboxRelay {
       if (success) {
         publishedIds.add(item.event().getId());
       } else {
-        markPublishFailure(item.event(), result.errorMessage());
+        markPublishFailure(item.event(), claimToken, result.errorMessage());
       }
     }
     if (EmptyChecks.isNotEmpty(publishedIds)) {
       int updated = mapper.markPublishedBatch(
           publishedIds,
           OutboxPublishStatus.PUBLISHED.code(),
-          OutboxPublishStatus.PUBLISHING.code());
+          OutboxPublishStatus.PUBLISHING.code(),
+          claimToken);
       if (updated != publishedIds.size()) {
         log.warn(
             "TriggerOutboxRelay markPublishedBatch partial update: expected={} updated={}",
@@ -442,17 +453,21 @@ public class TriggerOutboxRelay {
     timer.record(durationNanos, TimeUnit.NANOSECONDS);
   }
 
-  private void markPublishFailure(TriggerOutboxEventEntity event, String errorMessage) {
+  private void markPublishFailure(
+      TriggerOutboxEventEntity event, String claimToken, String errorMessage) {
     int nextAttempt = event.getPublishAttempt() + 1;
+    String safeErrorMessage = SwallowedExceptionLogger.safeMessage(errorMessage, 2000);
     if (nextAttempt >= Math.max(1, properties.getMaxPublishAttempts())) {
-      log.error(
-          "TriggerOutboxRelay GIVE_UP after {} attempts: id={} requestId={} topic={} error={}",
-          nextAttempt,
-          event.getId(),
-          event.getRequestId(),
-          event.getTopic(),
-          errorMessage);
-      markGiveUp(event, errorMessage);
+      boolean gaveUp = markGiveUp(event, claimToken, safeErrorMessage);
+      if (gaveUp) {
+        log.error(
+            "TriggerOutboxRelay GIVE_UP after {} attempts: id={} requestId={} topic={} error={}",
+            nextAttempt,
+            event.getId(),
+            event.getRequestId(),
+            event.getTopic(),
+            safeErrorMessage);
+      }
       return;
     }
     Instant retryBaseTime = BatchDateTimeSupport.utcNow();
@@ -460,16 +475,16 @@ public class TriggerOutboxRelay {
     Instant retryAt = retryBaseTime.plusSeconds(retryBackoffSeconds);
     Long eventId = event.getId();
     String failedStatus = OutboxPublishStatus.FAILED.code();
-    String truncatedErrorMessage = truncate(errorMessage);
-    TriggerOutboxEventMarkFailedParam triggerOutboxEventMarkFailedParam = TriggerOutboxEventMarkFailedParam.builder()
-        .id(eventId)
-        .status(failedStatus)
-        .lastError(truncatedErrorMessage)
-        .nextPublishAt(retryAt)
-        .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
-        .build();
-    int updated = mapper.markFailed(
-        triggerOutboxEventMarkFailedParam);
+    TriggerOutboxEventMarkFailedParam triggerOutboxEventMarkFailedParam =
+        TriggerOutboxEventMarkFailedParam.builder()
+            .id(eventId)
+            .status(failedStatus)
+            .lastError(safeErrorMessage)
+            .nextPublishAt(retryAt)
+            .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+            .claimToken(claimToken)
+            .build();
+    int updated = mapper.markFailed(triggerOutboxEventMarkFailedParam);
     if (updated == 0) {
       log.warn(
           "TriggerOutboxRelay markFailed(FAILED) affected 0 rows; another instance took over the event: id={}",
@@ -477,29 +492,33 @@ public class TriggerOutboxRelay {
     }
   }
 
-  private void markGiveUp(TriggerOutboxEventEntity event, String errorMessage) {
+  private boolean markGiveUp(
+      TriggerOutboxEventEntity event, String claimToken, String errorMessage) {
     Long eventId = event.getId();
     String giveUpStatus = OutboxPublishStatus.GIVE_UP.code();
-    String truncatedErrorMessage = truncate(errorMessage);
+    String safeErrorMessage = SwallowedExceptionLogger.safeMessage(errorMessage, 2000);
     Instant retryBaseTime = BatchDateTimeSupport.utcNow();
     Instant giveUpRetryAt = retryBaseTime.plusSeconds(MAX_BACKOFF_SECONDS);
-    TriggerOutboxEventMarkFailedParam triggerOutboxEventMarkFailedParam2 = TriggerOutboxEventMarkFailedParam.builder()
-        .id(eventId)
-        .status(giveUpStatus)
-        .lastError(truncatedErrorMessage)
-        .nextPublishAt(giveUpRetryAt)
-        .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
-        .build();
-    int updated = mapper.markFailed(
-        triggerOutboxEventMarkFailedParam2);
+    TriggerOutboxEventMarkFailedParam triggerOutboxEventMarkFailedParam2 =
+        TriggerOutboxEventMarkFailedParam.builder()
+            .id(eventId)
+            .status(giveUpStatus)
+            .lastError(safeErrorMessage)
+            .nextPublishAt(giveUpRetryAt)
+            .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+            .claimToken(claimToken)
+            .build();
+    int updated = mapper.markFailed(triggerOutboxEventMarkFailedParam2);
     if (updated == 0) {
       log.warn(
           "TriggerOutboxRelay markFailed(GIVE_UP) affected 0 rows; another instance took over the event: id={}",
           event.getId());
+      return false;
     }
     if (EmptyChecks.isNotNull(giveUpCounter)) {
       giveUpCounter.increment();
     }
+    return true;
   }
 
   private boolean shouldStopPolling() {
@@ -514,13 +533,6 @@ public class TriggerOutboxRelay {
     long shift = Math.min(attempt, 6); // 2^6 = 64 → 截断到 60
     long backoff = 1L << shift;
     return Math.min(backoff, MAX_BACKOFF_SECONDS);
-  }
-
-  private static String truncate(String s) {
-    if (EmptyChecks.isNull(s)) {
-      return null;
-    }
-    return s.length() <= 2000 ? s : s.substring(0, 2000);
   }
 
   private void resetStalePublishing() {

@@ -106,7 +106,9 @@ class BatchPlatformClientConfigEnvTest {
         .hasMessageContaining("invalid-concurrency");
 
     assertThat(lookedUpKeys)
-        .doesNotContain("BATCH_SDK_RETRY_MAX_ATTEMPTS", "BATCH_SDK_REQUEST_SIGNING_ENABLED",
+        .doesNotContain(
+            "BATCH_SDK_RETRY_MAX_ATTEMPTS",
+            "BATCH_SDK_REQUEST_SIGNING_ENABLED",
             "BATCH_SDK_STRICT_TIMING");
   }
 
@@ -128,5 +130,4 @@ class BatchPlatformClientConfigEnvTest {
     assertThat(lookedUpKeys)
         .doesNotContain("BATCH_SDK_REQUEST_SIGNING_ENABLED", "BATCH_SDK_STRICT_TIMING");
   }
-
 }

@@ -18,14 +18,15 @@ import io.github.pinpols.batch.console.application.rbac.ConsoleTenantApplication
 import io.github.pinpols.batch.console.application.rbac.ConsoleTenantReadinessService;
 import io.github.pinpols.batch.console.domain.file.mapper.FilePipelineMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobInstanceMapper;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.response.TenantReadinessResponse;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsolePasswordHasher;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.domain.rbac.view.TenantRow;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowRunMapper;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -74,15 +75,15 @@ class ConsoleTenantApplicationServiceTest {
 
   private ConsoleTenantApplicationService service;
 
-  private static final Map<String, Object> ACTIVE_TENANT = Map.of(
-      "id", 1L,
-      "tenant_id", "tenant-a",
-      "tenant_name", "Tenant A",
-      "status", "ACTIVE",
-      "description", "",
-      "created_by", "admin",
-      "created_at", "2026-01-01T00:00:00",
-      "updated_at", "2026-01-01T00:00:00");
+  private static final TenantRow ACTIVE_TENANT = new TenantRow(
+      1L,
+      "tenant-a",
+      "Tenant A",
+      "ACTIVE",
+      "",
+      "admin",
+      "2026-01-01T00:00:00",
+      "2026-01-01T00:00:00");
 
   @BeforeEach
   void setUp() {
@@ -233,15 +234,8 @@ class ConsoleTenantApplicationServiceTest {
     verify(tenantMapper, never()).updateStatus(any(), any());
   }
 
-  private static final Map<String, Object> ACME_TENANT = Map.of(
-      "id", 9L,
-      "tenant_id", "acme",
-      "tenant_name", "Acme",
-      "status", "ACTIVE",
-      "description", "",
-      "created_by", "admin",
-      "created_at", "2026-01-01T00:00:00",
-      "updated_at", "2026-01-01T00:00:00");
+  private static final TenantRow ACME_TENANT = new TenantRow(
+      9L, "acme", "Acme", "ACTIVE", "", "admin", "2026-01-01T00:00:00", "2026-01-01T00:00:00");
 
   @Test
   @DisplayName("未选择配置初始化时跳过配置复制, 但仍执行就绪自检")
@@ -250,8 +244,7 @@ class ConsoleTenantApplicationServiceTest {
     when(userAccountMapper.selectByUsername("acme-admin")).thenReturn(null);
     when(passwordHasher.encode(any())).thenReturn("hash");
     when(readinessService.check("acme"))
-        .thenReturn(new io.github.pinpols.batch.console.domain.rbac.application.contract.response
-            .TenantReadinessResponse("acme", true, List.of(), List.of()));
+        .thenReturn(new TenantReadinessResponse("acme", true, List.of(), List.of()));
 
     var cmd = new ConsoleTenantApplicationService.CreateTenantCommand(
         "acme", "Acme", "d", "acme-admin", "pw12345678", "admin");
@@ -336,8 +329,7 @@ class ConsoleTenantApplicationServiceTest {
     when(passwordHasher.encode(any())).thenReturn("hash");
     when(configCopyService.copy(any(), eq("admin"), any())).thenReturn(null);
     when(readinessService.check("acme"))
-        .thenReturn(new io.github.pinpols.batch.console.domain.rbac.application.contract.response
-            .TenantReadinessResponse("acme", true, List.of(), List.of()));
+        .thenReturn(new TenantReadinessResponse("acme", true, List.of(), List.of()));
 
     var cmd = new ConsoleTenantApplicationService.CreateTenantCommand(
         "acme", "Acme", "d", "acme-admin", "pw12345678", "admin");

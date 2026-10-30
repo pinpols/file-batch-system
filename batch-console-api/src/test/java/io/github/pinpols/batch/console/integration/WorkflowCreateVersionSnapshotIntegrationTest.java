@@ -60,13 +60,26 @@ class WorkflowCreateVersionSnapshotIntegrationTest extends AbstractMutationInteg
 
   private static final String TENANT = "t1";
 
-  @Autowired private WorkflowDefinitionMapper definitionMapper;
-  @Autowired private WorkflowDefinitionVersionMapper versionMapper;
-  @Autowired private WorkflowNodeMapper nodeMapper;
-  @Autowired private WorkflowEdgeMapper edgeMapper;
-  @Autowired private ObjectMapper objectMapper;
-  @Autowired private VersionInsertFault insertFault;
-  @Autowired private SqlSessionFactory sessions;
+  @Autowired
+  private WorkflowDefinitionMapper definitionMapper;
+
+  @Autowired
+  private WorkflowDefinitionVersionMapper versionMapper;
+
+  @Autowired
+  private WorkflowNodeMapper nodeMapper;
+
+  @Autowired
+  private WorkflowEdgeMapper edgeMapper;
+
+  @Autowired
+  private ObjectMapper objectMapper;
+
+  @Autowired
+  private VersionInsertFault insertFault;
+
+  @Autowired
+  private SqlSessionFactory sessions;
 
   private final Set<Long> ownedDefinitionIds = ConcurrentHashMap.newKeySet();
   private String workflowCode;
@@ -194,7 +207,9 @@ class WorkflowCreateVersionSnapshotIntegrationTest extends AbstractMutationInteg
     WorkflowEdgeQuery edgeQuery = WorkflowEdgeQuery.ofDefinition(TENANT, id, null);
     List<WorkflowNodeEntity> nodes = nodeMapper.selectByQuery(nodeQuery);
     List<WorkflowEdgeEntity> edges = edgeMapper.selectByQuery(edgeQuery);
-    assertThat(nodes).extracting(WorkflowNodeEntity::getNodeCode).containsExactlyInAnyOrder("start", "end");
+    assertThat(nodes)
+        .extracting(WorkflowNodeEntity::getNodeCode)
+        .containsExactlyInAnyOrder("start", "end");
     assertThat(edges).hasSize(1);
     // JSONB 不区分 Java 的 Long/Integer 节点，双方使用同一 JSON 解码边界比较全部字段。
     String actualNodesJson = objectMapper.writeValueAsString(nodes);
@@ -220,7 +235,8 @@ class WorkflowCreateVersionSnapshotIntegrationTest extends AbstractMutationInteg
     String edgeCountSql = """
         select count(*) from batch.workflow_edge where tenant_id = ? and workflow_definition_id = ?
         """;
-    Long definitions = jdbcTemplate.queryForObject(definitionCountSql, Long.class, TENANT, workflowCode);
+    Long definitions =
+        jdbcTemplate.queryForObject(definitionCountSql, Long.class, TENANT, workflowCode);
     Long versions = jdbcTemplate.queryForObject(versionCountSql, Long.class, TENANT, workflowCode);
     Long nodes = jdbcTemplate.queryForObject(nodeCountSql, Long.class, TENANT, attemptedId);
     Long edges = jdbcTemplate.queryForObject(edgeCountSql, Long.class, TENANT, attemptedId);
@@ -231,7 +247,8 @@ class WorkflowCreateVersionSnapshotIntegrationTest extends AbstractMutationInteg
   }
 
   private WebTestClient.ResponseSpec postCreate(String body, String intentKey) {
-    return client.post()
+    return client
+        .post()
         .uri("/api/console/workflow-definitions")
         .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT)
         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, intentKey)
@@ -270,8 +287,11 @@ class WorkflowCreateVersionSnapshotIntegrationTest extends AbstractMutationInteg
   }
 
   /** 只在本例版本语句真实执行后制造故障，连接仍归原 MyBatis 事务所有。 */
-  @Intercepts(@Signature(type = Executor.class, method = "update",
-      args = {MappedStatement.class, Object.class}))
+  @Intercepts(
+      @Signature(
+          type = Executor.class,
+          method = "update",
+          args = {MappedStatement.class, Object.class}))
   static final class VersionInsertFault implements Interceptor {
     private static final String INSERT_ID =
         WorkflowDefinitionVersionMapper.class.getName() + ".insertVersionSnapshot";
@@ -327,8 +347,8 @@ class WorkflowCreateVersionSnapshotIntegrationTest extends AbstractMutationInteg
       return result;
     }
 
-    private int countInsertedVersion(Executor executor, WorkflowDefinitionVersionInsertParam version)
-        throws SQLException {
+    private int countInsertedVersion(
+        Executor executor, WorkflowDefinitionVersionInsertParam version) throws SQLException {
       String countInsertedVersionSql = """
           select count(*) from batch.workflow_definition_version
           where tenant_id = ? and workflow_definition_id = ? and version = ?

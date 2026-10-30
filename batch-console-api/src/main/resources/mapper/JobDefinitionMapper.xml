@@ -77,10 +77,8 @@
                coalesce(mp.soft_runtime_severity, 'WARN') as soft_runtime_severity,
                coalesce(mp.start_grace_seconds, 0) as start_grace_seconds,
                coalesce(mp.start_grace_severity, 'WARN') as start_grace_severity,
-               (jd.schedule_type = 'CRON' and jd.depends_on_job_code is null
-                    and mp.completion_deadline_local_time is not null
-                 or jd.depends_on_job_code is not null
-                    and coalesce(mp.dependency_completion_window_seconds, 0) &gt; 0) as completion_deadline_enabled,
+               (mp.completion_deadline_local_time is not null
+                 or coalesce(mp.dependency_completion_window_seconds, 0) &gt; 0) as completion_deadline_enabled,
                mp.completion_deadline_local_time,
                coalesce(mp.dependency_completion_window_seconds, 0) as dependency_completion_window_seconds,
                coalesce(mp.completion_deadline_day_offset, 0) as completion_deadline_day_offset,
@@ -132,9 +130,13 @@
             </choose>
         </if>
         <if test="monitoringCategory == 'DEPENDENCY'">
-            and exists (select 1 from batch.job_dependency jdep
-                        where jdep.tenant_id = jd.tenant_id
-                          and jdep.downstream_job_code = jd.job_code)
+            and (exists (select 1 from batch.job_dependency jdep
+                         where jdep.tenant_id = jd.tenant_id
+                           and jdep.downstream_job_code = jd.job_code)
+                 or (jd.schedule_type != 'CRON' and (
+                     coalesce(mp.start_grace_seconds, 0) &gt; 0
+                     or coalesce(mp.dependency_completion_window_seconds, 0) &gt; 0
+                     or mp.completion_deadline_local_time is not null)))
         </if>
         <if test="monitoringCategory == 'SCHEDULED'">
             and jd.schedule_type = 'CRON'
@@ -147,6 +149,9 @@
             and not exists (select 1 from batch.job_dependency jdep
                             where jdep.tenant_id = jd.tenant_id
                               and jdep.downstream_job_code = jd.job_code)
+            and coalesce(mp.start_grace_seconds, 0) = 0
+            and coalesce(mp.dependency_completion_window_seconds, 0) = 0
+            and mp.completion_deadline_local_time is null
         </if>
         <if test="enabled != null">
             and jd.enabled = #{enabled}
@@ -187,9 +192,14 @@
             and schedule_type = #{scheduleType}
         </if>
         <if test="monitoringCategory == 'DEPENDENCY'">
-            and exists (select 1 from batch.job_dependency jdep
-                        where jdep.tenant_id = job_definition.tenant_id
-                          and jdep.downstream_job_code = job_definition.job_code)
+            and (exists (select 1 from batch.job_dependency jdep
+                         where jdep.tenant_id = job_definition.tenant_id
+                           and jdep.downstream_job_code = job_definition.job_code)
+                 or (schedule_type != 'CRON' and exists (
+                     select 1 from batch.job_monitoring_policy mp
+                     where mp.tenant_id = job_definition.tenant_id and mp.job_definition_id = job_definition.id
+                       and (mp.start_grace_seconds &gt; 0 or mp.dependency_completion_window_seconds &gt; 0
+                            or mp.completion_deadline_local_time is not null))))
         </if>
         <if test="monitoringCategory == 'SCHEDULED'">
             and schedule_type = 'CRON'
@@ -202,6 +212,10 @@
             and not exists (select 1 from batch.job_dependency jdep
                             where jdep.tenant_id = job_definition.tenant_id
                               and jdep.downstream_job_code = job_definition.job_code)
+            and not exists (select 1 from batch.job_monitoring_policy mp
+                            where mp.tenant_id = job_definition.tenant_id and mp.job_definition_id = job_definition.id
+                              and (mp.start_grace_seconds &gt; 0 or mp.dependency_completion_window_seconds &gt; 0
+                                   or mp.completion_deadline_local_time is not null))
         </if>
         <if test="enabled != null">
             and enabled = #{enabled}
@@ -232,10 +246,8 @@
                coalesce(mp.soft_runtime_severity, 'WARN') as soft_runtime_severity,
                coalesce(mp.start_grace_seconds, 0) as start_grace_seconds,
                coalesce(mp.start_grace_severity, 'WARN') as start_grace_severity,
-               (jd.schedule_type = 'CRON' and jd.depends_on_job_code is null
-                    and mp.completion_deadline_local_time is not null
-                 or jd.depends_on_job_code is not null
-                    and coalesce(mp.dependency_completion_window_seconds, 0) &gt; 0) as completion_deadline_enabled,
+               (mp.completion_deadline_local_time is not null
+                 or coalesce(mp.dependency_completion_window_seconds, 0) &gt; 0) as completion_deadline_enabled,
                mp.completion_deadline_local_time,
                coalesce(mp.dependency_completion_window_seconds, 0) as dependency_completion_window_seconds,
                coalesce(mp.completion_deadline_day_offset, 0) as completion_deadline_day_offset,
@@ -273,10 +285,8 @@
                coalesce(mp.soft_runtime_severity, 'WARN') as soft_runtime_severity,
                coalesce(mp.start_grace_seconds, 0) as start_grace_seconds,
                coalesce(mp.start_grace_severity, 'WARN') as start_grace_severity,
-               (jd.schedule_type = 'CRON' and jd.depends_on_job_code is null
-                    and mp.completion_deadline_local_time is not null
-                 or jd.depends_on_job_code is not null
-                    and coalesce(mp.dependency_completion_window_seconds, 0) &gt; 0) as completion_deadline_enabled,
+               (mp.completion_deadline_local_time is not null
+                 or coalesce(mp.dependency_completion_window_seconds, 0) &gt; 0) as completion_deadline_enabled,
                mp.completion_deadline_local_time,
                coalesce(mp.dependency_completion_window_seconds, 0) as dependency_completion_window_seconds,
                coalesce(mp.completion_deadline_day_offset, 0) as completion_deadline_day_offset,
@@ -339,6 +349,12 @@
         on conflict (tenant_id, job_definition_id) do update
         set soft_runtime_seconds = excluded.soft_runtime_seconds,
             start_grace_seconds = excluded.start_grace_seconds,
+            soft_runtime_updated_at = CASE
+                WHEN batch.job_monitoring_policy.soft_runtime_seconds IS DISTINCT FROM excluded.soft_runtime_seconds
+                THEN current_timestamp ELSE batch.job_monitoring_policy.soft_runtime_updated_at END,
+            start_grace_updated_at = CASE
+                WHEN batch.job_monitoring_policy.start_grace_seconds IS DISTINCT FROM excluded.start_grace_seconds
+                THEN current_timestamp ELSE batch.job_monitoring_policy.start_grace_updated_at END,
             completion_deadline_seconds = 0,
             completion_deadline_local_time = excluded.completion_deadline_local_time,
             completion_deadline_day_offset = excluded.completion_deadline_day_offset,
@@ -521,4 +537,12 @@
         where tenant_id = #{tenantId}
           and enabled = true
     </select>
+
+    <update id="updateLegacyDependsOnJobCode">
+        update batch.job_definition
+        set depends_on_job_code = #{dependsOnJobCode},
+            updated_at = CURRENT_TIMESTAMP
+        where tenant_id = #{tenantId}
+          and job_code = #{jobCode}
+    </update>
 </mapper>

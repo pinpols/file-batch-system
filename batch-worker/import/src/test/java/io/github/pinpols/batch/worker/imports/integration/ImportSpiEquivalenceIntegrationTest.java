@@ -2,10 +2,10 @@ package io.github.pinpols.batch.worker.imports.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
-import io.github.pinpols.batch.common.spi.task.BatchTaskExecutorRegistry;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
+import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
+import io.github.pinpols.batch.common.spi.task.BatchTaskExecutorRegistry;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
 import io.github.pinpols.batch.worker.imports.BatchWorkerImportApplication;
@@ -85,6 +85,7 @@ class ImportSpiEquivalenceIT extends AbstractIntegrationTest {
   @DisplayName("Worker 注册目录保留通用 JDBC 导入的 UNKNOWN 静态能力")
   void shouldPublishUnknownReplayCapability_whenImportConfigurationIsVariable() {
     assertThat(importLoadPluginRegistry.replayCapabilityCatalog())
-        .containsExactly(ReplayCapabilityDeclaration.unknown(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED));
+        .containsExactly(
+            ReplayCapabilityDeclaration.unknown(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED));
   }
 }

@@ -62,13 +62,11 @@ class WorkflowNodeReplayTargetMapperIntegrationTest {
         )
         """;
     jdbcTemplate.execute(createWorkflowNodeRunTableSql);
-    String insertTenantAWorkflowRunSql =
-        """
+    String insertTenantAWorkflowRunSql = """
         insert into batch.workflow_run (id, tenant_id) values (71, 'tenant-a')
     """;
     jdbcTemplate.update(insertTenantAWorkflowRunSql);
-    String insertTenantBWorkflowRunSql =
-        """
+    String insertTenantBWorkflowRunSql = """
         insert into batch.workflow_run (id, tenant_id) values (72, 'tenant-b')
     """;
     jdbcTemplate.update(insertTenantBWorkflowRunSql);
@@ -82,7 +80,8 @@ class WorkflowNodeReplayTargetMapperIntegrationTest {
 
     Configuration configuration =
         new Configuration(new Environment("it", new JdbcTransactionFactory(), dataSource));
-    try (InputStream mapperXml = Resources.getResourceAsStream("mapper/WorkflowNodeRunMapper.xml")) {
+    try (InputStream mapperXml =
+        Resources.getResourceAsStream("mapper/WorkflowNodeRunMapper.xml")) {
       new XMLMapperBuilder(
               mapperXml,
               configuration,

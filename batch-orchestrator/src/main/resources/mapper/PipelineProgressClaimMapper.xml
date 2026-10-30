@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.PipelineProgressClaimMapper">
+  <resultMap id="claim" type="io.github.pinpols.batch.orchestrator.domain.view.PipelineProgressClaimView">
+    <constructor><arg column="task_id" javaType="java.lang.Long"/><arg column="worker_code" javaType="java.lang.String"/><arg column="invocation" javaType="java.lang.String"/></constructor>
+  </resultMap>
+  <resultMap id="stage" type="io.github.pinpols.batch.orchestrator.domain.view.PipelineProgressStageView">
+    <constructor><arg column="id" javaType="java.lang.Long"/><arg column="stage_code" javaType="java.lang.String"/><arg column="run_seq" javaType="java.lang.Integer"/></constructor>
+  </resultMap>
+  <select id="setTenantContext" resultType="string" flushCache="true">select set_config('app.tenant_id', #{tenantId}, true)</select>
+  <select id="selectLiveClaims" resultMap="claim">
+    select t.id as task_id,t.assigned_worker_code as worker_code,q.current_invocation_id as invocation
+    from batch.pipeline_instance p
+    join batch.job_instance j on j.id=p.related_job_instance_id and j.tenant_id=p.tenant_id
+    join batch.job_task t on t.job_instance_id=j.id and t.tenant_id=j.tenant_id
+    join batch.job_partition q on q.id=t.job_partition_id and q.job_instance_id=j.id and q.tenant_id=j.tenant_id
+    where p.tenant_id=#{tenantId} and p.id=#{pipelineId} and p.run_status='RUNNING'
+      and j.instance_status in ('RUNNING','PAUSED') and j.dry_run=false and t.dry_run=false and q.dry_run=false
+      and t.task_status='RUNNING' and q.partition_status='RUNNING'
+      and t.assigned_worker_code=q.worker_code and t.assigned_worker_code is not null
+      and q.lease_expire_at &gt; current_timestamp
+      and q.current_invocation_id is not null and q.current_invocation_id != ''
+    order by t.id
+  </select>
+  <select id="selectRunningStages" resultMap="stage">
+    select s.id,s.stage_code,s.run_seq
+    from batch.pipeline_step_run s join batch.pipeline_instance p on p.id=s.pipeline_instance_id
+    where p.tenant_id=#{tenantId} and p.id=#{pipelineId} and p.run_status='RUNNING' and s.step_status='RUNNING'
+      and not exists (
+        select 1 from batch.pipeline_step_run newer
+        where newer.pipeline_instance_id=p.id and newer.step_code=s.step_code
+          and (newer.run_seq,newer.id) &gt; (s.run_seq,s.id)
+      )
+    order by s.id
+  </select>
+</mapper>

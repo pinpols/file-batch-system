@@ -1,22 +1,24 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
-import io.github.pinpols.batch.console.domain.ops.query.ResourceQueueQuery;
-import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueListRequest;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.application.config.ConsoleResourceQueueApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueCreateRequest;
+import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueListRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueUpdateRequest;
 import io.github.pinpols.batch.console.application.contract.response.config.ResourceQueueResponse;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
+import io.github.pinpols.batch.console.domain.ops.query.ResourceQueueQuery;
+import io.github.pinpols.batch.console.domain.ops.view.ResourceQueueRow;
+import io.github.pinpols.batch.console.domain.param.ResourceQueueInsertParam;
+import io.github.pinpols.batch.console.domain.param.ResourceQueueUpdateParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -32,18 +34,15 @@ public class DefaultConsoleResourceQueueApplicationService
   @Override
   public PageResponse<ResourceQueueResponse> list(ResourceQueueListRequest request) {
     String resolved = tenantGuard.resolveTenant(request.tenantId());
-    String normalizedQueueCode = CodeNormalizer.normalizeConfigCode(request.queueCode(), "queueCode");
+    String normalizedQueueCode =
+        CodeNormalizer.normalizeConfigCode(request.queueCode(), "queueCode");
     PageRequest pageRequest = new PageRequest(request.pageNo(), request.pageSize());
     ResourceQueueQuery query = new ResourceQueueQuery(
         resolved, normalizedQueueCode, request.queueType(), request.enabled(), pageRequest);
-    long total =
-        resourceQueueMapper.countByQuery(query);
-    List<ResourceQueueResponse> items =
-        resourceQueueMapper
-            .selectByQuery(query)
-            .stream()
-            .map(ResourceQueueResponse::from)
-            .toList();
+    long total = resourceQueueMapper.countByQuery(query);
+    List<ResourceQueueResponse> items = resourceQueueMapper.selectByQuery(query).stream()
+        .map(ResourceQueueResponse::from)
+        .toList();
     return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);
   }
 
@@ -51,89 +50,93 @@ public class DefaultConsoleResourceQueueApplicationService
   public ResourceQueueResponse create(ResourceQueueCreateRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     String queueCode = CodeNormalizer.normalizeConfigCode(request.getQueueCode(), "queueCode");
-    Map<String, Object> existing = resourceQueueMapper.selectByUniqueKey(tenantId, queueCode);
+    ResourceQueueRow existing = resourceQueueMapper.selectByUniqueKey(tenantId, queueCode);
     if (existing != null) {
       throw BizException.of(
           ResultCode.CONFLICT,
           ResultCode.CONFLICT.detailKey(),
           "queue code already exists: " + request.getQueueCode());
     }
-    Map<String, Object> params = new HashMap<>();
-    params.put("tenant_id", tenantId);
-    params.put("queue_code", queueCode);
-    params.put("queue_name", request.getQueueName());
-    params.put("queue_type", request.getQueueType());
-    params.put(
-        "max_running_jobs", request.getMaxRunningJobs() != null ? request.getMaxRunningJobs() : 0);
-    params.put(
-        "max_running_partitions",
-        request.getMaxRunningPartitions() != null ? request.getMaxRunningPartitions() : 0);
-    params.put("max_qps", request.getMaxQps() != null ? request.getMaxQps() : 0);
-    params.put("worker_group", request.getWorkerGroup());
-    params.put("resource_tag", request.getResourceTag());
-    params.put(
-        "priority_policy",
-        request.getPriorityPolicy() != null ? request.getPriorityPolicy() : "FIFO");
-    params.put(
-        "fair_share_weight",
-        request.getFairShareWeight() != null ? request.getFairShareWeight() : 1);
-    params.put("enabled", request.getEnabled() == null || request.getEnabled());
-    params.put("description", request.getDescription());
+    ResourceQueueInsertParam params = ResourceQueueInsertParam.builder()
+        .tenantId(tenantId)
+        .queueCode(queueCode)
+        .queueName(request.getQueueName())
+        .queueType(request.getQueueType())
+        .maxRunningJobs(
+            EmptyChecks.isNotNull(request.getMaxRunningJobs()) ? request.getMaxRunningJobs() : 0)
+        .maxRunningPartitions(
+            EmptyChecks.isNotNull(request.getMaxRunningPartitions())
+                ? request.getMaxRunningPartitions()
+                : 0)
+        .maxQps(EmptyChecks.isNotNull(request.getMaxQps()) ? request.getMaxQps() : 0)
+        .workerGroup(request.getWorkerGroup())
+        .resourceTag(request.getResourceTag())
+        .priorityPolicy(
+            EmptyChecks.isNotNull(request.getPriorityPolicy())
+                ? request.getPriorityPolicy()
+                : "FIFO")
+        .fairShareWeight(
+            EmptyChecks.isNotNull(request.getFairShareWeight()) ? request.getFairShareWeight() : 1)
+        .enabled(EmptyChecks.isNull(request.getEnabled()) || request.getEnabled())
+        .description(request.getDescription())
+        .build();
     resourceQueueMapper.insert(params);
-    Long id = ((Number) params.get("id")).longValue();
-    Map<String, Object> createdQueue = resourceQueueMapper.selectById(tenantId, id);
+    long id = params.getId();
+    ResourceQueueRow createdQueue = resourceQueueMapper.selectById(tenantId, id);
     return ResourceQueueResponse.from(createdQueue);
   }
 
   @Override
   public ResourceQueueResponse update(Long id, ResourceQueueUpdateRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    Map<String, Object> selectedQueue = resourceQueueMapper.selectById(tenantId, id);
-    Map<String, Object> existing = Guard.requireFound(selectedQueue, "resource queue not found");
-    Map<String, Object> params = new HashMap<>();
-    params.put("tenant_id", tenantId);
-    params.put("id", id);
-    params.put(
-        "queue_name",
-        request.getQueueName() != null ? request.getQueueName() : existing.get("queue_name"));
-    params.put(
-        "queue_type",
-        request.getQueueType() != null ? request.getQueueType() : existing.get("queue_type"));
-    params.put(
-        "max_running_jobs",
-        request.getMaxRunningJobs() != null
-            ? request.getMaxRunningJobs()
-            : existing.get("max_running_jobs"));
-    params.put(
-        "max_running_partitions",
-        request.getMaxRunningPartitions() != null
-            ? request.getMaxRunningPartitions()
-            : existing.get("max_running_partitions"));
-    params.put(
-        "max_qps", request.getMaxQps() != null ? request.getMaxQps() : existing.get("max_qps"));
-    params.put(
-        "worker_group",
-        request.getWorkerGroup() != null ? request.getWorkerGroup() : existing.get("worker_group"));
-    params.put(
-        "resource_tag",
-        request.getResourceTag() != null ? request.getResourceTag() : existing.get("resource_tag"));
-    params.put(
-        "priority_policy",
-        request.getPriorityPolicy() != null
-            ? request.getPriorityPolicy()
-            : existing.get("priority_policy"));
-    params.put(
-        "fair_share_weight",
-        request.getFairShareWeight() != null
-            ? request.getFairShareWeight()
-            : existing.get("fair_share_weight"));
-    params.put(
-        "enabled", request.getEnabled() != null ? request.getEnabled() : existing.get("enabled"));
-    params.put(
-        "description",
-        request.getDescription() != null ? request.getDescription() : existing.get("description"));
+    ResourceQueueRow selectedQueue = resourceQueueMapper.selectById(tenantId, id);
+    ResourceQueueRow existing = Guard.requireFound(selectedQueue, "resource queue not found");
+    ResourceQueueUpdateParam params = ResourceQueueUpdateParam.builder()
+        .tenantId(tenantId)
+        .id(id)
+        .queueName(
+            EmptyChecks.isNotNull(request.getQueueName())
+                ? request.getQueueName()
+                : existing.queueName())
+        .queueType(
+            EmptyChecks.isNotNull(request.getQueueType())
+                ? request.getQueueType()
+                : existing.queueType())
+        .maxRunningJobs(
+            EmptyChecks.isNotNull(request.getMaxRunningJobs())
+                ? request.getMaxRunningJobs()
+                : existing.maxRunningJobs())
+        .maxRunningPartitions(
+            EmptyChecks.isNotNull(request.getMaxRunningPartitions())
+                ? request.getMaxRunningPartitions()
+                : existing.maxRunningPartitions())
+        .maxQps(
+            EmptyChecks.isNotNull(request.getMaxQps()) ? request.getMaxQps() : existing.maxQps())
+        .workerGroup(
+            EmptyChecks.isNotNull(request.getWorkerGroup())
+                ? request.getWorkerGroup()
+                : existing.workerGroup())
+        .resourceTag(
+            EmptyChecks.isNotNull(request.getResourceTag())
+                ? request.getResourceTag()
+                : existing.resourceTag())
+        .priorityPolicy(
+            EmptyChecks.isNotNull(request.getPriorityPolicy())
+                ? request.getPriorityPolicy()
+                : existing.priorityPolicy())
+        .fairShareWeight(
+            EmptyChecks.isNotNull(request.getFairShareWeight())
+                ? request.getFairShareWeight()
+                : existing.fairShareWeight())
+        .enabled(
+            EmptyChecks.isNotNull(request.getEnabled()) ? request.getEnabled() : existing.enabled())
+        .description(
+            EmptyChecks.isNotNull(request.getDescription())
+                ? request.getDescription()
+                : existing.description())
+        .build();
     resourceQueueMapper.update(params);
-    Map<String, Object> updatedQueue = resourceQueueMapper.selectById(tenantId, id);
+    ResourceQueueRow updatedQueue = resourceQueueMapper.selectById(tenantId, id);
     return ResourceQueueResponse.from(updatedQueue);
   }
 

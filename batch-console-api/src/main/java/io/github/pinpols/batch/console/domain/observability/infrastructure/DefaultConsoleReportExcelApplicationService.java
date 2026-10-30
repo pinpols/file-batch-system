@@ -8,8 +8,8 @@ import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.w
 import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.writeHeaders;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigApplicationService;
@@ -151,7 +151,8 @@ public class DefaultConsoleReportExcelApplicationService
   @Override
   public ResponseEntity<StreamingResponseBody> exportOutboxRetries(
       OutboxRetryLogQueryRequest request) {
-    PageResponse<ConsoleOutboxRetryLogResponse> page = queryApplicationService.outboxRetries(request);
+    PageResponse<ConsoleOutboxRetryLogResponse> page =
+        queryApplicationService.outboxRetries(request);
     List<ConsoleOutboxRetryLogResponse> rows = page.items();
     return exportRows(
         "outbox_retries",
@@ -164,7 +165,8 @@ public class DefaultConsoleReportExcelApplicationService
   @Override
   public ResponseEntity<StreamingResponseBody> exportOutboxDeliveries(
       OutboxDeliveryLogQueryRequest request) {
-    PageResponse<ConsoleOutboxDeliveryLogResponse> page = queryApplicationService.outboxDeliveries(request);
+    PageResponse<ConsoleOutboxDeliveryLogResponse> page =
+        queryApplicationService.outboxDeliveries(request);
     List<ConsoleOutboxDeliveryLogResponse> rows = page.items();
     return exportRows(
         "outbox_deliveries",
@@ -266,10 +268,9 @@ public class DefaultConsoleReportExcelApplicationService
               .filter(item -> item.getName().equals(header))
               .findFirst()
               .orElse(null);
-          Object componentValue =
-              component == null // empty-check: allow - Sonar S2259
-                  ? null
-                  : component.getAccessor().invoke(row);
+          Object componentValue = component == null // empty-check: allow - Sonar S2259
+              ? null
+              : component.getAccessor().invoke(row);
           values.add(componentValue);
         }
       } catch (Exception exception) {

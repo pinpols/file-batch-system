@@ -63,14 +63,15 @@ public final class SdkWorkerRestartChildProcess {
           var selected = context.crossDayResults("prior_day").getFirst();
           String selectedName = String.valueOf(selected.output().get("sourceBatch"));
           try (SingleConnectionDataSource dataSource = new SingleConnectionDataSource(
-                  properties.getProperty("business.jdbc.url"),
-                  properties.getProperty("business.jdbc.username"),
-                  properties.getProperty("business.jdbc.password"),
-                  true)) {
+              properties.getProperty("business.jdbc.url"),
+              properties.getProperty("business.jdbc.username"),
+              properties.getProperty("business.jdbc.password"),
+              true)) {
             String tenantId = properties.getProperty("tenant");
             String customerNo = properties.getProperty("customer-no");
             if (!Objects.equals(tenantId, context.tenantId())) {
-              throw new IllegalStateException("SDK child business tenant differs from claimed tenant");
+              throw new IllegalStateException(
+                  "SDK child business tenant differs from claimed tenant");
             }
             persistCustomerEffect(
                 dataSource, tenantId, customerNo, selectedName, selected.resultVersionId());
@@ -105,6 +106,7 @@ public final class SdkWorkerRestartChildProcess {
       client.stop();
     }
   }
+
   private static void persistCustomerEffect(
       SingleConnectionDataSource dataSource,
       String tenantId,
@@ -143,5 +145,4 @@ public final class SdkWorkerRestartChildProcess {
       }
     });
   }
-
 }

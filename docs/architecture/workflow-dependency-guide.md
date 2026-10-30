@@ -14,24 +14,26 @@ Workflow 不支持 `APPROVAL` 人工审批节点；设计器与保存接口均�
 ## 1. 一图看懂依赖怎么表达
 
 ```mermaid
-flowchart LR
-  subgraph 单上游
-    A1[JOB_A] -- SUCCESS --> A2[JOB_B]
-    A1 -- FAILURE --> A3[JOB_ERR<br/>告警/补偿]
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  subgraph SINGLE["单上游"]
+    direction LR
+    A1["JOB A"] -->|"SUCCESS"| A2["JOB B"]
+    A1 -->|"FAILURE"| A3["错误处理 Job"]
   end
-
-  subgraph 多上游全部
-    B1[JOB_A] -- SUCCESS --> BG{GATEWAY<br/>joinMode=ALL}
-    B2[JOB_B] -- SUCCESS --> BG
-    B3[JOB_C] -- SUCCESS --> BG
-    BG --> B4[JOB_D<br/>等齐 A B C]
+  subgraph ALL["多上游 · 全部满足"]
+    direction LR
+    B1["JOB A"] --> BG{"ALL"}
+    B2["JOB B"] --> BG
+    B3["JOB C"] --> BG
+    BG --> B4["JOB D"]
   end
-
-  subgraph 多上游N个
-    C1[JOB_A] -- SUCCESS --> CG{GATEWAY<br/>joinMode=N_OF<br/>joinThreshold=2}
-    C2[JOB_B] -- SUCCESS --> CG
-    C3[JOB_C] -- SUCCESS --> CG
-    CG --> C4[JOB_D<br/>3 中 2 即触发]
+  subgraph N["多上游 · 3 中 2"]
+    direction LR
+    C1["JOB A"] --> CG{"N_OF · 2"}
+    C2["JOB B"] --> CG
+    C3["JOB C"] --> CG
+    CG --> C4["JOB D"]
   end
 ```
 
@@ -49,41 +51,39 @@ flowchart LR
 ### 2.1 三张表
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 erDiagram
-  workflow_definition ||--o{ workflow_node : has
-  workflow_definition ||--o{ workflow_edge : has
-  workflow_node }o--|| job_definition : "JOB.related_job_code"
-  job_definition }o..|| system_pipeline_catalog : "job_type (file types only)"
-
+  workflow_definition ||--o{ workflow_node : contains
+  workflow_definition ||--o{ workflow_edge : contains
+  workflow_node }o..o| job_definition : "JOB 引用，同租户校验"
   workflow_definition {
     bigint id PK
     string tenant_id
     string workflow_code
-    string workflow_type "DAG/PIPELINE/MIXED"
-    int    version
-    bool   enabled
+    int version
+    bool enabled
   }
   workflow_node {
     bigint id PK
     bigint workflow_definition_id FK
-    string node_code "唯一标识 START/END/JOB_X/MERGE..."
-    string node_type "START/END/JOB/TASK/GATEWAY/WAIT"
-    string related_job_code "目标执行节点指向 job_definition.job_code"
-    string worker_group
-    int    node_order
-    string retry_policy
-    int    retry_max_count
-    jsonb  node_params "{joinMode,joinThreshold,...}"
-    bool   enabled
+    string node_code
+    string node_type "START END JOB GATEWAY WAIT"
+    string related_job_code "仅 JOB 节点"
+    jsonb node_params
   }
   workflow_edge {
     bigint id PK
     bigint workflow_definition_id FK
     string from_node_code
     string to_node_code
-    string edge_type "SUCCESS/FAILURE/CONDITION/ALWAYS"
-    string condition_expr "edge_type=CONDITION 时的表达式"
-    bool   enabled
+    string edge_type "SUCCESS FAILURE CONDITION ALWAYS"
+    string condition_expr
+  }
+  job_definition {
+    bigint id PK
+    string tenant_id
+    string job_code
+    string job_type
   }
 ```
 
@@ -106,31 +106,32 @@ Worker，而是由 Orchestrator 持有 DAG 游标，按节点逐步物化任务�
 ### 3.1 端到端时序图
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 sequenceDiagram
-  participant Caller as Console/日程/到达适配器
-  participant Trigger
-  participant DB as 平台PostgreSQL
-  participant Kafka
-  participant Orch as Orchestrator
-  participant Worker
-  Caller->>Trigger: 显式workflowDefinitionId与稳定来源身份
-  Trigger->>DB: 请求与Trigger Outbox同事务
-  DB->>Kafka: Relay发布LaunchEnvelope
-  Kafka->>Orch: 消费原请求
-  Orch->>DB: 准备WorkflowRun、冻结图、START成功节点
-  Orch->>DB: 解析依赖与出边，物化JOB节点
-  Orch->>Trigger: 按父WorkflowRun/NodeRun接纳内部子Job请求
-  Trigger->>DB: 子请求与Outbox
-  DB->>Kafka: 发布子请求
-  Kafka->>Orch: 创建节点JobInstance及分区/任务
-  Orch->>DB: 状态与任务Outbox同事务
-  DB->>Kafka: 发布任务
-  Kafka->>Worker: 类型与Worker路由
-  Worker->>Orch: CLAIM，取得有效配置及invocation
-  Worker->>Worker: 核验冻结输入并执行
-  Worker->>Orch: REPORT（单条或逐项批量）
-  Orch->>DB: 聚合Job终态、节点输出与后继节点
-  Orch->>DB: 全图终态与终态Outbox/通知回执
+  participant C as 调用方
+  participant T as Trigger / Trigger Relay
+  participant DB as 平台数据库
+  participant K as Kafka
+  participant O as Orchestrator / Task Relay
+  participant W as Worker
+  C->>T: Workflow 目标 + 稳定来源身份
+  T->>DB: 请求与 Trigger Outbox 同事务
+  T->>K: Relay 发布 launch
+  K->>O: 投递原请求
+  O->>DB: WorkflowRun / 冻结图 / START
+  O->>T: JOB 节点子请求 + 父 Run / Node 身份
+  T->>DB: 子请求与 Outbox
+  T->>K: Relay 发布子请求
+  K->>O: 投递子请求
+  O->>DB: Job / Partition / Task 与 Outbox
+  O->>K: Relay 发布任务
+  K->>W: 按 Worker 类型投递
+  W->>O: HTTP CLAIM
+  O-->>W: 有效配置 / invocation / 租约
+  W->>W: 核验冻结输入并执行
+  W->>O: HTTP REPORT
+  O->>DB: Job 终态 / 节点输出 / 后继节点
+  O->>DB: 全图终态与通知 Outbox
 ```
 
 控制节点直接写NodeRun事实；WAIT由持久化轮询器驱动，既不创建空Job也不占用等待中的Worker线程。具体事务细分以根启动、子Job接纳和报告服务为准，不能把所有节点写入画成一个长事务。
@@ -138,10 +139,11 @@ sequenceDiagram
 ### 3.2 运行态对象关系图
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 erDiagram
-  workflow_definition ||--o{ workflow_run : snapshots
-  workflow_run ||--o{ workflow_node_run : advances
-  workflow_node_run o|--o| job_instance : materializes_JOB
+  workflow_definition ||--o{ workflow_run : freezes
+  workflow_run ||--o{ workflow_node_run : owns
+  workflow_node_run o|--o| job_instance : "JOB 按需物化"
   job_definition ||--o{ job_instance : configures
   job_instance ||--o{ job_partition : partitions
   job_partition ||--o{ job_task : executes
@@ -380,11 +382,9 @@ WAIT表示等待文件到达、HTTP条件、Kafka offset或业务库信号。Sen
 ### 7.1 串行链 — `tc/TC_WF_RISK_PIPELINE`
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  S[START] --> I[NODE_IMPORT<br/>JOB→TC_IMPORT_RISK_SCORE]
-  I --> E[NODE_EXPORT<br/>JOB→TC_EXPORT_RISK_ALERT]
-  E --> D[NODE_DISPATCH<br/>JOB→TC_DISPATCH_REVIEW]
-  D --> END[END]
+  S["START"] --> I["JOB · 导入风险分"] --> E["JOB · 导出预警"] --> D["JOB · 分发复核"] --> F["END"]
 ```
 
 边全是 `SUCCESS`，3 个 JOB 节点串行依赖。
@@ -392,13 +392,14 @@ flowchart LR
 ### 7.2 Fork-Join — `default-tenant/wf_probe_gateway`
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  S[START] -- ALWAYS --> F{FORK<br/>GATEWAY}
-  F -- ALWAYS --> A[BRANCH_A<br/>TASK]
-  F -- ALWAYS --> B[BRANCH_B<br/>TASK]
-  A -- SUCCESS --> M{MERGE<br/>GATEWAY<br/>joinMode=ANY}
-  B -- SUCCESS --> M
-  M -- ALWAYS --> END[END]
+  S["START"] --> F{"FORK"}
+  F --> A["BRANCH A · 旧 TASK"]
+  F --> B["BRANCH B · 旧 TASK"]
+  A -->|"SUCCESS"| M{"MERGE · ANY"}
+  B -->|"SUCCESS"| M
+  M --> E["END"]
 ```
 
 两个分支并行，任一成功 MERGE 就 fire。

@@ -75,11 +75,11 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
   @Autowired
   private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
-  // ── Scenario A: validation failure via unknown template ─────────────────────
+  // ── 场景 A：未知模板导致校验失败 ─────────────────────
 
   /**
    * Submits a job with a template code that does not exist in {@code file_template_config}. The
-   * import worker cannot resolve the template → ParseStep / ReceiveStep fails early → task FAILED.
+   * Import Worker 无法解析模板，导致 ParseStep / ReceiveStep 提前失败，任务进入 FAILED 状态。
    * We verify:
    *
    * <ul>
@@ -125,34 +125,33 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
 
     e2eOutboxPublishSupport.publishAllPending(TENANT);
 
-    // Task must reach FAILED status
+    // 任务必须进入 FAILED 状态。
     await()
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String status = jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
+          String status = jdbcTemplate.queryForObject(
+              selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
           assertThat(status).isEqualTo("FAILED");
         });
 
-    // Job instance must reflect failure
-    String instanceStatus = jdbcTemplate.queryForObject(
-        selectInstanceStatusSql,
-        String.class,
-        TENANT,
-        seed.dedupKey());
+    // 作业实例状态必须反映此次失败。
+    String instanceStatus =
+        jdbcTemplate.queryForObject(selectInstanceStatusSql, String.class, TENANT, seed.dedupKey());
     assertThat(instanceStatus).isIn("FAILED", "PARTIAL_FAILED");
 
-    // error_code on the task must be non-null
-    String errorCode = jdbcTemplate.queryForObject(selectErrorCodeSql, String.class, TENANT, seed.dedupKey());
+    // 任务的 error_code 必须非空。
+    String errorCode =
+        jdbcTemplate.queryForObject(selectErrorCodeSql, String.class, TENANT, seed.dedupKey());
     assertThat(errorCode).isNotBlank();
   }
 
-  // ── Scenario B: field-level validation failure via invalid record ────────────
+  // ── 场景 B：无效记录导致字段级校验失败 ────────────
 
   /**
-   * Submits JSON content where a required field (customerNo) is blank. With the
-   * IMP-CUSTOMER-JSON-ARRAY-STRICT template the data-quality service will flag the record. The
-   * strict template uses a non-skippable validation error code, so the job fails at VALIDATE stage.
+   * 提交必填字段 customerNo 为空的 JSON 内容。使用
+   * IMP-CUSTOMER-JSON-ARRAY-STRICT 模板时，数据质量服务会将该记录标记为异常。该
+   * 严格模板使用不可跳过的校验错误码，因此作业会在 VALIDATE 阶段失败。
    * We verify:
    *
    * <ul>
@@ -162,11 +161,11 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
    *       error_stage set
    * </ul>
    *
-   * Note: whether file_error_record is written depends on the skip-threshold configuration and the
-   * data-quality checks registered for this template. If the pipeline short-circuits before the
-   * validate stage (e.g. at parse) the record may not be written; in that case the test falls back
-   * to asserting only task/instance failure status. The assertion for file_error_record is
-   * performed conditionally to keep the test robust across configuration variants.
+   * 说明：是否写入 file_error_record 取决于跳过阈值配置以及
+   * 该模板注册的数据质量检查。如果流程在进入校验阶段前提前终止，
+   * （例如在解析阶段终止）则可能不会写入记录；此时测试退回到只校验
+   * 任务和实例的失败状态。对于 file_error_record 的断言
+   * 按条件执行，以适配不同配置下的行为。
    */
   @Test
   @DisplayName("必填字段缺失时,任务与实例必须失败并写入逐行错误明细且任务错误码非空")
@@ -211,7 +210,7 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
     params.put("fileFormatType", "JSON");
     params.put("templateCode", "IMP-CUSTOMER-JSON-ARRAY-STRICT");
     params.put("bizType", "CUSTOMER");
-    // customerNo is blank → data quality should fail the record; certificateNo deliberately missing
+    // customerNo 为空时数据质量校验应判定记录失败；certificateNo 则有意缺失。
     params.put(
         "content",
         "[{\"customerNo\":\"\",\"customerName\":\"Bad User\",\"customerType\":\"PERSONAL\","
@@ -228,26 +227,25 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
 
     e2eOutboxPublishSupport.publishAllPending(TENANT);
 
-    // Task must reach FAILED status
+    // 任务必须进入 FAILED 状态。
     await()
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String status = jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
+          String status = jdbcTemplate.queryForObject(
+              selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
           assertThat(status).isEqualTo("FAILED");
         });
 
     // Job instance failure
-    String instanceStatus = jdbcTemplate.queryForObject(
-        selectInstanceStatusSql,
-        String.class,
-        TENANT,
-        seed.dedupKey());
+    String instanceStatus =
+        jdbcTemplate.queryForObject(selectInstanceStatusSql, String.class, TENANT, seed.dedupKey());
     assertThat(instanceStatus).isIn("FAILED", "PARTIAL_FAILED");
 
-    // Fetch file_id associated with this job instance (may be null if pipeline aborted before file
+    // 获取与此作业实例关联的 file_id（若流程在创建文件前终止，该值可能为空）。
     // creation)
-    Long fileId = jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, seed.dedupKey(), TENANT);
+    Long fileId =
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, seed.dedupKey(), TENANT);
 
     assertThat(fileId)
         .as("import should create a file_record before validate-stage failure")
@@ -261,18 +259,20 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
           assertThat(errCount).isNotNull().isGreaterThan(0L);
         });
 
-    List<Map<String, Object>> errorRecords = jdbcTemplate.queryForList(selectErrorCodeSql, TENANT, fileId);
+    List<Map<String, Object>> errorRecords =
+        jdbcTemplate.queryForList(selectErrorCodeSql, TENANT, fileId);
     assertThat(errorRecords.get(0).get("error_code")).isNotNull();
     assertThat(errorRecords.get(0).get("record_no")).isNotNull();
 
-    // error_code on task must be non-null regardless of pipeline stage
-    String errorCode = jdbcTemplate.queryForObject(selectErrorCodeSql2, String.class, TENANT, seed.dedupKey());
+    // 无论流程在哪个阶段失败，任务的 error_code 都必须非空。
+    String errorCode =
+        jdbcTemplate.queryForObject(selectErrorCodeSql2, String.class, TENANT, seed.dedupKey());
     assertThat(errorCode).isNotBlank();
   }
 
   /**
-   * Scenario C – orchestrator retry exhaustion: same persistent failure (unknown template) with a
-   * non-zero retry budget must schedule partition retries and eventually emit a dead-letter row.
+   * 场景 C——Orchestrator 重试耗尽：未知模板导致持续失败，同时设置
+   * 非零重试预算后，系统应安排分区重试并最终写入死信记录。
    */
   @Test
   @DisplayName("持续失败且重试预算耗尽时,必须为分区生成死信记录并保留分区重试计数")
@@ -318,12 +318,13 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
         .pollInterval(Duration.ofMillis(400))
         .untilAsserted(() -> {
           e2eOutboxPublishSupport.publishAllPending(TENANT);
-          Long dlq = jdbcTemplate.queryForObject(selectCountSql, Long.class, TENANT, seed.dedupKey());
+          Long dlq =
+              jdbcTemplate.queryForObject(selectCountSql, Long.class, TENANT, seed.dedupKey());
           assertThat(dlq).isNotNull().isGreaterThanOrEqualTo(1L);
         });
 
     Integer partitionRetries =
-    jdbcTemplate.queryForObject(selectRetryCountSql, Integer.class, TENANT, seed.dedupKey());
+        jdbcTemplate.queryForObject(selectRetryCountSql, Integer.class, TENANT, seed.dedupKey());
     // unknown template 触发 IMPORT_LOAD_CONFIG_INVALID,被 DefaultRetryGovernanceService
     // 列入 NON_RETRYABLE_ERROR_CODES,直接进死信无重试 → retry_count=0;留 retryMaxCount(2)
     // 是验证"即使配置了重试预算,硬错也短路"。

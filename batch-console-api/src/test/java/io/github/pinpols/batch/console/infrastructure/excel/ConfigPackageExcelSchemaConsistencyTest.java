@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.infrastructure.excel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarQueryRow;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -12,6 +13,25 @@ import org.junit.jupiter.api.Test;
  */
 @DisplayName("配置包 Excel 列定义:各 sheet 与共享 schema 的一致性")
 class ConfigPackageExcelSchemaConsistencyTest {
+
+  @Test
+  @DisplayName("日历导出按既有列名保留字段、节假日及空值")
+  void shouldExportCalendarFieldsAndNulls() {
+    CalendarQueryRow row = new CalendarQueryRow(
+        11L, "tenant-a", "CAL", "name", "Asia/Shanghai", "NEXT", "NONE", 5, true, null, null, null);
+    assertThat(ConfigPackageExcelSchema.BusinessCalendar.toExportRow(row, "2026-01-01"))
+        .containsEntry("tenant_id", "tenant-a")
+        .containsEntry("calendar_code", "CAL")
+        .containsEntry("calendar_name", "name")
+        .containsEntry("timezone", "Asia/Shanghai")
+        .containsEntry("holiday_roll_rule", "NEXT")
+        .containsEntry("catch_up_policy", "NONE")
+        .containsEntry("catch_up_max_days", 5)
+        .containsEntry("holidays", "2026-01-01")
+        .containsEntry("enabled", true)
+        .containsEntry("description", null)
+        .hasSize(10);
+  }
 
   @Test
   @DisplayName("配置包写出列:所有 sheet 全部取自共享 schema 定义")

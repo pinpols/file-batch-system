@@ -12,6 +12,7 @@ import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.config.FileGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.BundleArrivalLauncher;
+import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceLatencyMetrics;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceScheduler;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.S3GovernanceStorage;
@@ -27,6 +28,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -162,6 +164,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   private final FileGovernanceRepository fileGovernanceRepository;
   private final MeterRegistry meterRegistry;
   private final FileGovernanceProperties fileGovernanceProperties;
+  private final FileGovernanceMetricsCacheService metricsCacheService;
 
   @MockitoSpyBean
   private FileGovernanceRepository fileGovernanceRepositorySpy;
@@ -171,12 +174,76 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
       FileGovernanceScheduler fileGovernanceScheduler,
       FileGovernanceRepository fileGovernanceRepository,
       MeterRegistry meterRegistry,
-      FileGovernanceProperties fileGovernanceProperties) {
+      FileGovernanceProperties fileGovernanceProperties,
+      FileGovernanceMetricsCacheService metricsCacheService) {
     this.jdbcTemplate = jdbcTemplate;
     this.fileGovernanceScheduler = fileGovernanceScheduler;
     this.fileGovernanceRepository = fileGovernanceRepository;
     this.meterRegistry = meterRegistry;
     this.fileGovernanceProperties = fileGovernanceProperties;
+    this.metricsCacheService = metricsCacheService;
+  }
+
+  @Test
+  @DisplayName("文件治理具名投影保留数据库字段和租户过滤")
+  void shouldReadTypedFileTemplateAndDispatchProjections() {
+    String token = suffix();
+    String templateCode = "typed-template-" + token;
+    Long fileId = insertFileRecord(new FileRecordSpec(
+        TENANT_ID,
+        "typed-projection-" + token + ".csv",
+        "INPUT",
+        "RECEIVED",
+        "S3",
+        "incoming/typed-projection-" + token + ".csv",
+        "{\"templateCode\":\"" + templateCode + "\"}"));
+
+    var file = fileGovernanceRepository.loadFileRecord(TENANT_ID, fileId);
+    assertThat(file).isNotNull();
+    assertThat(file.id()).isEqualTo(fileId);
+    assertThat(file.fileStatus()).isEqualTo("RECEIVED");
+    assertThat(file.storagePath()).isEqualTo("incoming/typed-projection-" + token + ".csv");
+    assertThat(fileGovernanceRepository.loadFileRecord("other-tenant", fileId)).isNull();
+
+    String insertTemplateSql = """
+        insert into batch.file_template_config (
+            tenant_id, template_code, template_name, template_type, file_format_type,
+            version, preview_masking_enabled, content_encryption_enabled,
+            encryption_key_ref, download_requires_approval, masking_rule_set
+        ) values (?, ?, ?, 'IMPORT', 'DELIMITED', 1, true, true, ?, true, ?)
+        """;
+    jdbcTemplate.update(
+        insertTemplateSql,
+        TENANT_ID,
+        templateCode,
+        templateCode,
+        "key-ref-" + token,
+        "rule-set-" + token);
+    var security = fileGovernanceRepository.loadTemplateSecurityForFile(TENANT_ID, fileId);
+    assertThat(security).isNotNull();
+    assertThat(security.previewMaskingEnabled()).isTrue();
+    assertThat(security.contentEncryptionEnabled()).isTrue();
+    assertThat(security.encryptionKeyRef()).isEqualTo("key-ref-" + token);
+    assertThat(security.downloadRequiresApproval()).isTrue();
+    assertThat(security.maskingRuleSet()).isEqualTo("rule-set-" + token);
+    assertThat(fileGovernanceRepository.loadTemplateSecurityForFile("other-tenant", fileId))
+        .isNull();
+
+    String insertDispatchSql = """
+        insert into batch.file_dispatch_record (
+            tenant_id, file_id, channel_code, dispatch_status
+        ) values (?, ?, ?, 'CREATED')
+        """;
+    jdbcTemplate.update(insertDispatchSql, TENANT_ID, fileId, "channel-" + token);
+    var dispatch =
+        fileGovernanceRepository.loadLatestDispatchRecord(TENANT_ID, fileId, "channel-" + token);
+    assertThat(dispatch).isNotNull();
+    assertThat(dispatch.id()).isPositive();
+    assertThat(dispatch.pipelineInstanceId()).isNull();
+    assertThat(dispatch.channelCode()).isEqualTo("channel-" + token);
+    assertThat(fileGovernanceRepository.loadLatestDispatchRecord(
+            "other-tenant", fileId, "channel-" + token))
+        .isNull();
   }
 
   @Test
@@ -202,11 +269,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
         "LOCAL",
         "incoming/" + groupCode + "/verified.csv",
         metadata));
-    jdbcTemplate.update(
-        updateFileRecordSql,
-        "a".repeat(64),
-        TENANT_ID,
-        fileId);
+    jdbcTemplate.update(updateFileRecordSql, "a".repeat(64), TENANT_ID, fileId);
     boolean original = fileGovernanceProperties.getArrival().isRequireVerified();
     try {
       fileGovernanceProperties.getArrival().setRequireVerified(true);
@@ -222,13 +285,13 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("真实数据库下 checksum 字段存在但没有 VERIFIED 背书时保持等待")
   void shouldWaitForVerifiedGroup_whenOnlyChecksumColumnsArePresent() {
-  final String updateFileRecordSql = """
+    final String updateFileRecordSql = """
       update batch.file_record set checksum_type = 'SHA-256', checksum_value = ? where tenant_id = ? and id = ?
   """;
-  final String selectMetadataJsonSql = """
+    final String selectMetadataJsonSql = """
       select metadata_json->>'arrivalState' from batch.file_record where tenant_id = ? and id = ?
   """;
-  final String selectMetadataJsonSql2 = """
+    final String selectMetadataJsonSql2 = """
       select metadata_json->>'arrivalReason' from batch.file_record where tenant_id = ? and id = ?
   """;
 
@@ -244,11 +307,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
         "LOCAL",
         "incoming/" + groupCode + "/unverified.csv",
         metadata));
-    jdbcTemplate.update(
-        updateFileRecordSql,
-        "a".repeat(64),
-        TENANT_ID,
-        fileId);
+    jdbcTemplate.update(updateFileRecordSql, "a".repeat(64), TENANT_ID, fileId);
     boolean original = fileGovernanceProperties.getArrival().isRequireVerified();
     try {
       fileGovernanceProperties.getArrival().setRequireVerified(true);
@@ -265,9 +324,28 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("文件治理指标经真实缓存往返后保留数值和样本")
+  void shouldLoadTypedMetricsFromRedis() {
+    String tenantId = "metrics-" + suffix();
+    FileGovernanceLatencyMetrics expected = new FileGovernanceLatencyMetrics(
+        tenantId,
+        2L,
+        7200L,
+        1L,
+        3600L,
+        List.of(Map.of("file_name", "in.csv")),
+        List.of(Map.of("pipeline_id", 19)));
+
+    metricsCacheService.write(tenantId, expected);
+    FileGovernanceLatencyMetrics actual = fileGovernanceScheduler.loadLatencyMetrics(tenantId);
+
+    assertThat(actual).isEqualTo(expected);
+  }
+
+  @Test
   @DisplayName("延迟到达的文件计入送达延迟违规计数,最大延迟秒数不低于实际延迟")
   void shouldCollectLatencyMetricsForDelayedArrivalFiles() {
-    // collectLatencyMetrics() scopes queries to reconcile.default-tenant-id (see
+    // collectLatencyMetrics() 将查询范围限定为 reconcile.default-tenant-id（参见
     // FileGovernanceScheduler).
     String latencyTenantId = "default-tenant";
     Instant now = BatchDateTimeSupport.utcNow();
@@ -323,9 +401,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
 
     fileGovernanceScheduler.cleanupArchivedFiles();
 
-    Map<String, Object> fileRecord = jdbcTemplate.queryForMap(
-        selectFileStatusSql,
-        fileId);
+    Map<String, Object> fileRecord = jdbcTemplate.queryForMap(selectFileStatusSql, fileId);
     assertThat(fileRecord)
         .containsEntry("file_status", FileStatus.DELETED.code())
         .containsEntry("cleanup_reason", "ARCHIVE_RETENTION_EXPIRED");
@@ -379,6 +455,43 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
 
     Integer auditCount = jdbcTemplate.queryForObject(selectCountSql, Integer.class);
     assertThat(auditCount).isGreaterThanOrEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("托管上传对象不会被对账登记到默认租户，原会话仍需确认到达")
+  void shouldKeepManagedUploadInItsOriginalTenant() throws Exception {
+    String uploadPrefix = "uploads/" + TENANT_ID + "/reconcile-it-" + suffix() + "/";
+    String objectName = uploadPrefix + "unconfirmed.csv";
+    putObject(objectName, "alpha,beta\n1,2\n");
+    insertFileRecord(new FileRecordSpec(
+            TENANT_ID,
+            "unconfirmed.csv",
+            "INPUT",
+            FileStatus.RECEIVED.code(),
+            "S3",
+            objectName,
+            "{\"uploadMode\":\"APP_MANAGED\",\"arrivalState\":\"WAITING_ARRIVAL\"}")
+        .storageBucket(s3Bucket()));
+
+    String originalPrefix = fileGovernanceProperties.getReconcile().getPrefix();
+    try {
+      fileGovernanceProperties.getReconcile().setPrefix(uploadPrefix);
+      fileGovernanceScheduler.reconcileObjectStorage();
+    } finally {
+      fileGovernanceProperties.getReconcile().setPrefix(originalPrefix);
+    }
+
+    String selectFilesSql = """
+        select tenant_id, metadata_json->>'uploadMode' as upload_mode,
+               metadata_json->>'arrivalState' as arrival_state
+        from batch.file_record where storage_bucket = ? and storage_path = ?
+        """;
+    var recordedFiles = jdbcTemplate.queryForList(selectFilesSql, s3Bucket(), objectName);
+    assertThat(recordedFiles).hasSize(1);
+    assertThat(recordedFiles.getFirst())
+        .containsEntry("tenant_id", TENANT_ID)
+        .containsEntry("upload_mode", "APP_MANAGED")
+        .containsEntry("arrival_state", "WAITING_ARRIVAL");
   }
 
   @Test
@@ -479,10 +592,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
 
     // 新配置只影响新请求；持久化等待仍保留原始请求中的两条依赖边。
     fileGovernanceScheduler.manageFileArrivalGroups();
-    var waitingRows = jdbcTemplate.queryForList(
-        selectMetadataJsonSql,
-        TENANT_ID,
-        groupCode);
+    var waitingRows = jdbcTemplate.queryForList(selectMetadataJsonSql, TENANT_ID, groupCode);
     assertThat(waitingRows).hasSize(1);
     assertThat(waitingRows.get(0).get("arrival_state")).isEqualTo("WAITING_ARRIVAL");
 
@@ -498,10 +608,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
         .updatedAt(BatchDateTimeSupport.utcNow()));
     fileGovernanceScheduler.manageFileArrivalGroups();
 
-    var recoveredRows = jdbcTemplate.queryForList(
-        selectMetadataJsonSql,
-        TENANT_ID,
-        groupCode);
+    var recoveredRows = jdbcTemplate.queryForList(selectMetadataJsonSql, TENANT_ID, groupCode);
     assertThat(recoveredRows).hasSize(2);
     assertThat(recoveredRows)
         .allSatisfy(row -> assertThat(row.get("arrival_state")).isEqualTo("TRIGGERED"));
@@ -510,11 +617,11 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("Bundle 到达组只收到部分必需文件时不启动 Workflow")
   void shouldNotLaunchBundle_whenRequiredFileSetIsIncomplete() {
-  final String selectMetadataJsonSql = """
+    final String selectMetadataJsonSql = """
       select metadata_json->>'arrivalState' from batch.file_record where tenant_id = ?\s\
       and metadata_json->>'fileGroupCode' = ?\
       """;
-  final String selectMetadataJsonSql2 = """
+    final String selectMetadataJsonSql2 = """
       select metadata_json->>'arrivalReason' from batch.file_record where tenant_id = ?\s\
       and metadata_json->>'fileGroupCode' = ?\
       """;
@@ -625,10 +732,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
       executor.shutdownNow();
     }
 
-    var states = jdbcTemplate.queryForList(
-        selectMetadataJsonSql,
-        TENANT_ID,
-        groupCode);
+    var states = jdbcTemplate.queryForList(selectMetadataJsonSql, TENANT_ID, groupCode);
     assertThat(states).hasSize(2);
     assertThat(states)
         .allSatisfy(row -> assertThat(row.get("arrival_state")).isEqualTo("TRIGGERED"));

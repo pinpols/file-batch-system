@@ -19,9 +19,13 @@ import java.util.OptionalLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mockito;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 @DisplayName("渠道分发网关:适配器解析与投递记账、健康与熔断拦截、许可释放与回读守卫")
+@ExtendWith(OutputCaptureExtension.class)
 class DispatchChannelGatewayTest {
 
   private DispatchChannelAdapter httpAdapter;
@@ -36,7 +40,7 @@ class DispatchChannelGatewayTest {
     when(httpAdapter.supports("API")).thenReturn(true);
     when(httpAdapter.supports("SFTP")).thenReturn(false);
 
-    // use real circuit breaker with lenient threshold
+    // 使用真实断路器，并设置较宽松的阈值。
     DispatchCircuitBreakerProperties cbProps = new DispatchCircuitBreakerProperties();
     cbProps.setEnabled(true);
     cbProps.setFailureThreshold(5);
@@ -103,7 +107,7 @@ class DispatchChannelGatewayTest {
   @Test
   @DisplayName("渠道已熔断开路时直接失败并给出开路原因,不调用适配器且按熔断拒绝计数")
   void shouldBlockWhenCircuitIsOpen() {
-    // trigger the circuit open via real circuit breaker
+    // 通过真实断路器触发开启状态。
     DispatchCircuitBreakerProperties cbProps = new DispatchCircuitBreakerProperties();
     cbProps.setEnabled(true);
     cbProps.setFailureThreshold(3);
@@ -267,11 +271,11 @@ class DispatchChannelGatewayTest {
 
   @Test
   @DisplayName("投递成功后健康快照写入失败不把已完成的外部副作用变成失败")
-  void shouldPreserveSuccessfulDispatchWhenHealthPersistenceFails() {
+  void shouldPreserveSuccessfulDispatchWhenHealthPersistenceFails(CapturedOutput output) {
     DispatchResult success = new DispatchResult(true, "req-1", null, true, false, "ok", null);
     when(httpAdapter.dispatch(any())).thenReturn(success);
     when(healthService.allowDispatch(any())).thenReturn(true);
-    Mockito.doThrow(new IllegalStateException("health FK rejected stale channel"))
+    Mockito.doThrow(new IllegalStateException("health token=probe-secret rejected stale channel"))
         .when(healthService)
         .recordDispatchOutcome(any(), anyBoolean(), anyString(), any());
 
@@ -286,6 +290,7 @@ class DispatchChannelGatewayTest {
     verify(cb).recordSuccess("t1|API|ch-1");
     verify(cb, never()).recordFailure(anyString());
     verify(deliveryMetrics).recordDelivery("API", true, false);
+    assertThat(output.getOut()).doesNotContain("probe-secret");
   }
 
   // --- helpers ---

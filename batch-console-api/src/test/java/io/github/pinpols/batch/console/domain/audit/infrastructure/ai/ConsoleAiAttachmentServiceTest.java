@@ -16,24 +16,25 @@ import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentBindingInput;
-import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentBindParam;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAttachmentEntity;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAttachmentMapper;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentBindParam;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.time.Instant;
-import java.util.UUID;
 import java.util.List;
-import org.mockito.ArgumentCaptor;
+import java.util.UUID;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
@@ -43,14 +44,19 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
 class ConsoleAiAttachmentServiceTest {
   @Mock
   private ConsoleAiAttachmentMapper mapper;
+
   @Mock
   private BatchObjectCryptoService crypto;
+
   @Mock
   private BatchObjectStore store;
+
   @Mock
   private PlatformTransactionManager transactionManager;
+
   @Mock
   private SlidingWindowRateLimiter rateLimiter;
+
   private final ConsoleAiProperties properties = new ConsoleAiProperties();
   private ConsoleAiAttachmentService service;
 
@@ -66,15 +72,15 @@ class ConsoleAiAttachmentServiceTest {
   @DisplayName("无附件时绑定保持空操作，不触发开关或数据库检查")
   void shouldLeaveBindingEmpty_whenAttachmentIdsAreNullOrEmpty() {
     properties.setImageInputEnabled(false);
-    ConsoleAiAttachmentBindingInput nullIds = ConsoleAiAttachmentBindingInput.builder().build();
-    ConsoleAiAttachmentBindingInput emptyIds = ConsoleAiAttachmentBindingInput.builder()
-        .ids(List.of())
-        .build();
+    ConsoleAiAttachmentBindingInput nullIds =
+        ConsoleAiAttachmentBindingInput.builder().build();
+    ConsoleAiAttachmentBindingInput emptyIds =
+        ConsoleAiAttachmentBindingInput.builder().ids(List.of()).build();
 
     service.bind(nullIds);
     service.bind(emptyIds);
 
-    org.mockito.Mockito.verifyNoInteractions(mapper);
+    Mockito.verifyNoInteractions(mapper);
   }
 
   @Test

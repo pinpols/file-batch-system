@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.governance;
 import io.github.pinpols.batch.common.enums.AlertStatus;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.utils.AlertFingerprints;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
 import io.github.pinpols.batch.orchestrator.infrastructure.governance.AlertmanagerEmitPublisher;
@@ -61,6 +62,11 @@ public class DefaultAlertEventService implements AlertEventService {
     entity.setStatus(AlertStatus.OPEN.code());
 
     alertEventMapper.insertOrMerge(entity);
+    AlertEventEntity persisted =
+        alertEventMapper.selectByFingerprint(request.tenantId(), fingerprint);
+    if (EmptyChecks.isNull(persisted)) {
+      throw new IllegalStateException("告警持久化后未能读取原始身份");
+    }
 
     meterRegistry
         .counter(
@@ -69,7 +75,9 @@ public class DefaultAlertEventService implements AlertEventService {
 
     // emit 直连 AM(迁移方案 §6.1):必须放事务提交后,否则回滚了 AM 却收到幽灵告警。
     // publisher 自身失败隔离(异步 + swallow),DB 落库为准。
-    publishToAlertmanagerAfterCommit(entity);
+    if (!AlertStatus.CLOSED.code().equals(persisted.getStatus())) {
+      publishToAlertmanagerAfterCommit(persisted);
+    }
   }
 
   private void publishToAlertmanagerAfterCommit(AlertEventEntity entity) {

@@ -9,22 +9,19 @@
 ## 1. 一图分清
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  subgraph Workflow["workflow_* — 跨 job 的 DAG 编排"]
-    direction LR
-    W1[workflow_definition] --- WN1[workflow_node<br/>WorkflowNodeType]
-    WN1 -- related_job_code --> J1[job_definition]
-    WN1 --- WE[workflow_edge<br/>SUCCESS / FAILURE / CONDITION]
+  subgraph WF["Workflow · 跨 Job 编排"]
+    D["workflow_definition"] --> N["workflow_node"]
+    D --> E["workflow_edge"]
+    N -->|"JOB 引用"| J["job_definition"]
   end
-
-  subgraph Pipeline["pipeline_* — 文件域内的步骤链路"]
-    direction LR
-    J1 -- JobType --> SYS[SystemPipelineCatalog<br/>平台代码固定定义]
-    SYS --- PSD[固定阶段序列<br/>IMPORT / EXPORT / PROCESS / DISPATCH]
-    PI[pipeline_instance] --- PSR[pipeline_step_run]
+  subgraph FILE["Pipeline · 文件 Job 内部阶段"]
+    CAT["SystemPipelineCatalog · 代码目录"] --> S["IMPORT / EXPORT / PROCESS / DISPATCH"]
+    PI["pipeline_instance"] --> PS["pipeline_step_run"]
   end
-
-  J1 -. 运行时按类型实例化 .-> PI
+  J -->|"文件类型"| CAT
+  J -. "按运行实例化" .-> PI
 ```
 
 **关系一句话**：Workflow 节点引用 Job；文件类 Job 的类型决定系统 Pipeline。旧租户Pipeline定义及步骤表在V347退役；系统固定阶段只来自代码目录和Job业务参数，不提供旧定义查询或执行回退。

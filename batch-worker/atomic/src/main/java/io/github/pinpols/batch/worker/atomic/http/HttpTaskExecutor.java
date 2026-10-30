@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.atomic.http;
 
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.CredentialEnvResolver;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
@@ -11,7 +12,9 @@ import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
+import io.github.pinpols.batch.worker.atomic.runtime.AtomicParameterNumbers;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import jakarta.annotation.PreDestroy;
 import java.io.ByteArrayOutputStream;
@@ -230,11 +233,12 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
       if (ctx.isDryRun()) {
         // ADR-026 §dry-run:不发出 HTTP 请求,只回传将要发的 method + url + header keys + body 长度。
         // 不回传 header value(可能含 auth bearer / cookie),不回传 body 文本(可能含敏感载荷)。
+        String plannedEndpoint = SecretMasking.maskEndpoint(inv.uri.toString());
         Map<String, Object> planned = new LinkedHashMap<>();
         planned.put(PipelineRuntimeKeys.DRY_RUN, true);
         planned.put("plannedAction", "http");
         planned.put(PARAM_METHOD, inv.method);
-        planned.put(PARAM_URL, inv.uri.toString());
+        planned.put(PARAM_URL, plannedEndpoint);
         planned.put("headerKeys", List.copyOf(inv.headers.keySet()));
         planned.put(
             "bodyBytes", inv.body == null ? 0 : inv.body.getBytes(StandardCharsets.UTF_8).length);
@@ -246,8 +250,9 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
             ctx.tenantId(),
             ctx.jobCode(),
             inv.method,
-            inv.uri);
-        return TaskResult.ok("dry-run: " + inv.method + " " + inv.uri + " (not sent)", planned);
+            plannedEndpoint);
+        return TaskResult.ok(
+            "dry-run: " + inv.method + " " + plannedEndpoint + " (not sent)", planned);
       }
       return runWithRetry(ctx, inv);
     } catch (HttpValidationException ex) {
@@ -272,10 +277,10 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
           AtomicErrorCode.SECURITY_REJECTED, "SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
     } catch (RuntimeException ex) {
       log.error(
-          "http executor unexpected error: tenantId={}, jobCode={}",
-          ctx.tenantId(),
-          ctx.jobCode(),
-          ex);
+          "http executor unexpected error: tenantId={}, jobCode={}, cause={}",
+          LogSanitizer.value(ctx.tenantId()),
+          LogSanitizer.value(ctx.jobCode()),
+          SwallowedExceptionLogger.summary(ex));
       String exceptionMessage = ex.getMessage();
       String failureMessage =
           EmptyChecks.isNull(exceptionMessage) ? ex.getClass().getSimpleName() : ex.getMessage();
@@ -319,14 +324,13 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
 
     Duration timeout = props.getDefaultTimeout();
     Object t = params.get(PARAM_TIMEOUT);
-    if (t instanceof Number number) {
-      long sec = number.longValue();
-      if (sec <= 0) {
-        throw new HttpValidationException("timeoutSeconds must be positive");
+    if (EmptyChecks.isNotNull(t)) {
+      Long sec = AtomicParameterNumbers.positiveLong(t);
+      if (EmptyChecks.isNull(sec)) {
+        throw new HttpValidationException("timeoutSeconds must be positive integer");
       }
       Duration requested = Duration.ofSeconds(sec);
-      boolean requestedTimeoutIsBelowDefault =
-          requested.compareTo(props.getDefaultTimeout()) < 0;
+      boolean requestedTimeoutIsBelowDefault = requested.compareTo(props.getDefaultTimeout()) < 0;
       if (requestedTimeoutIsBelowDefault) {
         timeout = requested;
       }
@@ -509,7 +513,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     }
   }
 
-  // ─── execution with retry ──────────────────────────────────────────────────
+  // ─── 带重试的执行 ──────────────────────────────────────────────────
 
   private TaskResult runWithRetry(TaskContext ctx, Invocation inv) {
     boolean idempotent = IDEMPOTENT_METHODS.contains(inv.method);
@@ -520,9 +524,12 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     for (int attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         TaskResult result = runOnce(inv, attempt);
-        // 5xx + 还有重试机会 → 走重试逻辑
+        // 显式接受的状态已满足调用方预期；未指定期望时保留默认 5xx 重试。
         Integer status = (Integer) result.output().get("statusCode");
-        boolean serverFailureCanBeRetried = status != null && status >= 500 && attempt < maxAttempts;
+        boolean serverFailureCanBeRetried = EmptyChecks.isNotNull(status)
+            && status >= 500
+            && attempt < maxAttempts
+            && (EmptyChecks.isEmpty(inv.expectedStatus) || !result.success());
         if (serverFailureCanBeRetried) {
           log.warn("http 5xx, retrying: status={}, attempt={}/{}", status, attempt, maxAttempts);
           sleep(props.getRetryBackoff().toMillis() * (1L << (attempt - 1)));
@@ -645,7 +652,10 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
           ? "; remote side effect may have committed, manual reconciliation is required"
           : "";
       return AtomicErrorCode.fail(
-          code, "status " + statusCode + " not in expected " + inv.expectedStatus + outcomeNote);
+          code,
+          "status " + statusCode + " not in expected " + inv.expectedStatus + outcomeNote,
+          Map.of("statusCode", statusCode),
+          null);
     }
     return TaskResult.ok("status=" + statusCode, output);
   }

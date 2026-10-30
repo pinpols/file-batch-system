@@ -142,6 +142,7 @@
          and alias.request_id = tr.request_id
          and alias.idempotency_key = #{dedupKey}
         where tr.tenant_id = #{tenantId}
+          and tr.parent_workflow_run_id is null
           and (tr.dedup_key = #{dedupKey} or alias.idempotency_key is not null)
         order by (tr.dedup_key = #{dedupKey}) desc
         limit 1

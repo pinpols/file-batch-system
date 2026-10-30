@@ -7,9 +7,15 @@ import io.github.pinpols.batch.common.config.ApplicationNameProvider;
 import io.github.pinpols.batch.common.config.RuntimeInfrastructureInspector;
 import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
 import java.nio.file.Path;
+import java.util.Locale;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.data.redis.autoconfigure.DataRedisConnectionDetails;
 import org.springframework.mock.env.MockEnvironment;
 
 @DisplayName("上报发件箱后端守卫: 禁用态与启用态的后端身份解析")
@@ -59,16 +65,42 @@ class WorkerReportOutboxBackendGuardTest {
             "path=" + Path.of("./target/outbox-switch-test.db").toAbsolutePath().normalize());
   }
 
+  @ParameterizedTest
+  @CsvSource({
+    "tr-TR,SQLITE,sqlite",
+    "az-AZ,SQLITE,sqlite",
+    "tr-TR,PLATFORM_PG,platform_pg",
+    "az-AZ,PLATFORM_PG,platform_pg"
+  })
+  @ResourceLock("java.util.Locale.default")
+  @DisplayName("主机语言改变时，存储后端身份仍与已登记协议值一致")
+  void shouldKeepBackendIdentityStable_whenDefaultLocaleChanges(
+      String language, WorkerReportOutboxStorage storage, String expectedBackend) {
+    WorkerReportOutboxProperties properties = new WorkerReportOutboxProperties();
+    properties.setEnabled(true);
+    properties.setStorage(storage);
+    properties.setSqlitePath("./target/outbox-switch-test.db");
+    Locale previous = Locale.getDefault();
+    try {
+      Locale.setDefault(Locale.forLanguageTag(language));
+      StatefulBackendGuard.DesiredBackend desired = guard(properties).desiredBackend();
+      assertThat(desired.backend()).isEqualTo(expectedBackend);
+    } finally {
+      Locale.setDefault(previous);
+    }
+  }
+
   private WorkerReportOutboxBackendGuard guard(WorkerReportOutboxProperties properties) {
     MockEnvironment environment = new MockEnvironment()
         .withProperty(ApplicationNameProvider.APPLICATION_NAME_KEY, "batch-worker-import")
         .withProperty(
             RuntimeInfrastructureInspector.DATASOURCE_URL_KEY,
             "jdbc:postgresql://platform-db/batch_platform");
+    @SuppressWarnings("unchecked")
+    ObjectProvider<DataRedisConnectionDetails> redis = mock(ObjectProvider.class);
+    RuntimeInfrastructureInspector inspector =
+        new RuntimeInfrastructureInspector(environment, redis);
     return new WorkerReportOutboxBackendGuard(
-        mock(DataSource.class),
-        properties,
-        new ApplicationNameProvider(environment),
-        new RuntimeInfrastructureInspector(environment));
+        mock(DataSource.class), properties, new ApplicationNameProvider(environment), inspector);
   }
 }

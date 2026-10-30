@@ -46,7 +46,7 @@ class RouteToPrimaryAspectTest {
 
       aspect.wrap(pjp);
 
-      // After inner returns, outer hint should still be set
+      // 内部调用返回后，外层提示信息仍应保留。
       assertThat(RoutingHints.isForcePrimary()).isTrue();
     } finally {
       RoutingHints.restore(prev);

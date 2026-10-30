@@ -8,7 +8,7 @@ import lombok.Data;
 
 @Data
 public class FileTemplateCreateRequest {
-  // CPD-OFF: Create and update requests intentionally mirror the public file-template contract.
+  // CPD-OFF: 创建和更新请求有意保持与公开文件模板契约一致。
   @ValidTenantId
   private String tenantId;
 

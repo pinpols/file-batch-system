@@ -44,8 +44,7 @@ public class RedisConsoleIdempotencyStore implements ConsoleIdempotencyStore {
     List<String> redisKeys = List.of(key);
     long ttlMillis = ttl.toMillis();
     String ttlMillisArgument = Long.toString(ttlMillis);
-    Long result = redisTemplate.execute(
-        REPLACE, redisKeys, expected, value, ttlMillisArgument);
+    Long result = redisTemplate.execute(REPLACE, redisKeys, expected, value, ttlMillisArgument);
     return successResult.equals(result);
   }
 

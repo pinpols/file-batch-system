@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.worker.imports.plugin;
 
 import io.github.pinpols.batch.common.plugin.ImportLoadPlugin;
-import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;

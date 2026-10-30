@@ -57,10 +57,8 @@ public class WorkflowLaunchWaitReconciler {
     Instant retryCutoffBaseTime = BatchDateTimeSupport.utcNow();
     long retryDelaySeconds = properties.getRetryDelaySeconds();
     Instant claimCutoff = retryCutoffBaseTime.plusSeconds(retryDelaySeconds);
-    List<WorkflowLaunchWaitClaim> waiting = waitingService.claimDue(
-        tenantId,
-        batchSize,
-        claimCutoff);
+    List<WorkflowLaunchWaitClaim> waiting =
+        waitingService.claimDue(tenantId, batchSize, claimCutoff);
     for (WorkflowLaunchWaitClaim entry : waiting) {
       reconcileClaimInTenant(tenantId, entry);
     }
@@ -79,8 +77,11 @@ public class WorkflowLaunchWaitReconciler {
           SwallowedExceptionLogger.summary(malformedPayload));
       return;
     } catch (RuntimeException unavailableProtection) {
-      log.warn("workflow launch wait decrypt deferred: tenantId={}, requestId={}, error={}",
-          tenantId, entry.requestId(), SwallowedExceptionLogger.summary(unavailableProtection));
+      log.warn(
+          "workflow launch wait decrypt deferred: tenantId={}, requestId={}, error={}",
+          tenantId,
+          entry.requestId(),
+          SwallowedExceptionLogger.summary(unavailableProtection));
       return;
     }
     try {

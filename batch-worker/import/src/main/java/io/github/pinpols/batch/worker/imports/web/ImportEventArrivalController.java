@@ -45,8 +45,11 @@ public class ImportEventArrivalController {
           new ImportEventArrivalResponse(false, "event-arrival-disabled"));
     }
     meterRegistry.counter("batch.import.event_arrival.notifications").increment();
+    if (!scannerProperties.isEnabled()) {
+      return CommonResponse.success(new ImportEventArrivalResponse(false, "scanner-disabled"));
+    }
     if (!scanInFlight.compareAndSet(false, true)) {
-      // 已有扫描在途,合并本次通知(扫描器单次全量扫已覆盖此对象),避免事件风暴重复扫。
+      // 已有扫描在途时合并通知；对象未进入本轮快照时由后续轮询发现。
       return CommonResponse.success(
           new ImportEventArrivalResponse(false, "scan-already-in-flight"));
     }

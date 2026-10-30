@@ -4,7 +4,7 @@
 
 本阶段继续[用户 19 项总体治理](../plans/development-worktree-governance-2026-10-24.md)，落实第 7、9、17、18 项相关的已确认源码缺口，不替代数据库、模型、配置、事务及运行时导入的后续全量审查。
 
-执行位置仍为 `/Users/dengchao/.codex/worktrees/workflow-daily-integration/file-batch-system` 的 `feature/workflow-daily-integration`，HEAD `ee01e97515b0`；保留已有暂存、未暂存及未跟踪改动，未新建分支/工作树、未操作 main 或提交。
+执行位置仍为 `~/.codex/worktrees/workflow-daily-integration/file-batch-system` 的 `feature/workflow-daily-integration`，HEAD `ee01e97515b0`；保留已有暂存、未暂存及未跟踪改动，未新建分支/工作树、未操作 main 或提交。
 
 本阶段源码范围为 1376 个现存 Java 测试文件。相较上阶段 1374 文件，清单按当前 Git 跟踪与未跟踪状态刷新，不恢复删除文件，不扫描 tmp/target/build/node_modules。实际改动 **102 个 Java 测试文件**，另修正 1 个 Python 守卫、补 1 个回归文件源码。只解析、核对和运行静态扫描；未执行项目编译、类型检查、单元/集成/E2E 或守卫测试。
 

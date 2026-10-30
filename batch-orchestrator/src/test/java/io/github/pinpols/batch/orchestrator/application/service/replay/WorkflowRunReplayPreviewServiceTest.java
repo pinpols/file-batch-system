@@ -11,56 +11,64 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.ConfigVersionPolicy;
 import io.github.pinpols.batch.common.enums.DispatchTaskKeys;
 import io.github.pinpols.batch.common.enums.JobType;
+import io.github.pinpols.batch.common.enums.ReplayOperationStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.event.DomainEvent;
+import io.github.pinpols.batch.common.event.DomainEventPublisher;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
-import io.github.pinpols.batch.common.enums.ReplayOperationStatus;
-import io.github.pinpols.batch.common.event.DomainEventPublisher;
-import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.replay.WorkflowRunReplaySourceResolver.Source;
-import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.CrossDayDependencyResolver;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
 import io.github.pinpols.batch.orchestrator.controller.WorkflowRunReplayController;
 import io.github.pinpols.batch.orchestrator.domain.entity.ApprovalCommandEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationPreviewTokenEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.ReplayOperationStartParam;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.ApprovalCommandMapper;
+import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
-import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationPreviewTokenMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper;
+import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationPreviewTokenMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
-import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.service.DispatchChannelSnapshotService;
 import io.github.pinpols.batch.orchestrator.service.DispatchSecretSnapshotResolver;
 import io.github.pinpols.batch.orchestrator.service.FileTemplateSnapshotService;
-import java.time.LocalDate;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -138,10 +146,11 @@ class WorkflowRunReplayPreviewServiceTest {
     // 保留真实定义与能力解析器，验证两者在预览链路中的集成。
     WorkflowReplayJobDefinitionResolver definitions = new WorkflowReplayJobDefinitionResolver(runs);
     WorkflowReplayCapabilityService capabilities = new WorkflowReplayCapabilityService(workers);
-    org.mockito.Mockito.lenient().when(dateTimeSupport.nowInstant())
+    Mockito.lenient()
+        .when(dateTimeSupport.nowInstant())
         .thenReturn(Instant.parse("2026-10-23T00:00:00Z"));
-    org.mockito.Mockito.lenient()
-        .when(secretPayloadProtector.protect(org.mockito.ArgumentMatchers.anyString()))
+    Mockito.lenient()
+        .when(secretPayloadProtector.protect(ArgumentMatchers.anyString()))
         .thenReturn("sealed-preview-snapshot");
     service = new WorkflowRunReplayPreviewService(
         sourceResolver,
@@ -174,8 +183,8 @@ class WorkflowRunReplayPreviewServiceTest {
     Throwable failure = catchThrowable(() -> service.approve(TENANT, 808L, "operator-b"));
 
     verifyNoInteractions(snapshotResolver, triggerRequests, domainEventPublisher);
-    verify(operations, never()).startApprovedWorkflowRunReplay(
-        org.mockito.ArgumentMatchers.any(ReplayOperationStartParam.class));
+    verify(operations, never())
+        .startApprovedWorkflowRunReplay(ArgumentMatchers.any(ReplayOperationStartParam.class));
     assertThat(failure).isInstanceOf(BizException.class);
   }
 
@@ -187,52 +196,66 @@ class WorkflowRunReplayPreviewServiceTest {
 
     Throwable failure = catchThrowable(() -> service.reject(TENANT, 808L));
 
-    verify(operations, never()).rejectPendingApproval(
-        org.mockito.ArgumentMatchers.eq(TENANT),
-        org.mockito.ArgumentMatchers.eq(808L),
-        org.mockito.ArgumentMatchers.any());
+    verify(operations, never())
+        .rejectPendingApproval(
+            ArgumentMatchers.eq(TENANT), ArgumentMatchers.eq(808L), ArgumentMatchers.any());
     verifyNoInteractions(snapshotResolver, triggerRequests, domainEventPublisher);
     assertThat(failure).isInstanceOf(BizException.class);
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {
-      "MISSING", "PENDING", "REJECTED", "WRONG_TENANT", "WRONG_KEY", "WRONG_TYPE",
-      "WRONG_ACTION", "WRONG_TARGET_TYPE", "WRONG_TARGET_ID", "WRONG_PAYLOAD_TENANT",
-      "WRONG_PAYLOAD_ID", "INVALID_JSON", "MISSING_APPROVER", "BLANK_APPROVER"
-  })
+  @ValueSource(
+      strings = {
+        "MISSING",
+        "PENDING",
+        "REJECTED",
+        "WRONG_TENANT",
+        "WRONG_KEY",
+        "WRONG_TYPE",
+        "WRONG_ACTION",
+        "WRONG_TARGET_TYPE",
+        "WRONG_TARGET_ID",
+        "WRONG_PAYLOAD_TENANT",
+        "WRONG_PAYLOAD_ID",
+        "INVALID_JSON",
+        "MISSING_APPROVER",
+        "BLANK_APPROVER"
+      })
   @DisplayName("批准决策必须绑定同租户、来源键、动作、目标、载荷及真实批准人，否则不创建请求和Outbox")
-  void shouldNotStartWholeWorkflowReplay_whenPersistedDecisionDoesNotAuthorizeOperation(String scenario) {
+  void shouldNotStartWholeWorkflowReplay_whenPersistedDecisionDoesNotAuthorizeOperation(
+      String scenario) {
     ReplayOperationEntity pending = pendingApprovalOperation();
     when(operations.selectForUpdate(TENANT, 808L)).thenReturn(pending);
     ApprovalCommandEntity decision = mismatchedReplayDecision(scenario, "APPROVED");
     when(approvals.selectByTenantAndSourceIdempotencyKey(
-        TENANT, "7c51d5c7-afc4-4016-b8cf-1888939c1269")).thenReturn(decision);
+            TENANT, "7c51d5c7-afc4-4016-b8cf-1888939c1269"))
+        .thenReturn(decision);
 
     Throwable failure = catchThrowable(() -> service.approve(TENANT, 808L, "request-actor"));
 
     verifyNoInteractions(snapshotResolver, triggerRequests, domainEventPublisher);
-    verify(operations, never()).startApprovedWorkflowRunReplay(
-        org.mockito.ArgumentMatchers.any(ReplayOperationStartParam.class));
+    verify(operations, never())
+        .startApprovedWorkflowRunReplay(ArgumentMatchers.any(ReplayOperationStartParam.class));
     assertThat(failure).isInstanceOf(BizException.class);
   }
 
   @ParameterizedTest
   @ValueSource(strings = {"MISSING", "APPROVED", "EXECUTED", "WRONG_PAYLOAD_ID"})
   @DisplayName("拒绝不能覆盖已批准或不属于此Operation的真实决策")
-  void shouldNotRejectWholeWorkflowReplay_whenPersistedDecisionDoesNotAuthorizeRejection(String scenario) {
+  void shouldNotRejectWholeWorkflowReplay_whenPersistedDecisionDoesNotAuthorizeRejection(
+      String scenario) {
     ReplayOperationEntity pending = pendingApprovalOperation();
     when(operations.selectForUpdate(TENANT, 808L)).thenReturn(pending);
     ApprovalCommandEntity decision = mismatchedReplayDecision(scenario, "REJECTED");
     when(approvals.selectByTenantAndSourceIdempotencyKey(
-        TENANT, "7c51d5c7-afc4-4016-b8cf-1888939c1269")).thenReturn(decision);
+            TENANT, "7c51d5c7-afc4-4016-b8cf-1888939c1269"))
+        .thenReturn(decision);
 
     Throwable failure = catchThrowable(() -> service.reject(TENANT, 808L));
 
-    verify(operations, never()).rejectPendingApproval(
-        org.mockito.ArgumentMatchers.eq(TENANT),
-        org.mockito.ArgumentMatchers.eq(808L),
-        org.mockito.ArgumentMatchers.any());
+    verify(operations, never())
+        .rejectPendingApproval(
+            ArgumentMatchers.eq(TENANT), ArgumentMatchers.eq(808L), ArgumentMatchers.any());
     verifyNoInteractions(snapshotResolver, triggerRequests, domainEventPublisher);
     assertThat(failure).isInstanceOf(BizException.class);
   }
@@ -254,7 +277,8 @@ class WorkflowRunReplayPreviewServiceTest {
     return decision;
   }
 
-  private static ApprovalCommandEntity mismatchedReplayDecision(String scenario, String validStatus) {
+  private static ApprovalCommandEntity mismatchedReplayDecision(
+      String scenario, String validStatus) {
     if ("MISSING".equals(scenario)) return null;
     ApprovalCommandEntity decision = persistedReplayDecision(validStatus);
     switch (scenario) {
@@ -332,8 +356,7 @@ class WorkflowRunReplayPreviewServiceTest {
           .isEqualTo(WorkflowReplayCapabilityService.Status.DECLARED_CONSISTENT);
     });
     assertThat(jobNodes.getFirst().blockers()).contains("EXTERNAL_OUTCOME_UNKNOWN");
-    assertThat(jobNodes.getLast().blockers())
-        .doesNotContain("CLAIM_REPLAY_VALIDATION_UNAVAILABLE");
+    assertThat(jobNodes.getLast().blockers()).doesNotContain("CLAIM_REPLAY_VALIDATION_UNAVAILABLE");
     assertThat(result.operationKey()).isNotNull();
     assertThat(result.previewToken()).isNotBlank();
     assertThat(result.expiresAt()).isEqualTo(Instant.parse("2026-10-23T00:05:00Z"));
@@ -353,9 +376,8 @@ class WorkflowRunReplayPreviewServiceTest {
 
     WorkflowRunReplayPreviewResponse response = service.preview(command());
 
-    var tokenCaptor = org.mockito.ArgumentCaptor.forClass(
-        io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationPreviewTokenEntity.class);
-    org.mockito.Mockito.verify(previewTokens).insert(tokenCaptor.capture());
+    var tokenCaptor = ArgumentCaptor.forClass(ReplayOperationPreviewTokenEntity.class);
+    Mockito.verify(previewTokens).insert(tokenCaptor.capture());
     var storedToken = tokenCaptor.getValue();
     assertThat(storedToken.tokenHash()).isNotEqualTo(response.previewToken());
     assertThat(storedToken.operationKey()).isEqualTo(response.operationKey().toString());
@@ -375,18 +397,19 @@ class WorkflowRunReplayPreviewServiceTest {
     when(nodeRuns.selectByWorkflowRunId(RUN_ID)).thenReturn(List.of());
 
     WorkflowRunReplayPreviewResponse preview = service.preview(command());
-    var previewTokenCaptor = org.mockito.ArgumentCaptor.forClass(
-        io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationPreviewTokenEntity.class);
-    org.mockito.Mockito.verify(previewTokens).insert(previewTokenCaptor.capture());
+    var previewTokenCaptor = ArgumentCaptor.forClass(ReplayOperationPreviewTokenEntity.class);
+    Mockito.verify(previewTokens).insert(previewTokenCaptor.capture());
     var previewToken = previewTokenCaptor.getValue();
     when(previewTokens.selectForUpdate(TENANT, previewToken.tokenHash())).thenReturn(previewToken);
-    when(previewTokens.consume(org.mockito.ArgumentMatchers.eq(TENANT),
-            org.mockito.ArgumentMatchers.eq(previewToken.tokenHash()),
-            org.mockito.ArgumentMatchers.any()))
+    when(previewTokens.consume(
+            ArgumentMatchers.eq(TENANT),
+            ArgumentMatchers.eq(previewToken.tokenHash()),
+            ArgumentMatchers.any()))
         .thenReturn(1);
-    when(previewTokens.linkOperation(org.mockito.ArgumentMatchers.eq(TENANT),
-            org.mockito.ArgumentMatchers.eq(previewToken.tokenHash()),
-            org.mockito.ArgumentMatchers.anyLong()))
+    when(previewTokens.linkOperation(
+            ArgumentMatchers.eq(TENANT),
+            ArgumentMatchers.eq(previewToken.tokenHash()),
+            ArgumentMatchers.anyLong()))
         .thenReturn(1);
     ReplayOperationEntity persisted = ReplayOperationEntity.builder()
         .id(808L)
@@ -406,9 +429,10 @@ class WorkflowRunReplayPreviewServiceTest {
     ReplayOperationEntity result = service.submitForApproval(submitCommand);
 
     assertThat(result.status()).isEqualTo(ReplayOperationStatus.PENDING_APPROVAL.code());
-    var operationCaptor = org.mockito.ArgumentCaptor.forClass(ReplayOperationEntity.class);
-    org.mockito.Mockito.verify(operations).insert(operationCaptor.capture());
-    assertThat(operationCaptor.getValue().snapshotPayload()).isEqualTo(previewToken.snapshotPayload());
+    var operationCaptor = ArgumentCaptor.forClass(ReplayOperationEntity.class);
+    Mockito.verify(operations).insert(operationCaptor.capture());
+    assertThat(operationCaptor.getValue().snapshotPayload())
+        .isEqualTo(previewToken.snapshotPayload());
     assertThat(operationCaptor.getValue().sourceWorkflowRunId()).isEqualTo(RUN_ID);
   }
 
@@ -423,25 +447,24 @@ class WorkflowRunReplayPreviewServiceTest {
         .setEnabled(false);
     when(sourceResolver.resolve(TENANT, RUN_ID)).thenReturn(source);
     when(nodeRuns.selectByWorkflowRunId(RUN_ID)).thenReturn(List.of());
-    String declaredCatalogue = JsonUtils.toJson(List.of(
-        new ReplayCapabilityDeclaration(
-            "root-sql",
-            "1",
-            List.of("BUSINESS_DATABASE"),
-            IdempotencyCapability.IDEMPOTENT_BY_PLUGIN_LOGIC,
-            "tenant+business-key",
-            "SQL_V1",
-            1)));
-    String unknownCatalogue = JsonUtils.toJson(List.of(ReplayCapabilityDeclaration.unknown("root-sql")));
+    String declaredCatalogue = JsonUtils.toJson(List.of(new ReplayCapabilityDeclaration(
+        "root-sql",
+        "1",
+        List.of("BUSINESS_DATABASE"),
+        IdempotencyCapability.IDEMPOTENT_BY_PLUGIN_LOGIC,
+        "tenant+business-key",
+        "SQL_V1",
+        1)));
+    String unknownCatalogue =
+        JsonUtils.toJson(List.of(ReplayCapabilityDeclaration.unknown("root-sql")));
     when(workers.selectReplayCapabilitiesByTenantAndWorkerGroup(
             TENANT, "ATOMIC", List.of("ONLINE")))
         .thenReturn(List.of(declaredCatalogue))
         .thenReturn(List.of(unknownCatalogue));
 
     WorkflowRunReplayPreviewResponse preview = service.preview(command());
-    var previewTokenCaptor = org.mockito.ArgumentCaptor.forClass(
-        io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationPreviewTokenEntity.class);
-    org.mockito.Mockito.verify(previewTokens).insert(previewTokenCaptor.capture());
+    var previewTokenCaptor = ArgumentCaptor.forClass(ReplayOperationPreviewTokenEntity.class);
+    Mockito.verify(previewTokens).insert(previewTokenCaptor.capture());
     var previewToken = previewTokenCaptor.getValue();
     when(previewTokens.selectForUpdate(TENANT, previewToken.tokenHash())).thenReturn(previewToken);
     WorkflowRunReplayCommand submitCommand = command().toBuilder()
@@ -449,15 +472,16 @@ class WorkflowRunReplayPreviewServiceTest {
         .previewToken(preview.previewToken())
         .build();
 
-    assertThatThrownBy(() -> service.submitForApproval(submitCommand)).isInstanceOf(BizException.class);
+    assertThatThrownBy(() -> service.submitForApproval(submitCommand))
+        .isInstanceOf(BizException.class);
 
-    org.mockito.Mockito.verify(previewTokens, org.mockito.Mockito.never())
+    Mockito.verify(previewTokens, Mockito.never())
         .consume(
-            org.mockito.ArgumentMatchers.eq(TENANT),
-            org.mockito.ArgumentMatchers.eq(previewToken.tokenHash()),
-            org.mockito.ArgumentMatchers.any());
-    org.mockito.Mockito.verify(operations, org.mockito.Mockito.never())
-        .insert(org.mockito.ArgumentMatchers.any(ReplayOperationEntity.class));
+            ArgumentMatchers.eq(TENANT),
+            ArgumentMatchers.eq(previewToken.tokenHash()),
+            ArgumentMatchers.any());
+    Mockito.verify(operations, Mockito.never())
+        .insert(ArgumentMatchers.any(ReplayOperationEntity.class));
   }
 
   @Test
@@ -471,8 +495,8 @@ class WorkflowRunReplayPreviewServiceTest {
     WorkflowRunReplayPreviewResponse preview = service.preview(command());
 
     assertThat(preview.nodes().stream()
-        .filter(node -> "JOB".equals(node.nodeType()))
-        .flatMap(node -> node.blockers().stream()))
+            .filter(node -> "JOB".equals(node.nodeType()))
+            .flatMap(node -> node.blockers().stream()))
         .doesNotContain("CLAIM_REPLAY_VALIDATION_UNAVAILABLE");
   }
 
@@ -487,9 +511,8 @@ class WorkflowRunReplayPreviewServiceTest {
     when(dateTimeSupport.nowInstant()).thenReturn(createdAt, createdAt.plusSeconds(301));
 
     WorkflowRunReplayPreviewResponse preview = service.preview(command());
-    var tokenCaptor = org.mockito.ArgumentCaptor.forClass(
-        io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationPreviewTokenEntity.class);
-    org.mockito.Mockito.verify(previewTokens).insert(tokenCaptor.capture());
+    var tokenCaptor = ArgumentCaptor.forClass(ReplayOperationPreviewTokenEntity.class);
+    Mockito.verify(previewTokens).insert(tokenCaptor.capture());
     var token = tokenCaptor.getValue();
     when(previewTokens.selectForUpdate(TENANT, token.tokenHash())).thenReturn(token);
     WorkflowRunReplayCommand submitCommand = command().toBuilder()
@@ -500,12 +523,11 @@ class WorkflowRunReplayPreviewServiceTest {
     assertThatThrownBy(() -> service.submitForApproval(submitCommand))
         .isInstanceOf(BizException.class);
 
-    org.mockito.Mockito.verify(operations, org.mockito.Mockito.never()).insert(
-        org.mockito.ArgumentMatchers.any(ReplayOperationEntity.class));
-    org.mockito.Mockito.verify(previewTokens, org.mockito.Mockito.never()).consume(
-        org.mockito.ArgumentMatchers.anyString(),
-        org.mockito.ArgumentMatchers.anyString(),
-        org.mockito.ArgumentMatchers.any());
+    Mockito.verify(operations, Mockito.never())
+        .insert(ArgumentMatchers.any(ReplayOperationEntity.class));
+    Mockito.verify(previewTokens, Mockito.never())
+        .consume(
+            ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any());
   }
 
   @Test
@@ -519,17 +541,15 @@ class WorkflowRunReplayPreviewServiceTest {
         .operationType("WORKFLOW_RUN")
         .status(ReplayOperationStatus.PENDING_APPROVAL.code())
         .build();
-    ReplayOperationEntity rejected = pending.toBuilder()
-        .status(ReplayOperationStatus.REJECTED.code())
-        .build();
+    ReplayOperationEntity rejected =
+        pending.toBuilder().status(ReplayOperationStatus.REJECTED.code()).build();
     ApprovalCommandEntity decision = persistedReplayDecision("REJECTED");
     when(approvals.selectByTenantAndSourceIdempotencyKey(
-        TENANT, "7c51d5c7-afc4-4016-b8cf-1888939c1269")).thenReturn(decision);
+            TENANT, "7c51d5c7-afc4-4016-b8cf-1888939c1269"))
+        .thenReturn(decision);
     when(operations.selectForUpdate(TENANT, 808L)).thenReturn(pending, rejected);
     when(operations.rejectPendingApproval(
-            org.mockito.ArgumentMatchers.eq(TENANT),
-            org.mockito.ArgumentMatchers.eq(808L),
-            org.mockito.ArgumentMatchers.any()))
+            ArgumentMatchers.eq(TENANT), ArgumentMatchers.eq(808L), ArgumentMatchers.any()))
         .thenReturn(1);
     when(operations.selectById(TENANT, 808L)).thenReturn(rejected);
 
@@ -550,10 +570,9 @@ class WorkflowRunReplayPreviewServiceTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.status").value(ReplayOperationStatus.REJECTED.code()));
 
-    org.mockito.Mockito.verify(operations).rejectPendingApproval(
-        org.mockito.ArgumentMatchers.eq(TENANT),
-        org.mockito.ArgumentMatchers.eq(808L),
-        org.mockito.ArgumentMatchers.any());
+    Mockito.verify(operations)
+        .rejectPendingApproval(
+            ArgumentMatchers.eq(TENANT), ArgumentMatchers.eq(808L), ArgumentMatchers.any());
   }
 
   @Test
@@ -613,14 +632,15 @@ class WorkflowRunReplayPreviewServiceTest {
     accepted.setCreatedAt(approvedAt);
     ApprovalCommandEntity decision = persistedReplayDecision("APPROVED");
     when(approvals.selectByTenantAndSourceIdempotencyKey(
-        TENANT, "7c51d5c7-afc4-4016-b8cf-1888939c1269")).thenReturn(decision);
+            TENANT, "7c51d5c7-afc4-4016-b8cf-1888939c1269"))
+        .thenReturn(decision);
     when(operations.selectForUpdate(TENANT, 808L)).thenReturn(pending);
     when(snapshotResolver.resolve(pending, "workflow-replay-808")).thenReturn(snapshot);
     when(dateTimeSupport.nowInstant()).thenReturn(approvedAt);
     when(operations.startApprovedWorkflowRunReplay(
-            org.mockito.ArgumentMatchers.any(ReplayOperationStartParam.class)))
+            ArgumentMatchers.any(ReplayOperationStartParam.class)))
         .thenReturn(1);
-    when(triggerRequests.insert(org.mockito.ArgumentMatchers.any(TriggerRequestEntity.class)))
+    when(triggerRequests.insert(ArgumentMatchers.any(TriggerRequestEntity.class)))
         .thenReturn(1);
     when(triggerRequests.selectByTenantAndRequestId(TENANT, "workflow-replay-808"))
         .thenReturn(accepted);
@@ -637,21 +657,20 @@ class WorkflowRunReplayPreviewServiceTest {
         .andExpect(jsonPath("$.data.status").value(ReplayOperationStatus.RUNNING.code()))
         .andExpect(jsonPath("$.data.approvedBy").value("operator-b"));
 
-    var triggerCaptor = org.mockito.ArgumentCaptor.forClass(TriggerRequestEntity.class);
-    org.mockito.Mockito.verify(triggerRequests).insert(triggerCaptor.capture());
+    var triggerCaptor = ArgumentCaptor.forClass(TriggerRequestEntity.class);
+    Mockito.verify(triggerRequests).insert(triggerCaptor.capture());
     assertThat(triggerCaptor.getValue().getRequestId()).isEqualTo("workflow-replay-808");
     assertThat(triggerCaptor.getValue().getLaunchPayload())
         .doesNotContain("root-private-secret", "password")
         .contains("\"workflowDefinitionId\":81", "\"params\":{}")
         .doesNotContain("frozen-execution-snapshot");
-    var eventCaptor = org.mockito.ArgumentCaptor.forClass(
-        io.github.pinpols.batch.common.event.DomainEvent.class);
-    org.mockito.Mockito.verify(domainEventPublisher).publish(eventCaptor.capture());
+    var eventCaptor = ArgumentCaptor.forClass(DomainEvent.class);
+    Mockito.verify(domainEventPublisher).publish(eventCaptor.capture());
     assertThat(JsonUtils.toJson(eventCaptor.getValue()))
         .contains("workflow-replay-808", "WORKFLOW_LAUNCH")
         .doesNotContain("root-private-secret", "password");
-    var startCaptor = org.mockito.ArgumentCaptor.forClass(ReplayOperationStartParam.class);
-    org.mockito.Mockito.verify(operations).startApprovedWorkflowRunReplay(startCaptor.capture());
+    var startCaptor = ArgumentCaptor.forClass(ReplayOperationStartParam.class);
+    Mockito.verify(operations).startApprovedWorkflowRunReplay(startCaptor.capture());
     assertThat(startCaptor.getValue().approver()).isEqualTo("operator-b");
   }
 
@@ -670,7 +689,8 @@ class WorkflowRunReplayPreviewServiceTest {
         .build();
     ApprovalCommandEntity decision = persistedReplayDecision("APPROVED");
     when(approvals.selectByTenantAndSourceIdempotencyKey(
-        TENANT, "7c51d5c7-afc4-4016-b8cf-1888939c1269")).thenReturn(decision);
+            TENANT, "7c51d5c7-afc4-4016-b8cf-1888939c1269"))
+        .thenReturn(decision);
     when(operations.selectForUpdate(TENANT, 808L)).thenReturn(running);
 
     ReplayOperationEntity result = service.approve(TENANT, 808L, "retrying-admin");
@@ -702,19 +722,17 @@ class WorkflowRunReplayPreviewServiceTest {
     when(configCache.findEnabledJobDefinition(TENANT, JOB_CODE))
         .thenReturn(definition("IMPORT", 4));
     when(fileTemplateSnapshots.captureForWorkflowReplay(
-            org.mockito.ArgumentMatchers.eq(TENANT),
-            org.mockito.ArgumentMatchers.any(JobDefinitionEntity.class),
-            org.mockito.ArgumentMatchers.anyMap(),
-            org.mockito.ArgumentMatchers.eq(
-                io.github.pinpols.batch.common.enums.ConfigVersionPolicy.USE_LATEST_CONFIG),
-            org.mockito.ArgumentMatchers.isNull()))
+            ArgumentMatchers.eq(TENANT),
+            ArgumentMatchers.any(JobDefinitionEntity.class),
+            ArgumentMatchers.anyMap(),
+            ArgumentMatchers.eq(ConfigVersionPolicy.USE_LATEST_CONFIG),
+            ArgumentMatchers.isNull()))
         .thenReturn(new FileTemplateSnapshotService.ReplayTemplateSelection(
             Map.of("TPL_A", "sealed-TPL_A"), "jdbc_mapped"));
     stubDeclaredCatalogue();
 
-    WorkflowRunReplayCommand latestCommand = command().toBuilder()
-        .configVersionPolicy("USE_LATEST_CONFIG")
-        .build();
+    WorkflowRunReplayCommand latestCommand =
+        command().toBuilder().configVersionPolicy("USE_LATEST_CONFIG").build();
     WorkflowRunReplayPreviewResponse result = service.preview(latestCommand);
 
     assertThat(result.nodes().get(1).pluginId()).isEqualTo("jdbc_mapped");
@@ -723,9 +741,8 @@ class WorkflowRunReplayPreviewServiceTest {
             "CLAIM_REPLAY_VALIDATION_UNAVAILABLE",
             "PLUGIN_SELECTION_NOT_FROZEN",
             "TEMPLATE_CONFIGURATION_NOT_FROZEN");
-    org.mockito.ArgumentCaptor<String> snapshotCaptor =
-        org.mockito.ArgumentCaptor.forClass(String.class);
-    org.mockito.Mockito.verify(secretPayloadProtector).protect(snapshotCaptor.capture());
+    ArgumentCaptor<String> snapshotCaptor = ArgumentCaptor.forClass(String.class);
+    Mockito.verify(secretPayloadProtector).protect(snapshotCaptor.capture());
     assertThat(snapshotCaptor.getValue())
         .contains("selectedFileTemplateSnapshots", "sealed-TPL_A")
         .doesNotContain("templateCode");
@@ -735,25 +752,24 @@ class WorkflowRunReplayPreviewServiceTest {
   @DisplayName("分发作业预览固定选中的通道配置和密钥版本绑定")
   void shouldFreezeDispatchChannelAndSecretBindings_whenLatestConfigSelected() {
     Source source = source(
-        "DISPATCH", Map.of("dispatchChannelCode", "CHANNEL_A", "password", "private-source-secret"));
+        "DISPATCH",
+        Map.of("dispatchChannelCode", "CHANNEL_A", "password", "private-source-secret"));
     when(sourceResolver.resolve(TENANT, RUN_ID)).thenReturn(source);
     when(nodeRuns.selectByWorkflowRunId(RUN_ID)).thenReturn(List.of());
     when(configCache.findEnabledJobDefinition(TENANT, JOB_CODE))
         .thenReturn(definition("DISPATCH", 5));
-    Map<String, Object> secretBinding = Map.of(
-        "secretRef", "dispatch/key",
-        "secretVersionId", 72L,
-        "versionNo", 4);
+    Map<String, Object> secretBinding =
+        Map.of("secretRef", "dispatch/key", "secretVersionId", 72L, "versionNo", 4);
     Map<String, Object> secretBindings = Map.of("CHANNEL_A", secretBinding);
     Map<String, Object> effectiveParams =
-        new java.util.LinkedHashMap<>(definition("DISPATCH", 5).defaultParams());
+        new LinkedHashMap<>(definition("DISPATCH", 5).defaultParams());
     effectiveParams.putAll(source.rootParams());
-    Map<String, Object> pinnedParams = new java.util.LinkedHashMap<>(source.rootParams());
+    Map<String, Object> pinnedParams = new LinkedHashMap<>(source.rootParams());
     pinnedParams.put(DispatchTaskKeys.SECRET_BINDINGS, secretBindings);
     when(dispatchSecretSnapshotResolver.pin(
-            org.mockito.ArgumentMatchers.eq(TENANT),
-            org.mockito.ArgumentMatchers.eq(JobType.DISPATCH.code()),
-            org.mockito.ArgumentMatchers.anyMap()))
+            ArgumentMatchers.eq(TENANT),
+            ArgumentMatchers.eq(JobType.DISPATCH.code()),
+            ArgumentMatchers.anyMap()))
         .thenReturn(pinnedParams);
     DispatchChannelSnapshotService.ReplayDispatchCaptureRequest expectedCaptureRequest =
         new DispatchChannelSnapshotService.ReplayDispatchCaptureRequest(
@@ -778,14 +794,13 @@ class WorkflowRunReplayPreviewServiceTest {
             "CLAIM_REPLAY_VALIDATION_UNAVAILABLE",
             "CONFIGURATION_UNAVAILABLE",
             "PLUGIN_SELECTION_NOT_FROZEN");
-    org.mockito.ArgumentCaptor<String> snapshotCaptor =
-        org.mockito.ArgumentCaptor.forClass(String.class);
-    org.mockito.Mockito.verify(secretPayloadProtector).protect(snapshotCaptor.capture());
+    ArgumentCaptor<String> snapshotCaptor = ArgumentCaptor.forClass(String.class);
+    Mockito.verify(secretPayloadProtector).protect(snapshotCaptor.capture());
     assertThat(snapshotCaptor.getValue())
         .contains("selectedDispatchChannelSnapshots", "sealed-channel-a")
         .contains("selectedDispatchSecretBindings", "dispatch/key", "secretVersionId")
         .doesNotContain("private-source-secret");
-    org.mockito.Mockito.verify(dispatchChannelSnapshotService, org.mockito.Mockito.times(2))
+    Mockito.verify(dispatchChannelSnapshotService, Mockito.times(2))
         .captureForWorkflowReplay(expectedCaptureRequest);
   }
 
@@ -839,11 +854,13 @@ class WorkflowRunReplayPreviewServiceTest {
   @DisplayName("跨日依赖在结果版本不可用时显示对应节点阻塞")
   void shouldExposeDependencyBlocker_whenResultVersionsCannotBeResolved() {
     Source source = source("ATOMIC", Map.of("taskType", "root-sql"));
-    String dependencyJson = "[{\"alias\":\"previous\",\"jobCode\":\"UPSTREAM\",\"bizDateOffset\":-1}]";
+    String dependencyJson =
+        "[{\"alias\":\"previous\",\"jobCode\":\"UPSTREAM\",\"bizDateOffset\":-1}]";
     source.executionSnapshot().nodes().get(1).setCrossDayDependencies(dependencyJson);
     when(sourceResolver.resolve(TENANT, RUN_ID)).thenReturn(source);
     when(nodeRuns.selectByWorkflowRunId(RUN_ID)).thenReturn(List.of());
-    when(crossDayDependencyResolver.resolve(TENANT, LocalDate.of(2026, 10, 20), dependencyJson, false))
+    when(crossDayDependencyResolver.resolve(
+            TENANT, LocalDate.of(2026, 10, 20), dependencyJson, false))
         .thenReturn(CrossDayDependencyResolver.ResolutionResult.builder()
             .status(CrossDayDependencyResolver.ResolutionStatus.WAITING)
             .resolved(Map.of())
@@ -861,11 +878,13 @@ class WorkflowRunReplayPreviewServiceTest {
   @DisplayName("整 Workflow 重放预览将跨日结果版本固定进受保护快照")
   void shouldFreezeCrossDayResultVersionIds_whenDependencyIsResolved() {
     Source source = source("ATOMIC", Map.of("taskType", "root-sql"));
-    String dependencyJson = "[{\"alias\":\"previous\",\"jobCode\":\"UPSTREAM\",\"bizDateOffset\":-1}]";
+    String dependencyJson =
+        "[{\"alias\":\"previous\",\"jobCode\":\"UPSTREAM\",\"bizDateOffset\":-1}]";
     source.executionSnapshot().nodes().get(1).setCrossDayDependencies(dependencyJson);
     when(sourceResolver.resolve(TENANT, RUN_ID)).thenReturn(source);
     when(nodeRuns.selectByWorkflowRunId(RUN_ID)).thenReturn(List.of());
-    when(crossDayDependencyResolver.resolve(TENANT, LocalDate.of(2026, 10, 20), dependencyJson, false))
+    when(crossDayDependencyResolver.resolve(
+            TENANT, LocalDate.of(2026, 10, 20), dependencyJson, false))
         .thenReturn(CrossDayDependencyResolver.ResolutionResult.builder()
             .status(CrossDayDependencyResolver.ResolutionStatus.RESOLVED)
             .resolved(Map.of("previous", Map.of("resultVersionId", 771L)))
@@ -876,13 +895,13 @@ class WorkflowRunReplayPreviewServiceTest {
 
     WorkflowRunReplayPreviewResponse result = service.preview(command());
 
-    assertThat(result.nodes().get(1).blockers())
-        .doesNotContain("DEPENDENCY_RESULTS_NOT_PINNED");
-    var payloadCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
-    org.mockito.Mockito.verify(secretPayloadProtector).protect(payloadCaptor.capture());
-    Map<String, Object> payload = JsonUtils.fromJson(
-        payloadCaptor.getValue(), new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-    Map<?, ?> idsByNode = (Map<?, ?>) payload.get("selectedCrossDayDependencyResultVersionIdsByNode");
+    assertThat(result.nodes().get(1).blockers()).doesNotContain("DEPENDENCY_RESULTS_NOT_PINNED");
+    var payloadCaptor = ArgumentCaptor.forClass(String.class);
+    Mockito.verify(secretPayloadProtector).protect(payloadCaptor.capture());
+    Map<String, Object> payload =
+        JsonUtils.fromJson(payloadCaptor.getValue(), new TypeReference<Map<String, Object>>() {});
+    Map<?, ?> idsByNode =
+        (Map<?, ?>) payload.get("selectedCrossDayDependencyResultVersionIdsByNode");
     assertThat(idsByNode.get("FIRST")).isEqualTo(Map.of("previous", List.of(771)));
   }
 
@@ -915,8 +934,7 @@ class WorkflowRunReplayPreviewServiceTest {
         .andExpect(jsonPath("$.data.sourceWorkflowRunId").value(901))
         .andExpect(jsonPath("$.data.nodes.length()").value(4))
         .andExpect(jsonPath("$.data.nodes[1].blockers")
-            .value(org.hamcrest.Matchers.not(
-                org.hamcrest.Matchers.hasItem("CLAIM_REPLAY_VALIDATION_UNAVAILABLE"))))
+            .value(Matchers.not(Matchers.hasItem("CLAIM_REPLAY_VALIDATION_UNAVAILABLE"))))
         .andExpect(jsonPath("$.data.previewToken").isNotEmpty())
         .andExpect(jsonPath("$.data.rootParams").doesNotExist());
   }

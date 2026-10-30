@@ -94,7 +94,7 @@ class CompleteDispatchStepTest {
     context.getAttributes().put(DispatchRuntimeKeys.RECEIPT_CODE, "R-001");
     step.execute(context);
 
-    // Just ensure no NPE and audit is written
+    // 仅校验不会发生 NPE，且审计记录已写入。
     verify(fileAudits).appendAudit(any());
   }
 
@@ -110,7 +110,7 @@ class CompleteDispatchStepTest {
     context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_PAYLOAD, payload);
     context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, 10L);
     context.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, "tr-1");
-    // receiptStatus is absent — defaults to "NONE"
+    // 未提供 receiptStatus 时，默认值为 "NONE"。
 
     DispatchStageResult result = step.execute(context);
     assertThat(result.success()).isTrue();

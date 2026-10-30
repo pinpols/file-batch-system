@@ -4,18 +4,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.service.governance.ApprovalWorkflowService;
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.application.service.governance.ApprovalWorkflowService;
-import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -94,6 +96,66 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
   private ApprovalWorkflowService approvalWorkflowService;
 
   @Test
+  @DisplayName("审批或驳回后，同一原请求仍返回原审批号，变更原原因仍发生冲突")
+  void shouldPreserveSubmissionIdentityAfterDecision() {
+    for (boolean approve : List.of(true, false)) {
+      String key = "identity-after-decision-" + UUID.randomUUID();
+      var submission = new ApprovalSubmissionSpec()
+          .actionType("CATCH_UP")
+          .targetType("CATCH_UP")
+          .payloadJson("{\"jobCode\":\"job-a\"}")
+          .sourceIdempotencyKey(key)
+          .approvalReason("original reason");
+      String approvalNo = approvalWorkflowService.submit(submission.build());
+      if (approve) {
+        approvalWorkflowService.approve("t1", approvalNo, "approver", "decision reason");
+      } else {
+        approvalWorkflowService.reject("t1", approvalNo, "approver", "decision reason");
+      }
+      var found = approvalWorkflowService.getBySourceKey("t1", key);
+      assertThat(found.sourceApprovalReason()).isEqualTo("original reason");
+      assertThat(found.approvalReason()).isEqualTo("decision reason");
+      assertThat(approvalWorkflowService.submit(submission.build())).isEqualTo(approvalNo);
+      assertThatThrownBy(() -> approvalWorkflowService.submit(
+              submission.approvalReason("different original reason").build()))
+          .isInstanceOf(BizException.class)
+          .hasMessageContaining("error.approval.idempotency_conflict");
+    }
+  }
+
+  @Test
+  @DisplayName("按原请求键查询审批时保留租户隔离并区分未找到")
+  void shouldFindApprovalBySourceKeyWithinTenant() {
+    String key = "lookup-" + UUID.randomUUID();
+    ApprovalSubmissionSpec first = new ApprovalSubmissionSpec()
+        .actionType("DLQ_REPLAY")
+        .targetType("DEAD_LETTER")
+        .targetId("100")
+        .payloadJson("{\"reason\":\"first\"}")
+        .sourceIdempotencyKey(key);
+    ApprovalSubmissionSpec second = new ApprovalSubmissionSpec()
+        .actionType("DLQ_REPLAY")
+        .targetType("DEAD_LETTER")
+        .targetId("200")
+        .payloadJson("{\"reason\":\"second\"}")
+        .sourceIdempotencyKey(key);
+    second.tenantId = "t2";
+    String firstNo = approvalWorkflowService.submit(first.build());
+    String secondNo = approvalWorkflowService.submit(second.build());
+
+    assertThat(approvalWorkflowService.getBySourceKey("t1", key).approvalNo()).isEqualTo(firstNo);
+    assertThat(approvalWorkflowService.getBySourceKey("t2", key).approvalNo()).isEqualTo(secondNo);
+    assertThatThrownBy(() -> approvalWorkflowService.getBySourceKey("t3", key))
+        .isInstanceOfSatisfying(
+            BizException.class,
+            failure -> assertThat(failure.getCode()).isEqualTo(ResultCode.NOT_FOUND));
+    assertThatThrownBy(() -> approvalWorkflowService.getBySourceKey("t1", " "))
+        .isInstanceOfSatisfying(
+            BizException.class,
+            failure -> assertThat(failure.getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT));
+  }
+
+  @Test
   @DisplayName("提交审批后生成非空审批单号,记录处于待审批状态并保留租户与审批类型")
   void shouldSubmitApprovalAndReturnApprovalNo() {
     String approvalNo = approvalWorkflowService.submit(new ApprovalSubmissionSpec()
@@ -118,7 +180,7 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("并发安全的来源幂等键重试返回同一审批单且不重复落库")
   void shouldReuseApprovalForRepeatedSourceIdempotencyKey() {
-    String key = "workflow-replay-" + java.util.UUID.randomUUID();
+    String key = "workflow-replay-" + UUID.randomUUID();
     ApprovalSubmissionSpec submission = new ApprovalSubmissionSpec()
         .actionType("RETRY")
         .targetType("JOB_PARTITION")
@@ -151,9 +213,34 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("批量日长作业编码的稳定审批键与载荷在真实数据库中支持重试")
+  void shouldReuseBatchDayApprovalForLongJobCode() throws Exception {
+    String key = "batchday-8c32e74419490ac8347867a8dca66011689fdc4aff0230666cc318943bec9387";
+    String payload = """
+        {"tenantId":"tenant-a","requestId":null,"workflowDefinitionId":null,
+         "jobCode":"%s","bizDate":"2026-10-14","batchDayCalendarCode":"CAL",
+         "scheduledAt":null,"reason":null,"approvalId":null}
+        """.formatted("J".repeat(128));
+    ApprovalWorkflowService.ApprovalSubmitCommand command =
+        ApprovalWorkflowService.ApprovalSubmitCommand.of(
+            "tenant-a",
+            new ApprovalWorkflowService.ApprovalTarget(
+                "CATCH_UP", "CATCH_UP", "CATCH_UP", null, payload),
+            new ApprovalWorkflowService.ApprovalSource("op-001", "trace-1", key, null));
+
+    String approvalNo = approvalWorkflowService.submit(command);
+    assertThat(approvalWorkflowService.submit(command)).isEqualTo(approvalNo);
+    ApprovalWorkflowService.ApprovalRecord saved =
+        approvalWorkflowService.get("tenant-a", approvalNo);
+    assertThat(saved.sourceIdempotencyKey()).isEqualTo(key);
+    assertThat(saved.approvalStatus()).isEqualTo("PENDING");
+    assertThat(JSON.readTree(saved.payloadJson())).isEqualTo(JSON.readTree(payload));
+  }
+
+  @Test
   @DisplayName("并发提交同一幂等审批只返回一个审批单号")
   void shouldCoalesceConcurrentSubmissionsForSourceIdempotencyKey() throws Exception {
-    String key = "workflow-replay-concurrent-" + java.util.UUID.randomUUID();
+    String key = "workflow-replay-concurrent-" + UUID.randomUUID();
     ApprovalWorkflowService.ApprovalSubmitCommand command = new ApprovalSubmissionSpec()
         .actionType("RETRY")
         .targetType("JOB_PARTITION")
@@ -174,9 +261,8 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
           .toList();
       startGate.countDown();
 
-      List<String> approvalNumbers = submissions.stream()
-          .map(future -> getApprovalNo(future))
-          .toList();
+      List<String> approvalNumbers =
+          submissions.stream().map(future -> getApprovalNo(future)).toList();
 
       assertThat(approvalNumbers).hasSize(submitterCount).doesNotContainNull();
       assertThat(approvalNumbers).containsOnly(approvalNumbers.getFirst());

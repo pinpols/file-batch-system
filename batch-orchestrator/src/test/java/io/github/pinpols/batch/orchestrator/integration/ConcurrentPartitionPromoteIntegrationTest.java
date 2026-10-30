@@ -1,12 +1,10 @@
 package io.github.pinpols.batch.orchestrator.integration;
 
-import io.github.pinpols.batch.orchestrator.domain.param.JobPartitionPromoteStatusParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.domain.param.JobPartitionPromoteStatusParam;
 import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
 import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowChildTriggerSeed;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
@@ -23,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest(
@@ -38,7 +37,7 @@ class ConcurrentPartitionPromoteIntegrationTest extends AbstractIntegrationTest 
   private JdbcTemplate jdbcTemplate;
 
   @Autowired
-  private TransactionTemplate transactionTemplate;
+  private PlatformTransactionManager transactionManager;
 
   @Test
   @DisplayName("两个线程并发把同一等待态分区推进到就绪时仅一个线程更新成功,最终状态为就绪且版本号加一")
@@ -93,7 +92,8 @@ class ConcurrentPartitionPromoteIntegrationTest extends AbstractIntegrationTest 
     String jobCode = "JOB_" + suffix;
     LocalDate bizDate = LocalDate.of(2026, 12, 23);
 
-    Long jobDefinitionId = jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, tenantId, jobCode, jobCode);
+    Long jobDefinitionId =
+        jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, tenantId, jobCode, jobCode);
 
     WorkflowChildTriggerSeed child =
         LaunchIntegrationFixture.prepareWorkflowChildTriggerRequestForDefinition(
@@ -123,14 +123,15 @@ class ConcurrentPartitionPromoteIntegrationTest extends AbstractIntegrationTest 
       for (int i = 0; i < 2; i++) {
         futures.add(pool.submit(() -> {
           startGate.await();
-          return transactionTemplate.execute(status ->
-              jobPartitionMapper.promoteStatus(JobPartitionPromoteStatusParam.builder()
-                  .tenantId(tenantId)
-                  .id(partitionId)
-                  .fromStatus("WAITING")
-                  .toStatus("READY")
-                  .expectedVersion(0L)
-                  .build()));
+          return new TransactionTemplate(transactionManager)
+              .execute(status ->
+                  jobPartitionMapper.promoteStatus(JobPartitionPromoteStatusParam.builder()
+                      .tenantId(tenantId)
+                      .id(partitionId)
+                      .fromStatus("WAITING")
+                      .toStatus("READY")
+                      .expectedVersion(0L)
+                      .build()));
         }));
       }
 
@@ -144,26 +145,19 @@ class ConcurrentPartitionPromoteIntegrationTest extends AbstractIntegrationTest 
 
       assertThat(totalUpdated).as("exactly one thread must win the CAS update").isEqualTo(1);
 
-      String finalStatus = jdbcTemplate.queryForObject(
-          selectPartitionStatusSql,
-          String.class,
-          partitionId);
+      String finalStatus =
+          jdbcTemplate.queryForObject(selectPartitionStatusSql, String.class, partitionId);
       assertThat(finalStatus).isEqualTo("READY");
 
-      Long finalVersion = jdbcTemplate.queryForObject(
-          selectVersionSql, Long.class, partitionId);
+      Long finalVersion = jdbcTemplate.queryForObject(selectVersionSql, Long.class, partitionId);
       assertThat(finalVersion).isEqualTo(1L);
     } finally {
       jdbcTemplate.update(deleteJobPartitionSql, partitionId);
       jdbcTemplate.update(deleteJobInstanceSql, jobInstanceId);
-      Long workflowRunId = jdbcTemplate.queryForObject(
-          selectParentWorkflowRunIdSql,
-          Long.class,
-          triggerRequestId);
-      Long rootTriggerRequestId = jdbcTemplate.queryForObject(
-          selectTriggerRequestIdSql,
-          Long.class,
-          workflowRunId);
+      Long workflowRunId =
+          jdbcTemplate.queryForObject(selectParentWorkflowRunIdSql, Long.class, triggerRequestId);
+      Long rootTriggerRequestId =
+          jdbcTemplate.queryForObject(selectTriggerRequestIdSql, Long.class, workflowRunId);
       jdbcTemplate.update(deleteTriggerRequestSql, triggerRequestId);
       jdbcTemplate.update(deleteWorkflowRunSql, workflowRunId);
       jdbcTemplate.update(deleteTriggerRequestSql, rootTriggerRequestId);

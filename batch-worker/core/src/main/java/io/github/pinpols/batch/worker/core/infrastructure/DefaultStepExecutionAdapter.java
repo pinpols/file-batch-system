@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
 import io.github.pinpols.batch.common.enums.TaskErrorCodes;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
@@ -79,12 +80,13 @@ public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
     String taskType = resolveExecutorType(request, parameters);
     BatchTaskExecutor executor = registry.find(taskType);
     if (executor == null) {
+      String safeTaskType = SwallowedExceptionLogger.safeMessage(taskType);
       log.warn(
           "no BatchTaskExecutor registered for taskType={}, registered={}",
-          taskType,
+          safeTaskType,
           registry.registeredTypes());
       return new StepExecutionResponse(
-          false, "NO_EXECUTOR", "no BatchTaskExecutor registered for taskType=" + taskType);
+          false, "NO_EXECUTOR", "no BatchTaskExecutor registered for taskType=" + safeTaskType);
     }
     TaskContext ctx = new TaskContext(
         request.tenantId(),
@@ -103,11 +105,17 @@ public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
     }
     try {
       TaskResult result = executor.execute(ctx);
+      if (result.success() && !result.output().isEmpty()) {
+        request.context().put(PipelineRuntimeKeys.NODE_OUTPUTS, result.output());
+      }
       return toResponse(result);
     } catch (RuntimeException ex) {
-      log.error("BatchTaskExecutor uncaught exception, taskType={}", taskType, ex);
-      String msg = ex.getMessage() == null ? ex.getClass().getName() : ex.getMessage();
-      return new StepExecutionResponse(false, "EXECUTOR_FAILURE", msg);
+      String failureSummary = SwallowedExceptionLogger.summary(ex);
+      log.error(
+          "BatchTaskExecutor uncaught exception, taskType={}, cause={}",
+          LogSanitizer.value(taskType),
+          failureSummary);
+      return new StepExecutionResponse(false, "EXECUTOR_FAILURE", failureSummary);
     }
   }
 
@@ -195,6 +203,9 @@ public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
     if (reportedCode instanceof String text && !text.isBlank()) {
       code = text.trim();
     }
-    return new StepExecutionResponse(false, code, result.message());
+    String message = EmptyChecks.isNull(result.error())
+        ? SwallowedExceptionLogger.safeMessage(result.message())
+        : SwallowedExceptionLogger.summary(result.error());
+    return new StepExecutionResponse(false, code, message);
   }
 }

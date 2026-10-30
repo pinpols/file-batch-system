@@ -3,12 +3,13 @@
 当前模型由[V182](../../db/migration/V182__global_idempotency_ledgers.sql)与[Outbox Mapper](../../batch-orchestrator/src/main/resources/mapper/OutboxEventMapper.xml)定义。分区表的唯一键必须带分区维度，因此平台用独立台账承接跨分区幂等，而不是仅依赖NOT EXISTS查询。
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  S["聚合状态变更"] --> L["同事务占用outbox_event_dedup_key"]
-  L --> C{"tenant + event_key已存在？"}
-  C -->|"否"| E["写分区outbox_event"]
-  C -->|"是"| D["不创建第二个逻辑事件"]
-  E --> K["至少一次Kafka发布与幂等消费"]
+  S[聚合状态变更] --> L[同事务占用幂等台账]
+  L --> C{tenant + event_key 已存在？}
+  C -->|否| E[写分区 outbox_event]
+  C -->|是| D[复用既有逻辑事件]
+  E --> K[至少一次发布 + 幂等消费]
 ```
 
 - `outbox_event_dedup_key`以tenant/event_key全局唯一；Mapper的claimed_key CTE先占键，仅成功占键者插入事件，两者同事务。

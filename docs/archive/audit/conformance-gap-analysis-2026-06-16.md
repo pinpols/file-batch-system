@@ -1,3 +1,5 @@
+> 历史原始记录：本轮恢复保留，正文中的结论、参数、状态和操作步骤仅适用于原日期/基线。提炼方法不替代原始证据；当前事实须按[文档治理](../../standards/document-governance.md)重新核实。本轮未执行原测试或扫描。
+
 # BYO SDK conformance 契约 — 覆盖缺口分析与补强计划
 
 > 2026-06-16。对标业界(gRPC interop / OpenID conformance / AWS Smithy / Stripe 混合派)审视多语言 BYO SDK

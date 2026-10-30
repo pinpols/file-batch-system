@@ -27,6 +27,7 @@ import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.AccountRow;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.RowIssue;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
+import io.github.pinpols.batch.console.domain.rbac.view.TenantRow;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -113,7 +114,8 @@ class ConsoleUserBatchProvisioningServiceTest {
   @Test
   @DisplayName("同一文件内用户名仅大小写不同时记为重复行")
   void shouldReportDuplicate_whenUsernamesDifferOnlyByCase() throws IOException {
-    when(tenantMapper.selectByTenantId("ta")).thenReturn(Map.of("status", "ACTIVE"));
+    when(tenantMapper.selectByTenantId("ta"))
+        .thenReturn(new TenantRow(null, null, null, "ACTIVE", null, null, null, null));
     var preview = service.preview(
         workbook("ta", "Alice", ConsoleRoles.TENANT_USER, "ta", "alice", ConsoleRoles.TENANT_USER));
     assertThat(preview.totalRows()).isEqualTo(2);
@@ -137,7 +139,8 @@ class ConsoleUserBatchProvisioningServiceTest {
   @Test
   @DisplayName("提交后逐个创建账号, 明文初始口令只返回一次且不落存储")
   void shouldCreateAllAccountsAndReturnCredentialsOnce_whenApplySucceeds() throws IOException {
-    when(tenantMapper.selectByTenantId("ta")).thenReturn(Map.of("status", "ACTIVE"));
+    when(tenantMapper.selectByTenantId("ta"))
+        .thenReturn(new TenantRow(null, null, null, "ACTIVE", null, null, null, null));
     when(accountService.createProvisioned(any(), any(), any(), any(), any()))
         .thenReturn(new ConsoleUserAccountResponse(
             42L, "ta", "alice", "", ConsoleRoles.TENANT_USER, true, null, null));
@@ -158,7 +161,8 @@ class ConsoleUserBatchProvisioningServiceTest {
   @Test
   @DisplayName("同一版本并发修改只有一个请求成功, 版本号只递增一次")
   void shouldAllowExactlyOneWinner_whenEditingSameVersionConcurrently() throws Exception {
-    when(tenantMapper.selectByTenantId("ta")).thenReturn(Map.of("status", "ACTIVE"));
+    when(tenantMapper.selectByTenantId("ta"))
+        .thenReturn(new TenantRow(null, null, null, "ACTIVE", null, null, null, null));
     var preview = service.preview(workbook("ta", "alice", ConsoleRoles.TENANT_USER));
     CyclicBarrier barrier = new CyclicBarrier(2);
     when(store.loadPreview(anyString())).thenAnswer(invocation -> {
@@ -199,7 +203,8 @@ class ConsoleUserBatchProvisioningServiceTest {
   @Test
   @DisplayName("提交期间冻结快照, 事务回滚后恢复为可编辑并递增版本")
   void shouldFreezeSnapshotThenRestore_whenApplyTransactionRollsBack() throws Exception {
-    when(tenantMapper.selectByTenantId("ta")).thenReturn(Map.of("status", "ACTIVE"));
+    when(tenantMapper.selectByTenantId("ta"))
+        .thenReturn(new TenantRow(null, null, null, "ACTIVE", null, null, null, null));
     var preview = service.preview(workbook("ta", "alice", ConsoleRoles.TENANT_USER));
     when(accountService.createProvisioned(any(), any(), any(), any(), any()))
         .thenThrow(new IllegalStateException("injected database failure"));
@@ -228,7 +233,8 @@ class ConsoleUserBatchProvisioningServiceTest {
       ints = {TransactionSynchronization.STATUS_COMMITTED, TransactionSynchronization.STATUS_UNKNOWN
       })
   void shouldKeepPreviewLocked_whenTransactionCompletedOrUnknown(int status) throws IOException {
-    when(tenantMapper.selectByTenantId("ta")).thenReturn(Map.of("status", "ACTIVE"));
+    when(tenantMapper.selectByTenantId("ta"))
+        .thenReturn(new TenantRow(null, null, null, "ACTIVE", null, null, null, null));
     when(accountService.createProvisioned(any(), any(), any(), any(), any()))
         .thenReturn(new ConsoleUserAccountResponse(
             42L, "ta", "alice", "", ConsoleRoles.TENANT_USER, true, null, null));
@@ -260,7 +266,8 @@ class ConsoleUserBatchProvisioningServiceTest {
       })
   void shouldLogRequestIdWithoutTokenOrStorageDetails_whenCompletionRuns(int status)
       throws IOException {
-    when(tenantMapper.selectByTenantId("ta")).thenReturn(Map.of("status", "ACTIVE"));
+    when(tenantMapper.selectByTenantId("ta"))
+        .thenReturn(new TenantRow(null, null, null, "ACTIVE", null, null, null, null));
     when(accountService.createProvisioned(any(), any(), any(), any(), any()))
         .thenReturn(new ConsoleUserAccountResponse(
             42L, "ta", "alice", "", ConsoleRoles.TENANT_USER, true, null, null));

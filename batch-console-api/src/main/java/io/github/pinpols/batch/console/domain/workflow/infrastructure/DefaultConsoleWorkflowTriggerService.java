@@ -41,7 +41,8 @@ public class DefaultConsoleWorkflowTriggerService implements ConsoleWorkflowTrig
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.request_body_required");
     }
     if (EmptyChecks.isBlank(idempotencyKey)) {
-      throw BizException.of(ResultCode.MISSING_IDEMPOTENCY_KEY,
+      throw BizException.of(
+          ResultCode.MISSING_IDEMPOTENCY_KEY,
           ResultCode.MISSING_IDEMPOTENCY_KEY.detailKey(),
           ResultCode.MISSING_IDEMPOTENCY_KEY.defaultMessage());
     }
@@ -122,15 +123,17 @@ public class DefaultConsoleWorkflowTriggerService implements ConsoleWorkflowTrig
       approvalRequest.setRequestId(result.requestId());
       approvalRequest.setBizDate(request.bizDate().toString());
       approvalRequest.setReason(request.reason().trim());
-      ApprovalSubmitContext.ApprovalSubmitContextBuilder approvalBuilder = ApprovalSubmitContext.builder()
-          .approvalType("CATCH_UP")
-          .actionType("CATCH_UP")
-          .targetType("CATCH_UP")
-          .targetId(result.requestId())
-          .payload(approvalRequest)
-          .approvalReason(request.reason().trim());
+      ApprovalSubmitContext.ApprovalSubmitContextBuilder approvalBuilder =
+          ApprovalSubmitContext.builder()
+              .approvalType("CATCH_UP")
+              .actionType("CATCH_UP")
+              .targetType("CATCH_UP")
+              .targetId(result.requestId())
+              .payload(approvalRequest)
+              .approvalReason(request.reason().trim());
       String approvalKey = approvalIdempotencyKey(result.requestId());
-      ApprovalSubmitContext approval = approvalBuilder.idempotencyKey(approvalKey).build();
+      ApprovalSubmitContext approval =
+          approvalBuilder.idempotencyKey(approvalKey).build();
       approvalId = operations.submitApproval(approval);
       if (EmptyChecks.isBlank(approvalId)) {
         throw BizException.of(ResultCode.SYSTEM_ERROR, "error.approval.submit_failed");

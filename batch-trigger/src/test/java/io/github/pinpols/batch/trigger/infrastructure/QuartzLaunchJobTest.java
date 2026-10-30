@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -16,9 +17,11 @@ import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
 import io.github.pinpols.batch.trigger.domain.MisfireHandler;
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
+import io.github.pinpols.batch.trigger.infrastructure.readiness.ReadinessWaitHandoverClient;
 import io.github.pinpols.batch.trigger.service.ScheduledOccurrenceRecorder;
 import io.github.pinpols.batch.trigger.service.TriggerService;
 import io.github.pinpols.batch.trigger.service.UpstreamNotReadyException;
+import io.github.pinpols.batch.trigger.support.ReadinessWaitWindow;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.Date;
@@ -69,8 +72,15 @@ class QuartzLaunchJobTest {
   @BeforeEach
   void setUp() {
     lenient()
-        .when(occurrenceRecorder.recordWaitingReadiness(any(), any(), any()))
+        .when(occurrenceRecorder.recordWaitingReadiness(any(), any(), any(), any(), any()))
         .thenReturn(true);
+    lenient().when(occurrenceRecorder.readinessWaitWindow(any(), any())).thenAnswer(invocation -> {
+      JobDataMap data = context.getMergedJobDataMap();
+      Instant since = data.containsKey(QuartzLaunchJob.READINESS_DEFERRED_SINCE)
+          ? Instant.ofEpochMilli(data.getLongValue(QuartzLaunchJob.READINESS_DEFERRED_SINCE))
+          : context.getFireTime().toInstant();
+      return new ReadinessWaitWindow(since, since.plusSeconds(7200));
+    });
     TriggerRuntimeProperties properties = new TriggerRuntimeProperties();
     properties.setMisfireCatchUpThresholdSeconds(60L);
     job = new QuartzLaunchJob(
@@ -79,7 +89,8 @@ class QuartzLaunchJobTest {
         properties,
         triggerRegistrationService,
         new SimpleMeterRegistry(),
-        occurrenceRecorder);
+        occurrenceRecorder,
+        mock(ReadinessWaitHandoverClient.class));
   }
 
   @Test
@@ -251,7 +262,11 @@ class QuartzLaunchJobTest {
         .isEqualTo(TriggerType.SCHEDULED.name());
     verify(occurrenceRecorder)
         .recordWaitingReadiness(
-            any(), ArgumentMatchers.eq(originalFireTime), ArgumentMatchers.isNull());
+            any(),
+            ArgumentMatchers.eq(originalFireTime),
+            ArgumentMatchers.isNull(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any());
   }
 
   @Test
@@ -264,7 +279,8 @@ class QuartzLaunchJobTest {
     doThrow(new UpstreamNotReadyException("t1", "IMPORT_JOB", "UPSTREAM_JOB", null))
         .when(triggerService)
         .launchScheduled(any());
-    when(occurrenceRecorder.recordWaitingReadiness(any(), any(), any())).thenReturn(false);
+    when(occurrenceRecorder.recordWaitingReadiness(any(), any(), any(), any(), any()))
+        .thenReturn(false);
     job.execute(context);
     verify(scheduler, never()).scheduleJob(any(Trigger.class));
   }
@@ -295,6 +311,51 @@ class QuartzLaunchJobTest {
             ArgumentMatchers.isNull(),
             ArgumentMatchers.eq(ScheduledOccurrenceStatus.READINESS_TIMEOUT),
             ArgumentMatchers.isNull());
+  }
+
+  @Test
+  @DisplayName("重试以持久窗口为准，不被新的运行配置延长")
+  void shouldUsePersistedDeadlineWhenRetrying() throws Exception {
+    Instant originalFireTime = Instant.parse("2026-03-27T00:00:00Z");
+    Instant deferredSince = originalFireTime.plusSeconds(5);
+    Instant frozenDeadline = deferredSince.plusSeconds(3600);
+    JobDataMap data = jobDataMap(CatchUpPolicyType.NONE.code(), 2);
+    data.put(QuartzLaunchJob.READINESS_ORIGINAL_FIRE_TIME, originalFireTime.toEpochMilli());
+    data.put(QuartzLaunchJob.READINESS_DEFERRED_SINCE, deferredSince.toEpochMilli());
+    data.put(QuartzLaunchJob.READINESS_TRIGGER_TYPE, TriggerType.SCHEDULED.name());
+    when(context.getMergedJobDataMap()).thenReturn(data);
+    when(context.getFireTime()).thenReturn(Date.from(frozenDeadline));
+    when(occurrenceRecorder.readinessWaitWindow(any(), any()))
+        .thenReturn(new ReadinessWaitWindow(deferredSince, frozenDeadline));
+    doThrow(new UpstreamNotReadyException("t1", "IMPORT_JOB", "UPSTREAM_JOB", null))
+        .when(triggerService)
+        .launchScheduled(any());
+
+    job.execute(context);
+
+    verify(context, never()).getScheduler();
+    verify(occurrenceRecorder)
+        .record(
+            any(),
+            ArgumentMatchers.eq(originalFireTime),
+            ArgumentMatchers.isNull(),
+            ArgumentMatchers.eq(ScheduledOccurrenceStatus.READINESS_TIMEOUT),
+            ArgumentMatchers.isNull());
+  }
+
+  @Test
+  @DisplayName("等待在窗口读取前已被推进时不再安排 Quartz 重试")
+  void shouldNotRescheduleWhenWaitAlreadyAdvanced() throws Exception {
+    when(context.getMergedJobDataMap()).thenReturn(jobDataMap(CatchUpPolicyType.NONE.code(), 2));
+    when(context.getScheduledFireTime())
+        .thenReturn(Date.from(Instant.parse("2026-03-27T00:00:00Z")));
+    when(context.getFireTime()).thenReturn(Date.from(Instant.parse("2026-03-27T00:00:05Z")));
+    when(occurrenceRecorder.readinessWaitWindow(any(), any())).thenReturn(null);
+    doThrow(new UpstreamNotReadyException("t1", "IMPORT_JOB", "UPSTREAM_JOB", null))
+        .when(triggerService)
+        .launchScheduled(any());
+    job.execute(context);
+    verify(context, never()).getScheduler();
   }
 
   private JobDataMap jobDataMap(String catchUpPolicy, Integer catchUpMaxDays) {

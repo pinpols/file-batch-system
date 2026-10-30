@@ -18,7 +18,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-/** 在报告事务中串行化终态条目的记账操作。 */
+/** 按租户加载启用的日历及节假日、调班规则，形成业务日期解析快照。 */
 @Service
 @RequiredArgsConstructor
 public class TriggerCalendarDefinitionProvider {

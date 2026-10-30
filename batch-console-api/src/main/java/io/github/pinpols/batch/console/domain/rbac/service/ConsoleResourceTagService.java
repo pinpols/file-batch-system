@@ -1,14 +1,12 @@
 package io.github.pinpols.batch.console.domain.rbac.service;
 
-import io.github.pinpols.batch.console.domain.rbac.param.ConsoleResourceTagUpsertParam;
-
-
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.domain.rbac.entity.ResourceTagEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleResourceTagMapper;
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleResourceTagUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.util.List;
 import java.util.Locale;
@@ -57,22 +55,23 @@ public class ConsoleResourceTagService {
     String operator = input.operator();
     Guard.requireText(resourceCode, "resourceCode is required");
     repository.lockResourceTagIdentity(resolvedTenant, normalizedType, resourceCode);
-    if (EmptyChecks.isNull(repository.selectResourceTagTarget(resolvedTenant, normalizedType, resourceCode))) {
+    if (EmptyChecks.isNull(
+        repository.selectResourceTagTarget(resolvedTenant, normalizedType, resourceCode))) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
           ResultCode.INVALID_ARGUMENT.detailKey(),
           "resource does not exist in tenant: " + normalizedType + "/" + resourceCode);
     }
-    ConsoleResourceTagUpsertParam consoleResourceTagUpsertParam = ConsoleResourceTagUpsertParam.builder()
-        .tenantId(resolvedTenant)
-        .resourceType(normalizedType)
-        .resourceCode(resourceCode)
-        .tagKey(tagKey)
-        .tagValue(tagValue == null ? "" : tagValue)
-        .operator(operator)
-        .build();
-    repository.upsert(
-        consoleResourceTagUpsertParam);
+    ConsoleResourceTagUpsertParam consoleResourceTagUpsertParam =
+        ConsoleResourceTagUpsertParam.builder()
+            .tenantId(resolvedTenant)
+            .resourceType(normalizedType)
+            .resourceCode(resourceCode)
+            .tagKey(tagKey)
+            .tagValue(EmptyChecks.isNull(tagValue) ? "" : tagValue)
+            .operator(operator)
+            .build();
+    repository.upsert(consoleResourceTagUpsertParam);
   }
 
   @Transactional

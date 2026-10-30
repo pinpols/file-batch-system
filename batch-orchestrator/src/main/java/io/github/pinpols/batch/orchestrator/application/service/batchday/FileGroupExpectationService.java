@@ -1,15 +1,15 @@
 package io.github.pinpols.batch.orchestrator.application.service.batchday;
 
-import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceInsertIfAbsentParam;
-import io.github.pinpols.batch.orchestrator.domain.param.FileGroupExpectationDefinitionUpsertParam;
-
-
+import io.github.pinpols.batch.common.jdbc.JdbcExceptionSupport;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceInsertIfAbsentParam;
+import io.github.pinpols.batch.orchestrator.domain.param.FileGroupExpectationDefinitionUpsertParam;
 import io.github.pinpols.batch.orchestrator.domain.query.FileGroupExpectationDefinition;
+import io.github.pinpols.batch.orchestrator.domain.query.FileGroupUploadTarget;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ExpectedWorkOccurrenceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.FileGroupExpectationDefinitionMapper;
@@ -20,6 +20,9 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -56,7 +59,7 @@ public class FileGroupExpectationService {
       return RlsTenantContextHolder.runWithTenant(
           request.tenantId(), () -> configureInTransaction(request));
     } catch (DataIntegrityViolationException failure) {
-      if (ExpectationCalendarConstraintConflict.matches(
+      if (JdbcExceptionSupport.isForeignKeyConstraintViolation(
           failure, "fk_file_group_expectation_workflow_calendar")) {
         throw new ResponseStatusException(
             HttpStatus.CONFLICT,
@@ -67,38 +70,89 @@ public class FileGroupExpectationService {
     }
   }
 
+  /** 返回租户内可用于人工文件入站的启用文件组绑定。 */
+  public List<FileGroupUploadTarget> listEnabledUploadTargets(String tenantId) {
+    if (!valid(tenantId, 64)) {
+      throw new IllegalArgumentException("tenant is required");
+    }
+    return RlsTenantContextHolder.runWithTenant(tenantId, () -> {
+      TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+      return transaction.execute(status -> {
+        occurrenceMapper.setTenantContext(tenantId);
+        List<FileGroupUploadTarget> targets = definitionMapper.selectEnabledUploadTargets(tenantId);
+        Map<String, Long> countByGroup = targets.stream()
+            .collect(
+                Collectors.groupingBy(FileGroupUploadTarget::fileGroupCode, Collectors.counting()));
+        return targets.stream()
+            .filter(target -> countByGroup.getOrDefault(target.fileGroupCode(), 0L) == 1L)
+            .toList();
+      });
+    });
+  }
+
+  /** 校验上传请求精确匹配唯一启用的文件组到 Workflow 绑定。 */
+  public FileGroupUploadTarget requireEnabledUploadTarget(
+      String tenantId, String calendarCode, Long workflowDefinitionId, String fileGroupCode) {
+    if (!valid(tenantId, 64)
+        || !valid(calendarCode, 128)
+        || EmptyChecks.isNull(workflowDefinitionId)
+        || workflowDefinitionId <= 0
+        || !valid(fileGroupCode, 128)) {
+      throw new IllegalArgumentException("tenant, calendar, workflow and file group are required");
+    }
+    return RlsTenantContextHolder.runWithTenant(tenantId, () -> {
+      TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+      return transaction.execute(status -> {
+        occurrenceMapper.setTenantContext(tenantId);
+        List<FileGroupUploadTarget> groupTargets =
+            definitionMapper.selectEnabledUploadTargetsByGroup(tenantId, fileGroupCode);
+        if (groupTargets.size() != 1) {
+          throw new ResponseStatusException(
+              HttpStatus.UNPROCESSABLE_CONTENT,
+              "File group must map to exactly one enabled Workflow before manual upload");
+        }
+        FileGroupUploadTarget target = groupTargets.get(0);
+        boolean exactTargetMatches = target.workflowDefinitionId().equals(workflowDefinitionId)
+            && target.calendarCode().equals(calendarCode);
+        if (!exactTargetMatches) {
+          throw new ResponseStatusException(
+              HttpStatus.UNPROCESSABLE_CONTENT,
+              "Manual upload target does not match the enabled file-group binding");
+        }
+        return target;
+      });
+    });
+  }
+
   private int configureInTransaction(DefinitionRequest request) {
     TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
     return transactionTemplate.execute(status -> {
       occurrenceMapper.setTenantContext(request.tenantId());
-      WorkflowDefinitionEntity workflow =
-          workflowDefinitionMapper.selectByTenantAndIdAndEnabled(
-              request.tenantId(), request.workflowDefinitionId(), true);
-      if (EmptyChecks.isNull(workflow)
-          || !request.calendarCode().equals(workflow.calendarCode())) {
+      WorkflowDefinitionEntity workflow = workflowDefinitionMapper.selectByTenantAndIdAndEnabled(
+          request.tenantId(), request.workflowDefinitionId(), true);
+      if (EmptyChecks.isNull(workflow) || !request.calendarCode().equals(workflow.calendarCode())) {
         throw new ResponseStatusException(
             HttpStatus.UNPROCESSABLE_CONTENT,
             "File-group expectation calendar must match the workflow calendar");
       }
-      FileGroupExpectationDefinitionUpsertParam fileGroupExpectationDefinitionUpsertParam = FileGroupExpectationDefinitionUpsertParam.builder()
-          .tenantId(request.tenantId())
-          .calendarCode(request.calendarCode())
-          .workflowDefinitionId(request.workflowDefinitionId())
-          .fileGroupCode(request.fileGroupCode())
-          .expectedLocalTime(request.expectedLocalTime())
-          .dueLocalTime(request.dueLocalTime())
-          .enabled(request.enabled())
-          .build();
-      return definitionMapper.upsert(
-          fileGroupExpectationDefinitionUpsertParam);
+      FileGroupExpectationDefinitionUpsertParam fileGroupExpectationDefinitionUpsertParam =
+          FileGroupExpectationDefinitionUpsertParam.builder()
+              .tenantId(request.tenantId())
+              .calendarCode(request.calendarCode())
+              .workflowDefinitionId(request.workflowDefinitionId())
+              .fileGroupCode(request.fileGroupCode())
+              .expectedLocalTime(request.expectedLocalTime())
+              .dueLocalTime(request.dueLocalTime())
+              .enabled(request.enabled())
+              .build();
+      return definitionMapper.upsert(fileGroupExpectationDefinitionUpsertParam);
     });
   }
 
   /** 明确只删除周期性定义；已经生成的 occurrence 仍保留以供审计。 */
   public boolean deleteDefinition(
       String tenantId, String calendarCode, Long workflowDefinitionId, String fileGroupCode) {
-    boolean fileGroupDefinitionIdentityIsInvalid =
-        !valid(tenantId, 64)
+    boolean fileGroupDefinitionIdentityIsInvalid = !valid(tenantId, 64)
         || !valid(calendarCode, 128)
         || EmptyChecks.isNull(workflowDefinitionId)
         || workflowDefinitionId <= 0
@@ -107,29 +161,24 @@ public class FileGroupExpectationService {
       throw new IllegalArgumentException(
           "tenant, calendar, workflowDefinitionId and fileGroupCode are required");
     }
-    return RlsTenantContextHolder.runWithTenant(
-        tenantId,
-        () -> {
-          TransactionTemplate transaction = new TransactionTemplate(transactionManager);
-          return transaction.execute(status -> {
-            occurrenceMapper.setTenantContext(tenantId);
-            return definitionMapper.delete(
-                    tenantId, calendarCode, workflowDefinitionId, fileGroupCode)
-                == 1;
-          });
-        });
+    return RlsTenantContextHolder.runWithTenant(tenantId, () -> {
+      TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+      return transaction.execute(status -> {
+        occurrenceMapper.setTenantContext(tenantId);
+        return definitionMapper.delete(tenantId, calendarCode, workflowDefinitionId, fileGroupCode)
+            == 1;
+      });
+    });
   }
 
   /** 在批次日开启事务内调用；重复开启会安全复用唯一标识。 */
   public int materializeForOpenedBusinessDay(
       String tenantId, String calendarCode, LocalDate bizDate, String timezoneSnapshot) {
-    return RlsTenantContextHolder.runWithTenant(
-        tenantId,
-        () -> {
-          TransactionTemplate transaction = new TransactionTemplate(transactionManager);
-          return transaction.execute(status -> materializeForOpenedBusinessDayInTenant(
-              tenantId, calendarCode, bizDate, timezoneSnapshot));
-        });
+    return RlsTenantContextHolder.runWithTenant(tenantId, () -> {
+      TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+      return transaction.execute(status -> materializeForOpenedBusinessDayInTenant(
+          tenantId, calendarCode, bizDate, timezoneSnapshot));
+    });
   }
 
   private int materializeForOpenedBusinessDayInTenant(
@@ -151,18 +200,18 @@ public class FileGroupExpectationService {
       Instant dueAt = EmptyChecks.isNull(definition.dueLocalTime())
           ? null
           : resolve(bizDate, definition.dueLocalTime(), zone);
-      ExpectedWorkOccurrenceInsertIfAbsentParam expectedWorkOccurrenceInsertIfAbsentParam = ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
-          .tenantId(tenantId)
-          .calendarCode(calendarCode)
-          .bizDate(bizDate)
-          .workflowDefinitionId(definition.workflowDefinitionId())
-          .sourceType("FILE_GROUP")
-          .sourceKey(definition.fileGroupCode())
-          .expectedAt(expectedAt)
-          .dueAt(dueAt)
-          .build();
-      materialized += occurrenceMapper.insertIfAbsent(
-          expectedWorkOccurrenceInsertIfAbsentParam);
+      ExpectedWorkOccurrenceInsertIfAbsentParam expectedWorkOccurrenceInsertIfAbsentParam =
+          ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
+              .tenantId(tenantId)
+              .calendarCode(calendarCode)
+              .bizDate(bizDate)
+              .workflowDefinitionId(definition.workflowDefinitionId())
+              .sourceType("FILE_GROUP")
+              .sourceKey(definition.fileGroupCode())
+              .expectedAt(expectedAt)
+              .dueAt(dueAt)
+              .build();
+      materialized += occurrenceMapper.insertIfAbsent(expectedWorkOccurrenceInsertIfAbsentParam);
     }
     return materialized;
   }
@@ -181,18 +230,16 @@ public class FileGroupExpectationService {
   }
 
   private static void validate(DefinitionRequest request) {
-    boolean requiredFieldsAreValid =
-        EmptyChecks.isNotNull(request)
-            && valid(request.tenantId(), 64)
-            && valid(request.calendarCode(), 128)
-            && EmptyChecks.isNotNull(request.workflowDefinitionId())
-            && request.workflowDefinitionId() > 0
-            && valid(request.fileGroupCode(), 128)
-            && EmptyChecks.isNotNull(request.expectedLocalTime());
-    boolean dueLocalTimeIsValidWhenRequiredFieldsAreValid =
-        !requiredFieldsAreValid
-            || EmptyChecks.isNull(request.dueLocalTime())
-            || request.dueLocalTime().isAfter(request.expectedLocalTime());
+    boolean requiredFieldsAreValid = EmptyChecks.isNotNull(request)
+        && valid(request.tenantId(), 64)
+        && valid(request.calendarCode(), 128)
+        && EmptyChecks.isNotNull(request.workflowDefinitionId())
+        && request.workflowDefinitionId() > 0
+        && valid(request.fileGroupCode(), 128)
+        && EmptyChecks.isNotNull(request.expectedLocalTime());
+    boolean dueLocalTimeIsValidWhenRequiredFieldsAreValid = !requiredFieldsAreValid
+        || EmptyChecks.isNull(request.dueLocalTime())
+        || request.dueLocalTime().isAfter(request.expectedLocalTime());
     boolean definitionIsValid =
         requiredFieldsAreValid && dueLocalTimeIsValidWhenRequiredFieldsAreValid;
     if (!definitionIsValid) {

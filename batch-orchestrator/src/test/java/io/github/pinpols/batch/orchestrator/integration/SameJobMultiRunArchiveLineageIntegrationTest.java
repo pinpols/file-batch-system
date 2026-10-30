@@ -28,7 +28,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** 避免在 Quartz 内重放相当于整段故障时间的触发风暴。此监听器会持久化本次回调触发， */
+/** 验证同一作业的多个运行在归档后仍能分别回查各自的结果与文件证据。 */
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
@@ -398,7 +398,7 @@ class SameJobMultiRunArchiveLineageIntegrationTest extends AbstractIntegrationTe
     assertThat(count("batch.pipeline_instance", artifact.pipelineInstanceId())).isZero();
     assertThat(count("archive.pipeline_instance_archive", artifact.pipelineInstanceId()))
         .isOne();
-    // 协调器也会查找更早且被 Quartz 合并丢弃的 AUTO 触发；每个恢复记录均保留
+    // 文件记录可能被其他运行引用，归档运行树时保留热文件并复制冷副本。
     assertThat(count("batch.file_record", artifact.fileRecordId())).isOne();
     assertThat(count("archive.file_record_archive", artifact.fileRecordId())).isOne();
     assertThat(count("batch.file_dispatch_record", artifact.dispatchRecordId())).isZero();

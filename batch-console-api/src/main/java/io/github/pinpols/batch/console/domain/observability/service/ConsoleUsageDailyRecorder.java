@@ -45,7 +45,7 @@ public class ConsoleUsageDailyRecorder implements ConsoleUsageRecorder {
     long failedOperations = success ? 0L : 1L;
     ZonedDateTime createdDateTime = createdAt.atZone(zone);
     OffsetDateTime zonedCreatedAt = createdDateTime.toOffsetDateTime();
-    mapper.insertDaily(new DailyUsageRow(
+    DailyUsageRow usage = new DailyUsageRow(
         statDate,
         tenantId,
         SOURCE,
@@ -55,7 +55,8 @@ public class ConsoleUsageDailyRecorder implements ConsoleUsageRecorder {
         1L,
         successfulOperations,
         failedOperations,
-        zonedCreatedAt));
+        zonedCreatedAt);
+    mapper.insertDaily(usage);
   }
 
   private String metricCode(String action) {

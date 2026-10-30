@@ -2,7 +2,9 @@ package io.github.pinpols.batch.console.domain.audit.command;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import lombok.Builder;
 
+@Builder
 public record AiAuditCommand(
     String tenantId,
     String requestId,

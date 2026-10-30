@@ -150,11 +150,14 @@
           and tr.request_id = #{requestId}
     </select>
 
-    <select id="selectByTenantAndDedupKey" resultMap="TriggerRequestResultMap">
+    <!-- 子 Job 可继承根请求去重键，补跑恢复只读取根请求。 -->
+    <select id="selectCatchUpRootByDedupKey" resultMap="TriggerRequestResultMap">
         select *
         from batch.trigger_request
         where tenant_id = #{tenantId}
           and dedup_key = #{dedupKey}
+          and trigger_type = 'CATCH_UP'
+          and parent_workflow_run_id is null
     </select>
 
     <select id="countUnlaunchedForCalendarBizDate" resultType="int">
@@ -224,6 +227,27 @@
             where workflow_run.tenant_id = #{tenantId}
               and workflow_run.id = #{parentWorkflowRunId}
         ))
+    </insert>
+
+    <insert id="insertBatchDayCatchUpIfAbsent" parameterType="io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        insert into batch.trigger_request (
+            tenant_id, request_id, trigger_type, job_code, workflow_definition_id, biz_date,
+            dedup_key, request_status, trace_id, dry_run, launch_payload
+        ) select #{tenantId}, #{requestId}, #{triggerType}, #{jobCode}, #{workflowDefinitionId},
+            #{bizDate}, #{dedupKey}, #{requestStatus}, #{traceId}, false,
+            cast(#{launchPayload,jdbcType=VARCHAR} as jsonb)
+        where (cast(#{workflowDefinitionId,jdbcType=BIGINT} as bigint) is null or exists (
+            select 1 from batch.workflow_definition workflow_definition
+            where workflow_definition.tenant_id = #{tenantId}
+              and workflow_definition.id = #{workflowDefinitionId}
+        ))
+        on conflict (tenant_id, dedup_key)
+          where trigger_type = 'CATCH_UP'
+            and parent_workflow_run_id is null
+            and left(dedup_key, length(tenant_id) + length(':batch-day-catchup:')) =
+                tenant_id || ':batch-day-catchup:'
+        do nothing
     </insert>
 
     <select id="isValidParentWorkflowNodeLaunch" resultType="boolean">

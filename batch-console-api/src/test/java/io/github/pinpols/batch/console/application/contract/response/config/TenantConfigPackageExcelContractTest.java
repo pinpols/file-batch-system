@@ -27,8 +27,24 @@ class TenantConfigPackageExcelContractTest {
   @DisplayName("配置应用响应不暴露退役 Pipeline 写入计数")
   @Test
   void shouldApplyDoesNotExposeRetiredPipelineWriteCounters() throws Exception {
-    TenantConfigPackageExcelApplyResponse response = new TenantConfigPackageExcelApplyResponse(
-        "upload-token", "tenant-a", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    TenantConfigPackageExcelApplyResponse response = TenantConfigPackageExcelApplyResponse.builder()
+        .uploadToken("upload-token")
+        .tenantId("tenant-a")
+        .resourceQueueInserted(0)
+        .resourceQueueUpdated(0)
+        .businessCalendarInserted(0)
+        .businessCalendarUpdated(0)
+        .batchWindowInserted(0)
+        .batchWindowUpdated(0)
+        .jobInserted(0)
+        .jobUpdated(0)
+        .channelInserted(0)
+        .channelUpdated(0)
+        .fileTemplateInserted(0)
+        .fileTemplateUpdated(0)
+        .workflowInserted(0)
+        .workflowUpdated(0)
+        .build();
 
     JsonNode json = objectMapper.readTree(objectMapper.writeValueAsBytes(response));
 

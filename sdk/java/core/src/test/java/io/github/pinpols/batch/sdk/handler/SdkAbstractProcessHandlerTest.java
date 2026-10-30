@@ -162,7 +162,7 @@ class SdkAbstractProcessHandlerTest {
 
       @Override
       protected void upsert(SdkTaskContext ctx, List<String> batch) {
-        // no-op: selectInput fails before any batch can be persisted.
+        // 无需执行实际操作：selectInput 会在任何批次持久化前失败。
       }
     };
 
@@ -283,7 +283,7 @@ class SdkAbstractProcessHandlerTest {
 
       @Override
       protected void upsert(SdkTaskContext ctx, List<String> batch) {
-        // no-op: this test only verifies stream close behavior after successful iteration.
+        // 无需执行实际操作：本测试仅校验迭代成功后的流关闭行为。
       }
     };
 
@@ -321,7 +321,7 @@ class SdkAbstractProcessHandlerTest {
 
       @Override
       protected void upsert(SdkTaskContext ctx, List<String> batch) {
-        // no-op: transform fails before the first batch reaches persistence.
+        // 无需执行实际操作：首个批次到达持久化前 transform 就会失败。
       }
     };
 
@@ -355,7 +355,7 @@ class SdkAbstractProcessHandlerTest {
 
       @Override
       protected void upsert(SdkTaskContext ctx, List<String> batch) {
-        // no-op: the default batch-size test never emits input rows.
+        // 无需执行实际操作：默认批大小测试不会产生输入行。
       }
 
       int exposedBatchSize() {

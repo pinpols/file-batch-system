@@ -103,13 +103,11 @@ class WorkerDrainE2eIT extends AbstractIntegrationTest {
         where tenant_id = ? and worker_code = ?
         """;
 
-    await()
-        .atMost(Duration.ofSeconds(10))
-        .untilAsserted(() -> {
-          Integer selectedWorkerRegistryCount =
-              jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, WORKER_CODE);
-          assertThat(selectedWorkerRegistryCount).isEqualTo(1);
-        });
+    await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+      Integer selectedWorkerRegistryCount =
+          jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, WORKER_CODE);
+      assertThat(selectedWorkerRegistryCount).isEqualTo(1);
+    });
     WorkerRegistration registration = workerRuntimeState.get(WORKER_CODE);
     if (registration != null) {
       registration.setStatus(WorkerRegistryStatus.ONLINE.code());
@@ -292,7 +290,8 @@ class WorkerDrainE2eIT extends AbstractIntegrationTest {
                       """;
 
     await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-      Map<String, Object> workerAfterTimeout = jdbcTemplate.queryForMap(selectStatusSql, TENANT, WORKER_CODE);
+      Map<String, Object> workerAfterTimeout =
+          jdbcTemplate.queryForMap(selectStatusSql, TENANT, WORKER_CODE);
       assertThat(workerAfterTimeout.get("status")).isEqualTo("DECOMMISSIONED");
       assertThat(workerAfterTimeout.get("drain_started_at")).isNull();
       assertThat(workerAfterTimeout.get("drain_deadline_at")).isNull();

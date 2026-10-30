@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
-/** 等待每日围栏期间，扫描候选项可能已经过期。只领取仍 */
+/** 同一租户、Workflow 及调度版本的一批待计划触发时间和业务日期。 */
 public record ScheduledOccurrencePlanBatchParam(
     String tenantId,
     Long workflowDefinitionId,

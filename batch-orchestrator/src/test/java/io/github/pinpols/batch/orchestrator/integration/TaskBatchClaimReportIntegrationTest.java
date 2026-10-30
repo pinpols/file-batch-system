@@ -182,41 +182,43 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
       LaunchedTask lt = launched.get(i);
       JobPartitionEntity p = jobPartitionMapper.selectById(TENANT, lt.partitionId());
       if (i < 2) {
-        reportItems.add(new TaskExecutionReportCommand(
-            lt.taskId(),
-            TENANT,
-            lt.seed().workerCode(),
-            true,
-            null,
-            null,
-            "{\"records\":" + (i + 1) + "}",
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            p.getCurrentInvocationId(),
-            null,
-            null));
+        reportItems.add(TaskExecutionReportCommand.builder()
+            .taskId(lt.taskId())
+            .tenantId(TENANT)
+            .workerId(lt.seed().workerCode())
+            .success(true)
+            .code(null)
+            .message(null)
+            .resultSummary("{\"records\":" + (i + 1) + "}")
+            .errorCode(null)
+            .errorMessage(null)
+            .errorKey(null)
+            .errorArgs(null)
+            .highWaterMarkOut(null)
+            .outputs(null)
+            .partitionInvocationId(p.getCurrentInvocationId())
+            .failureClass(null)
+            .verifierFailures(null)
+            .build());
       } else {
-        reportItems.add(new TaskExecutionReportCommand(
-            lt.taskId(),
-            TENANT,
-            lt.seed().workerCode(),
-            false,
-            "E_IT_FAIL",
-            "intentional failure for per-item isolation",
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            p.getCurrentInvocationId(),
-            null,
-            null));
+        reportItems.add(TaskExecutionReportCommand.builder()
+            .taskId(lt.taskId())
+            .tenantId(TENANT)
+            .workerId(lt.seed().workerCode())
+            .success(false)
+            .code("E_IT_FAIL")
+            .message("intentional failure for per-item isolation")
+            .resultSummary(null)
+            .errorCode(null)
+            .errorMessage(null)
+            .errorKey(null)
+            .errorArgs(null)
+            .highWaterMarkOut(null)
+            .outputs(null)
+            .partitionInvocationId(p.getCurrentInvocationId())
+            .failureClass(null)
+            .verifierFailures(null)
+            .build());
       }
     }
     TaskReportBatchResult reportResp =
@@ -296,10 +298,7 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
         ORDER BY event_key
         """;
     List<String> keys = jdbcTemplate.queryForList(
-        verifierFailureEventKeysSql,
-        String.class,
-        TENANT,
-        launched.instanceId());
+        verifierFailureEventKeysSql, String.class, TENANT, launched.instanceId());
     assertThat(keys)
         .containsExactly(
             TENANT + ":verifier:" + launched.taskId() + ":COUNT:1",
@@ -361,9 +360,6 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
           AND event_type = 'verifier.failure.v1'
         """;
     return jdbcTemplate.queryForObject(
-        verifierFailureEventCountSql,
-        Long.class,
-        TENANT,
-        launched.instanceId());
+        verifierFailureEventCountSql, Long.class, TENANT, launched.instanceId());
   }
 }

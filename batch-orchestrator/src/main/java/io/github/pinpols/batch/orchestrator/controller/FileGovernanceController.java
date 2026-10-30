@@ -7,6 +7,8 @@ import io.github.pinpols.batch.orchestrator.domain.command.FileGovernanceCommand
 import io.github.pinpols.batch.orchestrator.domain.command.FileUploadSessionCommand;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceLatencyMetrics;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceScheduler;
+import java.time.LocalDate;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -62,6 +64,12 @@ public class FileGovernanceController {
         .fileName(request.fileName())
         .operatorId(request.operatorId())
         .traceId(request.traceId())
+        .calendarCode(request.calendarCode())
+        .workflowDefinitionId(request.workflowDefinitionId())
+        .fileGroupCode(request.fileGroupCode())
+        .bizDate(request.bizDate())
+        .requiredFileNames(request.requiredFileNames())
+        .bundleTemplateCode(request.bundleTemplateCode())
         .build();
     return fileGovernanceService.createUploadSession(command);
   }
@@ -139,7 +147,17 @@ public class FileGovernanceController {
   public record FileDownloadResponse(String downloadUrl) {}
 
   public record FileUploadRequest(
-      String tenantId, String channelCode, String fileName, String operatorId, String traceId) {}
+      String tenantId,
+      String channelCode,
+      String fileName,
+      String operatorId,
+      String traceId,
+      String calendarCode,
+      Long workflowDefinitionId,
+      String fileGroupCode,
+      LocalDate bizDate,
+      List<String> requiredFileNames,
+      String bundleTemplateCode) {}
 
   public record ArrivalGroupOperationRequest(
       String tenantId,

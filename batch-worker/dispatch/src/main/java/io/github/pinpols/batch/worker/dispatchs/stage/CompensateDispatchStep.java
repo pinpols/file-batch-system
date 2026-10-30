@@ -49,7 +49,8 @@ public class CompensateDispatchStep implements DispatchStageStep {
   @Override
   public DispatchStageResult execute(DispatchJobContext context) {
     // ADR-026: 演练模式不发外部补偿（也没真投递过），跳过即可。
-    Map<String, Object> dryRunAttributes = EmptyChecks.isNull(context) ? null : context.getAttributes();
+    Map<String, Object> dryRunAttributes =
+        EmptyChecks.isNull(context) ? null : context.getAttributes();
     if (DryRunGuard.fromAttributes(dryRunAttributes).isDryRun()) {
       return DispatchStageResult.success(stage());
     }
@@ -84,9 +85,7 @@ public class CompensateDispatchStep implements DispatchStageStep {
     }
     String channelCode = Objects.requireNonNullElse(dispatchPayload.channelCode(), "");
     fileRecords.updateFileStatus(
-        fileId,
-        FileStatus.FAILED.code(),
-        Map.of(DispatchRuntimeKeys.CHANNEL_CODE, channelCode));
+        fileId, FileStatus.FAILED.code(), Map.of(DispatchRuntimeKeys.CHANNEL_CODE, channelCode));
     Map<String, Object> detailSummary = new LinkedHashMap<>();
     detailSummary.put(DispatchRuntimeKeys.CHANNEL_CODE, dispatchPayload.channelCode());
     detailSummary.put(DispatchRuntimeKeys.DISPATCH_TARGET, dispatchPayload.dispatchTarget());
@@ -102,7 +101,8 @@ public class CompensateDispatchStep implements DispatchStageStep {
         .operatorId(context.getWorkerId());
     Object traceId = attrs.get(PipelineRuntimeKeys.TRACE_ID);
     String traceIdText = String.valueOf(traceId);
-    FileAuditParam audit = auditParam.traceId(traceIdText)
+    FileAuditParam audit = auditParam
+        .traceId(traceIdText)
         .evidenceRef(null)
         .detailSummary(detailSummary)
         .build();

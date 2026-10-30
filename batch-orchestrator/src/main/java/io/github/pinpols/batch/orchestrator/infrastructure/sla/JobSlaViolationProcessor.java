@@ -37,6 +37,12 @@ public class JobSlaViolationProcessor {
     if (jobMonitoringMapper.markSlaAlerted(candidate.getTenantId(), candidate.getId(), now) <= 0) {
       return false;
     }
+    JobInstanceEntity claimedCandidate =
+        jobMonitoringMapper.selectSlaViolationCandidate(candidate.getTenantId(), candidate.getId());
+    if (EmptyChecks.isNull(claimedCandidate)) {
+      throw new IllegalStateException("claimed SLA violation candidate is no longer available");
+    }
+    candidate = claimedCandidate;
     BatchMdc.put(StructuredLogField.TENANT_ID, candidate.getTenantId());
     BatchMdc.put(StructuredLogField.TRACE_ID, candidate.getTraceId());
     BatchMdc.put(StructuredLogField.JOB_INSTANCE_ID, String.valueOf(candidate.getId()));
@@ -139,7 +145,9 @@ public class JobSlaViolationProcessor {
     extra.put("jobInstanceId", String.valueOf(candidate.getId()));
     extra.put(
         "bizDate",
-        EmptyChecks.isNull(candidate.getBizDate()) ? null : candidate.getBizDate().toString());
+        EmptyChecks.isNull(candidate.getBizDate())
+            ? null
+            : candidate.getBizDate().toString());
     if (EmptyChecks.isNotNull(candidate.getParentWorkflowRunId())) {
       extra.put("workflowRunId", candidate.getParentWorkflowRunId().toString());
     }
@@ -151,21 +159,28 @@ public class JobSlaViolationProcessor {
     extra.put("instanceStatus", candidate.getInstanceStatus());
     extra.put("deadlineAt", candidate.getDeadlineAt());
     extra.put("expectedDurationSeconds", candidate.getExpectedDurationSeconds());
+    extra.put("dispatchedAt", candidate.getStartedAt());
+    extra.put("executionStartedAt", candidate.getExecutionStartedAt());
+    Instant finishedAt = candidate.getFinishedAt();
+    Instant evaluatedAt = EmptyChecks.isNotNull(finishedAt) ? finishedAt : now;
+    extra.put("finishedAt", finishedAt);
+    extra.put("violationDetectedAt", now);
+    extra.put("violationEvaluatedAt", evaluatedAt);
     if (EmptyChecks.isNotNull(candidate.getDeadlineAt())
-        && candidate.getDeadlineAt().isBefore(now)) {
+        && candidate.getDeadlineAt().isBefore(evaluatedAt)) {
       extra.put(KEY_VIOLATION_REASON, "DEADLINE_EXCEEDED");
-      Duration deadlineOverrun = Duration.between(candidate.getDeadlineAt(), now);
+      Duration deadlineOverrun = Duration.between(candidate.getDeadlineAt(), evaluatedAt);
       long deadlineDelaySeconds = deadlineOverrun.getSeconds();
       extra.put("deadlineDelaySeconds", deadlineDelaySeconds);
     } else if (EmptyChecks.isNotNull(candidate.getExpectedDurationSeconds())
         && candidate.getExpectedDurationSeconds() > 0
-        && EmptyChecks.isNotNull(candidate.getStartedAt())) {
-      Instant startedAt = candidate.getStartedAt();
+        && EmptyChecks.isNotNull(candidate.getExecutionStartedAt())) {
+      Instant startedAt = candidate.getExecutionStartedAt();
       long expectedDurationSeconds = candidate.getExpectedDurationSeconds();
       Instant expectedFinish = startedAt.plusSeconds(expectedDurationSeconds);
       extra.put(KEY_VIOLATION_REASON, "EXPECTED_DURATION_EXCEEDED");
       extra.put("expectedFinishAt", expectedFinish);
-      Duration durationOverrun = Duration.between(expectedFinish, now);
+      Duration durationOverrun = Duration.between(expectedFinish, evaluatedAt);
       long durationDelaySeconds = durationOverrun.getSeconds();
       extra.put("durationDelaySeconds", durationDelaySeconds);
     } else {

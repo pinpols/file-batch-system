@@ -52,7 +52,8 @@ class BatchDayCatchupPreviewServiceTest {
         catchupControlMapper,
         timezoneProvider,
         new BatchDateTimeSupport(Clock.fixed(now, ZoneId.of("UTC")), timezoneProvider),
-        noopTransactionManager(), new BatchDayScanProperties());
+        noopTransactionManager(),
+        new BatchDayScanProperties());
     when(calendarMapper.selectFirstByTenantAndCodeAndEnabled("t1", "CAL", true))
         .thenReturn(calendar(LocalTime.of(6, 0)));
   }
@@ -91,7 +92,8 @@ class BatchDayCatchupPreviewServiceTest {
         catchupControlMapper,
         timezoneProvider,
         new BatchDateTimeSupport(Clock.fixed(beforeCutoff, ZoneId.of("UTC")), timezoneProvider),
-        noopTransactionManager(), new BatchDayScanProperties());
+        noopTransactionManager(),
+        new BatchDayScanProperties());
     when(batchDayMapper.selectOpenCursorDate("t1", "CAL")).thenReturn(null);
     when(batchDayMapper.selectLatestBizDateAtOrBefore("t1", "CAL", LocalDate.of(2026, 5, 4)))
         .thenReturn(LocalDate.of(2026, 5, 2));
@@ -158,7 +160,8 @@ class BatchDayCatchupPreviewServiceTest {
         timezoneProvider,
         new BatchDateTimeSupport(
             Clock.fixed(beforeShanghaiCutoff, ZoneId.of("UTC")), timezoneProvider),
-        noopTransactionManager(), new BatchDayScanProperties());
+        noopTransactionManager(),
+        new BatchDayScanProperties());
 
     assertThatThrownBy(() -> service.inventoryHistoricalGaps(
             "t1", "CAL", LocalDate.of(2026, 5, 5), LocalDate.of(2026, 5, 5)))

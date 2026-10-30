@@ -36,7 +36,8 @@ public class KafkaMqMessagePublisher implements MqMessagePublisher {
         headers.add(recordHeader);
       }
     });
-    CompletableFuture<SendResult<String, String>> sendFuture = kafkaTemplate.send(producerRecord).toCompletableFuture();
+    CompletableFuture<SendResult<String, String>> sendFuture =
+        kafkaTemplate.send(producerRecord).toCompletableFuture();
     return sendFuture.thenApply(result -> {
       RecordMetadata metadata = result.getRecordMetadata();
       return new MqPublishResult(metadata.partition(), metadata.offset());

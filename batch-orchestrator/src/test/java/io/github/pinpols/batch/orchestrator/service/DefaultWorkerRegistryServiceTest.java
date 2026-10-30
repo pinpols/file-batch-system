@@ -11,15 +11,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
-import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
 import io.github.pinpols.batch.common.dto.WorkerTaskTypeDescriptorDto;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.orchestrator.config.WorkerRegistryProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.CustomTaskTypeUpsertParam;
 import io.github.pinpols.batch.orchestrator.domain.param.TouchHeartbeatParam;
+import io.github.pinpols.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache;
 import io.github.pinpols.batch.orchestrator.mapper.CustomTaskTypeRegistryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.SystemParameterMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
@@ -64,11 +65,7 @@ class DefaultWorkerRegistryServiceTest {
   @Mock
   private SystemParameterMapper systemParameterMapper;
 
-  private final io.github.pinpols.batch.orchestrator.infrastructure.progress
-          .PipelineStageProgressCache
-      progressCache =
-          new io.github.pinpols.batch.orchestrator.infrastructure.progress
-              .PipelineStageProgressCache();
+  private final PipelineStageProgressCache progressCache = new PipelineStageProgressCache();
 
   private final WorkerRegistryProperties workerRegistryProperties = new WorkerRegistryProperties();
 
@@ -531,6 +528,22 @@ class DefaultWorkerRegistryServiceTest {
         .isInstanceOf(BizException.class)
         .hasMessageContaining("error.security.sensitive_in_payload");
 
+    verify(customTaskTypeRegistryMapper, never()).upsertDeclared(any());
+  }
+
+  @Test
+  @DisplayName("register: descriptor code 含凭据时，拒绝信息不回显 code")
+  void shouldNotExposeDescriptorCodeInSensitiveFieldError() {
+    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+    WorkerTaskTypeDescriptorDto leaky = new WorkerTaskTypeDescriptorDto(
+        "tenant_ta_token=probe-secret", "leak", "v1", Map.of("apiKey", "value"), null, null);
+
+    assertThatThrownBy(() -> service.register(dtoWithTaskTypes(List.of(leaky))))
+        .isInstanceOf(BizException.class)
+        .satisfies(error -> assertThat(((BizException) error).getMessageArgs())
+            .containsExactly("sdk.taskType.descriptor", "sensitiveField"))
+        .hasMessageNotContaining("probe-secret");
     verify(customTaskTypeRegistryMapper, never()).upsertDeclared(any());
   }
 

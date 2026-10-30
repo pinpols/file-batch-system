@@ -51,9 +51,7 @@ class TriggerRequestLaunchReconcilerTest {
   @BeforeEach
   void setUp() {
     meterRegistry = new SimpleMeterRegistry();
-    TriggerLaunchReconcilerProperties props =
-        new io.github.pinpols.batch.orchestrator.application.trigger
-            .TriggerLaunchReconcilerProperties();
+    TriggerLaunchReconcilerProperties props = new TriggerLaunchReconcilerProperties();
     props.setMinAgeSeconds(300);
     props.setBatchSize(200);
     reconciler = new TriggerRequestLaunchReconciler(

@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.shared.approval;
 
-import lombok.Builder;
-
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -13,6 +12,7 @@ import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestCli
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.Map;
+import java.util.Objects;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -65,17 +65,18 @@ public class OrchestratorApprovalClient {
     String traceId = metadata.traceId();
     String idempotencyKey = command.idempotencyKey();
     String approvalReason = ConsoleTextSanitizer.safeInput(command.approvalReason(), 512);
-    ApprovalSubmitBody body = new ApprovalSubmitBody(
-        tenantId,
-        approvalType,
-        actionType,
-        targetType,
-        targetId,
-        payloadJson,
-        requesterId,
-        traceId,
-        idempotencyKey,
-        approvalReason);
+    ApprovalSubmitBody body = ApprovalSubmitBody.builder()
+        .tenantId(tenantId)
+        .approvalType(approvalType)
+        .actionType(actionType)
+        .targetType(targetType)
+        .targetId(targetId)
+        .payloadJson(payloadJson)
+        .requesterId(requesterId)
+        .sourceTraceId(traceId)
+        .sourceIdempotencyKey(idempotencyKey)
+        .approvalReason(approvalReason)
+        .build();
     ApprovalSubmitResponse response = orchestratorInternalRestClient
         .client()
         .post()
@@ -93,6 +94,62 @@ public class OrchestratorApprovalClient {
       throw BizException.of(ResultCode.SYSTEM_ERROR, messageKey);
     }
     return response.approvalNo();
+  }
+
+  /** 查询已持久化的来源审批；未找到或调用失败均不代表可以重新提交。 */
+  public ApprovalSourceRecord lookupBySourceKey(String tenantId, String sourceIdempotencyKey) {
+    if (!hasText(tenantId) || !hasText(sourceIdempotencyKey)) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+    }
+    ApprovalSourceLookupResponse response = orchestratorInternalRestClient
+        .client()
+        .get()
+        .uri("/internal/approvals/by-source-key?tenantId={tenantId}", tenantId)
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, sourceIdempotencyKey)
+        .retrieve()
+        .body(ApprovalSourceLookupResponse.class);
+    ApprovalSourceRecord record = EmptyChecks.isNull(response) ? null : response.record();
+    if (EmptyChecks.isNull(record)
+        || !tenantId.equals(record.tenantId())
+        || !sourceIdempotencyKey.equals(record.sourceIdempotencyKey())
+        || !hasText(record.approvalNo())) {
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.approval.empty_response");
+    }
+    return record;
+  }
+
+  /**
+   * 按已冻结且与提交载荷一致的参数校验回查记录；未查到或不匹配均不能证明可重新提交。
+   */
+  public ApprovalSourceRecord lookupVerifiedSubmission(ApprovalSubmitCommand expected) {
+    if (EmptyChecks.isNull(expected)
+        || !hasText(expected.tenantId())
+        || !hasText(expected.idempotencyKey())
+        || !hasText(expected.approvalType())
+        || !hasText(expected.actionType())
+        || !hasText(expected.targetType())
+        || !hasText(expected.payloadJson())) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+    }
+    ApprovalSourceRecord record = lookupBySourceKey(expected.tenantId(), expected.idempotencyKey());
+    boolean sameIdentity = Objects.equals(expected.approvalType(), record.approvalType())
+        && Objects.equals(expected.actionType(), record.actionType())
+        && Objects.equals(expected.targetType(), record.targetType())
+        && Objects.equals(expected.targetId(), record.targetId())
+        && Objects.equals(expected.requesterId(), record.requesterId())
+        && Objects.equals(expected.approvalReason(), record.sourceApprovalReason());
+    try {
+      Object expectedPayload = JsonUtils.fromJsonStrict(expected.payloadJson(), Object.class);
+      Object actualPayload = JsonUtils.fromJsonStrict(record.payloadJson(), Object.class);
+      if (!sameIdentity
+          || EmptyChecks.isNull(expectedPayload)
+          || !expectedPayload.equals(actualPayload)) {
+        throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.idempotency_conflict");
+      }
+    } catch (IllegalArgumentException invalidPayload) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.idempotency_conflict");
+    }
+    return record;
   }
 
   /**
@@ -188,7 +245,9 @@ public class OrchestratorApprovalClient {
     /** 文件下载场景：{@code targetType=FILE} + {@code targetId=fileId}，沿用文件专属的错误文案。 */
     public static ApprovalTargetBinding file(Long fileId) {
       return new ApprovalTargetBinding(
-          "FILE", EmptyChecks.isNull(fileId) ? null : String.valueOf(fileId), FILE_TARGET_MISMATCH_MESSAGE);
+          "FILE",
+          EmptyChecks.isNull(fileId) ? null : String.valueOf(fileId),
+          FILE_TARGET_MISMATCH_MESSAGE);
     }
 
     boolean matches(ApprovalRecord record) {
@@ -199,6 +258,7 @@ public class OrchestratorApprovalClient {
     }
   }
 
+  @Builder
   private record ApprovalSubmitBody(
       String tenantId,
       String approvalType,
@@ -216,6 +276,25 @@ public class OrchestratorApprovalClient {
 
   /** 审批单查询响应包装。 */
   public record ApprovalRecordResponse(ApprovalRecord record) {}
+
+  /** 来源查询保留原始身份和业务载荷，供后续对账比对。 */
+  public record ApprovalSourceLookupResponse(ApprovalSourceRecord record) {}
+
+  @Builder
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  public record ApprovalSourceRecord(
+      String tenantId,
+      String approvalNo,
+      String sourceIdempotencyKey,
+      String approvalType,
+      String actionType,
+      String targetType,
+      String targetId,
+      String payloadJson,
+      String requesterId,
+      String approvalReason,
+      String sourceApprovalReason,
+      String approvalStatus) {}
 
   /** 审批执行前读取状态、资源身份、动作和冻结载荷。 */
   public record ApprovalRecord(

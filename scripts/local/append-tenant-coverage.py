@@ -85,8 +85,7 @@ def update_tb():
     append_if_new(ch, [1], ["tb_api_ingest"], [
         "tb","tb_api_ingest","核心系统 API 同步入站","API","http://mockserver:1080/tb/ingest",
         "TOKEN",
-        json.dumps({"url":"http://mockserver:1080/tb/ingest","method":"POST",
-                    "tokenHeader":"X-API-Token","target_endpoint":"http://mockserver:1080/tb/ingest"},
+        json.dumps({"target_endpoint":"http://mockserver:1080/tb/ingest"},
                    ensure_ascii=False),
         "SYNC",15,"TRUE",
     ])

@@ -10,4 +10,5 @@ public record TriggerOutboxEventMarkFailedParam(
     String status,
     String lastError,
     Instant nextPublishAt,
-    String publishingStatus) {}
+    String publishingStatus,
+    String claimToken) {}

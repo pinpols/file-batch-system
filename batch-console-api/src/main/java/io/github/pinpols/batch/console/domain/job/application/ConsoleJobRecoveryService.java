@@ -1,10 +1,10 @@
 package io.github.pinpols.batch.console.domain.job.application;
 
-import io.github.pinpols.batch.console.domain.job.application.contract.request.CompensateRequest;
 import io.github.pinpols.batch.console.application.contract.request.WorkflowNodeReplayPreviewRequest;
 import io.github.pinpols.batch.console.application.contract.request.WorkflowRunReplayRequest;
 import io.github.pinpols.batch.console.application.contract.response.ConsoleWorkflowNodeReplayPreviewResponse;
 import io.github.pinpols.batch.console.application.contract.response.ConsoleWorkflowRunReplayPreviewResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.CompensateRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleWorkflowRunReplaySubmissionResponse;
 import io.github.pinpols.batch.console.shared.command.CompensationCommandRequest;
 import io.github.pinpols.batch.console.shared.command.DeadLetterReplayRequest;
@@ -21,7 +21,8 @@ public interface ConsoleJobRecoveryService {
   ConsoleWorkflowNodeReplayPreviewResponse previewWorkflowNodeReplay(
       WorkflowNodeReplayPreviewRequest request);
 
-  ConsoleWorkflowRunReplayPreviewResponse previewWorkflowRunReplay(WorkflowRunReplayRequest request);
+  ConsoleWorkflowRunReplayPreviewResponse previewWorkflowRunReplay(
+      WorkflowRunReplayRequest request);
 
   ConsoleWorkflowRunReplaySubmissionResponse submitWorkflowRunReplay(
       WorkflowRunReplayRequest request, String idempotencyKey);

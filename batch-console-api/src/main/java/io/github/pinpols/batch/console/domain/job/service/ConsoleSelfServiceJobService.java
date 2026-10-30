@@ -1,7 +1,5 @@
 package io.github.pinpols.batch.console.domain.job.service;
 
-import lombok.Builder;
-
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;

@@ -71,8 +71,7 @@ class AtomicSeedStrictVerifyE2eIT extends AbstractIntegrationTest {
         CREATE OR REPLACE PROCEDURE batch.e2e_seed_proc() LANGUAGE plpgsql AS $$ BEGIN END; $$
     """;
 
-    jdbcTemplate.execute(
-        createProcedureSql);
+    jdbcTemplate.execute(createProcedureSql);
     runSeedJob("{\"taskType\":\"stored_proc\",\"procedureName\":\"batch.e2e_seed_proc\"}");
   }
 
@@ -113,11 +112,7 @@ class AtomicSeedStrictVerifyE2eIT extends AbstractIntegrationTest {
         jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
 
     // 把执行器协议写进 job_definition.default_params(生产形态:管理员配好,调度只给 jobCode)
-    jdbcTemplate.update(
-        updateJobDefinitionSql,
-        defaultParamsJson,
-        TENANT,
-        seed.jobCode());
+    jdbcTemplate.update(updateJobDefinitionSql, defaultParamsJson, TENANT, seed.jobCode());
 
     launchService.launch(new LaunchRequest(
         TENANT,
@@ -134,7 +129,8 @@ class AtomicSeedStrictVerifyE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String status = jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
+          String status = jdbcTemplate.queryForObject(
+              selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
           assertThat(status).isEqualTo("SUCCESS");
         });
   }

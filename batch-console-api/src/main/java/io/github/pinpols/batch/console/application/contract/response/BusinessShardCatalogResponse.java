@@ -4,7 +4,7 @@ import io.github.pinpols.batch.console.domain.entity.BusinessShardCatalogEntity;
 import java.time.Instant;
 import lombok.Builder;
 
-/** Public shard catalog view; credentials remain outside the catalog. */
+/** 公开分片目录视图；凭据不会包含在目录中。 */
 @Builder
 public record BusinessShardCatalogResponse(
     String placementKey,

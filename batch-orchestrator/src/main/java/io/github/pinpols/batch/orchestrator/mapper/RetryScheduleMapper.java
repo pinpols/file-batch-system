@@ -15,6 +15,9 @@ public interface RetryScheduleMapper {
 
   List<RetryScheduleEntity> selectByQuery(RetryScheduleQuery query);
 
+  /** 到期扫描排除暂停目标；事务内仍需重新校验当前状态。 */
+  List<RetryScheduleEntity> selectDueNotPaused(RetryScheduleQuery query);
+
   int markRunning(
       @Param("tenantId") String tenantId,
       @Param("id") Long id,

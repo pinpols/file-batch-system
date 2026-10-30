@@ -1,3 +1,5 @@
+> 历史证据（2026-10-25 存量核对）：ADR-010/011 的异步触发、幂等边界原始问题依据。正文仅表示原日期/基线；当前规则与状态见[现行入口](../../architecture/outbox-architecture.md)及 TODO，本轮没有重新执行原测试或扫描。
+
 # 深度分析报告
 
 > **历史快照（2026-04-30）**：本文记录当时的静态审查结论，正文中的“当前”“仍然成立”及状态标注均仅指该审查时点。多项问题已由后续代码、ADR 和治理记录处理；本文不作为当前缺陷清单或安全结论。当前待办请查 [`todo-master.md`](../../plans/todo-master.md)，硬化事项请查 [`hardening-backlog.md`](../../plans/hardening-backlog.md)。保留原章节和锚点用于历史追溯。
@@ -124,7 +126,7 @@
 
 ### 5.1 P0: Trigger 模块缺少真正的入口保护
 
-> 🟢 **[已修,2026-04-30 校正]** `cd389a0b`(2026-04-22 v4 闭环)加 `batch-trigger/.../config/TriggerSecurityConfiguration.java:42-46` 真起 `SecurityFilterChain` 把 `/actuator/**` 之外的请求强制 `authenticated()`。本节"问题"描述适用于修复前。后续动作见历史快照 [`project-assessment-2026-04-29.md`](project-assessment-2026-04-29.md) §8 S5-c。
+> 🟢 **[已修,2026-04-30 校正]** `cd389a0b`(2026-04-22 v4 闭环)加 `batch-trigger/.../config/TriggerSecurityConfiguration.java:42-46` 真起 `SecurityFilterChain` 把 `/actuator/**` 之外的请求强制 `authenticated()`。本节"问题"描述适用于修复前。后续动作见历史快照 [security-model.md](../../architecture/security-model.md) §8 S5-c。
 
 #### 问题
 
@@ -159,7 +161,7 @@
 
 ### 5.2 P0: Console 仍保留共享密钥直通后台的旧鉴权路径
 
-> 🟡 **[部分修,2026-04-30 校正]** `legacyHeaderAuthEnabled` 在 `application.yml:67` 用 env `BATCH_CONSOLE_LEGACY_HEADER_AUTH_ENABLED:false` 覆盖默认关闭,注释明确"5.2 默认关闭旧式 X-Console-Token 鉴权";实际部署不再走 X-Console-Token compat,仅 opt-in 兼容。历史排期见 [`project-assessment-2026-04-29.md`](project-assessment-2026-04-29.md) §8 S5-d；当前状态以 [`todo-master.md`](../../plans/todo-master.md) 为准。
+> 🟡 **[部分修,2026-04-30 校正]** `legacyHeaderAuthEnabled` 在 `application.yml:67` 用 env `BATCH_CONSOLE_LEGACY_HEADER_AUTH_ENABLED:false` 覆盖默认关闭,注释明确"5.2 默认关闭旧式 X-Console-Token 鉴权";实际部署不再走 X-Console-Token compat,仅 opt-in 兼容。历史排期见 [security-model.md](../../architecture/security-model.md) §8 S5-d；当前状态以 [`todo-master.md`](../../plans/todo-master.md) 为准。
 
 #### 问题
 

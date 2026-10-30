@@ -371,15 +371,45 @@ def main() -> int:
     }
     for required_alert in (
         "BatchCoreServiceTargetMissing",
+        "BatchPrometheusDown",
+        "BatchPrometheusConfigReloadFailed",
+        "BatchPrometheusRuleEvaluationFailures",
         "BatchAlertmanagerDown",
         "BatchAlertmanagerNotificationFailures",
         "BatchAlertmanagerConfigReloadFailed",
         "BatchAlertmanagerNotifySkipped",
         "BatchAlertmanagerDeliveryFailed",
+        "BatchJobMonitoringStale",
+        "BatchWorkflowMonitoringStale",
     ):
         if required_alert not in alert_names:
             errors.append(f"platform alert rule missing: {required_alert}")
+    docker_target_rules = load_yaml(
+        ROOT / "deploy/docker/observability/prometheus-docker-target-rules.yml"
+    )
+    docker_alert_names = {
+        rule.get("alert")
+        for group in docker_target_rules.get("groups") or []
+        for rule in group.get("rules") or []
+    }
+    for required_alert in (
+        "BatchDependencyTargetMissing",
+        "BatchTelemetryBackendTargetMissing",
+    ):
+        if required_alert not in docker_alert_names:
+            errors.append(f"Docker target alert rule missing: {required_alert}")
+
     prometheus = load_yaml(ROOT / "deploy/docker/observability/prometheus.yml")
+    docker_rules_path = "/etc/prometheus/rules/docker-targets.yml"
+    if docker_rules_path not in (prometheus.get("rule_files") or []):
+        errors.append("Docker Prometheus must load its static target inventory rules")
+    prometheus_volumes = nested(obs_compose, "services", "prometheus", "volumes") or []
+    docker_rules_volume = (
+        "./deploy/docker/observability/prometheus-docker-target-rules.yml:"
+        "/etc/prometheus/rules/docker-targets.yml:ro"
+    )
+    if docker_rules_volume not in prometheus_volumes:
+        errors.append("Docker Prometheus must mount its static target inventory rules")
     alertmanager_scraped = any(
         scrape.get("job_name") == "alertmanager"
         and any(
@@ -390,6 +420,37 @@ def main() -> int:
     )
     if not alertmanager_scraped:
         errors.append("Docker Prometheus must scrape Alertmanager's metrics endpoint")
+    prometheus_self_scraped = any(
+        scrape.get("job_name") == "prometheus"
+        and any(
+            "localhost:9090" in (target_group.get("targets") or [])
+            for target_group in scrape.get("static_configs") or []
+        )
+        for scrape in prometheus.get("scrape_configs") or []
+    )
+    if not prometheus_self_scraped:
+        errors.append("Docker Prometheus must scrape its own metrics endpoint")
+    for relative_path, metric_name in (
+        (
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/sla/JobMonitoringScheduler.java",
+            "batch.job.monitoring.enabled",
+        ),
+        (
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/sla/JobMonitoringScheduler.java",
+            "batch.job.monitoring.poll.interval.seconds",
+        ),
+        (
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/sla/WorkflowMonitoringScheduler.java",
+            "batch.workflow.monitoring.enabled",
+        ),
+        (
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/sla/WorkflowMonitoringScheduler.java",
+            "batch.workflow.monitoring.poll.interval.seconds",
+        ),
+    ):
+        source = (ROOT / relative_path).read_text(encoding="utf-8")
+        if f'"{metric_name}"' not in source:
+            errors.append(f"monitoring scheduler health metric missing: {metric_name}")
     service_monitor = (
         ROOT / "helm/batch-platform/templates/servicemonitor.yaml"
     ).read_text(encoding="utf-8")

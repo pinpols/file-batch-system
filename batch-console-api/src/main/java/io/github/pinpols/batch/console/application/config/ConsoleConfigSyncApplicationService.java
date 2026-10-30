@@ -8,6 +8,7 @@ import io.github.pinpols.batch.console.application.contract.response.config.Conf
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncImportResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncLogResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncPreviewResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncRequestStatusResponse;
 
 public interface ConsoleConfigSyncApplicationService {
 
@@ -16,6 +17,8 @@ public interface ConsoleConfigSyncApplicationService {
   ConfigSyncPreviewResponse preview(ConfigSyncPreviewRequest request);
 
   ConfigSyncImportResponse importBundle(ConfigSyncImportRequest request);
+
+  ConfigSyncRequestStatusResponse requestStatus(String tenantId, String requestKey);
 
   ConfigSyncLogResponse reconcile(String tenantId, Long logId);
 

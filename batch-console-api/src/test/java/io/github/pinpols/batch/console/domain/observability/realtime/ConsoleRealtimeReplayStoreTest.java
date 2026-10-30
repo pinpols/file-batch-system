@@ -18,16 +18,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
 import org.springframework.data.redis.core.ListOperations;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
-// LENIENT:每个 @Test 内部 stub `redisTemplate.opsForList()`,但 append() 走
-// executePipelined 不读 opsForList,strict 模式会报 UnnecessaryStubbing。
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("实时回放存储: 游标续传读取与写入时的裁剪过期")
 class ConsoleRealtimeReplayStoreTest {
 
@@ -78,7 +73,6 @@ class ConsoleRealtimeReplayStoreTest {
   @Test
   @DisplayName("写入回放缓冲时在同一次管道操作内完成裁剪与过期设置")
   void shouldTrimAndExpireReplayBufferUsingConfiguredRetention() {
-    when(redisTemplate.opsForList()).thenReturn(listOperations);
     ConsoleRealtimeReplayStore store = new ConsoleRealtimeReplayStore(
         redisTemplate,
         new BatchRedisNamespace(""),

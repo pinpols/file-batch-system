@@ -36,20 +36,47 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("等待分区候选预评估: 排序不消费容量和派发令牌,正式准入只扣一次")
 class ResourceSchedulerPreviewTest {
 
-  @Mock private ResourceQueueManager resourceQueueManager;
-  @Mock private ConcurrencyLimiter concurrencyLimiter;
-  @Mock private PartitionThrottle partitionThrottle;
-  @Mock private DispatchAdmissionLimiter dispatchAdmissionLimiter;
-  @Mock private DownstreamAdmissionGuard downstreamAdmissionGuard;
-  @Mock private WorkerSelector workerSelector;
-  @Mock private PriorityScheduler priorityScheduler;
-  @Mock private OrchestratorConfigCacheService configCacheService;
-  @Mock private JobInstanceMapper jobInstanceMapper;
-  @Mock private JobPartitionMapper jobPartitionMapper;
-  @Mock private BatchTimezoneProvider timezoneProvider;
-  @Mock private BatchDateTimeSupport dateTimeSupport;
-  @Spy private ResourceSchedulerProperties resourceSchedulerProperties;
-  @InjectMocks private DefaultResourceScheduler scheduler;
+  @Mock
+  private ResourceQueueManager resourceQueueManager;
+
+  @Mock
+  private ConcurrencyLimiter concurrencyLimiter;
+
+  @Mock
+  private PartitionThrottle partitionThrottle;
+
+  @Mock
+  private DispatchAdmissionLimiter dispatchAdmissionLimiter;
+
+  @Mock
+  private DownstreamAdmissionGuard downstreamAdmissionGuard;
+
+  @Mock
+  private WorkerSelector workerSelector;
+
+  @Mock
+  private PriorityScheduler priorityScheduler;
+
+  @Mock
+  private OrchestratorConfigCacheService configCacheService;
+
+  @Mock
+  private JobInstanceMapper jobInstanceMapper;
+
+  @Mock
+  private JobPartitionMapper jobPartitionMapper;
+
+  @Mock
+  private BatchTimezoneProvider timezoneProvider;
+
+  @Mock
+  private BatchDateTimeSupport dateTimeSupport;
+
+  @Spy
+  private ResourceSchedulerProperties resourceSchedulerProperties;
+
+  @InjectMocks
+  private DefaultResourceScheduler scheduler;
 
   @Test
   @DisplayName("反复评估等待候选保留路由与公平分数,只在实际派发时扣一次额度")

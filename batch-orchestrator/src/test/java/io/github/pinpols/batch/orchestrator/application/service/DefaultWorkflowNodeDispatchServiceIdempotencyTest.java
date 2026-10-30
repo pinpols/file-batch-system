@@ -21,6 +21,7 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Default
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodePayloadBuilder;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeTerminalFinalizer;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
@@ -125,9 +126,7 @@ class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
         payloadBuilder,
         childJobLaunchSupport,
         mock(CrossDayDependencyResolver.class),
-        mock(
-            io.github.pinpols.batch.orchestrator.application.service.workflow
-                .WorkflowNodeTerminalFinalizer.class),
+        mock(WorkflowNodeTerminalFinalizer.class),
         mock(SecretPayloadProtector.class),
         mock(JobDependencyWaitingLaunchMapper.class),
         batchDayInstanceMapper,

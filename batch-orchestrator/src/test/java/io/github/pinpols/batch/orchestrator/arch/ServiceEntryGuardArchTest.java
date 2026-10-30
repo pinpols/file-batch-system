@@ -81,8 +81,8 @@ class ServiceEntryGuardArchTest {
   }
 
   private static boolean hasBatchDayNullGuard(String source) {
-    String executableSource = source.replaceAll("(?s)/\\*.*?\\*/", "")
-        .replaceAll("(?m)//[^\\r\\n]*", "");
+    String executableSource =
+        source.replaceAll("(?s)/\\*.*?\\*/", "").replaceAll("(?m)//[^\\r\\n]*", "");
     String compact = executableSource.replaceAll("\\s+", "");
     return compact.contains(
             "if(EmptyChecks.isNull(request)||EmptyChecks.isNull(loaded)){returnGateDecision.allow();")

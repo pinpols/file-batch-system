@@ -29,10 +29,10 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.engine.JobTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.application.service.failure.PersistenceConflictDetectionPort;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
@@ -67,53 +67,81 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.Month;
 import java.time.ZoneId;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 
 @DisplayName("默认启动服务:批量日与作业实例落库,迟到事件路由,派发异常失败标记及重复投递幂等")
+@ExtendWith(MockitoExtension.class)
 class DefaultLaunchServiceTest {
 
+  @Mock
   private LaunchValidationService launchValidationService;
+
+  @Mock
   private PartitionDispatchService partitionDispatchService;
+
   private OrchestratorJobMappers jobMappers;
   private OrchestratorWorkflowMappers workflowMappers;
+
+  @Mock
   private JobInstanceMapper jobInstanceMapper;
+
+  @Mock
   private TriggerRequestMapper triggerRequestMapper;
+
+  @Mock
   private WorkflowRunMapper workflowRunMapper;
+
+  @Mock
   private WorkflowNodeRunMapper workflowNodeRunMapper;
+
+  @Mock
   private OrchestratorConfigCacheService configCacheService;
+
+  @Mock
   private BatchDayInstanceMapper batchDayInstanceMapper;
+
+  @Mock
   private JobExecutionLogMapper jobExecutionLogMapper;
+
+  @Mock
   private BatchDayGateService batchDayGateService;
+
   private LaunchBatchDayService launchBatchDayService;
   private LaunchParamResolver launchParamResolver;
+
+  @Mock
   private JobDependencyWaitingLaunchService jobDependencyWaitingLaunchService;
+
+  @Mock
   private RelatedFileReferenceValidator relatedFileReferenceValidator;
+
+  @Mock
   private FileTemplateSnapshotService fileTemplateSnapshots;
 
   private DefaultLaunchService service;
-  private final JobTerminalOutboxService terminalOutbox = mock(JobTerminalOutboxService.class);
+
+  @Mock
+  private JobTerminalOutboxService terminalOutbox;
 
   @BeforeEach
   @SuppressWarnings("unchecked")
   void setUp() {
-    launchValidationService = mock(LaunchValidationService.class);
-    partitionDispatchService = mock(PartitionDispatchService.class);
-    triggerRequestMapper = mock(TriggerRequestMapper.class);
-    jobInstanceMapper = mock(JobInstanceMapper.class);
     // V182:insert 现返回 dedup 账本受影响行数(1=成功,0=重复)。happy-path 默认 1;
-    // DefaultLaunchService 据此判定幂等重复(inserted<=0 抛 DuplicateKey)。
-    when(jobInstanceMapper.insert(any())).thenReturn(1);
-    workflowRunMapper = mock(WorkflowRunMapper.class);
-    workflowNodeRunMapper = mock(WorkflowNodeRunMapper.class);
+
     jobMappers = new OrchestratorJobMappers(
         jobInstanceMapper,
         mock(JobPartitionMapper.class),
@@ -122,13 +150,6 @@ class DefaultLaunchServiceTest {
         triggerRequestMapper);
     workflowMappers = new OrchestratorWorkflowMappers(
         mock(WorkflowNodeMapper.class), workflowRunMapper, workflowNodeRunMapper);
-    configCacheService = mock(OrchestratorConfigCacheService.class);
-    batchDayInstanceMapper = mock(BatchDayInstanceMapper.class);
-    jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
-    batchDayGateService = mock(BatchDayGateService.class);
-    PlatformTransactionManager batchDayTransactionManager = mock(PlatformTransactionManager.class);
-    when(batchDayTransactionManager.getTransaction(any()))
-        .thenReturn(mock(TransactionStatus.class));
     BatchTimezoneProvider timezoneProvider =
         new BatchTimezoneProvider(new BatchTimezoneProperties());
     launchBatchDayService = new LaunchBatchDayService(
@@ -145,25 +166,9 @@ class DefaultLaunchServiceTest {
         timezoneProvider,
         new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
         mock(CustomTaskTypeRegistryMapper.class));
-    jobDependencyWaitingLaunchService = mock(JobDependencyWaitingLaunchService.class);
-    relatedFileReferenceValidator = mock(RelatedFileReferenceValidator.class);
     lenient()
         .when(jobDependencyWaitingLaunchService.captureOrDefer(any()))
         .thenReturn(Optional.of(List.of()));
-    DispatchSecretSnapshotResolver secretSnapshotResolver =
-        mock(DispatchSecretSnapshotResolver.class);
-    when(secretSnapshotResolver.pin(anyString(), anyString(), anyMap()))
-        .thenAnswer(invocation -> invocation.getArgument(2));
-    DispatchChannelSnapshotService dispatchChannelSnapshotService =
-        mock(DispatchChannelSnapshotService.class);
-    when(dispatchChannelSnapshotService.pin(anyString(), anyString(), anyMap()))
-        .thenAnswer(invocation -> invocation.getArgument(2));
-    when(dispatchChannelSnapshotService.pinWorkflowReplay(
-            anyString(), anyString(), anyMap(), anyMap(), anyMap()))
-        .thenAnswer(invocation -> invocation.getArgument(2));
-    fileTemplateSnapshots = mock(FileTemplateSnapshotService.class);
-    when(fileTemplateSnapshots.pin(any(), any(), anyMap()))
-        .thenAnswer(invocation -> invocation.getArgument(2));
     service = new DefaultLaunchService(
         launchValidationService,
         partitionDispatchService,
@@ -182,16 +187,25 @@ class DefaultLaunchServiceTest {
         new LaunchPhaseMetrics(new SimpleMeterRegistry()),
         mock(PersistenceConflictDetectionPort.class),
         terminalOutbox);
-    when(batchDayGateService.evaluateAndApply(any(), any(), any(), anyString()))
-        .thenReturn(
-            new BatchDayGateService.GateDecision(BatchDayGateService.GateDecisionType.ALLOW, null));
   }
 
   @Test
   @DisplayName("首次启动时新增作业实例与批量日记录,回写受理为已启动并保存时限与重跑策略快照")
   void shouldUpsertBatchDayInstanceOnFirstLaunch() {
+    when(batchDayGateService.evaluateAndApply(any(), any(), any(), anyString()))
+        .thenReturn(
+            new BatchDayGateService.GateDecision(BatchDayGateService.GateDecisionType.ALLOW, null));
+    when(fileTemplateSnapshots.pin(any(), any(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(dispatchChannelSnapshotService.pin(anyString(), anyString(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(secretSnapshotResolver.pin(anyString(), anyString(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(batchDayTransactionManager.getTransaction(any()))
+        .thenReturn(mock(TransactionStatus.class));
+    when(jobInstanceMapper.insert(any())).thenReturn(1);
     when(fileTemplateSnapshots.pin(any(), any(), anyMap())).thenAnswer(invocation -> {
-      Map<String, Object> pinned = new java.util.LinkedHashMap<>(invocation.getArgument(2));
+      Map<String, Object> pinned = new LinkedHashMap<>(invocation.getArgument(2));
       pinned.put("frozenFileTemplateProtected", "captured-template");
       return pinned;
     });
@@ -230,7 +244,6 @@ class DefaultLaunchServiceTest {
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate("t1", "BIZ_CAL", request.bizDate()))
         .thenReturn(null);
     when(batchDayInstanceMapper.insert(any())).thenReturn(1);
-    when(batchDayInstanceMapper.updateWithCas(any())).thenReturn(1);
     when(jobDependencyWaitingLaunchService.captureOrDefer(any()))
         .thenReturn(Optional.of(List.of(new DependencyResultReference(
             "UPSTREAM_JOB",
@@ -265,7 +278,7 @@ class DefaultLaunchServiceTest {
     Map<String, Object> paramsSnapshot =
         JsonUtils.fromJson(jobCaptor.getValue().getParamsSnapshot(), new TypeReference<>() {});
     assertThat(paramsSnapshot.get("effectiveParams"))
-        .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+        .asInstanceOf(InstanceOfAssertFactories.MAP)
         .containsEntry("frozenFileTemplateProtected", "captured-template");
     ArgumentCaptor<PartitionDispatchService.DispatchContext> dispatchCaptor =
         ArgumentCaptor.forClass(PartitionDispatchService.DispatchContext.class);
@@ -335,6 +348,17 @@ class DefaultLaunchServiceTest {
   @Test
   @DisplayName("等待释放后实际创建子 Job 时在实例事务内关联回 Workflow 节点")
   void shouldAttachReleasedChildJobToWorkflowNodeDuringInstanceCreation() {
+    when(batchDayGateService.evaluateAndApply(any(), any(), any(), anyString()))
+        .thenReturn(
+            new BatchDayGateService.GateDecision(BatchDayGateService.GateDecisionType.ALLOW, null));
+    when(fileTemplateSnapshots.pin(any(), any(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(dispatchChannelSnapshotService.pin(anyString(), anyString(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(secretSnapshotResolver.pin(anyString(), anyString(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(batchDayTransactionManager.getTransaction(any()))
+        .thenReturn(mock(TransactionStatus.class));
     LaunchRequest request = new LaunchRequest(
         "t1",
         "CHILD_JOB",
@@ -404,6 +428,9 @@ class DefaultLaunchServiceTest {
   @Test
   @DisplayName("依赖未就绪时保留持久等待且不创建作业实例")
   void shouldDeferLaunchWhenDependencyGateIsNotReady() {
+    when(batchDayGateService.evaluateAndApply(any(), any(), any(), anyString()))
+        .thenReturn(
+            new BatchDayGateService.GateDecision(BatchDayGateService.GateDecisionType.ALLOW, null));
     LaunchRequest request = new LaunchRequest(
         "t1",
         "IMPORT_JOB",
@@ -497,6 +524,18 @@ class DefaultLaunchServiceTest {
   @Test
   @DisplayName("批量日已存在且缺少服务时限时保留原状态与截止时刻,仅补写服务时限")
   void shouldPreserveExistingStatusWhenFillingMissingSlaDeadline() {
+    when(batchDayGateService.evaluateAndApply(any(), any(), any(), anyString()))
+        .thenReturn(
+            new BatchDayGateService.GateDecision(BatchDayGateService.GateDecisionType.ALLOW, null));
+    when(fileTemplateSnapshots.pin(any(), any(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(dispatchChannelSnapshotService.pin(anyString(), anyString(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(secretSnapshotResolver.pin(anyString(), anyString(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(batchDayTransactionManager.getTransaction(any()))
+        .thenReturn(mock(TransactionStatus.class));
+    when(jobInstanceMapper.insert(any())).thenReturn(1);
     LaunchRequest request = new LaunchRequest(
         "t1",
         "IMPORT_JOB",
@@ -547,7 +586,6 @@ class DefaultLaunchServiceTest {
     when(configCacheService.findEnabledBusinessCalendar("t1", "BIZ_CAL")).thenReturn(calendar);
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate("t1", "BIZ_CAL", request.bizDate()))
         .thenReturn(existing);
-    when(batchDayInstanceMapper.insert(any())).thenReturn(1);
     when(batchDayInstanceMapper.updateWithCas(any())).thenReturn(1);
 
     service.launch(request);
@@ -567,6 +605,18 @@ class DefaultLaunchServiceTest {
   @Test
   @DisplayName("事件迟到但在容差内时保持原触发类型,累计迟到次数且不增加补跑次数")
   void shouldAcceptLateEventWithinTolerance() {
+    when(batchDayGateService.evaluateAndApply(any(), any(), any(), anyString()))
+        .thenReturn(
+            new BatchDayGateService.GateDecision(BatchDayGateService.GateDecisionType.ALLOW, null));
+    when(fileTemplateSnapshots.pin(any(), any(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(dispatchChannelSnapshotService.pin(anyString(), anyString(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(secretSnapshotResolver.pin(anyString(), anyString(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(batchDayTransactionManager.getTransaction(any()))
+        .thenReturn(mock(TransactionStatus.class));
+    when(jobInstanceMapper.insert(any())).thenReturn(1);
     LaunchRequest request = new LaunchRequest(
         "t1",
         "IMPORT_JOB",
@@ -619,7 +669,6 @@ class DefaultLaunchServiceTest {
     when(configCacheService.findEnabledBusinessCalendar("t1", "BIZ_CAL")).thenReturn(calendar);
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate("t1", "BIZ_CAL", request.bizDate()))
         .thenReturn(existing);
-    when(batchDayInstanceMapper.insert(any())).thenReturn(1);
     when(batchDayInstanceMapper.updateWithCas(any())).thenReturn(1);
 
     service.launch(request);
@@ -642,6 +691,18 @@ class DefaultLaunchServiceTest {
   @Test
   @DisplayName("事件超出容差时改写为补跑类型,累计补跑次数且不记迟到")
   void shouldRouteLateEventOutsideToleranceToCatchUp() {
+    when(batchDayGateService.evaluateAndApply(any(), any(), any(), anyString()))
+        .thenReturn(
+            new BatchDayGateService.GateDecision(BatchDayGateService.GateDecisionType.ALLOW, null));
+    when(fileTemplateSnapshots.pin(any(), any(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(dispatchChannelSnapshotService.pin(anyString(), anyString(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(secretSnapshotResolver.pin(anyString(), anyString(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(batchDayTransactionManager.getTransaction(any()))
+        .thenReturn(mock(TransactionStatus.class));
+    when(jobInstanceMapper.insert(any())).thenReturn(1);
     LaunchRequest request = new LaunchRequest(
         "t1",
         "IMPORT_JOB",
@@ -693,7 +754,6 @@ class DefaultLaunchServiceTest {
     when(configCacheService.findEnabledBusinessCalendar("t1", "BIZ_CAL")).thenReturn(calendar);
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate("t1", "BIZ_CAL", request.bizDate()))
         .thenReturn(existing);
-    when(batchDayInstanceMapper.insert(any())).thenReturn(1);
     when(batchDayInstanceMapper.updateWithCas(any())).thenReturn(1);
     when(triggerRequestMapper.updateTriggerType(
             "t1", "req-004", TriggerType.CATCH_UP.code(), TriggerType.EVENT.code()))
@@ -719,6 +779,17 @@ class DefaultLaunchServiceTest {
   @Test
   @DisplayName("实例已落库后派发出现业务异常时标记为失败,回写拒绝受理并记录告警日志与失败分类")
   void shouldMarkPreparedJobFailedWhenDispatchBusinessErrorOccursAfterT1() {
+    when(batchDayGateService.evaluateAndApply(any(), any(), any(), anyString()))
+        .thenReturn(
+            new BatchDayGateService.GateDecision(BatchDayGateService.GateDecisionType.ALLOW, null));
+    when(fileTemplateSnapshots.pin(any(), any(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(dispatchChannelSnapshotService.pin(anyString(), anyString(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(secretSnapshotResolver.pin(anyString(), anyString(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(batchDayTransactionManager.getTransaction(any()))
+        .thenReturn(mock(TransactionStatus.class));
     LaunchRequest request = new LaunchRequest(
         "t1",
         "IMPORT_JOB",
@@ -841,6 +912,17 @@ class DefaultLaunchServiceTest {
   @Test
   @DisplayName("模板冻结业务拒绝发生在实例创建前，退出事务后终结请求且不派发")
   void shouldRejectRequestWithoutInstance_whenTemplateCaptureFails() {
+    when(batchDayGateService.evaluateAndApply(any(), any(), any(), anyString()))
+        .thenReturn(
+            new BatchDayGateService.GateDecision(BatchDayGateService.GateDecisionType.ALLOW, null));
+    when(fileTemplateSnapshots.pin(any(), any(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(dispatchChannelSnapshotService.pin(anyString(), anyString(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(secretSnapshotResolver.pin(anyString(), anyString(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(batchDayTransactionManager.getTransaction(any()))
+        .thenReturn(mock(TransactionStatus.class));
     LaunchRequest request = LaunchRequest.builder()
         .tenantId("t1")
         .jobCode("IMPORT_JOB")
@@ -869,6 +951,10 @@ class DefaultLaunchServiceTest {
   @Test
   @DisplayName("整 Workflow Replay 的 Job 准备只使用审批绑定的模板快照")
   void shouldPinApprovedWorkflowReplayTemplateBindingDuringJobPrepare() {
+    when(jobInstanceMapper.insert(any())).thenReturn(1);
+    when(dispatchChannelSnapshotService.pinWorkflowReplay(
+            anyString(), anyString(), anyMap(), anyMap(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(2));
     LocalDate bizDate = LocalDate.of(2026, Month.MARCH, 27);
     Map<String, Object> replayParams = Map.of(
         "templateCode",
@@ -1073,4 +1159,13 @@ class DefaultLaunchServiceTest {
         .toInstant()
         .plusSeconds(120L * 60L);
   }
+
+  @Mock
+  private PlatformTransactionManager batchDayTransactionManager;
+
+  @Mock
+  private DispatchSecretSnapshotResolver secretSnapshotResolver;
+
+  @Mock
+  private DispatchChannelSnapshotService dispatchChannelSnapshotService;
 }

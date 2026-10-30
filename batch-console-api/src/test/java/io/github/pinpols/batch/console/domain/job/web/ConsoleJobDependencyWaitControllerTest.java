@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.domain.job.web;
 
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -16,15 +15,22 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 @DisplayName("Console 作业依赖等待的租户查询边界")
+@ExtendWith(MockitoExtension.class)
 class ConsoleJobDependencyWaitControllerTest {
 
-  private final ConsoleOrchestratorPort orchestrator = mock(ConsoleOrchestratorPort.class);
-  private final ConsoleRequestMetadataResolver metadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleOrchestratorPort orchestrator;
+
+  @Mock
+  private ConsoleRequestMetadataResolver metadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach

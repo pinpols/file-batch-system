@@ -20,6 +20,23 @@ public class SlaGovernanceProperties {
   @Valid
   private final JobMonitoring jobMonitoring = new JobMonitoring();
 
+  @Valid
+  private final WorkflowMonitoring workflowMonitoring = new WorkflowMonitoring();
+
+  /** 根级监控独立启停；沿用旁路监控调度池，不改变任何编排状态。 */
+  @Data
+  public static class WorkflowMonitoring {
+    private boolean enabled = true;
+
+    @Min(5_000)
+    @Max(600_000)
+    private long pollIntervalMillis = 30_000L;
+
+    @Min(1)
+    @Max(100)
+    private int batchSize = 50;
+  }
+
   /** 作业定义上的独立软 SLA 扫描；与硬超时和旧实例级 SLA 保持明确边界。 */
   @Data
   public static class JobMonitoring {

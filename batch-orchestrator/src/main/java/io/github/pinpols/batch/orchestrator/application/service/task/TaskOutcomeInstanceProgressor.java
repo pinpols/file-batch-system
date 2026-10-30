@@ -173,8 +173,7 @@ public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNode
       instanceStatus = instanceEvent;
       String tenantIdForLog = LogSanitizer.value(command.tenantId());
       Long jobInstanceIdForLog = jobInstance.getId();
-      String previousStatusForLog =
-          LogSanitizer.value(jobInstance.getInstanceStatus());
+      String previousStatusForLog = LogSanitizer.value(jobInstance.getInstanceStatus());
       log.info(
           "promoting stale failed job instance to success after all partitions completed:"
               + " tenantId={} jobInstanceId={} previousStatus={} successPartitions={}",
@@ -262,8 +261,7 @@ public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNode
             .max(Comparator.comparing(
                 node -> Optional.ofNullable(node.getRunSeq()).orElse(0)))
             .orElse(null);
-    boolean linkedNodeIsMissingOrTerminal =
-        EmptyChecks.isNull(linkedNode)
+    boolean linkedNodeIsMissingOrTerminal = EmptyChecks.isNull(linkedNode)
         || WorkflowNodeRunStatus.FAILED.code().equals(linkedNode.getNodeStatus())
         || WorkflowNodeRunStatus.SUCCESS.code().equals(linkedNode.getNodeStatus())
         || WorkflowNodeRunStatus.SKIPPED.code().equals(linkedNode.getNodeStatus());
@@ -273,15 +271,15 @@ public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNode
     JobTaskQuery instanceTaskQuery = JobTaskQuery.ofJobInstance(tenantId, jobInstanceId);
     List<JobTaskEntity> instanceTasks = jobMappers.jobTaskMapper.selectByQuery(instanceTaskQuery);
     JobTaskEntity task = instanceTasks.stream()
-            .filter(candidate -> {
-              String linkedNodeCode = linkedNode.getNodeCode();
-              String candidateNodeCode = TaskOutcomePayloadSupport.payloadStringValue(
-                  candidate.getTaskPayload(), "workflowNodeCode");
-              return linkedNodeCode.equals(candidateNodeCode);
-            })
-            .findFirst()
-            .orElseThrow(() ->
-                BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_progress_conflict"));
+        .filter(candidate -> {
+          String linkedNodeCode = linkedNode.getNodeCode();
+          String candidateNodeCode = TaskOutcomePayloadSupport.payloadStringValue(
+              candidate.getTaskPayload(), "workflowNodeCode");
+          return linkedNodeCode.equals(candidateNodeCode);
+        })
+        .findFirst()
+        .orElseThrow(() ->
+            BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_progress_conflict"));
     TaskOutcomeCommand command = TaskOutcomeCommand.builder()
         .tenantId(tenantId)
         .taskId(task.getId())

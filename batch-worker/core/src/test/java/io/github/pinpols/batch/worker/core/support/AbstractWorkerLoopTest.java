@@ -38,6 +38,7 @@ import org.springframework.mock.env.MockEnvironment;
  * WorkerLifecycleManager - shutdown() 在从未启动时也是安全的
  */
 @ExtendWith(MockitoExtension.class)
+// LENIENT 原因：共享准备提供首次启动的注册结果；仅心跳、未启动关闭等分支不调用启动桩。
 @MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("Worker 主循环基类: 注册幂等, 端口选择, 心跳与关闭委托")
 class AbstractWorkerLoopTest {

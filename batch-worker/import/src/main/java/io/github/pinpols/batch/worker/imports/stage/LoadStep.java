@@ -11,6 +11,7 @@ import io.github.pinpols.batch.common.plugin.ImportLoadContext;
 import io.github.pinpols.batch.common.plugin.ImportLoadPlugin;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -33,10 +34,15 @@ import io.github.pinpols.batch.worker.imports.plugin.GenericJdbcMappedImportLoad
 import io.github.pinpols.batch.worker.imports.plugin.ImportLoadPluginRegistry;
 import io.github.pinpols.batch.worker.imports.stage.support.ImportStageSupport;
 import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -117,18 +123,22 @@ public class LoadStep implements ImportStageStep {
       Path validatedRecordsFile = Path.of(validatedRecordsPath);
       return executeStreaming(context, validatedRecordsFile);
     }
-    return missingPayload(context);
+    return missingPayload();
   }
 
   private ImportStageResult executeStreaming(ImportJobContext context, Path validatedRecordsPath) {
     if (!Files.exists(validatedRecordsPath)) {
-      return missingPayload(context);
+      return missingPayload();
     }
     Map<String, Object> attrs = context.getAttributes();
     try {
+      boolean validatedFileIsEmpty = Files.size(validatedRecordsPath) == 0L;
+      if (validatedFileIsEmpty
+          && numberValue(attrs.get(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT)) > 0) {
+        return missingPayload();
+      }
       boolean hasSkippedRowsAndNoValidatedPayload =
-          numberValue(attrs.get(KEY_SKIPPED_COUNT)) > 0
-              && Files.size(validatedRecordsPath) == 0L;
+          numberValue(attrs.get(KEY_SKIPPED_COUNT)) > 0 && validatedFileIsEmpty;
       if (hasSkippedRowsAndNoValidatedPayload) {
         return markLoaded(context, 0L);
       }
@@ -163,22 +173,19 @@ public class LoadStep implements ImportStageStep {
       int chunkSize = resolveChunkSize(context);
 
       // ADR-038 P2:续跑位点。开关关闭或 pipeline_instance_id 缺失时退化为今天的行为(从 0 跑、不写位点)。
-      CheckpointHandle ckpt = openCheckpoint(context);
+      CheckpointHandle ckpt = openCheckpoint(context, validatedRecordsPath);
       if (ckpt != null && ckpt.completed()) {
-        // 该实例的 LOAD 已整体完成,幂等跳过(防止重派后重复 loadChunk)。
-        deleteQuietly(validatedRecordsPath);
-        Object parsedRecordsPathValue = attrs.get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
-        Path parsedRecordsPath = resolvePath(parsedRecordsPathValue);
-        deleteQuietly(parsedRecordsPath);
-        // 幂等跳过:loaded_count 用已写库记录数,不能用 startLineNo(completed 态 positionMarker 为
-        // null,parseLineNo 返回 0,会把审计 loaded_count 覆写成 0)。
-        return markLoaded(context, ckpt.processedCount());
+        return recoverCompletedCheckpoint(context, validatedRecordsPath, ckpt);
       }
       LoadExecution loadExecution =
           new LoadExecution(context, plugin, loadCtx, ckpt, executionFence);
       long loadedCount = loadValidatedRecords(validatedRecordsPath, chunkSize, loadExecution);
+      requireValidatedRecordCount(attrs, loadedCount);
       if (partitionStageSwapCopy) {
         ((GenericJdbcMappedImportLoadPlugin) plugin).finishPartitionStageSwap(loadCtx);
+      }
+      if (EmptyChecks.isNotNull(ckpt) && loadedCount == 0L) {
+        advanceCheckpoint(ckpt, 0L, 0);
       }
       completeCheckpoint(ckpt);
       commit(context, loadedCount);
@@ -191,6 +198,25 @@ public class LoadStep implements ImportStageStep {
     } catch (Exception ex) {
       return streamingFailure(context, attrs, ex);
     }
+  }
+
+  private ImportStageResult recoverCompletedCheckpoint(
+      ImportJobContext context, Path validatedRecordsPath, CheckpointHandle checkpoint) {
+    Map<String, Object> attrs = context.getAttributes();
+    requireValidatedRecordCount(attrs, checkpoint.processedCount());
+    // 同一上下文状态写入失败后重试时，不重复计入已加载的记录。
+    if (!attrs.containsKey(KEY_LOADED_COUNT)) {
+      long previousSuccessCount = numberValue(attrs.get(ImportRuntimeKeys.SUCCESS_COUNT));
+      attrs.put(
+          ImportRuntimeKeys.SUCCESS_COUNT, previousSuccessCount + checkpoint.processedCount());
+      attrs.put(KEY_LOADED_COUNT, checkpoint.processedCount());
+    }
+    ImportStageResult recovered = markLoaded(context, checkpoint.processedCount());
+    deleteQuietly(validatedRecordsPath);
+    Object parsedRecordsPathValue = attrs.get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
+    Path parsedRecordsPath = resolvePath(parsedRecordsPathValue);
+    deleteQuietly(parsedRecordsPath);
+    return recovered;
   }
 
   /** 失败只清心跳进度，保留暂存文件和既有位点，随后按原错误契约归类与记录诊断。 */
@@ -220,9 +246,8 @@ public class LoadStep implements ImportStageStep {
     }
     ImportStage failureStage = stage();
     String failureCode = configError ? "IMPORT_LOAD_CONFIG_INVALID" : "IMPORT_LOAD_FAILED";
-    String failureMessageKey = configError
-        ? "error.import.load.config_invalid"
-        : "error.import.load.failed";
+    String failureMessageKey =
+        configError ? "error.import.load.config_invalid" : "error.import.load.failed";
     String localizedMessageArgument = ex.getMessage();
     String fallbackMessage = ex.getMessage();
     return ImportStageResult.failure(
@@ -276,6 +301,14 @@ public class LoadStep implements ImportStageStep {
       long currentLineNo,
       long loadedCount)
       throws Exception {
+    Object validatedCount =
+        loadExecution.context().getAttributes().get(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT);
+    if (EmptyChecks.isNotNull(validatedCount)) {
+      long expected = numberValue(validatedCount);
+      if (loadedCount > expected || chunk.size() > expected - loadedCount) {
+        throw new IllegalStateException("Import LOAD chunk exceeds validated record count");
+      }
+    }
     int written = flushChunk(loadExecution, chunk);
     long updatedLoadedCount = loadedCount + written;
     advanceCheckpoint(loadExecution.checkpoint(), currentLineNo, written);
@@ -286,13 +319,31 @@ public class LoadStep implements ImportStageStep {
     return updatedLoadedCount;
   }
 
+  private void requireValidatedRecordCount(Map<String, Object> attributes, long loadedCount) {
+    Object validatedCount = attributes.get(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT);
+    if (EmptyChecks.isNotNull(validatedCount) && numberValue(validatedCount) != loadedCount) {
+      throw new IllegalStateException(
+          "Import LOAD record count does not match validation: expected="
+              + numberValue(validatedCount)
+              + ", loaded="
+              + loadedCount);
+    }
+  }
+
   private int flushChunk(LoadExecution loadExecution, List<Map<String, Object>> chunk)
       throws Exception {
     if (!loadExecution.executionFence().authorizeBeforeSideEffect()) {
       throw new NonIdempotentExecutionFenceException();
     }
-    loadExecution.plugin().loadChunk(loadExecution.loadContext(), chunk);
-    return chunk.size();
+    int handled = loadExecution.plugin().loadChunk(loadExecution.loadContext(), chunk);
+    if (handled != chunk.size()) {
+      throw new IllegalStateException(
+          "Import LOAD plugin did not confirm the entire chunk: expected="
+              + chunk.size()
+              + ", confirmed="
+              + handled);
+    }
+    return handled;
   }
 
   /**
@@ -372,7 +423,8 @@ public class LoadStep implements ImportStageStep {
    * 启动续跑入口:开关关闭 / pipelineInstanceId 缺失 / 多分区任务 → 返回 null,走"无位点"原路径(从 0 跑、不写位点)。 开关开 + 有 instance
    * id → 加载已存位点(可能 empty / completed / 中途位点)。
    */
-  private CheckpointHandle openCheckpoint(ImportJobContext context) {
+  private CheckpointHandle openCheckpoint(ImportJobContext context, Path validatedRecordsPath)
+      throws Exception {
     if (checkpointProperties == null || !checkpointProperties.isEnabled()) {
       return null;
     }
@@ -386,9 +438,20 @@ public class LoadStep implements ImportStageStep {
     }
     String tenantId = context.getTenantId();
     ProcessingPosition pos = positionStore.load(tenantId, pipelineInstanceId, ProcessingStage.LOAD);
-    long startLineNo = parseLineNo(pos.positionMarker());
+    MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
+    try (InputStream input =
+        new DigestInputStream(Files.newInputStream(validatedRecordsPath), digest)) {
+      input.transferTo(OutputStream.nullOutputStream());
+    }
+    String fileDigest = HexFormat.of().formatHex(digest.digest());
+    long startLineNo = parseLineNo(pos, fileDigest);
     return new CheckpointHandle(
-        tenantId, pipelineInstanceId, startLineNo, pos.processedCount(), pos.completed());
+        tenantId,
+        pipelineInstanceId,
+        startLineNo,
+        pos.processedCount(),
+        pos.completed(),
+        fileDigest);
   }
 
   /**
@@ -424,7 +487,7 @@ public class LoadStep implements ImportStageStep {
         handle.tenantId(),
         handle.pipelineInstanceId(),
         ProcessingStage.LOAD,
-        Long.toString(lineNoSeen),
+        lineNoSeen + ":" + handle.fileDigest(),
         chunkSize);
   }
 
@@ -437,17 +500,26 @@ public class LoadStep implements ImportStageStep {
         handle.tenantId(), handle.pipelineInstanceId(), ProcessingStage.LOAD);
   }
 
-  private static long parseLineNo(String marker) {
-    if (marker == null || marker.isBlank()) {
+  private static long parseLineNo(ProcessingPosition position, String fileDigest) {
+    String marker = position.positionMarker();
+    if (EmptyChecks.isNull(marker) && position.processedCount() == 0L && !position.completed()) {
       return 0L;
     }
+    if (EmptyChecks.isNull(marker)) {
+      throw new IllegalStateException("Import LOAD checkpoint has no file identity");
+    }
+    int separator = marker.indexOf(':');
+    if (separator <= 0 || !fileDigest.equals(marker.substring(separator + 1))) {
+      throw new IllegalStateException("Import LOAD checkpoint file identity mismatch");
+    }
     try {
-      String lineNumberText = marker.trim();
-      long lineNumber = Long.parseLong(lineNumberText);
-      return Math.max(0L, lineNumber);
+      long lineNumber = Long.parseLong(marker.substring(0, separator));
+      if (lineNumber < 0L) {
+        throw new IllegalStateException("Import LOAD checkpoint line is invalid");
+      }
+      return lineNumber;
     } catch (NumberFormatException ex) {
-      // 位点损坏(理论上不应发生)— 退化为 0,从头跑(plugin 幂等回退)
-      return 0L;
+      throw new IllegalStateException("Import LOAD checkpoint line is invalid", ex);
     }
   }
 
@@ -459,7 +531,8 @@ public class LoadStep implements ImportStageStep {
       long pipelineInstanceId,
       long startLineNo,
       long processedCount,
-      boolean completed) {}
+      boolean completed,
+      String fileDigest) {}
 
   private record LoadExecution(
       ImportJobContext context,
@@ -538,16 +611,8 @@ public class LoadStep implements ImportStageStep {
     }
   }
 
-  /**
-   * VALIDATED_RECORDS_PATH 缺失或暂存文件不存在时:全部记录被 skip 则视为成功;否则 fail。 (ADR-038 P3:Legacy
-   * customerPayloads 路径已下线,所有写入方必须走 streaming 路径。)
-   */
-  private ImportStageResult missingPayload(ImportJobContext context) {
-    boolean allRecordsWereSkipped =
-        EmptyChecks.isNotNull(context) && numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT)) > 0;
-    if (allRecordsWereSkipped) {
-      return markLoaded(context, 0L);
-    }
+  /** 缺少校验暂存文件时失败；跳过计数本身不能证明没有待加载记录。 */
+  private ImportStageResult missingPayload() {
     return ImportStageResult.failure(
         stage(),
         "IMPORT_LOAD_NO_PAYLOAD",
@@ -671,8 +736,8 @@ public class LoadStep implements ImportStageStep {
     long successCount = numberValue(context.getAttributes().get(ImportRuntimeKeys.SUCCESS_COUNT));
     long skippedCount = numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT));
     long badRecordCount = badRecordCount(context);
-    boolean manualReviewRequired = Boolean.TRUE.equals(
-        context.getAttributes().get(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED));
+    boolean manualReviewRequired =
+        Boolean.TRUE.equals(context.getAttributes().get(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED));
     Map<String, Object> fileStatusMetadata = Map.of(
         KEY_LOADED_COUNT,
         loadedCount,

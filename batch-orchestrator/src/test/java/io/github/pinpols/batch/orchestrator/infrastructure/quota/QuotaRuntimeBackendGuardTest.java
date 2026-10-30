@@ -3,14 +3,21 @@ package io.github.pinpols.batch.orchestrator.infrastructure.quota;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.ApplicationNameProvider;
 import io.github.pinpols.batch.common.config.RuntimeInfrastructureInspector;
 import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
 import io.github.pinpols.batch.orchestrator.config.QuotaProperties;
+import java.util.Locale;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.data.redis.autoconfigure.DataRedisConnectionDetails;
 import org.springframework.mock.env.MockEnvironment;
 
 @DisplayName("配额运行态后端守卫,验证期望后端的标识解析与未知存储类型的快速失败")
@@ -57,12 +64,49 @@ class QuotaRuntimeBackendGuardTest {
         .hasMessageContaining("unsupported batch.quota.runtime-store");
   }
 
+  @ParameterizedTest
+  @CsvSource({
+    "tr-TR,REDIS,redis",
+    "az-AZ,REDIS,redis",
+    "tr-TR,DATABASE,database",
+    "az-AZ,DATABASE,database"
+  })
+  @ResourceLock("java.util.Locale.default")
+  @DisplayName("配额存储类型转换不受主机语言影响，保留合法大写配置")
+  void shouldKeepConfiguredBackendStable_whenDefaultLocaleChanges(
+      String language, String configured, String expected) {
+    QuotaProperties properties = new QuotaProperties();
+    properties.setRuntimeStore(configured);
+    Locale previous = Locale.getDefault();
+    try {
+      Locale.setDefault(Locale.forLanguageTag(language));
+      StatefulBackendGuard.DesiredBackend desired =
+          guard(properties, environment()).desiredBackend();
+      assertThat(desired.backend()).isEqualTo(expected);
+    } finally {
+      Locale.setDefault(previous);
+    }
+  }
+
   private QuotaRuntimeBackendGuard guard(QuotaProperties properties, MockEnvironment environment) {
+    @SuppressWarnings("unchecked")
+    ObjectProvider<DataRedisConnectionDetails> redis = mock(ObjectProvider.class);
+    // 本类验证守卫路由；配置绑定与覆盖优先级由真实Boot上下文测试独立验证。
+    when(redis.getIfAvailable()).thenReturn(new DataRedisConnectionDetails() {
+      @Override
+      public Standalone getStandalone() {
+        return Standalone.of(
+            environment.getProperty(RuntimeInfrastructureInspector.REDIS_HOST_KEY, "localhost"),
+            environment.getProperty(
+                RuntimeInfrastructureInspector.REDIS_PORT_KEY, Integer.class, 6379),
+            environment.getProperty(
+                RuntimeInfrastructureInspector.REDIS_DATABASE_KEY, Integer.class, 0));
+      }
+    });
+    RuntimeInfrastructureInspector inspector =
+        new RuntimeInfrastructureInspector(environment, redis);
     return new QuotaRuntimeBackendGuard(
-        mock(DataSource.class),
-        properties,
-        new ApplicationNameProvider(environment),
-        new RuntimeInfrastructureInspector(environment));
+        mock(DataSource.class), properties, new ApplicationNameProvider(environment), inspector);
   }
 
   private MockEnvironment environment() {

@@ -7,13 +7,13 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.ActiveCalendarRow;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowEdgeUpsertParam;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowNodeUpsertParam;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -56,9 +56,8 @@ public class DefaultSingleJobWorkflowProvisioner {
     if (!Texts.hasText(calendarCode)) {
       calendarCode = DEFAULT_CALENDAR_CODE;
     }
-    Map<String, Object> activeBusinessCalendar =
-        businessCalendarMapper.selectActiveByTenantAndCalendarCode(
-            job.getTenantId(), calendarCode);
+    ActiveCalendarRow activeBusinessCalendar =
+        businessCalendarMapper.selectActiveByTenantAndCalendarCode(job.getTenantId(), calendarCode);
     if (EmptyChecks.isNull(activeBusinessCalendar)) {
       throw BizException.of(
           ResultCode.NOT_FOUND, "error.workflow.calendar_not_found", calendarCode);
@@ -76,17 +75,16 @@ public class DefaultSingleJobWorkflowProvisioner {
   }
 
   private void upsertNode(
-      JobDefinitionEntity job,
-      Long workflowId,
-      String nodeType,
-      int nodeOrder) {
+      JobDefinitionEntity job, Long workflowId, String nodeType, int nodeOrder) {
     // 托管单作业图的节点代码与类型固定一致，避免调用方拼出不一致的控制节点。
-    String nodeName = switch (nodeType) {
-      case START -> "开始";
-      case JOB -> job.getJobName();
-      case END -> "结束";
-      default -> throw new IllegalArgumentException("Unsupported managed workflow node: " + nodeType);
-    };
+    String nodeName =
+        switch (nodeType) {
+          case START -> "开始";
+          case JOB -> job.getJobName();
+          case END -> "结束";
+          default ->
+            throw new IllegalArgumentException("Unsupported managed workflow node: " + nodeType);
+        };
     String relatedJobCode = JOB.equals(nodeType) ? job.getJobCode() : null;
     WorkflowNodeUpsertParam node = new WorkflowNodeUpsertParam();
     node.setTenantId(job.getTenantId());

@@ -1,13 +1,7 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
-import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookSubscriptionInsertParam;
-import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookSubscriptionUpdateParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -17,6 +11,8 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookSubscriptionMapper;
+import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookSubscriptionInsertParam;
+import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookSubscriptionUpdateParam;
 import io.github.pinpols.batch.console.domain.notification.service.ConsoleWebhookService.CreateSubscriptionCommand;
 import io.github.pinpols.batch.console.domain.notification.service.ConsoleWebhookService.UpdateSubscriptionCommand;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
@@ -28,6 +24,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentMatchers;
 
 @DisplayName("订阅管理服务: 增删改查, 名称冲突与事件类型规范化")
 class ConsoleWebhookServiceTest {
@@ -48,7 +45,7 @@ class ConsoleWebhookServiceTest {
             BizException.class,
             ex -> assertThat(ex.getMessageKey()).isEqualTo("error.notification.sla_alert_channel"));
     verify(subscriptionRepository, never())
-        .insert(org.mockito.ArgumentMatchers.any(ConsoleWebhookSubscriptionInsertParam.class));
+        .insert(ArgumentMatchers.any(ConsoleWebhookSubscriptionInsertParam.class));
   }
 
   @DisplayName("更新 Webhook 前拒绝仅用于告警的事件类型")
@@ -69,7 +66,7 @@ class ConsoleWebhookServiceTest {
             BizException.class,
             ex -> assertThat(ex.getMessageKey()).isEqualTo("error.notification.sla_alert_channel"));
     verify(subscriptionRepository, never())
-        .update(org.mockito.ArgumentMatchers.any(ConsoleWebhookSubscriptionUpdateParam.class));
+        .update(ArgumentMatchers.any(ConsoleWebhookSubscriptionUpdateParam.class));
   }
 
   private ConsoleWebhookSubscriptionMapper subscriptionRepository;
@@ -159,16 +156,15 @@ class ConsoleWebhookServiceTest {
 
     assertThat(result.getName()).isEqualTo("hook-new");
     verify(subscriptionRepository)
-        .insert(
-            ConsoleWebhookSubscriptionInsertParam.builder()
-                .tenantId("t1")
-                .name("hook-new")
-                .callbackUrl("https://example.com/hook")
-                .eventTypes("JOB_SUCCESS")
-                .secret("secret")
-                .enabled(true)
-                .operator("admin")
-                .build());
+        .insert(ConsoleWebhookSubscriptionInsertParam.builder()
+            .tenantId("t1")
+            .name("hook-new")
+            .callbackUrl("https://example.com/hook")
+            .eventTypes("JOB_SUCCESS")
+            .secret("secret")
+            .enabled(true)
+            .operator("admin")
+            .build());
   }
 
   @Test
@@ -284,15 +280,14 @@ class ConsoleWebhookServiceTest {
     service.createSubscription(normCmd);
 
     verify(subscriptionRepository)
-        .insert(
-            ConsoleWebhookSubscriptionInsertParam.builder()
-                .tenantId("t1")
-                .name("hook-norm")
-                .callbackUrl("https://example.com/hook")
-                .eventTypes("JOB-SUCCESS,JOB_FAILED")
-                .secret("secret")
-                .enabled(true)
-                .operator("admin")
-                .build());
+        .insert(ConsoleWebhookSubscriptionInsertParam.builder()
+            .tenantId("t1")
+            .name("hook-norm")
+            .callbackUrl("https://example.com/hook")
+            .eventTypes("JOB-SUCCESS,JOB_FAILED")
+            .secret("secret")
+            .enabled(true)
+            .operator("admin")
+            .build());
   }
 }

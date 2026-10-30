@@ -1,3 +1,5 @@
+> 历史原始记录：本轮恢复保留，正文中的结论、参数、状态和操作步骤仅适用于原日期/基线。提炼方法不替代原始证据；当前事实须按[文档治理](../../standards/document-governance.md)重新核实。本轮未执行原测试或扫描。
+
 # Backlog: EXPORT 分区不切数据导致重复/丢数据(治本设计)
 
 > 状态:**已实现**(分支 `feature/export-partition-slice`;5 个实现 task + 分片完整性 IT 全部通过)。补齐 import 早有的分片切数据能力。

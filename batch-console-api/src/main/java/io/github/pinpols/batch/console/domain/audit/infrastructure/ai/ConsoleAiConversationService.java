@@ -1,16 +1,5 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
-import lombok.Builder;
-
-import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentBindingInput;
-
-import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiTurnStartInput;
-
-import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiConversationAllocateTurnNoParam;
-import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationPageByOwnerQuery;
-import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationTurnsQuery;
-
-
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageResponse;
@@ -21,9 +10,14 @@ import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentBindingInput;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiTurnStartInput;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiConversationEntity;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiTurnEntity;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiConversationMapper;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiConversationAllocateTurnNoParam;
+import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationPageByOwnerQuery;
+import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationTurnsQuery;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -108,15 +102,15 @@ public class ConsoleAiConversationService {
         tenantId, conversationId, properties.getPersistence().getMaxHistoryTurns());
     Collections.reverse(history);
     history = boundHistory(history, properties.getPersistence().getMaxHistoryChars());
-    ConsoleAiConversationAllocateTurnNoParam consoleAiConversationAllocateTurnNoParam = ConsoleAiConversationAllocateTurnNoParam.builder()
-        .tenantId(tenantId)
-        .conversationId(conversationId)
-        .ownerUserId(ownerUserId)
-        .expiresAt(expiresAt)
-        .contextVersion(contextVersion)
-        .build();
-    Long turnNo =
-        mapper.allocateTurnNo(consoleAiConversationAllocateTurnNoParam);
+    ConsoleAiConversationAllocateTurnNoParam consoleAiConversationAllocateTurnNoParam =
+        ConsoleAiConversationAllocateTurnNoParam.builder()
+            .tenantId(tenantId)
+            .conversationId(conversationId)
+            .ownerUserId(ownerUserId)
+            .expiresAt(expiresAt)
+            .contextVersion(contextVersion)
+            .build();
+    Long turnNo = mapper.allocateTurnNo(consoleAiConversationAllocateTurnNoParam);
     if (EmptyChecks.isNull(turnNo)) {
       throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey());
     }
@@ -209,15 +203,16 @@ public class ConsoleAiConversationService {
     CursorPosition position = decodeCursor(cursor);
     mapper.setTenantContext(tenantId);
     int limit = conversationPageLimit(requestedLimit);
-    ConsoleAiConversationPageByOwnerQuery consoleAiConversationPageByOwnerQuery = ConsoleAiConversationPageByOwnerQuery.builder()
-        .tenantId(tenantId)
-        .ownerUserId(ownerUserId)
-        .beforeUpdatedAt(position.updatedAt())
-        .beforeId(position.id())
-        .limit(limit + 1)
-        .build();
-    List<ConsoleAiConversationEntity> rows = mapper.selectPageByOwner(
-        consoleAiConversationPageByOwnerQuery);
+    ConsoleAiConversationPageByOwnerQuery consoleAiConversationPageByOwnerQuery =
+        ConsoleAiConversationPageByOwnerQuery.builder()
+            .tenantId(tenantId)
+            .ownerUserId(ownerUserId)
+            .beforeUpdatedAt(position.updatedAt())
+            .beforeId(position.id())
+            .limit(limit + 1)
+            .build();
+    List<ConsoleAiConversationEntity> rows =
+        mapper.selectPageByOwner(consoleAiConversationPageByOwnerQuery);
     boolean hasMore = rows.size() > limit;
     List<ConsoleAiConversationEntity> visible = rows.subList(0, Math.min(rows.size(), limit));
     List<ConversationView> items = visible.stream()
@@ -283,15 +278,15 @@ public class ConsoleAiConversationService {
     }
     int atLeastOneTurn = Math.max(requestedLimit, 1);
     int limit = Math.min(atLeastOneTurn, 100);
-    ConsoleAiConversationTurnsQuery consoleAiConversationTurnsQuery = ConsoleAiConversationTurnsQuery.builder()
-        .tenantId(tenantId)
-        .conversationId(conversationId)
-        .ownerUserId(ownerUserId)
-        .beforeTurnNo(beforeTurnNo)
-        .limit(limit)
-        .build();
-    List<ConsoleAiTurnEntity> turns =
-        mapper.selectTurns(consoleAiConversationTurnsQuery);
+    ConsoleAiConversationTurnsQuery consoleAiConversationTurnsQuery =
+        ConsoleAiConversationTurnsQuery.builder()
+            .tenantId(tenantId)
+            .conversationId(conversationId)
+            .ownerUserId(ownerUserId)
+            .beforeTurnNo(beforeTurnNo)
+            .limit(limit)
+            .build();
+    List<ConsoleAiTurnEntity> turns = mapper.selectTurns(consoleAiConversationTurnsQuery);
     return turns.stream().map(this::toTurnView).toList();
   }
 
@@ -439,6 +434,7 @@ public class ConsoleAiConversationService {
 
   private record CursorPosition(Instant updatedAt, String id) {}
 
+  @Builder
   public record TurnView(
       long turnNo,
       UUID clientTurnId,

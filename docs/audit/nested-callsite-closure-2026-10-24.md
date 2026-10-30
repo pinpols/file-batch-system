@@ -8,8 +8,8 @@
 
 工作树与分支：
 
-- 后端：`/Users/dengchao/.codex/worktrees/workflow-daily-integration/file-batch-system`，`feature/workflow-daily-integration`，HEAD `ee01e97515b0`。
-- 前端：`/Users/dengchao/.codex/worktrees/workflow-daily-integration/batch-console`，`feature/workflow-daily-integration`，HEAD `662d254e2f8b`。
+- 后端：`~/.codex/worktrees/workflow-daily-integration/file-batch-system`，`feature/workflow-daily-integration`，HEAD `ee01e97515b0`。
+- 前端：`~/.codex/worktrees/workflow-daily-integration/batch-console`，`feature/workflow-daily-integration`，HEAD `662d254e2f8b`。
 - 本次没有创建分支/工作树，没有操作 main，也没有暂存、提交或清理既有改动。表内记录基于本轮开始前的独立源码副本对比，不能把当前工作树其他差异归入本轮。
 
 ## 全量口径与旧统计更正

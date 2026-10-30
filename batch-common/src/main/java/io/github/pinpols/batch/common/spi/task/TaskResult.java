@@ -15,7 +15,7 @@ import java.util.Objects;
  *   <li>业务自定义:按需要约定 key
  * </ul>
  *
- * <p>{@code error} 仅在失败时非空,框架会把它转成 i18n LocalizedError 透传到 orchestrator 持久化。
+ * <p>{@code error} 可在失败时携带根因，供 Worker 边界生成脱敏摘要；不直接透传异常对象到 orchestrator。
  *
  * @param success 成功 / 失败
  * @param message 描述信息(成功 = 摘要;失败 = 错误文本)

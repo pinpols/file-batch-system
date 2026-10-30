@@ -17,8 +17,13 @@ import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.mapper.LineageEvidenceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
+import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -30,6 +35,7 @@ public class LineageEvidenceService {
   private static final String FILE_RECORD_REF_PREFIX = "file_record:";
   private static final String HOT = "HOT";
   private static final String ARCHIVE = "ARCHIVE";
+  private static final String HOT_AND_ARCHIVE = "HOT_AND_ARCHIVE";
   private static final String NONE = "NONE";
 
   private final ResultVersionMapper resultVersionMapper;
@@ -75,25 +81,42 @@ public class LineageEvidenceService {
           version.tenantId(), version.jobInstanceId());
       pipelineSource = ARCHIVE;
     }
-    List<FileRecord> files = lineageEvidenceMapper.selectFileRecords(
-        version.tenantId(), version.jobInstanceId(), payloadFileId);
-    String fileSource = HOT;
-    if (EmptyChecks.isEmpty(files)) {
-      files = lineageEvidenceMapper.selectArchivedFileRecords(
-          version.tenantId(), version.jobInstanceId(), payloadFileId);
-      fileSource = ARCHIVE;
-    }
-    files = nullToEmpty(files);
+    List<FileRecord> hotFiles = nullToEmpty(lineageEvidenceMapper.selectFileRecords(
+        version.tenantId(), version.jobInstanceId(), payloadFileId));
+    List<FileRecord> archivedFiles = nullToEmpty(lineageEvidenceMapper.selectArchivedFileRecords(
+        version.tenantId(), version.jobInstanceId(), payloadFileId));
+    TreeMap<Long, FileRecord> filesById = new TreeMap<>();
+    boolean archivedJob = EmptyChecks.isNotNull(jobInstance) && ARCHIVE.equals(jobInstanceSource);
+    List<FileRecord> preferredFiles = archivedJob ? archivedFiles : hotFiles;
+    List<FileRecord> otherFiles = archivedJob ? hotFiles : archivedFiles;
+    preferredFiles.forEach(file -> filesById.put(file.id(), file));
+    int preferredCount = filesById.size();
+    otherFiles.forEach(file -> filesById.putIfAbsent(file.id(), file));
+    boolean otherFilesUsed = filesById.size() > preferredCount;
+    String preferredSource = archivedJob ? ARCHIVE : HOT;
+    String otherSource = archivedJob ? HOT : ARCHIVE;
+    String fileSource =
+        preferredCount == 0 ? otherSource : otherFilesUsed ? HOT_AND_ARCHIVE : preferredSource;
+    List<FileRecord> files = List.copyOf(filesById.values());
     List<Long> fileIds =
         files.stream().map(FileRecord::id).filter(Objects::nonNull).toList();
-    List<DispatchRecord> dispatches = lineageEvidenceMapper.selectDispatchRecords(
-        version.tenantId(), version.jobInstanceId(), fileIds);
-    String dispatchSource = HOT;
-    if (EmptyChecks.isEmpty(dispatches)) {
-      dispatches = lineageEvidenceMapper.selectArchivedDispatchRecords(
-          version.tenantId(), version.jobInstanceId(), fileIds);
-      dispatchSource = ARCHIVE;
-    }
+    List<DispatchRecord> hotDispatches = nullToEmpty(lineageEvidenceMapper.selectDispatchRecords(
+        version.tenantId(), version.jobInstanceId(), fileIds));
+    List<DispatchRecord> archivedDispatches =
+        nullToEmpty(lineageEvidenceMapper.selectArchivedDispatchRecords(
+            version.tenantId(), version.jobInstanceId(), fileIds));
+    TreeMap<Long, DispatchRecord> dispatchesById = new TreeMap<>(Comparator.reverseOrder());
+    hotDispatches.forEach(dispatch -> dispatchesById.put(dispatch.id(), dispatch));
+    archivedDispatches.forEach(dispatch -> dispatchesById.putIfAbsent(dispatch.id(), dispatch));
+    List<DispatchRecord> dispatches =
+        dispatchesById.values().stream().limit(100).toList();
+    Set<Long> hotDispatchIds =
+        hotDispatches.stream().map(DispatchRecord::id).collect(Collectors.toSet());
+    boolean hotDispatchUsed =
+        dispatches.stream().anyMatch(dispatch -> hotDispatchIds.contains(dispatch.id()));
+    boolean archiveDispatchUsed =
+        dispatches.stream().anyMatch(dispatch -> !hotDispatchIds.contains(dispatch.id()));
+    String dispatchSource = hotDispatchUsed ? archiveDispatchUsed ? HOT_AND_ARCHIVE : HOT : ARCHIVE;
     pipelines = nullToEmpty(pipelines);
     dispatches = nullToEmpty(dispatches);
     EvidenceCoverageInput coverageInput = new EvidenceCoverageInput(
@@ -115,21 +138,22 @@ public class LineageEvidenceService {
   }
 
   private static ResultVersion resultVersion(ResultVersionEntity v) {
-    return new ResultVersion(
-        v.id(),
-        v.tenantId(),
-        v.businessKey(),
-        v.versionNo(),
-        v.jobInstanceId(),
-        v.status(),
-        v.effectiveAt(),
-        v.deactivatedAt(),
-        v.payloadStorage(),
-        v.payloadRef(),
-        v.generatedAt(),
-        v.generatedBy(),
-        v.promotionPolicy(),
-        v.dqGateStatus());
+    return ResultVersion.builder()
+        .id(v.id())
+        .tenantId(v.tenantId())
+        .businessKey(v.businessKey())
+        .versionNo(v.versionNo())
+        .jobInstanceId(v.jobInstanceId())
+        .status(v.status())
+        .effectiveAt(v.effectiveAt())
+        .deactivatedAt(v.deactivatedAt())
+        .payloadStorage(v.payloadStorage())
+        .payloadRef(v.payloadRef())
+        .generatedAt(v.generatedAt())
+        .generatedBy(v.generatedBy())
+        .promotionPolicy(v.promotionPolicy())
+        .dqGateStatus(v.dqGateStatus())
+        .build();
   }
 
   private static LineageCoverage coverage(EvidenceCoverageInput input) {
@@ -153,23 +177,19 @@ public class LineageEvidenceService {
         || (jobFound && ARCHIVE.equals(input.jobInstanceSource()))
         || (!EmptyChecks.isEmpty(input.pipelineInstances())
             && ARCHIVE.equals(input.pipelineSource()))
-        || (!EmptyChecks.isEmpty(input.fileRecords()) && ARCHIVE.equals(input.fileSource()))
+        || (!EmptyChecks.isEmpty(input.fileRecords())
+            && (ARCHIVE.equals(input.fileSource()) || HOT_AND_ARCHIVE.equals(input.fileSource())))
         || (!EmptyChecks.isEmpty(input.dispatchRecords())
-            && ARCHIVE.equals(input.dispatchSource()));
+            && (ARCHIVE.equals(input.dispatchSource())
+                || HOT_AND_ARCHIVE.equals(input.dispatchSource())));
     String jobSource = jobFound ? input.jobInstanceSource() : NONE;
-    String pipelineSource = EmptyChecks.isEmpty(input.pipelineInstances())
-        ? NONE
-        : input.pipelineSource();
+    String pipelineSource =
+        EmptyChecks.isEmpty(input.pipelineInstances()) ? NONE : input.pipelineSource();
     String fileSource = EmptyChecks.isEmpty(input.fileRecords()) ? NONE : input.fileSource();
-    String dispatchSource = EmptyChecks.isEmpty(input.dispatchRecords())
-        ? NONE
-        : input.dispatchSource();
+    String dispatchSource =
+        EmptyChecks.isEmpty(input.dispatchRecords()) ? NONE : input.dispatchSource();
     LineageSources sources = new LineageSources(
-        input.resultVersionSource(),
-        jobSource,
-        pipelineSource,
-        fileSource,
-        dispatchSource);
+        input.resultVersionSource(), jobSource, pipelineSource, fileSource, dispatchSource);
     return new LineageCoverage(
         archiveUsed ? "BFS_HOT_AND_ARCHIVE" : "BFS_HOT_TABLES",
         input.version().id(),
@@ -191,8 +211,7 @@ public class LineageEvidenceService {
     if (resultVersionHasNoFileRecordReference) {
       return null;
     }
-    String payloadReferenceSuffix =
-        version.payloadRef().substring(FILE_RECORD_REF_PREFIX.length());
+    String payloadReferenceSuffix = version.payloadRef().substring(FILE_RECORD_REF_PREFIX.length());
     String id = payloadReferenceSuffix.trim();
     try {
       return Long.valueOf(id);
@@ -205,6 +224,7 @@ public class LineageEvidenceService {
     return EmptyChecks.isNull(rows) ? List.of() : rows;
   }
 
+  @Builder
   private record EvidenceCoverageInput(
       ResultVersionEntity version,
       String resultVersionSource,

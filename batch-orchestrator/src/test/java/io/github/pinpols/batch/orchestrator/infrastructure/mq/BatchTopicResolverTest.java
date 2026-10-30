@@ -2,8 +2,8 @@ package io.github.pinpols.batch.orchestrator.infrastructure.mq;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
+import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.config.BatchMqTopicsProperties;
 import io.github.pinpols.batch.orchestrator.config.MqRoutingProperties;
@@ -82,8 +82,8 @@ class BatchTopicResolverTest {
   @Test
   @DisplayName("命名空间统一前缀基础主题和租户分流主题")
   void shouldPrefixNamespacedTopicBeforeAppendingTenantSuffix() {
-    BatchTopicResolver namespacedResolver = new BatchTopicResolver(
-        topics, routing, new BatchKafkaTopicNamespace("run-a"));
+    BatchTopicResolver namespacedResolver =
+        new BatchTopicResolver(topics, routing, new BatchKafkaTopicNamespace("run-a"));
     routing.setMode(MqRoutingProperties.Mode.TENANT);
 
     assertThat(namespacedResolver.resolve("EXPORT", message("ta", "NORMAL")))

@@ -22,13 +22,17 @@
 5. **保留 Job Instance、分区、任务和 Pipeline 阶段运行记录**。统一用户的运行入口，同时保留执行、恢复和审计所需的细粒度事实。
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  JD[作业定义菜单：执行配置] <-->|关联、查看、复用| WD[工作流定义菜单：组合与调度]
-  WD --> WF[Workflow Run：整体运行]
-  WF --> NR[节点运行：引用 Job]
-  NR --> JI[Job Instance：分区与任务]
-  JI --> BT[按 Job 类型选择系统内置 Pipeline]
-  BT --> PI[Pipeline Instance 与阶段运行记录]
+  W[Workflow 定义：组合与日程] -. JOB 节点引用 .-> J[Job 定义：执行配置]
+  W --> R[WorkflowRun：根运行]
+  R --> N[WorkflowNodeRun]
+  N -->|到达 JOB 节点| I[独立 JobInstance]
+  J -. 冻结参数 .-> I
+  I --> T{执行类型}
+  T -->|IMPORT / EXPORT / PROCESS / DISPATCH| P[系统固定 Pipeline 与阶段记录]
+  T -->|ATOMIC| A[独立原子任务执行器]
+  T -->|GENERAL / 自定义类型| E[对应执行契约]
 ```
 
 单作业为 `START → Job → END`；串行为 `START → A → B → END`；并行为 `START → A、B → 汇合 → END`。只有显式子工作流才具有自己的流程边界，普通 Job 节点直接执行，不递归运行自己的单作业 Workflow。

@@ -133,8 +133,8 @@ class SqlTemplateExportSqlValidatorTest {
     props.setForbidSelectStar(false);
     SqlTemplateExportSqlValidator v = new SqlTemplateExportSqlValidator(props);
 
-    // Unqualified table (no schema prefix) must be rejected — prevents bypassing the whitelist
-    // by referencing internal tables like batch.job_task without a schema prefix
+    // 必须拒绝未限定 schema 的表名，防止绕过允许列表
+    // 并通过省略 schema 前缀引用 batch.job_task 等内部表。
     assertThatThrownBy(() ->
             v.validate("SELECT id FROM unqualified_table WHERE tenant_id = :tenantId AND batch_no ="
                 + " :batchNo"))
@@ -287,8 +287,7 @@ class SqlTemplateExportSqlValidatorTest {
   @Test
   @DisplayName("合法查询返回去除首尾空白后的语句")
   void validate_returnsNormalizedSqlForValidQuery() {
-    String sql =
-        """
+    String sql = """
           SELECT id, name FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo\s\s\
     """;
     String result = validatorWithDefaults().validate(sql);
@@ -402,8 +401,7 @@ class SqlTemplateExportSqlValidatorTest {
   @Test
   @DisplayName("分组子句里出现危险函数时被拒绝")
   void validate_rejectsForbiddenFunctionInGroupBy() {
-    String sql =
-        """
+    String sql = """
         SELECT max(c1) AS m FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo\s\
         GROUP BY pg_terminate_backend(pid)\
         """;

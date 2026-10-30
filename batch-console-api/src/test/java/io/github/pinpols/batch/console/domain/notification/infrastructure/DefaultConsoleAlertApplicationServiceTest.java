@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.console.domain.notification.infrastructure;
 
-import io.github.pinpols.batch.console.domain.notification.query.AlertEventActiveAlertsInAmGroupCountQuery;
-
-
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,7 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("Console 告警关闭与 Alertmanager 活动组解除")
+@DisplayName("Console 告警关闭与 Alertmanager 单实体解除")
 class DefaultConsoleAlertApplicationServiceTest {
 
   private static final String TENANT_ID = "tenant-a";
@@ -51,37 +48,19 @@ class DefaultConsoleAlertApplicationServiceTest {
     when(alertEventMapper.updateStatus(TENANT_ID, ALERT_ID, "CLOSED")).thenReturn(1);
   }
 
-  @DisplayName("同组仍有 OPEN 告警时不发送整组解除")
+  @DisplayName("同组另一实体仍 OPEN 时，仅按当前指纹解除已关闭实体")
   @Test
-  void shouldKeepAmGroupOpenWhenAnotherMatchingAlertIsOpen() {
-    when(alertEventMapper.countActiveAlertsInAmGroup(
-            AlertEventActiveAlertsInAmGroupCountQuery.builder()
-                .tenantId(TENANT_ID)
-                .serviceName("batch-orchestrator")
-                .alertType("JOB_RUNNING_TOO_LONG")
-                .severity("WARN")
-                .excludingId(ALERT_ID)
-                .build()))
-        .thenReturn(1L);
-
+  void shouldResolveClosedEntityWhenAnotherMatchingAlertIsOpen() {
     service.close(ALERT_ID, request(), "close-1");
 
-    verify(alertmanagerSilenceBridge, never()).resolve(ArgumentMatchers.any());
+    verify(alertmanagerSilenceBridge).resolve(activeAlert());
+    verify(alertEventMapper, never()).countActiveAlertsInAmGroup(ArgumentMatchers.any());
   }
 
   @DisplayName("同组最后一条 OPEN 告警关闭后发送解除")
   @Test
   void shouldResolveAmGroupWhenNoMatchingAlertRemainsOpen() {
     AlertEventEntity alert = activeAlert();
-    when(alertEventMapper.countActiveAlertsInAmGroup(
-            AlertEventActiveAlertsInAmGroupCountQuery.builder()
-                .tenantId(TENANT_ID)
-                .serviceName("batch-orchestrator")
-                .alertType("JOB_RUNNING_TOO_LONG")
-                .severity("WARN")
-                .excludingId(ALERT_ID)
-                .build()))
-        .thenReturn(0L);
 
     service.close(ALERT_ID, request(), "close-2");
 

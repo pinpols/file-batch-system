@@ -11,4 +11,6 @@ public record FilePipelineProgressStepView(
     String stepStatus,
     Long rowsProcessed,
     Long totalRowsHint,
-    Instant lastHeartbeatAt) {}
+    Instant lastHeartbeatAt,
+    Integer runSeq,
+    String errorCode) {}

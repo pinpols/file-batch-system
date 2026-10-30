@@ -155,9 +155,9 @@ public class PreprocessStep implements ImportStageStep {
         // 文件束每片绑定整份独立文件，只允许普通单文件分片使用字节范围下载。
         boolean sourceSupportsDirectRangeSlice =
             EmptyChecks.isNull(attrs.get(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID))
-            && objectSource.supportsRangeRead()
-            && ImportPreprocessObjectSource.rangeSliceEligible(
-                importPayload, templateConfig, partitionNo, partitionCount, directCharset);
+                && objectSource.supportsRangeRead()
+                && ImportPreprocessObjectSource.rangeSliceEligible(
+                    importPayload, templateConfig, partitionNo, partitionCount, directCharset);
         if (sourceSupportsDirectRangeSlice) {
           return objectSource.streamObjectRangeToSpool(
               context,

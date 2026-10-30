@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -49,6 +50,20 @@ class SystemPipelineStepConfigurationTest {
         .containsEntry("source", "job")
         .containsEntry("encoding", "UTF-8");
     assertThat(configured.get(1).stepParams()).containsEntry("mode", "UPSERT");
+  }
+
+  @Test
+  @DisplayName("显式空值覆盖阶段默认参数且结果只读")
+  void shouldPreserveExplicitNullInReadOnlyStageParameters() {
+    Map<String, Object> stageParams = new LinkedHashMap<>();
+    stageParams.put("source", null);
+
+    var configured =
+        SystemPipelineStepConfiguration.apply(TEMPLATES, Map.of("RECEIVE", stageParams));
+
+    assertThat(configured.getFirst().stepParams()).containsEntry("source", null);
+    assertThatThrownBy(() -> configured.getFirst().stepParams().put("source", "changed"))
+        .isInstanceOf(UnsupportedOperationException.class);
   }
 
   @Test

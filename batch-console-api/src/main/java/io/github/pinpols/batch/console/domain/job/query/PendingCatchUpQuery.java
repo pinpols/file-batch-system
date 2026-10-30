@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.domain.job.query;
 
+import io.github.pinpols.batch.common.model.PageRequest;
 import lombok.Builder;
 
-import io.github.pinpols.batch.common.model.PageRequest;
 /**
  * catch-up 待审列表查询条件(7 字段)。字段多且多为可选过滤项,构造一律走 {@link #builder()} 具名赋值, 禁内联多 null 位参(QF-2 守护 {@code
  * QueryRecordConstructionConventionTest})。

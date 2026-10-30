@@ -190,12 +190,12 @@ public class StoreStep implements ExportStageStep {
     context.getAttributes().put(PipelineRuntimeKeys.FILE_SIZE_BYTES, record.get("file_size_bytes"));
     Map<?, ?> metadata = ExportArtifactIdentity.metadata(record);
     for (String key : new String[] {
-        "contentEncryptionEnabled",
-        "encryptionKeyRef",
-        "encryptionObjectVersion",
-        KEY_DOWNLOAD_REQUIRES_APPROVAL
-      }) {
-        if (metadata.containsKey(key)) context.getAttributes().put(key, metadata.get(key));
+      "contentEncryptionEnabled",
+      "encryptionKeyRef",
+      "encryptionObjectVersion",
+      KEY_DOWNLOAD_REQUIRES_APPROVAL
+    }) {
+      if (metadata.containsKey(key)) context.getAttributes().put(key, metadata.get(key));
     }
     context.getAttributes().put(PipelineRuntimeKeys.OBJECT_NAME, objectName);
     context.getAttributes().put(PipelineRuntimeKeys.EXPORT_STORE_COMMITTED, Boolean.TRUE);
@@ -363,9 +363,17 @@ public class StoreStep implements ExportStageStep {
           Map<String, Object> checksumAttributes = context.getAttributes();
           String fileChecksum = sha256Hex(generatedFile);
           checksumAttributes.put(PipelineRuntimeKeys.CHECKSUM_VALUE, fileChecksum);
+          Files.deleteIfExists(generatedFile);
         }
-      } catch (Exception ignored) {
-        SwallowedExceptionLogger.info(StoreStep.class, "catch:dry_run_sha_failure", ignored);
+      } catch (Exception ex) {
+        SwallowedExceptionLogger.warn(StoreStep.class, "catch:dry_run_store_failure", ex);
+        return ExportStageResult.failure(
+            stage(),
+            "EXPORT_STORE_FAILED",
+            "error.export.store.failed",
+            new Object[] {ex.getMessage()},
+            ex.getMessage(),
+            ERROR_OBJECT_MAPPER);
       }
     }
     if (context != null) {

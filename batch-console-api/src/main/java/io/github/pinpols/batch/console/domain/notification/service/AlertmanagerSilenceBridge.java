@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
-import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
@@ -195,7 +195,8 @@ public class AlertmanagerSilenceBridge {
       String serializedBody = JsonUtils.toJson(body);
       Duration connectTimeout = Duration.ofMillis(props.getConnectTimeoutMillis());
       Duration responseTimeout = Duration.ofMillis(props.getTimeoutMillis());
-      OutboundHttpContent httpContent = new OutboundHttpContent(serializedBody, "application/json; charset=utf-8");
+      OutboundHttpContent httpContent =
+          new OutboundHttpContent(serializedBody, "application/json; charset=utf-8");
       OutboundHttpRequest request = OutboundHttpRequest.post(
           uri,
           Map.of(),

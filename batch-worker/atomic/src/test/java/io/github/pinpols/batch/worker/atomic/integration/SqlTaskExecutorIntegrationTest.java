@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
 import io.github.pinpols.batch.worker.atomic.BatchWorkerAtomicApplication;
@@ -57,6 +58,29 @@ class SqlTaskExecutorIntegrationTest extends AbstractIntegrationTest {
     // 真结果集:42 应出现在 output
     assertThat(r.output()).isNotNull();
     assertThat(r.output().toString()).contains("42");
+  }
+
+  @Test
+  @DisplayName("JSONB 查询结果在报告 JSON 中保持业务对象")
+  void shouldSerializeJsonbResultAsBusinessObject() {
+    TaskResult result =
+        executor().execute(ctx(Map.of("sql", "SELECT '{\"answer\":42}'::jsonb AS payload")));
+
+    assertThat(result.success()).isTrue();
+    Map<?, ?> decoded = JsonUtils.fromJson(JsonUtils.toJson(result.output()), Map.class);
+    assertThat(decoded.get("lastResultSet"))
+        .isEqualTo(List.of(Map.of("payload", Map.of("answer", 42))));
+  }
+
+  @Test
+  @DisplayName("数据库数组结果在报告 JSON 中保持数组内容")
+  void shouldSerializeArrayResultAsJsonArray() {
+    TaskResult result = executor().execute(ctx(Map.of("sql", "SELECT ARRAY[1,2,3] AS numbers")));
+
+    assertThat(result.success()).isTrue();
+    Map<?, ?> decoded = JsonUtils.fromJson(JsonUtils.toJson(result.output()), Map.class);
+    assertThat(decoded.get("lastResultSet"))
+        .isEqualTo(List.of(Map.of("numbers", List.of(1, 2, 3))));
   }
 
   @Test

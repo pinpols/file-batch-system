@@ -2,8 +2,8 @@ package io.github.pinpols.batch.e2e;
 
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.e2e.apps.E2eAtomicApplication;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.junit.jupiter.api.Tag;
+import org.springframework.boot.test.context.SpringBootTest;
 
 @E2eSpringBootTest(
     classes = E2eAtomicApplication.class,
@@ -14,7 +14,8 @@ import org.junit.jupiter.api.Tag;
     })
 @Tag("critical")
 @SuppressWarnings("PMD.TestClassWithoutTestCases")
-class AtomicWorkerKafkaNamespaceIsolationE2eIT extends AbstractWorkerKafkaNamespaceIsolationE2eIT {
+class AtomicWorkerKafkaNamespaceIsolationE2eIT
+    extends AbstractWorkerKafkaNamespaceIsolationSupport {
 
   @Override
   protected String legacyTopic() {

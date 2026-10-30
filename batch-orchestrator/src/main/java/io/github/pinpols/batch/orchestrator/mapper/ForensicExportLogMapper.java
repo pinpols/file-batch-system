@@ -1,9 +1,7 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.param.ForensicExportLogMarkCompletedParam;
-
-
 import io.github.pinpols.batch.orchestrator.domain.entity.ForensicExportLogEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.ForensicExportLogMarkCompletedParam;
 import java.time.Instant;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -43,8 +41,7 @@ public interface ForensicExportLogMapper {
       @Param("tenantId") String tenantId, @Param("limit") int limit);
 
   /** 完成时回写 status=COMPLETED + storage_path + sha256 + row_counts + completed_at。 */
-  default int markCompleted(
-      ForensicExportLogMarkCompletedParam parameters) {
+  default int markCompleted(ForensicExportLogMarkCompletedParam parameters) {
     String tenantId = parameters.tenantId();
     String exportId = parameters.exportId();
     String storagePath = parameters.storagePath();

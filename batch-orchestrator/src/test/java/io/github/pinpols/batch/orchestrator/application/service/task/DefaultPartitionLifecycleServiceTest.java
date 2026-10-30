@@ -1,9 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
-import io.github.pinpols.batch.orchestrator.domain.param.JobPartitionPromoteStatusParam;
-import io.github.pinpols.batch.orchestrator.domain.param.JobTaskPromoteStatusParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -26,6 +22,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.ClaimPartitionParam;
+import io.github.pinpols.batch.orchestrator.domain.param.JobPartitionPromoteStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkPartitionStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseParam;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -40,9 +37,11 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 
 /**
@@ -58,6 +57,7 @@ import org.springframework.dao.DataIntegrityViolationException;
  * 事务行为,留给集成测覆盖。
  */
 @DisplayName("分区生命周期服务: 认领, 续租, 过期回收与派发放行口径")
+@ExtendWith(MockitoExtension.class)
 class DefaultPartitionLifecycleServiceTest {
 
   @Mock
@@ -76,12 +76,8 @@ class DefaultPartitionLifecycleServiceTest {
 
   @BeforeEach
   void setUp() {
-    MockitoAnnotations.openMocks(this);
     service = new DefaultPartitionLifecycleService(
         jobPartitionMapper, jobTaskMapper, jobInstanceMapper, relatedFileReferenceValidator);
-    JobInstanceEntity instance = new JobInstanceEntity();
-    instance.setBizDate(LocalDate.of(2026, 10, 19));
-    when(jobInstanceMapper.selectById(anyString(), anyLong())).thenReturn(instance);
   }
 
   // ===== claimPartition =====
@@ -89,6 +85,7 @@ class DefaultPartitionLifecycleServiceTest {
   @Test
   @DisplayName("createPartitions: 缺失同租户父实例时在批量写入前失败")
   void shouldRejectMissingParentInstanceBeforeBatchInsert() {
+    when(jobInstanceMapper.selectById(anyString(), anyLong())).thenReturn(parentInstance());
     SchedulePlan plan = new SchedulePlan();
     plan.setTenantId("tenant-a");
     plan.setPartitions(List.of(new SchedulePlan.PartitionPlan()));
@@ -103,6 +100,7 @@ class DefaultPartitionLifecycleServiceTest {
   @Test
   @DisplayName("createPartitions: 父实例并发变更的精确外键拒绝映射为稳定冲突")
   void shouldMapConcurrentParentReferenceViolationToConflict() {
+    when(jobInstanceMapper.selectById(anyString(), anyLong())).thenReturn(parentInstance());
     SchedulePlan plan = new SchedulePlan();
     plan.setTenantId("tenant-a");
     SchedulePlan.PartitionPlan partition = new SchedulePlan.PartitionPlan();
@@ -123,6 +121,7 @@ class DefaultPartitionLifecycleServiceTest {
   @Test
   @DisplayName("createPartitions: 源文件并发删除的精确外键拒绝映射为文件不存在")
   void shouldMapConcurrentSourceFileReferenceViolationToNotFound() {
+    when(jobInstanceMapper.selectById(anyString(), anyLong())).thenReturn(parentInstance());
     SchedulePlan plan = new SchedulePlan();
     plan.setTenantId("tenant-a");
     SchedulePlan.PartitionPlan partition = new SchedulePlan.PartitionPlan();
@@ -144,6 +143,7 @@ class DefaultPartitionLifecycleServiceTest {
   @Test
   @DisplayName("createPartitions: 其他数据库约束错误不伪装成父实例冲突")
   void shouldPreserveUnrelatedDatabaseConstraintFailure() {
+    when(jobInstanceMapper.selectById(anyString(), anyLong())).thenReturn(parentInstance());
     SchedulePlan plan = new SchedulePlan();
     plan.setTenantId("tenant-a");
     SchedulePlan.PartitionPlan partition = new SchedulePlan.PartitionPlan();
@@ -160,6 +160,7 @@ class DefaultPartitionLifecycleServiceTest {
   @Test
   @DisplayName("createPartitions: 外租户源文件使整批分区在写入前失败")
   void shouldRejectForeignTenantSourceFileBeforeBatchInsert() {
+    when(jobInstanceMapper.selectById(anyString(), anyLong())).thenReturn(parentInstance());
     SchedulePlan plan = new SchedulePlan();
     plan.setTenantId("tenant-a");
     SchedulePlan.PartitionPlan partition = new SchedulePlan.PartitionPlan();
@@ -312,9 +313,15 @@ class DefaultPartitionLifecycleServiceTest {
     assertThat(service.releaseForDispatch(partition(1L, 0L), null, "x", "y")).isFalse();
     assertThat(service.releaseForDispatch(null, task(1L, 0L), "x", "y")).isFalse();
     verify(jobPartitionMapper, never())
-        .promoteStatus(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.fromStatus() != null && parameters.toStatus() != null));
+        .promoteStatus(ArgumentMatchers.argThat(parameters -> parameters != null
+            && parameters.tenantId() != null
+            && parameters.fromStatus() != null
+            && parameters.toStatus() != null));
     verify(jobTaskMapper, never())
-        .promoteStatus(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.fromStatus() != null && parameters.toStatus() != null));
+        .promoteStatus(ArgumentMatchers.argThat(parameters -> parameters != null
+            && parameters.tenantId() != null
+            && parameters.fromStatus() != null
+            && parameters.toStatus() != null));
   }
 
   @Test
@@ -323,21 +330,23 @@ class DefaultPartitionLifecycleServiceTest {
     JobPartitionEntity p = partition(1L, 0L);
     p.setTenantId("ta");
     JobTaskEntity t = task(1L, 0L);
-    when(jobPartitionMapper.promoteStatus(
-            JobPartitionPromoteStatusParam.builder()
-                .tenantId("ta")
-                .id(1L)
-                .fromStatus(PartitionStatus.WAITING.code())
-                .toStatus(PartitionStatus.READY.code())
-                .expectedVersion(0L)
-                .build()))
+    when(jobPartitionMapper.promoteStatus(JobPartitionPromoteStatusParam.builder()
+            .tenantId("ta")
+            .id(1L)
+            .fromStatus(PartitionStatus.WAITING.code())
+            .toStatus(PartitionStatus.READY.code())
+            .expectedVersion(0L)
+            .build()))
         .thenReturn(0);
 
     boolean ok =
         service.releaseForDispatch(p, t, PartitionStatus.WAITING.code(), TaskStatus.CREATED.code());
     assertThat(ok).isFalse();
     verify(jobTaskMapper, never())
-        .promoteStatus(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.fromStatus() != null && parameters.toStatus() != null));
+        .promoteStatus(ArgumentMatchers.argThat(parameters -> parameters != null
+            && parameters.tenantId() != null
+            && parameters.fromStatus() != null
+            && parameters.toStatus() != null));
   }
 
   @Test
@@ -347,10 +356,15 @@ class DefaultPartitionLifecycleServiceTest {
     p.setTenantId("ta");
     JobTaskEntity t = task(1L, 0L);
     t.setTenantId("ta");
-    when(jobPartitionMapper.promoteStatus(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.fromStatus() != null && parameters.toStatus() != null)))
+    when(jobPartitionMapper.promoteStatus(ArgumentMatchers.argThat(parameters -> parameters != null
+            && parameters.tenantId() != null
+            && parameters.fromStatus() != null
+            && parameters.toStatus() != null)))
         .thenReturn(1);
-    when(jobTaskMapper.promoteStatus(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.fromStatus() != null && parameters.toStatus() != null)))
+    when(jobTaskMapper.promoteStatus(ArgumentMatchers.argThat(parameters -> parameters != null
+            && parameters.tenantId() != null
+            && parameters.fromStatus() != null
+            && parameters.toStatus() != null)))
         .thenReturn(1);
 
     boolean ok =
@@ -366,6 +380,7 @@ class DefaultPartitionLifecycleServiceTest {
   @DisplayName("createPartitions: input_snapshot 固化 partition plan contract")
   @SuppressWarnings("unchecked")
   void shouldPersistPartitionPlanContract_whenCreatingPartitions() {
+    when(jobInstanceMapper.selectById(anyString(), anyLong())).thenReturn(parentInstance());
     SchedulePlan plan = new SchedulePlan();
     plan.setTenantId("ta");
     plan.setJobCode("JOB_A");
@@ -411,6 +426,7 @@ class DefaultPartitionLifecycleServiceTest {
   @DisplayName("createPartitions: 分发束按分区固化各自的下游渠道")
   @SuppressWarnings("unchecked")
   void shouldPersistPartitionChannel_whenCreatingDispatchBundle() {
+    when(jobInstanceMapper.selectById(anyString(), anyLong())).thenReturn(parentInstance());
     SchedulePlan plan = new SchedulePlan();
     plan.setTenantId("ta");
     plan.setJobCode("DISPATCH_BUNDLE");
@@ -446,5 +462,11 @@ class DefaultPartitionLifecycleServiceTest {
     t.setId(id);
     t.setVersion(version);
     return t;
+  }
+
+  private JobInstanceEntity parentInstance() {
+    JobInstanceEntity instance = new JobInstanceEntity();
+    instance.setBizDate(LocalDate.of(2026, 10, 19));
+    return instance;
   }
 }

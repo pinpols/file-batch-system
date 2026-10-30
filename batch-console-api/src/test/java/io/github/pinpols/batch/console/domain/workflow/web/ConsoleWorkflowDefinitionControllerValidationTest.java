@@ -5,8 +5,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -19,12 +19,14 @@ import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefin
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatchers;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -36,12 +38,18 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
  * 未被解析,异常数据可直通入库。本测试保证嵌套校验链不破。
  */
 @DisplayName("工作流定义控制器入参校验: 编码与嵌套节点、连线非法时均拒绝请求")
+@ExtendWith(MockitoExtension.class)
 class ConsoleWorkflowDefinitionControllerValidationTest {
 
-  private final WorkflowDefinitionService service = mock(WorkflowDefinitionService.class);
-  private final WorkflowDesignLockService lockService = mock(WorkflowDesignLockService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private WorkflowDefinitionService service;
+
+  @Mock
+  private WorkflowDesignLockService lockService;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -52,9 +60,6 @@ class ConsoleWorkflowDefinitionControllerValidationTest {
 
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "ta", "tester", null, "127.0.0.1"));
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
@@ -69,8 +74,8 @@ class ConsoleWorkflowDefinitionControllerValidationTest {
   @Test
   @DisplayName("触发结果核对缺少原幂等键时拒绝，不创建新的触发")
   void shouldRejectReceiptLookup_whenIdempotencyKeyIsMissing() throws Exception {
-    mockMvc.perform(get("/api/console/workflow-definitions/23/trigger-status")
-            .param("tenantId", "ta"))
+    mockMvc
+        .perform(get("/api/console/workflow-definitions/23/trigger-status").param("tenantId", "ta"))
         .andExpect(status().isBadRequest());
   }
 
@@ -94,7 +99,23 @@ class ConsoleWorkflowDefinitionControllerValidationTest {
     // 顶层 workflowCode 合法,但 nodes[0].nodeCode 含空格 → @Valid 应下钻 → 400
     String body = "{\"tenantId\":\"ta\",\"workflowCode\":\"wf_ok\",\"workflowName\":\"wf\","
         + "\"workflowType\":\"DAG\",\"nodes\":["
-        + "{\"nodeCode\":\"bad node\",\"nodeType\":\"TASK\"}],\"edges\":[]}";
+        + "{\"nodeCode\":\"bad node\",\"nodeName\":\"name\",\"nodeType\":\"TASK\"}],\"edges\":[]}";
+    mockMvc
+        .perform(post("/api/console/workflow-definitions")
+            .contentType(APPLICATION_JSON)
+            .content(body))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    verify(service, never()).create(ArgumentMatchers.any());
+  }
+
+  @Test
+  @DisplayName("节点名称缺失时在写入之前返回参数错误")
+  void shouldRejectMissingNodeName_whenCreatingWorkflow() throws Exception {
+    String body = """
+        {"tenantId":"ta","workflowCode":"wf_ok","workflowName":"wf",
+         "workflowType":"DAG","nodes":[{"nodeCode":"start","nodeType":"START"}]}
+        """;
     mockMvc
         .perform(post("/api/console/workflow-definitions")
             .contentType(APPLICATION_JSON)
@@ -136,8 +157,8 @@ class ConsoleWorkflowDefinitionControllerValidationTest {
           "workflowName": "wf",
           "workflowType": "DAG",
           "nodes": [
-            {"nodeCode": "start", "nodeType": "START"},
-            {"nodeCode": "end", "nodeType": "END"}
+            {"nodeCode": "start", "nodeName": "start", "nodeType": "START"},
+            {"nodeCode": "end", "nodeName": "end", "nodeType": "END"}
           ],
           "edges": [{"fromNodeCode": "start", "toNodeCode": "end"}]
         }

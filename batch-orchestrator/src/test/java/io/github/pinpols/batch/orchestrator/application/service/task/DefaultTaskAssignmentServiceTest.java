@@ -11,6 +11,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import io.github.pinpols.batch.common.dto.DependencyResultReference;
 import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import io.github.pinpols.batch.common.enums.TaskStatus;
@@ -43,6 +46,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 
 /**
  * 守护 worker 认领 / 续租关键路径:
@@ -427,6 +431,44 @@ class DefaultTaskAssignmentServiceTest {
     assertThat(config.partitionNo()).isEqualTo(3);
     assertThat(config.partitionCount()).isEqualTo(4);
     assertThat(config.partitionInvocationId()).isEqualTo("inv-1");
+  }
+
+  @Test
+  @DisplayName("损坏分片快照回退时不把原始异常及凭据写入日志")
+  void shouldNotLogRawMalformedPartitionSnapshot_whenLoadingEffectiveConfig() {
+    JobTaskEntity task = task(103L, 1L, TaskStatus.RUNNING.code());
+    task.setJobInstanceId(13L);
+    task.setJobPartitionId(50L);
+    when(jobTaskMapper.selectById("ta", 103L)).thenReturn(task);
+
+    JobInstanceEntity instance = new JobInstanceEntity();
+    instance.setId(13L);
+    instance.setJobDefinitionId(20L);
+    when(jobInstanceMapper.selectById("ta", 13L)).thenReturn(instance);
+
+    JobPartitionEntity partition = new JobPartitionEntity();
+    partition.setId(50L);
+    partition.setInputSnapshot("{\"password\":\"probe-secret\",");
+    when(jobPartitionMapper.selectById("ta", 50L)).thenReturn(partition);
+
+    Logger logger = (Logger) LoggerFactory.getLogger(DefaultTaskAssignmentService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      EffectiveTaskConfig config = service.loadEffectiveConfig("ta", 103L);
+
+      assertThat(config.partitionPlanVersion()).isNull();
+      assertThat(appender.list).anySatisfy(event -> {
+        assertThat(event.getFormattedMessage())
+            .contains("partitionId=50")
+            .doesNotContain("probe-secret");
+        assertThat(event.getThrowableProxy()).isNull();
+      });
+    } finally {
+      logger.detachAppender(appender);
+      appender.stop();
+    }
   }
 
   @Test

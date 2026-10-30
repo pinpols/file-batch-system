@@ -123,6 +123,8 @@ Dispatch 作业从参数读取 `channelCode`，兼容 `dispatchChannelCode`、`t
 `DOWNSTREAM_CHANNEL_UNAVAILABLE`，不写新的 Kafka 派发消息。Dispatch Worker 的独立探针把状态恢复为
 `HEALTHY` 后，WAITING scheduler 才小批量释放。
 
+普通分发在调度和 Worker 中按 `channelCode`、`dispatchChannelCode`、`targetChannelCode` 的顺序选取首个非空渠道；文件束分区的 `bundleTargetRef` 优先于这些普通字段。
+
 健康表没有该渠道的记录时允许首次探测性执行；首次失败由现有渠道熔断和健康仓储建立快照。这样既不会让
 新渠道因“从未执行”永久卡住，也不会在已知故障期间持续放大流量。
 
@@ -163,3 +165,7 @@ CPU/IO、Kafka lag 和 Worker 饱和度。`tasks/s` 只适用于同一任务重�
 | 部署 | `helm/batch-platform/templates/worker-resource-pool.yaml` |
 | 操作手册 | [`heavy-workload-operations.md`](../runbook/heavy-workload-operations.md) |
 | 本轮验证 | [`heavy-workload-guarantees-2026-09-14.md`](../verifications/heavy-workload-guarantees-2026-09-14.md) |
+
+## 文件 IO 和并发模型的变更条件
+
+同步流式读取本身不是待整改项。改为异步 IO、Reactive 或虚拟线程前，先测量等待时间、CPU、磁盘/网络、队列和连接占用，证明收益并保持背压、取消、租约、RLS 与资源关闭语义。不能用更换线程模型扩大数据库连接或远端并发；大文件验证还应证明内存随 chunk/page 上限增长，而非随整文件大小增长。运行时版本及开关以当前兼容合同为准。

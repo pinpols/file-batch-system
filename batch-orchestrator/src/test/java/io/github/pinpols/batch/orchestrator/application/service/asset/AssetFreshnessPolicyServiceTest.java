@@ -162,12 +162,12 @@ class AssetFreshnessPolicyServiceTest {
             "t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
         .thenReturn(false);
 
-    // act: re-scan the same still-stale asset (mirrors the ~60s scheduled scan re-firing)
+    // 执行：重新扫描同一仍过期的资产（模拟约 60 秒后定时扫描再次触发）。
     int firstEmitted = service.scanDuePolicies(10);
     int secondEmitted = service.scanDuePolicies(10);
 
-    // assert: each scan emits, but the dedup fingerprint is IDENTICAL so the downstream
-    // UPSERT merges instead of creating duplicate alert rows.
+    // 断言：每次扫描都会产生事件，但去重指纹完全一致，因此下游
+    // 通过 UPSERT 合并记录，不会创建重复告警。
     assertThat(firstEmitted).isEqualTo(1);
     assertThat(secondEmitted).isEqualTo(1);
     ArgumentCaptor<AlertEmitRequest> captor = ArgumentCaptor.forClass(AlertEmitRequest.class);
@@ -176,13 +176,13 @@ class AssetFreshnessPolicyServiceTest {
     String firstKey = emissions.get(0).resourceKey();
     String secondKey = emissions.get(1).resourceKey();
     assertThat(firstKey).isEqualTo(secondKey);
-    // deterministic composite of the stable identifiers: tenant:assetCode:bizDate
+    // 由稳定标识 tenant:assetCode:bizDate 构成的确定性组合值。
     assertThat(firstKey)
         .isEqualTo("t1:JOB_A:2026-06-30")
         .contains("t1")
         .contains("JOB_A")
         .contains("2026-06-30");
-    // alertType is likewise stable across re-scans (same dedup class)
+    // 重复扫描时 alertType 也保持稳定（属于同一去重类别）。
     assertThat(emissions.get(0).alertType()).isEqualTo(emissions.get(1).alertType());
   }
 

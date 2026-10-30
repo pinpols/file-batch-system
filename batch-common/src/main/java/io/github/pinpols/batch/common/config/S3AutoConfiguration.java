@@ -88,12 +88,10 @@ public class S3AutoConfiguration {
         AwsBasicCredentials.create(p.getAccessKey(), p.getSecretKey());
     StaticCredentialsProvider credentialsProvider =
         StaticCredentialsProvider.create(basicCredentials);
-    S3Presigner.Builder presignerBuilder = S3Presigner.builder()
-        .endpointOverride(endpoint)
-        .credentialsProvider(credentialsProvider);
-    S3Configuration serviceConfiguration = S3Configuration.builder()
-        .pathStyleAccessEnabled(p.isPathStyleEnabled())
-        .build();
+    S3Presigner.Builder presignerBuilder =
+        S3Presigner.builder().endpointOverride(endpoint).credentialsProvider(credentialsProvider);
+    S3Configuration serviceConfiguration =
+        S3Configuration.builder().pathStyleAccessEnabled(p.isPathStyleEnabled()).build();
     return presignerBuilder
         .serviceConfiguration(serviceConfiguration)
         .region(Texts.hasText(p.getRegion()) ? Region.of(p.getRegion()) : Region.US_EAST_1)

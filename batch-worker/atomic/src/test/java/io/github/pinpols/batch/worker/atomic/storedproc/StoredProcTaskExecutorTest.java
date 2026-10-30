@@ -3,12 +3,14 @@ package io.github.pinpols.batch.worker.atomic.storedproc;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import java.math.BigInteger;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -23,10 +25,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.BeanFactory;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 /** {@link StoredProcTaskExecutor} 单测 — validation / 类型映射 / mocked CALL 执行。 */
 @DisplayName("存储过程执行器: 参数校验, 类型映射与调用执行")
+@ExtendWith(OutputCaptureExtension.class)
 class StoredProcTaskExecutorTest {
 
   private StoredProcExecutorProperties props;
@@ -47,6 +53,32 @@ class StoredProcTaskExecutorTest {
 
   private TaskContext ctxWithParams(Map<String, Object> params) {
     return new TaskContext("t1", "job-1", "ti-1", "w-1", params, Map.of());
+  }
+
+  @Test
+  @DisplayName("无效语句超时不得回退默认值并执行存储过程")
+  void shouldRejectNonIntegralOrNonNumericStatementTimeout() throws Exception {
+    for (Object value : List.of("1", 1.5d, new BigInteger("18446744073709551617"))) {
+      TaskResult result = executor.execute(
+          ctxWithParams(Map.of("procedureName", "batch.p", "statementTimeoutSeconds", value)));
+      assertThat(result.output())
+          .as("timeout=%s", value)
+          .containsEntry("error_code", "CONFIG_INVALID");
+    }
+    verify(ds, never()).getConnection();
+  }
+
+  @Test
+  @DisplayName("存储过程连接抛运行时异常时日志不得输出原始凭据")
+  void shouldMaskUnexpectedConnectionErrorInLog(CapturedOutput output) throws Exception {
+    when(ds.getConnection()).thenThrow(new RuntimeException("connect token=probe-secret"));
+
+    TaskResult result = executor.execute(ctxWithParams(Map.of("procedureName", "batch.p")));
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.output()).containsEntry("error_code", "EXECUTION_FAILED");
+    assertThat(result.error()).hasMessageContaining("probe-secret");
+    assertThat(output.getOut()).doesNotContain("probe-secret");
   }
 
   // ─── Validation ──────────────────────────────────────────────────────────────
@@ -184,7 +216,7 @@ class StoredProcTaskExecutorTest {
   class MockedExecution {
 
     @Test
-    @DisplayName("未限定模式的过程应先查元数据, 再按无参调用形式兜底")
+    @DisplayName("未限定过程名使用默认模式查询元数据并调用")
     void shouldCheckUnqualifiedMetadata_whenProcedureNotSchemaQualified() throws Exception {
       Connection conn = mock(Connection.class);
       CallableStatement cs = mock(CallableStatement.class);
@@ -200,7 +232,9 @@ class StoredProcTaskExecutorTest {
       TaskResult result = executor.execute(ctxWithParams(Map.of("procedureName", "p")));
 
       assertThat(result.success()).isTrue();
-      final String sqlPSql = "{call p()}";
+      verify(metadata).setString(1, "p");
+      verify(metadata).setString(2, "batch");
+      final String sqlPSql = "{call batch.p()}";
       verify(conn).prepareCall(sqlPSql);
     }
 

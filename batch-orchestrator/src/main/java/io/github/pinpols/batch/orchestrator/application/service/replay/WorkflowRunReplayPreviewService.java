@@ -5,13 +5,13 @@ import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.ApprovalCommandStatus;
 import io.github.pinpols.batch.common.enums.ConfigVersionPolicy;
-import io.github.pinpols.batch.common.enums.DispatchTaskKeys;
 import io.github.pinpols.batch.common.enums.DictEnum;
+import io.github.pinpols.batch.common.enums.DispatchTaskKeys;
 import io.github.pinpols.batch.common.enums.JobType;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.enums.ResultVersionPolicy;
 import io.github.pinpols.batch.common.enums.ReplayOperationStatus;
 import io.github.pinpols.batch.common.enums.ReplayOperationType;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.enums.ResultVersionPolicy;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
@@ -22,7 +22,6 @@ import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.replay.WorkflowRunReplayPreviewResponse.EdgePreview;
 import io.github.pinpols.batch.orchestrator.application.service.replay.WorkflowRunReplayPreviewResponse.NodePreview;
@@ -31,17 +30,17 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.CrossDa
 import io.github.pinpols.batch.orchestrator.domain.entity.ApprovalCommandEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationPreviewTokenEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationPreviewTokenEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.ReplayOperationStartParam;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.ApprovalCommandMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
-import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationPreviewTokenMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper;
+import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationPreviewTokenMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.orchestrator.service.DispatchChannelSnapshotService;
@@ -53,9 +52,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -109,7 +108,8 @@ public class WorkflowRunReplayPreviewService {
     String protectedSnapshot = secretPayloadProtector.protect(prepared.snapshotPayload());
     tokenMapper.setTenantContext(command.tenantId());
     ReplayOperationPreviewTokenMapper previewTokenMapper = tokenMapper;
-    ReplayOperationPreviewTokenEntity.ReplayOperationPreviewTokenEntityBuilder previewTokenBuilder = ReplayOperationPreviewTokenEntity.builder();
+    ReplayOperationPreviewTokenEntity.ReplayOperationPreviewTokenEntityBuilder previewTokenBuilder =
+        ReplayOperationPreviewTokenEntity.builder();
     previewTokenBuilder.tenantId(command.tenantId());
     previewTokenBuilder.tokenHash(tokenHash);
     previewTokenBuilder.operationKey(operationKey.toString());
@@ -137,7 +137,8 @@ public class WorkflowRunReplayPreviewService {
     tokenMapper.setTenantContext(command.tenantId());
     String operationKey = command.operationKey().toString();
     String requestHash = requestHash(command, policies);
-    ReplayOperationEntity existing = operationMapper.selectByIdentity(command.tenantId(), operationKey);
+    ReplayOperationEntity existing =
+        operationMapper.selectByIdentity(command.tenantId(), operationKey);
     if (EmptyChecks.isNotNull(existing)) {
       if (requestHash.equals(existing.requestHash())
           && ReplayOperationType.WORKFLOW_RUN.code().equals(existing.operationType())) {
@@ -173,11 +174,12 @@ public class WorkflowRunReplayPreviewService {
       throw previewChanged();
     }
 
-    PreparedPreview fresh = preparePreview(
-        command, command.operationKey(), command.previewToken(), token.expiresAt());
+    PreparedPreview fresh =
+        preparePreview(command, command.operationKey(), command.previewToken(), token.expiresAt());
     String freshSnapshotHash = sha256(fresh.snapshotPayload());
     if (!freshSnapshotHash.equals(token.snapshotHash())
-        || fresh.response().nodes().stream().anyMatch(node -> !EmptyChecks.isEmpty(Objects.requireNonNull(node.blockers())))) {
+        || fresh.response().nodes().stream()
+            .anyMatch(node -> !EmptyChecks.isEmpty(Objects.requireNonNull(node.blockers())))) {
       throw previewChanged();
     }
     if (tokenMapper.consume(command.tenantId(), tokenHash, now) != 1) {
@@ -187,17 +189,19 @@ public class WorkflowRunReplayPreviewService {
     Source source = fresh.source();
     ReplayOperationEntity.ReplayOperationEntityBuilder operationBuilder =
         ReplayOperationEntity.builder()
-        .tenantId(command.tenantId())
-        .operationKey(operationKey)
-        .operationType(ReplayOperationType.WORKFLOW_RUN.code())
-        .status(ReplayOperationStatus.PENDING_APPROVAL.code())
-        .calendarCode(source.executionSnapshot().workflowCalendarCode())
-        .scope("FULL_WORKFLOW")
-        .executionMode("REPLAY")
-        .candidateSource("EXACT_SOURCE_WORKFLOW_RUN");
-    Map<String, Object> scopePayload = Map.of("sourceWorkflowRunId", source.run().getId());
+            .tenantId(command.tenantId())
+            .operationKey(operationKey)
+            .operationType(ReplayOperationType.WORKFLOW_RUN.code())
+            .status(ReplayOperationStatus.PENDING_APPROVAL.code())
+            .calendarCode(source.executionSnapshot().workflowCalendarCode())
+            .scope("FULL_WORKFLOW")
+            .executionMode("REPLAY")
+            .candidateSource("EXACT_SOURCE_WORKFLOW_RUN");
+    Map<String, Object> scopePayload =
+        Map.of("sourceWorkflowRunId", source.run().getId());
     String scopePayloadJson = JsonUtils.toJson(scopePayload);
-    operationBuilder.scopePayload(scopePayloadJson)
+    operationBuilder
+        .scopePayload(scopePayloadJson)
         .resultPolicy(policies.result().code())
         .configVersionPolicy(policies.config().code())
         .configVersion(command.configVersion())
@@ -219,9 +223,10 @@ public class WorkflowRunReplayPreviewService {
         .updatedAt(now)
         .build();
     operationMapper.insert(operation);
-    ReplayOperationEntity persisted = operationMapper.selectByIdentity(command.tenantId(), operationKey);
-    boolean previewOperationWasNotLinked =
-        EmptyChecks.isNull(persisted) || EmptyChecks.isNull(persisted.id())
+    ReplayOperationEntity persisted =
+        operationMapper.selectByIdentity(command.tenantId(), operationKey);
+    boolean previewOperationWasNotLinked = EmptyChecks.isNull(persisted)
+        || EmptyChecks.isNull(persisted.id())
         || tokenMapper.linkOperation(command.tenantId(), tokenHash, persisted.id()) != 1;
     if (previewOperationWasNotLinked) {
       throw BizException.of(
@@ -261,8 +266,7 @@ public class WorkflowRunReplayPreviewService {
 
   @Transactional
   public ReplayOperationEntity approve(String tenantId, Long operationId, String approver) {
-    boolean approvalRequestIsIncomplete =
-        EmptyChecks.isBlank(tenantId)
+    boolean approvalRequestIsIncomplete = EmptyChecks.isBlank(tenantId)
         || EmptyChecks.isNull(operationId)
         || operationId <= 0
         || EmptyChecks.isBlank(approver);
@@ -336,8 +340,8 @@ public class WorkflowRunReplayPreviewService {
     if (triggerRequestMapper.insert(triggerRequest) != 1) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.trigger_target_mismatch");
     }
-    TriggerRequestEntity accepted = triggerRequestMapper.selectByTenantAndRequestId(
-        tenantId, requestId);
+    TriggerRequestEntity accepted =
+        triggerRequestMapper.selectByTenantAndRequestId(tenantId, requestId);
     boolean acceptedReplayLaunchIsIncomplete = EmptyChecks.isNull(accepted)
         || EmptyChecks.isNull(accepted.getId())
         || EmptyChecks.isBlank(accepted.getLaunchPayload());
@@ -353,22 +357,22 @@ public class WorkflowRunReplayPreviewService {
     if (launchRequestDoesNotMatchReplayIdentity) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.trigger_target_mismatch");
     }
-    LaunchEnvelope envelope = LaunchEnvelope.of(frozen, accepted.getDedupKey(), accepted.getCreatedAt());
+    LaunchEnvelope envelope =
+        LaunchEnvelope.of(frozen, accepted.getDedupKey(), accepted.getCreatedAt());
     DomainEvent.Builder launchEventBuilder = DomainEvent.builder(tenantId)
         .aggregate("TRIGGER_REQUEST", accepted.getId())
         .type("WORKFLOW_LAUNCH")
         .key(dedupKey + ":launch");
     Map<String, Object> launchEventPayload = JsonUtils.toMap(envelope);
-    DomainEvent launchEvent = launchEventBuilder
-        .payload(launchEventPayload)
-        .traceId(frozen.traceId())
-        .build();
+    DomainEvent launchEvent =
+        launchEventBuilder.payload(launchEventPayload).traceId(frozen.traceId()).build();
     domainEventPublisher.publish(launchEvent);
     return operationMapper.selectById(tenantId, operationId);
   }
 
   /** operationKey 已作为审批来源键唯一持久化，批准与拒绝都读取同一真实决策。 */
-  private ApprovalCommandEntity requireBoundWorkflowRunReplayApproval(ReplayOperationEntity operation) {
+  private ApprovalCommandEntity requireBoundWorkflowRunReplayApproval(
+      ReplayOperationEntity operation) {
     if (EmptyChecks.isBlank(operation.operationKey())) {
       throw invalidApprovalDecision();
     }
@@ -387,11 +391,13 @@ public class WorkflowRunReplayPreviewService {
     }
     WorkflowRunReplayApprovalPayload payload;
     try {
-      payload = JsonUtils.fromJsonStrict(approval.getPayloadJson(), WorkflowRunReplayApprovalPayload.class);
+      payload = JsonUtils.fromJsonStrict(
+          approval.getPayloadJson(), WorkflowRunReplayApprovalPayload.class);
     } catch (IllegalArgumentException invalidPayload) {
       throw invalidApprovalDecision();
     }
-    if (payload == null || !operation.tenantId().equals(payload.tenantId())
+    if (EmptyChecks.isNull(payload)
+        || !operation.tenantId().equals(payload.tenantId())
         || !operation.id().equals(payload.replayOperationId())) {
       throw invalidApprovalDecision();
     }
@@ -411,10 +417,7 @@ public class WorkflowRunReplayPreviewService {
   }
 
   private PreparedPreview preparePreview(
-      WorkflowRunReplayCommand command,
-      UUID operationKey,
-      String rawToken,
-      Instant expiresAt) {
+      WorkflowRunReplayCommand command, UUID operationKey, String rawToken, Instant expiresAt) {
     Policies policies = validate(command);
     Source source = sourceResolver.resolve(command.tenantId(), command.workflowRunId());
     if (EmptyChecks.isNull(source.run().getBizDate())
@@ -422,7 +425,8 @@ public class WorkflowRunReplayPreviewService {
       throw BizException.of(
           ResultCode.STATE_CONFLICT, "error.workflow.replay_source_snapshot_invalid");
     }
-    List<WorkflowNodeRunEntity> sourceNodeRuns = nodeRunMapper.selectByWorkflowRunId(command.workflowRunId());
+    List<WorkflowNodeRunEntity> sourceNodeRuns =
+        nodeRunMapper.selectByWorkflowRunId(command.workflowRunId());
     Set<String> unknownNodes = unknownOutcomeNodes(command, sourceNodeRuns);
     Map<String, WorkflowNodeRunEntity> latestNodeRunsByNode = latestNodeRuns(sourceNodeRuns);
     SelectedConfigurations selectedConfigurations = new SelectedConfigurations(
@@ -446,31 +450,30 @@ public class WorkflowRunReplayPreviewService {
         .map(edge -> new EdgePreview(
             edge.getFromNodeCode(), edge.getToNodeCode(), edge.getEdgeType(), edge.getEnabled()))
         .toList();
-    WorkflowRunReplayPreviewResponse response = new WorkflowRunReplayPreviewResponse(
-        command.tenantId(),
-        source.run().getId(),
-        source.executionSnapshot().workflowDefinitionId(),
-        source.executionSnapshot().workflowVersion(),
-        source.run().getBizDate(),
-        source.executionSnapshot().workflowCalendarCode(),
-        source.run().getDataIntervalStart(),
-        source.run().getDataIntervalEnd(),
-        policies.result().code(),
-        policies.config().code(),
-        command.configVersion(),
-        operationKey,
-        rawToken,
-        expiresAt,
-        nodes,
-        edges);
+    WorkflowRunReplayPreviewResponse response = WorkflowRunReplayPreviewResponse.builder()
+        .tenantId(command.tenantId())
+        .sourceWorkflowRunId(source.run().getId())
+        .workflowDefinitionId(source.executionSnapshot().workflowDefinitionId())
+        .workflowVersion(source.executionSnapshot().workflowVersion())
+        .bizDate(source.run().getBizDate())
+        .calendarCode(source.executionSnapshot().workflowCalendarCode())
+        .dataIntervalStart(source.run().getDataIntervalStart())
+        .dataIntervalEnd(source.run().getDataIntervalEnd())
+        .resultPolicy(policies.result().code())
+        .configVersionPolicy(policies.config().code())
+        .configVersion(command.configVersion())
+        .operationKey(operationKey)
+        .previewToken(rawToken)
+        .expiresAt(expiresAt)
+        .nodes(nodes)
+        .edges(edges)
+        .build();
     String payload = snapshotPayload(source, response, selectedConfigurations);
     return new PreparedPreview(response, source, policies, payload);
   }
 
   private String snapshotPayload(
-      Source source,
-      WorkflowRunReplayPreviewResponse response,
-      SelectedConfigurations selected) {
+      Source source, WorkflowRunReplayPreviewResponse response, SelectedConfigurations selected) {
     Map<String, Object> payload = new LinkedHashMap<>();
     Map<String, Object> previewSnapshot = new LinkedHashMap<>();
     previewSnapshot.put("tenantId", response.tenantId());
@@ -563,8 +566,10 @@ public class WorkflowRunReplayPreviewService {
               Boolean.TRUE.equals(context.source().run().getDryRun()));
       if (dependencyResults.isResolved()
           && EmptyChecks.isNotEmpty(dependencyResults.getResultVersionIdsByAlias())) {
-        context.selectedConfigurations().selectedCrossDayDependencyResultVersionIds().put(
-            node.getNodeCode(), dependencyResults.getResultVersionIdsByAlias());
+        context
+            .selectedConfigurations()
+            .selectedCrossDayDependencyResultVersionIds()
+            .put(node.getNodeCode(), dependencyResults.getResultVersionIdsByAlias());
       } else {
         blockers.add(Blocker.DEPENDENCY_RESULTS_NOT_PINNED.name());
       }
@@ -620,16 +625,17 @@ public class WorkflowRunReplayPreviewService {
       JobDefinitionEntity definition,
       PreviewContext context,
       List<String> blockers) {
-    Map<String, Object> params = effectiveJobParams(node, definition, context.source().rootParams());
+    Map<String, Object> params =
+        effectiveJobParams(node, definition, context.source().rootParams());
     if (EmptyChecks.isNull(params)) {
       return null;
     }
     JobType jobType = DictEnum.fromCode(JobType.class, definition.jobType());
     if (isFileTemplateJob(jobType)) {
-      Map<String, Object> originalParams = context.policies().config()
-              == ConfigVersionPolicy.USE_ORIGINAL_CONFIG
-          ? originalEffectiveParams(node, definition, context)
-          : null;
+      Map<String, Object> originalParams =
+          context.policies().config() == ConfigVersionPolicy.USE_ORIGINAL_CONFIG
+              ? originalEffectiveParams(node, definition, context)
+              : null;
       try {
         FileTemplateSnapshotService.ReplayTemplateSelection selection =
             fileTemplateSnapshotService.captureForWorkflowReplay(
@@ -644,7 +650,10 @@ public class WorkflowRunReplayPreviewService {
           blockers.add(Blocker.TEMPLATE_CONFIGURATION_NOT_FROZEN.name());
           return null;
         }
-        context.selectedConfigurations().selectedFileTemplateSnapshots().put(node.getNodeCode(), selection.protectedSnapshots());
+        context
+            .selectedConfigurations()
+            .selectedFileTemplateSnapshots()
+            .put(node.getNodeCode(), selection.protectedSnapshots());
         return selection.pluginId();
       } catch (BizException unavailableTemplate) {
         blockers.add(Blocker.TEMPLATE_CONFIGURATION_NOT_FROZEN.name());
@@ -664,10 +673,10 @@ public class WorkflowRunReplayPreviewService {
       Map<String, Object> effectiveParams,
       PreviewContext context,
       List<String> blockers) {
-    Map<String, Object> originalParams = context.policies().config()
-            == ConfigVersionPolicy.USE_ORIGINAL_CONFIG
-        ? originalEffectiveParams(node, definition, context)
-        : null;
+    Map<String, Object> originalParams =
+        context.policies().config() == ConfigVersionPolicy.USE_ORIGINAL_CONFIG
+            ? originalEffectiveParams(node, definition, context)
+            : null;
     try {
       Map<String, Object> selectedParams;
       if (context.policies().config() == ConfigVersionPolicy.USE_ORIGINAL_CONFIG) {
@@ -694,11 +703,15 @@ public class WorkflowRunReplayPreviewService {
         blockers.add(Blocker.CONFIGURATION_UNAVAILABLE.name());
         return null;
       }
-      context.selectedConfigurations().selectedDispatchChannelSnapshots().put(
-          node.getNodeCode(), selection.protectedSnapshots());
+      context
+          .selectedConfigurations()
+          .selectedDispatchChannelSnapshots()
+          .put(node.getNodeCode(), selection.protectedSnapshots());
       if (!EmptyChecks.isEmpty(Objects.requireNonNull(selection.secretBindings()))) {
-        context.selectedConfigurations().selectedDispatchSecretBindings().put(
-            node.getNodeCode(), selection.secretBindings());
+        context
+            .selectedConfigurations()
+            .selectedDispatchSecretBindings()
+            .put(node.getNodeCode(), selection.secretBindings());
       }
       return selection.pluginId();
     } catch (BizException unavailableConfiguration) {
@@ -713,12 +726,14 @@ public class WorkflowRunReplayPreviewService {
       return Map.of();
     }
     if (!(rawBindings instanceof Map<?, ?> bindings)) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.replay_source_snapshot_invalid");
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT, "error.workflow.replay_source_snapshot_invalid");
     }
     Map<String, Object> selectedBindings = new LinkedHashMap<>();
     for (Map.Entry<?, ?> entry : bindings.entrySet()) {
       if (!(entry.getKey() instanceof String channelCode) || EmptyChecks.isBlank(channelCode)) {
-        throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.replay_source_snapshot_invalid");
+        throw BizException.of(
+            ResultCode.STATE_CONFLICT, "error.workflow.replay_source_snapshot_invalid");
       }
       selectedBindings.put(channelCode, entry.getValue());
     }
@@ -726,9 +741,7 @@ public class WorkflowRunReplayPreviewService {
   }
 
   private Map<String, Object> effectiveJobParams(
-      WorkflowNodeEntity node,
-      JobDefinitionEntity definition,
-      Map<String, Object> rootParams) {
+      WorkflowNodeEntity node, JobDefinitionEntity definition, Map<String, Object> rootParams) {
     Map<String, Object> params = new LinkedHashMap<>();
     if (EmptyChecks.isNotNull(definition.defaultParams())) {
       params.putAll(definition.defaultParams());
@@ -777,8 +790,8 @@ public class WorkflowRunReplayPreviewService {
     }
     try {
       String serializedParamsSnapshot = sourceInstance.getParamsSnapshot();
-      Map<String, Object> paramsSnapshot = JsonUtils.fromJson(
-          serializedParamsSnapshot, new TypeReference<Map<String, Object>>() {});
+      Map<String, Object> paramsSnapshot =
+          JsonUtils.fromJson(serializedParamsSnapshot, new TypeReference<Map<String, Object>>() {});
       Object effectiveParams = paramsSnapshot.get("effectiveParams");
       if (!(effectiveParams instanceof Map<?, ?> values)) {
         return null;
@@ -822,7 +835,8 @@ public class WorkflowRunReplayPreviewService {
         || type == JobType.BUNDLE_EXPORT;
   }
 
-  private Map<String, WorkflowNodeRunEntity> latestNodeRuns(List<WorkflowNodeRunEntity> sourceNodes) {
+  private Map<String, WorkflowNodeRunEntity> latestNodeRuns(
+      List<WorkflowNodeRunEntity> sourceNodes) {
     Map<String, WorkflowNodeRunEntity> latestByNode = new LinkedHashMap<>();
     if (EmptyChecks.isEmpty(sourceNodes)) {
       return latestByNode;
@@ -832,8 +846,7 @@ public class WorkflowRunReplayPreviewService {
         continue;
       }
       WorkflowNodeRunEntity existing = latestByNode.get(candidate.getNodeCode());
-      boolean candidateIsLatestForNode =
-          EmptyChecks.isNull(existing)
+      boolean candidateIsLatestForNode = EmptyChecks.isNull(existing)
           || runSequence(candidate) > runSequence(existing)
           || (Objects.equals(candidate.getRunSeq(), existing.getRunSeq())
               && EmptyChecks.isNull(existing.getJobInstanceId())
@@ -894,8 +907,7 @@ public class WorkflowRunReplayPreviewService {
   }
 
   private Policies validate(WorkflowRunReplayCommand command) {
-    boolean replaySubmitCommandIsIncomplete =
-        EmptyChecks.isNull(command)
+    boolean replaySubmitCommandIsIncomplete = EmptyChecks.isNull(command)
         || EmptyChecks.isBlank(command.tenantId())
         || EmptyChecks.isNull(command.workflowRunId())
         || command.workflowRunId() <= 0
@@ -910,15 +922,13 @@ public class WorkflowRunReplayPreviewService {
     ResultVersionPolicy result = EmptyChecks.isBlank(command.resultPolicy())
         ? ResultVersionPolicy.CREATE_NEW_VERSION
         : ResultVersionPolicy.fromCodeOrNull(command.resultPolicy());
-    boolean replayPolicyPairSupported =
-        EmptyChecks.isNotNull(config)
-            && EmptyChecks.isNotNull(result)
-            && result != ResultVersionPolicy.DRY_RUN_ONLY;
-    boolean replayPolicyIsValid =
-        replayPolicyPairSupported
-            && (config == ConfigVersionPolicy.USE_SPECIFIED_VERSION
-                ? EmptyChecks.isNotNull(command.configVersion()) && command.configVersion() > 0
-                : EmptyChecks.isNull(command.configVersion()));
+    boolean replayPolicyPairSupported = EmptyChecks.isNotNull(config)
+        && EmptyChecks.isNotNull(result)
+        && result != ResultVersionPolicy.DRY_RUN_ONLY;
+    boolean replayPolicyIsValid = replayPolicyPairSupported
+        && (config == ConfigVersionPolicy.USE_SPECIFIED_VERSION
+            ? EmptyChecks.isNotNull(command.configVersion()) && command.configVersion() > 0
+            : EmptyChecks.isNull(command.configVersion()));
     if (!replayPolicyIsValid) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.replay_invalid_policy");
     }

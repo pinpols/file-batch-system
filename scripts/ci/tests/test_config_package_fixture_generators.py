@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import shutil
 import sys
 import tempfile
@@ -50,6 +51,31 @@ DEFAULT_GENERATOR = load_script(
 
 
 class ConfigPackageFixtureGeneratorsTest(unittest.TestCase):
+    def test_new_api_channel_uses_runtime_config_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "tb-tenant-config-package-test.xlsx"
+            shutil.copy2(SUITE_DIR / path.name, path)
+            workbook = load_workbook(path)
+            sheet = workbook["file_channel_config"]
+            for row in range(sheet.max_row, 1, -1):
+                if sheet.cell(row, 2).value == "tb_api_ingest":
+                    sheet.delete_rows(row)
+            workbook.save(path)
+            workbook.close()
+            old_base = APPEND_SCRIPT.BASE
+            try:
+                APPEND_SCRIPT.BASE = temp_dir + "/"
+                APPEND_SCRIPT.update_tb()
+            finally:
+                APPEND_SCRIPT.BASE = old_base
+            workbook = load_workbook(path, read_only=True)
+            try:
+                row = next(row for row in workbook["file_channel_config"].iter_rows(values_only=True)
+                           if row[1] == "tb_api_ingest")
+                self.assertEqual({"target_endpoint": row[4]}, json.loads(row[6]))
+            finally:
+                workbook.close()
+
     def test_default_generator_emits_current_ten_sheet_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             output = Path(temp_dir) / "default-tenant.xlsx"

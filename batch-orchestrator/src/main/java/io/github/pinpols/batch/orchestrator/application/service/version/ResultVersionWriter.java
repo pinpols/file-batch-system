@@ -72,8 +72,7 @@ public class ResultVersionWriter {
    */
   @Transactional(propagation = Propagation.MANDATORY)
   public void writeOnTerminal(JobInstanceEntity instance, Map<String, Object> outputs) {
-    boolean instanceIsNotEligibleForResultVersion =
-        EmptyChecks.isNull(instance)
+    boolean instanceIsNotEligibleForResultVersion = EmptyChecks.isNull(instance)
         || instance.getId() == null
         || !Texts.hasText(instance.getTenantId())
         || !isSuccessTerminal(instance.getInstanceStatus());

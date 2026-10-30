@@ -1,10 +1,10 @@
 package io.github.pinpols.batch.orchestrator.application.outbox;
 
+import io.github.pinpols.batch.common.jdbc.JdbcExceptionSupport;
 import io.github.pinpols.batch.orchestrator.domain.entity.EventDeliveryLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.EventOutboxRetryEntity;
 import io.github.pinpols.batch.orchestrator.mapper.EventDeliveryLogMapper;
 import io.github.pinpols.batch.orchestrator.mapper.EventOutboxRetryMapper;
-import java.sql.SQLException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -59,10 +59,8 @@ public class OutboxChildRecordService {
   }
 
   private static DataIntegrityViolationException missingParent(String tenantId, Long eventId) {
-    SQLException cause =
-        new SQLException("Outbox child reference does not match a hot or archived parent", "23503");
-    return new DataIntegrityViolationException(
+    return JdbcExceptionSupport.missingReferenceViolation(
         "Outbox event reference is unavailable for tenant " + tenantId + " and event " + eventId,
-        cause);
+        "Outbox child reference does not match a hot or archived parent");
   }
 }

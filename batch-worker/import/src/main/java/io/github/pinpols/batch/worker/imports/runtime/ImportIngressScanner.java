@@ -179,9 +179,8 @@ public class ImportIngressScanner {
       return;
     }
     // 幂等:trigger 记录以清单对象路径为 storage_path,已登记则跳过 → 同一导出清单只发射一次
-    boolean fileRecordAlreadyExists =
-        fileRecords.existsFileRecordByStoragePath(
-            resolvedTenant, s3StorageProperties.getBucket(), snapshot.objectName());
+    boolean fileRecordAlreadyExists = fileRecords.existsFileRecordByStoragePath(
+        resolvedTenant, s3StorageProperties.getBucket(), snapshot.objectName());
     if (fileRecordAlreadyExists) {
       return;
     }
@@ -210,7 +209,8 @@ public class ImportIngressScanner {
         .fileName(fileName)
         .originalFileName(fileName);
     String exportTriggerFileFormatType = resolveFileFormatType(fileName);
-    exportTriggerFileRecordBuilder.fileFormatType(exportTriggerFileFormatType)
+    exportTriggerFileRecordBuilder
+        .fileFormatType(exportTriggerFileFormatType)
         .charset(StandardCharsets.UTF_8.name())
         .fileSizeBytes(snapshot.size())
         .checksumType("NONE")
@@ -328,7 +328,8 @@ public class ImportIngressScanner {
     if (bizDate == null) {
       return;
     }
-    registerDiscoveredInputFile(snapshot, resolvedTenant, manifest, batchManifests, fileName, bizDate);
+    registerDiscoveredInputFile(
+        snapshot, resolvedTenant, manifest, batchManifests, fileName, bizDate);
   }
 
   /** 准入与幂等判断完成后才生成本次元数据，并按文件登记、到达审计、扫描审计的顺序持久化。 */
@@ -380,13 +381,16 @@ public class ImportIngressScanner {
         .fileName(fileName)
         .originalFileName(fileName);
     String inputFileFormatType = resolveFileFormatType(fileName);
-    inputFileRecordBuilder.fileFormatType(inputFileFormatType)
+    inputFileRecordBuilder
+        .fileFormatType(inputFileFormatType)
         .charset(StandardCharsets.UTF_8.name())
         .fileSizeBytes(snapshot.size());
-    String inputChecksumType = EmptyChecks.isNotNull(manifest) && Texts.hasText(manifest.checksumType())
-        ? manifest.checksumType()
-        : "NONE";
-    inputFileRecordBuilder.checksumType(inputChecksumType)
+    String inputChecksumType =
+        EmptyChecks.isNotNull(manifest) && Texts.hasText(manifest.checksumType())
+            ? manifest.checksumType()
+            : "NONE";
+    inputFileRecordBuilder
+        .checksumType(inputChecksumType)
         .checksumValue(manifest == null ? null : manifest.checksumValue())
         .storageType("S3")
         .storagePath(snapshot.objectName())
@@ -397,10 +401,8 @@ public class ImportIngressScanner {
         .sourceRef(snapshot.objectName())
         .fileStatus(FileStatus.RECEIVED.code());
     String inputTraceId = "import-scan-" + sanitizeTrace(fileName);
-    FileRecordParam inputFileRecord = inputFileRecordBuilder
-        .traceId(inputTraceId)
-        .metadata(metadata)
-        .build();
+    FileRecordParam inputFileRecord =
+        inputFileRecordBuilder.traceId(inputTraceId).metadata(metadata).build();
     Long fileId = fileRecords.createFileRecord(inputFileRecord);
     boolean arrivalGroupAuditCanBeRecorded = scannerProperties.getArrival().isEnabled()
         && Texts.hasText(effectiveGroupCode)
@@ -674,9 +676,7 @@ public class ImportIngressScanner {
       return false;
     }
     boolean checksumScopeHasText = Texts.hasText(manifest.checksumScope());
-    String checksumScope = checksumScopeHasText
-        ? manifest.checksumScope().trim()
-        : "RAW_OBJECT";
+    String checksumScope = checksumScopeHasText ? manifest.checksumScope().trim() : "RAW_OBJECT";
     if (!"RAW_OBJECT".equalsIgnoreCase(checksumScope)) {
       return false;
     }
@@ -747,8 +747,7 @@ public class ImportIngressScanner {
       return;
     }
     String fileName = baseName(snapshot.objectName());
-    BatchManifest matched =
-        matchBatchManifest(batchManifests, tenantId, fileName);
+    BatchManifest matched = matchBatchManifest(batchManifests, tenantId, fileName);
     if (matched == null) {
       return;
     }

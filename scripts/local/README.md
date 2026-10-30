@@ -98,7 +98,7 @@ python3 scripts/local/spark-e2e-runtime.py -- ./mvnw -o -ntp \
 
 `run-tests.sh --e2e`、`--all` 已接入检查与参数传递；缺失运行时会在构建和环境清理前失败并给出准备命令。用明确的 `-Dtest=OtherE2eIT#method` 选择不涉及 Spark 的场景时不要求该缓存；通配符选择保守执行前置检查。直接执行 `./mvnw` 不会准备运行时，Spark 定向命令请使用上述入口。
 
-当前 Full CI / Staging 的 shard 尚未列入此恢复 E2E 类，本次没有改动其测试范围，不能据本地通过宣称 CI 已覆盖。将来接入时，应在该 job 显式准备运行时，并以同一 `spark-e2e-runtime.py -- <Maven 命令>` 入口执行；不能依靠开发者工作树的路径或跳过 Spark 用例。
+Full CI / Staging 将恢复 E2E 类按方法分片，其中包含 Spark 场景的分片显式准备 Python 3.12 和经摘要验证的 Spark，并通过同一 `spark-e2e-runtime.py -- <Maven 命令>` 入口执行；其他恢复方法无需下载 Spark。依赖下载或校验失败时该分片失败，不跳过 Spark 用例；远端运行情况以实际 CI 结果为准。
 
 ## 相关目录
 

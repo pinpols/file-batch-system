@@ -42,8 +42,6 @@ public class PartitionLeaseConfigurationValidator {
   private int maxPollIntervalMillis() {
     Map<String, String> properties = kafkaConsumerTimingProperties.getProperties();
     String value = properties.get("max-poll-interval-ms");
-    return EmptyChecks.isNull(value)
-        ? DEFAULT_MAX_POLL_INTERVAL_MILLIS
-        : Integer.parseInt(value);
+    return EmptyChecks.isNull(value) ? DEFAULT_MAX_POLL_INTERVAL_MILLIS : Integer.parseInt(value);
   }
 }

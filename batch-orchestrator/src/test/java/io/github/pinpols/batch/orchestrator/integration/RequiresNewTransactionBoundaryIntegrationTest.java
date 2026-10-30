@@ -175,17 +175,13 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
         .isEqualTo(outboxBefore);
 
     // 拒绝记账独立提交；终态父执行不能被重放复活。
-    String selectReplayStatusSql =
-        """
+    String selectReplayStatusSql = """
         select replay_status from batch.dead_letter_task where id = ?
     """;
-    String replayStatus = jdbcTemplate.queryForObject(
-        selectReplayStatusSql,
-        String.class,
-        deadLetterId);
+    String replayStatus =
+        jdbcTemplate.queryForObject(selectReplayStatusSql, String.class, deadLetterId);
     assertThat(replayStatus).isEqualTo(DeadLetterReplayStatus.GIVE_UP.code());
-    String selectReplayCountSql =
-        """
+    String selectReplayCountSql = """
         select replay_count from batch.dead_letter_task where tenant_id = ? and id = ?
     """;
     Integer selectedReplayCount =
@@ -323,10 +319,8 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
            and source_type = 'JOB_PARTITION'
          order by id desc limit 1
         """;
-    List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-        selectDeadLetterByPartitionSql,
-        TENANT,
-        partitionId);
+    List<Map<String, Object>> rows =
+        jdbcTemplate.queryForList(selectDeadLetterByPartitionSql, TENANT, partitionId);
     return rows.isEmpty() ? null : ((Number) rows.get(0).get("id")).longValue();
   }
 

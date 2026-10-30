@@ -1,66 +1,47 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import java.util.Map;
+import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews.DispatchRecordRow;
+import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews.FileRecordRow;
+import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews.TemplateSecurityRow;
 
 /**
  * 文件治理 Repository 投影的稳定读取视图。
  *
- * <p>底层 MyBatis 查询仍以 Map 接住历史 {@code SELECT *} 结果；转换只允许发生在应用服务边界，防止列名字符串继续进入状态、下载和重派决策。
- * metadata 等动态 JSON 字段不属于本视图，继续保留 Map 边界。
+ * <p>底层 MyBatis 直接映射为具名记录；这里只补齐文件缺失与可选安全配置的业务默认值。
+ * metadata 等动态 JSON 字段仍保留 Map 边界。
  */
 final class FileGovernanceViews {
 
   private FileGovernanceViews() {}
 
-  static FileRecordView fileRecord(Map<String, Object> row) {
-    if (EmptyChecks.isEmpty(row)) {
+  static FileRecordView fileRecord(FileRecordRow row) {
+    if (EmptyChecks.isNull(row)) {
       return FileRecordView.absent();
     }
-    return new FileRecordView(
-        true,
-        stringValue(row, "file_status"),
-        stringValue(row, "storage_bucket"),
-        stringValue(row, "storage_path"));
+    return new FileRecordView(true, row.fileStatus(), row.storageBucket(), row.storagePath());
   }
 
-  static TemplateSecurityView templateSecurity(Map<String, Object> row) {
+  static TemplateSecurityView templateSecurity(TemplateSecurityRow row) {
+    boolean previewMaskingEnabled =
+        EmptyChecks.isNotNull(row) && Boolean.TRUE.equals(row.previewMaskingEnabled());
+    boolean contentEncryptionEnabled =
+        EmptyChecks.isNotNull(row) && Boolean.TRUE.equals(row.contentEncryptionEnabled());
+    boolean downloadRequiresApproval =
+        EmptyChecks.isNotNull(row) && Boolean.TRUE.equals(row.downloadRequiresApproval());
     return new TemplateSecurityView(
-        booleanValue(row, "preview_masking_enabled"),
-        booleanValue(row, "content_encryption_enabled"),
-        stringValue(row, "encryption_key_ref"),
-        booleanValue(row, "download_requires_approval"),
-        stringValue(row, "masking_rule_set"));
+        previewMaskingEnabled,
+        contentEncryptionEnabled,
+        EmptyChecks.isNull(row) ? null : row.encryptionKeyRef(),
+        downloadRequiresApproval,
+        EmptyChecks.isNull(row) ? null : row.maskingRuleSet());
   }
 
-  static DispatchRecordView dispatchRecord(Map<String, Object> row) {
-    if (EmptyChecks.isEmpty(row)) {
+  static DispatchRecordView dispatchRecord(DispatchRecordRow row) {
+    if (EmptyChecks.isNull(row)) {
       return DispatchRecordView.absent();
     }
-    return new DispatchRecordView(
-        true,
-        longValue(row, "id"),
-        longValue(row, "pipeline_instance_id"),
-        stringValue(row, "channel_code"));
-  }
-
-  private static String stringValue(Map<String, Object> row, String key) {
-    Object value = row == null ? null : row.get(key);
-    return value == null ? null : value.toString();
-  }
-
-  private static Long longValue(Map<String, Object> row, String key) {
-    Object value = row == null ? null : row.get(key);
-    return value instanceof Number number
-        ? number.longValue()
-        : value == null ? null : Long.valueOf(value.toString());
-  }
-
-  private static boolean booleanValue(Map<String, Object> row, String key) {
-    Object value = row == null ? null : row.get(key);
-    return value instanceof Boolean bool
-        ? bool
-        : value != null && Boolean.parseBoolean(value.toString());
+    return new DispatchRecordView(true, row.id(), row.pipelineInstanceId(), row.channelCode());
   }
 
   record FileRecordView(

@@ -51,10 +51,10 @@ public class JobPushIntakeService {
             : EmptyChecks.isBlank(operator) ? "NO_OPERATOR" : "QUEUED";
     List<ConsolePushSubscriptionEntity> devices =
         "QUEUED".equals(decision) ? subscriptions.findByTenantAndUser(tenant, operator) : List.of();
-    if ("QUEUED".equals(decision) && EmptyChecks.isEmpty(Objects.requireNonNull(devices))) decision = "NO_SUBSCRIPTIONS";
+    if ("QUEUED".equals(decision) && EmptyChecks.isEmpty(Objects.requireNonNull(devices)))
+      decision = "NO_SUBSCRIPTIONS";
     for (ConsolePushSubscriptionEntity device : devices) {
-      boolean deviceDoesNotMatchFrozenJobOperator =
-          !tenant.equals(device.getTenantId())
+      boolean deviceDoesNotMatchFrozenJobOperator = !tenant.equals(device.getTenantId())
           || !operator.equals(device.getUsername())
           || EmptyChecks.isNull(device.getId())
           || device.getId() <= 0;

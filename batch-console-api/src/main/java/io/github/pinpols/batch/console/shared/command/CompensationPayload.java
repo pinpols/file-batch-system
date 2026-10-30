@@ -1,7 +1,5 @@
 package io.github.pinpols.batch.console.shared.command;
 
-import lombok.Builder;
-
 import java.time.LocalDate;
 import lombok.Builder;
 import lombok.Getter;

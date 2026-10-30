@@ -34,7 +34,8 @@ public class ConsoleUsageSummaryController {
       @RequestParam("to") LocalDate to,
       @RequestParam(value = "metricCode", required = false) String metricCode,
       @RequestParam(value = "pageCode", required = false) String pageCode) {
-    List<ConsoleUsageDailyMapper.DailyUsageRow> summaries = service.query(tenantId, from, to, metricCode, pageCode);
+    List<ConsoleUsageDailyMapper.DailyUsageRow> summaries =
+        service.query(tenantId, from, to, metricCode, pageCode);
     List<ConsoleUsageSummaryResponse> responses =
         summaries.stream().map(ConsoleUsageSummaryResponse::from).toList();
     return responseFactory.success(responses);

@@ -1,7 +1,5 @@
 package io.github.pinpols.batch.console.infrastructure.excel;
 
-import lombok.Builder;
-
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.ExecutionMode;
 import io.github.pinpols.batch.common.enums.FileChannelAuthType;
@@ -15,6 +13,7 @@ import io.github.pinpols.batch.common.enums.SystemPipelineCatalog;
 import io.github.pinpols.batch.common.enums.WorkflowEdgeType;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowType;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -24,7 +23,10 @@ import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
+import io.github.pinpols.batch.console.domain.job.support.BatchWindowRules;
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.BatchWindowRow;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
+import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.console.infrastructure.excel.BatchWindowExcelRowParser.WindowRow;
 import io.github.pinpols.batch.console.infrastructure.excel.BusinessCalendarExcelRowParser.CalendarRow;
 import io.github.pinpols.batch.console.infrastructure.excel.FileTemplateExcelRowParser.TemplateRow;
@@ -43,6 +45,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import lombok.Builder;
+
 /**
  * 租户配置包的跨 sheet 业务校验器。
  *
@@ -149,6 +153,8 @@ public class ConfigPackageExcelValidator {
   public static final String WF_DEF_SHEET = "workflow_definition";
   public static final String WF_NODE_SHEET = "workflow_node";
   public static final String WF_EDGE_SHEET = "workflow_edge";
+  public static final String WORKFLOW_MONITORING_POLICY_SHEET =
+      ConfigPackageExcelSchema.WorkflowMonitoringPolicy.SHEET_NAME;
 
   public static final Set<String> JOB_TYPES = DictEnum.codes(JobType.class);
   public static final Set<String> SCHEDULE_TYPES = Set.of("CRON", "FIXED_RATE", "MANUAL");
@@ -175,6 +181,7 @@ public class ConfigPackageExcelValidator {
   private final ResourceQueueMapper resourceQueueMapper;
   private final BusinessCalendarMapper businessCalendarMapper;
   private final BatchWindowMapper batchWindowMapper;
+  private final WorkflowDefinitionMapper workflowDefinitionMapper;
   private final ConfigPackageExcelRowValidators rowValidators;
 
   public ConfigPackageExcelValidator(
@@ -182,13 +189,30 @@ public class ConfigPackageExcelValidator {
       FileTemplateConfigMapper fileTemplateConfigMapper,
       ResourceQueueMapper resourceQueueMapper,
       BusinessCalendarMapper businessCalendarMapper,
-      BatchWindowMapper batchWindowMapper) {
+      BatchWindowMapper batchWindowMapper,
+      WorkflowDefinitionMapper workflowDefinitionMapper) {
     this.jobDefinitionMapper = jobDefinitionMapper;
     this.fileTemplateConfigMapper = fileTemplateConfigMapper;
     this.resourceQueueMapper = resourceQueueMapper;
     this.businessCalendarMapper = businessCalendarMapper;
     this.batchWindowMapper = batchWindowMapper;
+    this.workflowDefinitionMapper = workflowDefinitionMapper;
     this.rowValidators = new ConfigPackageExcelRowValidators(fileTemplateConfigMapper);
+  }
+
+  public ConfigPackageExcelValidator(
+      JobDefinitionMapper jobDefinitionMapper,
+      FileTemplateConfigMapper fileTemplateConfigMapper,
+      ResourceQueueMapper resourceQueueMapper,
+      BusinessCalendarMapper businessCalendarMapper,
+      BatchWindowMapper batchWindowMapper) {
+    this(
+        jobDefinitionMapper,
+        fileTemplateConfigMapper,
+        resourceQueueMapper,
+        businessCalendarMapper,
+        batchWindowMapper,
+        null);
   }
 
   public record SheetResult(
@@ -205,6 +229,7 @@ public class ConfigPackageExcelValidator {
     }
   }
 
+  @Builder
   @SuppressWarnings("PMD.ExcessiveParameterList") // 每个组件对应配置包固定 sheet，保持逐表校验结果的类型安全。
   public record PackageValidationResult(
       SheetResult resourceQueues,
@@ -219,7 +244,39 @@ public class ConfigPackageExcelValidator {
       SheetResult wfDefs,
       SheetResult wfNodes,
       SheetResult wfEdges,
+      SheetResult workflowMonitoringPolicies,
       List<WorkbookIssue> crossRefIssues) {
+
+    public PackageValidationResult(
+        SheetResult resourceQueues,
+        SheetResult businessCalendars,
+        SheetResult batchWindows,
+        SheetResult jobs,
+        SheetResult jobMonitoringPolicies,
+        SheetResult channels,
+        SheetResult fileTemplates,
+        SheetResult pipelines,
+        SheetResult steps,
+        SheetResult wfDefs,
+        SheetResult wfNodes,
+        SheetResult wfEdges,
+        List<WorkbookIssue> crossRefIssues) {
+      this(
+          resourceQueues,
+          businessCalendars,
+          batchWindows,
+          jobs,
+          jobMonitoringPolicies,
+          channels,
+          fileTemplates,
+          pipelines,
+          steps,
+          wfDefs,
+          wfNodes,
+          wfEdges,
+          emptySheet(WORKFLOW_MONITORING_POLICY_SHEET),
+          crossRefIssues);
+    }
 
     public PackageValidationResult(
         SheetResult resourceQueues,
@@ -247,6 +304,7 @@ public class ConfigPackageExcelValidator {
           wfDefs,
           wfNodes,
           wfEdges,
+          emptySheet(WORKFLOW_MONITORING_POLICY_SHEET),
           crossRefIssues);
     }
 
@@ -267,6 +325,7 @@ public class ConfigPackageExcelValidator {
           + wfDefs.invalid()
           + wfNodes.invalid()
           + wfEdges.invalid()
+          + workflowMonitoringPolicies.invalid()
           + crossRefIssues.size();
     }
 
@@ -310,6 +369,10 @@ public class ConfigPackageExcelValidator {
       return wfEdges.validRows();
     }
 
+    public List<Map<String, String>> validWorkflowMonitoringPolicies() {
+      return workflowMonitoringPolicies.validRows();
+    }
+
     public List<WorkbookIssue> allIssues() {
       List<WorkbookIssue> all = new ArrayList<>();
       all.addAll(resourceQueues.issues());
@@ -324,6 +387,7 @@ public class ConfigPackageExcelValidator {
       all.addAll(wfDefs.issues());
       all.addAll(wfNodes.issues());
       all.addAll(wfEdges.issues());
+      all.addAll(workflowMonitoringPolicies.issues());
       all.addAll(crossRefIssues);
       return all;
     }
@@ -358,10 +422,7 @@ public class ConfigPackageExcelValidator {
       int candidateFallbackRowNo = fallbackRowNo++;
       int rowNo = excelRowNo(row, candidateFallbackRowNo);
       issues.add(new WorkbookIssue(
-          sheetName,
-          rowNo,
-          "",
-          "tenant Pipeline configuration sheet is retired"));
+          sheetName, rowNo, "", "tenant Pipeline configuration sheet is retired"));
     }
     return new SheetResult(sheetName, rows.size(), List.of(), issues);
   }
@@ -380,6 +441,8 @@ public class ConfigPackageExcelValidator {
     SheetResult pipelines = retiredSheet(PIPELINE_SHEET, session.pipelineRows());
     SheetResult steps = retiredSheet(STEP_SHEET, session.pipelineStepRows());
     SheetResult wfDefs = validateWfDefRows(tid, session.workflowDefinitionRows());
+    SheetResult workflowMonitoringPolicies = validateWorkflowMonitoringPolicyRows(
+        tid, session.workflowMonitoringPolicyRows(), wfDefs.validRows());
     SheetResult wfNodes = validateWfNodeRows(tid, session.workflowNodeRows(), wfDefs.validRows());
     SheetResult wfEdges = validateWfEdgeRows(
         tid, session.workflowEdgeRows(), wfDefs.validRows(), wfNodes.validRows());
@@ -411,6 +474,7 @@ public class ConfigPackageExcelValidator {
         wfDefs,
         wfNodes,
         wfEdges,
+        workflowMonitoringPolicies,
         crossIssues);
   }
 
@@ -442,7 +506,32 @@ public class ConfigPackageExcelValidator {
       if (hasText(window.windowCode()) && !seen.add(window.windowCode())) {
         ri.add("duplicate window_code in excel: " + window.windowCode());
       }
+      if (EmptyChecks.isEmpty(ri)) {
+        validateWindowSettings(window, row, ri);
+      }
     });
+  }
+
+  /** 仅省略跨日标志且区间校验失败时回查目标；普通合法行不额外查询。 */
+  private void validateWindowSettings(
+      WindowRow window, Map<String, String> values, List<String> issues) {
+    try {
+      BatchWindowRules.validate(
+          window.timezone(), window.startTime(), window.endTime(), window.allowCrossDay());
+    } catch (BizException invalid) {
+      boolean needsExistingCrossDay =
+          !Texts.hasText(values.get(ConfigPackageExcelSchema.BatchWindow.COL_ALLOW_CROSS_DAY))
+              && BatchWindowRules.WINDOW_RANGE_FIELD.equals(invalid.getMessageArgs()[0]);
+      if (needsExistingCrossDay) {
+        BatchWindowRow existing =
+            batchWindowMapper.selectByUniqueKey(window.tenantId(), window.windowCode());
+        if (EmptyChecks.isNotNull(existing) && Boolean.TRUE.equals(existing.allowCrossDay())) {
+          return;
+        }
+      }
+      // 共同规则只返回固定字段上下文，预览不回显异常原值。
+      issues.add("invalid batch window settings: " + invalid.getMessageArgs()[0]);
+    }
   }
 
   private SheetResult validateJobRows(String tenantId, List<Map<String, String>> rows) {
@@ -550,7 +639,8 @@ public class ConfigPackageExcelValidator {
       issues.add(COL_COMPLETION_DEADLINE_LOCAL_TIME
           + " is only supported for CRON jobs without an upstream dependency");
     }
-    boolean dependencyWindowConfiguredForNonDependentJob = hasPositiveDependencyWindow && !dependent;
+    boolean dependencyWindowConfiguredForNonDependentJob =
+        hasPositiveDependencyWindow && !dependent;
     if (dependencyWindowConfiguredForNonDependentJob) {
       issues.add(
           COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS + " is only supported for dependent jobs");
@@ -673,6 +763,65 @@ public class ConfigPackageExcelValidator {
         rows,
         (row, rowNo, ri) ->
             ConfigPackageExcelRowValidators.validateWfDefRow(tenantId, row, seen, ri));
+  }
+
+  private SheetResult validateWorkflowMonitoringPolicyRows(
+      String tenantId,
+      List<Map<String, String>> rows,
+      List<Map<String, String>> packageWorkflowRows) {
+    Set<String> packageWorkflowKeys = packageWorkflowRows.stream()
+        .map(row -> workflowPolicyKey(row.get(COL_WORKFLOW_CODE), row.get(COL_VERSION)))
+        .collect(Collectors.toSet());
+    Set<String> seen = new LinkedHashSet<>();
+    return validateRows(
+        WORKFLOW_MONITORING_POLICY_SHEET,
+        rows,
+        (row, rowNo, issues) ->
+            validateWorkflowMonitoringPolicyRow(tenantId, packageWorkflowKeys, seen, row, issues));
+  }
+
+  private void validateWorkflowMonitoringPolicyRow(
+      String tenantId,
+      Set<String> packageWorkflowKeys,
+      Set<String> seen,
+      Map<String, String> row,
+      List<String> issues) {
+    validatePolicyTenant(tenantId, row, issues);
+    String workflowCode = normalize(row.get(COL_WORKFLOW_CODE));
+    String versionText = normalize(row.get(COL_WORKFLOW_VERSION));
+    if (!hasText(workflowCode)) {
+      issues.add(COL_WORKFLOW_CODE + " is required");
+    }
+    Integer version = parseIntegerWithoutIssue(versionText);
+    if (EmptyChecks.isNull(version) || version <= 0) {
+      issues.add(COL_WORKFLOW_VERSION + " must be a positive integer");
+    }
+    if (hasText(workflowCode) && EmptyChecks.isNotNull(version) && version > 0) {
+      String key = workflowPolicyKey(workflowCode, versionText);
+      if (!seen.add(key)) {
+        issues.add("duplicate workflow_code + workflow_version in excel: " + key);
+      }
+      if (!packageWorkflowKeys.contains(key)) {
+        boolean workflowExists = EmptyChecks.isNotNull(workflowDefinitionMapper)
+            && EmptyChecks.isNotNull(
+                workflowDefinitionMapper.selectByUniqueKey(tenantId, workflowCode, version));
+        if (!workflowExists) {
+          issues.add("workflow_code + workflow_version does not exist for tenant: " + key);
+        }
+      }
+    }
+    validateMonitoringPolicyValues(row, issues);
+  }
+
+  private static String workflowPolicyKey(String workflowCode, String version) {
+    String normalizedCode = normalize(workflowCode);
+    String normalizedVersion = normalize(version);
+    Integer parsedVersion = parseIntegerWithoutIssue(normalizedVersion);
+    return Objects.toString(normalizedCode, "").toUpperCase(Locale.ROOT)
+        + KEY_SEP_COLON
+        + (EmptyChecks.isNull(parsedVersion)
+            ? Objects.toString(normalizedVersion, "")
+            : parsedVersion.toString());
   }
 
   private SheetResult validateWfNodeRows(
@@ -960,19 +1109,16 @@ public class ConfigPackageExcelValidator {
   }
 
   private boolean resourceQueueExists(String tenantId, String queueCode) {
-    Map<String, Object> found = resourceQueueMapper.selectByUniqueKey(tenantId, queueCode);
-    return found != null && !found.isEmpty();
+    return EmptyChecks.isNotNull(resourceQueueMapper.selectByUniqueKey(tenantId, queueCode));
   }
 
   private boolean businessCalendarExists(String tenantId, String calendarCode) {
-    Map<String, Object> found =
-        businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, calendarCode);
-    return found != null && !found.isEmpty();
+    return EmptyChecks.isNotNull(
+        businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, calendarCode));
   }
 
   private boolean batchWindowExists(String tenantId, String windowCode) {
-    Map<String, Object> found = batchWindowMapper.selectByUniqueKey(tenantId, windowCode);
-    return found != null && !found.isEmpty();
+    return EmptyChecks.isNotNull(batchWindowMapper.selectByUniqueKey(tenantId, windowCode));
   }
 
   private static Set<String> extractCodes(List<Map<String, String>> rows, String column) {
@@ -1089,5 +1235,4 @@ public class ConfigPackageExcelValidator {
       Objects.requireNonNull(windowCodes, "windowCodes");
     }
   }
-
 }

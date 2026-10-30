@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.domain.workflow.web;
 
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -21,6 +20,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -29,11 +31,15 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /** P2: ConsoleWorkflowRunController cancel/terminate/skip-node 透传到 proxy。 */
 @DisplayName("工作流运行控制器: 取消、终止、暂停、恢复与跳过节点动作透传到编排端口")
+@ExtendWith(MockitoExtension.class)
 class ConsoleWorkflowRunControllerTest {
 
-  private final ConsoleOrchestratorPort proxy = mock(ConsoleOrchestratorPort.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleOrchestratorPort proxy;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach

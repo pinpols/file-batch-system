@@ -51,6 +51,30 @@ class SuccessInstanceArchiveServiceTest {
 
     assertThat(result.executed()).isFalse();
     verify(mapper, never()).selectArchivableInstanceIds(any(Instant.class), anyInt());
+    service.reportIntegrityIssues();
+    service.archiveNextBatch();
+    verify(mapper, never()).disableJitForCurrentTransaction();
+  }
+
+  @Test
+  @DisplayName("每个归档事务在查询前局部关闭JIT，不改变候选或诊断语义")
+  void shouldDisableJitBeforeQueriesForEachArchiveEntry() {
+    props.setEnabled(true);
+    when(mapper.selectArchivableInstanceIds(any(Instant.class), anyInt())).thenReturn(List.of());
+
+    service.archiveOnce();
+    service.reportIntegrityIssues();
+    service.archiveNextBatch();
+
+    InOrder order = Mockito.inOrder(mapper);
+    order.verify(mapper).disableJitForCurrentTransaction();
+    order.verify(mapper).selectInvalidArchiveReferenceSummaries(any(Instant.class));
+    order.verify(mapper).selectArchivableInstanceIds(any(Instant.class), anyInt());
+    order.verify(mapper).disableJitForCurrentTransaction();
+    order.verify(mapper).selectInvalidArchiveReferenceSummaries(any(Instant.class));
+    order.verify(mapper).disableJitForCurrentTransaction();
+    order.verify(mapper).selectArchivableInstanceIds(any(Instant.class), anyInt());
+    order.verifyNoMoreInteractions();
   }
 
   @Test
@@ -115,9 +139,12 @@ class SuccessInstanceArchiveServiceTest {
 
     InOrder order = Mockito.inOrder(mapper);
     order.verify(mapper).selectPipelineInstanceIdsForUpdate(ids);
+    order.verify(mapper).lockRuntimeTreeRows(ids);
     order.verify(mapper).archiveJobInstancesByIds(ids);
+    order.verify(mapper).countJobInstanceArchiveMismatches(ids);
     order.verify(mapper).archiveJobPartitionsByInstanceIds(ids);
     order.verify(mapper).archiveJobTasksByInstanceIds(ids);
+    order.verify(mapper).countJobTaskArchiveMismatches(ids);
     order.verify(mapper).archiveJobStepInstancesByInstanceIds(ids);
     order.verify(mapper).archivePipelineInstancesByInstanceIds(ids);
     order.verify(mapper).selectPipelineProgressIdsForUpdate(pipelineIds);
@@ -130,6 +157,7 @@ class SuccessInstanceArchiveServiceTest {
     order.verify(mapper).archiveWorkflowNodeRunsByInstanceIds(ids);
     order.verify(mapper).archiveJobExecutionLogsByInstanceIds(ids);
     order.verify(mapper).archiveCompensationCommandsByInstanceIds(ids);
+    order.verify(mapper).countRuntimeTreeArchiveMismatches(ids);
     // FK 依赖顺序：先孙节点（job_step_instance / pipeline_step_run），中间表，最后根（job_instance）
     order.verify(mapper).deleteJobStepInstancesByInstanceIds(ids);
     order.verify(mapper).deleteJobTasksByInstanceIds(ids);

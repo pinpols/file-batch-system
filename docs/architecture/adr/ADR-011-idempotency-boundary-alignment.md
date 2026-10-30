@@ -66,25 +66,16 @@
 
 ## 三层关系图
 
-```
-HTTP POST/PUT/PATCH/DELETE + Idempotency-Key
-        ↓
-┌──────────────────────────────────────────┐
-│ Layer 1: ConsoleIdempotencyInterceptor   │  防"30s-24h 内重复写请求",scoped to (tenant+uri+method+key)
-│   ✓ 失败释放,允许安全重试                  │
-│   ✓ Redis fail-closed (503)              │
-└──────────────────────────────────────────┘
-        ↓ (通过/REJECT 409)
-┌──────────────────────────────────────────┐
-│ Layer 2: DefaultTriggerService           │  Best-effort 业务级去重(查 trigger_request)
-│   ✓ approvePendingCatchUp 短路 LAUNCHED  │
-│   ✓ trigger_request 无唯一约束(V37)      │  允许同 dedupKey 多条 request_id
-└──────────────────────────────────────────┘
-        ↓ (HTTP / Kafka envelope)
-┌──────────────────────────────────────────┐
-│ Layer 3: uk_job_instance_tenant_dedup    │  事实源唯一(DB constraint)
-│   ✓ DuplicateKeyException → select       │  绝对保证 1 条 / (tenant, dedup_key)
-└──────────────────────────────────────────┘
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+%% 决策示意；实施范围以本文状态记录为准。
+flowchart TB
+  H["HTTP 写请求 + Idempotency-Key"] --> L1["ConsoleIdempotencyInterceptor"]
+  L1 -->|"放行"| L2["DefaultTriggerService · 请求去重"]
+  L2 -->|"HTTP / Kafka envelope"| L3["数据库唯一约束 · 运行事实"]
+  L1 -. "tenant / URI / method / key" .-> S1["请求重试身份"]
+  L2 -. "本 ADR 原决策：best effort" .-> S2["历史 trigger_request 边界"]
+  L3 -. "本 ADR 原决策" .-> S3["tenant + job dedup_key"]
 ```
 
 ## 不变量

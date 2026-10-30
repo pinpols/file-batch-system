@@ -101,6 +101,9 @@ public class ConfigPackageExcelWorkbookWriter {
   public static final List<String> JOB_MONITORING_POLICY_COLUMNS =
       List.copyOf(ConfigPackageExcelSchema.JobMonitoringPolicy.COLUMNS);
 
+  public static final List<String> WORKFLOW_MONITORING_POLICY_COLUMNS =
+      List.copyOf(ConfigPackageExcelSchema.WorkflowMonitoringPolicy.COLUMNS);
+
   public static final List<String> CHANNEL_COLUMNS = ConfigPackageExcelSchema.FileChannel.COLUMNS;
 
   public static final List<String> FILE_TEMPLATE_COLUMNS =
@@ -285,7 +288,8 @@ public class ConfigPackageExcelWorkbookWriter {
         session.fileTemplateRows(),
         session.workflowDefinitionRows(),
         session.workflowNodeRows(),
-        session.workflowEdgeRows());
+        session.workflowEdgeRows(),
+        session.workflowMonitoringPolicyRows());
     List<SheetResult> results = List.of(
         result.resourceQueues(),
         result.businessCalendars(),
@@ -296,7 +300,8 @@ public class ConfigPackageExcelWorkbookWriter {
         result.fileTemplates(),
         result.wfDefs(),
         result.wfNodes(),
-        result.wfEdges());
+        result.wfEdges(),
+        result.workflowMonitoringPolicies());
     try (XSSFWorkbook wb = new XSSFWorkbook()) {
       for (ConfigPackageSheetSpecs.SheetDef def : exportSheetDefs) {
         int sourceIndex = sheetIndex(def.name());
@@ -640,7 +645,7 @@ public class ConfigPackageExcelWorkbookWriter {
       Map.entry(
           WF_NODE_SHEET,
           Map.of(
-              "node_type", "WORKFLOW 内部分类：START/END/TASK/GATEWAY/JOB",
+              "node_type", "新 WORKFLOW 节点：START/END/JOB/GATEWAY/WAIT；TASK 为历史类型",
               "related_job_code", "WORKFLOW 节点引用的其他 Job（任意 worker 类型）")));
 
   public static String joinAllowedValues(ConsoleExcelStyles.ColumnGuide guide) {

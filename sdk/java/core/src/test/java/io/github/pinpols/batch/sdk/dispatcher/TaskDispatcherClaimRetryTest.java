@@ -25,6 +25,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 /**
  * Phase 1 #SDK-P1-2 — CLAIM 401/403 fail-fast + 5xx 指数退避 + 409 peer / 其它 4xx give up。
@@ -165,8 +167,8 @@ class TaskDispatcherClaimRetryTest {
     dispatcher = new TaskDispatcher(config, Map.of("tt", trackedHandler(executed)), http);
 
     for (long taskId = 1L; taskId <= 6L; taskId++) {
-      TaskDispatchMessage historical = new TaskDispatchMessage(
-          taskId, "tx", "job-1", "tt", "historical", Map.of(), Map.of());
+      TaskDispatchMessage historical =
+          new TaskDispatchMessage(taskId, "tx", "job-1", "tt", "historical", Map.of(), Map.of());
       dispatcher.processInWorkerThread(historical);
     }
     assertThat(dispatcher.isFatal()).isFalse();
@@ -174,12 +176,11 @@ class TaskDispatcherClaimRetryTest {
     assertThat(executed).isFalse();
     verify(http, never()).report(anyLong(), anyString(), any());
 
-    TaskDispatchMessage pending = new TaskDispatchMessage(
-        100L, "tx", "job-1", "tt", "pending", Map.of(), Map.of());
+    TaskDispatchMessage pending =
+        new TaskDispatchMessage(100L, "tx", "job-1", "tt", "pending", Map.of(), Map.of());
     TaskDispatcher.DispatchDecision decision = dispatcher.onMessage(pending);
     assertThat(decision).isEqualTo(TaskDispatcher.DispatchDecision.SUBMITTED);
-    verify(http, org.mockito.Mockito.timeout(2000)).report(
-        org.mockito.ArgumentMatchers.eq(100L), anyString(), any());
+    verify(http, Mockito.timeout(2000)).report(ArgumentMatchers.eq(100L), anyString(), any());
     assertThat(executed).isTrue();
     verify(http, times(7)).claim(anyLong(), anyString(), any());
   }

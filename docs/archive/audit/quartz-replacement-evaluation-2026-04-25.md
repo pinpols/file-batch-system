@@ -1,3 +1,5 @@
+> 历史原始记录：本轮恢复保留，正文中的结论、参数、状态和操作步骤仅适用于原日期/基线。提炼方法不替代原始证据；当前事实须按[文档治理](../../standards/document-governance.md)重新核实。本轮未执行原测试或扫描。
+
 > **历史说明**：本文是 Wheel 实施前的评估快照。Wheel 方案曾完成设计并进入评估，但已于 2026-07-23 撤销并从运行路径移除；当前生产统一使用 Quartz JDBC JobStore。请以当前代码和 [`ADR-033`](../../architecture/adr/ADR-033-quartz-to-wheel-scheduler.md) 的 `Superseded` 状态为准。
 
 # Quartz 替换为时间轮的可执行方案
@@ -17,7 +19,7 @@
 >
 > **工程量(2026-04-25 经外部 review 校准)**:1.5-2 人月开发 + 1 人月 staging/灰度观察 = 真实从开工到全量切换 2-3 个月。原 "≤ 800 行 / 1 人月" 估算偏乐观,**未计入** fire 强约束 / 滑动窗口去重 / failover fast-path / 双引擎防护 / cron 一致性等生产风险回退。
 >
-> **实施前必读**:[`quartz-replacement-design-2026-04-25.md`](../design/quartz-replacement-design-2026-04-25.md)(详细实施设计 + 5 项风险回退 + Pre-flight Checklist)。本文档(evaluation)只承载战略决策,设计层细节全部在 design.md。
+> 本评估记录的是当时提出替换 Quartz 的战略理由。替换提案后来已撤销；当前决策与运行容量基线见 [ADR-033](../../architecture/adr/ADR-033-quartz-to-wheel-scheduler.md) 和 [Quartz 容量基线](../../runbook/quartz-capacity-baseline.md)。
 
 ---
 

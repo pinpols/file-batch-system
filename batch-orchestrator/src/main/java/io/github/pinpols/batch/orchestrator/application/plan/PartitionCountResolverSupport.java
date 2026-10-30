@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.plan;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 
-/** Shared numeric normalization for partition-count resolvers. */
+/** 分区数解析器共用的数值规范化逻辑。 */
 final class PartitionCountResolverSupport {
 
   private PartitionCountResolverSupport() {}

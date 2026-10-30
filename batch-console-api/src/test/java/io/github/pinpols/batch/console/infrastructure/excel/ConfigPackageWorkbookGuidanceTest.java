@@ -15,7 +15,6 @@ import io.github.pinpols.batch.common.enums.OutOfWindowAction;
 import io.github.pinpols.batch.common.enums.PipelineType;
 import io.github.pinpols.batch.common.enums.ScheduleType;
 import io.github.pinpols.batch.common.enums.WorkflowEdgeType;
-import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles;
@@ -43,6 +42,22 @@ import org.springframework.context.support.StaticMessageSource;
  */
 @DisplayName("配置包模板引导内容:示例 sheet、填写顺序与字段说明的防漂移校验")
 class ConfigPackageWorkbookGuidanceTest {
+
+  @Test
+  @DisplayName("Workflow 新图模板只提供可执行节点类型")
+  void shouldOfferOnlyRunnableWorkflowNodeTypes() throws Exception {
+    try (XSSFWorkbook workbook = buildTemplate()) {
+      assertDropdownValues(
+          workbook.getSheet(ConfigPackageExcelValidator.WF_NODE_SHEET),
+          "node_type",
+          List.of("GATEWAY", "START", "END", "JOB", "WAIT"));
+      assertThat(rowOf(workbook.getSheet("字段说明"), "node_type").getCell(8).getStringCellValue())
+          .contains("WAIT", "TASK 为历史类型");
+      assertThat(rowOf(workbook.getSheet("字段说明"), "node_type").getCell(5).getStringCellValue())
+          .contains("JOB", "WAIT")
+          .doesNotContain("TASK");
+    }
+  }
 
   private XSSFWorkbook buildTemplate() throws Exception {
     StaticMessageSource ms = new StaticMessageSource();
@@ -120,9 +135,12 @@ class ConfigPackageWorkbookGuidanceTest {
 
   @Test
   @DisplayName("新完整模板不再提供可编辑 Pipeline 定义表")
-  void shouldPreserveLegacyFullWorkbook_whenBuildingTemplate() throws Exception {
+  void shouldIncludeCurrentFullWorkbook_whenBuildingTemplate() throws Exception {
+    StaticMessageSource messages = new StaticMessageSource();
+    assertThat(ConfigPackageSampleDataFactory.sampleSheets("ALL"))
+        .hasSize(new ConfigPackageSheetSpecs(messages).build().size());
     try (XSSFWorkbook wb = buildTemplate()) {
-      assertThat(wb.getNumberOfSheets()).isEqualTo(18);
+      assertThat(wb.getNumberOfSheets()).isEqualTo(19);
       assertThat(wb.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET)).isNull();
       assertThat(wb.getSheet(ConfigPackageExcelValidator.STEP_SHEET)).isNull();
       assertThat(wb.getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET)).isNotNull();
@@ -193,7 +211,7 @@ class ConfigPackageWorkbookGuidanceTest {
       assertDropdownValues(
           workbook.getSheet(ConfigPackageExcelValidator.WF_NODE_SHEET),
           "node_type",
-          DictEnum.codeList(WorkflowNodeType.class));
+          List.of("GATEWAY", "START", "END", "JOB", "WAIT"));
       assertDropdownValues(
           workbook.getSheet(ConfigPackageExcelValidator.WF_EDGE_SHEET),
           "edge_type",

@@ -18,6 +18,7 @@
 ## 2. 白名单路径(维护期始终放行)
 
 - `/actuator/**`(健康检查 / 监控)
+- `/internal/am-notify/**`（维护期间继续接收告警，由独立共享令牌鉴权）
 - `/api/console/auth/check`(登录态探活,nginx auth_request 用)
 - `/api/console/auth/logout`(允许用户登出)
 - `/api/console/system/maintenance`(状态接口,前端轮询恢复)
@@ -111,3 +112,33 @@ POST /internal/orchestrator/drain/disable
 ```
 
 `enable` 先将实例标记为 draining，使后续进入 listener 的 Launch 消息延迟重投，再暂停该实例的 Trigger Launch listener 并将 Readiness 置为拒绝流量；已经进入 launch 业务处理的单条消息允许完成。消息继续遵循 Kafka 手动确认与幂等重投语义。同一 Kafka 工厂中的 OpenLineage listener 不受影响。确认 Pod 已从 Service endpoints 摘除、Launch 消费已暂停后再进行滚动维护；取消维护时调用 `disable` 恢复 listener 和 Readiness。应用进程收到关闭事件时也会进入同一排空流程。
+
+## 10. 维护期通知抑制（2026-10-26）
+
+维护开关不关闭 Prometheus 规则、业务告警生成、事件持久化或恢复判断，也不把原故障改成已恢复。Console 将共享状态发布为 `BatchPlannedMaintenance` 控制信号；Alertmanager 仅对同一 `maintenance_scope`、同一 `job` 的 `BatchServiceDown` 和 `BatchCoreServiceTargetMissing` 抑制通知。控制信号进入空接收端，不作为业务消息发送。数据完整性、SLA、监控自身故障、维护同步失败与维护超时均不在抑制名单。
+
+### 部署前置与范围
+
+- Console 与 Prometheus 必须配置相同、跨环境和工作树唯一的 `BATCH_MAINTENANCE_ALERT_SCOPE`。空范围不启用自动抑制，缺少范围标签的告警继续通知。Docker 范围编码使用字母、数字及 `_.:-`。
+- `BATCH_CONSOLE_ALERTMANAGER_SILENCE_ENABLED=true`，且 `BATCH_CONSOLE_ALERTMANAGER_API_BASE_URL` 必须指向实际 Alertmanager。裸 JVM 通常使用宿主映射地址，Compose 使用容器网络地址；两者不要混用。此配置属于重启生效项，不是动态维护状态。
+- Helm ServiceMonitor 的服务选择器同时限定 name/component/Release instance; monitor 自身的 metadata 标签不能代替服务选择条件。同命名空间双 Release 不得互相抓取或重打维护范围。
+- Docker Prometheus 同时给应用 target 和外部告警添加范围标签，覆盖 `absent()` 目标缺失告警。Helm 从 `alertmanager.console.maintenanceScope` 取范围，空值派生为 `namespace.release`；ServiceMonitor、可用性规则选择器和 Console ConfigMap 使用同一值。站点仍需启用 `silenceEnabled` 并配置 `apiBaseUrl`，加载更新后的 Alertmanager 模板和 Prometheus 规则。
+- 公告 `affectedServices` 保留展示用途，并新增有限的通知范围解释：识别 `console-api`、`trigger`、`orchestrator`、`worker-import`、`worker-export`、`worker-process`、`worker-dispatch`、`worker-atomic`，也接受对应 `batch-` 前缀。留空只抑制 Console 可用性通知，不扩大到全平台；未知标记不抑制。该字段不执行服务启停、业务路由或单服务请求冻结。
+
+部署范围标签属于告警身份。首次加载或更换范围时应核对已有 firing/抑制信号；修改范围前先结束旧维护并确认旧控制信号已解除，再切换 Console 与 Prometheus，避免旧标签信号残留到原截止时间。
+
+### 时间、结束与失败
+
+- 公告发布但 `startsAt` 未到时不抑制通知。到点后按共享状态轮询同步；轮询与 HTTP 重试会有短暂传播延迟，计划停机前应核对同步指标和 Alertmanager 中的控制信号，不把保存成功当作已完成摘流或通知抑制。
+- 抑制截止采用 `etaAt`；缺省从持久化的 `startsAt` 或 `updatedAt` 加默认 120 分钟计算，复用 `silence.default-duration-minutes`。最大窗口为 24 小时。重试、后台轮询及进程重启不从当前时间续期；需要延长时须显式更新共享维护状态。
+- Console 每 5 秒检查状态，正常每 30 秒重发一次控制信号；范围、活动状态或版本变化时立即同步下一轮。提前关闭或缩小范围会发布相同身份的解除信号，多副本重复发布不会制造不同标签身份。
+- 控制信号携带固定 RFC3339 `endsAt`。即使 Console 随后停机、不再刷新，到期也会解除抑制；这遵循 [Alertmanager Alerts API](https://prometheus.io/docs/alerting/latest/alerts_api/) 的生命周期。抑制解除不会制造业务恢复回执，仍存在的故障由 Alertmanager 正常通知。
+- 未配置地址/范围、共享状态不可确认、未知服务范围或同步请求失败时，`batch_console_maintenance_alert_suppression_available=0`，保留未确认状态；已经成功发送的信号最多保留到原固定截止时间。`BatchConsoleMaintenanceSuppressionUnavailable` 提示维护抑制未确认，`BatchConsoleMaintenanceWindowOverdue` 提示窗口已结束。截止只恢复告警通知，不自动取消业务冻结。
+
+### 维护 HTTP 503
+
+统一观测约定为所有 HTTP 请求提供相同的标签集合：已确认维护拒绝为 `maintenance=planned`，其余为 `maintenance=none`，避免同名 Prometheus 指标因标签结构不同而注册失败。普通 HTTP 错误率的分子、分母与请求量下限均排除此类请求，防止误报或以大量维护请求稀释真实 500。共享维护状态失联产生的 503 不打此标记，真实错误继续告警。不要按整个服务、全部 503 或“维护开启”直接屏蔽 HTTP 错误。
+
+### 验证边界
+
+实现与验证记录维护在[完善方案](../plans/maintenance-degradation-hardening-plan-2026-09-29.md#2026-10-26-维护通知联动补齐)。隔离 Alertmanager 与规则 fixture 证明抑制策略，不替代站点配置加载、跨 Console 副本状态收敛、带任务滚动启停和真实最终收件验收。

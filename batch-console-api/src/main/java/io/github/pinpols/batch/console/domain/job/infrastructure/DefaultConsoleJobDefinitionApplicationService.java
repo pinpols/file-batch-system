@@ -95,18 +95,13 @@ public class DefaultConsoleJobDefinitionApplicationService
     List<String> dependencyCodes =
         dependencyRules.stream().map(JobDependencyRuleRequest::upstreamJobCode).toList();
     validateDependencies(tenantId, request.getJobCode(), dependencyCodes);
-    String validationScheduleType = request.getScheduleType();
-    String validationDependencyCode =
-        EmptyChecks.isEmpty(dependencyCodes) ? null : dependencyCodes.get(0);
-    Integer validationStartGraceSeconds = request.getStartGraceSeconds();
-    LocalTime validationCompletionDeadlineLocalTime = request.getCompletionDeadlineLocalTime();
+    LocalTime validationCompletionDeadlineLocalTime =
+        Boolean.FALSE.equals(request.getCompletionDeadlineEnabled())
+            ? null
+            : request.getCompletionDeadlineLocalTime();
     Integer validationDependencyWindowSeconds = request.getDependencyCompletionWindowSeconds();
-    validateScheduledMonitoring(
-        validationScheduleType,
-        validationDependencyCode,
-        validationStartGraceSeconds,
-        validationCompletionDeadlineLocalTime,
-        validationDependencyWindowSeconds);
+    validateMonitoringCompletionMode(
+        validationCompletionDeadlineLocalTime, validationDependencyWindowSeconds);
     JobDefinitionEntity existing =
         jobDefinitionMapper.selectByUniqueKey(tenantId, request.getJobCode());
     if (existing != null) {
@@ -194,21 +189,14 @@ public class DefaultConsoleJobDefinitionApplicationService
     if (enabledCompletionDeadlineIsMissing) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_ARGUMENT_KEY);
     }
-    String scheduleType = existing.getScheduleType();
-    boolean useExistingStartGrace = EmptyChecks.isNull(request.getStartGraceSeconds());
-    Integer effectiveStartGraceSeconds =
-        useExistingStartGrace ? existing.getStartGraceSeconds() : request.getStartGraceSeconds();
+
     boolean useExistingDependencyCompletionWindow =
         EmptyChecks.isNull(request.getDependencyCompletionWindowSeconds());
     Integer effectiveDependencyCompletionWindowSeconds = useExistingDependencyCompletionWindow
         ? existing.getDependencyCompletionWindowSeconds()
         : request.getDependencyCompletionWindowSeconds();
-    validateScheduledMonitoring(
-        scheduleType,
-        dependsOnJobCode,
-        effectiveStartGraceSeconds,
-        completionDeadlineLocalTime,
-        effectiveDependencyCompletionWindowSeconds);
+    validateMonitoringCompletionMode(
+        completionDeadlineLocalTime, effectiveDependencyCompletionWindowSeconds);
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     String operator = requestMetadata.operatorId();
     JobDefinitionMaintenanceUpdateParam param = new JobDefinitionMaintenanceUpdateParam();
@@ -379,6 +367,8 @@ public class DefaultConsoleJobDefinitionApplicationService
     monitoringPolicyBuilder.updatedBy(operator);
     JobMonitoringPolicyUpsertParam monitoringPolicy = monitoringPolicyBuilder.build();
     jobDefinitionMapper.upsertJobMonitoringPolicy(monitoringPolicy);
+    // 监控策略属于 jobDefinition 聚合，写后必须失效 orchestrator 读热点的配置缓存。
+    cacheInvalidationService.evictAllJobDefinitions(tenantId);
   }
 
   private void applyMonitoringUpdate(
@@ -865,30 +855,14 @@ public class DefaultConsoleJobDefinitionApplicationService
     return EmptyChecks.isNull(requested) ? defaults.getSoftRuntimeSeconds() : requested;
   }
 
-  private static void validateScheduledMonitoring(
-      String scheduleType,
-      String dependsOnJobCode,
-      Integer startGraceSeconds,
-      LocalTime completionDeadlineLocalTime,
-      Integer dependencyCompletionWindowSeconds) {
-    boolean cron = "CRON".equals(scheduleType);
-    boolean dependency = Texts.hasText(dependsOnJobCode);
-    boolean startGraceConfigured = valueOrZero(startGraceSeconds) > 0;
-    boolean completionDeadlineConfigured = EmptyChecks.isNotNull(completionDeadlineLocalTime);
-    boolean dependencyWindowConfigured = valueOrZero(dependencyCompletionWindowSeconds) > 0;
-    boolean startGraceSupported = cron || dependency;
-    boolean deadlineRequiresCronWithoutDependency =
-        completionDeadlineConfigured && (!cron || dependency);
-    boolean dependencyWindowRequiresDependency = dependencyWindowConfigured && !dependency;
-    boolean deadlineAndDependencyWindowCannotCombine =
-        completionDeadlineConfigured && dependencyWindowConfigured;
-    boolean invalidDeadlineCombination = deadlineRequiresCronWithoutDependency
-        || dependencyWindowRequiresDependency
-        || deadlineAndDependencyWindowCannotCombine;
-    boolean startDeadlineConfigurationIsInvalid =
-        (!startGraceSupported && startGraceConfigured) || invalidDeadlineCombination;
-    if (startDeadlineConfigurationIsInvalid) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_ARGUMENT_KEY);
+  /** 策略资格由运行事实判定；配置侧只校验两种完成期限不能同时启用。 */
+  private static void validateMonitoringCompletionMode(
+      LocalTime completionDeadlineLocalTime, Integer dependencyCompletionWindowSeconds) {
+    boolean localDeadlineConfigured = EmptyChecks.isNotNull(completionDeadlineLocalTime);
+    boolean relativeWindowConfigured = valueOrZero(dependencyCompletionWindowSeconds) > 0;
+    if (localDeadlineConfigured && relativeWindowConfigured) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.job.monitoring_completion_modes_exclusive");
     }
   }
 

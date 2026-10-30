@@ -1,11 +1,9 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.metrics;
 
-import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionGlobalQueueBacklogSummaryQuery;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionGlobalQueueBacklogSummaryQuery;
 import io.github.pinpols.batch.orchestrator.domain.view.QueuePartitionBacklogStats;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
@@ -13,10 +11,12 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @DisplayName("调度队列积压指标采集器:验证采样时聚合各状态分区数与排队总数并刷新全局指标,含最老等待时长")
+@ExtendWith(MockitoExtension.class)
 class SchedulerQueueBacklogMetricsSchedulerTest {
 
   @Mock
@@ -30,7 +30,6 @@ class SchedulerQueueBacklogMetricsSchedulerTest {
 
   @BeforeEach
   void setUp() {
-    MockitoAnnotations.openMocks(this);
     meterRegistry = new SimpleMeterRegistry();
     scheduler = new SchedulerQueueBacklogMetricsScheduler(
         jobPartitionMapper, meterRegistry, gracefulShutdown);

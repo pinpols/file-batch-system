@@ -50,6 +50,36 @@ class TaskOutcomeSummaryBuilderTest {
   }
 
   @Test
+  @DisplayName("失败分片的最后报告不能补作成功分片缺失的输出")
+  void shouldNotUseFailedReportOutputsAsSuccessfulPartitionFallback() {
+    JobPartitionEntity success = partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of());
+    JobPartitionEntity failed =
+        partition(2L, 2, "p2", PartitionStatus.FAILED.code(), Map.of("rows", 999));
+    TaskOutcomeCommand failedReport = TaskOutcomeCommand.builder()
+        .tenantId("ta")
+        .taskId(10L)
+        .success(false)
+        .outputs(Map.of("rows", 999))
+        .build();
+
+    assertThat(TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
+            List.of(success, failed), failedReport))
+        .isEmpty();
+    assertThat(TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
+            List.of(failed), failedReport))
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("单个成功报告仍可补足历史分片缺失的输出")
+  void shouldKeepSuccessfulReportFallbackForLegacyPartition() {
+    JobPartitionEntity success = partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of());
+    assertThat(TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
+            List.of(success), commandOutputs(Map.of("rows", 100))))
+        .containsEntry("rows", 100);
+  }
+
+  @Test
   @DisplayName("aggregateSuccessfulPartitionOutputs: 多分片包装为 partitionedOutputs")
   void shouldWrapPartitionedOutputs_whenMultiplePartitions() {
     JobPartitionEntity first =

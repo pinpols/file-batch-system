@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.worker.core.infrastructure.checkpoint;
 
-import io.github.pinpols.batch.worker.core.param.PipelineProgressAdvanceParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
@@ -11,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.worker.core.domain.PipelineProgressEntity;
 import io.github.pinpols.batch.worker.core.mapper.PipelineProgressMapper;
+import io.github.pinpols.batch.worker.core.param.PipelineProgressAdvanceParam;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.OffsetDateTime;
@@ -131,21 +129,23 @@ class DefaultProcessingPositionStoreTest {
   @DisplayName("advance:透传到 mapper,使用 stage.code() 作为 DB 列值")
   void shouldDelegateAdvance() {
     when(mapper.advance(PipelineProgressAdvanceParam.builder()
-        .tenantId(TENANT)
-        .pipelineInstanceId(INSTANCE)
-        .stage("LOAD")
-        .positionMarker("row:500")
-        .processedCountIncrement(500L)
-        .build())).thenReturn(1);
+            .tenantId(TENANT)
+            .pipelineInstanceId(INSTANCE)
+            .stage("LOAD")
+            .positionMarker("row:500")
+            .processedCountIncrement(500L)
+            .build()))
+        .thenReturn(1);
     store.advance(TENANT, INSTANCE, ProcessingStage.LOAD, "row:500", 500L);
 
-    verify(mapper).advance(PipelineProgressAdvanceParam.builder()
-        .tenantId(TENANT)
-        .pipelineInstanceId(INSTANCE)
-        .stage("LOAD")
-        .positionMarker("row:500")
-        .processedCountIncrement(500L)
-        .build());
+    verify(mapper)
+        .advance(PipelineProgressAdvanceParam.builder()
+            .tenantId(TENANT)
+            .pipelineInstanceId(INSTANCE)
+            .stage("LOAD")
+            .positionMarker("row:500")
+            .processedCountIncrement(500L)
+            .build());
     assertMetric("LOAD", "advance", "success", 1.0);
   }
 
@@ -206,13 +206,15 @@ class DefaultProcessingPositionStoreTest {
   @DisplayName("存储异常:记录 failure 指标并保留原异常")
   void shouldRecordFailureAndRethrow() {
     IllegalStateException failure = new IllegalStateException("database unavailable");
-    doThrow(failure).when(mapper).advance(PipelineProgressAdvanceParam.builder()
-        .tenantId(TENANT)
-        .pipelineInstanceId(INSTANCE)
-        .stage("LOAD")
-        .positionMarker("row:500")
-        .processedCountIncrement(500L)
-        .build());
+    doThrow(failure)
+        .when(mapper)
+        .advance(PipelineProgressAdvanceParam.builder()
+            .tenantId(TENANT)
+            .pipelineInstanceId(INSTANCE)
+            .stage("LOAD")
+            .positionMarker("row:500")
+            .processedCountIncrement(500L)
+            .build());
 
     assertThatThrownBy(() -> store.advance(TENANT, INSTANCE, ProcessingStage.LOAD, "row:500", 500L))
         .isSameAs(failure);

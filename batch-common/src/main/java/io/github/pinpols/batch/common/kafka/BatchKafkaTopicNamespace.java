@@ -13,8 +13,8 @@ public final class BatchKafkaTopicNamespace {
 
   public BatchKafkaTopicNamespace(String namespace) {
     this.namespace = EmptyChecks.isNull(namespace) ? "" : namespace.trim();
-    boolean namespaceIsInvalid =
-        !EmptyChecks.isEmpty(Objects.requireNonNull(this.namespace)) && !VALID_NAMESPACE.matcher(this.namespace).matches();
+    boolean namespaceIsInvalid = !EmptyChecks.isEmpty(Objects.requireNonNull(this.namespace))
+        && !VALID_NAMESPACE.matcher(this.namespace).matches();
     if (namespaceIsInvalid) {
       throw new IllegalArgumentException(
           "batch.kafka.namespace must match [a-z0-9][a-z0-9_-]{0,47}");

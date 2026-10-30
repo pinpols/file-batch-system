@@ -60,7 +60,8 @@ public final class RlsTenantSessionSupport {
     }
     Connection conn = DataSourceUtils.getConnection(dataSource);
     boolean releaseAfter = !DataSourceUtils.isConnectionTransactional(conn, dataSource);
-    try (PreparedStatement ps = conn.prepareStatement("SELECT set_config(?, ?, true)")) {
+    String setTenantSql = "SELECT set_config(?, ?, true)";
+    try (PreparedStatement ps = conn.prepareStatement(setTenantSql)) {
       // P2-2(2026-06-03):改 PreparedStatement,GUC 名与 tenantId 均走 bind 参数,
       // 关闭字符串拼接路径(任何 escape 漏洞 / Unicode 注入都不再相关)。
       // set_config(.,.,true) 等价于 SET LOCAL,事务结束(COMMIT/ROLLBACK)自动 reset。
@@ -85,7 +86,8 @@ public final class RlsTenantSessionSupport {
     Connection conn = DataSourceUtils.getConnection(dataSource);
     boolean releaseAfter = !DataSourceUtils.isConnectionTransactional(conn, dataSource);
     try (Statement stmt = conn.createStatement()) {
-      stmt.execute("RESET " + SESSION_VAR_NAME);
+      String resetTenantSql = "RESET " + SESSION_VAR_NAME;
+      stmt.execute(resetTenantSql);
     } catch (SQLException e) {
       throw new IllegalStateException("RLS RESET " + SESSION_VAR_NAME + " failed", e);
     } finally {

@@ -160,12 +160,14 @@ public class ConsoleRealtimeRedisPubSubConsumer implements MessageListener {
       String eventType = envelope.eventType();
       String cursor = envelope.cursor();
       Object eventData = null;
-      if (EmptyChecks.isNotNull(envelope.dataJson()) && !EmptyChecks.isBlank(Objects.requireNonNull(envelope.dataJson()))) {
+      if (EmptyChecks.isNotNull(envelope.dataJson())
+          && !EmptyChecks.isBlank(Objects.requireNonNull(envelope.dataJson()))) {
         String eventDataJson = envelope.dataJson();
         eventData = JsonUtils.fromJson(eventDataJson, Object.class);
       }
-      Instant emittedAt =
-          EmptyChecks.isNull(envelope.emittedAt()) ? BatchDateTimeSupport.utcNow() : envelope.emittedAt();
+      Instant emittedAt = EmptyChecks.isNull(envelope.emittedAt())
+          ? BatchDateTimeSupport.utcNow()
+          : envelope.emittedAt();
       ConsoleSseEvent event =
           new ConsoleSseEvent(tenantId, stream, eventType, cursor, eventData, emittedAt);
       realtimeEventHub.publish(event);

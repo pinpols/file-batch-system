@@ -1,9 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service.replay;
 
-import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplayEntryFailRejectedLaunchesParam;
-import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplaySessionUpdateCountsParam;
-
-
 import io.github.pinpols.batch.common.enums.BatchDayReplayExecutionMode;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
@@ -12,6 +8,8 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplayEntryFailRejectedLaunchesParam;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplaySessionUpdateCountsParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplayEntryStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplaySessionStatusParam;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
@@ -53,8 +51,7 @@ public class BatchDayReplayTerminalReconciler {
       String jobCode,
       Long jobInstanceId,
       String instanceStatus) {
-    boolean terminalReplayIdentityIsIncomplete =
-        !Texts.hasText(tenantId)
+    boolean terminalReplayIdentityIsIncomplete = !Texts.hasText(tenantId)
         || EmptyChecks.isNull(replaySessionId)
         || EmptyChecks.isNull(jobInstanceId)
         || !Texts.hasText(jobCode)
@@ -102,15 +99,16 @@ public class BatchDayReplayTerminalReconciler {
     if (EmptyChecks.isNull(session)) return;
     Instant now = dateTimeSupport.nowInstant();
     entryMapper.bindCurrentExecutions(tenantId, sessionId, now);
-    BatchDayReplayEntryFailRejectedLaunchesParam batchDayReplayEntryFailRejectedLaunchesParam = BatchDayReplayEntryFailRejectedLaunchesParam.builder()
-        .tenantId(tenantId)
-        .sessionId(sessionId)
-        .now(now)
-        .failedStatus(ENTRY_FAILED)
-        .rejectedStatuses(List.of(TriggerRequestStatus.REJECTED.code(), TriggerRequestStatus.GIVE_UP.code()))
-        .build();
-    entryMapper.failRejectedLaunches(
-        batchDayReplayEntryFailRejectedLaunchesParam);
+    BatchDayReplayEntryFailRejectedLaunchesParam batchDayReplayEntryFailRejectedLaunchesParam =
+        BatchDayReplayEntryFailRejectedLaunchesParam.builder()
+            .tenantId(tenantId)
+            .sessionId(sessionId)
+            .now(now)
+            .failedStatus(ENTRY_FAILED)
+            .rejectedStatuses(
+                List.of(TriggerRequestStatus.REJECTED.code(), TriggerRequestStatus.GIVE_UP.code()))
+            .build();
+    entryMapper.failRejectedLaunches(batchDayReplayEntryFailRejectedLaunchesParam);
     // 提交前可能尚未创建启动请求；该条补跑记录仍需计入。
     advanceSessionCounts(session, now);
   }
@@ -134,11 +132,10 @@ public class BatchDayReplayTerminalReconciler {
     if (isSuccessfulRealReplayExecution) {
       return ENTRY_SUCCEEDED;
     }
-    boolean isNonDryRunFailureTerminalStatus =
-        !dryRun
-            && (JobInstanceStatus.FAILED.code().equals(instanceStatus)
-                || JobInstanceStatus.CANCELLED.code().equals(instanceStatus)
-                || JobInstanceStatus.TERMINATED.code().equals(instanceStatus));
+    boolean isNonDryRunFailureTerminalStatus = !dryRun
+        && (JobInstanceStatus.FAILED.code().equals(instanceStatus)
+            || JobInstanceStatus.CANCELLED.code().equals(instanceStatus)
+            || JobInstanceStatus.TERMINATED.code().equals(instanceStatus));
     if (isNonDryRunFailureTerminalStatus) {
       return ENTRY_FAILED;
     }
@@ -162,17 +159,17 @@ public class BatchDayReplayTerminalReconciler {
     long pending = entryMapper.countBySessionAndStatus(session.id(), ENTRY_PENDING);
     long running = entryMapper.countBySessionAndStatus(session.id(), ENTRY_RUNNING);
     long inFlight = pending + running;
-    BatchDayReplaySessionUpdateCountsParam batchDayReplaySessionUpdateCountsParam = BatchDayReplaySessionUpdateCountsParam.builder()
-        .tenantId(session.tenantId())
-        .id(session.id())
-        .succeededCount((int) succeeded)
-        .failedCount((int) failed)
-        .inFlightCount((int) inFlight)
-        .totalCount(session.totalCount())
-        .now(now)
-        .build();
-    sessionMapper.updateCounts(
-        batchDayReplaySessionUpdateCountsParam);
+    BatchDayReplaySessionUpdateCountsParam batchDayReplaySessionUpdateCountsParam =
+        BatchDayReplaySessionUpdateCountsParam.builder()
+            .tenantId(session.tenantId())
+            .id(session.id())
+            .succeededCount((int) succeeded)
+            .failedCount((int) failed)
+            .inFlightCount((int) inFlight)
+            .totalCount(session.totalCount())
+            .now(now)
+            .build();
+    sessionMapper.updateCounts(batchDayReplaySessionUpdateCountsParam);
     boolean replaySessionCanComplete = inFlight == 0L
         && (SESSION_RUNNING.equals(session.status())
             || SESSION_PARTIAL_FAILED.equals(session.status()));
@@ -203,11 +200,13 @@ public class BatchDayReplayTerminalReconciler {
     }
   }
 
-  private BatchDayReplaySessionEntity loadForUpdateWithOperationLock(String tenantId, Long sessionId) {
+  private BatchDayReplaySessionEntity loadForUpdateWithOperationLock(
+      String tenantId, Long sessionId) {
     BatchDayReplaySessionEntity candidate = sessionMapper.selectById(tenantId, sessionId);
     if (EmptyChecks.isNull(candidate)) return null;
     if (EmptyChecks.isNotNull(candidate.replayOperationId())
-        && EmptyChecks.isNull(replayOperationMapper.lockForProgressRefresh(tenantId, candidate.replayOperationId()))) {
+        && EmptyChecks.isNull(replayOperationMapper.lockForProgressRefresh(
+            tenantId, candidate.replayOperationId()))) {
       throw new IllegalStateException(
           "replay operation not found while reconciling child session " + sessionId);
     }

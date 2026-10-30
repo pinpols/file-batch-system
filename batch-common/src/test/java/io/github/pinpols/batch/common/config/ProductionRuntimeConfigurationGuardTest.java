@@ -1,12 +1,17 @@
 package io.github.pinpols.batch.common.config;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.mock.env.MockEnvironment;
 
 @DisplayName("生产运行期配置守卫:开发环境放行、必需地址缺失与回环地址拒绝,以及远端地址的通过场景")
@@ -30,11 +35,12 @@ class ProductionRuntimeConfigurationGuardTest {
     assertFailsClosed(environment, "spring.datasource.url");
   }
 
-  @Test
-  @DisplayName("生产环境缺少 Kafka namespace 时启动校验失败")
-  void shouldRequireKafkaNamespaceInProduction() {
+  @ParameterizedTest
+  @ValueSource(strings = {"", "   "})
+  @DisplayName("生产环境 Kafka namespace 为空或空白时启动校验失败")
+  void shouldRequireKafkaNamespaceInProduction(String namespace) {
     MockEnvironment environment = validProductionEnvironment();
-    environment.setProperty("batch.kafka.namespace", "");
+    environment.setProperty("batch.kafka.namespace", namespace);
 
     assertFailsClosed(environment, "batch.kafka.namespace");
   }
@@ -87,6 +93,29 @@ class ProductionRuntimeConfigurationGuardTest {
         .doesNotThrowAnyException();
   }
 
+  @Test
+  @DisplayName("生产上下文共享已绑定的 Kafka 命名空间配置并成功启动")
+  void shouldBindKafkaNamespace_whenProductionContextStarts() {
+    new ApplicationContextRunner()
+        .withInitializer(context -> context.getEnvironment().setActiveProfiles("prod"))
+        .withConfiguration(AutoConfigurations.of(
+            ProductionRuntimeConfigurationGuard.class, BatchKafkaNamespaceAutoConfiguration.class))
+        .withPropertyValues(
+            "spring.application.name=batch-orchestrator",
+            "spring.datasource.url=jdbc:postgresql://postgres:5432/platform",
+            "spring.kafka.bootstrap-servers=kafka:9092",
+            "spring.data.redis.host=valkey",
+            "batch.orchestrator.base-url=http://orchestrator:18082",
+            "batch.kafka.namespace=test-deployment",
+            "batch.storage.backend=filesystem",
+            "management.server.port=18082")
+        .run(context -> {
+          assertThat(context).hasNotFailed().hasSingleBean(KafkaNamespaceProperties.class);
+          assertThat(context.getBean(KafkaNamespaceProperties.class).getNamespace())
+              .isEqualTo("test-deployment");
+        });
+  }
+
   /**
    * 断言生产配置守卫在给定环境下 fail-closed。
    *
@@ -108,7 +137,11 @@ class ProductionRuntimeConfigurationGuardTest {
     ConsoleReadReplicaProperties readReplica = Binder.get(environment)
         .bind("batch.console.read-replica", Bindable.of(ConsoleReadReplicaProperties.class))
         .orElseGet(ConsoleReadReplicaProperties::new);
-    return new ProductionRuntimeConfigurationGuard(environment, storage, readReplica);
+    KafkaNamespaceProperties kafkaNamespace = Binder.get(environment)
+        .bind("batch.kafka", Bindable.of(KafkaNamespaceProperties.class))
+        .orElseGet(KafkaNamespaceProperties::new);
+    return new ProductionRuntimeConfigurationGuard(
+        environment, storage, readReplica, kafkaNamespace);
   }
 
   private static MockEnvironment validProductionEnvironment() {

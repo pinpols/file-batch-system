@@ -318,3 +318,11 @@ Kafka 增长主要由 topic retention、segment、消费 lag 和副本因子决�
 - [ ] Kafka 核心 topic 有副本、minISR、retention 和 lag 告警。
 - [ ] 对象存储 bucket 分离，lifecycle 可查，关键对象有 checksum/manifest。
 - [ ] 压测残留清理只作用于测试租户、测试 runId 和测试前缀，没有复用生产清理入口。
+
+## 历史基线承接与重新测量
+
+旧调优记录中的池大小、分页大小、吞吐倍数和单机容量不能直接作为当前默认值。每轮只改变可解释的变量，记录镜像/提交及 dirty 状态、容器 CPU/内存限制、JVM、PG 会话/连接池、Kafka 分区与消费参数、数据形状和外部依赖。
+
+控制面 task 吞吐与数据面行数吞吐分别计量。HTTP 成功之外还要核对准入、Outbox、CLAIM、执行、REPORT、业务数据和最终排空；拒绝和失败应按策略统计，不能将 UNKNOWN 或非终态排除后宣布全成功。Kafka lag=0 也不能证明业务已完成。
+
+先在稳定负载下确认瓶颈，再改变 IO/线程/批大小/存储写入策略；保留失败和恢复窗口，不能从一次本地百万行或千万行运行推导目标环境容量。历史测量入口见[大文件验证](../verifications/streaming-large-file-import-export-2026-06-06.md)及[控制面混合吞吐](../verifications/control-plane-worker-throughput-2026-06-07.md)。

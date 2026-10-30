@@ -15,7 +15,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 /**
  * Wiring check for {@link QuartzMisfireListener}. Quartz cron triggers use {@code
- * MISFIRE_INSTRUCTION_DO_NOTHING} (scheduler-level skip); application catch-up vs scheduled-only is
+ * MISFIRE_INSTRUCTION_DO_NOTHING}（调度器层面跳过）；应用层补跑与仅按计划执行的区别由
  * covered in {@link io.github.pinpols.batch.trigger.infrastructure.QuartzLaunchJobTest}.
  */
 @SpringBootTest(

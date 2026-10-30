@@ -6,6 +6,7 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.persistence.entity.WorkflowMonitoringPolicyEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
@@ -33,12 +34,17 @@ import io.github.pinpols.batch.console.domain.job.mapper.CalendarHolidayMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.StepRegistryQueryMapper;
 import io.github.pinpols.batch.console.domain.job.query.JobDefinitionQuery;
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.BatchWindowRow;
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarHolidayRow;
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarQueryRow;
 import io.github.pinpols.batch.console.domain.job.view.StepRegistryEntryView;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.ops.query.ResourceQueueQuery;
+import io.github.pinpols.batch.console.domain.ops.view.ResourceQueueRow;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
+import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowMonitoringPolicyMapper;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowDefinitionQuery;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelSchema;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator;
@@ -106,8 +112,8 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
  *   <li>{@link #apply} — 再次 validate；若 {@code totalInvalid > 0} 直接拒绝；否则在单事务内按资源、作业、工作流依赖顺序写库；完成后 {@code importStore.remove(token)}。
  * </ol>
  *
- * <p>Pipeline 阶段由系统按 Job 类型提供；租户配置包不接受 Pipeline 定义/步骤表。作业监控策略单独放在
- * {@code job_monitoring_policy}，与 {@code job_definition} 分开维护；该 sheet 可省略，缺失表示不修改已有策略。
+ * <p>Pipeline 阶段由系统按 Job 类型提供；租户配置包不接受 Pipeline 定义/步骤表。Job 与 Workflow 监控策略分别放在独立 sheet；
+ * 对应 sheet 可省略，缺失表示不修改已有策略。
  *
  * <p><b>多级结构写法</b>：
  *
@@ -123,8 +129,6 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 @SuppressWarnings({"java:S2259", "java:S2583"})
 public class DefaultTenantConfigPackageExcelService implements TenantConfigPackageExcelService {
 
-  private static final String KEY_ID = "id";
-
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final TenantConfigPackageExcelImportStore importStore;
@@ -137,6 +141,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
   private final FileChannelConfigMapper fileChannelConfigMapper;
   private final FileTemplateConfigMapper fileTemplateConfigMapper;
   private final WorkflowDefinitionMapper workflowDefinitionMapper;
+  private final WorkflowMonitoringPolicyMapper workflowMonitoringPolicyMapper;
   private final StepRegistryQueryMapper stepRegistryQueryMapper;
   private final TenantConfigPackageRowProjections rowProjections;
   private final BatchDateTimeSupport dateTimeSupport;
@@ -150,7 +155,8 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
         fileTemplateConfigMapper,
         resourceQueueMapper,
         businessCalendarMapper,
-        batchWindowMapper);
+        batchWindowMapper,
+        workflowDefinitionMapper);
   }
 
   private ConfigPackageExcelWorkbookWriter workbookWriter() {
@@ -162,6 +168,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
   }
 
   @Override
+  @Transactional(readOnly = true)
   public ResponseEntity<StreamingResponseBody> exportPackage(String tenantId) {
     String tid = tenantGuard.resolveTenant(tenantId);
     boolean includePlatformFields = applyAuthorization.canViewPlatformFields();
@@ -170,11 +177,16 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     List<Map<String, Object>> resourceQueues = List.of();
     if (includePlatformFields) {
       ResourceQueueQuery queueQuery = ResourceQueueQuery.allForTenant(tid);
-      resourceQueues = resourceQueueMapper.selectByQuery(queueQuery);
+      resourceQueues = resourceQueueMapper.selectByQuery(queueQuery).stream()
+          .map(ResourceQueueRow::toMap)
+          .toList();
     }
     List<Map<String, Object>> businessCalendars =
         withCalendarHolidayValues(businessCalendarMapper.selectByQuery(tid, null, null, null));
-    List<Map<String, Object>> batchWindows = batchWindowMapper.selectByQuery(tid, null, null, null);
+    List<Map<String, Object>> batchWindows =
+        batchWindowMapper.selectByQuery(tid, null, null, null).stream()
+            .map(BatchWindowRow::toMap)
+            .toList();
     JobDefinitionQuery jobDefinitionQuery = JobDefinitionQuery.ofTenant(tid, null);
     List<JobDefinitionEntity> jobDefinitions =
         jobDefinitionMapper.selectByQuery(jobDefinitionQuery);
@@ -207,6 +219,9 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
       wfNodes = rowProjections.withoutPlatformWorkerGroups(wfNodes);
     }
     List<Map<String, Object>> wfEdges = rowProjections.collectWorkflowEdges(tid, wfEntities);
+    workflowMonitoringPolicyMapper.setTenantContext(tid);
+    List<Map<String, Object>> workflowMonitoringPolicies = toWorkflowMonitoringPolicyRows(
+        tid, wfEntities, workflowMonitoringPolicyMapper.selectByTenant(tid), includePlatformFields);
     List<List<Map<String, Object>>> sheets = List.of(
         resourceQueues,
         businessCalendars,
@@ -217,13 +232,57 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
         fileTemplates,
         wfDefs,
         wfNodes,
-        wfEdges);
+        wfEdges,
+        workflowMonitoringPolicies);
     Map<String, List<String>> implRegistry = loadRegisteredImplCodesByModule();
     ConfigPackageExcelWorkbookWriter writer = workbookWriter();
     String fileName =
         "tenant-config-package-" + tid + "-" + dateTimeSupport.currentFileTimestamp() + ".xlsx";
     return ConsoleSingleSheetExcelImportSupport.excelStreamingResponse(
         fileName, out -> writer.writeExportWorkbook(out, sheets, implRegistry));
+  }
+
+  private static List<Map<String, Object>> toWorkflowMonitoringPolicyRows(
+      String tenantId,
+      List<WorkflowDefinitionEntity> definitions,
+      List<WorkflowMonitoringPolicyEntity> policies,
+      boolean includeTenantColumn) {
+    Map<Long, WorkflowMonitoringPolicyEntity> policyByDefinitionId = policies.stream()
+        .collect(Collectors.toMap(
+            WorkflowMonitoringPolicyEntity::getWorkflowDefinitionId, policy -> policy));
+    return definitions.stream()
+        .map(definition -> {
+          WorkflowMonitoringPolicyEntity policy = policyByDefinitionId.get(definition.getId());
+          Map<String, Object> row = new LinkedHashMap<>();
+          if (includeTenantColumn) {
+            row.put(COL_TENANT_ID, tenantId);
+          }
+          row.put(COL_WORKFLOW_CODE, definition.getWorkflowCode());
+          row.put(COL_WORKFLOW_VERSION, definition.getVersion());
+          row.put(
+              COL_SOFT_RUNTIME_SECONDS,
+              EmptyChecks.isNull(policy) ? 0 : policy.getSoftRuntimeSeconds());
+          row.put(
+              COL_SOFT_RUNTIME_SEVERITY,
+              EmptyChecks.isNull(policy) ? "WARN" : policy.getSoftRuntimeSeverity());
+          row.put(
+              COL_START_GRACE_SECONDS,
+              EmptyChecks.isNull(policy) ? 0 : policy.getStartGraceSeconds());
+          row.put(
+              COL_START_GRACE_SEVERITY,
+              EmptyChecks.isNull(policy) ? "WARN" : policy.getStartGraceSeverity());
+          row.put(
+              COL_COMPLETION_DEADLINE_LOCAL_TIME,
+              EmptyChecks.isNull(policy) ? null : policy.getCompletionDeadlineLocalTime());
+          row.put(
+              COL_COMPLETION_DEADLINE_DAY_OFFSET,
+              EmptyChecks.isNull(policy) ? 0 : policy.getCompletionDeadlineDayOffset());
+          row.put(
+              COL_COMPLETION_DEADLINE_SEVERITY,
+              EmptyChecks.isNull(policy) ? "WARN" : policy.getCompletionDeadlineSeverity());
+          return row;
+        })
+        .toList();
   }
 
   @Override
@@ -280,18 +339,19 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
         ConsoleExcelStyles.ColumnGuide guide = sheet.guides().get(column);
         boolean required = EmptyChecks.isNotNull(guide) && guide.required();
         TenantConfigPackageExcelGuideResponse.ColumnGuide columnGuide =
-            new TenantConfigPackageExcelGuideResponse.ColumnGuide(
-                column,
-                required,
-                EmptyChecks.isNotNull(guide) && guide.readOnly(),
-                guideLevelFor(sheet.name(), column, required),
-                EmptyChecks.isNull(guide) ? "" : guide.formatHint(),
-                EmptyChecks.isNull(guide) ? List.of() : guide.allowedValues(),
-                EmptyChecks.isNull(guide) ? "" : guide.description(),
-                EmptyChecks.isNull(guide) ? "" : guide.example(),
-                fillExampleFor(sheet.name(), column, guide),
-                defaultBehaviorFor(column, guide),
-                appliesToFor(sheet.name(), column));
+            TenantConfigPackageExcelGuideResponse.ColumnGuide.builder()
+                .columnName(column)
+                .required(required)
+                .readOnly(EmptyChecks.isNotNull(guide) && guide.readOnly())
+                .guideLevel(guideLevelFor(sheet.name(), column, required))
+                .format(EmptyChecks.isNull(guide) ? "" : guide.formatHint())
+                .allowedValues(EmptyChecks.isNull(guide) ? List.of() : guide.allowedValues())
+                .description(EmptyChecks.isNull(guide) ? "" : guide.description())
+                .example(EmptyChecks.isNull(guide) ? "" : guide.example())
+                .fillExample(fillExampleFor(sheet.name(), column, guide))
+                .defaultBehavior(defaultBehaviorFor(column, guide))
+                .appliesTo(appliesToFor(sheet.name(), column))
+                .build();
         columns.add(columnGuide);
       }
       sheets.add(new TenantConfigPackageExcelGuideResponse.SheetGuide(
@@ -325,10 +385,10 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     return result;
   }
 
-  private List<Map<String, Object>> withCalendarHolidayValues(List<Map<String, Object>> rows) {
+  private List<Map<String, Object>> withCalendarHolidayValues(List<CalendarQueryRow> rows) {
     List<Map<String, Object>> out = new ArrayList<>();
-    for (Map<String, Object> row : rows) {
-      Object calendarId = row.get(KEY_ID);
+    for (CalendarQueryRow row : rows) {
+      Long calendarId = row.id();
       String holidayDatesText = calendarHolidaysText(calendarId);
       Map<String, Object> exportRow =
           ConfigPackageExcelSchema.BusinessCalendar.toExportRow(row, holidayDatesText);
@@ -337,14 +397,12 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     return out;
   }
 
-  private String calendarHolidaysText(Object idValue) {
-    if (!(idValue instanceof Number number)) {
+  private String calendarHolidaysText(Long calendarId) {
+    if (EmptyChecks.isNull(calendarId)) {
       return null;
     }
-    List<Map<String, Object>> holidayRows =
-        calendarHolidayMapper.selectByCalendarId(number.longValue());
-    List<String> dates =
-        holidayRows.stream().map(row -> String.valueOf(row.get("bizDate"))).toList();
+    List<CalendarHolidayRow> holidayRows = calendarHolidayMapper.selectByCalendarId(calendarId);
+    List<String> dates = holidayRows.stream().map(h -> h.bizDate().toString()).toList();
     return dates.isEmpty() ? null : String.join(",", dates);
   }
 
@@ -369,20 +427,21 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
       Files.deleteIfExists(temporaryWorkbook);
     }
     String token = importStore.save(session);
-    return new TenantConfigPackageExcelUploadResponse(
-        token,
-        fileName,
-        session.resourceQueueRows().size(),
-        session.businessCalendarRows().size(),
-        session.batchWindowRows().size(),
-        session.jobRows().size(),
-        session.fileChannelRows().size(),
-        session.fileTemplateRows().size(),
-        session.pipelineRows().size(),
-        session.pipelineStepRows().size(),
-        session.workflowDefinitionRows().size(),
-        session.workflowNodeRows().size(),
-        session.workflowEdgeRows().size());
+    return TenantConfigPackageExcelUploadResponse.builder()
+        .uploadToken(token)
+        .fileName(fileName)
+        .resourceQueueRows(session.resourceQueueRows().size())
+        .businessCalendarRows(session.businessCalendarRows().size())
+        .batchWindowRows(session.batchWindowRows().size())
+        .jobRows(session.jobRows().size())
+        .fileChannelRows(session.fileChannelRows().size())
+        .fileTemplateRows(session.fileTemplateRows().size())
+        .pipelineRows(session.pipelineRows().size())
+        .pipelineStepRows(session.pipelineStepRows().size())
+        .workflowDefinitionRows(session.workflowDefinitionRows().size())
+        .workflowNodeRows(session.workflowNodeRows().size())
+        .workflowEdgeRows(session.workflowEdgeRows().size())
+        .build();
   }
 
   @Override
@@ -456,6 +515,8 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     List<Map<String, String>> workflowDefinitionRows = copyRows(session.workflowDefinitionRows());
     List<Map<String, String>> workflowNodeRows = copyRows(session.workflowNodeRows());
     List<Map<String, String>> workflowEdgeRows = copyRows(session.workflowEdgeRows());
+    List<Map<String, String>> workflowMonitoringPolicyRows =
+        copyRows(session.workflowMonitoringPolicyRows());
     String uploadedBy = session.uploadedBy();
     Set<String> permissionScope = session.permissionScope();
     return new PackageExcelSession(
@@ -474,6 +535,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
         workflowDefinitionRows,
         workflowNodeRows,
         workflowEdgeRows,
+        workflowMonitoringPolicyRows,
         uploadedBy,
         permissionScope);
   }
@@ -540,23 +602,24 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
       TenantConfigPackageExcelApplyService.ApplyCounts counts = applyService.applyAll(result, ctx);
       registerApplyCompletion(uploadToken, applyOwnerToken);
       completionRegistered = true;
-      return new TenantConfigPackageExcelApplyResponse(
-          uploadToken,
-          session.tenantId(),
-          counts.resourceQueueInserted(),
-          counts.resourceQueueUpdated(),
-          counts.businessCalendarInserted(),
-          counts.businessCalendarUpdated(),
-          counts.batchWindowInserted(),
-          counts.batchWindowUpdated(),
-          counts.jobInserted(),
-          counts.jobUpdated(),
-          counts.channelInserted(),
-          counts.channelUpdated(),
-          counts.fileTemplateInserted(),
-          counts.fileTemplateUpdated(),
-          counts.workflowInserted(),
-          counts.workflowUpdated());
+      return TenantConfigPackageExcelApplyResponse.builder()
+          .uploadToken(uploadToken)
+          .tenantId(session.tenantId())
+          .resourceQueueInserted(counts.resourceQueueInserted())
+          .resourceQueueUpdated(counts.resourceQueueUpdated())
+          .businessCalendarInserted(counts.businessCalendarInserted())
+          .businessCalendarUpdated(counts.businessCalendarUpdated())
+          .batchWindowInserted(counts.batchWindowInserted())
+          .batchWindowUpdated(counts.batchWindowUpdated())
+          .jobInserted(counts.jobInserted())
+          .jobUpdated(counts.jobUpdated())
+          .channelInserted(counts.channelInserted())
+          .channelUpdated(counts.channelUpdated())
+          .fileTemplateInserted(counts.fileTemplateInserted())
+          .fileTemplateUpdated(counts.fileTemplateUpdated())
+          .workflowInserted(counts.workflowInserted())
+          .workflowUpdated(counts.workflowUpdated())
+          .build();
     } finally {
       if (!completionRegistered) {
         importStore.releaseApply(uploadToken, applyOwnerToken);
@@ -636,6 +699,8 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
           parseOptionalSheet(wb, WF_NODE_SHEET, WF_NODE_COLUMNS, tenantId);
       List<Map<String, String>> workflowEdgeRows =
           parseOptionalSheet(wb, WF_EDGE_SHEET, WF_EDGE_COLUMNS, tenantId);
+      List<Map<String, String>> workflowMonitoringPolicyRows = parseOptionalSheet(
+          wb, WORKFLOW_MONITORING_POLICY_SHEET, WORKFLOW_MONITORING_POLICY_COLUMNS, tenantId);
       return new PackageExcelSession(
           fileName,
           tenantId,
@@ -651,7 +716,10 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
           stepRows,
           workflowDefinitionRows,
           workflowNodeRows,
-          workflowEdgeRows);
+          workflowEdgeRows,
+          workflowMonitoringPolicyRows,
+          null,
+          Set.of());
     } catch (BizException e) {
       throw e;
     } catch (Exception e) {
@@ -712,6 +780,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
         WF_DEF_SHEET,
         WF_NODE_SHEET,
         WF_EDGE_SHEET,
+        WORKFLOW_MONITORING_POLICY_SHEET,
         ConsoleExcelStyles.SHEET_NAME_README,
         "填写顺序",
         "依赖说明",
@@ -793,7 +862,8 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
         toSheetStats(result.steps(), crossReferenceInvalidRows),
         toSheetStats(result.wfDefs(), crossReferenceInvalidRows),
         toSheetStats(result.wfNodes(), crossReferenceInvalidRows),
-        toSheetStats(result.wfEdges(), crossReferenceInvalidRows));
+        toSheetStats(result.wfEdges(), crossReferenceInvalidRows),
+        toSheetStats(result.workflowMonitoringPolicies(), crossReferenceInvalidRows));
     List<IssueDto> issues = result.allIssues().stream()
         .map(i -> new IssueDto(i.sheetName(), i.rowNo(), i.columnName(), i.message()))
         .toList();
@@ -855,6 +925,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     m.put(WF_DEF_SHEET, session.workflowDefinitionRows());
     m.put(WF_NODE_SHEET, session.workflowNodeRows());
     m.put(WF_EDGE_SHEET, session.workflowEdgeRows());
+    m.put(WORKFLOW_MONITORING_POLICY_SHEET, session.workflowMonitoringPolicyRows());
     return m;
   }
 

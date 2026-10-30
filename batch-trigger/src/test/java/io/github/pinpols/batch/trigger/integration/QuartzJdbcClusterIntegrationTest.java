@@ -59,10 +59,10 @@ class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
   void shouldPersistQuartzJobAndTriggerIntoJdbcStore() throws Exception {
     assertThat(scheduler.getSchedulerName())
         .isEqualTo("BatchTriggerScheduler-quartz-isolation-test");
-  final String insertTenantSql = """
+    final String insertTenantSql = """
       insert into batch.tenant (tenant_id, tenant_name, status) values (?, ?, ?)
   """;
-  final String insertWorkflowDefinitionSql = """
+    final String insertWorkflowDefinitionSql = """
           insert into batch.workflow_definition (
               tenant_id, workflow_code, workflow_name, workflow_type, version, enabled,
               single_job_definition_id, schedule_type, schedule_expr, timezone, trigger_mode,
@@ -71,28 +71,28 @@ class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
           select ?, ?, ?, 'DAG', 1, true, id, 'CRON', ?, 'UTC', 'SCHEDULED', true, ?
             from batch.job_definition where tenant_id = ? and job_code = ?
           """;
-  final String selectCountSql = """
+    final String selectCountSql = """
                 select count(*)::int
                 from quartz.QRTZ_JOB_DETAILS
                 where JOB_NAME = ? and JOB_GROUP = ?
                 """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
               select count(*)::int
               from quartz.QRTZ_CRON_TRIGGERS
               where TRIGGER_NAME = ? and TRIGGER_GROUP = ?
               """;
-  final String updateWorkflowDefinitionSql = """
+    final String updateWorkflowDefinitionSql = """
       update batch.workflow_definition set version=2, schedule_expr=? where tenant_id=? and workflow_code=?\
       """;
-  final String selectCountSql3 = """
+    final String selectCountSql3 = """
           select count(*)::int
           from quartz.QRTZ_TRIGGERS
           where JOB_NAME = ? and JOB_GROUP = ?
           """;
-  final String selectCountSql4 = """
+    final String selectCountSql4 = """
       select count(*) from batch.trigger_request where tenant_id=? and request_id=?
   """;
-  final String selectCountSql5 = """
+    final String selectCountSql5 = """
       select count(*) from batch.trigger_outbox_event where tenant_id=? and request_id=?
   """;
     final String deleteTriggerOutboxEventSql = """
@@ -128,15 +128,18 @@ class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
     String jobKeyName = tenantId + ":WF:" + workflowCode;
     String cronExpr = "0 0 0 1 1 ? 2099";
 
-    jdbcTemplate.update(
-        insertTenantSql,
-        tenantId,
-        tenantId,
-        "ACTIVE");
+    jdbcTemplate.update(insertTenantSql, tenantId, tenantId, "ACTIVE");
     insertBusinessCalendar(tenantId, calendarCode);
     insertCronJobDefinition(tenantId, jobCode, calendarCode, cronExpr);
     jdbcTemplate.update(
-        insertWorkflowDefinitionSql, tenantId, workflowCode, workflowCode, cronExpr, calendarCode, tenantId, jobCode);
+        insertWorkflowDefinitionSql,
+        tenantId,
+        workflowCode,
+        workflowCode,
+        cronExpr,
+        calendarCode,
+        tenantId,
+        jobCode);
 
     try {
       TriggerDescriptor staleDescriptor =
@@ -149,19 +152,15 @@ class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
       assertThat(scheduler.getMetaData().isJobStoreClustered()).isTrue();
 
       Integer jobDetailCount =
-      jdbcTemplate.queryForObject(selectCountSql, Integer.class, jobKeyName, "batch-trigger");
+          jdbcTemplate.queryForObject(selectCountSql, Integer.class, jobKeyName, "batch-trigger");
       Integer triggerCount =
-      jdbcTemplate.queryForObject(selectCountSql2, Integer.class, jobKeyName, "batch-trigger");
+          jdbcTemplate.queryForObject(selectCountSql2, Integer.class, jobKeyName, "batch-trigger");
 
       assertThat(jobDetailCount).isEqualTo(1);
       assertThat(triggerCount).isEqualTo(1);
 
       String updatedCronExpr = "0 30 1 1 2 ? 2099";
-      jdbcTemplate.update(
-          updateWorkflowDefinitionSql,
-          updatedCronExpr,
-          tenantId,
-          workflowCode);
+      jdbcTemplate.update(updateWorkflowDefinitionSql, updatedCronExpr, tenantId, workflowCode);
       triggerRegistrationService.reconcileByWorkflowCode(tenantId, workflowCode);
 
       var updatedJob = scheduler.getJobDetail(jobKey);
@@ -197,35 +196,19 @@ class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
         // 尽力清理
       }
       jdbcTemplate.update(
-          deleteTriggerOutboxEventSql,
-          tenantId,
-          "stale-quartz-version-" + workflowCode);
+          deleteTriggerOutboxEventSql, tenantId, "stale-quartz-version-" + workflowCode);
       jdbcTemplate.update(
-          deleteTriggerRequestSql,
-          tenantId,
-          "stale-quartz-version-" + workflowCode);
+          deleteTriggerRequestSql, tenantId, "stale-quartz-version-" + workflowCode);
       jdbcTemplate.update(
           deleteScheduledOccurrenceSql,
           tenantId,
           tenantId,
           workflowCode,
           Timestamp.from(Instant.parse("2099-01-01T00:00:00Z")));
-      jdbcTemplate.update(
-          deleteWorkflowDefinitionSql,
-          tenantId,
-          workflowCode);
-      jdbcTemplate.update(
-          deleteJobDefinitionSql,
-          tenantId,
-          jobCode);
-      jdbcTemplate.update(
-          deleteBatchDayCatchupControlSql,
-          tenantId,
-          calendarCode);
-      jdbcTemplate.update(
-          deleteBusinessCalendarSql,
-          tenantId,
-          calendarCode);
+      jdbcTemplate.update(deleteWorkflowDefinitionSql, tenantId, workflowCode);
+      jdbcTemplate.update(deleteJobDefinitionSql, tenantId, jobCode);
+      jdbcTemplate.update(deleteBatchDayCatchupControlSql, tenantId, calendarCode);
+      jdbcTemplate.update(deleteBusinessCalendarSql, tenantId, calendarCode);
       jdbcTemplate.update(deleteTenantSql, tenantId);
     }
   }
@@ -287,17 +270,9 @@ class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
           where SCHED_NAME = ? and JOB_NAME = ? and JOB_GROUP = ?
           """;
       Integer primaryJobCount = jdbcTemplate.queryForObject(
-          selectJobCountSql,
-          Integer.class,
-          scheduler.getSchedulerName(),
-          jobName,
-          jobGroup);
+          selectJobCountSql, Integer.class, scheduler.getSchedulerName(), jobName, jobGroup);
       Integer secondaryJobCount = jdbcTemplate.queryForObject(
-          selectJobCountSql,
-          Integer.class,
-          secondarySchedulerName,
-          jobName,
-          jobGroup);
+          selectJobCountSql, Integer.class, secondarySchedulerName, jobName, jobGroup);
 
       assertThat(primaryJobCount).isEqualTo(1);
       assertThat(secondaryJobCount).isZero();
@@ -327,7 +302,7 @@ class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
 
   private void insertCronJobDefinition(
       String tenantId, String jobCode, String calendarCode, String cronExpr) {
-        final String insertJobDefinitionSql = """
+    final String insertJobDefinitionSql = """
     insert into batch.job_definition (
     tenant_id, job_code, job_name, job_type, biz_type, schedule_type,
     schedule_expr, timezone, priority, queue_code, worker_group,
@@ -337,7 +312,8 @@ class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
     ?, 'SCHEDULED', false, 'NONE', 'NONE', 0, 0, true, 1)
     """;
 
-        jdbcTemplate.update(insertJobDefinitionSql, tenantId, jobCode, jobCode, cronExpr, jobCode, calendarCode);
+    jdbcTemplate.update(
+        insertJobDefinitionSql, tenantId, jobCode, jobCode, cronExpr, jobCode, calendarCode);
   }
 
   private Properties clusterProperties(String schedulerName, String instanceId) throws Exception {
@@ -372,10 +348,7 @@ class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
         select count(*)::int from quartz.QRTZ_SCHEDULER_STATE where SCHED_NAME = ?
     """;
 
-    Integer count = jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        schedulerName);
+    Integer count = jdbcTemplate.queryForObject(selectCountSql, Integer.class, schedulerName);
     return count == null ? 0 : count;
   }
 }

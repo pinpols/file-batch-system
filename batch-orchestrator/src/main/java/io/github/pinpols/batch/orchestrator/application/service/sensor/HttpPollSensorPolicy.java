@@ -1,11 +1,11 @@
 package io.github.pinpols.batch.orchestrator.application.service.sensor;
 
-import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.SensorType;
 import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
@@ -126,8 +126,7 @@ public class HttpPollSensorPolicy implements SensorPolicy {
       String errorDetail =
           Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName());
       List<String> errorArguments = List.of("HTTP_POLL", errorDetail);
-      return SensorProbeResult.error(
-          "error.workflow.sensor_probe_failed", errorArguments);
+      return SensorProbeResult.error("error.workflow.sensor_probe_failed", errorArguments);
     }
   }
 
@@ -143,8 +142,8 @@ public class HttpPollSensorPolicy implements SensorPolicy {
         yield httpTransport.execute(request);
       }
       case "HEAD" -> {
-        OutboundHttpRequest request = OutboundHttpRequest.head(
-            url, headers, timeout, timeout, OutboundAddressPolicy.GUARDED);
+        OutboundHttpRequest request =
+            OutboundHttpRequest.head(url, headers, timeout, timeout, OutboundAddressPolicy.GUARDED);
         yield httpTransport.execute(request);
       }
       case "POST" -> {
@@ -152,12 +151,7 @@ public class HttpPollSensorPolicy implements SensorPolicy {
         String contentType = resolveContentType(headers);
         OutboundHttpContent httpContent = new OutboundHttpContent(requestBody, contentType);
         OutboundHttpRequest request = OutboundHttpRequest.post(
-            url,
-            headers,
-            httpContent,
-            timeout,
-            timeout,
-            OutboundAddressPolicy.GUARDED);
+            url, headers, httpContent, timeout, timeout, OutboundAddressPolicy.GUARDED);
         yield httpTransport.execute(request);
       }
       default -> throw new IllegalArgumentException("unsupported sensor HTTP method: " + method);

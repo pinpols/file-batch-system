@@ -16,6 +16,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
@@ -23,7 +24,6 @@ import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowNodeQuery;
 import java.time.LocalTime;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -37,11 +37,10 @@ class TenantConfigPackageRowProjectionsMonitoringPolicyTest {
   void shouldOmitChannelConfigurationFromTenantExport() {
     TenantConfigPackageRowProjections projections = new TenantConfigPackageRowProjections(
         mock(WorkflowNodeMapper.class), mock(WorkflowEdgeMapper.class));
-    Map<String, Object> source = new LinkedHashMap<>(Map.of(
-        "channel_code",
-        "PARTNER_SFTP",
-        COL_CONFIG_JSON,
-        "{\"sftp_password\":\"plain-text-secret\"}"));
+    FileChannelConfigQueryView source = FileChannelConfigQueryView.builder()
+        .channelCode("PARTNER_SFTP")
+        .configJson("{\"sftp_password\":\"plain-text-secret\"}")
+        .build();
 
     List<Map<String, Object>> rows = projections.toExportableChannelRows(List.of(source));
 
@@ -49,7 +48,7 @@ class TenantConfigPackageRowProjectionsMonitoringPolicyTest {
       assertThat(row).containsEntry("channel_code", "PARTNER_SFTP");
       assertThat(row).containsEntry(COL_CONFIG_JSON, "");
     });
-    assertThat(source.get(COL_CONFIG_JSON)).isEqualTo("{\"sftp_password\":\"plain-text-secret\"}");
+    assertThat(source.configJson()).isEqualTo("{\"sftp_password\":\"plain-text-secret\"}");
   }
 
   @Test

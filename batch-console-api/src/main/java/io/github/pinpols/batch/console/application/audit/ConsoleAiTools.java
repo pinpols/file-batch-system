@@ -263,18 +263,18 @@ public class ConsoleAiTools {
         traceId=%s
         resultSummary=%s
         """.formatted(
-        instance.id(),
-        instance.jobCode(),
-        instance.instanceNo(),
-        instance.instanceStatus(),
-        displayFailureClass,
-        instance.bizDate(),
-        instance.startedAt(),
-        instance.finishedAt(),
-        instance.retryFlag(),
-        instance.rerunFlag(),
-        displayTraceId,
-        displayResultSummary);
+            instance.id(),
+            instance.jobCode(),
+            instance.instanceNo(),
+            instance.instanceStatus(),
+            displayFailureClass,
+            instance.bizDate(),
+            instance.startedAt(),
+            instance.finishedAt(),
+            instance.retryFlag(),
+            instance.rerunFlag(),
+            displayTraceId,
+            displayResultSummary);
     return formattedInstance.stripTrailing();
   }
 

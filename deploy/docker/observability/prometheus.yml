@@ -1,9 +1,13 @@
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
+  # 外部标签也覆盖 absent() 产生的目标缺失告警，避免丢失部署范围。
+  external_labels:
+    maintenance_scope: ${BATCH_MAINTENANCE_ALERT_SCOPE}
 
 rule_files:
   - /etc/prometheus/rules/batch.yml
+  - /etc/prometheus/rules/docker-targets.yml
 
 # 告警投递:把 fire 的规则推给 Alertmanager(同 batch-network,容器内端口 9093)。
 # 缺这一段时 70 条规则会在 Prometheus 内部变红却永远推不出去 → 形同装了报警器没接电。
@@ -13,6 +17,10 @@ alerting:
         - targets: ['alertmanager:9093']
 
 scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
   - job_name: alertmanager
     static_configs:
       - targets: ['alertmanager:9093']

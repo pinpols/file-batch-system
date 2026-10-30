@@ -1,10 +1,8 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.param.WorkflowNodeRunUpdateSensorProbeStateParam;
-
-
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateNodeRunStatusParam;
+import io.github.pinpols.batch.orchestrator.domain.param.WorkflowNodeRunUpdateSensorProbeStateParam;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -39,7 +37,7 @@ public interface WorkflowNodeRunMapper {
   List<WorkflowNodeRunEntity> selectLatestByWorkflowRunIdAndNodeCodesIn(
       @Param("workflowRunId") Long workflowRunId, @Param("nodeCodes") Collection<String> nodeCodes);
 
-  // C-1/C-3: pessimistic lock to serialize concurrent recordNodeRunFinish /
+  // C-1/C-3：使用悲观锁串行化并发的 recordNodeRunFinish /
   // isNodeAlreadyActivated
   WorkflowNodeRunEntity selectLatestForUpdate(
       @Param("workflowRunId") Long workflowRunId, @Param("nodeCode") String nodeCode);
@@ -64,6 +62,5 @@ public interface WorkflowNodeRunMapper {
   int claimDueWaitNode(@Param("id") Long id, @Param("now") Instant now);
 
   /** ADR-028 S3：探测后更新 sensor 状态字段，不动 node_status（status 由 recordNodeRunFinish 推进）。 */
-  int updateSensorProbeState(
-      WorkflowNodeRunUpdateSensorProbeStateParam parameters);
+  int updateSensorProbeState(WorkflowNodeRunUpdateSensorProbeStateParam parameters);
 }

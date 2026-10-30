@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.infrastructure.workflow;
 
-import io.github.pinpols.batch.console.domain.workflow.application.command.WorkflowVersionSnapshotCommand;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
@@ -17,6 +16,7 @@ import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService.LockHolder;
+import io.github.pinpols.batch.console.domain.workflow.application.command.WorkflowVersionSnapshotCommand;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionFullUpdateRequest;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest.EdgeItem;
@@ -113,8 +113,9 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
     String resolvedTenant = tenantGuard.resolveTenant(request.getTenantId());
     assertNodeRoutingOnCreate(request.getNodes());
 
+    // 编辑会递增当前行版本，创建去重仍须按稳定编码检查，而不是只检查版本1。
     WorkflowDefinitionEntity existing =
-        definitionMapper.selectByUniqueKey(resolvedTenant, request.getWorkflowCode(), 1);
+        definitionMapper.selectLatestByCode(resolvedTenant, request.getWorkflowCode());
     if (existing != null) {
       throw BizException.of(
           ResultCode.CONFLICT,
@@ -210,8 +211,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
     assertManagedSingleJobGraph(resolvedTenant, def, body);
     String previousCalendarCode = def.getCalendarCode();
     applyScheduleConfiguration(def, body, def);
-    String validatedCalendarCode =
-        validateCalendarReference(resolvedTenant, def.getCalendarCode());
+    String validatedCalendarCode = validateCalendarReference(resolvedTenant, def.getCalendarCode());
     def.setCalendarCode(validatedCalendarCode);
     rejectCalendarChangeWithExpectations(
         resolvedTenant, id, previousCalendarCode, def.getCalendarCode());
@@ -245,6 +245,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
             .triggerMode(def.getTriggerMode())
             .calendarCode(def.getCalendarCode())
             .dependsOnJobCode(dependsOnJobCode)
+            .description(def.getDescription())
             .build();
     int rows = definitionMapper.updateAndBumpVersion(versionedUpdate);
     if (rows == 0) {
@@ -457,8 +458,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
       Long workflowDefinitionId,
       String previousCalendarCode,
       String nextCalendarCode) {
-    String previousNormalizedCalendarCode =
-        CodeNormalizer.toConfigFormOrNull(previousCalendarCode);
+    String previousNormalizedCalendarCode = CodeNormalizer.toConfigFormOrNull(previousCalendarCode);
     String nextNormalizedCalendarCode = CodeNormalizer.toConfigFormOrNull(nextCalendarCode);
     boolean calendarCodeChanged =
         !Objects.equals(previousNormalizedCalendarCode, nextNormalizedCalendarCode);
@@ -542,10 +542,9 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
         .orElseThrow(DefaultWorkflowDefinitionService::managedGraphConflict);
     boolean managedStartNodeMatches =
         isManagedNode(nodesByCode.get("START"), "START", "START", 0, null);
-    boolean managedNodeGraphMatches =
-        managedStartNodeMatches
-            && isManagedNode(nodesByCode.get("JOB"), "JOB", "JOB", 1, jobCode)
-            && isManagedNode(nodesByCode.get("END"), "END", "END", 2, null);
+    boolean managedNodeGraphMatches = managedStartNodeMatches
+        && isManagedNode(nodesByCode.get("JOB"), "JOB", "JOB", 1, jobCode)
+        && isManagedNode(nodesByCode.get("END"), "END", "END", 2, null);
     if (!managedNodeGraphMatches) {
       throw managedGraphConflict();
     }
@@ -573,8 +572,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
       return false;
     }
     String requestedWorkflowType = request.getWorkflowType();
-    if (EmptyChecks.isNotNull(requestedWorkflowType)
-        && !"DAG".equals(request.getWorkflowType())) {
+    if (EmptyChecks.isNotNull(requestedWorkflowType) && !"DAG".equals(request.getWorkflowType())) {
       return false;
     }
     if (EmptyChecks.isNull(submittedNodes)) {
@@ -586,8 +584,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
     if (EmptyChecks.isNull(submittedEdges)) {
       return false;
     }
-    return submittedEdges.size() == 2
-        && !submittedEdges.stream().anyMatch(Objects::isNull);
+    return submittedEdges.size() == 2 && !submittedEdges.stream().anyMatch(Objects::isNull);
   }
 
   private static boolean isManagedNode(
@@ -595,18 +592,16 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
     if (EmptyChecks.isNull(node)) {
       return false;
     }
-    boolean nodeIdentityMatches =
-        nodeCode.equals(node.getNodeCode())
-            && nodeType.equals(node.getNodeType())
-            && Objects.equals(relatedJobCode, node.getRelatedJobCode())
-            && Objects.equals(nodeOrder, node.getNodeOrder());
+    boolean nodeIdentityMatches = nodeCode.equals(node.getNodeCode())
+        && nodeType.equals(node.getNodeType())
+        && Objects.equals(relatedJobCode, node.getRelatedJobCode())
+        && Objects.equals(nodeOrder, node.getNodeOrder());
     if (!nodeIdentityMatches) {
       return false;
     }
-    boolean routingOverridesAreAbsent =
-        !Texts.hasText(node.getWorkerGroup())
-            && !Texts.hasText(node.getNodeParams())
-            && !Texts.hasText(node.getCrossDayDependencies());
+    boolean routingOverridesAreAbsent = !Texts.hasText(node.getWorkerGroup())
+        && !Texts.hasText(node.getNodeParams())
+        && !Texts.hasText(node.getCrossDayDependencies());
     if (!routingOverridesAreAbsent) {
       return false;
     }
@@ -690,8 +685,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
     for (WorkflowNodeEntity node : existingNodes) {
       existingGroups.put(node.getNodeCode(), node.getWorkerGroup());
     }
-    boolean existingRoutingIsConfigured =
-        existingGroups.values().stream().anyMatch(Texts::hasText);
+    boolean existingRoutingIsConfigured = existingGroups.values().stream().anyMatch(Texts::hasText);
     boolean hasRouting = existingRoutingIsConfigured;
     if (!hasRouting) {
       hasRouting = nodes.stream().anyMatch(node -> Texts.hasText(node.getWorkerGroup()));

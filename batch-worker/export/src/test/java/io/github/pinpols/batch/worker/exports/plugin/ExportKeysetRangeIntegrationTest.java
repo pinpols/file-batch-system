@@ -28,32 +28,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
-/**
- * 导出分片 keyset 区间优化的端到端集成测试：连真实 PostgreSQL（Testcontainers）验证 keyset-range 分片语义。
- *
- * <p>镜像 {@link ExportPartitionSliceIT}（hashtext 分片的同款 harness），差异仅在 templateConfig 里加 {@code
- * partition_keyset_range = true} 激活 keyset 路径，并补充 keyset 专有断言（边界探测只算一次）。
- *
- * <p>被测行为：{@code partitionCount>1} + opt-in + 数值游标列 min/max 可取 → 每分片谓词走 {@code cur >= loN AND cur
- * <(=) hiN}（等宽，末片含上界）；否则退回 hashtext。
- *
- * <p>覆盖用例：
- *
- * <ol>
- *   <li>4 片无重叠 + 全覆盖（opt-in keyset，1..1000）；
- *   <li>倾斜（造空洞，实插 950 行）仍无重无漏；
- *   <li>未 opt-in 退回 hashtext 仍正确；
- *   <li>边界只算一次/分片（多页复用 exportSnapshot 缓存键 {@code __export_keyset_range}）。
- * </ol>
- *
- * <p>主覆盖 {@link SqlTemplateExportDataPlugin}（与 ExportPartitionSliceIT 同款、游标列 = default_query_sql 的
- * cursorColumn）。另对 {@link GenericJdbcMappedExportDataPlugin}（游标列 = detailOrderByColumn 物理表）补一个
- * keyset 变体，确保两个 plugin 都覆盖。
- */
+/** 真实 PostgreSQL 验证旧区间配置下统一哈希分片，覆盖两种插件、稀疏数据与多页读取。 */
 @SpringBootTest(
     classes = BatchWorkerExportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@DisplayName("导出 keyset 区间分片集成测试:真实库上验证分片无重叠,无遗漏以及未开启时的回退语义")
+@DisplayName("导出哈希分片集成测试:旧区间配置下验证真实库分片完整性")
 class ExportKeysetRangeIT extends AbstractIntegrationTest {
 
   private static final int ROW_COUNT = 1000;
@@ -156,8 +135,9 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
       String insertSkewedKeysetRowsSql = skew.toString();
       stmt.execute(insertSkewedKeysetRowsSql);
 
-      // jdbc_mapped keyset 变体：复用 settlement_batch + settlement_detail（id 数值列）
-      final String insertBizSettlementBatchSql = """
+      // jdbc_mapped 变体：复用 settlement_batch + settlement_detail（id 数值列）
+      final String insertBizSettlementBatchSql =
+          """
           INSERT INTO biz.settlement_batch
               (id, tenant_id, batch_no, biz_date, accounting_period)
           VALUES
@@ -196,13 +176,13 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
   }
 
   // ----------------------------------------------------------------
-  //  用例 1：opt-in keyset，4 片无重叠 + 全覆盖
+  //  用例 1：旧区间配置下，4 片无重叠 + 全覆盖
   // ----------------------------------------------------------------
 
   @Test
-  @DisplayName("用例1 sql_template+keyset: 4 片无重叠且合集恰好等于全量 1000 行")
+  @DisplayName("旧区间配置下 sql_template 哈希分片无重漏")
   void sqlTemplate_keyset_fourPartitions_disjointAndComplete() throws Exception {
-    // 准备: opt-in keyset
+    // 准备: 开启旧区间配置，运行时仍使用哈希。
     Map<String, Object> templateConfig = Map.of(
         "default_query_sql",
         "SELECT id FROM biz.keyset_demo WHERE tenant_id = :tenantId AND batch_no = :batchNo",
@@ -222,7 +202,7 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
   // ----------------------------------------------------------------
 
   @Test
-  @DisplayName("用例2 sql_template+keyset: 倾斜空洞下 4 片仍无重叠且合集等于实插 950 行")
+  @DisplayName("旧区间配置下稀疏数据的哈希分片无重漏")
   void sqlTemplate_keyset_skewed_disjointAndComplete() throws Exception {
     // 准备: 同表，batch_no = SKEW（id 有空洞 [400,450]）
     Map<String, Object> templateConfig = Map.of(
@@ -261,12 +241,12 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
   }
 
   // ----------------------------------------------------------------
-  //  用例 4：边界探测只算一次/分片（多页复用 exportSnapshot 缓存）
+  //  用例 4：旧区间配置下多页读取不再探测边界
   // ----------------------------------------------------------------
 
   @Test
-  @DisplayName("用例4 sql_template+keyset: 单分片翻多页时 min/max 边界缓存进 exportSnapshot 且跨页稳定")
-  void sqlTemplate_keyset_boundaryComputedOncePerPartition() {
+  @DisplayName("旧区间配置启用时多页仍走哈希，不写入区间缓存")
+  void shouldUseHashAcrossPages_whenRangeOptionEnabled() {
     // 准备: partitionNo=1，pageSize 小到保证多页（1000 行 / 4 片 ≈ 250 行，PAGE_SIZE=200 → ≥2 页）
     Map<String, Object> templateConfig = Map.of(
         "default_query_sql",
@@ -274,11 +254,10 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
         "partition_keyset_range",
         true);
 
-    // 单个 exportSnapshot 跨页共享（plugin 内 planner 把结果缓存进它）
+    // 单个 exportSnapshot 跨页共享，不应出现区间缓存
     Map<String, Object> sharedSnapshot = new LinkedHashMap<>();
     Object cursor = null;
     int pages = 0;
-    ExportKeysetRange firstCached = null;
 
     while (true) {
       ExportDataContext ctx = new ExportDataContext(
@@ -286,19 +265,7 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
       ExportDataPlugin.DetailPage page =
           sqlTemplatePlugin.loadDetailPage(ctx, 0L, PAGE_SIZE, cursor);
 
-      // 每页调用后，缓存键必须已写入且 value 为 active keyset
-      Object cached = sharedSnapshot.get(ExportKeysetRangePlanner.SNAP_KEY);
-      assertThat(cached)
-          .as("第 %d 页后 exportSnapshot 应含缓存键 %s", pages + 1, ExportKeysetRangePlanner.SNAP_KEY)
-          .isInstanceOf(ExportKeysetRange.class);
-      ExportKeysetRange range = (ExportKeysetRange) cached;
-      assertThat(range.active()).as("keyset 应已激活").isTrue();
-      if (firstCached == null) {
-        firstCached = range;
-      } else {
-        // 跨页 value 稳定：同一 [loN, hiN) 不被重算覆盖
-        assertThat(range).as("跨页缓存的 keyset 区间应稳定不变（只算一次）").isEqualTo(firstCached);
-      }
+      assertThat(sharedSnapshot).doesNotContainKey(ExportKeysetRangePlanner.SNAP_KEY);
 
       pages++;
       if (page.rows().isEmpty()) {
@@ -310,16 +277,15 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
       }
     }
 
-    assertThat(pages).as("分片1 应翻多页以验证跨页复用").isGreaterThanOrEqualTo(2);
-    assertThat(firstCached).isNotNull();
+    assertThat(pages).as("分片1 应翻多页以验证哈希分页").isGreaterThanOrEqualTo(2);
   }
 
   // ----------------------------------------------------------------
-  //  补充：jdbc_mapped plugin 的 keyset 变体（两个 plugin 都覆盖）
+  //  补充：jdbc_mapped 插件启用旧区间配置时的哈希分片
   // ----------------------------------------------------------------
 
   @Test
-  @DisplayName("补充 jdbc_mapped+keyset: 4 片无重叠且合集等于全量 1000 行")
+  @DisplayName("旧区间配置下 jdbc_mapped 哈希分片无重漏")
   void jdbcMapped_keyset_fourPartitions_disjointAndComplete() throws Exception {
     Map<String, Object> jdbcMappedSpec = Map.of(
         "schema", "biz",
@@ -345,7 +311,7 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
   //  辅助方法
   // ----------------------------------------------------------------
 
-  /** 对 1..PARTITION_COUNT 的每个分片分页收集所有 id。每分片用独立可变 exportSnapshot（planner 缓存边界用）。 */
+  /** 对 1..PARTITION_COUNT 的每个分片分页收集所有 id。每分片用独立可变 exportSnapshot，用于核对没有写入区间边界。 */
   private List<Set<Object>> collectAllPartitions(
       ExportDataPlugin plugin, Map<String, Object> templateConfig, long batchId, String batchNo)
       throws Exception {
@@ -365,7 +331,7 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
       throws Exception {
     Set<Object> ids = new HashSet<>();
     Object cursor = null;
-    // 可变 snapshot：planner 把 keyset 边界缓存进来，跨页复用
+    // 可变 snapshot：跨页共享，不应写入旧区间边界。
     Map<String, Object> snapshot = new LinkedHashMap<>();
 
     while (true) {

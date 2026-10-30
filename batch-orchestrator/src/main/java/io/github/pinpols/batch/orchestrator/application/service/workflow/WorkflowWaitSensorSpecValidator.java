@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorSpecs;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowValidationResult.ValidationIssue;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import java.time.LocalDate;
@@ -74,17 +75,17 @@ final class WorkflowWaitSensorSpecValidator {
       validateSensorSpecByType(sensorType, spec.orElseThrow(), node.getNodeCode(), errors);
     }
 
-    Object timeoutSecondsValue = params.get("timeout_seconds");
-    Long parsedTimeoutSeconds = asLong(timeoutSecondsValue);
+    Long parsedTimeoutSeconds = SensorSpecs.longValue(params, "timeout_seconds");
     long timeout = Objects.requireNonNullElse(parsedTimeoutSeconds, 0L);
-    Object pollIntervalSecondsValue = params.get("poll_interval_seconds");
-    Long parsedPollIntervalSeconds = asLong(pollIntervalSecondsValue);
+    Long parsedPollIntervalSeconds = SensorSpecs.longValue(params, "poll_interval_seconds");
     long pollInterval = Objects.requireNonNullElse(parsedPollIntervalSeconds, 0L);
     if (timeout <= 0) {
-      errors.add(issue(V16D, "WAIT timeout_seconds missing or <=0", node.getNodeCode()));
+      errors.add(
+          issue(V16D, "WAIT timeout_seconds must be a positive integer", node.getNodeCode()));
     }
     if (pollInterval <= 0) {
-      errors.add(issue(V16D, "WAIT poll_interval_seconds missing or <=0", node.getNodeCode()));
+      errors.add(
+          issue(V16D, "WAIT poll_interval_seconds must be a positive integer", node.getNodeCode()));
     }
     boolean sensorTimeoutDoesNotAllowPolling =
         timeout > 0 && pollInterval > 0 && timeout <= pollInterval;
@@ -128,8 +129,7 @@ final class WorkflowWaitSensorSpecValidator {
     if (!Texts.hasText(pattern)) {
       errors.add(issue(V16C, "FILE_ARRIVAL sensor_spec.pattern required", nodeCode));
     }
-    Object maxAgeValue = spec.get("maxAgeSeconds");
-    Long parsedMaxAge = asLong(maxAgeValue);
+    Long parsedMaxAge = SensorSpecs.longValue(spec, "maxAgeSeconds");
     long age = Objects.requireNonNullElse(parsedMaxAge, 0L);
     if (age <= 0) {
       errors.add(issue(V16C, "FILE_ARRIVAL sensor_spec.maxAgeSeconds required", nodeCode));
@@ -145,9 +145,10 @@ final class WorkflowWaitSensorSpecValidator {
       }
     }
     String bizDate = asString(spec.get("bizDate"));
-    boolean completeGroupHasNoBusinessDateBinding = Boolean.TRUE.equals(spec.get("requireCompleteGroup"))
-        && !Texts.hasText(bizDate)
-        && !Boolean.TRUE.equals(spec.get("bindWorkflowBizDate"));
+    boolean completeGroupHasNoBusinessDateBinding =
+        Boolean.TRUE.equals(spec.get("requireCompleteGroup"))
+            && !Texts.hasText(bizDate)
+            && !Boolean.TRUE.equals(spec.get("bindWorkflowBizDate"));
     if (completeGroupHasNoBusinessDateBinding) {
       errors.add(issue(
           V16C,
@@ -190,15 +191,17 @@ final class WorkflowWaitSensorSpecValidator {
     if (!Texts.hasText(topic)) {
       errors.add(issue(V16C, "KAFKA_OFFSET sensor_spec.topic required", nodeCode));
     }
-    Object partitionValue = spec.get("partition");
-    Long partition = asLong(partitionValue);
-    if (EmptyChecks.isNull(partition)) {
-      errors.add(issue(V16C, "KAFKA_OFFSET sensor_spec.partition required", nodeCode));
+    Integer partition = SensorSpecs.intValue(spec, "partition");
+    if (EmptyChecks.isNull(partition) || partition < 0) {
+      errors.add(issue(
+          V16C,
+          "KAFKA_OFFSET sensor_spec.partition must be a non-negative 32-bit integer",
+          nodeCode));
     }
-    Object minimumOffsetValue = spec.get("minOffset");
-    Long minimumOffset = asLong(minimumOffsetValue);
-    if (EmptyChecks.isNull(minimumOffset)) {
-      errors.add(issue(V16C, "KAFKA_OFFSET sensor_spec.minOffset required", nodeCode));
+    Long minimumOffset = SensorSpecs.longValue(spec, "minOffset");
+    if (EmptyChecks.isNull(minimumOffset) || minimumOffset < 0) {
+      errors.add(issue(
+          V16C, "KAFKA_OFFSET sensor_spec.minOffset must be a non-negative integer", nodeCode));
     }
   }
 
@@ -237,17 +240,6 @@ final class WorkflowWaitSensorSpecValidator {
       result.put(key, entry.getValue());
     }
     return Optional.of(result);
-  }
-
-  private static Long asLong(Object value) {
-    if (EmptyChecks.isNull(value)) return null;
-    if (value instanceof Number number) return number.longValue();
-    try {
-      String trimmedValue = value.toString().trim();
-      return Long.parseLong(trimmedValue);
-    } catch (NumberFormatException e) {
-      return null;
-    }
   }
 
   private static ValidationIssue issue(String code, String message, String nodeCode) {

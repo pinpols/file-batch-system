@@ -279,8 +279,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
       if (quotaWindowHasExpiredOrIsMissing) {
         Duration slidingWindowDuration = Duration.ofHours(normalizedHours);
         Instant windowExpiresAt = now.plus(slidingWindowDuration);
-        state = state.withRefresh(
-            normalizedPolicy, now, windowExpiresAt, 0, now);
+        state = state.withRefresh(normalizedPolicy, now, windowExpiresAt, 0, now);
         changed = true;
       }
     }

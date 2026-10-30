@@ -195,46 +195,41 @@ staging 已验收 manifest 的 workflow 仍是独立待办。
 当前阶段的生产基线不是把所有组件永久塞进一台主机，而是优先采用“应用节点 + 基础设施节点”两节点 Compose。开发、Demo 和低成本验证仍允许单机。
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  U["用户 / 运维人员"] --> EDGE["HTTPS / Nginx"]
-
-  subgraph APP["App Node · Linux · Docker Compose"]
-    EDGE --> FE["batch-console"]
-    EDGE --> API["console-api"]
-    API --> TR["trigger"]
-    API --> OR["orchestrator"]
-    OR --> WI["worker-import"]
-    OR --> WE["worker-export"]
-    OR --> WP["worker-process"]
-    OR --> WD["worker-dispatch"]
-    OR --> WA["worker-atomic"]
+  USER["用户 / 运维"] --> EDGE["HTTPS / Nginx"]
+  subgraph APP["当前基线：App Node / Compose"]
+    FE["batch-console"]
+    API["console-api"]
+    TR["Trigger"]
+    OR["Orchestrator"]
+    FILE["文件 Worker 池<br/>import / export / process / dispatch"]
+    ATOMIC["Atomic Worker<br/>独立权限边界"]
+    EDGE --> FE
+    EDGE --> API
+    API --> TR
+    API --> OR
+    FILE -->|"HTTP claim / report"| OR
+    ATOMIC -->|"HTTP claim / report"| OR
   end
-
-  subgraph INFRA["Infra Node · Linux · Docker Compose"]
-    PG[("PostgreSQL")]
-    KF["Kafka KRaft"]
-    VK["Valkey"]
-    MO["MinIO / S3"]
+  subgraph INFRA["Infra Node / 私网访问"]
+    subgraph KAFKA["同一 Kafka 集群"]
+      LAUNCH["触发请求通道"]
+      TASK["任务派单通道"]
+    end
+    PG["PostgreSQL"]
+    CACHE["Valkey"]
+    OBJ["MinIO / S3"]
   end
-
+  TR --> LAUNCH --> OR
+  OR --> TASK
+  TASK --> FILE
+  TASK --> ATOMIC
   API --> PG
   TR --> PG
-  TR --> KF
   OR --> PG
-  OR --> KF
-  OR --> VK
-  WI --> PG
-  WI --> KF
-  WI --> MO
-  WE --> PG
-  WE --> KF
-  WE --> MO
-  WP --> PG
-  WP --> KF
-  WD --> KF
-  WD --> MO
-  WA --> PG
-  APP <-->|"private network · firewall allowlist"| INFRA
+  OR --> CACHE
+  FILE --> OBJ
 ```
 
 建议起步规格：
@@ -255,61 +250,49 @@ flowchart TB
 最终目标不是“把 Compose 原样搬进 Kubernetes”，而是让无状态控制面和 Worker 由 Kubernetes 调度，有状态基础设施按各自 HA 模型运行，并由 GitOps 管理环境期望状态。
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  USER["用户 / 运维"] --> LB["LB / Ingress / TLS"]
-
-  GHA["GitHub Actions"] --> GHCR["GHCR\nimmutable image digests"]
-  GHA --> OPS["Deployment / Ops Repo\nstaging + production desired state"]
+  CI["GitHub Actions"] --> REG["GHCR<br/>不可变镜像 digest"]
+  CI --> OPS["Ops Repo<br/>staging / production 期望状态"]
   OPS --> ARGO["Argo CD"]
-  ARGO --> K8S
-
-  subgraph K8S["Kubernetes Cluster · 多节点 / 多故障域"]
-    ING["Ingress Controller"]
+  USER["用户 / 运维"] --> ING["LB / Ingress / TLS"]
+  subgraph K8S["目标：Kubernetes / 多故障域"]
     FE["batch-console × N"]
     API["console-api × N"]
-    TR["trigger × N"]
-    OR["orchestrator × N"]
-
-    subgraph WORKERS["Worker Pools · 独立扩缩容"]
-      WI["import × N"]
-      WE["export × N"]
-      WP["process × N"]
-      WD["dispatch × N"]
-      WA["atomic × N\n独立权限 / NetworkPolicy"]
-    end
-
+    TR["Trigger × N"]
+    OR["Orchestrator × N"]
+    FILE["文件 Worker 池 × N"]
+    ATOMIC["Atomic Worker × N<br/>独立权限 / NetworkPolicy"]
     ING --> FE
     ING --> API
     API --> TR
     API --> OR
-    OR --> WORKERS
+    FILE -->|"claim / report"| OR
+    ATOMIC -->|"claim / report"| OR
   end
-
-  LB --> ING
-
-  subgraph DATA["HA Data Plane"]
-    PGB["PgBouncer × 2"]
-    PG[("PostgreSQL HA\nPrimary + Replica\nPITR / Backup")]
-    KF["Kafka KRaft × 3\nRF=3 / min.insync=2"]
-    VK["Valkey / Redis HA"]
-    MO["Distributed S3 / MinIO\n多盘 / 多节点"]
+  ARGO -. "同步声明" .-> K8S
+  REG -. "按 digest 拉取" .-> K8S
+  subgraph DATA["目标：HA 数据平面"]
+    PG["PgBouncer / PostgreSQL HA<br/>备份 / PITR"]
+    subgraph KF["Kafka HA"]
+      LAUNCH["触发通道"]
+      TASK["派单通道"]
+    end
+    CACHE["Valkey / Redis HA"]
+    OBJ["分布式 S3"]
   end
-
-  API --> PGB
-  TR --> PGB
-  OR --> PGB
-  WORKERS --> PGB
-  PGB --> PG
-
-  TR --> KF
-  OR --> KF
-  WORKERS --> KF
-  API --> VK
-  OR --> VK
-  WORKERS --> MO
-
-  OBS["Prometheus / Grafana / OTel / Logs"] -.-> K8S
-  OBS -.-> DATA
+  TR --> LAUNCH --> OR
+  OR --> TASK
+  TASK --> FILE
+  TASK --> ATOMIC
+  API --> PG
+  TR --> PG
+  OR --> PG
+  API --> CACHE
+  OR --> CACHE
+  FILE --> OBJ
+  OBS["指标 / 日志 / 链路"] -. "观测" .-> K8S
+  OBS -. "观测" .-> DATA
 ```
 
 目标职责边界：
@@ -327,45 +310,32 @@ flowchart TB
 ## 13. 最终生产发布拓扑
 
 ```mermaid
-flowchart LR
-  MAIN["main"] --> CI["CI / Build"]
-  CI --> REG["GHCR\nimmutable digests"]
-  REG --> MAN["Release Manifest\nFE + all BE digests"]
-
-  MAN --> STG["Staging"]
-  STG --> VERIFY["Health + Version + Digest\nBE Smoke + FE E2E + Lighthouse"]
-  VERIFY -->|PASS| APPROVE["Production Approval"]
-  VERIFY -->|FAIL| PREV1["Previous Stable"]
-
-  APPROVE --> PROD["Production\nsame release set"]
-  PROD --> CHECK["Post-deploy verify"]
-  CHECK -->|PASS| STABLE["Mark Stable"]
-  CHECK -->|FAIL| PREV2["Rollback Previous Stable"]
-
-  MAN -. "Phase 1 executor" .-> SSH["SSH + Compose"]
-  MAN -. "Phase 2 executor" .-> GITOPS["Ops Repo + Argo CD"]
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  MAIN["main"] --> BUILD["CI / 构建"]
+  BUILD --> MAN["Release Manifest<br/>FE + 全部 BE 镜像 digest"]
+  MAN --> STG["部署 staging"]
+  STG --> VERIFY{"健康 / 版本 / digest<br/>BE Smoke / FE E2E / Lighthouse"}
+  VERIFY -->|"失败"| STOP["停止晋级<br/>恢复或修复 staging"]
+  VERIFY -->|"通过"| APPROVE["Production Approval"]
+  APPROVE --> PROD["生产部署<br/>同一 release set"]
+  PROD --> CHECK{"部署后验证"}
+  CHECK -->|"通过"| STABLE["记录稳定版本"]
+  CHECK -->|"失败"| ROLLBACK["回滚上一个稳定 release set"]
+  MAN -. "阶段 1 执行器" .-> COMPOSE["SSH + Compose"]
+  MAN -. "阶段 2 执行器" .-> GITOPS["Ops Repo + Argo CD"]
 ```
 
 这里的长期稳定契约是 Release Manifest，而不是 Compose 或 Argo CD 本身。Phase 1 和 Phase 2 只替换部署执行器，因此当前 Compose CD 的投入可以直接迁移到最终 GitOps 架构。
 
 ## 14. 从当前到最终目标的演进
 
-```text
-A. Dev / Demo
-   单机 Compose
-       ↓
-B. 当前 Production Baseline
-   App Node + Infra Node
-   GitHub Actions + GHCR + SSH Compose
-       ↓  容量增长
-C. Compose 横向拆分
-   Worker/App 横向扩容
-   PG/Kafka/MinIO 按压力拆机
-       ↓  HA/SLA/K8s 运维条件满足
-D. 最终 Production
-   Kubernetes + Helm + Argo CD
-   App/Worker 多副本
-   PostgreSQL/Kafka/Valkey/Object Storage HA
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart LR
+  DEV["开发 / Demo<br/>单机 Compose"] --> BASE["当前基线<br/>App Node + Infra Node<br/>Actions / GHCR / SSH Compose"]
+  BASE -->|"容量增长"| SPLIT["Compose 横向拆分<br/>按压力拆 Worker 与数据服务"]
+  SPLIT -->|"HA / SLA / 运维条件满足"| TARGET["目标生产形态<br/>Kubernetes / Helm / Argo CD<br/>应用与数据平面 HA"]
 ```
 
 进入最终架构必须由 SLA、故障域、多节点、自动恢复、滚动升级、弹性或容量需求触发；不能只因为 Helm 文件已经存在就提前迁移。

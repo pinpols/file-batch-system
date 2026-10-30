@@ -57,14 +57,7 @@ public class CapacityProfileService {
     CapacityProfileTotals totals = totals(rows);
     CapacityProfileCoverage coverage = coverage();
     return new CapacityProfileReport(
-        capturedAt,
-        tenantId,
-        window,
-        resolvedGroupBy,
-        SCOPE,
-        rows,
-        totals,
-        coverage);
+        capturedAt, tenantId, window, resolvedGroupBy, SCOPE, rows, totals, coverage);
   }
 
   private List<CapacityProfileRow> selectRows(
@@ -85,13 +78,19 @@ public class CapacityProfileService {
   }
 
   private CapacityProfileTotals totals(List<CapacityProfileRow> rows) {
-    long instanceCount = rows.stream().mapToLong(CapacityProfileRow::instanceCount).sum();
+    long instanceCount =
+        rows.stream().mapToLong(CapacityProfileRow::instanceCount).sum();
     long taskCount = rows.stream().mapToLong(CapacityProfileRow::taskCount).sum();
-    long successCount = rows.stream().mapToLong(CapacityProfileRow::successCount).sum();
-    long failureCount = rows.stream().mapToLong(CapacityProfileRow::failureCount).sum();
-    long totalDurationMs = rows.stream().mapToLong(CapacityProfileRow::totalDurationMs).sum();
-    long totalFileBytes = rows.stream().mapToLong(CapacityProfileRow::totalFileBytes).sum();
-    long processedRecords = rows.stream().mapToLong(CapacityProfileRow::processedRecords).sum();
+    long successCount =
+        rows.stream().mapToLong(CapacityProfileRow::successCount).sum();
+    long failureCount =
+        rows.stream().mapToLong(CapacityProfileRow::failureCount).sum();
+    long totalDurationMs =
+        rows.stream().mapToLong(CapacityProfileRow::totalDurationMs).sum();
+    long totalFileBytes =
+        rows.stream().mapToLong(CapacityProfileRow::totalFileBytes).sum();
+    long processedRecords =
+        rows.stream().mapToLong(CapacityProfileRow::processedRecords).sum();
     return new CapacityProfileTotals(
         instanceCount,
         taskCount,

@@ -89,5 +89,5 @@ MINIO_LIFECYCLE_PROD_ACK=I_UNDERSTAND_PRODUCTION_LIFECYCLE \
 ## 相关
 
 - v3 分析报告：`docs/archive/audit/deep-issue-analysis-v3-2026-04-20.md` R-4.6 条
-- 设计文档：`docs/archive/design/system-design-2026-03-21.md` §9.11
-- 容量规划：`docs/archive/audit/scalability-ha-assessment-2026-03-26.md`
+- 设计文档：[`docs/design/delete-strategy.md`](../design/delete-strategy.md)；本 Runbook 说明对象存储生命周期的实际操作策略。
+- 容量规划：`docs/runbook/ha-readiness.md`

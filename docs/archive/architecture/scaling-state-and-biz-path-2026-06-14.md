@@ -1,3 +1,5 @@
+> 历史原始记录：本轮恢复保留，正文中的结论、参数、状态和操作步骤仅适用于原日期/基线。提炼方法不替代原始证据；当前事实须按[文档治理](../../standards/document-governance.md)重新核实。本轮未执行原测试或扫描。
+
 # 扩容现状盘点 + biz 数据层路径决策(2026-06-14)
 
 > **历史决策快照（2026-06-14）**：本文保留当时对 Citus、分区和租户路由的评估。PR #470/#479 已合并并引入 platform 表分区；表格中“待合”等状态只表示记录时点。当前扩容事实和事项请复核 [`scalability-assessment-2026-07-28.md`](../audit/scalability-assessment-2026-07-28.md)、相关 ADR 与 [`todo-master.md`](../../plans/todo-master.md)。

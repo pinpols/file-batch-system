@@ -84,6 +84,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -175,18 +176,19 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     DeadLetterQueryRequest deadLetters = traceRequest(new DeadLetterQueryRequest());
     deadLetters.setTenantId(tenantId);
     deadLetters.setTraceId(traceId);
-    return new TraceSnapshotRequests(
-        jobs,
-        workflows,
-        workflowNodes,
-        files,
-        pipelines,
-        audits,
-        operationAudits,
-        executionLogs,
-        outbox,
-        alerts,
-        deadLetters);
+    return TraceSnapshotRequests.builder()
+        .jobs(jobs)
+        .workflows(workflows)
+        .workflowNodes(workflowNodes)
+        .files(files)
+        .pipelines(pipelines)
+        .audits(audits)
+        .operationAudits(operationAudits)
+        .executionLogs(executionLogs)
+        .outbox(outbox)
+        .alerts(alerts)
+        .deadLetters(deadLetters)
+        .build();
   }
 
   private TraceSnapshotPages queryTraceSnapshotPages(TraceSnapshotRequests requests) {
@@ -204,18 +206,19 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     PageResponse<ConsoleOutboxDeliveryLogResponse> outbox = outboxDeliveries(requests.outbox());
     PageResponse<ConsoleAlertEventResponse> alerts = alertEvents(requests.alerts());
     PageResponse<ConsoleDeadLetterTaskResponse> deadLetters = deadLetters(requests.deadLetters());
-    return new TraceSnapshotPages(
-        jobs,
-        workflows,
-        workflowNodes,
-        files,
-        pipelines,
-        audits,
-        operationAudits,
-        executionLogs,
-        outbox,
-        alerts,
-        deadLetters);
+    return TraceSnapshotPages.builder()
+        .jobs(jobs)
+        .workflows(workflows)
+        .workflowNodes(workflowNodes)
+        .files(files)
+        .pipelines(pipelines)
+        .audits(audits)
+        .operationAudits(operationAudits)
+        .executionLogs(executionLogs)
+        .outbox(outbox)
+        .alerts(alerts)
+        .deadLetters(deadLetters)
+        .build();
   }
 
   private ConsoleTraceSnapshotResponse buildTraceSnapshotResponse(
@@ -233,19 +236,20 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     addIfTruncated(truncatedDomains, "alerts", pages.alerts());
     addIfTruncated(truncatedDomains, "deadLetters", pages.deadLetters());
 
-    TraceTimelineSources timelineSources = new TraceTimelineSources(
-        traceId,
-        pages.jobs().items(),
-        pages.workflows().items(),
-        pages.workflowNodes().items(),
-        pages.files().items(),
-        pages.pipelines().items(),
-        pages.audits().items(),
-        pages.operationAudits().items(),
-        pages.executionLogs().items(),
-        pages.outbox().items(),
-        pages.alerts().items(),
-        pages.deadLetters().items());
+    TraceTimelineSources timelineSources = TraceTimelineSources.builder()
+        .traceId(traceId)
+        .jobInstances(pages.jobs().items())
+        .workflowRuns(pages.workflows().items())
+        .workflowNodeRuns(pages.workflowNodes().items())
+        .files(pages.files().items())
+        .filePipelines(pages.pipelines().items())
+        .auditLogs(pages.audits().items())
+        .operationAudits(pages.operationAudits().items())
+        .executionLogs(pages.executionLogs().items())
+        .outboxDeliveries(pages.outbox().items())
+        .alerts(pages.alerts().items())
+        .deadLetters(pages.deadLetters().items())
+        .build();
     List<ConsoleTraceTimelineItem> timeline = buildTimeline(timelineSources);
     List<String> truncatedDomainSnapshot = List.copyOf(truncatedDomains);
     return ConsoleTraceSnapshotResponse.builder()
@@ -420,8 +424,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
         .thenComparing(
             ConsoleTraceTimelineItem::source, Comparator.nullsLast(Comparator.naturalOrder()))
         .thenComparing(
-            ConsoleTraceTimelineItem::referenceId,
-            Comparator.nullsLast(Comparator.naturalOrder()));
+            ConsoleTraceTimelineItem::referenceId, Comparator.nullsLast(Comparator.naturalOrder()));
     items.sort(timelineOrder);
     return List.copyOf(items);
   }
@@ -433,6 +436,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     }
   }
 
+  @Builder
   private record TraceSnapshotRequests(
       JobInstanceQueryRequest jobs,
       WorkflowRunQueryRequest workflows,
@@ -446,6 +450,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
       AlertEventQueryRequest alerts,
       DeadLetterQueryRequest deadLetters) {}
 
+  @Builder
   private record TraceSnapshotPages(
       PageResponse<ConsoleJobInstanceResponse> jobs,
       PageResponse<ConsoleWorkflowRunResponse> workflows,
@@ -459,6 +464,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
       PageResponse<ConsoleAlertEventResponse> alerts,
       PageResponse<ConsoleDeadLetterTaskResponse> deadLetters) {}
 
+  @Builder
   private record TraceTimelineSources(
       String traceId,
       List<ConsoleJobInstanceResponse> jobInstances,

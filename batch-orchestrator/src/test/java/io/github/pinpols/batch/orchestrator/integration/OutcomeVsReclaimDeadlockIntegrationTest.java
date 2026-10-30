@@ -161,11 +161,7 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
           .executeWithoutResult(status -> {
             jdbcTemplate.execute(setLocalSql);
             jobInstanceMapper.acquireInstanceAdvisoryLock(TENANT, instance.instanceId());
-            jdbcTemplate.queryForObject(
-                selectIdSql,
-                Long.class,
-                TENANT,
-                shard.partitionId());
+            jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, shard.partitionId());
             reportLocked.countDown();
             try {
               if (!releaseReport.await(10, TimeUnit.SECONDS)) {
@@ -188,8 +184,7 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
       Future<Integer> terminal =
           pool.submit(() -> new TransactionTemplate(transactionManager).execute(status -> {
             jdbcTemplate.execute(setLocalSql);
-            terminalPid.complete(
-            jdbcTemplate.queryForObject(selectPgBackendPidSql, Integer.class));
+            terminalPid.complete(jdbcTemplate.queryForObject(selectPgBackendPidSql, Integer.class));
             return terminalStatusService.updateTerminalStatusAndReconcileChildren(
                 new JobInstanceTerminalStatusCommand(
                     TENANT,
@@ -202,10 +197,8 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
       Awaitility.await()
           .alias("终止事务必须实际进入锁等待")
           .atMost(3, TimeUnit.SECONDS)
-          .until(() -> Boolean.TRUE.equals(jdbcTemplate.queryForObject(
-              selectExistsSql,
-              Boolean.class,
-              pid)));
+          .until(() -> Boolean.TRUE.equals(
+              jdbcTemplate.queryForObject(selectExistsSql, Boolean.class, pid)));
       releaseReport.countDown();
       report.get(10, TimeUnit.SECONDS);
       assertThat(terminal.get(10, TimeUnit.SECONDS)).isZero();
@@ -323,10 +316,7 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
         """;
 
     // 把 instance / partition / task / step 全部复位到干净 RUNNING,再单线程逐分片报 success → 必然收敛 SUCCESS。
-    jdbcTemplate.update(
-        updateJobInstanceSql,
-        TENANT,
-        fannedOut.instanceId());
+    jdbcTemplate.update(updateJobInstanceSql, TENANT, fannedOut.instanceId());
     String[] settleInvocations = new String[shards.size()];
     for (int i = 0; i < shards.size(); i++) {
       settleInvocations[i] = "settle-" + UUID.randomUUID();
@@ -480,32 +470,17 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
         updated_at = current_timestamp where tenant_id = ? and job_task_id = ?\
         """;
 
-    jdbcTemplate.update(
-        updateJobTaskSql,
-        workerCode,
-        TENANT,
-        shard.taskId());
-    jdbcTemplate.update(
-        updateJobPartitionSql,
-        workerCode,
-        invocation,
-        TENANT,
-        shard.partitionId());
-    jdbcTemplate.update(
-        updateJobStepInstanceSql,
-        TENANT,
-        shard.taskId());
+    jdbcTemplate.update(updateJobTaskSql, workerCode, TENANT, shard.taskId());
+    jdbcTemplate.update(updateJobPartitionSql, workerCode, invocation, TENANT, shard.partitionId());
+    jdbcTemplate.update(updateJobStepInstanceSql, TENANT, shard.taskId());
   }
 
   private int countColumn(String column, Long instanceId) {
-  final String selectStatementSql = """
+    final String selectStatementSql = """
       select %s from batch.job_instance where tenant_id = ? and id = ?\
       """.formatted(column);
-  Integer value = jdbcTemplate.queryForObject(
-        selectStatementSql,
-        Integer.class,
-        TENANT,
-        instanceId);
+    Integer value =
+        jdbcTemplate.queryForObject(selectStatementSql, Integer.class, TENANT, instanceId);
     return value == null ? 0 : value;
   }
 

@@ -1,11 +1,11 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
-import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
@@ -106,9 +106,7 @@ public class TencentSmsProvider implements SmsProvider {
       String channelCodeForLog = LogSanitizer.value(message.channelCode());
       String reasonForLog = ex.getClass().getSimpleName();
       log.warn(
-          "tencent sms config parse failed channel={} reason={}",
-          channelCodeForLog,
-          reasonForLog);
+          "tencent sms config parse failed channel={} reason={}", channelCodeForLog, reasonForLog);
       return WebhookDeliveryResult.failure(null, "invalid sms config");
     }
 
@@ -136,10 +134,7 @@ public class TencentSmsProvider implements SmsProvider {
     } catch (Exception ex) {
       String channelCodeForLog = LogSanitizer.value(message.channelCode());
       String reasonForLog = ex.getClass().getSimpleName();
-      log.warn(
-          "tencent sms sign failed channel={} reason={}",
-          channelCodeForLog,
-          reasonForLog);
+      log.warn("tencent sms sign failed channel={} reason={}", channelCodeForLog, reasonForLog);
       return WebhookDeliveryResult.failure(null, "sms sign failed");
     }
 

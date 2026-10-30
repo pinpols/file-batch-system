@@ -1,10 +1,8 @@
 package io.github.pinpols.batch.console.application.observability;
 
-import io.github.pinpols.batch.console.domain.observability.param.ConsoleSystemParameterUpsertParam;
-
-
 import io.github.pinpols.batch.console.domain.observability.entity.SystemParameterEntity;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleSystemParameterMapper;
+import io.github.pinpols.batch.console.domain.observability.param.ConsoleSystemParameterUpsertParam;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import java.time.Duration;
 import java.util.List;
@@ -47,13 +45,14 @@ public class ConsoleSystemParameterService {
   public void upsert(
       String tenantId, String paramKey, String paramValue, String description, String operator) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    ConsoleSystemParameterUpsertParam consoleSystemParameterUpsertParam = ConsoleSystemParameterUpsertParam.builder()
-        .tenantId(resolved)
-        .paramKey(paramKey)
-        .paramValue(paramValue)
-        .description(description)
-        .operator(operator)
-        .build();
+    ConsoleSystemParameterUpsertParam consoleSystemParameterUpsertParam =
+        ConsoleSystemParameterUpsertParam.builder()
+            .tenantId(resolved)
+            .paramKey(paramKey)
+            .paramValue(paramValue)
+            .description(description)
+            .operator(operator)
+            .build();
     repository.upsert(consoleSystemParameterUpsertParam);
     cacheStore.evict(cacheKey(resolved, paramKey));
   }

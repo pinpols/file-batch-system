@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.config.RuntimeInfrastructureInspector;
 import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
 import io.github.pinpols.batch.common.stateful.StatefulBackendIdentity;
 import java.nio.file.Path;
+import java.util.Locale;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -15,8 +16,7 @@ import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
 
 /**
- * Refuses unmarked report-outbox enable/disable and PLATFORM_PG/SQLITE changes for a worker
- * service.
+ * 拒绝未标记的 Worker 回报 Outbox 启用或停用，以及 PLATFORM_PG/SQLITE 后端切换。
  */
 @Slf4j
 @Component
@@ -65,7 +65,7 @@ public class WorkerReportOutboxBackendGuard implements ApplicationRunner, Ordere
     }
 
     WorkerReportOutboxStorage storage = properties.getStorage();
-    String backend = storage.name().toLowerCase();
+    String backend = storage.name().toLowerCase(Locale.ROOT);
     String identity =
         switch (storage) {
           case PLATFORM_PG -> {

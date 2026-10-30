@@ -20,40 +20,50 @@ class ReplayOperationMapperXmlTest {
     parse(configuration, "/mapper/BatchDayReplaySessionMapper.xml");
 
     assertThat(configuration.hasStatement(
-        "io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper.insert")).isTrue();
-    assertThat(configuration.hasStatement(
-        "io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper.refreshFromChildSessions"))
+            "io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper.insert"))
+        .isTrue();
+    assertThat(
+            configuration.hasStatement(
+                "io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper.refreshFromChildSessions"))
+        .isTrue();
+    assertThat(
+            configuration.hasStatement(
+                "io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper.selectByTargetRequest"))
+        .isTrue();
+    assertThat(
+            configuration.hasStatement(
+                "io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper.attachTargetWorkflowRun"))
+        .isTrue();
+    assertThat(
+            configuration.hasStatement(
+                "io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper.updateWorkflowTargetOutcome"))
+        .isTrue();
+    assertThat(
+            configuration.hasStatement(
+                "io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper.rejectPendingApprovalWithStatus"))
+        .isTrue();
+    assertThat(
+            configuration.hasStatement(
+                "io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper.startApprovedWorkflowNodeReplay"))
+        .isTrue();
+    assertThat(
+            configuration.hasStatement(
+                "io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper.startApprovedWorkflowRunReplay"))
+        .isTrue();
+    assertThat(
+            configuration.hasStatement(
+                "io.github.pinpols.batch.orchestrator.mapper.ReplayOperationPreviewTokenMapper.selectForUpdate"))
         .isTrue();
     assertThat(configuration.hasStatement(
-        "io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper.selectByTargetRequest"))
+            "io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper.insert"))
         .isTrue();
-    assertThat(configuration.hasStatement(
-        "io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper.attachTargetWorkflowRun"))
-        .isTrue();
-    assertThat(configuration.hasStatement(
-        "io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper.updateWorkflowTargetOutcome"))
-        .isTrue();
-    assertThat(configuration.hasStatement(
-        "io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper.rejectPendingApproval"))
-        .isTrue();
-    assertThat(configuration.hasStatement(
-        "io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper.startApprovedWorkflowNodeReplay"))
-        .isTrue();
-    assertThat(configuration.hasStatement(
-        "io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper.startApprovedWorkflowRunReplay"))
-        .isTrue();
-    assertThat(configuration.hasStatement(
-        "io.github.pinpols.batch.orchestrator.mapper.ReplayOperationPreviewTokenMapper.selectForUpdate"))
-        .isTrue();
-    assertThat(configuration.hasStatement(
-        "io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper.insert")).isTrue();
   }
 
   private static void parse(Configuration configuration, String resource) throws Exception {
     try (InputStream input = ReplayOperationMapperXmlTest.class.getResourceAsStream(resource)) {
       assertThat(input).as("mapper resource %s exists", resource).isNotNull();
-      XMLMapperBuilder parser = new XMLMapperBuilder(
-          input, configuration, resource, configuration.getSqlFragments());
+      XMLMapperBuilder parser =
+          new XMLMapperBuilder(input, configuration, resource, configuration.getSqlFragments());
       parser.parse();
     }
   }

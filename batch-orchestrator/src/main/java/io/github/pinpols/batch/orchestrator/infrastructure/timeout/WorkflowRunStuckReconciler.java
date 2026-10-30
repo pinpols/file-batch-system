@@ -123,9 +123,8 @@ public class WorkflowRunStuckReconciler {
     workflowRunResumeProgressor.resume(candidate.getTenantId(), candidate.getId());
     WorkflowRunEntity refreshed =
         workflowRunMapper.selectById(candidate.getTenantId(), candidate.getId());
-    boolean refreshedRunIsMissingOrNotRunning =
-        EmptyChecks.isNull(refreshed)
-            || !WorkflowRunStatus.RUNNING.code().equals(refreshed.getRunStatus());
+    boolean refreshedRunIsMissingOrNotRunning = EmptyChecks.isNull(refreshed)
+        || !WorkflowRunStatus.RUNNING.code().equals(refreshed.getRunStatus());
     if (refreshedRunIsMissingOrNotRunning) {
       return CandidateResult.NO_ACTION;
     }

@@ -2,8 +2,12 @@ package io.github.pinpols.batch.orchestrator.application.plan;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.enums.JobType;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.plan.BundlePlanParams.BundleFile;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -91,5 +95,34 @@ class BundlePlanParamsTest {
     assertThat(BundlePlanParams.extract(Map.of(), JobType.BUNDLE_IMPORT)).isEmpty();
     assertThat(BundlePlanParams.extract(Map.of("bundleFiles", "not-a-list"), JobType.BUNDLE_IMPORT))
         .isEmpty();
+  }
+
+  @Test
+  @DisplayName("文件束只接受能精确表示为 long 的数字文件 ID")
+  void shouldNotTruncateFractionalOrOverflowFileIds() {
+    Map<String, Object> params = Map.of(
+        "bundleFiles",
+        List.of(
+            Map.of("sourceFileId", new BigDecimal("101.9"), "templateCode", "FRACTION"),
+            Map.of(
+                "sourceFileId", new BigInteger("18446744073709551718"), "templateCode", "OVERFLOW"),
+            Map.of("sourceFileId", new BigDecimal("102.0"), "templateCode", "VALID")));
+
+    assertThat(BundlePlanParams.extract(params, JobType.BUNDLE_IMPORT))
+        .extracting(BundleFile::sourceFileId)
+        .containsExactly(102L);
+  }
+
+  @Test
+  @DisplayName("JSON 浮点数即使解析时丢失小数也不能作为文件身份")
+  void shouldRejectFloatingPointFileId_whenJsonParserRoundsFraction() {
+    String json = """
+        {"bundleFiles":[
+          {"sourceFileId":101.00000000000000001,"templateCode":"TPL"},
+          {"sourceFileId":102.0,"templateCode":"TPL"}]}
+        """;
+    Map<String, Object> params = JsonUtils.fromJson(json, new TypeReference<>() {});
+
+    assertThat(BundlePlanParams.extract(params, JobType.BUNDLE_IMPORT)).isEmpty();
   }
 }

@@ -136,9 +136,8 @@ public class InstanceManagementApplicationService {
     if (EmptyChecks.isEmpty(pendingTasks)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
     }
-    boolean hasRunningTask =
-        partitionTasks.stream()
-            .anyMatch(task -> TaskStatus.RUNNING.code().equals(task.getTaskStatus()));
+    boolean hasRunningTask = partitionTasks.stream()
+        .anyMatch(task -> TaskStatus.RUNNING.code().equals(task.getTaskStatus()));
     if (hasRunningTask) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
     }

@@ -155,7 +155,8 @@ class FileErrorRecordIntegrationTest extends AbstractIntegrationTest {
         select count(*) from batch.file_error_record
         where tenant_id = ? and file_id = ? and error_stage = 'VALIDATE'
         """;
-    Long validateErrors = jdbcTemplate.queryForObject(validateErrorCountSql, Long.class, "t1", fileId);
+    Long validateErrors =
+        jdbcTemplate.queryForObject(validateErrorCountSql, Long.class, "t1", fileId);
 
     assertThat(parseErrors).isEqualTo(1L);
     assertThat(validateErrors).isEqualTo(1L);

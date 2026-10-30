@@ -7,40 +7,36 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-
+import io.github.pinpols.batch.common.enums.CatchUpPolicyType;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
 import io.github.pinpols.batch.trigger.domain.MisfireHandler;
+import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
+import io.github.pinpols.batch.trigger.infrastructure.readiness.ReadinessWaitHandoverClient;
 import io.github.pinpols.batch.trigger.infrastructure.scheduler.TriggerReconciler;
 import io.github.pinpols.batch.trigger.service.ScheduledOccurrenceRecorder;
 import io.github.pinpols.batch.trigger.service.TriggerScheduledOccurrencePlanner;
 import io.github.pinpols.batch.trigger.service.TriggerService;
 import io.github.pinpols.batch.trigger.service.UpstreamNotReadyException;
+import io.github.pinpols.batch.trigger.support.ReadinessWaitWindow;
+import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Date;
+import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
-import org.quartz.JobDataMap;
-import org.quartz.JobExecutionContext;
-import org.quartz.impl.StdSchedulerFactory;
-import org.springframework.scheduling.TaskScheduler;
-
-import io.github.pinpols.batch.common.enums.CatchUpPolicyType;
-import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
-import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
-import java.time.Duration;
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -49,21 +45,27 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.quartz.CronTrigger;
+import org.quartz.JobBuilder;
+import org.quartz.JobDataMap;
 import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
 import org.quartz.JobKey;
 import org.quartz.Scheduler;
+import org.quartz.SimpleScheduleBuilder;
 import org.quartz.SimpleTrigger;
 import org.quartz.Trigger;
 import org.quartz.TriggerBuilder;
 import org.quartz.TriggerKey;
-import org.quartz.SimpleScheduleBuilder;
+import org.quartz.impl.StdSchedulerFactory;
+import org.springframework.scheduling.TaskScheduler;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Quartz 调度门面:CRON/FIXED_RATE 注册替换、启停暂停顺序与并发管理保护")
@@ -131,7 +133,9 @@ class TriggerSchedulerFacadeTest {
 
     var inOrder = inOrder(scheduler);
     inOrder.verify(scheduler).checkExists(any(JobKey.class));
-    inOrder.verify(scheduler).scheduleJob(any(JobDetail.class), org.mockito.ArgumentMatchers.anySet(), eq(true));
+    inOrder
+        .verify(scheduler)
+        .scheduleJob(any(JobDetail.class), ArgumentMatchers.anySet(), eq(true));
     verify(scheduler, never()).deleteJob(any(JobKey.class));
   }
 
@@ -264,15 +268,18 @@ class TriggerSchedulerFacadeTest {
     when(triggerDefinitionLoader.loadByWorkflowCode("t1", "WF_JOB_PAUSE_WITH_MISFIRE"))
         .thenReturn(descriptor);
     when(scheduler.checkExists(workflowJobKey)).thenReturn(true);
-    JobDetail originalJob = org.quartz.JobBuilder.newJob(QuartzLaunchJob.class).withIdentity(workflowJobKey)
+    JobDetail originalJob = JobBuilder.newJob(QuartzLaunchJob.class)
+        .withIdentity(workflowJobKey)
         .usingJobData(QuartzLaunchJob.TENANT_ID, "t1")
         .usingJobData(QuartzLaunchJob.WORKFLOW_DEFINITION_ID, 42L)
-        .usingJobData(QuartzLaunchJob.WORKFLOW_VERSION, 3).storeDurably().build();
+        .usingJobData(QuartzLaunchJob.WORKFLOW_VERSION, 3)
+        .storeDurably()
+        .build();
     when(scheduler.getJobDetail(workflowJobKey)).thenReturn(originalJob);
     doReturn(attachedTriggers).when(scheduler).getTriggersOfJob(workflowJobKey);
     when(scheduler.checkExists(recoveryJobKey)).thenReturn(false);
     when(scheduler.rescheduleJob(eq(recoveryTriggerKey), any(Trigger.class)))
-        .thenReturn(new java.util.Date());
+        .thenReturn(new Date());
 
     facade.pauseByWorkflowCode("t1", "WF_JOB_PAUSE_WITH_MISFIRE");
 
@@ -283,7 +290,8 @@ class TriggerSchedulerFacadeTest {
     var inOrder = inOrder(scheduler, triggerDefinitionLoader);
     inOrder.verify(scheduler).rescheduleJob(eq(recoveryTriggerKey), any(Trigger.class));
     inOrder.verify(scheduler).deleteJob(workflowJobKey);
-    inOrder.verify(triggerDefinitionLoader)
+    inOrder
+        .verify(triggerDefinitionLoader)
         .setWorkflowScheduleEnabled("t1", "WF_JOB_PAUSE_WITH_MISFIRE", false);
   }
 
@@ -356,7 +364,9 @@ class TriggerSchedulerFacadeTest {
 
     var inOrder = inOrder(scheduler);
     inOrder.verify(scheduler).checkExists(any(JobKey.class));
-    inOrder.verify(scheduler).scheduleJob(any(JobDetail.class), org.mockito.ArgumentMatchers.anySet(), eq(true));
+    inOrder
+        .verify(scheduler)
+        .scheduleJob(any(JobDetail.class), ArgumentMatchers.anySet(), eq(true));
     verify(scheduler, never()).deleteJob(any(JobKey.class));
   }
 
@@ -454,8 +464,7 @@ class TriggerSchedulerFacadeTest {
   void shouldUseUpdatedWorkflowVersionForNextFireWithoutCronChange() throws Exception {
     TriggerDescriptor current = cronDescriptor("t1", "VERSION_ONLY", true);
     current.setCatchUpPolicy(CatchUpPolicyType.NONE.code());
-    when(triggerDefinitionLoader.loadByWorkflowCode("t1", "WF_VERSION_ONLY"))
-        .thenReturn(current);
+    when(triggerDefinitionLoader.loadByWorkflowCode("t1", "WF_VERSION_ONLY")).thenReturn(current);
     when(triggerDefinitionLoader.loadAll()).thenReturn(List.of(current));
     Scheduler actualScheduler = newMemoryScheduler();
     try {
@@ -493,7 +502,8 @@ class TriggerSchedulerFacadeTest {
           properties,
           actualFacade,
           new SimpleMeterRegistry(),
-          mock(ScheduledOccurrenceRecorder.class));
+          mock(ScheduledOccurrenceRecorder.class),
+          mock(ReadinessWaitHandoverClient.class));
 
       actualJob.execute(fireContext);
 
@@ -527,7 +537,7 @@ class TriggerSchedulerFacadeTest {
       LocalDate bizDate = LocalDate.of(2026, 3, 27);
       ScheduledOccurrenceRecorder recorder = mock(ScheduledOccurrenceRecorder.class);
       when(recorder.pendingMisfires("t1", 42L, 100)).thenReturn(List.of(fireTime));
-      when(recorder.recordWaitingReadiness(any(), eq(fireTime), eq(bizDate)))
+      when(recorder.recordWaitingReadiness(any(), eq(fireTime), eq(bizDate), any(), any()))
           .thenReturn(true);
       TriggerRuntimeProperties properties = new TriggerRuntimeProperties();
       QuartzMisfireRecoveryListener recoveryListener = new QuartzMisfireRecoveryListener(
@@ -543,6 +553,9 @@ class TriggerSchedulerFacadeTest {
       JobDataMap merged = new JobDataMap(recoveryJob.getJobDataMap());
       merged.putAll(recoveryTrigger.getJobDataMap());
       Date actualFireDate = Date.from(fireTime.plusSeconds(90));
+      when(recorder.readinessWaitWindow(any(), eq(fireTime)))
+          .thenReturn(new ReadinessWaitWindow(
+              actualFireDate.toInstant(), actualFireDate.toInstant().plusSeconds(7200)));
       JobExecutionContext fireContext = mock(JobExecutionContext.class);
       when(fireContext.getMergedJobDataMap()).thenReturn(merged);
       when(fireContext.getFireTime()).thenReturn(actualFireDate);
@@ -558,7 +571,8 @@ class TriggerSchedulerFacadeTest {
           properties,
           actualFacade,
           new SimpleMeterRegistry(),
-          recorder);
+          recorder,
+          mock(ReadinessWaitHandoverClient.class));
 
       actualJob.execute(fireContext);
       actualScheduler.unscheduleJob(recoveryTrigger.getKey());
@@ -577,7 +591,7 @@ class TriggerSchedulerFacadeTest {
 
       actualReconciler.reconcile();
 
-      verify(recorder).recordWaitingReadiness(any(), eq(fireTime), eq(bizDate));
+      verify(recorder).recordWaitingReadiness(any(), eq(fireTime), eq(bizDate), any(), any());
       Trigger retainedRetry = actualScheduler.getTrigger(originalRetryKey);
       assertThat(retainedRetry).as("已观察等待仍应保留可执行回调").isNotNull();
       JobDataMap retainedData = retainedRetry.getJobDataMap();
@@ -612,7 +626,8 @@ class TriggerSchedulerFacadeTest {
       assertThat(retained.getStartTime()).isEqualTo(phase);
       assertThat(retained.getNextFireTime()).isEqualTo(nextFire);
       JobDetail definition = actual.getJobDetail(retained.getJobKey());
-      assertThat(definition.getJobDataMap().getIntValue(QuartzLaunchJob.WORKFLOW_VERSION)).isEqualTo(4);
+      assertThat(definition.getJobDataMap().getIntValue(QuartzLaunchJob.WORKFLOW_VERSION))
+          .isEqualTo(4);
     } finally {
       actual.shutdown(true);
     }
@@ -621,7 +636,8 @@ class TriggerSchedulerFacadeTest {
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   @DisplayName("定义更新不能删除等待回调，也不能把新依赖注入原null或空依赖")
-  void shouldKeepOldReadinessDescriptorWhenDefinitionChanges(boolean emptyDependencies) throws Exception {
+  void shouldKeepOldReadinessDescriptorWhenDefinitionChanges(boolean emptyDependencies)
+      throws Exception {
     TriggerDescriptor current = cronDescriptor("t1", "FROZEN", true);
     current.setDependsOnJobCodes(emptyDependencies ? List.of() : null);
     current.setDependsOnJobCode("LEGACY");
@@ -634,10 +650,14 @@ class TriggerSchedulerFacadeTest {
       Instant originalFire = Instant.parse("2026-03-27T12:00:00Z");
       JobDataMap original = new JobDataMap(actual.getJobDetail(jobKey).getJobDataMap());
       original.put(QuartzLaunchJob.READINESS_ORIGINAL_FIRE_TIME, originalFire.toEpochMilli());
-      original.put(QuartzLaunchJob.READINESS_DEFERRED_SINCE, originalFire.plusSeconds(90).toEpochMilli());
+      original.put(
+          QuartzLaunchJob.READINESS_DEFERRED_SINCE, originalFire.plusSeconds(90).toEpochMilli());
       original.put(QuartzLaunchJob.READINESS_TRIGGER_TYPE, TriggerType.CATCH_UP.name());
-      Trigger retry = TriggerBuilder.newTrigger().withIdentity("frozen-readiness", TriggerSchedulerFacade.JOB_GROUP)
-          .forJob(jobKey).usingJobData(original).startAt(Date.from(Instant.parse("2099-01-01T00:00:00Z")))
+      Trigger retry = TriggerBuilder.newTrigger()
+          .withIdentity("frozen-readiness", TriggerSchedulerFacade.JOB_GROUP)
+          .forJob(jobKey)
+          .usingJobData(original)
+          .startAt(Date.from(Instant.parse("2099-01-01T00:00:00Z")))
           .build();
       actual.scheduleJob(retry);
       current.setWorkflowVersion(4);
@@ -650,11 +670,13 @@ class TriggerSchedulerFacadeTest {
 
       Trigger retained = actual.getTrigger(retry.getKey());
       assertThat(retained).isNotNull();
-      ScheduledTriggerCommand fired = captureScheduledFire(actual, service, retained, originalFire.plusSeconds(100));
+      ScheduledTriggerCommand fired =
+          captureScheduledFire(actual, service, retained, originalFire.plusSeconds(100));
       assertThat(fired.descriptor().getWorkflowVersion()).isEqualTo(3);
       assertThat(fired.descriptor().getCalendarCode()).isEqualTo("BIZ_CAL");
       assertThat(fired.descriptor().getDependsOnJobCode()).isEqualTo("LEGACY");
-      if (emptyDependencies) assertThat(fired.descriptor().getDependsOnJobCodes()).isEmpty();
+      if (emptyDependencies)
+        assertThat(fired.descriptor().getDependsOnJobCodes()).isEmpty();
       else assertThat(fired.descriptor().getDependsOnJobCodes()).isNull();
       assertThat(fired.fireTime()).isEqualTo(originalFire);
       assertThat(retained.getJobDataMap().getLongValue(QuartzLaunchJob.READINESS_DEFERRED_SINCE))
@@ -668,11 +690,14 @@ class TriggerSchedulerFacadeTest {
   @DisplayName("同一恢复Job承载两代fire时，各恢复回调保留自己的版本与依赖")
   void shouldKeepRecoveryMetadataPerFireAcrossDefinitionUpdates() throws Exception {
     TriggerDescriptor current = cronDescriptor("t1", "RECOVERY_VERSION", true);
-    when(triggerDefinitionLoader.loadByWorkflowCode("t1", "WF_RECOVERY_VERSION")).thenReturn(current);
+    when(triggerDefinitionLoader.loadByWorkflowCode("t1", "WF_RECOVERY_VERSION"))
+        .thenReturn(current);
     ScheduledOccurrenceRecorder recorder = mock(ScheduledOccurrenceRecorder.class);
     Instant oldFire = Instant.parse("2026-03-27T12:00:00Z");
     Instant newFire = oldFire.plusSeconds(60);
-    when(recorder.pendingMisfires("t1", 42L, 100)).thenReturn(List.of(oldFire)).thenReturn(List.of(newFire));
+    when(recorder.pendingMisfires("t1", 42L, 100))
+        .thenReturn(List.of(oldFire))
+        .thenReturn(List.of(newFire));
     Scheduler actual = newMemoryScheduler();
     try {
       TriggerSchedulerFacade service = new TriggerSchedulerFacade(triggerDefinitionLoader, actual);
@@ -687,11 +712,15 @@ class TriggerSchedulerFacadeTest {
       listener.restorePendingMisfires("t1", 42L, primary);
 
       Trigger oldRecovery = actual.getTrigger(TriggerKey.triggerKey(
-          "misfire-recovery-42-" + oldFire.toEpochMilli(), QuartzMisfireRecoveryListener.RECOVERY_GROUP));
+          "misfire-recovery-42-" + oldFire.toEpochMilli(),
+          QuartzMisfireRecoveryListener.RECOVERY_GROUP));
       Trigger newRecovery = actual.getTrigger(TriggerKey.triggerKey(
-          "misfire-recovery-42-" + newFire.toEpochMilli(), QuartzMisfireRecoveryListener.RECOVERY_GROUP));
-      ScheduledTriggerCommand oldCommand = captureScheduledFire(actual, service, oldRecovery, newFire.plusSeconds(90));
-      ScheduledTriggerCommand newCommand = captureScheduledFire(actual, service, newRecovery, newFire.plusSeconds(90));
+          "misfire-recovery-42-" + newFire.toEpochMilli(),
+          QuartzMisfireRecoveryListener.RECOVERY_GROUP));
+      ScheduledTriggerCommand oldCommand =
+          captureScheduledFire(actual, service, oldRecovery, newFire.plusSeconds(90));
+      ScheduledTriggerCommand newCommand =
+          captureScheduledFire(actual, service, newRecovery, newFire.plusSeconds(90));
       assertThat(oldCommand.descriptor().getWorkflowVersion()).isEqualTo(3);
       assertThat(oldCommand.descriptor().getDependsOnJobCodes()).isNull();
       assertThat(newCommand.descriptor().getWorkflowVersion()).isEqualTo(4);
@@ -704,7 +733,8 @@ class TriggerSchedulerFacadeTest {
   }
 
   private ScheduledTriggerCommand captureScheduledFire(
-      Scheduler actual, TriggerSchedulerFacade service, Trigger trigger, Instant actualFire) throws Exception {
+      Scheduler actual, TriggerSchedulerFacade service, Trigger trigger, Instant actualFire)
+      throws Exception {
     JobDetail job = actual.getJobDetail(trigger.getJobKey());
     JobDataMap merged = new JobDataMap(job.getJobDataMap());
     merged.putAll(trigger.getJobDataMap());
@@ -712,10 +742,17 @@ class TriggerSchedulerFacadeTest {
     when(context.getMergedJobDataMap()).thenReturn(merged);
     when(context.getFireTime()).thenReturn(Date.from(actualFire));
     TriggerService admission = mock(TriggerService.class);
-    QuartzLaunchJob launch = new QuartzLaunchJob(admission, mock(MisfireHandler.class),
-        new TriggerRuntimeProperties(), service, new SimpleMeterRegistry(), mock(ScheduledOccurrenceRecorder.class));
+    QuartzLaunchJob launch = new QuartzLaunchJob(
+        admission,
+        mock(MisfireHandler.class),
+        new TriggerRuntimeProperties(),
+        service,
+        new SimpleMeterRegistry(),
+        mock(ScheduledOccurrenceRecorder.class),
+        mock(ReadinessWaitHandoverClient.class));
     launch.execute(context);
-    ArgumentCaptor<ScheduledTriggerCommand> command = ArgumentCaptor.forClass(ScheduledTriggerCommand.class);
+    ArgumentCaptor<ScheduledTriggerCommand> command =
+        ArgumentCaptor.forClass(ScheduledTriggerCommand.class);
     verify(admission).launchScheduled(command.capture());
     return command.getValue();
   }

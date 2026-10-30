@@ -85,7 +85,7 @@
         FROM <include refid="hotAndColdHistory"/>
         <include refid="queryWhere"/>
         <choose>
-            <when test="cursorId != null">
+            <when test="cursorMode">
                 ORDER BY id DESC
                 LIMIT #{pageRequest.pageSize}
             </when>

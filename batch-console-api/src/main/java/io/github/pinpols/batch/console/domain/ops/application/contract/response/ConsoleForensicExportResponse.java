@@ -1,10 +1,5 @@
 package io.github.pinpols.batch.console.domain.ops.application.contract.response;
 
-import static io.github.pinpols.batch.console.domain.ops.application.contract.response.OpsResponseFieldReader.longValue;
-import static io.github.pinpols.batch.console.domain.ops.application.contract.response.OpsResponseFieldReader.stringValue;
-
-import java.util.Map;
-
 /**
  * ADR-022 forensic 取证导出响应，透传自 orchestrator {@code ForensicExportResponse}，字段 1:1。
  *
@@ -17,18 +12,4 @@ public record ConsoleForensicExportResponse(
     String storagePath,
     Long fileSizeBytes,
     String sha256,
-    String downloadUrl) {
-
-  public static ConsoleForensicExportResponse from(Map<String, Object> row) {
-    if (row == null) {
-      return null;
-    }
-    return new ConsoleForensicExportResponse(
-        stringValue(row, "exportId"),
-        stringValue(row, "status"),
-        stringValue(row, "storagePath"),
-        longValue(row, "fileSizeBytes"),
-        stringValue(row, "sha256"),
-        stringValue(row, "downloadUrl"));
-  }
-}
+    String downloadUrl) {}

@@ -79,6 +79,14 @@ class TerminalNotificationRecoveryIntegrationTest extends AbstractIntegrationTes
 
   @AfterEach
   void clean() {
+    final String deleteArchivedDeliverySql = """
+        delete from archive.notification_delivery_log_archive where tenant_id=?
+        """;
+    final String deleteArchivedReceiptSql = """
+        delete from archive.workflow_terminal_notification_receipt_archive where tenant_id=?
+        """;
+    jdbc.update(deleteArchivedDeliverySql, tenant);
+    jdbc.update(deleteArchivedReceiptSql, tenant);
     for (String table : List.of(
         "webhook_delivery_log",
         "notification_delivery_log",
@@ -107,6 +115,55 @@ class TerminalNotificationRecoveryIntegrationTest extends AbstractIntegrationTes
         .expectBody()
         .jsonPath("$.data")
         .isArray();
+  }
+
+  @Test
+  @DisplayName("普通租户用户回查热表及归档终态投递时不回显历史错误凭据")
+  void shouldMaskHistoricalDeliveryErrorsFromHotAndArchivedRows() {
+    final String updateHistoricalErrorSql = """
+        update batch.notification_delivery_log set error_message=? where tenant_id=? and id=?
+        """;
+    final String archiveDeliverySql = """
+        insert into archive.notification_delivery_log_archive
+        select * from batch.notification_delivery_log where tenant_id=? and id=?
+        """;
+    final String archiveReceiptSql = """
+        insert into archive.workflow_terminal_notification_receipt_archive
+        select * from batch.workflow_terminal_notification_receipt where tenant_id=?
+        """;
+    final String deleteHotDeliverySql = """
+        delete from batch.notification_delivery_log where tenant_id=? and id=?
+        """;
+    long id = exhaustedProvider();
+    String historicalError =
+        "{&quot;password&quot;:&quot;stored-secret&quot;} ｔｏｋｅｎ=unicode-secret; &lt;script&gt; retry later";
+    jdbc.update(updateHistoricalErrorSql, historicalError, tenant, id);
+
+    assertMaskedTerminalError(id);
+    assertThat(jdbc.update(archiveReceiptSql, tenant)).isEqualTo(1);
+    assertThat(jdbc.update(archiveDeliverySql, tenant, id)).isEqualTo(1);
+    assertThat(jdbc.update(deleteHotDeliverySql, tenant, id)).isEqualTo(1);
+    assertMaskedTerminalError(id);
+  }
+
+  private void assertMaskedTerminalError(long id) {
+    client
+        .mutate()
+        .defaultHeader("X-Console-Roles", "ROLE_TENANT_USER")
+        .defaultHeader("X-Tenant-Id", tenant)
+        .build()
+        .get()
+        .uri("/api/console/notifications/terminal-deliveries?tenantId=" + tenant)
+        .exchange()
+        .expectStatus()
+        .isOk()
+        .expectBody()
+        .jsonPath("$.data[0].id")
+        .isEqualTo(id)
+        .jsonPath("$.data[0].errorMessage")
+        .value(value -> assertThat(value.toString())
+            .contains("password", "token=****", "&lt;script&gt;", "retry later")
+            .doesNotContain("stored-secret", "unicode-secret", "<script>"));
   }
 
   @DisplayName("核对后才允许重试并以稳定请求身份查询审计")

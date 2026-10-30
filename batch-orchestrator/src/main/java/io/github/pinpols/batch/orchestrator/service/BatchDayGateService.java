@@ -86,7 +86,8 @@ public class BatchDayGateService {
         configCacheService.findEnabledBusinessCalendar(request.tenantId(), calendarCode);
     String policy;
     if ("INHERIT".equals(scope)) {
-      String configuredRolloverPolicy = EmptyChecks.isNull(calendar) ? null : calendar.dayRolloverPolicy();
+      String configuredRolloverPolicy =
+          EmptyChecks.isNull(calendar) ? null : calendar.dayRolloverPolicy();
       policy = normalize(configuredRolloverPolicy, POLICY_ALLOW_OVERLAP);
     } else {
       policy = POLICY_WAIT_PREVIOUS_DAY;
@@ -187,8 +188,7 @@ public class BatchDayGateService {
           request.requestId());
     }
     appendAuditLog(request, previous, "BATCH_DAY_GATE_WAIT", reason, traceId);
-    emitGateAlert(
-        request, triggerRequest, previous, GateAlertKind.WAITING, reason, traceId);
+    emitGateAlert(request, triggerRequest, previous, GateAlertKind.WAITING, reason, traceId);
   }
 
   private void reject(
@@ -206,12 +206,7 @@ public class BatchDayGateService {
     }
     appendAuditLog(request, previous, "BATCH_DAY_GATE_REJECT", reason, request.traceId());
     emitGateAlert(
-        request,
-        triggerRequest,
-        previous,
-        GateAlertKind.REJECTED,
-        reason,
-        request.traceId());
+        request, triggerRequest, previous, GateAlertKind.REJECTED, reason, request.traceId());
   }
 
   /** 等待与拒绝使用固定级别，避免告警类型和严重性错配。 */

@@ -46,7 +46,7 @@ def main() -> int:
     if not snapshot.is_file():
         return fail("docs/stats 缺少 loc-current-lean.md 当前代码量快照")
 
-    for index_path in (STATS_DIR / "README.md", STATS_DIR / "archive" / "README.md"):
+    for index_path in (STATS_DIR / "README.md", ROOT / "docs" / "archive" / "stats" / "README.md"):
         if snapshot.name not in read(index_path):
             return fail(f"{index_path.relative_to(ROOT)} 未指向最新代码量快照 {snapshot.name}")
 

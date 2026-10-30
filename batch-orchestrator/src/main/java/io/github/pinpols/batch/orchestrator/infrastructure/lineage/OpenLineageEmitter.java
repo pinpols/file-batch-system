@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.lineage;
 
-import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
@@ -95,7 +95,8 @@ public class OpenLineageEmitter {
       String endpoint = props.getEndpoint();
       Duration connectTimeout = Duration.ofMillis(props.getConnectTimeoutMs());
       Duration requestTimeout = Duration.ofMillis(props.getRequestTimeoutMs());
-      OutboundHttpContent httpContent = new OutboundHttpContent(body, "application/json; charset=utf-8");
+      OutboundHttpContent httpContent =
+          new OutboundHttpContent(body, "application/json; charset=utf-8");
       OutboundHttpRequest request = OutboundHttpRequest.post(
           endpoint,
           Map.of(),

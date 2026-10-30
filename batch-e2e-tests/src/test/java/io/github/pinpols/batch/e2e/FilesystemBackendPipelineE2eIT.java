@@ -102,6 +102,7 @@ class FilesystemBackendPipelineE2eIT extends AbstractIntegrationTest {
             select fr.storage_path, fr.file_status, fr.file_size_bytes
             from batch.file_record fr
             join batch.job_instance ji on ji.tenant_id = fr.tenant_id
+                 and fr.metadata_json ->> 'jobInstanceId' = ji.id::text
             where ji.tenant_id = ? and ji.dedup_key = ? and fr.file_category = 'OUTPUT'
             order by fr.id desc
             limit 1
@@ -135,12 +136,15 @@ class FilesystemBackendPipelineE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String status = jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
+          String status = jdbcTemplate.queryForObject(
+              selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
           assertThat(status).isEqualTo("SUCCESS");
         });
 
-    Map<String, Object> fileRecord = jdbcTemplate.queryForMap(selectStoragePathSql, TENANT, seed.dedupKey());
-    String storagePath = String.valueOf(fileRecord.get("storage_path"));
+    Map<String, Object> fileRecord =
+        jdbcTemplate.queryForMap(selectStoragePathSql, TENANT, seed.dedupKey());
+    assertThat(fileRecord.get("storage_path")).isInstanceOf(String.class);
+    String storagePath = (String) fileRecord.get("storage_path");
     assertThat(storagePath).as("export: file_record.storage_path must be set").isNotBlank();
 
     String bucket = s3Properties.getBucket();
@@ -153,6 +157,9 @@ class FilesystemBackendPipelineE2eIT extends AbstractIntegrationTest {
     assertThat(Files.isRegularFile(onDisk))
         .as("export: artifact must exist on filesystem root: %s", onDisk)
         .isTrue();
+    assertThat(fileRecord.get("file_size_bytes")).isInstanceOf(Number.class);
+    long registeredBytes = ((Number) fileRecord.get("file_size_bytes")).longValue();
+    assertThat(registeredBytes).as("登记大小应与磁盘实际字节数一致").isEqualTo(Files.size(onDisk));
     String diskContent = Files.readString(onDisk, StandardCharsets.UTF_8);
     assertThat(diskContent)
         .as("export: artifact content must contain settlement record")
@@ -193,7 +200,8 @@ class FilesystemBackendPipelineE2eIT extends AbstractIntegrationTest {
         ) values (?, ?, ?, ?, date '2026-01-15', '202601', 10.00, 1.00, 9.00, 'CNY', 'READY')
         """;
 
-    Long batchId = businessJdbc.queryForObject(insertSettlementBatchSql, Long.class, TENANT, BATCH_NO);
+    Long batchId =
+        businessJdbc.queryForObject(insertSettlementBatchSql, Long.class, TENANT, BATCH_NO);
     assertThat(batchId).isNotNull();
 
     businessJdbc.update(insertSettlementDetailSql, TENANT, batchId, SETTLEMENT_NO, "C-FS-1");

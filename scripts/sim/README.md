@@ -60,6 +60,8 @@ scripts/sim/
 
 标准本地与 nightly 验证统一使用 harness。`sim` 会执行 04-30 全部业务主链阶段；26 文件束与
 27 batch-claim 会由 harness 临时切换 Worker 配置，结束或异常退出时恢复默认配置。
+
+阶段运行前若核心健康检查触发整体恢复，harness会重新应用该阶段要求的Import skip/checkpoint/bundle或Process batch-claim模式；核心或模式重启命令失败会显式返回，旧健康端点仍200也不能掩盖失败；不能在默认模式下冒充验证。共享本地环境的真实验收应安排独占窗口；调用方可持有已有生命周期锁并传给子脚本，避免其它会话在场景中重建运行包或启停服务。比较累计指标前后必须核对进程启动身份，不跨重启直接相减。
 任何阶段未执行、未命中目标路径或未达业务终态都返回失败，不以 `SKIP` 或编排侧部分成功代替。
 
 基线 `05-load.sh` 按租户先触发 IMPORT，并等待该请求关联的 JobInstance 到达 `SUCCESS` 后才触发同租户 EXPORT；IMPORT 启动失败、执行失败或 180 秒内未结束时，该租户的 EXPORT/DISPATCH 跳过并使本轮失败。这样不会因 Trigger 仅返回“已受理”就把异步 IMPORT 当作已完成前置条件。
@@ -85,7 +87,7 @@ bash scripts/local/sim-harness.sh all
 
 全新部署前需先在本机 PostgreSQL 容器中创建所选平台库和业务库；`all` 只重置库内运行态，不创建、删除或覆盖数据库。`preflight` 会在 reset 前确认两个目标库都存在且 SQL/JVM URL 指向同名库。
 
-`03-import-tenants.sh` 为每个租户记录工作簿 SHA-256。同一工作簿重复运行时跳过 Apply；工作簿变更或存在未登记的既有租户配置时失败关闭，要求使用干净数据库，避免重复推进 Workflow 版本或覆盖未知配置。
+`03-import-tenants.sh` 先在本轮私有目录准备上传副本，由 `sim_mockserver_base_url` 按宿主机/Compose 模式统一已知 SIM API 渠道的目标列和 JSON 地址，再上传 Apply；原模板保留容器地址。准备器仅修改相关单元格，保留其他 ZIP 成员及元数据，重复准备的 SHA-256 稳定。每租户记录实际上传副本的 SHA-256；同指纹重复运行跳过 Apply，端口/运行模式/工作簿变化或存在未登记的既有配置时失败关闭，要求使用干净数据库，不改台账规避检查。本轮副本在成功、失败及信号退出时清理，清理失败返回失败。
 
 直接执行 26/27 时不会自动配置 Worker，也不会跳过；调用方必须先提供脚本头部说明的运行配置。
 
@@ -221,6 +223,8 @@ docker exec -it batch-postgres-primary psql -U batch_user -d batch_platform -c \
 | [01-init-biz.sh](01-init-biz.sh) | 初始化 SIM 业务表、权限与对象存储空间。 |
 | [02-start-sim.sh](02-start-sim.sh) | start-sim.sh:起模拟下游容器(sftp + mockserver)。 |
 | [03-import-tenants.sh](03-import-tenants.sh) | import-tenants.sh:把 ta/tb/tc 的 4 类 worker 配置导入到 console-api。 |
+| [fix-fixture-xlsx.py](fix-fixture-xlsx.py) | 只读校验或修复四份 SIM 租户配置包；`--check` 不写工作簿，省略该参数会修复工作簿。 |
+| [prepare-tenant-fixture.py](prepare-tenant-fixture.py) | 在导入私有副本中归一化已知 SIM API 渠道，保持原工作簿不变。 |
 | [04-seed-source-data.sh](04-seed-source-data.sh) | seed-source-data.sh:把假业务文件投放到 SFTP 入站目录。 |
 | [05-load.sh](05-load.sh) | 按导入完成顺序驱动多租户 SIM 主链负载。 |
 | [06-sdk-worker-verify.sh](06-sdk-worker-verify.sh) | sdk-worker-verify.sh — 自托管 SDK worker 端到端真实调用验证(可重复执行)。 |
@@ -230,13 +234,14 @@ docker exec -it batch-postgres-primary psql -U batch_user -d batch_platform -c \
 | [09-export-stage3.sh](09-export-stage3.sh) | export-stage3.sh:Export 业务分支系统级验证。 |
 | [10-process-stage4.sh](10-process-stage4.sh) | process-stage4.sh:Process 业务分支系统级验证。 |
 | [11-import-stage2b.sh](11-import-stage2b.sh) | import-stage2b.sh:Import LOAD/幂等/分片保护业务分支验证。 |
-| [12-export-stage3b.sh](12-export-stage3b.sh) | export-stage3b.sh:Export 分片/keyset-range 业务分支验证。 |
+| [12-export-stage3b.sh](12-export-stage3b.sh) | Export 四分片正常路径及 MinIO 产物业务键无重无漏验证。 |
+| [export_partition_evidence.py](export_partition_evidence.py) | 对 Stage 3b/3c 的 JSON 产物核对租户和跨分片业务键，拒绝重复或遗漏。 |
 | [13-process-stage4b.sh](13-process-stage4b.sh) | process-stage4b.sh:Process 幂等重跑/失败恢复业务分支验证。 |
 | [14-dispatch-stage5b.sh](14-dispatch-stage5b.sh) | dispatch-stage5b.sh:Dispatch 未知外部结果的自动重试围栏验证。 |
 | [15-trigger-stage6b.sh](15-trigger-stage6b.sh) | trigger-stage6b.sh:Trigger 去重 + 小规模 storm 验证。 |
 | [16-atomic-stage5b.sh](16-atomic-stage5b.sh) | atomic-stage5b.sh:Atomic shell/sql/stored-proc 成功态验证。 |
 | [17-import-stage2c.sh](17-import-stage2c.sh) | import-stage2c.sh:Import BATCH_UPSERT/REPLACE 小矩阵验证。 |
-| [18-export-stage3c.sh](18-export-stage3c.sh) | export-stage3c.sh:Export 8 分片 + 多租户 + 幂等重放验证。 |
+| [18-export-stage3c.sh](18-export-stage3c.sh) | Export 八分片产物业务键、多租户与请求幂等验证。 |
 | [19-process-stage4c.sh](19-process-stage4c.sh) | process-stage4c.sh:Process 分片 + 取消验证。 |
 | [20-dispatch-stage5c.sh](20-dispatch-stage5c.sh) | dispatch-stage5c.sh:Dispatch LOCAL / NAS stub / SFTP manifest 验证。 |
 | [21-atomic-stage5c.sh](21-atomic-stage5c.sh) | atomic-stage5c.sh:Atomic SSRF rejection / timeout / cancel 验证。 |
@@ -345,6 +350,7 @@ docker exec -it batch-postgres-primary psql -U batch_user -d batch_platform -c \
 | [sql/select-export-stage3-job-status.sql](sql/select-export-stage3-job-status.sql) | 供 [09-export-stage3.sh](09-export-stage3.sh) 使用的配套 SQL。 |
 | [sql/select-export-stage3-object-sample.sql](sql/select-export-stage3-object-sample.sql) | 供 [09-export-stage3.sh](09-export-stage3.sh) 使用的配套 SQL。 |
 | [sql/select-export-stage3b-assertion.sql](sql/select-export-stage3b-assertion.sql) | 供 [12-export-stage3b.sh](12-export-stage3b.sh) 使用的配套 SQL。 |
+| [sql/select-export-partition-objects.sql](sql/select-export-partition-objects.sql) | 供 Stage 3b/3c 获取本次导出对象路径，读取产物并核对完整性。 |
 | [sql/select-export-stage3c-dedup-check.sql](sql/select-export-stage3c-dedup-check.sql) | 供 [18-export-stage3c.sh](18-export-stage3c.sh) 使用的配套 SQL。 |
 | [sql/select-export-stage3c-file-records.sql](sql/select-export-stage3c-file-records.sql) | 供 [18-export-stage3c.sh](18-export-stage3c.sh) 使用的配套 SQL。 |
 | [sql/select-export-stage3c-instance.sql](sql/select-export-stage3c-instance.sql) | 供 [18-export-stage3c.sh](18-export-stage3c.sh) 使用的配套 SQL。 |

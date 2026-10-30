@@ -74,9 +74,8 @@ public class ForensicExportController {
     HttpHeaders headers = new HttpHeaders();
     headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + exportId + ".zip\"");
     headers.add("X-Forensic-Sha256", log.sha256() == null ? "" : log.sha256());
-    ResponseEntity.BodyBuilder responseBuilder = ResponseEntity.ok()
-        .headers(headers)
-        .contentType(MediaType.APPLICATION_OCTET_STREAM);
+    ResponseEntity.BodyBuilder responseBuilder =
+        ResponseEntity.ok().headers(headers).contentType(MediaType.APPLICATION_OCTET_STREAM);
     long contentLength = Files.size(file);
     FileSystemResource resource = new FileSystemResource(file);
     return responseBuilder.contentLength(contentLength).body(resource);

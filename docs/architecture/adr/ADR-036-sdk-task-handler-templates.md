@@ -43,19 +43,24 @@ public interface SdkTaskHandler {
 
 ## 层次结构
 
-```
-SdkTaskHandler                                  ← ADR-035 协议契约,不动
-   ▲
-   │ implements
-   │
-SdkAbstractTaskHandler                          ← 共同基类:template 序 + 共享工具
-   ▲
-   │ extends
-   ├── SdkAbstractAtomicHandler<R>              单次原子调用
-   ├── SdkAbstractImportHandler<R>              external → tenant
-   ├── SdkAbstractExportHandler<R>              tenant → external (file)
-   ├── SdkAbstractProcessHandler<I,O>           tenant → tenant (transform)
-   └── SdkAbstractDispatchHandler<R>            tenant → external (push)
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+%% 决策示意；实施范围以本文状态记录为准。
+classDiagram
+  class SdkTaskHandler
+  <<interface>> SdkTaskHandler
+  class SdkAbstractTaskHandler
+  class SdkAbstractAtomicHandler
+  class SdkAbstractImportHandler
+  class SdkAbstractExportHandler
+  class SdkAbstractProcessHandler
+  class SdkAbstractDispatchHandler
+  SdkTaskHandler <|.. SdkAbstractTaskHandler
+  SdkAbstractTaskHandler <|-- SdkAbstractAtomicHandler
+  SdkAbstractTaskHandler <|-- SdkAbstractImportHandler
+  SdkAbstractTaskHandler <|-- SdkAbstractExportHandler
+  SdkAbstractTaskHandler <|-- SdkAbstractProcessHandler
+  SdkAbstractTaskHandler <|-- SdkAbstractDispatchHandler
 ```
 
 ### 共同基类 `SdkAbstractTaskHandler`

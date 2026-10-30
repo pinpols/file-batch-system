@@ -102,11 +102,11 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
   @DisplayName("根运行或任务 Outbox 提交前数据库连接被终止,未提交部分回滚且同请求重试恢复唯一业务结果")
   void shouldRecoverSameRequest_whenDatabaseDisconnectsBeforeLaunchCommit(
       LaunchCommitFaultPoint faultPoint) {
-        final String selectCountSql5 = """
+    final String selectCountSql5 = """
             select count(*) from biz.customer_account where tenant_id = ? and customer_no = ?
         """;
 
-        final String createFunctionSql = """
+    final String createFunctionSql = """
         create function batch.e2e_abort_launch_connection() returns trigger language plpgsql as $$
         begin
           perform pg_terminate_backend(pg_backend_pid());
@@ -114,28 +114,28 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
         end
         $$
         """;
-        final String selectCountSql = """
+    final String selectCountSql = """
               select count(*) from batch.workflow_run
               where tenant_id = ? and workflow_definition_id = ?
               """;
-        final String selectCountSql2 = """
+    final String selectCountSql2 = """
             select count(*) from batch.job_instance where tenant_id = ? and job_code = ?
         """;
-        final String selectCountSql3 = """
+    final String selectCountSql3 = """
               select count(*) from batch.outbox_event
               where tenant_id = ? and event_type = 'IMPORT' and payload_json ->> 'jobCode' = ?
               """;
-        final String selectRequestStatusSql = """
+    final String selectRequestStatusSql = """
             select request_status from batch.trigger_request where tenant_id = ? and request_id = ?
         """;
-        final String dropFunctionSql = """
+    final String dropFunctionSql = """
             drop function if exists batch.e2e_abort_launch_connection()
         """;
-        final String selectRunStatusSql = """
+    final String selectRunStatusSql = """
               select run_status from batch.workflow_run
               where tenant_id = ? and workflow_definition_id = ?
               """;
-        final String selectCountSql4 = """
+    final String selectCountSql4 = """
             select count(*) from batch.outbox_event
             where tenant_id = ? and event_type = 'IMPORT' and payload_json ->> 'jobCode' = ?
             """;
@@ -165,7 +165,7 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
     String predicate = faultPoint == LaunchCommitFaultPoint.ROOT
         ? "new.workflow_definition_id = " + seed.workflowDefinitionId()
         : "new.event_type = 'IMPORT' and new.payload_json ->> 'jobCode' = '" + seed.jobCode() + "'";
-        jdbcTemplate.execute(createFunctionSql);
+    jdbcTemplate.execute(createFunctionSql);
     try {
       final String createTriggerSql = """
           create trigger e2e_abort_launch_connection after insert on batch.%s
@@ -194,8 +194,8 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
       Integer selectedOutboxEventCount =
           jdbcTemplate.queryForObject(selectCountSql3, Integer.class, TENANT, seed.jobCode());
       assertThat(selectedOutboxEventCount).isZero();
-      String selectedRequestStatus =
-          jdbcTemplate.queryForObject(selectRequestStatusSql, String.class, TENANT, seed.requestId());
+      String selectedRequestStatus = jdbcTemplate.queryForObject(
+          selectRequestStatusSql, String.class, TENANT, seed.requestId());
       assertThat(selectedRequestStatus).isEqualTo("ACCEPTED");
       Integer selectedCustomerAccountCount = new JdbcTemplate(businessDataSource)
           .queryForObject(selectCountSql5, Integer.class, TENANT, customerNo);
@@ -218,12 +218,12 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
           .queryForObject(selectCountSql5, Integer.class, TENANT, customerNo);
       assertThat(selectedCustomerAccountCountRead2).isEqualTo(1);
     });
-        Integer selectedJobInstanceCountRead2 =
-            jdbcTemplate.queryForObject(selectCountSql2, Integer.class, TENANT, seed.jobCode());
-        assertThat(selectedJobInstanceCountRead2).isEqualTo(1);
-        Integer selectedOutboxEventCountRead2 =
-            jdbcTemplate.queryForObject(selectCountSql4, Integer.class, TENANT, seed.jobCode());
-        assertThat(selectedOutboxEventCountRead2).isEqualTo(1);
+    Integer selectedJobInstanceCountRead2 =
+        jdbcTemplate.queryForObject(selectCountSql2, Integer.class, TENANT, seed.jobCode());
+    assertThat(selectedJobInstanceCountRead2).isEqualTo(1);
+    Integer selectedOutboxEventCountRead2 =
+        jdbcTemplate.queryForObject(selectCountSql4, Integer.class, TENANT, seed.jobCode());
+    assertThat(selectedOutboxEventCountRead2).isEqualTo(1);
   }
 
   @Test
@@ -336,7 +336,8 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
       String blockedTransition = crashBeforePublish
           ? "old.publish_status in ('NEW', 'FAILED') and new.publish_status = 'PUBLISHING'"
           : "old.publish_status = 'PUBLISHING' and new.publish_status = 'PUBLISHED'";
-      final String createTriggerSql = """
+      final String createTriggerSql =
+          """
           create trigger e2e_hold_outbox_ack before update on batch.outbox_event
           for each row when (%s)
           execute function batch.e2e_hold_outbox_ack('%s', '%s', '%s')
@@ -352,7 +353,7 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
               PLATFORM_POSTGRES.getUsername(),
               PLATFORM_POSTGRES.getPassword());
           var statement = gate.createStatement()) {
-            final String selectPgAdvisoryLockSql = """
+        final String selectPgAdvisoryLockSql = """
                 select pg_advisory_lock(%s)\
                 """.formatted(gateKey);
         statement.execute(selectPgAdvisoryLockSql);
@@ -407,11 +408,8 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
             assertThat(selectedPublishStatusRead2).isEqualTo("PUBLISHING");
           });
         }
-        attemptsBeforeDisconnect = jdbcTemplate.queryForObject(
-            selectPublishAttemptSql,
-            Integer.class,
-            TENANT,
-            outboxId);
+        attemptsBeforeDisconnect =
+            jdbcTemplate.queryForObject(selectPublishAttemptSql, Integer.class, TENANT, outboxId);
         claimsBeforeDisconnect =
             claimAttempts.getOrDefault(taskId, new AtomicInteger()).get();
         if (crashBeforePublish) {
@@ -424,8 +422,8 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
           await().atMost(Duration.ofSeconds(15)).until(() -> !gate.isValid(1));
         } else {
           int failedBackend = blockedOutboxUpdatePids(gatePid).getFirst();
-          Boolean selectedPgTerminateBackend =
-              jdbcTemplate.queryForObject(selectPgTerminateBackendSql, Boolean.class, failedBackend);
+          Boolean selectedPgTerminateBackend = jdbcTemplate.queryForObject(
+              selectPgTerminateBackendSql, Boolean.class, failedBackend);
           assertThat(selectedPgTerminateBackend).isTrue();
         }
       }
@@ -445,16 +443,16 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
             assertThat(selectedPublishStatusRow)
                 .containsEntry("publish_status", "PUBLISHED")
                 .containsEntry("payload", originalPayload);
-            Integer selectedPublishAttempt =
-                jdbcTemplate.queryForObject(selectPublishAttemptSql, Integer.class, TENANT, outboxId);
+            Integer selectedPublishAttempt = jdbcTemplate.queryForObject(
+                selectPublishAttemptSql, Integer.class, TENANT, outboxId);
             assertThat(selectedPublishAttempt).isGreaterThan(attemptsBeforeDisconnect);
             assertThat(claimAttempts.getOrDefault(taskId, new AtomicInteger()).get())
                 .isGreaterThan(claimsBeforeDisconnect);
             String selectedTaskStatusRead2 =
                 jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, taskId);
             assertThat(selectedTaskStatusRead2).isEqualTo("SUCCESS");
-            String selectedRunStatus =
-                jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, seed.requestId());
+            String selectedRunStatus = jdbcTemplate.queryForObject(
+                selectRunStatusSql, String.class, TENANT, seed.requestId());
             assertThat(selectedRunStatus).isEqualTo("SUCCESS");
           });
       assertThat(successfulClaims.get(taskId).get()).isEqualTo(1);
@@ -523,14 +521,15 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
         "e2e-tr-outbox-fwd",
         params));
 
-    // OutboxPollScheduler fires every 500 ms and publishes the pending outbox event automatically.
+    // OutboxPollScheduler 每 500 毫秒运行一次，并自动发布待处理的 Outbox 事件。
     await()
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
           E2eStatusLogger.logJobFlowSnapshot(
               jdbcTemplate, TENANT, seed.dedupKey(), "OutboxForwarderE2eIT");
-          String status = jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
+          String status = jdbcTemplate.queryForObject(
+              selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
           assertThat(status).isEqualTo("SUCCESS");
         });
   }

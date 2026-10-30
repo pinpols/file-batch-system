@@ -47,8 +47,8 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn) {
         schemaMap.get("sql_template_export"),
         templateConfig.get("sql_template_export"),
         templateConfig.get("sqlTemplateExport"));
-    Map<String, Object> spec = ExportConfigValueSupport.toMap(
-        rawSpec, objectMapper, SqlTemplateExportSpec.class);
+    Map<String, Object> spec =
+        ExportConfigValueSupport.toMap(rawSpec, objectMapper, SqlTemplateExportSpec.class);
 
     Object rawCursorColumn = firstNonNull(spec.get("cursorColumn"), spec.get("cursor_column"));
     String cursorColumn = textValue(rawCursorColumn);

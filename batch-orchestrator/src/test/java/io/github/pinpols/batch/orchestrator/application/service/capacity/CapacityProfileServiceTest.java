@@ -3,7 +3,6 @@ package io.github.pinpols.batch.orchestrator.application.service.capacity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -13,16 +12,23 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @DisplayName("容量画像服务: 分组查询, 时间窗边界与条数上限的校验口径")
+@ExtendWith(MockitoExtension.class)
 class CapacityProfileServiceTest {
 
-  private final CapacityProfileMapper mapper = mock(CapacityProfileMapper.class);
-  private final CapacityProfileService service = new CapacityProfileService(mapper);
+  @Mock
+  private CapacityProfileMapper mapper;
+
+  private CapacityProfileService service;
 
   @Test
   @DisplayName("按任务分组查询时返回速率, 汇总与覆盖缺口, 并透传扫描范围")
@@ -149,7 +155,7 @@ class CapacityProfileServiceTest {
     assertThat(resolvedFrom).isNotNull();
     assertThat(resolvedTo).isNotNull();
     assertThat(resolvedFrom).isBefore(resolvedTo);
-    // null from/to default to a 24h window ending ~now
+    // from 和 to 为空时，默认查询截至当前时间的 24 小时窗口。
     assertThat(Duration.between(resolvedFrom, resolvedTo)).isEqualTo(Duration.ofHours(24));
     assertThat(resolvedTo).isCloseTo(Instant.now(), within(1, ChronoUnit.MINUTES));
   }
@@ -194,5 +200,10 @@ class CapacityProfileServiceTest {
 
   private static int eqInt(int v) {
     return ArgumentMatchers.eq(v);
+  }
+
+  @BeforeEach
+  void initializeSubject() {
+    service = new CapacityProfileService(mapper);
   }
 }

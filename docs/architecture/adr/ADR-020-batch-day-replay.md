@@ -110,12 +110,15 @@ batch.batch_day_replay_entry        -- session 内每个 job 的重跑入口
 
 ### 状态机
 
-```
-PENDING_APPROVAL ──(approve)──► RUNNING ──(全部完成)──► SUCCEEDED
-       │                            │                        │
-       │                            ├──(部分失败)──► PARTIAL_FAILED
-       │                            │
-       └──(reject)─► CANCELLED      └──(ops cancel)─► CANCELLED
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+%% 决策示意；实施范围以本文状态记录为准。
+stateDiagram-v2
+  PENDING_APPROVAL --> RUNNING: approve
+  PENDING_APPROVAL --> CANCELLED: reject
+  RUNNING --> SUCCEEDED: 全部完成
+  RUNNING --> PARTIAL_FAILED: 部分失败
+  RUNNING --> CANCELLED: ops cancel
 ```
 
 `RUNNING` 期间禁止启动同 (tenantId, calendarCode, bizDate) 的另一个 session — 见"不变量"。

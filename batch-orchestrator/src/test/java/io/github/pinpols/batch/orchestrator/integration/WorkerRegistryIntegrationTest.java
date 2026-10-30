@@ -9,11 +9,11 @@ import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.service.replay.WorkflowReplayCapabilityService;
 import io.github.pinpols.batch.orchestrator.domain.entity.CustomTaskTypeRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.CustomTaskTypeUpsertParam;
 import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
-import io.github.pinpols.batch.orchestrator.application.service.replay.WorkflowReplayCapabilityService;
 import io.github.pinpols.batch.orchestrator.mapper.CustomTaskTypeRegistryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
@@ -163,7 +163,8 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
 
     int updated = workerRegistryMapper.markStaleHeartbeatsOffline(60);
 
-    assertThat(updated).isEqualTo(2);
+    // 全局扫描也会处理共享集成库中其他测试留下的过期节点。
+    assertThat(updated).isGreaterThanOrEqualTo(2);
     assertThat(workerRegistryMapper
             .selectByTenantAndWorkerCode("worker-tenant-a", tenantAOnline.workerCode())
             .status())
@@ -342,14 +343,18 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
         "READ_ONLY_QUERY_V1",
         ReplayCapabilityDeclaration.CURRENT_CONTRACT_VERSION);
     String declaredCatalogue = JsonUtils.toJson(List.of(declared));
-    String unknownCatalogue = JsonUtils.toJson(List.of(ReplayCapabilityDeclaration.unknown(pluginId)));
-    assertThat(workerRegistryMapper.updateReplayCapabilities(tenantId, safeWorkerCode, declaredCatalogue))
+    String unknownCatalogue =
+        JsonUtils.toJson(List.of(ReplayCapabilityDeclaration.unknown(pluginId)));
+    assertThat(workerRegistryMapper.updateReplayCapabilities(
+            tenantId, safeWorkerCode, declaredCatalogue))
         .isEqualTo(1);
-    assertThat(workerRegistryMapper.updateReplayCapabilities(tenantId, unknownWorkerCode, unknownCatalogue))
+    assertThat(workerRegistryMapper.updateReplayCapabilities(
+            tenantId, unknownWorkerCode, unknownCatalogue))
         .isEqualTo(1);
 
-    List<String> persistedCatalogues = workerRegistryMapper.selectReplayCapabilitiesByTenantAndWorkerGroup(
-        tenantId, workerGroup, List.of(WorkerRegistryStatus.ONLINE.code()));
+    List<String> persistedCatalogues =
+        workerRegistryMapper.selectReplayCapabilitiesByTenantAndWorkerGroup(
+            tenantId, workerGroup, List.of(WorkerRegistryStatus.ONLINE.code()));
     assertThat(persistedCatalogues).hasSize(2);
     WorkflowReplayCapabilityService.Assessment assessment =
         replayCapabilityService.assess(tenantId, workerGroup, pluginId);
@@ -362,15 +367,18 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
 
   private void assertUnknownCapabilityBlocksReplay(
       String tenantId, String workerGroup, String pluginId) {
-    String workerCode = workerGroup.toLowerCase() + "-replay-" + BatchDateTimeSupport.utcEpochMillis();
+    String workerCode =
+        workerGroup.toLowerCase() + "-replay-" + BatchDateTimeSupport.utcEpochMillis();
     workerRegistryMapper.saveLikeSdj(onlineWorker(tenantId, workerCode, workerGroup));
     String capabilityCatalogue =
         JsonUtils.toJson(List.of(ReplayCapabilityDeclaration.unknown(pluginId)));
 
-    assertThat(workerRegistryMapper.updateReplayCapabilities(tenantId, workerCode, capabilityCatalogue))
+    assertThat(workerRegistryMapper.updateReplayCapabilities(
+            tenantId, workerCode, capabilityCatalogue))
         .isEqualTo(1);
-    List<String> persistedCatalogues = workerRegistryMapper.selectReplayCapabilitiesByTenantAndWorkerGroup(
-        tenantId, workerGroup, List.of(WorkerRegistryStatus.ONLINE.code()));
+    List<String> persistedCatalogues =
+        workerRegistryMapper.selectReplayCapabilitiesByTenantAndWorkerGroup(
+            tenantId, workerGroup, List.of(WorkerRegistryStatus.ONLINE.code()));
     assertThat(persistedCatalogues).hasSize(1);
     assertThat(persistedCatalogues.getFirst()).contains(pluginId, "UNKNOWN");
 

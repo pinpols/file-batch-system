@@ -1,6 +1,6 @@
 # mega 设计文档章节 → 当前位置导航表
 
-> 配套阅读：[`system-design-2026-03-21.md`](../archive/design/system-design-2026-03-21.md)（**已变存根**：仅保留 20 章 + 95 子节标题供锚点兼容；原 8005 行正文需 `git show 5b72df9b:docs/archive/design/system-design-2026-03-21.md` 找回）。
+> 本表是原 mega 设计稿章节到当前文档的导航。原稿正文不另存重复副本；需要审计原始内容时，通过 Git 历史查看。
 > 本表把 20 章每章的内容指向**当前权威位置**，方便从 mega 章号反查。
 
 ## 三类状态
@@ -29,7 +29,7 @@
 | **ch.14** | 数据模型与 PG 表结构设计 | ✅ | [数据库目录与关系](database-schema-guide.md)、[逻辑建模基线](data-model-ddl.md)；实际 DDL 以 Flyway 和 catalog 为准 |
 | **ch.15** | 多租户与安全设计 | 🟢 | [`design/multi-tenant-and-security.md`](multi-tenant-and-security.md) |
 | **ch.16** | 可观测性与运行手册设计 | ✅ | [`design/logging-architecture.md`](logging-architecture.md) + [`runbook/observability-stack.md`](../runbook/observability-stack.md) |
-| **ch.17** | 项目结构、模块划分与 POM 设计 | ✅ | [当前项目结构](../architecture/project-structure.md)；[早期 POM 设计稿](../archive/design/project-structure-pom-2026-03-21.md) 仅用于历史对照 |
+| **ch.17** | 项目结构、模块划分与 POM 设计 | ✅ | 当前结构和 Maven reactor 见[项目结构](../architecture/project-structure.md) |
 | **ch.18** | 生产可用性与部署设计 | ✅ | [`runbook/docker-deployment.md`](../runbook/docker-deployment.md) + [`runbook/ha-elastic-scaling.md`](../runbook/ha-elastic-scaling.md) + [`runbook/autoscaling-strategy.md`](../runbook/autoscaling-strategy.md) + [`runbook/pg-table-partitioning.md`](../runbook/pg-table-partitioning.md) + [`runbook/read-replica.md`](../runbook/read-replica.md) + [`runbook/orchestrator-statefulset-migration.md`](../runbook/orchestrator-statefulset-migration.md) + [`runbook/rolling-upgrade-workers.md`](../runbook/rolling-upgrade-workers.md) + [`runbook/incident-response.md`](../runbook/incident-response.md) |
 | **ch.19** | 实施落地计划 | ✅ | [TODO Master](../plans/todo-master.md) → [阶段计划索引](../plans/README.md) → [持续硬化事项](../plans/hardening-backlog.md) |
 | **ch.20** | 批量调度能力评估 | ✅ | [`design/capability-assessment.md`](capability-assessment.md) |

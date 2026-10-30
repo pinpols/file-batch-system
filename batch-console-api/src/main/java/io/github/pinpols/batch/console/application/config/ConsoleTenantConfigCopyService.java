@@ -33,13 +33,13 @@ public interface ConsoleTenantConfigCopyService {
   TenantConfigBatchInitResponse copy(
       TenantConfigCopyRequest request, String operator, String batchOperationId);
 
-  /** Read-only diff preview before copying a source tenant package to target tenants. */
+  /** 将源租户配置包复制到目标租户前，提供只读差异预览。 */
   TenantConfigDiffPreviewResponse preview(TenantConfigPreviewRequest request);
 
-  /** Read-only overlay preview from a base tenant package to target tenant overrides. */
+  /** 基于租户配置包预览目标租户覆盖项，只读不落库。 */
   TenantConfigDiffPreviewResponse previewOverlay(TenantConfigPreviewRequest request);
 
-  /** Compare the same job configuration across tenants. */
+  /** 比较多个租户的同一作业配置。 */
   TenantConfigMatrixResponse matrix(TenantConfigMatrixRequest request);
 
   /**

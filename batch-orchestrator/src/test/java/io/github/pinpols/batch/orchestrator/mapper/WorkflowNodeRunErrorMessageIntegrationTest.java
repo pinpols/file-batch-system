@@ -86,8 +86,7 @@ class WorkflowNodeRunErrorMessageIntegrationTest {
   @DisplayName("记录长失败原因时仍提交 FAILED 状态和有界错误文本")
   void shouldPersistFailure_whenErrorMessageExceedsColumnLimit() {
     String longMessage = "root-cause-".repeat(200);
-    String insertRunningWorkflowNodeSql =
-        """
+    String insertRunningWorkflowNodeSql = """
         insert into batch.workflow_node_run(id, node_status) values (1, 'RUNNING')
     """;
     jdbcTemplate.update(insertRunningWorkflowNodeSql);
@@ -106,19 +105,16 @@ class WorkflowNodeRunErrorMessageIntegrationTest {
           .isEqualTo(1);
     }
 
-    String workflowNodeStatusSql =
-        """
+    String workflowNodeStatusSql = """
         select node_status from batch.workflow_node_run where id = 1
     """;
-    String persistedNodeStatus =
-    jdbcTemplate.queryForObject(workflowNodeStatusSql, String.class);
+    String persistedNodeStatus = jdbcTemplate.queryForObject(workflowNodeStatusSql, String.class);
     assertThat(persistedNodeStatus).isEqualTo("FAILED");
-    String workflowNodeErrorMessageSql =
-        """
+    String workflowNodeErrorMessageSql = """
         select error_message from batch.workflow_node_run where id = 1
     """;
     String persistedErrorMessage =
-    jdbcTemplate.queryForObject(workflowNodeErrorMessageSql, String.class);
+        jdbcTemplate.queryForObject(workflowNodeErrorMessageSql, String.class);
     String boundedErrorMessage = longMessage.substring(0, 1024);
     assertThat(persistedErrorMessage).isEqualTo(boundedErrorMessage);
   }

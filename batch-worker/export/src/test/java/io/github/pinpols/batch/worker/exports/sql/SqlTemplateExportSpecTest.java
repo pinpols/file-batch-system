@@ -1,10 +1,10 @@
 package io.github.pinpols.batch.worker.exports.sql;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.postgresql.util.PGobject;
@@ -43,10 +43,11 @@ class SqlTemplateExportSpecTest {
   @DisplayName("数据库 jsonb 形态的查询参数模板同样能解析出游标列")
   void parse_shouldReadCursorFromPostgresJsonbQueryParamSchema() {
     PGobject queryParamSchema = new PGobject();
-    Assertions.assertDoesNotThrow(() -> {
-      queryParamSchema.setType("jsonb");
-      queryParamSchema.setValue("{\"sqlTemplateExport\":{\"cursorColumn\":\"created_at\"}}");
-    });
+    assertThatCode(() -> {
+          queryParamSchema.setType("jsonb");
+          queryParamSchema.setValue("{\"sqlTemplateExport\":{\"cursorColumn\":\"created_at\"}}");
+        })
+        .doesNotThrowAnyException();
 
     SqlTemplateExportSpec spec = SqlTemplateExportSpec.parse(
         Map.of(

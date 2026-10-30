@@ -1,3 +1,5 @@
+> 历史原始记录：本轮恢复保留，正文中的结论、参数、状态和操作步骤仅适用于原日期/基线。提炼方法不替代原始证据；当前事实须按[文档治理](../../standards/document-governance.md)重新核实。本轮未执行原测试或扫描。
+
 # 待办事项汇总(2026-06-23)
 
 本文件是 2026-06-23 的历史快照，不再作为当前待办索引。当前状态以
@@ -40,7 +42,7 @@
 
 - **biz Tiered 多租**(来源:`plans/biz-tiered-tenancy-plan-2026-06-14.md`):biz schema 多目标迁移 + drift 校验、路由数据源、Pooled 扩 shard、Silo 升舱工具。仅 biz 撞单机墙时执行;P0 多目标迁移是硬前置债。
 - **跨平台脚本 D-1/D-2**(来源:`backlog/cross-platform-scripts-2026-05-24.md`):ops 脚本 host:port env 化、容器名 compose 解析。需 K8s/staging 真需求才做。
-- **ADR-046 文件束坏数据隔离终态**(来源:`docs/archive/architecture/arrival-group-malformed-data-quarantine-decision-2026-06-21.md`):QUARANTINED 状态 + console 人工恢复。已加 metric 回退;告警高频再上。
+- **ADR-046 文件束坏数据隔离终态**：该历史待办当前仍暂缓；launch 失败保留 `WAITING_ARRIVAL` 并递增指标，只有生产证据确认需要自动隔离时再评估。当前边界见 `docs/architecture/adr/ADR-046-file-bundle-aggregation.md`。
 - **多租户隔离 Phase C/D/E**(来源:`plans/multi-tenant-isolation-plan-2026-05-31.md`):per-tenant schema 已否决;per-tenant worker pool 跑通 + 演练需 live 集群;per-tenant DB 仅合规硬要求时做。
 
 ## 近期已完成(原规划文档曾标"待办",勿误列)

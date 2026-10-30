@@ -149,8 +149,8 @@
                last_not_ready_reason, last_checked_at, created_at, updated_at, timeout_alerted_at
         from batch.job_dependency_waiting_launch
         where tenant_id = #{tenantId}
-          and (#{waitStatus} is null or wait_status = #{waitStatus})
-          and (#{jobCode} is null or job_code = #{jobCode})
+          and (cast(#{waitStatus,jdbcType=VARCHAR} as text) is null or wait_status = #{waitStatus})
+          and (cast(#{jobCode,jdbcType=VARCHAR} as text) is null or job_code = #{jobCode})
         order by updated_at desc, id desc
         limit #{limit}
     </select>

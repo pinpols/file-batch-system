@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.constants.NodeOutputKeys;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -358,19 +359,20 @@ public class DefaultProcessStageExecutor
       result = ProcessStageResult.failure(
           stage, StageFailureCode.BUSINESS_ERROR.name(), exception, ERROR_OBJECT_MAPPER);
     } catch (Exception exception) {
+      String failureSummary = SwallowedExceptionLogger.summary(exception);
       log.error(
-          "process stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}",
+          "process stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, cause={}",
           stage,
-          step.stepCode(),
-          step.implCode(),
-          context.getTenantId(),
-          exception);
+          LogSanitizer.value(step.stepCode()),
+          LogSanitizer.value(step.implCode()),
+          LogSanitizer.value(context.getTenantId()),
+          failureSummary);
       result = ProcessStageResult.failure(
           stage,
           StageFailureCode.INFRA_ERROR.name(),
           "error.worker.stage_infra_error",
-          new Object[] {exception.getMessage()},
-          exception.getMessage(),
+          new Object[] {failureSummary},
+          failureSummary,
           ERROR_OBJECT_MAPPER);
     }
     metrics.recordStageDuration(

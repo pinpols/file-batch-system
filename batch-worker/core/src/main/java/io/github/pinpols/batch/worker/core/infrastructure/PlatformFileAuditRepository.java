@@ -1,18 +1,13 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
-import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.FILE_ID;
-import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.ID;
-import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.PIPELINE_INSTANCE_ID;
-import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.TENANT_ID;
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.defaultText;
-import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.params;
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.toJson;
-import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.toLong;
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.truncate;
 
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
-import java.util.Map;
+import io.github.pinpols.batch.worker.core.param.PlatformFileAuditInsertParam;
+import io.github.pinpols.batch.worker.core.param.PlatformFileErrorInsertParam;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -37,36 +32,23 @@ public class PlatformFileAuditRepository {
     String rawRecordJson = toJson(param.getRawRecord());
     Long sourceRowNum = param.getSourceRowNum();
     String sourceColumn = truncate(param.getSourceColumn(), 256);
-    Map<String, Object> values = params(
-        TENANT_ID,
-        tenantId,
-        FILE_ID,
-        fileId,
-        PIPELINE_INSTANCE_ID,
-        pipelineInstanceId,
-        "pipelineStepRunId",
-        pipelineStepRunId,
-        "recordNo",
-        recordNo,
-        "errorCode",
-        errorCode,
-        "errorMessage",
-        errorMessage,
-        "errorStage",
-        errorStage,
-        "isSkipped",
-        skipped,
-        "skipAction",
-        skipAction,
-        "rawRecordJson",
-        rawRecordJson,
-        "sourceRowNum",
-        sourceRowNum,
-        "sourceColumn",
-        sourceColumn);
+    PlatformFileErrorInsertParam values = PlatformFileErrorInsertParam.builder()
+        .tenantId(tenantId)
+        .fileId(fileId)
+        .pipelineInstanceId(pipelineInstanceId)
+        .pipelineStepRunId(pipelineStepRunId)
+        .recordNo(recordNo)
+        .errorCode(errorCode)
+        .errorMessage(errorMessage)
+        .errorStage(errorStage)
+        .isSkipped(skipped)
+        .skipAction(skipAction)
+        .rawRecordJson(rawRecordJson)
+        .sourceRowNum(sourceRowNum)
+        .sourceColumn(sourceColumn)
+        .build();
     mapper.insertFileErrorRecord(values);
-    Object insertedIdValue = values.get(ID);
-    return toLong(insertedIdValue);
+    return values.getId();
   }
 
   public void appendAudit(FileAuditParam param) {
@@ -86,24 +68,17 @@ public class PlatformFileAuditRepository {
     String traceId = param.getTraceId();
     String evidenceRef = param.getEvidenceRef();
     String detailSummaryJson = toJson(param.getDetailSummary());
-    mapper.insertFileAuditLog(params(
-        TENANT_ID,
-        tenantId,
-        FILE_ID,
-        fileId,
-        "operationType",
-        operationType,
-        "operationResult",
-        operationResult,
-        "operatorType",
-        operatorType,
-        "operatorId",
-        operatorId,
-        "traceId",
-        traceId,
-        "evidenceRef",
-        evidenceRef,
-        "detailSummaryJson",
-        detailSummaryJson));
+    PlatformFileAuditInsertParam statementParams = PlatformFileAuditInsertParam.builder()
+        .tenantId(tenantId)
+        .fileId(fileId)
+        .operationType(operationType)
+        .operationResult(operationResult)
+        .operatorType(operatorType)
+        .operatorId(operatorId)
+        .traceId(traceId)
+        .evidenceRef(evidenceRef)
+        .detailSummaryJson(detailSummaryJson)
+        .build();
+    mapper.insertFileAuditLog(statementParams);
   }
 }

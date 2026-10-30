@@ -31,13 +31,11 @@ Workflow 新根与系统 Pipeline 的实施范围见[整合方案](../plans/work
 | 26 | [heavy-workload-guarantees.md](./heavy-workload-guarantees.md) | 重任务容量保障设计与已验证边界；目标环境容量仍需实测 | 重任务上线 / 定容 / 资源隔离前 |
 | 27 | [security-model.md](./security-model.md) | 资产、信任边界、攻击者假设和安全验证入口 | 新增外部入口、执行能力或安全控制前 |
 
-## 历史评估与撤销方案
+## 治理与撤销方案
 
-历史材料只用于追溯依据，当前治理以 [工程成熟度路线图](engineering-maturity-roadmap.md) 和 [TODO Master](../plans/todo-master.md) 为准：
+工程治理要求见[工程成熟度路线图](engineering-maturity-roadmap.md)，容量边界见[容量治理](../runbook/production-capacity-governance.md)，当前事项以[TODO Master](../plans/todo-master.md)为准。旧评估、重复路线图和工作量分类中的有效内容已并入现行文档。
 
-- [成熟度评估（2026-04-26）](../archive/audit/maturity-assessment-2026-04-26.md)、[容量方向评估（2026-07-28）](../archive/audit/scalability-assessment-2026-07-28.md)。
-- [改造工作量分类（2026-04-25）](../archive/plans/rework-classification-2026-04-25.md)、[P0/P1/P2 路线（2026-05-29）](../archive/plans/p0-p1-p2-roadmap-2026-05-29.md)、[缺陷盘点（2026-05-30）](../archive/audit/deficiencies-2026-05-30.md)。
-- 已撤销的时间轮 [实施设计](../archive/design/quartz-replacement-design-2026-04-25.md) 与 [评估](../archive/audit/quartz-replacement-evaluation-2026-04-25.md)；撤销决策继续保留在 [ADR-033](adr/ADR-033-quartz-to-wheel-scheduler.md)。
+Quartz 时间轮替换提案已撤销；当前决策与原因见 [ADR-033](adr/ADR-033-quartz-to-wheel-scheduler.md)，运行容量基线见 [Quartz 容量基线](../runbook/quartz-capacity-baseline.md)。
 
 ## 角色路径
 

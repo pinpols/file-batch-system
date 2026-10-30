@@ -18,7 +18,7 @@ import org.springframework.core.env.Environment;
  * <p>覆盖：JWT 颁发 + 多租户路由 + session 单点 + bypass-mode 测试钩子。
  *
  * <p>主认证方式 = JWT（Authorization Bearer）；旧 X-Console-Token 共享密钥兼容路径已于 2026-04-30 物理删除（详见
- * docs/archive/audit/project-assessment-2026-04-29.md §8 S5-d）。
+ * docs/architecture/security-model.md）。
  *
  * <p>详见 design/multi-tenant-and-security.md §3。
  */

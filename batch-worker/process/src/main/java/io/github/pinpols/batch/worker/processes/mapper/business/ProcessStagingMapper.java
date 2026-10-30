@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.processes.mapper.business;
 
 import io.github.pinpols.batch.worker.processes.cleanup.ProcessStagingGenerationCandidate;
+import io.github.pinpols.batch.worker.processes.query.ProcessStagingExpiredScanQuery;
 import java.time.Instant;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -19,6 +20,10 @@ public interface ProcessStagingMapper {
       @Param("retentionHours") int retentionHours,
       @Param("batchSize") int batchSize,
       @Param("offset") int offset);
+
+  /** 按创建时间及代际身份续扫，已回收候选退出集合时不跳过后续代际。 */
+  List<ProcessStagingGenerationCandidate> listExpiredGenerationsAfter(
+      ProcessStagingExpiredScanQuery query);
 
   long countExpiredGenerations(
       @Param("tenantId") String tenantId, @Param("retentionHours") int retentionHours);

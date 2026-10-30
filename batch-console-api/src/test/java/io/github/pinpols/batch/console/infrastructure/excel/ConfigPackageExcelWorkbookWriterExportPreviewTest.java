@@ -39,7 +39,8 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
       ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
       ConfigPackageExcelValidator.WF_DEF_SHEET,
       ConfigPackageExcelValidator.WF_NODE_SHEET,
-      ConfigPackageExcelValidator.WF_EDGE_SHEET);
+      ConfigPackageExcelValidator.WF_EDGE_SHEET,
+      ConfigPackageExcelValidator.WORKFLOW_MONITORING_POLICY_SHEET);
 
   private static final int LEGACY_IMPORT_SHEET_COUNT = 12;
 

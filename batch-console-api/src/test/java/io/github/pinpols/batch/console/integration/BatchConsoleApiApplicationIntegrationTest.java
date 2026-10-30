@@ -145,6 +145,7 @@ class BatchConsoleApiApplicationIntegrationTest extends AbstractIntegrationTest 
                   "Asia/Shanghai",
                   "MANUAL",
                   null,
+                  null,
                   null)))
           .isEqualTo(1);
       var updated = workflowDefinitionMapper.selectByUniqueKey(tenantId, workflowCode, 2);

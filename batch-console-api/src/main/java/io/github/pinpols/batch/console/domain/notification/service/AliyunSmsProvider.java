@@ -108,9 +108,7 @@ public class AliyunSmsProvider implements SmsProvider {
       String channelCodeForLog = LogSanitizer.value(message.channelCode());
       String reasonForLog = ex.getClass().getSimpleName();
       log.warn(
-          "aliyun sms config parse failed channel={} reason={}",
-          channelCodeForLog,
-          reasonForLog);
+          "aliyun sms config parse failed channel={} reason={}", channelCodeForLog, reasonForLog);
       return WebhookDeliveryResult.failure(null, "invalid sms config");
     }
 
@@ -143,10 +141,7 @@ public class AliyunSmsProvider implements SmsProvider {
     } catch (Exception ex) {
       String channelCodeForLog = LogSanitizer.value(message.channelCode());
       String reasonForLog = ex.getClass().getSimpleName();
-      log.warn(
-          "aliyun sms sign failed channel={} reason={}",
-          channelCodeForLog,
-          reasonForLog);
+      log.warn("aliyun sms sign failed channel={} reason={}", channelCodeForLog, reasonForLog);
       return WebhookDeliveryResult.failure(null, "sms sign failed");
     }
 
@@ -229,10 +224,7 @@ public class AliyunSmsProvider implements SmsProvider {
    * → HMAC-SHA256(secret) → 十六进制 signature。
    */
   private String buildAuthorization(
-      String canonicalQuery,
-      String acsDate,
-      String nonce,
-      String endpoint)
+      String canonicalQuery, String acsDate, String nonce, String endpoint)
       throws GeneralSecurityException {
     String hashedPayload = sha256Hex("");
 

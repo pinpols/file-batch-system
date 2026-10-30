@@ -231,19 +231,81 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
         select result_summary ->> 'invocation' from batch.job_task
         where tenant_id = ? and id = ?
         """;
-    String persistedResultInvocation = jdbcTemplate.queryForObject(
-        taskResultInvocationSql, String.class, TENANT, task.getId());
-    assertThat(persistedResultInvocation)
-        .isEqualTo("I2 real result");
+    String persistedResultInvocation =
+        jdbcTemplate.queryForObject(taskResultInvocationSql, String.class, TENANT, task.getId());
+    assertThat(persistedResultInvocation).isEqualTo("I2 real result");
     String taskErrorCodeSql = """
         select error_code from batch.job_task where tenant_id = ? and id = ?
     """;
-    String persistedErrorCode = jdbcTemplate.queryForObject(
-        taskErrorCodeSql, String.class, TENANT, task.getId());
-    assertThat(persistedErrorCode)
-        .isNull();
+    String persistedErrorCode =
+        jdbcTemplate.queryForObject(taskErrorCodeSql, String.class, TENANT, task.getId());
+    assertThat(persistedErrorCode).isNull();
     assertThat(jobPartitionMapper.selectById(TENANT, partition.getId()).getPartitionStatus())
         .isEqualTo(PartitionStatus.SUCCESS.code());
+  }
+
+  @Test
+  @DisplayName("回收租约时载荷异常必须回滚任务分区步骤并保留过期租约")
+  void shouldRollbackLeaseReclaimWhenTaskPayloadIsInvalid() {
+    final String clearPayloadSql =
+        "update batch.job_task set task_payload = null where tenant_id = ? and id = ?";
+    final String expireLeaseSql =
+        "update batch.job_partition set lease_expire_at = current_timestamp - interval '1 minute' where tenant_id = ? and id = ?";
+    final String selectStepSql =
+        "select step_status, version from batch.job_step_instance where tenant_id = ? and job_task_id = ?";
+    final String selectEventCountSql =
+        "select count(*) from batch.outbox_event where tenant_id = ? and event_key = ?";
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
+        jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
+    var response = workflowRunLaunchService.launch(LaunchRequest.builder()
+        .tenantId(TENANT)
+        .workflowDefinitionId(seed.workflowDefinitionId())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.API)
+        .requestId(seed.requestId())
+        .traceId("invalid-reclaim-" + seed.requestId())
+        .params(Map.of())
+        .build());
+    Long instanceId = LaunchIntegrationFixture.selectDispatchedJobInstanceId(
+        jdbcTemplate, TENANT, response.instanceNo());
+    JobTaskEntity task = jobTaskMapper
+        .selectByQuery(new JobTaskQuery(TENANT, instanceId, null, null, null))
+        .getFirst();
+    JobTaskEntity claimed = assignWorkerWithRetry(task.getId(), seed.workerCode());
+    assertThat(claimed).isNotNull();
+    assertThat(claimed.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
+    jdbcTemplate.update(clearPayloadSql, TENANT, task.getId());
+    jdbcTemplate.update(expireLeaseSql, TENANT, task.getJobPartitionId());
+    JobTaskEntity beforeTask = jobTaskMapper.selectById(TENANT, task.getId());
+    JobPartitionEntity beforePartition =
+        jobPartitionMapper.selectById(TENANT, task.getJobPartitionId());
+    Map<String, Object> beforeStep = jdbcTemplate.queryForMap(selectStepSql, TENANT, task.getId());
+    String reclaimKey =
+        TENANT + ":reclaim:" + beforePartition.getId() + ":v" + beforePartition.getVersion();
+
+    assertThatThrownBy(() -> partitionReclaimUnit.reclaim(beforePartition))
+        .isInstanceOf(BizException.class)
+        .satisfies(error -> assertThat(((BizException) error).getMessageKey())
+            .isEqualTo("error.task.retry_payload_unsafe"));
+
+    JobTaskEntity afterTask = jobTaskMapper.selectById(TENANT, task.getId());
+    JobPartitionEntity afterPartition =
+        jobPartitionMapper.selectById(TENANT, task.getJobPartitionId());
+    assertThat(afterTask.getTaskStatus())
+        .isEqualTo(beforeTask.getTaskStatus())
+        .isEqualTo("RUNNING");
+    assertThat(afterTask.getVersion()).isEqualTo(beforeTask.getVersion());
+    assertThat(afterTask.getTaskPayload()).isNull();
+    assertThat(afterPartition.getPartitionStatus())
+        .isEqualTo(beforePartition.getPartitionStatus())
+        .isEqualTo("RUNNING");
+    assertThat(afterPartition.getVersion()).isEqualTo(beforePartition.getVersion());
+    assertThat(afterPartition.getCurrentInvocationId())
+        .isEqualTo(beforePartition.getCurrentInvocationId());
+    assertThat(afterPartition.getLeaseExpireAt()).isEqualTo(beforePartition.getLeaseExpireAt());
+    assertThat(jdbcTemplate.queryForMap(selectStepSql, TENANT, task.getId())).isEqualTo(beforeStep);
+    assertThat(jdbcTemplate.queryForObject(selectEventCountSql, Long.class, TENANT, reclaimKey))
+        .isZero();
   }
 
   /** 复刻 lifecycle 测试的 CAS 抖动重试:延长重试 + 每拍刷新 worker 可见性,直至 task RUNNING。 */

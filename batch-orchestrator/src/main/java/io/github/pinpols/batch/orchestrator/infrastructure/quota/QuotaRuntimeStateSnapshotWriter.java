@@ -30,8 +30,7 @@ class QuotaRuntimeStateSnapshotWriter {
         new QuotaRuntimeStateService.QuotaReservationOwner(tenantId, scope, ownerCode);
     QuotaRuntimeStateService.QuotaDescribeRequest request =
         new QuotaRuntimeStateService.QuotaDescribeRequest(owner, policy, burstLimit, 24);
-    QuotaRuntimeStateService.QuotaRuntimeSnapshot snap =
-        quotaRuntimeStateService.describe(request);
+    QuotaRuntimeStateService.QuotaRuntimeSnapshot snap = quotaRuntimeStateService.describe(request);
     boolean hasNoActiveBorrowedQuota = snap == null
         || snap.peakBorrowedCount() == null
         || snap.peakBorrowedCount() == 0

@@ -1,10 +1,8 @@
 package io.github.pinpols.batch.worker.core.infrastructure.checkpoint;
 
-import io.github.pinpols.batch.worker.core.param.PipelineProgressAdvanceParam;
-
-
 import io.github.pinpols.batch.worker.core.domain.PipelineProgressEntity;
 import io.github.pinpols.batch.worker.core.mapper.PipelineProgressMapper;
+import io.github.pinpols.batch.worker.core.param.PipelineProgressAdvanceParam;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
@@ -74,15 +72,15 @@ public class DefaultProcessingPositionStore implements ProcessingPositionStore {
       String newMarker,
       long processedCountIncrement) {
     try {
-      PipelineProgressAdvanceParam pipelineProgressAdvanceParam = PipelineProgressAdvanceParam.builder()
-          .tenantId(tenantId)
-          .pipelineInstanceId(pipelineInstanceId)
-          .stage(stage.code())
-          .positionMarker(newMarker)
-          .processedCountIncrement(processedCountIncrement)
-          .build();
-      int updated = mapper.advance(
-          pipelineProgressAdvanceParam);
+      PipelineProgressAdvanceParam pipelineProgressAdvanceParam =
+          PipelineProgressAdvanceParam.builder()
+              .tenantId(tenantId)
+              .pipelineInstanceId(pipelineInstanceId)
+              .stage(stage.code())
+              .positionMarker(newMarker)
+              .processedCountIncrement(processedCountIncrement)
+              .build();
+      int updated = mapper.advance(pipelineProgressAdvanceParam);
       if (updated != 1) {
         throw new IllegalStateException(
             "Pipeline checkpoint write rejected: missing or inaccessible parent");

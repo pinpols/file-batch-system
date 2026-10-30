@@ -3,10 +3,10 @@ package io.github.pinpols.batch.orchestrator.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews.ArrivalGroupBacklogRow;
 import io.github.pinpols.batch.orchestrator.mapper.FileGovernanceMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
-import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,10 +36,10 @@ class FileArrivalGroupBacklogIntegrationTest extends AbstractIntegrationTest {
     insertWaitingFile(tenantId, olderGroup, "older-b.csv", "-1 day");
     insertWaitingFile(tenantId, newerGroup, "newer-a.csv", "-1 hour");
 
-    Map<String, Object> backlog = fileGovernanceMapper.selectArrivalGroupBacklogMetrics();
+    ArrivalGroupBacklogRow backlog = fileGovernanceMapper.selectArrivalGroupBacklogMetrics();
 
-    long waitingGroupCount = ((Number) backlog.get("waiting_groups")).longValue();
-    long oldestWaitingSeconds = ((Number) backlog.get("oldest_wait_seconds")).longValue();
+    long waitingGroupCount = backlog.waitingGroups();
+    long oldestWaitingSeconds = backlog.oldestWaitSeconds();
     assertThat(waitingGroupCount).isEqualTo(2L);
     assertThat(oldestWaitingSeconds).isBetween(172_700L, 172_900L);
   }
@@ -61,7 +61,7 @@ class FileArrivalGroupBacklogIntegrationTest extends AbstractIntegrationTest {
     """;
     String storagePath = "arrival-metrics/" + groupCode + "/" + fileName;
     LocalDate businessDate = LocalDate.of(2026, 10, 14);
-        jdbcTemplate.update(
+    jdbcTemplate.update(
         insertWaitingFileSql,
         tenantId,
         fileName,

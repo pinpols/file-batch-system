@@ -8,8 +8,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
+import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.orchestrator.config.OpenLineageProperties;
 import java.time.Duration;
 import java.time.Instant;
@@ -32,8 +32,8 @@ class WorkflowTerminalLineageConsumerTest {
     emitter = mock(OpenLineageEmitter.class);
     properties = new OpenLineageProperties();
     properties.setRetryBackoffMs(2500L);
-    consumer = new WorkflowTerminalLineageConsumer(
-        emitter, properties, new BatchKafkaTopicNamespace(""));
+    consumer =
+        new WorkflowTerminalLineageConsumer(emitter, properties, new BatchKafkaTopicNamespace(""));
     acknowledgment = mock(Acknowledgment.class);
   }
 

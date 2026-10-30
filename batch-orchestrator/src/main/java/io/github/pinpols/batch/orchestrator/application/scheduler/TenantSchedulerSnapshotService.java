@@ -1,11 +1,9 @@
 package io.github.pinpols.batch.orchestrator.application.scheduler;
 
-import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionActiveByTenantCountQuery;
-
-
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
 import io.github.pinpols.batch.orchestrator.controller.response.SchedulerSnapshotResponse;
@@ -14,6 +12,9 @@ import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntit
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantSchedulerSnapshotEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.QueueBacklogQueryParam;
+import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionActiveByTenantCountQuery;
+import io.github.pinpols.batch.orchestrator.domain.view.FairShareGroupActiveCountView;
+import io.github.pinpols.batch.orchestrator.domain.view.QueueActiveCountView;
 import io.github.pinpols.batch.orchestrator.domain.view.QueuePartitionBacklogStats;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
@@ -65,15 +66,16 @@ public class TenantSchedulerSnapshotService {
           BatchDateTimeSupport.utcNow(), tenantId, List.of(), List.of(), List.of());
     }
     long tenantActiveJobs = jobInstanceMapper.countActiveByTenant(tenantId);
-    JobPartitionActiveByTenantCountQuery jobPartitionActiveByTenantCountQuery = JobPartitionActiveByTenantCountQuery.builder()
-        .tenantId(tenantId)
-        .waitingStatus(PartitionStatus.WAITING.code())
-        .readyStatus(PartitionStatus.READY.code())
-        .runningStatus(PartitionStatus.RUNNING.code())
-        .retryingStatus(PartitionStatus.RETRYING.code())
-        .build();
-    long tenantActivePartitions = jobPartitionMapper.countActiveByTenant(
-        jobPartitionActiveByTenantCountQuery);
+    JobPartitionActiveByTenantCountQuery jobPartitionActiveByTenantCountQuery =
+        JobPartitionActiveByTenantCountQuery.builder()
+            .tenantId(tenantId)
+            .waitingStatus(PartitionStatus.WAITING.code())
+            .readyStatus(PartitionStatus.READY.code())
+            .runningStatus(PartitionStatus.RUNNING.code())
+            .retryingStatus(PartitionStatus.RETRYING.code())
+            .build();
+    long tenantActivePartitions =
+        jobPartitionMapper.countActiveByTenant(jobPartitionActiveByTenantCountQuery);
 
     List<SchedulerSnapshotResponse.PolicySnapshot> policies =
         buildQuotaSnapshot(tenantId, tenantActiveJobs, tenantActivePartitions);
@@ -98,11 +100,10 @@ public class TenantSchedulerSnapshotService {
     }
     Map<String, Long> groupCountMap = new HashMap<>();
     if (!groups.isEmpty()) {
-      for (Map<String, Object> row : jobInstanceMapper.countActiveByFairShareGroups(groups)) {
-        Object fairShareGroupValue = row.get("fairShareGroup");
-        String fairShareGroup = String.valueOf(fairShareGroupValue);
-        Object activeJobCountValue = row.getOrDefault("cnt", 0L);
-        long activeJobCount = ((Number) activeJobCountValue).longValue();
+      for (FairShareGroupActiveCountView row :
+          jobInstanceMapper.countActiveByFairShareGroups(groups)) {
+        String fairShareGroup = row.fairShareGroup();
+        long activeJobCount = EmptyChecks.isNull(row.cnt()) ? 0L : row.cnt();
         groupCountMap.put(fairShareGroup, activeJobCount);
       }
     }
@@ -163,12 +164,10 @@ public class TenantSchedulerSnapshotService {
     }
     Map<String, Long> queueCountMap = new HashMap<>();
     if (!queueCodes.isEmpty()) {
-      for (Map<String, Object> row :
+      for (QueueActiveCountView row :
           jobInstanceMapper.countActiveByTenantAndQueueCodes(tenantId, queueCodes)) {
-        Object queueCodeValue = row.get("queueCode");
-        String queueCode = String.valueOf(queueCodeValue);
-        Object activeJobCountValue = row.getOrDefault("cnt", 0L);
-        long activeJobCount = ((Number) activeJobCountValue).longValue();
+        String queueCode = row.queueCode();
+        long activeJobCount = EmptyChecks.isNull(row.cnt()) ? 0L : row.cnt();
         queueCountMap.put(queueCode, activeJobCount);
       }
     }
@@ -198,8 +197,7 @@ public class TenantSchedulerSnapshotService {
       int partitionCap = q.maxRunningPartitions() == null ? 0 : q.maxRunningPartitions();
       QueuePartitionBacklogStats backlog = backlogMap.getOrDefault(q.queueCode(), emptyBacklog(q));
       QuotaRuntimeStateService.QuotaReservationOwner quotaOwner =
-          new QuotaRuntimeStateService.QuotaReservationOwner(
-              tenantId, "QUEUE_JOBS", q.queueCode());
+          new QuotaRuntimeStateService.QuotaReservationOwner(tenantId, "QUEUE_JOBS", q.queueCode());
       QuotaRuntimeStateService.QuotaDescribeRequest quotaRequest =
           new QuotaRuntimeStateService.QuotaDescribeRequest(
               quotaOwner,
@@ -210,8 +208,7 @@ public class TenantSchedulerSnapshotService {
           quotaRuntimeStateService.describe(quotaRequest);
       int waitingSharePermille = permille(backlog.waitingPartitions(), tenantWaitingPartitions);
       int activePartitionPermille = permille(backlog.activePartitions(), partitionCap);
-      String queueBottleneckReason =
-          bottleneckReason(q, qj, qeff, backlog, onlineWorkerGroups);
+      String queueBottleneckReason = bottleneckReason(q, qj, qeff, backlog, onlineWorkerGroups);
       SchedulerSnapshotResponse.QueueSnapshot queueSnapshot =
           SchedulerSnapshotResponse.QueueSnapshot.builder()
               .queueCode(q.queueCode())

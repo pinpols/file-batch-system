@@ -117,10 +117,7 @@ class AtomicTaskLoadE2eIT extends AbstractIntegrationTest {
         select count(*) from batch.job_task t join batch.job_instance ji on ji.id = t.job_instance_id\s\
         where ji.tenant_id = ? and ji.dedup_key in (%s) and t.task_status = 'SUCCESS'\
         """.formatted(inClause);
-    Integer n = jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        args);
+    Integer n = jdbcTemplate.queryForObject(selectCountSql, Integer.class, args);
     return n == null ? 0 : n;
   }
 }

@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.domain.workflow.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -30,27 +29,37 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @DisplayName("Console Workflow 触发与原 occurrence 补跑")
+@ExtendWith(MockitoExtension.class)
 class DefaultConsoleWorkflowTriggerServiceTest {
 
-  private final ConsoleJobOperationsPort operations = mock(ConsoleJobOperationsPort.class);
-  private final WorkflowDefinitionService workflows = mock(WorkflowDefinitionService.class);
-  private final WorkflowTriggerReceiptMapper receipts = mock(WorkflowTriggerReceiptMapper.class);
-  private final DefaultConsoleWorkflowTriggerService service =
-      new DefaultConsoleWorkflowTriggerService(operations, workflows, receipts);
+  @Mock
+  private ConsoleJobOperationsPort operations;
+
+  @Mock
+  private WorkflowDefinitionService workflows;
+
+  @Mock
+  private WorkflowTriggerReceiptMapper receipts;
+
+  private DefaultConsoleWorkflowTriggerService service;
 
   @BeforeEach
   void setUp() {
-    when(operations.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    when(operations.resolveTriggerType(null, TriggerType.MANUAL)).thenReturn(TriggerType.MANUAL);
-    when(operations.parsePayload(null)).thenReturn(Map.of());
+    service = new DefaultConsoleWorkflowTriggerService(operations, workflows, receipts);
   }
 
   @DisplayName("触发传递 Workflow 目标并刷新运行视图")
   @Test
   void shouldTriggerDelegatesWorkflowTargetAndRefreshesRunViews() {
+    when(operations.resolveTenant("tenant-a")).thenReturn("tenant-a");
+    when(operations.parsePayload(null)).thenReturn(Map.of());
+    when(operations.resolveTriggerType(null, TriggerType.MANUAL)).thenReturn(TriggerType.MANUAL);
     when(workflows.getById(23L, "tenant-a")).thenReturn(enabledWorkflow());
     when(workflows.validate(23L, "tenant-a"))
         .thenReturn(new DagValidationResult(true, List.of(), List.of()));
@@ -75,6 +84,7 @@ class DefaultConsoleWorkflowTriggerServiceTest {
   @DisplayName("完整停用的 Workflow 拒绝普通触发")
   @Test
   void shouldTriggerRejectsDisabledWorkflowBeforeDelegating() {
+    when(operations.resolveTenant("tenant-a")).thenReturn("tenant-a");
     WorkflowDefinitionDetailResponse enabled = enabledWorkflow();
     var disabled = new WorkflowDefinitionDetailResponse(
         enabled.id(),
@@ -108,6 +118,7 @@ class DefaultConsoleWorkflowTriggerServiceTest {
   @DisplayName("补跑传递精确 occurrence 与认证操作者及理由")
   @Test
   void shouldCatchUpDelegatesExactOccurrenceWithAuthenticatedOperatorAndReason() {
+    when(operations.resolveTenant("tenant-a")).thenReturn("tenant-a");
     when(workflows.getById(23L, "tenant-a")).thenReturn(enabledWorkflow());
     when(workflows.validate(23L, "tenant-a"))
         .thenReturn(new DagValidationResult(true, List.of(), List.of()));
@@ -136,6 +147,7 @@ class DefaultConsoleWorkflowTriggerServiceTest {
   @DisplayName("补跑策略要求审批时提交统一审批")
   @Test
   void shouldCatchUpSubmitsCentralApprovalWhenTriggerPolicyRequiresIt() {
+    when(operations.resolveTenant("tenant-a")).thenReturn("tenant-a");
     when(workflows.getById(23L, "tenant-a")).thenReturn(enabledWorkflow());
     when(workflows.validate(23L, "tenant-a"))
         .thenReturn(new DagValidationResult(true, List.of(), List.of()));
@@ -165,6 +177,7 @@ class DefaultConsoleWorkflowTriggerServiceTest {
   @Test
   @DisplayName("按认证租户与原键核对请求，停用定义不阻止只读核对")
   void shouldReadOriginalReceipt_whenDefinitionIsNoLongerEnabled() {
+    when(operations.resolveTenant("tenant-a")).thenReturn("tenant-a");
     LocalDate bizDate = LocalDate.of(2026, 10, 24);
     WorkflowTriggerStatusResponse receipt = new WorkflowTriggerStatusResponse(
         "tenant-a", 23L, bizDate, "request-1", "trace-1", "WAITING", Instant.EPOCH);
@@ -181,6 +194,7 @@ class DefaultConsoleWorkflowTriggerServiceTest {
   @Test
   @DisplayName("请求不存在时返回未找到，不能伪造空日或允许自动重发")
   void shouldReturnNotFound_whenReceiptHasNotBeenRecorded() {
+    when(operations.resolveTenant("tenant-a")).thenReturn("tenant-a");
     assertThatThrownBy(() -> service.triggerStatus(23L, "tenant-a", "original-key"))
         .isInstanceOf(BizException.class);
     verify(operations, never()).delegateWorkflowLaunch(any());

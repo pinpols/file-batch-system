@@ -1,10 +1,9 @@
 package io.github.pinpols.batch.trigger.mapper;
 
-import io.github.pinpols.batch.trigger.domain.param.TriggerOutboxEventMarkFailedParam;
-
-
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.persistence.entity.TriggerOutboxEventEntity;
+import io.github.pinpols.batch.trigger.domain.param.TriggerOutboxEventMarkFailedParam;
+import io.github.pinpols.batch.trigger.domain.param.TriggerOutboxEventMarkPublishingBatchParam;
 import java.time.Instant;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -16,8 +15,8 @@ import org.apache.ibatis.annotations.Param;
  *
  * <ul>
  *   <li>trigger 业务路径(同 trigger_request 事务):{@link #insert}
- *   <li>TriggerOutboxRelay 周期扫描:{@link #selectPending} → {@link #markPublishing} → {@link
- *       #markPublished} / {@link #markFailed}
+ *   <li>TriggerOutboxRelay 周期扫描:{@link #selectPending} → {@link #markPublishingBatch} → {@link
+ *       #markPublishedBatch} / {@link #markFailed}
  * </ul>
  */
 public interface TriggerOutboxEventMapper {
@@ -35,8 +34,8 @@ public interface TriggerOutboxEventMapper {
       @Param("defaultStatus") String defaultStatus);
 
   /**
-   * 取一批待发事件:{@code publish_status IN ('NEW','FAILED') AND next_publish_at <= now()}, 按 {@code
-   * created_at ASC} 排序,锁定行(SKIP LOCKED)防多实例 trigger 重发。
+   * 取一批待发候选事件:{@code publish_status IN ('NEW','FAILED') AND next_publish_at <= now()}；
+   * {@code FOR UPDATE SKIP LOCKED} 只作用于本次查询事务，实际投递所有权由后续批量 CAS 领取确立。
    */
   List<TriggerOutboxEventEntity> selectPending(
       @Param("now") Instant now,
@@ -44,42 +43,22 @@ public interface TriggerOutboxEventMapper {
       @Param("pendingStatus1") String pendingStatus1,
       @Param("pendingStatus2") String pendingStatus2);
 
-  /** 标记为 PUBLISHING(投递前状态),只对 NEW/FAILED 行生效。 返回 1 表示成功抢占,0 表示已被其它 relay 实例抢走。 */
-  int markPublishing(
-      @Param("id") Long id,
-      @Param("publishingStatus") String publishingStatus,
-      @Param("pendingStatus1") String pendingStatus1,
-      @Param("pendingStatus2") String pendingStatus2);
-
   /**
-   * 单批 CAS 抢占。返回实际从 NEW/FAILED 推进到 PUBLISHING 的 id，避免逐条 UPDATE 往返。
+   * 单批 CAS 抢占。claimToken 标识本轮领取；返回实际从 NEW/FAILED 推进到 PUBLISHING 的 id。
    */
-  List<Long> markPublishingBatch(
-      @Param("ids") List<Long> ids,
-      @Param("publishingStatus") String publishingStatus,
-      @Param("pendingStatus1") String pendingStatus1,
-      @Param("pendingStatus2") String pendingStatus2);
+  List<Long> markPublishingBatch(TriggerOutboxEventMarkPublishingBatchParam parameters);
 
-  /**
-   * 投递成功,设置 published_at + status。只对当前仍为 PUBLISHING 的行生效(与 orchestrator OutboxEventMapper 对称的 CAS
-   * 守卫),返回 0 表示行已被其它 relay 实例接管。
-   */
-  int markPublished(
-      @Param("id") Long id,
-      @Param("status") String status,
-      @Param("publishingStatus") String publishingStatus);
-
-  /** 批量写入成功状态，保留 PUBLISHING CAS 守卫。 */
+  /** 批量写入成功状态；状态和领取 token 均须匹配，旧投递者不能覆盖新领取。 */
   int markPublishedBatch(
       @Param("ids") List<Long> ids,
       @Param("status") String status,
-      @Param("publishingStatus") String publishingStatus);
+      @Param("publishingStatus") String publishingStatus,
+      @Param("claimToken") String claimToken);
 
   /**
-   * 投递失败,递增 publish_attempt,写 last_error,延迟下次扫描。只对当前仍为 PUBLISHING 的行生效, 返回 0 表示行已被其它 relay 实例接管。
+   * 投递失败时递增次数、写入原因和退避时刻；状态与领取 token 均须匹配。
    */
-  int markFailed(
-      TriggerOutboxEventMarkFailedParam parameters);
+  int markFailed(TriggerOutboxEventMarkFailedParam parameters);
 
   int resetStalePublishing(
       @Param("publishingStatus") String publishingStatus,

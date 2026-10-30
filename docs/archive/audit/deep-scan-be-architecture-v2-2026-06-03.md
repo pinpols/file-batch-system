@@ -1,3 +1,5 @@
+> 历史原始记录：本轮恢复保留，正文中的结论、参数、状态和操作步骤仅适用于原日期/基线。提炼方法不替代原始证据；当前事实须按[文档治理](../../standards/document-governance.md)重新核实。本轮未执行原测试或扫描。
+
 # BE 架构 + 维护性 深度扫描报告 v2(2026-06-03)
 
 > **本报告作为 v1 的补充扫描**(基线:`docs/archive/audit/deep-scan-be-architecture-2026-06-03.md`)。专攻 v1 受 session 限额未尽兴的死角:DDD 边界一致性、package-info 守护、Mapper XML 反模式、Spring/MyBatis 配置漂移、Lombok 红线、测试可维护性、TODO 老化、ADR 越界。**只列 v1 未覆盖的新发现**,与 v1 完全重叠的项目仅做交叉引用,不复述。

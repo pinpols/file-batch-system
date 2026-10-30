@@ -10,8 +10,8 @@
 
 | 内容 | 入口 |
 |---|---|
-| 早期阶段验证（截至 2026-10-15） | [早期阶段证据](#1-早期阶段证据截至-2026-10-15) |
-| 按日期追加的验证记录 | [执行证据记录](#2-按批次追加的执行证据) |
+| 早期阶段验证（截至 2026-10-15） | [早期阶段证据](#_1-早期阶段证据-截至-2026-10-15) |
+| 按日期追加的验证记录 | [执行证据记录](#_2-按批次追加的执行证据) |
 | 当前执行焦点与验收范围 | [整合验收总览](workflow-daily-integration-validation-2026-10-14.md#1-当前状态与下一步)，逐项状态与关闭条件见[验收矩阵](workflow-daily-integration-acceptance-matrix-2026-10-14.md) |
 
 ## 1. 早期阶段证据（截至 2026-10-15）
@@ -6029,3 +6029,70 @@ v6 只有上述定向 SIM，最近完整 28/28 仍为 v4。PMD 17 项、实际�
 - 关联命令：`./mvnw -o -ntp -pl batch-orchestrator -am '-Dtest=WorkflowLaunchWaitServiceTest,WaitingLaunchIdentityIntegrationTest,JobNodeDispatchIntegrationTest#independentCatchUp_shouldWaitForActiveRunAndLaunchAfterItFinishes+admittedRootBeforeWaitCompletion_shouldRecoverWithoutDuplicateExecution+systemCapacityWaitRecovery_shouldResumeEachRunnableTenantIndependently+capacityWaitRecoveryRacingSettlement_shouldKeepBatchDayInFlight+rejectedWaitingRequest_shouldNotCreateRootRun+corruptedWaitingPayload_shouldFailClosed+capacityWait_shouldEnforceRealTenantRowSecurity+capacityWait_shouldKeepOriginalExecutionSnapshotAfterDefinitionChanges+capacityWait_shouldProtectParametersAndRejectChangedRedelivery' -Dsurefire.failIfNoSpecifiedTests=false test`，exit0、82项（wait14、请求身份PG56、JobNodePG12），0skip。
 - 本轮13+82为95个不同用例，逐类/方法ledger、日志/XML及源SHA在b197-functional。只更新Replay单测对新专用插入的成功1/容量0桩和真实调用断言，审批快照/授权断言保留。容量等待原子性本地子项关闭，完整readiness/原deadline移交仍开放，正式23已验证/13部分验证不变。
 - 纠正前一只读设计稿：RR冲突owner不在本事务快照时可抛40001，不能保证返回0；已用真实并发验证。有限Kafka重投耗尽后、尚未提交wait的请求是否仍可自动恢复另保留静态候选，后续纳入等待所有权闭环，未把手动重投证明扩大为自动恢复证据。未重跑全量SIM、SDK已过用例或规约门禁，未打包/重启、提交/推送/PR。
+
+
+## 2026-10-25 B198：三项问题、SDK 故障边界及配置导入本地收尾
+
+- 当前后端及配对前端均在 `fix/wdi-current` 工作树，后端 HEAD `f3d5e400d` 加当前未提交增量；未动冻结的 feature 工作树，未提交、推送或建 PR。当前源与最终临时验证快照的 4701 个源码及 POM SHA-256 全部一致，摘要及原始日志/XML 在 `logs/verification/wdi-functional-2026-10-25/`。
+- readiness 真实 HTTP／PG 首红确认 INSERT 使用不存在的单数依赖列名，导致移交 500；修正为 V351 实际复数列。另将恢复地址接到现有 `BATCH_TRIGGER_BASE_URL`／`BATCH_TRIGGER_PORT`，Compose 解析为 `http://trigger:18081`。无 Quartz 回调的快照持久化、恢复与超时终结 2 项、实际 YAML 地址绑定 2 项通过。
+- Kafka 耗尽恢复：锚点不可用或写入失败时抛回 error handler，禁止确认跳过未持久化消息；单元/持久层证据后补真实 Kafka 场景，实际消费失败耗尽后密文 PENDING，扫描按原请求创建唯一根运行并置 DONE，原消息重投仍只有一个根。新 E2E 1 项通过。初次夹具把投递日期与已接纳日期设为不同值，生产身份守护正确拒绝；只修夹具，不放宽身份校验。
+- WR-04 必须纠正早先仅凭审批指纹得出的结论：真实 PG 首红已证明另一根请求复制授权标识后获得非幂等开始许可。最小修复复用 V336 字段，在开始事务内以原任务版本、父实例、租户、业务日和根请求绑定做一次性 CAS；消费与本次开始标记共同提交，重复开始幂等。真实开始写入注入异常时，源授权消费与目标开始标记全部回滚。定向 2 项通过；完整分派 29／重试 33 共 62 项通过（包含前述两项），真实 Console UNKNOWN 审批恢复 1 项通过。
+- SDK 外部动作提交后用独立 JVM 实际强杀，再经租约回收和真实 Kafka 重投验证 UNKNOWN／效果唯一；REPORT 在平台提交后实际断开 HTTP 响应，SDK 收到 EOF，以同幂等键和原载荷重试。两个新场景与原有 Error／安全恢复共 5 个不同用例通过，WR-04 变更后再次通过；平台 Worker 的 REPORT 确认丢失及 SQL／存储过程提交后强杀另有 3 项通过，不与普通 SDK 混称。
+- 配置导入：55 单测＋15 真实 PostgreSQL／Redis 联合测试，共 70 项通过、0 跳过。批量初始化成功提交后清缓存，严格回滚及 dry-run 不清缓存、不意外生成托管 Workflow；其它租户缓存保持；Excel 公共 Apply 提交后清日历缓存，登记失效回调后失败会回滚数据库、保留缓存并释放上传会话。更新原影响审计中“未编译／未测试”的状态；多实例传播时延仍是目标环境边界。
+- 共享原工作目录曾被其它轮次 clean 清除 class，亦有 Jdbc 异常断言重载歧义、时间源接口改造漏调用方的编译错误，均保留原始失败。最后在临时源码快照隔离构建目录：JDBC 8、调度原 fire 1、分派 29、重试 33，共 71 项先通过；E2E 中 12 个时间源调用未适配造成编译失败后，沿现有 Quartz adapter 修正该测试文件，并只重跑剩余 7 个 E2E。最终 reactor BUILD SUCCESS，71＋7 形成 78 个不同受影响用例，0 失败／错误／跳过；未将中途失败的整条命令算成功，未重跑配置 70 项或全量 SIM。
+- 完整命令、首红与验证边界见 [本批验证](../verifications/wdi-functional-closure-2026-10-25.md)。同步 TODO、总览、R03 本地子项及运行手册。正式矩阵仍为 23 已验证／13 部分验证，冻结联合门、CI、目标部署及多实例传播等例外继续独立；本批指定的功能收尾待办为 0。
+
+
+## 2026-10-25 B199：剩余本地工作集中收口
+
+- 原始目标：完成当前台账所列本地整改、候选分类、受控归档验证、安全与质量检查、最终联合验收和证据对账；不把环境例外当作本地通过。
+- 基线：后端 `fix/wdi-current` / `f3d5e400d`（含既有暂存、未暂存和新增文件）；前端同名分支 / `662d254`。本批冻结副本含后端7050、前端1273个文件，逐文件SHA位于本机验证目录。
+- 分工：测试组独占已有Java/前端测试；模型组负责候选分类和必要生产映射修复，新增独立测试；脚本安全组负责脚本/守卫及扫描；主会话负责归档性能、工程语义复核、整合和最终联合门。各组独立副本构建，回写前比对原SHA；共享运行栈与性能测量串行。
+- 边界：其它会话当前处理归档整理和现行文档图，不覆盖其文件内容；不新增产品能力，不深化已暂停的数据库全面治理，不提交、推送或建PR。候选允许按现行规范有依据保留，不以清零强制重构。
+- 验收：明确违规整改并通过受影响回归；候选逐项裁定；可复现归档多批对照和冷热完整性；适用本地扫描/门禁实际执行；冻结后必要SIM、strict、WARN及资源清理。历史证据仅在来源未变且适用时复用。
+- 进度：已建立隔离副本并分组实施，原工作树文件尚未回写；归档定向编译/测试执行中。外部部署、真实拓扑、正式容量签收、上线观察继续按EX单列。
+
+### B199 里程碑：实际工作树整合与环境故障分流
+
+- 已回写实际后端工作树：模型18文件、测试145文件、脚本/SDK依赖6文件、Kafka日志保护2文件、调度器关闭2文件及Docker上下文排除。逐文件基线SHA核对通过，未提交/推送。
+- 已回写实际前端 `fix/wdi-current`：429路径（62新增/6删除），以冻结Workflow前端为来源三方合并本轮测试修复；排除历史output产物和新增Skill UI元数据。唯一CI文档并发冲突保留现行Mermaid图并补类型检查范围。冻结工作树只读。
+- 关闭原待分类44构造/482Map快照：完整651位置逐项裁定，保留有依据的动态边界；模型103个不同用例通过。测试343定位已裁定，最新XML去重847用例通过；同一集合不同批次不再叠加计数。前端174文件/1030单测、types/lint/build/API/i18n/fixture/维护性检查通过；浏览器仍待最终真实路径收齐。
+- Kafka日志泄露先红2场景后修，关联4例通过；暂停上下文线程退出先红2场景，修复后组件6例与原53场景通过，fork自然退出且7个自有容器清理为0。53例与847重叠，不另算不同用例。
+- 本地启动暴露旧平台库V351/V352校验不一致：已备份原 `batch_platform`（本机600权限dump，SHA已存验证目录），只重建其batch/archive/quartz应用schema；采用全新部署合同，没有篡改Flyway历史。随后磁盘耗尽引发Docker元数据只读，停止下载和本轮应用、清理自有可重建工具缓存并重启Docker，写探针及基础容器健康恢复；数据库卷保留。
+- 实际Console local启动另暴露两个StatusCountView别名冲突，测试profile未覆盖该扫描配置；现按真实application-local.yml增加回归并复用已有ClusterStatusCountView，未宣称启动通过。
+- Native八JAR已干净构建；后续调度修复仅补Orchestrator包并核对352迁移资源逐文件一致。八镜像初建完成、:dev保持原ID，最终Orch/Console局部替换按真实镜像身份记录；镜像扫描工具首次Java索引下载及认证DAST仍进行中。
+
+### B199 运行复核与 B200 追加范围
+
+- Console local 别名冲突已先红后修，12 例通过；仅 clean 重建 Console，旧重复 class 不在包中，Flyway 由 Orchestrator/Trigger 持有，Console 包按 POM 为 0 份。实际八服务健康均 UP。
+- 847 个最新 XML 用例、145 测试最终 SHA 及前端功能迁入范围经独立只读复核，未发现新增必须修复项。无需再全跑 847/103/1030。
+- 完整 SIM 正按官方 all 入口执行，单套环境先停止应用写入再 reset；真实路由前置已通过，自有 shard 容器/匿名卷已清理。不能提前判最终 SIM 通过。
+- 8 镜像的同一 OpenSSL 共享层 HIGH 已确认；仅升级同 Jammy 的 openssl/libssl3 两包，模拟零新装/零移除；重建复扫中。非阻断 MEDIUM/LOW 保留，不扩本批操作系统/依赖升级。
+- 用户追加接通 Worker 批量链路（B200），独立副本实施有界同步 report 聚合，不等待整个长任务批次结束、不改逐项幂等/ACK/Outbox。当前 claim 现有调用保留，开关不盲目全局开启；前端多选启动仍逐 Workflow 独立契约。追加生产改动整合后只重验受影响链路，不以本次在跑 SIM 覆盖尚未整合代码。
+
+
+## 2026-10-25 B200 批量主链实际接线与最终本地窗口
+
+- 实际双仓fix/wdi-current，后端HEAD f3d5e400d、前端662d254；保留既有暂存/未暂存/新增及并发会话内容，无提交、推送或PR。七个交付文件SHA再次匹配。claim/renew按taskId及身份核对，report同步有界微批、原剩余重试预算和Outbox；批内仍串行。136个不同用例通过，配置六门及Helm覆盖值通过。Java联合治理77/77、七生产模块PMD及四个本批文件Spotless在限定检查点通过；并发Console新增范围不代验。
+- B199官方全量SIM28/28、strict21/21；B200新库导入/前置通过，只跑受影响04/05/07/08/09/10/14/15/19/27共10/10，quiesce后strict21/21。阶段24/25原完整恢复证据不重复跑。旧全量WARN81/69/12原FAIL保留，导入前原生地址/旧键私有夹具及强JWT配置修复已在新库导入窗口复验；不覆盖ledger。
+- REPORT OFF场景：Job SUCCESS、4/4分区SUCCESS、claim1次/4项、批量report未调用；场景恢复/清理完成，私有协调器主动终止exit143另记。ON最终官方Stage27命令exit0，Job/4分区SUCCESS、claim1次/4项、report4次/4项。按process_start_time_seconds识别阶段前核心恢复，使用新进程累计数，不跨重启相减。只验证接线/结果，不据此宣称吞吐改善；受控N8 HTTP8→1另属协议探针。
+- 首次ON真实复验暴露harness在核心恢复后丢失已设场景模式，作业成功但batch-claim指标为0；原失败保留。ensure_core_runtime显式接收/恢复Import及Process模式，失败阻断。四个新增方法首红含5个失败子项；真实脚本契约22/22通过，bash语法/脚本治理/危险操作守卫通过（666操作/254类别，9旧登记保留）。原CI运行时契约步骤已有覆盖。最终仅重跑Stage27，未重跑全量SIM。
+- 最后联验持有已有生命周期锁；strict21/21、模式验证后WARN12/12。stop/cleanup-inputs/start均exit0，SFTP精确移除3个SIM输入、MinIO输入0残留；启动WARN12/12。真实认证匿名401、真实JWT/CSRF三个浏览器用例20秒全部通过，专有夹具和预览进程清理完成。根运行、原键409/回执唯一及终态Outbox均有实际回读。
+- 浏览器后默认WARN审计exit1：18条/12已分类/6UNKNOWN。1条为ConfigSync预设写入故障，2条为主动重发原Workflow键；3条SSE ticket重复拒绝仍是维护候选，未扩大白名单或当故障注入通过。锁释放后其它会话重启Console且新增Orchestrator另一trace冲突；后续共享环境审计14/13/1仍FAIL，认证探测200，不能冒称真实认证持续开启。该后续trace不套用本批task75取消归因；后者已回读Task CANCELLED、Job73 FAILED、Root64 FAILED且同trace迟到报告被忽略。
+- 八个运行包/健康与五个Worker交付类字节码已回读；其它会话期间重建八JAR、再重启Console，身份变化与源文件差异保留，未宣称整体工作树冻结。B200八候选镜像raw/policy均exit0，高危/严重/secret0，仍各63MEDIUM/16LOW；DAST四条认证GET执行但12低危/信息告警导致策略exit2；NVD仍FAIL，均不由业务SIM替代。
+- ADR-046及Worker插件三张图已更新；亮暗共六次解析/渲染通过，主链/恢复图目视核对。R03本地恢复与联合运行条件关闭，矩阵24已验证/12部分验证；EX范围、发布门、SSE票据/非法图输入维护候选独立保留。源与证据边界见[本地收尾](../verifications/wdi-local-closure-2026-10-25.md)、[安全验证](../verifications/wdi-local-security-validation-2026-10-25.md)及TODO。
+- 实际命令：./mvnw按本批类清单定向test/PMD；python3 -m unittest scripts.ci.tests.test_sim_runtime_cleanup；BATCH_SCRIPT_RUNTIME=host bash scripts/local/sim-harness.sh sim-selected 04 05 07 08 09 10 14 15 19 27；REPORT切换后的sim-selected 27；bash scripts/local/strict-verify.sh；真实Playwright三个指定场景。原件及退出码在/private/tmp/wdi-local-close-b1gcqnvy、/private/tmp/wdi-worker-batch-evidence、/private/tmp/wdi-frontend-finish-evidence/real-ui-b200-final与/private/tmp/wdi-script-security-1hhd7_6y。首次错误模块名的脚本测试命令及各失败阶段保留，后续只补跑受影响项。
+
+- B200末次独立复核补丁：Bash条件调用可禁用helper内部errexit，restart失败而旧health200时曾误报ready。core/import/process三处重启显式失败返回，提取三个真实helper的定向负例先红（1方法/3子项），最终运行时脚本契约23/23、bash语法及脚本治理通过。成功路径不变，复用此前最终Stage27/strict/浏览器结果，不为失败分支补丁再跑业务SIM。原始首红及最终日志：b200-harness-errexit-red、b200-harness-profile-complete、b200-harness-script-final。
+
+
+## 2026-10-25 B201 原六组完成审计、SSE修复与代表性归档
+
+- 完成审计发现29行不足以关闭原定代表性吞吐/等待，保留原六组范围，追加50000/臂、批1000、三组交替A/B。第一次命令遇另一会话SDK编译中间态，首错保留；确认其方法和测试清理落地后才续跑，未绕过编译。
+- JIT开启的首臂计划证明编译占候选/诊断的大部分时间，按自身fork PID停止未完成实验，原件在b201/jit-on-partial，不能算通过。仅归档事务用set_config局部关闭JIT，三入口单测首红后修；同一物理连接核对提交/回滚复位。未改全局PG参数、增加索引/迁移或恢复数据库全面治理。
+- 六臂50000全部完成，共300000根实例，50批/臂、诊断50→1、完整冷热JSON一致、自有清理0；12个真实计划均jit=off。Service/Probe/XML组合12/12，再顺序执行原五类归档事务组合47/47，按类方法去重49项。五类包含完整树非空execution_started_at、DQ/位点失败回滚与并发引用保护。吞吐两组更快一组略慢、新路径尾延迟更高，如实保留共享宿主/测试采样边界，不签收EX-03目标容量。
+- SSE新连接票据复用幂等键先红，实际fetchStreamTicket为每次发行创建新键，同次HTTP重试仍用原键。实际四文件44项、typecheck/API漂移/lint通过；受控预览的票据函数与实际逐字一致，真实JWT/CSRF票据刷新及批量原键409/唯一根两场景通过，20类夹具0残留。八日志同inode/字节窗口默认WARN审计1条/1已分类/0UNKNOWN，历史及并发失败不删除。
+- 原145测试文件先与847例快照对照，随后补强自有归档用例；651模型元数据按六处变化复核20行。共享Worker后续执行开始信号另找到相同源码原件：HTTP31、执行前2、排队1、服务端6分别通过，独立只读核对SHA后复用，不再重跑。其它会话完整128例不代作本目标验收。
+- 自有四测试文件约定扫描0缺口，Spotless限定文件exit0；test-config/文档日期检查通过。全树可读性及测试命名检查发现同期Console进度代码缺口，保留失败，按用户分工不接手；本批报告预算用例名称已修正，未扩大基线。归档五类验证源身份稳定，自有临时容器自然退出。
+- 未重跑全量SIM，沿用B199全量28/28与B200受影响10/10、strict21/21、REPORT开关及真实服务回读的明确构建边界。原六组及批量链路本地交付与正式24/36、12行部分验证相区分；NVD数据失败、DAST低风险、历史WARN、容量和其它会话新增功能不冒充通过。没有提交、推送或创建PR。
+- 原始命令、source/环境/指标/SQL/计划/XML/清理与退出码均保留在 `/private/tmp/wdi-local-close-b1gcqnvy/b201`；[本地收尾](../verifications/wdi-local-closure-2026-10-25.md)逐项列出命令与结果。ADR-046/Worker三图已在B200随实际接线更新并完成亮暗渲染，本批票据/JIT补丁不引入新的流程图语义。

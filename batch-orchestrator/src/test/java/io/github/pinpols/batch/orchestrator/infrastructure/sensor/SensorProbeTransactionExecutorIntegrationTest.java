@@ -13,13 +13,16 @@ import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.HttpPollSensorPolicy;
+import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorContext;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorPolicyRegistry;
+import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorProbeStatus;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorStateMachine;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeTerminalFinalizer;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.config.SensorProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
@@ -32,6 +35,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -98,9 +102,7 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
   private WorkflowRunMapper workflowRunMapper;
 
   @Autowired
-  private io.github.pinpols.batch.orchestrator.application.service.workflow
-          .WorkflowNodeTerminalFinalizer
-      workflowNodeTerminalFinalizer;
+  private WorkflowNodeTerminalFinalizer workflowNodeTerminalFinalizer;
 
   @Autowired
   private WorkflowNodeMapper workflowNodeMapper;
@@ -142,24 +144,24 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
         insert into batch.workflow_definition (tenant_id, workflow_code, workflow_name, workflow_type, version,\s\
         enabled) values (?, ?, ?, 'DAG', 1, true) returning id\
         """;
-  final String insertWorkflowRunSql = """
+    final String insertWorkflowRunSql = """
       insert into batch.workflow_run (tenant_id, workflow_definition_id, biz_date, run_status, trace_id)\s\
       values (?, ?, ?, 'RUNNING', ?) returning id\
       """;
-  final String insertWorkflowNodeRunSql = """
+    final String insertWorkflowNodeRunSql = """
       insert into batch.workflow_node_run (workflow_run_id, node_code, node_type, node_status)\s\
       values (?, 'WAIT_FILE', 'WAIT', 'RUNNING') returning id\
       """;
-  final String updateWorkflowNodeRunSql = """
+    final String updateWorkflowNodeRunSql = """
       update batch.workflow_node_run set node_status = 'SUCCESS', finished_at = current_timestamp where id = ?\
       """;
-  final String updateWorkflowNodeRunSql2 = """
+    final String updateWorkflowNodeRunSql2 = """
       update batch.workflow_node_run set sensor_next_probe_at = ? where id = ?
   """;
-  final String selectNodeStatusSql = """
+    final String selectNodeStatusSql = """
       select node_status, finished_at from batch.workflow_node_run where id = ?
   """;
-  final String selectNodeStatusSql2 = """
+    final String selectNodeStatusSql2 = """
       select node_status, finished_at, sensor_next_probe_at from batch.workflow_node_run where id = ?\
       """;
 
@@ -177,10 +179,8 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
         workflowDefinitionId,
         LocalDate.of(2026, 5, 7),
         "trace-sensor-tx-" + suffix);
-    Long nodeRunId = jdbcTemplate.queryForObject(
-        insertWorkflowNodeRunSql,
-        Long.class,
-        workflowRunId);
+    Long nodeRunId =
+        jdbcTemplate.queryForObject(insertWorkflowNodeRunSql, Long.class, workflowRunId);
     WorkflowNodeRunEntity nodeRun = new WorkflowNodeRunEntity();
     nodeRun.setId(nodeRunId);
     nodeRun.setWorkflowRunId(workflowRunId);
@@ -191,15 +191,11 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
     AtomicInteger attempts = new AtomicInteger();
     doAnswer(invocation -> {
           if (attempts.incrementAndGet() == 1) {
-            jdbcTemplate.update(
-                updateWorkflowNodeRunSql,
-                nodeRunId);
+            jdbcTemplate.update(updateWorkflowNodeRunSql, nodeRunId);
             throw new IllegalStateException("downstream outbox unavailable");
           }
-      jdbcTemplate.update(
-              updateWorkflowNodeRunSql2,
-              Timestamp.from(Instant.now().plusSeconds(60)),
-              nodeRunId);
+          jdbcTemplate.update(
+              updateWorkflowNodeRunSql2, Timestamp.from(Instant.now().plusSeconds(60)), nodeRunId);
           return null;
         })
         .when(stateMachine)
@@ -207,8 +203,7 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
 
     newSensorPollScheduler().scan();
 
-    var persisted = jdbcTemplate.queryForMap(
-        selectNodeStatusSql, nodeRunId);
+    var persisted = jdbcTemplate.queryForMap(selectNodeStatusSql, nodeRunId);
     assertThat(persisted.get("node_status")).isEqualTo("RUNNING");
     assertThat(persisted.get("finished_at")).isNull();
 
@@ -220,9 +215,7 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
     newSensorPollScheduler().scan();
 
     assertThat(attempts).hasValue(2);
-    var recovered = jdbcTemplate.queryForMap(
-        selectNodeStatusSql2,
-        nodeRunId);
+    var recovered = jdbcTemplate.queryForMap(selectNodeStatusSql2, nodeRunId);
     assertThat(recovered.get("node_status")).isEqualTo("RUNNING");
     assertThat(recovered.get("finished_at")).isNull();
     List<WorkflowNodeRunEntity> noLongerDue = RlsTenantContextHolder.runWithTenant(
@@ -280,9 +273,7 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
         workflowDefinitionId,
         LocalDate.of(2026, 10, 17),
         "trace-" + workflowCode);
-    jdbcTemplate.update(
-        insertWorkflowNodeRunSql,
-        workflowRunId);
+    jdbcTemplate.update(insertWorkflowNodeRunSql, workflowRunId);
     return workflowRunId;
   }
 
@@ -294,24 +285,24 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
   @Test
   @DisplayName("真实 FILE_ARRIVAL 命中后推进 WAIT 到 END 并持久化节点输出")
   void shouldAdvanceWorkflowToEndWhenFileArrivalSensorMatches() {
-  final String insertWorkflowDefinitionSql = """
+    final String insertWorkflowDefinitionSql = """
           insert into batch.workflow_definition (
               tenant_id, workflow_code, workflow_name, workflow_type, version, enabled, calendar_code
           ) values (?, ?, ?, 'DAG', 1, true, 'JOB_CALENDAR') returning id
           """;
-  final String insertWorkflowNodeSql = """
+    final String insertWorkflowNodeSql = """
           insert into batch.workflow_node (
               tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order,
               retry_policy, retry_max_count, timeout_seconds, enabled
           ) values (?, ?, 'START', 'start', 'START', 0, 'NONE', 0, 0, true)
           """;
-  final String insertWorkflowNodeSql2 = """
+    final String insertWorkflowNodeSql2 = """
         insert into batch.workflow_node (
             tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order,
             node_params, retry_policy, retry_max_count, timeout_seconds, enabled
         ) values (?, ?, 'WAIT_FILE', 'wait for file', 'WAIT', 1, ?::jsonb, 'NONE', 0, 3600, true)
         """;
-  final String insertWorkflowNodeSql3 = """
+    final String insertWorkflowNodeSql3 = """
         insert into batch.workflow_node (
             tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order,
             retry_policy, retry_max_count, timeout_seconds, enabled
@@ -360,8 +351,8 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
     String dedupKey = "dedup-sensor-e2e-" + suffix;
     LocalDate bizDate = LocalDate.of(2026, 10, 13);
 
-    Long workflowDefinitionId =
-    jdbcTemplate.queryForObject(insertWorkflowDefinitionSql, Long.class, TENANT, jobCode, "sensor e2e workflow");
+    Long workflowDefinitionId = jdbcTemplate.queryForObject(
+        insertWorkflowDefinitionSql, Long.class, TENANT, jobCode, "sensor e2e workflow");
     String nodeParams = """
         {"sensor_type":"FILE_ARRIVAL",
          "sensor_spec":{"pattern":"sensor-e2e-*.csv","maxAgeSeconds":3600,
@@ -371,7 +362,8 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
     jdbcTemplate.update(insertWorkflowNodeSql, TENANT, workflowDefinitionId);
     jdbcTemplate.update(insertWorkflowNodeSql2, TENANT, workflowDefinitionId, nodeParams);
     jdbcTemplate.update(insertWorkflowNodeSql3, TENANT, workflowDefinitionId);
-    jdbcTemplate.update(insertWorkflowEdgeSql, TENANT, workflowDefinitionId, TENANT, workflowDefinitionId);
+    jdbcTemplate.update(
+        insertWorkflowEdgeSql, TENANT, workflowDefinitionId, TENANT, workflowDefinitionId);
     jdbcTemplate.update(
         insertTriggerRequestSql,
         TENANT,
@@ -391,12 +383,8 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
         .params(Map.of())
         .build();
     workflowRunLaunchService.launch(launchRequest);
-    Long workflowRunId = jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class,
-        TENANT,
-        TENANT,
-        requestId);
+    Long workflowRunId =
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, TENANT, requestId);
     Long selectedRelatedJobInstanceId = jdbcTemplate.queryForObject(
         selectRelatedJobInstanceIdSql, Long.class, TENANT, workflowRunId);
     assertThat(selectedRelatedJobInstanceId).isNull();
@@ -407,7 +395,12 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
 
     String fileName = "sensor-e2e-" + suffix + ".csv";
     jdbcTemplate.update(
-        insertFileRecordSql, TENANT, fileName, "s3://test/" + fileName, bizDate, jobCode + "_OTHER");
+        insertFileRecordSql,
+        TENANT,
+        fileName,
+        "s3://test/" + fileName,
+        bizDate,
+        jobCode + "_OTHER");
 
     SensorStateMachine realStateMachine = new SensorStateMachine(
         sensorPolicyRegistry,
@@ -434,14 +427,8 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
             .selectLatestByWorkflowRunIdAndNodeCode(workflowRunId, "WAIT_FILE")
             .getNodeStatus())
         .isEqualTo("RUNNING");
-    jdbcTemplate.update(
-        updateFileRecordSql,
-        jobCode,
-        TENANT,
-        fileName);
-    jdbcTemplate.update(
-        updateWorkflowNodeRunSql,
-        waitRun.getId());
+    jdbcTemplate.update(updateFileRecordSql, jobCode, TENANT, fileName);
+    jdbcTemplate.update(updateWorkflowNodeRunSql, waitRun.getId());
     RlsTenantContextHolder.runWithTenant(
         TENANT,
         () -> transaction.executeWithoutResult(
@@ -472,29 +459,29 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
           ) values (?, ?, ?, 'GENERAL', 'IT', 'MANUAL', 'UTC',
               5, 'q-it', ?, 'API', false, 'NONE', 'NONE', 0, 0, true, 1)
           """;
-  final String insertWorkerRegistrySql = """
+    final String insertWorkerRegistrySql = """
           insert into batch.worker_registry (
               tenant_id, worker_code, worker_group, capability_tags, status, heartbeat_at, current_load
           ) values (?, ?, ?, '[]'::jsonb, 'ONLINE', now(), 0)
           """;
-  final String insertWorkflowDefinitionSql = """
+    final String insertWorkflowDefinitionSql = """
           insert into batch.workflow_definition (
               tenant_id, workflow_code, workflow_name, workflow_type, version, enabled, calendar_code
           ) values (?, ?, ?, 'DAG', 1, true, 'JOB_CALENDAR') returning id
           """;
-  final String insertWorkflowNodeSql = """
+    final String insertWorkflowNodeSql = """
           insert into batch.workflow_node (
               tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order,
               retry_policy, retry_max_count, timeout_seconds, enabled
           ) values (?, ?, 'START', 'start', 'START', 0, 'NONE', 0, 0, true)
           """;
-  final String insertWorkflowNodeSql2 = """
+    final String insertWorkflowNodeSql2 = """
         insert into batch.workflow_node (
             tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order,
             node_params, retry_policy, retry_max_count, timeout_seconds, enabled
         ) values (?, ?, 'WAIT_FILE', 'wait for file', 'WAIT', 1, ?::jsonb, 'NONE', 0, 3600, true)
         """;
-  final String insertWorkflowNodeSql3 = """
+    final String insertWorkflowNodeSql3 = """
         insert into batch.workflow_node (
             tenant_id, workflow_definition_id, node_code, node_name, node_type,
             related_job_code, node_order, retry_policy, retry_max_count, timeout_seconds, enabled
@@ -512,41 +499,41 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
               request_status, trace_id
           ) values (?, ?, 'API', ?, ?, ?, 'ACCEPTED', ?)
           """;
-  final String selectIdSql = """
+    final String selectIdSql = """
       select id from batch.workflow_run where tenant_id = ? and trigger_request_id = (select id\s\
       from batch.trigger_request where tenant_id = ? and request_id = ?)\
       """;
-  final String insertFileRecordSql = """
+    final String insertFileRecordSql = """
           insert into batch.file_record (
               tenant_id, file_category, file_name, file_format_type, storage_type, storage_path,
               source_type, file_status, biz_date, metadata_json, created_at
           ) values (?, 'INPUT', ?, 'DELIMITED', 'S3', ?, 'SFTP', 'RECEIVED', ?,
               jsonb_build_object('fileGroupCode', 'SENSOR_OUTBOX', 'arrivalState', 'TRIGGERED'), now())
           """;
-  final String selectCountSql = """
+    final String selectCountSql = """
               select count(*) from batch.job_task jt
               join batch.job_instance ji on ji.id = jt.job_instance_id
               where ji.tenant_id = ? and ji.job_code = ?
               """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.job_instance where tenant_id = ? and job_code = ?
   """;
-  final String selectCountSql3 = """
+    final String selectCountSql3 = """
             select count(*) from batch.outbox_event oe
             join batch.job_task jt on oe.aggregate_type = 'JOB_TASK' and oe.aggregate_id = jt.id
             join batch.job_instance ji on ji.id = jt.job_instance_id
             where ji.tenant_id = ? and ji.job_code = ?
             """;
-  final String selectIdSql2 = """
+    final String selectIdSql2 = """
       select id from batch.job_instance where tenant_id = ? and job_code = ?
   """;
-  final String selectCountSql4 = """
+    final String selectCountSql4 = """
       select count(*) from batch.job_task where tenant_id = ? and job_instance_id = ?
   """;
-  final String selectCountSql5 = """
+    final String selectCountSql5 = """
       select count(*) from batch.job_partition where tenant_id = ? and job_instance_id = ?
   """;
-  final String selectCountSql6 = """
+    final String selectCountSql6 = """
             select count(*) from batch.outbox_event oe
             join batch.job_task jt on oe.aggregate_type = 'JOB_TASK' and oe.aggregate_id = jt.id
             where jt.tenant_id = ? and jt.job_instance_id = ?
@@ -565,8 +552,8 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
 
     jdbcTemplate.update(insertJobDefinitionSql, TENANT, taskJobCode, taskJobCode, workerGroup);
     jdbcTemplate.update(insertWorkerRegistrySql, TENANT, "wk-sensor-outbox-" + suffix, workerGroup);
-    Long definitionId =
-    jdbcTemplate.queryForObject(insertWorkflowDefinitionSql, Long.class, TENANT, rootJobCode, rootJobCode);
+    Long definitionId = jdbcTemplate.queryForObject(
+        insertWorkflowDefinitionSql, Long.class, TENANT, rootJobCode, rootJobCode);
     String sensorParams = """
         {"sensor_type":"FILE_ARRIVAL",
          "sensor_spec":{"pattern":"sensor-outbox-*.csv","maxAgeSeconds":3600,
@@ -577,7 +564,8 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
     jdbcTemplate.update(insertWorkflowNodeSql2, TENANT, definitionId, sensorParams);
     jdbcTemplate.update(insertWorkflowNodeSql3, TENANT, definitionId, taskJobCode);
     jdbcTemplate.update(insertWorkflowEdgeSql, TENANT, definitionId, TENANT, definitionId);
-    jdbcTemplate.update(insertTriggerRequestSql, TENANT, requestId, definitionId, bizDate, dedupKey, requestId);
+    jdbcTemplate.update(
+        insertTriggerRequestSql, TENANT, requestId, definitionId, bizDate, dedupKey, requestId);
     LaunchRequest launchRequest = LaunchRequest.builder()
         .tenantId(TENANT)
         .workflowDefinitionId(definitionId)
@@ -589,12 +577,8 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
         .build();
     workflowRunLaunchService.launch(launchRequest);
 
-    Long workflowRunId = jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class,
-        TENANT,
-        TENANT,
-        requestId);
+    Long workflowRunId =
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, TENANT, requestId);
     WorkflowNodeRunEntity waitRun =
         nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(workflowRunId, "WAIT_FILE");
     assertThat(waitRun.getNodeStatus()).isEqualTo("RUNNING");
@@ -678,11 +662,7 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
             .selectLatestByWorkflowRunIdAndNodeCode(workflowRunId, "IMPORT_TASK")
             .getNodeStatus())
         .isEqualTo("READY");
-    Long jobInstanceId = jdbcTemplate.queryForObject(
-        selectIdSql2,
-        Long.class,
-        TENANT,
-        taskJobCode);
+    Long jobInstanceId = jdbcTemplate.queryForObject(selectIdSql2, Long.class, TENANT, taskJobCode);
     Long selectedJobTaskCountRead2 =
         jdbcTemplate.queryForObject(selectCountSql4, Long.class, TENANT, jobInstanceId);
     assertThat(selectedJobTaskCountRead2).isEqualTo(1L);
@@ -706,18 +686,18 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
   @DisplayName("FILE_ARRIVAL、HTTP_POLL 与 KAFKA_OFFSET WAIT 释放 JOB 均受结算围栏保护")
   void shouldKeepCutoffInFlightWhenWaitReleasesJobDuringSettlement(
       String sensorType, String firstLockWaiter) throws Exception {
-        final String selectAcquireBatchDaySettlementFenceSql = """
+    final String selectAcquireBatchDaySettlementFenceSql = """
             select batch.acquire_batch_day_settlement_fence(?, ?, ?)
         """;
-        final String selectPgBackendPidSql = """
+    final String selectPgBackendPidSql = """
             select pg_backend_pid()
         """;
 
-        final String insertBusinessCalendarSql = """
+    final String insertBusinessCalendarSql = """
             insert into batch.business_calendar (tenant_id, calendar_code, calendar_name, timezone, enabled)\s\
             values (?, ?, ?, 'UTC', true)\
             """;
-        final String insertJobDefinitionSql = """
+    final String insertJobDefinitionSql = """
     insert into batch.job_definition (
     tenant_id, job_code, job_name, job_type, biz_type, schedule_type, timezone,
     priority, queue_code, worker_group, trigger_mode, dag_enabled, shard_strategy,
@@ -725,48 +705,48 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
     ) values (?, ?, ?, 'GENERAL', 'IT', 'MANUAL', 'UTC', 5, 'q-it', ?, 'API', false,
     'NONE', 'NONE', 0, 0, true, 1, ?)
     """;
-        final String insertWorkerRegistrySql = """
+    final String insertWorkerRegistrySql = """
     insert into batch.worker_registry (
     tenant_id, worker_code, worker_group, capability_tags, status, heartbeat_at, current_load
     ) values (?, ?, ?, '[]'::jsonb, 'ONLINE', now(), 0)
     """;
-        final String insertWorkflowDefinitionSql = """
+    final String insertWorkflowDefinitionSql = """
     insert into batch.workflow_definition (
     tenant_id, workflow_code, workflow_name, workflow_type, version, enabled, calendar_code
     ) values (?, ?, ?, 'DAG', 1, true, ?) returning id
     """;
-        final String insertWorkflowNodeSql = """
+    final String insertWorkflowNodeSql = """
     insert into batch.workflow_node (
     tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order,
     retry_policy, retry_max_count, timeout_seconds, enabled
     ) values (?, ?, 'START', 'start', 'START', 0, 'NONE', 0, 0, true)
     """;
-  final String insertWorkflowNodeSql2 = """
+    final String insertWorkflowNodeSql2 = """
         insert into batch.workflow_node (
             tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order,
             node_params, retry_policy, retry_max_count, timeout_seconds, enabled
         ) values (?, ?, 'WAIT_FILE', 'wait for file', 'WAIT', 1, ?::jsonb, 'NONE', 0, 3600, true)
         """;
-  final String insertWorkflowNodeSql3 = """
+    final String insertWorkflowNodeSql3 = """
         insert into batch.workflow_node (
             tenant_id, workflow_definition_id, node_code, node_name, node_type,
             related_job_code, node_order, retry_policy, retry_max_count, timeout_seconds, enabled
         ) values (?, ?, 'IMPORT_TASK', 'import task', 'JOB', ?, 2, 'NONE', 0, 3600, true)
         """;
-  final String insertWorkflowNodeSql4 = """
+    final String insertWorkflowNodeSql4 = """
         insert into batch.workflow_node (
             tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order,
             retry_policy, retry_max_count, timeout_seconds, enabled
         ) values (?, ?, 'END', 'end', 'END', 3, 'NONE', 0, 0, true)
         """;
-        final String insertWorkflowEdgeSql = """
+    final String insertWorkflowEdgeSql = """
     insert into batch.workflow_edge (
     tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, enabled
     ) values (?, ?, 'START', 'WAIT_FILE', 'ALWAYS', true),
     (?, ?, 'WAIT_FILE', 'IMPORT_TASK', 'SUCCESS', true),
     (?, ?, 'IMPORT_TASK', 'END', 'SUCCESS', true)
     """;
-        final String insertBatchDayInstanceSql = """
+    final String insertBatchDayInstanceSql = """
     insert into batch.batch_day_instance (
     tenant_id, calendar_code, biz_date, day_status, open_at, cutoff_at,
     timezone_snapshot, dst_policy_snapshot, frozen, version, created_at, updated_at, dry_run
@@ -774,43 +754,43 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
     'UTC', 'gap=RUN_AT_NEXT_VALID_TIME;overlap=RUN_ONCE_EARLIER_OFFSET', false, 0,
     current_timestamp, current_timestamp, false)
     """;
-        final String insertTriggerRequestSql = """
+    final String insertTriggerRequestSql = """
     insert into batch.trigger_request (
     tenant_id, request_id, trigger_type, workflow_definition_id, biz_date, dedup_key,
     request_status, trace_id
     ) values (?, ?, 'API', ?, ?, ?, 'ACCEPTED', ?)
     """;
-        final String selectIdSql = """
+    final String selectIdSql = """
     select id from batch.workflow_run where tenant_id = ? and trigger_request_id =
     (select id from batch.trigger_request where tenant_id = ? and request_id = ?)
     """;
-        final String insertFileRecordSql = """
+    final String insertFileRecordSql = """
     insert into batch.file_record (
     tenant_id, file_category, file_name, file_format_type, storage_type, storage_path,
     source_type, file_status, biz_date, metadata_json, created_at
     ) values (?, 'INPUT', ?, 'DELIMITED', 'S3', ?, 'SFTP', 'RECEIVED', ?,
     jsonb_build_object('fileGroupCode', 'SENSOR_R11', 'arrivalState', 'TRIGGERED'), now())
     """;
-        final String updateBatchDayInstanceSql = """
+    final String updateBatchDayInstanceSql = """
             update batch.batch_day_instance\s\
             set day_status = 'CUTOFF', cutoff_at = current_timestamp - interval '1 second' where tenant_id = ?\s\
             and calendar_code = ? and biz_date = ?\
             """;
-        final String selectDayStatusSql = """
+    final String selectDayStatusSql = """
             select day_status from batch.batch_day_instance where tenant_id = ? and calendar_code = ?\s\
             and biz_date = ?\
             """;
-        final String selectRunStatusSql = """
+    final String selectRunStatusSql = """
             select run_status from batch.workflow_run where tenant_id = ? and id = ?
         """;
-        final String selectStatementSql = """
+    final String selectStatementSql = """
             select (output ->> 'currentOffset')::bigint from batch.workflow_node_run where id = ?
         """;
-        final String selectCountSql = """
+    final String selectCountSql = """
     select count(*) from batch.trigger_request where tenant_id = ?
     and parent_workflow_run_id = ? and parent_node_code = 'IMPORT_TASK'
     """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
             select count(*) from batch.workflow_node_run where workflow_run_id = ?
               and node_code = 'IMPORT_TASK' and node_status in ('READY', 'RUNNING')
               and job_instance_id is not null
@@ -825,13 +805,10 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
     LocalDate bizDate = LocalDate.of(2026, 10, 17);
     String workflowCode = "WF_SENSOR_R11_" + suffix;
 
-        jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        TENANT,
-        calendarCode,
-        calendarCode);
-        jdbcTemplate.update(insertJobDefinitionSql, TENANT, jobCode, jobCode, workerGroup, calendarCode);
-        jdbcTemplate.update(insertWorkerRegistrySql, TENANT, "wk-sensor-r11-" + suffix, workerGroup);
+    jdbcTemplate.update(insertBusinessCalendarSql, TENANT, calendarCode, calendarCode);
+    jdbcTemplate.update(
+        insertJobDefinitionSql, TENANT, jobCode, jobCode, workerGroup, calendarCode);
+    jdbcTemplate.update(insertWorkerRegistrySql, TENANT, "wk-sensor-r11-" + suffix, workerGroup);
     Long workflowDefinitionId = jdbcTemplate.queryForObject(
         insertWorkflowDefinitionSql, Long.class, TENANT, workflowCode, workflowCode, calendarCode);
     String sensorParams =
@@ -862,11 +839,11 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
           }
           default -> throw new IllegalArgumentException("Unsupported test sensor: " + sensorType);
         };
-        jdbcTemplate.update(insertWorkflowNodeSql, TENANT, workflowDefinitionId);
-        jdbcTemplate.update(insertWorkflowNodeSql2, TENANT, workflowDefinitionId, sensorParams);
-        jdbcTemplate.update(insertWorkflowNodeSql3, TENANT, workflowDefinitionId, jobCode);
-        jdbcTemplate.update(insertWorkflowNodeSql4, TENANT, workflowDefinitionId);
-        jdbcTemplate.update(
+    jdbcTemplate.update(insertWorkflowNodeSql, TENANT, workflowDefinitionId);
+    jdbcTemplate.update(insertWorkflowNodeSql2, TENANT, workflowDefinitionId, sensorParams);
+    jdbcTemplate.update(insertWorkflowNodeSql3, TENANT, workflowDefinitionId, jobCode);
+    jdbcTemplate.update(insertWorkflowNodeSql4, TENANT, workflowDefinitionId);
+    jdbcTemplate.update(
         insertWorkflowEdgeSql,
         TENANT,
         workflowDefinitionId,
@@ -874,11 +851,17 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
         workflowDefinitionId,
         TENANT,
         workflowDefinitionId);
-        jdbcTemplate.update(insertBatchDayInstanceSql, TENANT, calendarCode, bizDate);
+    jdbcTemplate.update(insertBatchDayInstanceSql, TENANT, calendarCode, bizDate);
 
     String requestId = "req-sensor-r11-" + suffix;
-        jdbcTemplate.update(
-        insertTriggerRequestSql, TENANT, requestId, workflowDefinitionId, bizDate, "dedup-" + suffix, requestId);
+    jdbcTemplate.update(
+        insertTriggerRequestSql,
+        TENANT,
+        requestId,
+        workflowDefinitionId,
+        bizDate,
+        "dedup-" + suffix,
+        requestId);
     LaunchRequest launchRequest = LaunchRequest.builder()
         .tenantId(TENANT)
         .workflowDefinitionId(workflowDefinitionId)
@@ -889,7 +872,8 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
         .params(Map.of())
         .build();
     workflowRunLaunchService.launch(launchRequest);
-    Long workflowRunId = jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, TENANT, requestId);
+    Long workflowRunId =
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, TENANT, requestId);
     WorkflowNodeRunEntity waitRun =
         nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(workflowRunId, "WAIT_FILE");
     assertThat(waitRun).isNotNull();
@@ -926,11 +910,7 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
     TransactionTemplate transaction = new TransactionTemplate(transactionManager);
     transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     ExecutorService executor = Executors.newFixedThreadPool(2);
-        jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        TENANT,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, TENANT, calendarCode, bizDate);
     try (Connection fence = jdbcTemplate.getDataSource().getConnection()) {
       fence.setAutoCommit(false);
       try (PreparedStatement statement =
@@ -968,12 +948,12 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
       }
     }
 
-        String selectedDayStatus = jdbcTemplate.queryForObject(
-            selectDayStatusSql, String.class, TENANT, calendarCode, bizDate);
-        assertThat(selectedDayStatus).isEqualTo("IN_FLIGHT");
-        String selectedRunStatus =
-            jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
-        assertThat(selectedRunStatus).isEqualTo("RUNNING");
+    String selectedDayStatus = jdbcTemplate.queryForObject(
+        selectDayStatusSql, String.class, TENANT, calendarCode, bizDate);
+    assertThat(selectedDayStatus).isEqualTo("IN_FLIGHT");
+    String selectedRunStatus =
+        jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
+    assertThat(selectedRunStatus).isEqualTo("RUNNING");
     assertThat(nodeRunMapper
             .selectLatestByWorkflowRunIdAndNodeCode(workflowRunId, "WAIT_FILE")
             .getNodeStatus())
@@ -983,12 +963,44 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
           jdbcTemplate.queryForObject(selectStatementSql, Long.class, waitRun.getId());
       assertThat(selectedStatement).isEqualTo(1L);
     }
-        Integer selectedTriggerRequestCount =
-            jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, workflowRunId);
-        assertThat(selectedTriggerRequestCount).isEqualTo(1);
-        Integer selectedWorkflowNodeRunCount =
-            jdbcTemplate.queryForObject(selectCountSql2, Integer.class, workflowRunId);
-        assertThat(selectedWorkflowNodeRunCount).isEqualTo(1);
+    Integer selectedTriggerRequestCount =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, workflowRunId);
+    assertThat(selectedTriggerRequestCount).isEqualTo(1);
+    Integer selectedWorkflowNodeRunCount =
+        jdbcTemplate.queryForObject(selectCountSql2, Integer.class, workflowRunId);
+    assertThat(selectedWorkflowNodeRunCount).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("超出整数范围的 Kafka 分区不能被截断为现有分区")
+  void shouldRejectOverflowPartitionWithoutMatchingRealKafkaPartition() throws Exception {
+    String topic = "sensor-partition-overflow-" + System.nanoTime();
+    KafkaAdmin admin = new KafkaAdmin(
+        Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers()));
+    publishKafkaOffset(admin, topic);
+    KafkaOffsetSensorPolicy policy = new KafkaOffsetSensorPolicy(admin, new SensorProperties());
+    try {
+      SensorContext invalid = new SensorContext(
+          TENANT,
+          1L,
+          Map.of("topic", topic, "partition", 4_294_967_296L, "minOffset", 1L),
+          Map.of(),
+          Duration.ofSeconds(30),
+          null);
+      var result = policy.probe(invalid);
+      assertThat(result.status()).isEqualTo(SensorProbeStatus.ERROR);
+      assertThat(result.errorKey()).isEqualTo("error.workflow.sensor_spec_invalid");
+      SensorContext valid = new SensorContext(
+          TENANT,
+          1L,
+          Map.of("topic", topic, "partition", 0, "minOffset", 1L),
+          Map.of(),
+          Duration.ofSeconds(30),
+          null);
+      assertThat(policy.probe(valid).status()).isEqualTo(SensorProbeStatus.MATCHED);
+    } finally {
+      policy.closeAdminClient();
+    }
   }
 
   private void publishKafkaOffset(KafkaAdmin kafkaAdmin, String topic) throws Exception {
@@ -1051,10 +1063,8 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
         workflowDefinitionId,
         LocalDate.of(2026, 5, 7),
         "trace-sensor-claim-" + suffix);
-    Long nodeRunId = jdbcTemplate.queryForObject(
-        insertWorkflowNodeRunSql,
-        Long.class,
-        workflowRunId);
+    Long nodeRunId =
+        jdbcTemplate.queryForObject(insertWorkflowNodeRunSql, Long.class, workflowRunId);
     WorkflowNodeRunEntity nodeRun = new WorkflowNodeRunEntity();
     nodeRun.setId(nodeRunId);
     nodeRun.setWorkflowRunId(workflowRunId);
@@ -1069,10 +1079,8 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
     AtomicInteger probeCalls = new AtomicInteger();
     doAnswer(invocation -> {
           probeCalls.incrementAndGet();
-      jdbcTemplate.update(
-              updateWorkflowNodeRunSql,
-              Timestamp.from(now.plusSeconds(60)),
-              nodeRunId);
+          jdbcTemplate.update(
+              updateWorkflowNodeRunSql, Timestamp.from(now.plusSeconds(60)), nodeRunId);
           firstProbeEntered.countDown();
           if (!allowFirstProbeToCommit.await(5, TimeUnit.SECONDS)) {
             throw new IllegalStateException("timed out waiting to release first probe");
@@ -1098,13 +1106,9 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
     CompletableFuture.allOf(first, second).get(10, TimeUnit.SECONDS);
 
     assertThat(probeCalls).hasValue(1);
-    assertThat(jdbcTemplate
-            .queryForObject(
-                selectSensorNextProbeAtSql,
-                Timestamp.class,
-                nodeRunId)
-            .toInstant())
-        .isEqualTo(now.plusSeconds(60));
+    Timestamp selectedSensorNextProbeAt =
+        jdbcTemplate.queryForObject(selectSensorNextProbeAtSql, Timestamp.class, nodeRunId);
+    assertThat(selectedSensorNextProbeAt.toInstant()).isEqualTo(now.plusSeconds(60));
   }
 
   private void ensureBusinessCalendar() {
@@ -1125,10 +1129,7 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
 
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
     while (System.nanoTime() < deadline) {
-      Integer waiting = jdbcTemplate.queryForObject(
-          selectCountSql,
-          Integer.class,
-          blockerPid);
+      Integer waiting = jdbcTemplate.queryForObject(selectCountSql, Integer.class, blockerPid);
       if (waiting != null && waiting >= expectedWaiters) return;
       Thread.sleep(10);
     }

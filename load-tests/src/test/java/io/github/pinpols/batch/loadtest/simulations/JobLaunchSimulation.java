@@ -14,7 +14,7 @@ import static io.gatling.javaapi.core.CoreDsl.*;
 import static io.gatling.javaapi.http.HttpDsl.*;
 
 /**
- * Measures the throughput and latency of the job-launch path:
+ * 测量作业发起链路的吞吐量和延迟：
  *   POST /api/triggers/launch  (batch-trigger:8081)
  *
  * <p>Load profile: ramp from 1 to {@code users.peak} over {@code ramp.seconds},
@@ -43,7 +43,7 @@ public class JobLaunchSimulation extends Simulation {
             .contentTypeHeader("application/json")
             .shareConnections();
 
-    // ── Feeder: generates a unique idempotency key per request ─────────────────
+    // ── Feeder：为每个请求生成唯一幂等键 ─────────────────
 
     private final Iterator<Map<String, Object>> feeder = Stream.generate(() ->
             Map.<String, Object>of(

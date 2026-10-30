@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.worker.imports.stage;
 
-import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService.BadRecordCommand;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -35,12 +32,14 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -185,7 +184,11 @@ class ValidateStepTest {
     assertThat(result.code()).isEqualTo("DATASET_BAD");
     verify(governance)
         .recordFailedRecord(
-            any(), org.mockito.ArgumentMatchers.argThat(command -> command != null && java.util.Objects.equals(command.stage(), ImportStage.VALIDATE) && java.util.Objects.equals(command.recordNo(), 0L) && java.util.Objects.equals(command.errorCode(), "DATASET_BAD")));
+            any(),
+            ArgumentMatchers.argThat(command -> command != null
+                && Objects.equals(command.stage(), ImportStage.VALIDATE)
+                && Objects.equals(command.recordNo(), 0L)
+                && Objects.equals(command.errorCode(), "DATASET_BAD")));
   }
 
   @Test
@@ -204,10 +207,16 @@ class ValidateStepTest {
     assertThat(result.code()).isEqualTo("IMPORT_VALIDATE_CONTROL_RECORD");
     verify(governance)
         .recordFailedRecord(
-            any(), org.mockito.ArgumentMatchers.argThat(command -> command != null && java.util.Objects.equals(command.stage(), ImportStage.VALIDATE) && java.util.Objects.equals(command.recordNo(), 0L) && java.util.Objects.equals(command.errorCode(), "IMPORT_VALIDATE_CONTROL_RECORD")));
+            any(),
+            ArgumentMatchers.argThat(command -> command != null
+                && Objects.equals(command.stage(), ImportStage.VALIDATE)
+                && Objects.equals(command.recordNo(), 0L)
+                && Objects.equals(command.errorCode(), "IMPORT_VALIDATE_CONTROL_RECORD")));
     verify(governance, never())
         .recordSkippedRecord(
-            any(), org.mockito.ArgumentMatchers.argThat(command -> command != null && java.util.Objects.equals(command.errorCode(), "IMPORT_VALIDATE_CONTROL_RECORD")));
+            any(),
+            ArgumentMatchers.argThat(command -> command != null
+                && Objects.equals(command.errorCode(), "IMPORT_VALIDATE_CONTROL_RECORD")));
     verify(governance, never()).isSkippable("IMPORT_VALIDATE_CONTROL_RECORD");
   }
 
@@ -228,7 +237,11 @@ class ValidateStepTest {
     assertThat(result.code()).isEqualTo("IMPORT_VALIDATE_ROW_COUNT");
     verify(governance)
         .recordFailedRecord(
-            any(), org.mockito.ArgumentMatchers.argThat(command -> command != null && java.util.Objects.equals(command.stage(), ImportStage.VALIDATE) && java.util.Objects.equals(command.recordNo(), 0L) && java.util.Objects.equals(command.errorCode(), "IMPORT_VALIDATE_ROW_COUNT")));
+            any(),
+            ArgumentMatchers.argThat(command -> command != null
+                && Objects.equals(command.stage(), ImportStage.VALIDATE)
+                && Objects.equals(command.recordNo(), 0L)
+                && Objects.equals(command.errorCode(), "IMPORT_VALIDATE_ROW_COUNT")));
     verify(governance, never()).isSkippable("IMPORT_VALIDATE_ROW_COUNT");
   }
 
@@ -253,10 +266,16 @@ class ValidateStepTest {
     assertThat(result.code()).isEqualTo("IMPORT_VALIDATE_CONTROL_TOTAL");
     verify(governance)
         .recordFailedRecord(
-            any(), org.mockito.ArgumentMatchers.argThat(command -> command != null && java.util.Objects.equals(command.stage(), ImportStage.VALIDATE) && java.util.Objects.equals(command.recordNo(), 0L) && java.util.Objects.equals(command.errorCode(), "IMPORT_VALIDATE_CONTROL_TOTAL")));
+            any(),
+            ArgumentMatchers.argThat(command -> command != null
+                && Objects.equals(command.stage(), ImportStage.VALIDATE)
+                && Objects.equals(command.recordNo(), 0L)
+                && Objects.equals(command.errorCode(), "IMPORT_VALIDATE_CONTROL_TOTAL")));
     verify(governance, never())
         .recordSkippedRecord(
-            any(), org.mockito.ArgumentMatchers.argThat(command -> command != null && java.util.Objects.equals(command.errorCode(), "IMPORT_VALIDATE_CONTROL_TOTAL")));
+            any(),
+            ArgumentMatchers.argThat(command -> command != null
+                && Objects.equals(command.errorCode(), "IMPORT_VALIDATE_CONTROL_TOTAL")));
     verify(governance, never()).isSkippable("IMPORT_VALIDATE_CONTROL_TOTAL");
   }
 
@@ -305,7 +324,12 @@ class ValidateStepTest {
     // 只 1 行通过校验，被写到 validated 文件
     assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, 1L);
     verify(governance)
-        .recordSkippedRecord(any(), org.mockito.ArgumentMatchers.argThat(command -> command != null && java.util.Objects.equals(command.stage(), ImportStage.VALIDATE) && java.util.Objects.equals(command.recordNo(), 1L) && java.util.Objects.equals(command.errorCode(), "ROW_BAD")));
+        .recordSkippedRecord(
+            any(),
+            ArgumentMatchers.argThat(command -> command != null
+                && Objects.equals(command.stage(), ImportStage.VALIDATE)
+                && Objects.equals(command.recordNo(), 1L)
+                && Objects.equals(command.errorCode(), "ROW_BAD")));
   }
 
   @Test
@@ -327,10 +351,15 @@ class ValidateStepTest {
     assertThat(result.success()).isFalse();
     assertThat(result.code()).isEqualTo("HARD");
     verify(governance)
-        .recordFailedRecord(any(), org.mockito.ArgumentMatchers.argThat(command -> command != null && java.util.Objects.equals(command.stage(), ImportStage.VALIDATE) && java.util.Objects.equals(command.recordNo(), 1L) && java.util.Objects.equals(command.errorCode(), "HARD")));
+        .recordFailedRecord(
+            any(),
+            ArgumentMatchers.argThat(command -> command != null
+                && Objects.equals(command.stage(), ImportStage.VALIDATE)
+                && Objects.equals(command.recordNo(), 1L)
+                && Objects.equals(command.errorCode(), "HARD")));
   }
 
-  // ── JSON parsing failure on a row ──
+  // ── 某行 JSON 解析失败 ──
 
   @Test
   @DisplayName("非法结构行按类型非法计入校验错误并失败")
@@ -351,7 +380,11 @@ class ValidateStepTest {
     assertThat(result.code()).isEqualTo("IMPORT_VALIDATE_TYPE_INVALID");
     verify(governance)
         .recordFailedRecord(
-            any(), org.mockito.ArgumentMatchers.argThat(command -> command != null && java.util.Objects.equals(command.stage(), ImportStage.VALIDATE) && java.util.Objects.equals(command.recordNo(), 1L) && java.util.Objects.equals(command.errorCode(), "IMPORT_VALIDATE_TYPE_INVALID")));
+            any(),
+            ArgumentMatchers.argThat(command -> command != null
+                && Objects.equals(command.stage(), ImportStage.VALIDATE)
+                && Objects.equals(command.recordNo(), 1L)
+                && Objects.equals(command.errorCode(), "IMPORT_VALIDATE_TYPE_INVALID")));
   }
 
   // ── post-loop threshold check ──
@@ -376,7 +409,7 @@ class ValidateStepTest {
     assertThat(result.code()).isEqualTo("IMPORT_SKIP_THRESHOLD_EXCEEDED");
   }
 
-  // ── exception in dataQualityService bubbles to IMPORT_VALIDATE_FAILED ──
+  // ── dataQualityService 抛出的异常向上传递为 IMPORT_VALIDATE_FAILED ──
 
   @Test
   @DisplayName("质量服务抛异常时返回通用失败结果")

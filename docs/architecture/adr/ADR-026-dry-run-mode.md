@@ -2,14 +2,16 @@
 
 > **当前适用性（2026-10-24）**：dry-run 仍与正式执行分离；WorkflowRun、节点和子 Job 保持同一演练语义，自托管能力未知时不得声称无副作用。预检只读检查不等同于启动 dry-run。 原决策背景与阶段记录保留，正式关闭状态以当前验收矩阵为准。
 
+> **SQL 模板导出演练限制（2026-10-28）**：EXPORT 的 `sql_template_export` 在 dry-run GENERATE 之前返回 `EXPORT_DRY_RUN_SQL_UNAVAILABLE`，不执行插件 SQL；正式导出不受此限制。其他导出插件是否无副作用仍需各自核验。
+
 - **Status**: Implemented（默认关闭，按环境验收后启用；仍不支持 FULL_SIMULATION）
 - **Date**: 2026-05-06（实现校准：2026-09-11）
 - **Supersedes**: —
-- **Related**: §配置开关规范（与 `bypass-mode` 区分）/ ADR-020（重放，dry-run 是 replay 的另一面）/ §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../archive/standards/worker-capability-priority-and-scope-2026-05-06.md)
+- **Related**: §配置开关规范（与 `bypass-mode` 区分）/ ADR-020（重放，dry-run 是 replay 的另一面）/ §14.3.2 / [系统职责范围](../system-scope-boundary.md)
 
 ## 范围边界（Scope Discipline）
 
-> **本 ADR 的边界红线：只做"计划 / 校验 / Explain"，不做"完整副作用沙箱 + 事务回滚 + Kafka 不消费"模拟。**
+> **本 ADR 的边界红线：只做计划和校验，不做"完整副作用沙箱 + 事务回滚 + Kafka 不消费"模拟；L3 SQL 数据库计划执行已停用。**
 >
 > **判定提问**：「这个 dry-run 想看什么？」"看配置对不对 / 看会不会跑 / 看 SQL 能不能跑" → 属本 ADR；"跑出来看业务结果对不对" → 不属本 ADR（那是 UAT 环境的活）。
 
@@ -19,7 +21,7 @@
 |---|---|---|
 | **L1 CONFIG_VALIDATE** | 指定 Job 定义 | 检查启用定义及必需参数；只读、不调用外部服务；不推断 Workflow 目标 |
 | **L2 SCHEDULE_PLAN** | 指定 Job / bizDate | 给定 Job 与 bizDate，输出预计 instance / 分区数、Worker 路由等执行计划 |
-| **L3 EXECUTION_PLAN** | task 级 | SQL explain / 文件路径解析 / 模板字段检查 / MinIO key 预生成 / 下游 endpoint reachability |
+| **L3 EXECUTION_PLAN** | task 级 | SQL 静态检查（数据库计划停用） / 文件路径解析 / 模板字段检查 / MinIO key 预生成 / 下游 endpoint reachability |
 
 **2026-10-24 新模型校准**：当前计划 API 的目标字段只有 `tenantId + jobCode`。Job 与 Workflow 的编码空间独立，不能查询同编码 Workflow 来猜测日程或 DAG，也不能用 Job 上残留的日程字段证明 Workflow 有效。L1 的 `summary` 显式返回 `validationScope=JOB`、`workflowValidated=false`；该结果不是整条 Workflow 的启动准入证明。L2/L3 仍针对同一个 Job 的执行计划与只读探针，不创建运行。Workflow 日程/图的校验由现有明确 Workflow 身份的配置/启用入口负责；本次不新增 Workflow 预检 API。运行级 `dry_run` 与这些不创建实例的计划查询分别遵循各自契约。
 
@@ -71,6 +73,8 @@ ALTER TABLE batch.batch_day_instance
 
 `LaunchRequest` 加 `dryRun: boolean` 字段，沿透到 instance / partition / task。
 
+Worker task payload 的 `dryRun` 由作业实例状态决定，业务默认参数或启动参数中的同名值不能改变正式或演练执行模式；参数原始快照不因此重写。
+
 ### Dry-run 行为契约
 
 | 行为 | dry_run = false | dry_run = true |
@@ -80,7 +84,7 @@ ALTER TABLE batch.batch_day_instance
 | worker 拉 task 执行 | ✓ | ✓ |
 | worker 读业务表 | ✓ | ✓（只读不变） |
 | worker 写业务表 / staging | ✓ | ✗ DryRunGuard 拦 |
-| worker 写 file_record | ✓ | ✗（写 stub 行带 `dry_run=true`） |
+| worker 写 file_record | ✓ | IMPORT 不创建正式记录或更新已有记录；其他链路按各自实现核验 |
 | worker 调外部 API（结算 / 发邮件） | ✓ | ✗ 短路返回 mock |
 | outbox_event 写入 | ✓ | ✗（不发下游） |
 | result_version 创建 | ✓ | ✓ status=DRY_RUN（不进 EFFECTIVE 链） |

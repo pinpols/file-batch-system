@@ -29,5 +29,4 @@ public class ResourceSchedulingRequest {
    * {@code false}，避免重复占用全局、租户、队列及公平共享组的 Job 配额。
    */
   private boolean newJobAdmission = true;
-
 }

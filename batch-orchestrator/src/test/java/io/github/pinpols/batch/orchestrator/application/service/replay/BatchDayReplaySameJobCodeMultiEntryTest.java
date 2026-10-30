@@ -51,7 +51,7 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
   @Test
   @DisplayName("来源实例的旧终态不能完成新重放条目")
   void shouldRejectSourceTerminal_whenOnlyHistoricalSourceMatches() {
-    when(sessionMapper.selectForUpdate("t1", 7L)).thenReturn(session("REPLAY"));
+    givenSession("REPLAY");
     reconciler.reconcileOnTerminal("t1", 7L, "JOB_DUP", 5001L, "SUCCESS");
     verify(entryMapper).selectByCurrentExecution("t1", 7L, "JOB_DUP", 5001L);
     verify(entryMapper, never()).updateStatus(any());
@@ -61,7 +61,7 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
   @Test
   @DisplayName("当前执行的精确关联用于更新，不能扫描同编码第一条")
   void shouldCompleteExactEntry_whenCurrentExecutionMatches() {
-    when(sessionMapper.selectForUpdate("t1", 7L)).thenReturn(session("REPLAY"));
+    givenSession("REPLAY");
     when(entryMapper.selectByCurrentExecution("t1", 7L, "JOB_DUP", 7100L)).thenReturn(entry());
     when(entryMapper.countBySessionAndStatus(7L, "SUCCEEDED")).thenReturn(1L);
     reconciler.reconcileOnTerminal("t1", 7L, "JOB_DUP", 7100L, "SUCCESS");
@@ -75,7 +75,7 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
   @Test
   @DisplayName("只有 jobCode 相同但执行身份未知时不写入")
   void shouldRejectUnboundTerminal_whenOnlyJobCodeMatches() {
-    when(sessionMapper.selectForUpdate("t1", 7L)).thenReturn(session("REPLAY"));
+    givenSession("REPLAY");
     reconciler.reconcileOnTerminal("t1", 7L, "JOB_DUP", 8000L, "SUCCESS");
     verify(entryMapper, never()).selectBySessionId(anyLong());
     verify(entryMapper, never()).updateStatus(any());
@@ -86,7 +86,7 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
   @CsvSource({"DRY_RUN,SUCCESS", "REPLAY,SUCCESS_DRY_RUN", "REPLAY,RUNNING"})
   @DisplayName("模式不匹配或非终态时不回退条目、不写完成时间")
   void shouldPreserveEntry_whenTerminalModeDoesNotMatch(String mode, String status) {
-    when(sessionMapper.selectForUpdate("t1", 7L)).thenReturn(session(mode));
+    givenSession(mode);
     when(entryMapper.selectByCurrentExecution("t1", 7L, "JOB_DUP", 7100L)).thenReturn(entry());
     reconciler.reconcileOnTerminal("t1", 7L, "JOB_DUP", 7100L, status);
     verify(entryMapper, never()).updateStatus(any());
@@ -120,6 +120,12 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
         .rerunInstanceId(7100L)
         .status("RUNNING")
         .build();
+  }
+
+  private void givenSession(String mode) {
+    BatchDayReplaySessionEntity replaySession = session(mode);
+    when(sessionMapper.selectById("t1", 7L)).thenReturn(replaySession);
+    when(sessionMapper.selectForUpdate("t1", 7L)).thenReturn(replaySession);
   }
 
   private static BatchDayReplaySessionEntity session(String mode) {

@@ -9,17 +9,17 @@ import org.mybatis.spring.boot.autoconfigure.ConfigurationCustomizer;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Component;
 
 /**
- * E2E merges orchestrator + several workers; each worker may register its own business {@link
+ * E2E 上下文会合并 Orchestrator 和多个 Worker；每个 Worker 都可能注册自己的业务 {@link
  * SqlSessionFactory}. With multiple {@link DataSource} beans, MyBatis auto-config may not register
  * a primary {@code sqlSessionFactory} for {@code spring.datasource}, so orchestrator and
- * worker-core mappers would not resolve. This restores the platform (primary datasource) factory.
+ * 否则 worker-core Mapper 将无法解析。此处恢复平台主数据源的 SqlSessionFactory。
  * Business mappers are deliberately excluded and use {@code e2eBusinessSqlSessionFactory}.
  */
 @Component

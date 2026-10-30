@@ -44,7 +44,8 @@ public class CompleteDispatchStep implements DispatchStageStep {
   @Override
   public DispatchStageResult execute(DispatchJobContext context) {
     // ADR-026: 演练模式不更新 file_record 状态 / 不写 audit。
-    Map<String, Object> dryRunAttributes = EmptyChecks.isNull(context) ? null : context.getAttributes();
+    Map<String, Object> dryRunAttributes =
+        EmptyChecks.isNull(context) ? null : context.getAttributes();
     if (DryRunGuard.fromAttributes(dryRunAttributes).isDryRun()) {
       return DispatchStageResult.success(stage());
     }
@@ -93,8 +94,7 @@ public class CompleteDispatchStep implements DispatchStageStep {
     Object traceIdValue = attrs.get(PipelineRuntimeKeys.TRACE_ID);
     String traceId = String.valueOf(traceIdValue);
     audit.traceId(traceId);
-    Object externalRequestIdValue =
-        attrs.getOrDefault(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID, "");
+    Object externalRequestIdValue = attrs.getOrDefault(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID, "");
     String evidenceReference = String.valueOf(externalRequestIdValue);
     audit.evidenceRef(evidenceReference);
     audit.detailSummary(detailSummary);

@@ -51,11 +51,14 @@ public class DefaultConsoleKafkaLagQueryService implements ConsoleKafkaLagQueryP
   /** 列出所有 batch 相关 consumer group 的积压情况。 */
   @Override
   public List<ConsoleKafkaConsumerLagResponse> consumerGroupLags(String groupIdFilter) {
-    return cacheService.getOrLoad(
+    List<ConsoleKafkaConsumerLagResponse> responses = cacheService.getOrLoad(
         "kafka-lag:" + cacheSegment(groupIdFilter),
         ConsoleQueryCacheService.KAFKA_LAG_TTL,
         new TypeReference<List<ConsoleKafkaConsumerLagResponse>>() {},
         () -> loadConsumerGroupLags(groupIdFilter));
+    return responses.stream()
+        .map(DefaultConsoleKafkaLagQueryService::sanitizeError)
+        .toList();
   }
 
   private List<ConsoleKafkaConsumerLagResponse> loadConsumerGroupLags(String groupIdFilter) {
@@ -91,10 +94,13 @@ public class DefaultConsoleKafkaLagQueryService implements ConsoleKafkaLagQueryP
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      log.error("Kafka consumer group query was interrupted", e);
+      log.error(
+          "Kafka consumer group query was interrupted: {}", SwallowedExceptionLogger.summary(e));
       result.add(error(null, "Kafka admin query interrupted: " + e.getMessage()));
     } catch (ExecutionException | TimeoutException e) {
-      log.error("Failed to query Kafka consumer group list (Kafka may be unreachable)", e);
+      log.error(
+          "Failed to query Kafka consumer group list (Kafka may be unreachable): {}",
+          SwallowedExceptionLogger.summary(e));
       result.add(error(null, "Failed to list consumer groups: " + e.getMessage()));
     }
     return result;
@@ -130,7 +136,8 @@ public class DefaultConsoleKafkaLagQueryService implements ConsoleKafkaLagQueryP
   private ConsoleKafkaConsumerLagResponse queryGroupLag(AdminClient admin, String groupId)
       throws InterruptedException, ExecutionException, TimeoutException {
     ListConsumerGroupOffsetsResult offsetsResult = admin.listConsumerGroupOffsets(groupId);
-    KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> committedOffsetsFuture = offsetsResult.partitionsToOffsetAndMetadata();
+    KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> committedOffsetsFuture =
+        offsetsResult.partitionsToOffsetAndMetadata();
     Map<TopicPartition, OffsetAndMetadata> committedOffsets =
         committedOffsetsFuture.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
@@ -145,7 +152,8 @@ public class DefaultConsoleKafkaLagQueryService implements ConsoleKafkaLagQueryP
     for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : committedOffsets.entrySet()) {
       TopicPartition topicPartition = entry.getKey();
       long committed = entry.getValue().offset();
-      KafkaFuture<ListOffsetsResult.ListOffsetsResultInfo> endOffsetFuture = endOffsetsResult.partitionResult(topicPartition);
+      KafkaFuture<ListOffsetsResult.ListOffsetsResultInfo> endOffsetFuture =
+          endOffsetsResult.partitionResult(topicPartition);
       ListOffsetsResult.ListOffsetsResultInfo endOffsetInfo =
           endOffsetFuture.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
       long endOffset = endOffsetInfo.offset();
@@ -164,6 +172,20 @@ public class DefaultConsoleKafkaLagQueryService implements ConsoleKafkaLagQueryP
   }
 
   private static ConsoleKafkaConsumerLagResponse error(String groupId, String message) {
-    return new ConsoleKafkaConsumerLagResponse(groupId, null, null, null, message);
+    return new ConsoleKafkaConsumerLagResponse(
+        groupId, null, null, null, SwallowedExceptionLogger.safeMessage(message));
+  }
+
+  private static ConsoleKafkaConsumerLagResponse sanitizeError(
+      ConsoleKafkaConsumerLagResponse response) {
+    if (EmptyChecks.isNull(response.error())) {
+      return response;
+    }
+    return new ConsoleKafkaConsumerLagResponse(
+        response.groupId(),
+        response.totalLag(),
+        response.partitionCount(),
+        response.partitionsWithLag(),
+        SwallowedExceptionLogger.safeMessage(response.error()));
   }
 }

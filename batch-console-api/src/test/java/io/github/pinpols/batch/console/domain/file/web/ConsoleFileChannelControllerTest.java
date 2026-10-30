@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.domain.file.web;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -18,24 +17,30 @@ import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileChannelApplicationService;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileProjectionMapper;
+import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 @DisplayName("文件通道控制器: 查询、创建、启停与更新的参数校验")
+@ExtendWith(MockitoExtension.class)
 class ConsoleFileChannelControllerTest {
 
-  private final ConsoleFileChannelApplicationService applicationService =
-      mock(ConsoleFileChannelApplicationService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleFileChannelApplicationService applicationService;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -61,7 +66,8 @@ class ConsoleFileChannelControllerTest {
   @DisplayName("按标识查询通道返回成功与租户信息")
   void shouldReturn200WhenGetChannelById() throws Exception {
     when(applicationService.get(anyLong(), anyString()))
-        .thenReturn(ConsoleFileProjectionMapper.channel(Map.of("id", 1L, "tenant_id", "t1")));
+        .thenReturn(ConsoleFileProjectionMapper.channelView(
+            FileChannelConfigQueryView.builder().id(1L).tenantId("t1").build()));
 
     mockMvc
         .perform(get("/api/console/file-channels/1").param("tenantId", "t1"))
@@ -110,7 +116,8 @@ class ConsoleFileChannelControllerTest {
   @DisplayName("更新通道返回成功")
   void shouldReturn200WhenUpdateChannel() throws Exception {
     when(applicationService.update(anyLong(), any()))
-        .thenReturn(ConsoleFileProjectionMapper.channel(Map.of("id", 1L, "tenant_id", "t1")));
+        .thenReturn(ConsoleFileProjectionMapper.channelView(
+            FileChannelConfigQueryView.builder().id(1L).tenantId("t1").build()));
 
     mockMvc
         .perform(put("/api/console/file-channels/1")

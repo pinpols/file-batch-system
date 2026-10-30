@@ -49,10 +49,13 @@ async def test_supported_schema_versions_accepted(schema: str, httpx_mock: HTTPX
     http = PlatformHttpClient(cfg)
     dispatcher = TaskDispatcher(cfg, http)
     try:
-        await dispatcher.on_message(_msg(1, schema))
-        # 进入 in-flight 即说明 schema 通过门控;等待执行完成。
-        assert dispatcher.in_flight_count() == 1
+        disposition = await dispatcher.on_message(_msg(1, schema))
+        assert disposition is DispatchDisposition.ACCEPTED
         await _drain(dispatcher)
+        claims = [
+            request for request in httpx_mock.get_requests() if request.url.path.endswith("/claim")
+        ]
+        assert len(claims) == 1
     finally:
         await http.close()
 
@@ -119,7 +122,13 @@ async def test_missing_or_blank_schema_accepted_as_v1(httpx_mock: HTTPXMock) -> 
         del missing["schemaVersion"]  # 字段整体缺失
         assert await dispatcher.on_message(missing) is DispatchDisposition.ACCEPTED
         assert await dispatcher.on_message(_msg(8, "  ")) is DispatchDisposition.ACCEPTED
-        assert dispatcher.in_flight_count() == 2
         await _drain(dispatcher)
+        claims = [
+            request for request in httpx_mock.get_requests() if request.url.path.endswith("/claim")
+        ]
+        assert {request.url.path for request in claims} == {
+            "/internal/tasks/7/claim",
+            "/internal/tasks/8/claim",
+        }
     finally:
         await http.close()

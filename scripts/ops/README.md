@@ -9,7 +9,7 @@
 - `inspect-db.sh`：数据库健康、积压和 Flyway 状态巡检。
 - `inspect-workers.sh`：worker 心跳、排空和任务占用巡检。
 - `inspect-observability.sh`：观测栈连通性巡检。
-- `render-alertmanager-config.sh`：Alertmanager 容器启动时校验共享 Bearer Token 并渲染本地配置。
+- `render-alertmanager-config.sh`：Alertmanager 容器启动时校验挂载的共享 Bearer Token 文件并加载模板，令牌不复制到配置正文。
 - `inspect-dependencies.sh`：PostgreSQL / Kafka / Valkey / MinIO 基础依赖只读巡检，支持宿主机 CLI 和 Docker fallback。
 - `inspect-production-capacity.sh`：生产容量治理只读巡检，覆盖 PostgreSQL 热表/保留、Kafka topic retention 和对象存储 bucket/lifecycle。
 - `plan-production-retention.sh`：生产保留治理只读计划，输出 PostgreSQL 归档策略缺口、Kafka topic 保留策略、对象存储 lifecycle 和 Redis TTL 候选项；不执行清理。
@@ -87,7 +87,7 @@ fallback 结果代替。
 | [inspect-workers.sh](inspect-workers.sh) | Worker 注册表巡检。 |
 | [manage-trigger.sh](manage-trigger.sh) | Trigger 管理 API 运维入口。 |
 | [plan-production-retention.sh](plan-production-retention.sh) | 生产保留治理计划：只读输出候选量和缺失策略，不执行归档、删除或配置修改。 |
-| [render-alertmanager-config.sh](render-alertmanager-config.sh) | 根据环境变量渲染 Alertmanager 配置。 |
+| [render-alertmanager-config.sh](render-alertmanager-config.sh) | 校验挂载 Secret 和模板后启动 Alertmanager。 |
 | [run-toolbox.sh](run-toolbox.sh) | 进入独立运维工具箱；不把 psql、Kafka CLI、mc、Python 塞进应用容器。 |
 | [sql/common-connectivity.sql](sql/common-connectivity.sql) | 供 [inspect-db.sh](inspect-db.sh) 使用的配套 SQL。 |
 | [sql/heal-drain-timeout-workers.sql](sql/heal-drain-timeout-workers.sql) | 供 [heal-drain-timeout.sh](heal-drain-timeout.sh) 使用的配套 SQL。 |

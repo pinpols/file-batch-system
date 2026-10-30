@@ -11,7 +11,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * Temporary E2E diagnostics helper.
  *
  * <p>Used to print the current job_instance / job_task / outbox_event snapshot while Awaitility is
- * polling. Keep this class test-only and remove it once the flaky states are understood.
+ * 仅在测试中使用此类；待不稳定状态的成因查明后将其删除。
  */
 public final class E2eStatusLogger {
 
@@ -21,14 +21,14 @@ public final class E2eStatusLogger {
 
   public static void logJobFlowSnapshot(
       JdbcTemplate jdbcTemplate, String tenantId, String dedupKey, String label) {
-        final String selectIdSql = """
+    final String selectIdSql = """
             select id, instance_no, instance_status, queue_code, worker_group, deadline_at,
                    started_at, finished_at
             from batch.job_instance
             where tenant_id = ? and dedup_key = ?
             order by id
             """;
-        final String selectIdSql2 = """
+    final String selectIdSql2 = """
             select t.id, t.task_seq, t.task_status, t.error_code, t.error_message,
                    t.started_at, t.finished_at
             from batch.job_task t
@@ -36,7 +36,7 @@ public final class E2eStatusLogger {
             where ji.tenant_id = ? and ji.dedup_key = ?
             order by t.id
             """;
-        final String selectIdSql3 = """
+    final String selectIdSql3 = """
             select oe.id, oe.event_key, oe.event_type, oe.publish_status, oe.publish_attempt,
                    oe.next_publish_at
             from batch.outbox_event oe
@@ -46,9 +46,11 @@ public final class E2eStatusLogger {
             order by oe.id
             """;
 
-    List<Map<String, Object>> instances = jdbcTemplate.queryForList(selectIdSql, tenantId, dedupKey);
+    List<Map<String, Object>> instances =
+        jdbcTemplate.queryForList(selectIdSql, tenantId, dedupKey);
     List<Map<String, Object>> tasks = jdbcTemplate.queryForList(selectIdSql2, tenantId, dedupKey);
-    List<Map<String, Object>> outboxes = jdbcTemplate.queryForList(selectIdSql3, tenantId, dedupKey);
+    List<Map<String, Object>> outboxes =
+        jdbcTemplate.queryForList(selectIdSql3, tenantId, dedupKey);
     log.info(
         "[e2e-status] {} tenant={} dedupKey={} job_instance={} job_task={} outbox_event={}",
         label,

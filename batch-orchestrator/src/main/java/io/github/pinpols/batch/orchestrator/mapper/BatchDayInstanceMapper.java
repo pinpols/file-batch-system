@@ -1,9 +1,7 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.param.BatchDayInstanceAdvanceOpenCursorParam;
-
-
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayInstanceAdvanceOpenCursorParam;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
@@ -75,8 +73,7 @@ public interface BatchDayInstanceMapper {
   LocalDate selectOpenCursorDate(
       @Param("tenantId") String tenantId, @Param("calendarCode") String calendarCode);
 
-  int advanceOpenCursor(
-      BatchDayInstanceAdvanceOpenCursorParam parameters);
+  int advanceOpenCursor(BatchDayInstanceAdvanceOpenCursorParam parameters);
 
   /** 扫描指定状态集合的批次日实例（用于 cutoff / settle 调度器候选过滤）。 */
   List<BatchDayInstanceEntity> selectByDayStatusIn(

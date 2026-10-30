@@ -10,7 +10,7 @@ final class HealthCheck {
         connection.setConnectTimeout(2_000);
         connection.setReadTimeout(2_000);
         // MockServer 5.15 has no dedicated GET readiness endpoint. Any non-5xx
-        // response proves that Netty has bound the port and can serve requests.
+        // 响应可证明 Netty 已绑定端口并能够处理请求。
         if (connection.getResponseCode() >= 500) {
             throw new IllegalStateException("MockServer is not ready");
         }

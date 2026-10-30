@@ -17,7 +17,7 @@
 |---|---|
 | [`review/batch-worker-sdk-deep-review-2026-05-31.md`](../review/batch-worker-sdk-deep-review-2026-05-31.md) | 当前实现的近期修复清单(P0/P1/P2 bug + 协议补强) |
 | [`design/worker-deployment-models.md`](../design/worker-deployment-models.md) | 平台 / 自托管两种 worker 边界与能力(协议演进 + 调度上下文下沉) |
-| [`sdk-industry-benchmark-2026-05-31.md`](../archive/audit/sdk-industry-benchmark-2026-05-31.md) | 跨季度对标演进路线图(Temporal/Conductor 对标项) |
+| [byo-sdk-guide.md](../sdk/byo-sdk-guide.md) | 当前自托管 SDK 接入与运行边界 |
 | [`design/sdk-task-type-configuration.md`](../design/sdk-task-type-configuration.md) | 自定义 taskType 配置完整链路(注册体系 + console UX) |
 
 ### 核心原则
@@ -493,7 +493,7 @@ mvn -pl batch-orchestrator test -Dtest=SdkWireContractTest
 | 跨 4 方协作 stall | 3 | M1/M2 拆分,UI 没好不阻塞 SDK 发布 |
 | scope 蔓延 | 全部 | 新发现的事丢下个 phase,不塞当前 |
 | 文档变 stale | 全部 | 每周五 1h 同步 doc + git log 对账;完成项划线不删 |
-| "全部通过"骗自己 | 全部 | 每 phase 出口对照 [`sdk-industry-benchmark`](../archive/audit/sdk-industry-benchmark-2026-05-31.md) §2 矩阵核对(memory: `feedback_audit_vs_architecture_review`) |
+| "全部通过"骗自己 | 全部 | 每 phase 出口对照[SDK支持矩阵](../sdk/sdk-parity-matrix.md)、实际 transport 与独立验证证据核对 |
 | stale cache 漏报真错 | 全部 | push 前 `mvn clean compile`(memory: `feedback_clean_before_push`) |
 | 测试覆盖率刷指标 | 全部 | 不为指标写测试(memory: `feedback_coverage_principle`) |
 | 并行构建 target 冲突 | 全部 | 隔离 clean 复验(memory: `feedback_mvn_build_gotchas`) |
@@ -1164,7 +1164,7 @@ agent 立刻:
 
 - [batch-worker-sdk 深度评估](../review/batch-worker-sdk-deep-review-2026-05-31.md)
 - [worker-deployment-models](../design/worker-deployment-models.md)
-- [sdk-industry-benchmark](../archive/audit/sdk-industry-benchmark-2026-05-31.md)
+- [自托管 SDK 接入](../sdk/byo-sdk-guide.md)
 - [sdk-task-type-configuration](../design/sdk-task-type-configuration.md)
 - [ADR-035 租户自托管 SDK](../architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md)
 - [multi-tenant-isolation-plan](multi-tenant-isolation-plan-2026-05-31.md)(姊妹 plan)

@@ -2,6 +2,9 @@ package io.github.pinpols.batch.orchestrator.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -42,6 +45,115 @@ class DispatchSecretSnapshotResolverTest {
             Map.of(
                 "CH1", Map.of("secretRef", "dispatch/key", "secretVersionId", 42L, "versionNo", 3)))
         .doesNotContainValue("secret material");
+  }
+
+  @Test
+  @DisplayName("文件束分发为各分区渠道固定凭据版本")
+  void pinsCurrentVersion_whenBundleDispatchInstanceCreated() {
+    when(bindingMapper.selectCurrentByChannels("t1", List.of("CH1")))
+        .thenReturn(List.of(new DispatchSecretBindingEntity("CH1", "dispatch/key", 42L, 3)));
+    Map<String, Object> params =
+        Map.of("bundleFiles", List.of(Map.of("sourceFileId", 1, "targetRef", "CH1")));
+
+    Map<String, Object> result = resolver().pin("t1", JobType.BUNDLE_DISPATCH.code(), params);
+
+    assertThat(result)
+        .containsEntry(
+            DispatchTaskKeys.SECRET_BINDINGS,
+            Map.of(
+                "CH1",
+                Map.of("secretRef", "dispatch/key", "secretVersionId", 42L, "versionNo", 3)));
+  }
+
+  @Test
+  @DisplayName("文件束不同分区分别固定各自渠道的凭据版本")
+  void pinsEachChannelVersion_whenBundleHasMultipleTargets() {
+    when(bindingMapper.selectCurrentByChannels("t1", List.of("CH1", "CH2")))
+        .thenReturn(List.of(
+            new DispatchSecretBindingEntity("CH1", "key/one", 42L, 3),
+            new DispatchSecretBindingEntity("CH2", "key/two", 51L, 4)));
+    Map<String, Object> params = Map.of(
+        "bundleFiles",
+        List.of(
+            Map.of("sourceFileId", 1, "targetRef", "CH1"),
+            Map.of("sourceFileId", 2, "targetRef", "CH2")));
+
+    Map<String, Object> result = resolver().pin("t1", JobType.BUNDLE_DISPATCH.code(), params);
+
+    assertThat(result)
+        .containsEntry(
+            DispatchTaskKeys.SECRET_BINDINGS,
+            Map.of(
+                "CH1", Map.of("secretRef", "key/one", "secretVersionId", 42L, "versionNo", 3),
+                "CH2", Map.of("secretRef", "key/two", "secretVersionId", 51L, "versionNo", 4)));
+  }
+
+  @Test
+  @DisplayName("文件束只查询有效分区的渠道密钥，不把业务元数据当渠道")
+  void ignoresUnrelatedTargetRef_whenBundleDispatch() {
+    when(bindingMapper.selectCurrentByChannels(eq("t1"), anyList()))
+        .thenReturn(List.of(new DispatchSecretBindingEntity("CH1", "key/one", 42L, 3)));
+    Map<String, Object> params = Map.of(
+        "bundleFiles", List.of(Map.of("sourceFileId", 1, "targetRef", "CH1")),
+        "metadata", Map.of("targetRef", "business-value"));
+
+    Map<String, Object> result = resolver().pin("t1", JobType.BUNDLE_DISPATCH.code(), params);
+
+    assertThat(result)
+        .containsEntry(
+            DispatchTaskKeys.SECRET_BINDINGS,
+            Map.of("CH1", Map.of("secretRef", "key/one", "secretVersionId", 42L, "versionNo", 3)));
+    verify(bindingMapper).selectCurrentByChannels("t1", List.of("CH1"));
+  }
+
+  @Test
+  @DisplayName("普通分发明确渠道可用时，不因业务元数据引用的其他渠道密钥缺失而阻断")
+  void shouldIgnoreUnavailableUnselectedChannel_whenExplicitTargetIsValid() {
+    when(bindingMapper.selectCurrentByChannels(eq("t1"), anyList()))
+        .thenReturn(List.of(
+            new DispatchSecretBindingEntity("CH1", "key/one", 42L, 3),
+            new DispatchSecretBindingEntity("OTHER", "key/other", null, null)));
+    Map<String, Object> params =
+        Map.of("channelCode", "CH1", "metadata", Map.of("targetRef", "OTHER"));
+
+    Map<String, Object> result = resolver().pin("t1", JobType.DISPATCH.code(), params);
+
+    assertThat(result)
+        .containsEntry(
+            DispatchTaskKeys.SECRET_BINDINGS,
+            Map.of("CH1", Map.of("secretRef", "key/one", "secretVersionId", 42L, "versionNo", 3)));
+  }
+
+  @Test
+  @DisplayName("没有明确渠道时未解析候选仍失败关闭")
+  void shouldRejectUnavailableCandidate_whenNoExplicitTargetExists() {
+    when(bindingMapper.selectCurrentByChannels(eq("t1"), anyList()))
+        .thenReturn(List.of(new DispatchSecretBindingEntity("CH2", "key/two", null, null)));
+    Map<String, Object> params = Map.of("metadata", Map.of("targetRef", "CH2"));
+
+    assertThatThrownBy(() -> resolver().pin("t1", JobType.DISPATCH.code(), params))
+        .isInstanceOf(BizException.class)
+        .extracting("code")
+        .isEqualTo(ResultCode.CREDENTIAL_REF_UNRESOLVED);
+  }
+
+  @Test
+  @DisplayName("文件束任一目标渠道的密钥缺失仍失败关闭")
+  void shouldRejectUnavailableBundleTarget_whenAnotherChannelIsValid() {
+    when(bindingMapper.selectCurrentByChannels(eq("t1"), anyList()))
+        .thenReturn(List.of(
+            new DispatchSecretBindingEntity("CH1", "key/one", 42L, 3),
+            new DispatchSecretBindingEntity("CH2", "key/two", null, null)));
+    Map<String, Object> params = Map.of(
+        "bundleFiles",
+        List.of(
+            Map.of("sourceFileId", 1, "targetRef", "CH1"),
+            Map.of("sourceFileId", 2, "targetRef", "CH2")));
+
+    assertThatThrownBy(() -> resolver().pin("t1", JobType.BUNDLE_DISPATCH.code(), params))
+        .isInstanceOf(BizException.class)
+        .extracting("code")
+        .isEqualTo(ResultCode.CREDENTIAL_REF_UNRESOLVED);
   }
 
   @Test

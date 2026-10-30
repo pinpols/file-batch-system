@@ -22,8 +22,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * Verifies that DefaultTaskExecutionService correctly delegates every method to its sub-service
- * collaborators without adding logic of its own.
+ * 校验 DefaultTaskExecutionService 是否将每个方法正确委托给下游服务，
+ * 且自身不额外增加业务逻辑。
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("任务执行服务: 创建, 派工, 心跳, 日志与状态更新的委托口径")

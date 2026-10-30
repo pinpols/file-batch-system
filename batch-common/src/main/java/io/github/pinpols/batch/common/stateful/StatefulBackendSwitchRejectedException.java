@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.stateful;
 
-/** Raised when a stateful backend changes without a fresh, explicit cutover marker. */
+/** 有状态后端变更时未提供新的显式切换标记会抛出此异常。 */
 public class StatefulBackendSwitchRejectedException extends IllegalStateException {
 
   public StatefulBackendSwitchRejectedException(String message) {

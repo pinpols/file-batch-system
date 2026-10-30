@@ -9,6 +9,7 @@ import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
 import io.github.pinpols.batch.worker.atomic.BatchWorkerAtomicApplication;
 import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcExecutorProperties;
 import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcTaskExecutor;
+import java.math.BigInteger;
 import java.sql.Connection;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -119,6 +121,29 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("错误超时阻止真实存储过程写入，合法整数超时允许执行")
+  void shouldRejectInvalidTimeoutWithoutDatabaseSideEffect() {
+    StoredProcTaskExecutor exec = executor(props());
+    for (Object value : List.of("1", 1.5d, new BigInteger("18446744073709551617"))) {
+      TaskContext task =
+          ctx(Map.of("procedureName", "spi_it.it_proc", "statementTimeoutSeconds", value));
+      TaskResult result = exec.execute(task);
+      assertThat(result.output())
+          .as("timeout=%s", value)
+          .containsEntry("error_code", "CONFIG_INVALID");
+    }
+    String countMarkersSql = "select count(*) from spi_it.marker";
+    Integer before = jdbc.queryForObject(countMarkersSql, Integer.class);
+    assertThat(before).isZero();
+
+    TaskResult valid =
+        exec.execute(ctx(Map.of("procedureName", "spi_it.it_proc", "statementTimeoutSeconds", 1)));
+    assertThat(valid.success()).isTrue();
+    Integer after = jdbc.queryForObject(countMarkersSql, Integer.class);
+    assertThat(after).isEqualTo(1);
+  }
+
+  @Test
   @DisplayName("目标为过程时应走原生调用形式, 并真实写入数据")
   void shouldInvokeNativeCall_whenTargetIsProcedure() {
     TaskResult r = executor(props()).execute(ctx(Map.of("procedureName", "spi_it.it_proc")));
@@ -164,6 +189,56 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
     p.setAllowedSchemas(Set.of("spi_it")); // 非 qualified 名按 defaultSchema(spi_it)判 schema 放行 + pin
     TaskResult r = executor(p).execute(ctx(Map.of("procedureName", "it_proc")));
     assertThat(r.success()).isTrue();
+  }
+
+  @Test
+  @DisplayName("自动提交时未限定过程名仍执行允许模式的过程")
+  void shouldUseAllowedSchema_whenAutoCommitAndUnqualifiedName() throws Exception {
+    String createSchemaSql = "CREATE SCHEMA spi_shadow";
+    String createShadowProcSql = """
+        CREATE PROCEDURE spi_shadow.it_proc() LANGUAGE plpgsql AS $$
+        BEGIN INSERT INTO spi_it.marker(note) VALUES ('shadow'); END $$
+        """;
+    jdbc.execute(createSchemaSql);
+    try {
+      jdbc.execute(createShadowProcSql);
+      try (Connection connection = dataSource.getConnection()) {
+        String showSearchPathSql = "SHOW search_path";
+        String originalSearchPath;
+        try (var statement = connection.createStatement()) {
+          try (var resultSet = statement.executeQuery(showSearchPathSql)) {
+            resultSet.next();
+            originalSearchPath = resultSet.getString(1);
+          }
+          String setShadowSearchPathSql = "SET search_path = spi_shadow, public";
+          statement.execute(setShadowSearchPathSql);
+        }
+        try {
+          SingleConnectionDataSource shadowDataSource =
+              new SingleConnectionDataSource(connection, true);
+          StoredProcExecutorProperties p = props();
+          p.setDefaultSchema("spi_it");
+          StoredProcTaskExecutor exec =
+              new StoredProcTaskExecutor(p, beanFactory, shadowDataSource);
+
+          TaskResult result =
+              exec.execute(ctx(Map.of("procedureName", "it_proc", "autoCommit", true)));
+
+          assertThat(result.success()).isTrue();
+          String selectMarkerSql = "select note from spi_it.marker";
+          assertThat(jdbc.queryForList(selectMarkerSql, String.class)).containsExactly("proc");
+        } finally {
+          String restoreSearchPathSql = "select set_config('search_path', ?, false)";
+          try (var statement = connection.prepareStatement(restoreSearchPathSql)) {
+            statement.setString(1, originalSearchPath);
+            statement.execute();
+          }
+        }
+      }
+    } finally {
+      String dropShadowSchemaSql = "DROP SCHEMA spi_shadow CASCADE";
+      jdbc.execute(dropShadowSchemaSql);
+    }
   }
 
   @Test

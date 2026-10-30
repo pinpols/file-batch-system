@@ -28,8 +28,8 @@ public final class WorkflowRunReportLock {
   }
 
   public void acquireForJobInstance(String tenantId, Long jobInstanceId) {
-    WorkflowRunEntity workflowRun = workflowMappers.workflowRunMapper.selectByNodeJobInstanceId(
-        tenantId, jobInstanceId);
+    WorkflowRunEntity workflowRun =
+        workflowMappers.workflowRunMapper.selectByNodeJobInstanceId(tenantId, jobInstanceId);
     if (EmptyChecks.isNull(workflowRun)) {
       return;
     }
@@ -42,8 +42,8 @@ public final class WorkflowRunReportLock {
 
     batchDayInstanceMapper.acquireSettlementFence(tenantId, calendarCode, bizDate);
     Long workflowRunId = workflowRun.getId();
-    WorkflowRunEntity lockedRun = workflowMappers.workflowRunMapper.selectByTenantAndIdForUpdate(
-        tenantId, workflowRunId);
+    WorkflowRunEntity lockedRun =
+        workflowMappers.workflowRunMapper.selectByTenantAndIdForUpdate(tenantId, workflowRunId);
     if (EmptyChecks.isNull(lockedRun)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
     }

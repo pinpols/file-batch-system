@@ -29,6 +29,10 @@ public class ConsoleCatchUpApprovalRequest {
   @ValidBizDate
   private String bizDate;
 
+  /** 批量日发起的审批携带其冻结日历；普通补跑审批可不传。 */
+  @Size(max = 128, message = "batchDayCalendarCode too long (max 128)")
+  private String batchDayCalendarCode;
+
   @Size(max = 64, message = "scheduledAt too long (max 64)")
   private String scheduledAt;
 

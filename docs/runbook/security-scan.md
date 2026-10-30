@@ -92,9 +92,11 @@ OpenSSF Scorecard 由 `.github/workflows/scorecard.yml` 在 main 推送、每周
 默认所有报告都统一写到仓库根目录下的 `target/security-scan-report/`：
 
 - `gitleaks.json`
+- `gitleaks-worktree.json`（当前目录扫描；不自动遵循 `.gitignore`，依 `.gitleaks.toml` 排除 `.env.local`、运行日志、构建产物及本地 Spark 生成的校验清单等明确路径）
 - `dependency-check/`
 - `semgrep.json`
 - `trivy-fs.json`
+- `trivy-config.json`（IaC 配置专项，使用 `.trivyignore.yaml`）
 - `trivy-image.json`
 - `zap-report.html`
 
@@ -111,7 +113,7 @@ brew install gitleaks semgrep trivy
 已安装过的,可先用下面命令确认：
 
 ```bash
-command -v gitleaks semgrep trivy docker mvn
+command -v gitleaks semgrep trivy docker mvn python3
 ```
 
 `docker` 需要本机 Docker Desktop 或等效容器运行时。
@@ -161,6 +163,7 @@ mvn -P compliance org.owasp:dependency-check-maven:check -DfailBuildOnCVSS=7
 ### 3. 代码级 SAST
 
 用 Semgrep 扫 Java / Spring 代码中的常见安全模式问题。
+统一入口的 SAST 模式还需要 `python3` 读取完整报告：`ERROR`、`HIGH`、`CRITICAL` 命中阻断；中低级别保留在报告中供人工复核。扫描错误或警告意味着覆盖不完整，报告无法读取或严重级别未知也会使汇总失败；规则命中本身不等于确认漏洞。
 
 安装：
 
@@ -247,6 +250,7 @@ bash scripts/ci/security-scan.sh -- \
 ```
 
 `--require-zap-auth` 会在认证头缺失时直接失败，防止无认证 baseline 被误当作 Console API 安全门禁。
+失败汇总会遮蔽 ZAP 认证配置；认证值仍会传给扫描进程，进程参数及扫描器自身输出应按敏感信息控制访问。
 
 如需按 OpenAPI 合约做 application-level API 扫描，可改用 API scan：
 

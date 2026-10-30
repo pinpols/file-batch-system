@@ -28,6 +28,7 @@
   - `(tenant_id, request_id)` UNIQUE（V83 改成 CONSTRAINT，原 V80 是 UNIQUE INDEX）
   - 必须与 `trigger_request` 同事务写入
   - publish_status 状态机：NEW → PUBLISHING → PUBLISHED；失败走 NEW → PUBLISHING → FAILED → ...（带退避）→ GIVE_UP
+  - V361 起每次进入 PUBLISHING 生成独立 `publish_claim_token`；ACK 与失败回写必须同时匹配状态和 token，离开 PUBLISHING 清空 token。超时回收后旧投递者不得更新新一轮领取。
 
 - **outbox_event**:
   - 必须与业务状态变更同事务（`outbox_event 必须与任务状态写入处于同一事务` —— docs/agent-baseline.md §架构硬约束）
@@ -50,7 +51,7 @@ DefaultTriggerService.persistAndForward(...) [@Transactional]
   ├─ INSERT trigger_request (status=ACCEPTED)
   └─ INSERT trigger_outbox_event (status=NEW, payload=LaunchEnvelope JSON)
   ↓
-TriggerOutboxRelay (200ms 周期, ShedLock 互斥；按每秒释放预算批量 CAS 抢占 → Kafka async ACK → 批量 PUBLISHED 回写)
+TriggerOutboxRelay (200ms 周期, ShedLock 互斥；按每秒释放预算批量 CAS 抢占并写领取 token → Kafka async ACK → 按 token 回写 PUBLISHED/FAILED)
   ↓
 KafkaTriggerEventPublisher.publishAsync(topic="batch.trigger.launch.v1")
   ↓
@@ -127,6 +128,7 @@ OutboxRetryScheduler 扫 event_outbox_retry
 | V21 | 创建 `outbox_event` + `event_outbox_retry`（ADR-002 transactional outbox 落地） |
 | V80（2026-04-30） | 创建 `trigger_outbox_event`（ADR-010 trigger 异步解耦，独立表避免与业务 outbox 抢 scheduler 资源） |
 | V83（2026-05-03） | trigger_outbox_event UNIQUE INDEX → CONSTRAINT，对齐 SQL 标准 |
+| V361（2026-10-27） | Trigger Outbox 主表与归档镜像增加领取 token；回收重领后旧投递者回写被围栏拒绝 |
 | 2026-05-02 | ADR-010 同步 HTTP 桥（HttpOrchestratorTriggerAdapter）删除，trigger_outbox_event 成为唯一路径 |
 
 详见 `docs/architecture/adr/ADR-002-transactional-outbox.md` + `docs/architecture/adr/ADR-010-trigger-async-decoupling.md`。

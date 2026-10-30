@@ -70,10 +70,7 @@ public class QuotaRuntimeStateSnapshotScheduler {
       } catch (DataAccessException ex) {
         // 单个租户失败不影响其他租户：下一轮自然重试
         String causeSummary = SwallowedExceptionLogger.summary(ex);
-        log.warn(
-            "quota snapshot failed for tenant={}: {}",
-            tenantId,
-            causeSummary);
+        log.warn("quota snapshot failed for tenant={}: {}", tenantId, causeSummary);
       }
     }
     if (snapshotted > 0) {
@@ -89,11 +86,7 @@ public class QuotaRuntimeStateSnapshotScheduler {
       String tenantJobsResetPolicy = p.quotaResetPolicy();
       int tenantJobsBurstLimit = nonNegativeBurstLimit(p.burstLimit());
       written += snapshotWriter.writeIfActive(
-          tenantId,
-          "TENANT_JOBS",
-          tenantId,
-          tenantJobsResetPolicy,
-          tenantJobsBurstLimit);
+          tenantId, "TENANT_JOBS", tenantId, tenantJobsResetPolicy, tenantJobsBurstLimit);
       String tenantPartitionsResetPolicy = p.quotaResetPolicy();
       int tenantPartitionsBurstLimit = nonNegativeBurstLimit(p.partitionBurstLimit());
       written += snapshotWriter.writeIfActive(

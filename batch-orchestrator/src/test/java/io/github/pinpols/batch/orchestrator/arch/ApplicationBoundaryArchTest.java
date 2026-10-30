@@ -8,7 +8,7 @@ import com.tngtech.archunit.core.importer.ImportOption;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/** Guards application services from depending on HTTP controller DTOs. */
+/** 防止应用服务依赖 HTTP 控制器 DTO。 */
 @DisplayName("架构守护:任务应用服务不得依赖控制器层及其请求与响应数据对象")
 class ApplicationBoundaryArchTest {
 

@@ -9,5 +9,7 @@ import org.apache.ibatis.annotations.Param;
 public interface ConsolePipelineProgressDirtyMapper {
 
   List<PipelineProgressDirtyView> selectUpdatedSince(
-      @Param("since") Instant since, @Param("limit") int limit);
+      @Param("since") Instant since, @Param("after") DirtyCursor after, @Param("limit") int limit);
+
+  record DirtyCursor(Instant updatedAt, String tenantId, Long pipelineInstanceId) {}
 }

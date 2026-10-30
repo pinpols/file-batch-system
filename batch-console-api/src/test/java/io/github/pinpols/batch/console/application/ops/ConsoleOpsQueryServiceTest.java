@@ -138,8 +138,8 @@ class ConsoleOpsQueryServiceTest {
   @DisplayName("批次日窗口响应包括 occurrence 拒绝原因和请求关联")
   void shouldExposeScheduledOccurrencesInBatchDayWindow() {
     LocalDate bizDate = LocalDate.of(2026, 10, 15);
-    BatchDayView row = new BatchDayView(
-        bizDate, "SETTLED", null, null, null, null, 0, 0, 0L, 0L, 0L, 0L);
+    BatchDayView row =
+        new BatchDayView(bizDate, "SETTLED", null, null, null, null, 0, 0, 0L, 0L, 0L, 0L, true);
     when(batchDayMapper.selectWindow("tenant-a", "CALENDAR", bizDate)).thenReturn(row);
     when(batchDayMapper.selectJobSummaries("tenant-a", "CALENDAR", bizDate)).thenReturn(List.of());
     BatchDayScheduledOccurrenceView occurrenceRow = new BatchDayScheduledOccurrenceView(
@@ -173,8 +173,9 @@ class ConsoleOpsQueryServiceTest {
     request.setTenantId("tenant-a");
     request.setCalendarCode("CALENDAR");
 
-    var occurrence =
-        service.batchDayWindow("2026-10-15", request).scheduledOccurrences().getFirst();
+    var response = service.batchDayWindow("2026-10-15", request);
+    assertThat(response.frozen()).isTrue();
+    var occurrence = response.scheduledOccurrences().getFirst();
 
     assertThat(occurrence.workflowDefinitionId()).isEqualTo(42L);
     assertThat(occurrence.workflowCode()).isEqualTo("daily-settlement");

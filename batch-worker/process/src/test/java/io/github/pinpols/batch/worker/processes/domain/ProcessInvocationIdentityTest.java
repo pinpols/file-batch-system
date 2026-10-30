@@ -12,7 +12,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 class ProcessInvocationIdentityTest {
 
   @ParameterizedTest
-  @ValueSource(strings = {"tenantId", "taskId", "jobInstanceId", "jobPartitionId", "workerId", "invocationId"})
+  @ValueSource(
+      strings = {"tenantId", "taskId", "jobInstanceId", "jobPartitionId", "workerId", "invocationId"
+      })
   @DisplayName("缺少任一领取身份字段时拒绝构造")
   void shouldRejectMissingClaimField_whenRequiredFieldIsNull(String field) {
     ProcessInvocationIdentity.ProcessInvocationIdentityBuilder builder = completeBuilder();
@@ -36,7 +38,8 @@ class ProcessInvocationIdentityTest {
     missingTenant.tenantId(blank);
     ProcessInvocationIdentity.ProcessInvocationIdentityBuilder missingWorker = completeBuilder();
     missingWorker.workerId(blank);
-    ProcessInvocationIdentity.ProcessInvocationIdentityBuilder missingInvocation = completeBuilder();
+    ProcessInvocationIdentity.ProcessInvocationIdentityBuilder missingInvocation =
+        completeBuilder();
     missingInvocation.invocationId(blank);
 
     assertThatThrownBy(missingTenant::build).isInstanceOf(IllegalArgumentException.class);

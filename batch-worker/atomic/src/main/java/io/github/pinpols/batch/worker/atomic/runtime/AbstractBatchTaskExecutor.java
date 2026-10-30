@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
@@ -18,8 +19,8 @@ import lombok.extern.slf4j.Slf4j;
  * <ul>
  *   <li>钩子是 opt-in 的(不在接口加 default 方法),要全局能力请走 SDK 侧扩展点
  *   <li>{@link #before / #after / #cleanup} 不应是多 stage 状态机(那是 pipeline 的边界)
- *   <li>钩子异常不应被捕获并抑制,统一让 {@link #execute(TaskContext)} 的 catch-all 转成 {@link
- *       TaskResult#fail(Throwable)}
+ *   <li>validate、before、doExecute 和 after 抛出的 Exception 由 {@link #execute(TaskContext)} 转为失败结果；
+ *       cleanup 的 Exception 记录日志，Error 不在此处捕获
  * </ul>
  *
  * <p>典型用法:
@@ -39,14 +40,14 @@ import lombok.extern.slf4j.Slf4j;
  *   protected TaskResult doExecute(TaskContext ctx) { ... }
  *
  *   @Override
- *   protected void cleanup(TaskContext ctx) { ... }  // 必跑,即使 doExecute 抛异常
+ *   protected void cleanup(TaskContext ctx) { ... }  // before 成功后必跑,即使 doExecute 抛异常
  * }
  * }</pre>
  */
 @Slf4j
 public abstract class AbstractBatchTaskExecutor implements BatchTaskExecutor {
 
-  /** 模板方法:固定流程 validate → before → doExecute → after + finally cleanup。 */
+  /** 模板方法:validate → before → doExecute → after；before 成功后执行 finally cleanup。 */
   @Override
   public final TaskResult execute(TaskContext ctx) {
     boolean started = false;
@@ -65,10 +66,9 @@ public abstract class AbstractBatchTaskExecutor implements BatchTaskExecutor {
       log.error(
           "SPI executor {} failed (taskType={}, taskId={}): {}",
           executorName,
-          currentTaskType,
-          taskId,
-          causeSummary,
-          t);
+          LogSanitizer.value(currentTaskType),
+          LogSanitizer.value(taskId),
+          causeSummary);
       String failureMessage =
           EmptyChecks.isNull(t.getMessage()) ? t.getClass().getSimpleName() : t.getMessage();
       return TaskResult.fail(failureMessage, t);
@@ -80,7 +80,7 @@ public abstract class AbstractBatchTaskExecutor implements BatchTaskExecutor {
           // cleanup 异常不掩盖原结果,只 log
           String executorName = this.getClass().getSimpleName();
           String causeSummary = SwallowedExceptionLogger.summary(cleanupEx);
-          log.warn("SPI executor {} cleanup() failed: {}", executorName, causeSummary, cleanupEx);
+          log.warn("SPI executor {} cleanup() failed: {}", executorName, causeSummary);
         }
       }
     }
@@ -97,7 +97,7 @@ public abstract class AbstractBatchTaskExecutor implements BatchTaskExecutor {
   }
 
   /**
-   * 真实业务执行。子类必须实现。抛任何 {@link Throwable} 都会被模板方法 catch 转 {@link TaskResult#fail}。
+   * 真实业务执行。子类必须实现。抛出的 {@link Exception} 会由模板方法转换为失败结果，{@link Error} 继续传播。
    *
    * @return 不应返 null;返 null 会被转 {@link TaskResult#fail("executor returned null")}
    */

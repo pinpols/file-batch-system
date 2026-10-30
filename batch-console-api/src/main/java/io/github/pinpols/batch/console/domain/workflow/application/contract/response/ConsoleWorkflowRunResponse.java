@@ -2,7 +2,9 @@ package io.github.pinpols.batch.console.domain.workflow.application.contract.res
 
 import java.time.Instant;
 import java.time.LocalDate;
+import lombok.Builder;
 
+@Builder
 public record ConsoleWorkflowRunResponse(
     Long id,
     String tenantId,

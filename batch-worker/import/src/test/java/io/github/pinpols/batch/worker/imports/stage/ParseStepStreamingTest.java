@@ -128,7 +128,7 @@ class ParseStepStreamingTest {
         .containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, (long) count);
   }
 
-  // ── JSON object without "records" ──────────────────────────────────────────
+  // ── 不含 "records" 字段的 JSON 对象 ────────────────────────────────────
 
   @Test
   @DisplayName("不含记录字段的普通对象按单条记录处理")

@@ -1,20 +1,20 @@
 package io.github.pinpols.batch.orchestrator.application.service.replay;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import io.github.pinpols.batch.common.dto.ReplayExecutionGuard;
 import io.github.pinpols.batch.common.enums.ReplayOperationType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.SystemPipelineCatalog;
-import io.github.pinpols.batch.common.dto.ReplayExecutionGuard;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
-import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -31,7 +31,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class WorkflowRunReplaySnapshotResolver {
 
-  private static final String INVALID_SNAPSHOT_MESSAGE = "error.workflow.replay_source_snapshot_invalid";
+  private static final String INVALID_SNAPSHOT_MESSAGE =
+      "error.workflow.replay_source_snapshot_invalid";
   private static final String RESULT_POLICY_PARAM = "_rerunResultPolicy";
   private static final String CONFIG_POLICY_PARAM = "_rerunConfigVersionPolicy";
   private static final String CONFIG_VERSION_PARAM = "_rerunConfigVersion";
@@ -72,23 +73,20 @@ public class WorkflowRunReplaySnapshotResolver {
     Boolean dryRun = snapshot.get("dryRun") instanceof Boolean value ? value : null;
     Instant dataIntervalStart = instant(preview.get("dataIntervalStart"));
     Instant dataIntervalEnd = instant(preview.get("dataIntervalEnd"));
-    boolean operationMatchesSnapshot =
-        operation.tenantId().equals(tenantId)
-            && operation.sourceWorkflowRunId().equals(sourceWorkflowRunId)
-            && EmptyChecks.isNull(operation.fromDate())
-            && EmptyChecks.isNull(operation.throughDate())
-            && operation.calendarCode().equals(calendarCode)
-            && operation.resultPolicy().equals(resultPolicy)
-            && operation.configVersionPolicy().equals(configVersionPolicy)
-            && Objects.equals(operation.configVersion(), configVersion);
-    boolean operationSupportsFullReplay =
-        operationMatchesSnapshot
-            && "FULL_WORKFLOW".equals(operation.scope())
-            && "REPLAY".equals(operation.executionMode());
-    boolean targetRequestMatches =
-        operationSupportsFullReplay
-            && (EmptyChecks.isNull(operation.targetRequestId())
-                || operation.targetRequestId().equals(targetRequestId));
+    boolean operationMatchesSnapshot = operation.tenantId().equals(tenantId)
+        && operation.sourceWorkflowRunId().equals(sourceWorkflowRunId)
+        && EmptyChecks.isNull(operation.fromDate())
+        && EmptyChecks.isNull(operation.throughDate())
+        && operation.calendarCode().equals(calendarCode)
+        && operation.resultPolicy().equals(resultPolicy)
+        && operation.configVersionPolicy().equals(configVersionPolicy)
+        && Objects.equals(operation.configVersion(), configVersion);
+    boolean operationSupportsFullReplay = operationMatchesSnapshot
+        && "FULL_WORKFLOW".equals(operation.scope())
+        && "REPLAY".equals(operation.executionMode());
+    boolean targetRequestMatches = operationSupportsFullReplay
+        && (EmptyChecks.isNull(operation.targetRequestId())
+            || operation.targetRequestId().equals(targetRequestId));
     boolean snapshotHasDryRunValue = targetRequestMatches && EmptyChecks.isNotNull(dryRun);
     boolean sourceExecutionDefinitionMatches = false;
     if (snapshotHasDryRunValue) {
@@ -103,12 +101,11 @@ public class WorkflowRunReplaySnapshotResolver {
         }
       }
     }
-    boolean replaySnapshotIsValid =
-        sourceExecutionDefinitionMatches
-            && !(EmptyChecks.isNotNull(dataIntervalStart)
-                && EmptyChecks.isNotNull(dataIntervalEnd)
-                && !dataIntervalStart.isBefore(dataIntervalEnd))
-            && (EmptyChecks.isNotNull(dataIntervalStart)) == (EmptyChecks.isNotNull(dataIntervalEnd));
+    boolean replaySnapshotIsValid = sourceExecutionDefinitionMatches
+        && !(EmptyChecks.isNotNull(dataIntervalStart)
+            && EmptyChecks.isNotNull(dataIntervalEnd)
+            && !dataIntervalStart.isBefore(dataIntervalEnd))
+        && (EmptyChecks.isNotNull(dataIntervalStart)) == (EmptyChecks.isNotNull(dataIntervalEnd));
     if (!replaySnapshotIsValid) {
       throw invalidSnapshot();
     }
@@ -155,8 +152,9 @@ public class WorkflowRunReplaySnapshotResolver {
     Map<String, Object> selectedCrossDayDependencyResultVersionIds =
         optionalMap(snapshot, "selectedCrossDayDependencyResultVersionIdsByNode");
     Map<String, Object> selectedDefinitions = readMap(snapshot.get("selectedJobDefinitions"));
-    if (!selectedDefinitions.keySet().containsAll(
-        selectedCrossDayDependencyResultVersionIds.keySet())) {
+    if (!selectedDefinitions
+        .keySet()
+        .containsAll(selectedCrossDayDependencyResultVersionIds.keySet())) {
       throw invalidSnapshot();
     }
     String operationTenantId = operation.tenantId();
@@ -178,8 +176,7 @@ public class WorkflowRunReplaySnapshotResolver {
     Map<String, Object> executionSnapshot = freezeSelectedDefinitions(
         operationTenantId, sourceExecutionSnapshot, selected, replayOperationId);
     executionSnapshot.put(
-        "crossDayDependencyResultVersionIdsByNode",
-        selectedCrossDayDependencyResultVersionIds);
+        "crossDayDependencyResultVersionIdsByNode", selectedCrossDayDependencyResultVersionIds);
     executionSnapshot.put("triggerRequestId", targetRequestId);
     executionSnapshot.put("replaySessionId", null);
     executionSnapshot.put("replayOperationId", operation.id());
@@ -188,8 +185,7 @@ public class WorkflowRunReplaySnapshotResolver {
   }
 
   private void validateOperation(ReplayOperationEntity operation, String targetRequestId) {
-    boolean replayOperationSnapshotIsInvalid =
-        EmptyChecks.isNull(operation)
+    boolean replayOperationSnapshotIsInvalid = EmptyChecks.isNull(operation)
         || !ReplayOperationType.WORKFLOW_RUN.code().equals(operation.operationType())
         || EmptyChecks.isNull(operation.id())
         || EmptyChecks.isBlank(operation.tenantId())
@@ -221,8 +217,8 @@ public class WorkflowRunReplaySnapshotResolver {
     Map<String, Object> selectedReplayCapabilities = selected.replayCapabilities();
     boolean selectedSnapshotsReferenceUnknownJobs =
         !selectedDefinitions.keySet().containsAll(selectedFileTemplateSnapshots.keySet())
-        || !selectedDefinitions.keySet().containsAll(selectedDispatchChannelSnapshots.keySet())
-        || !selectedDefinitions.keySet().containsAll(selectedDispatchSecretBindings.keySet());
+            || !selectedDefinitions.keySet().containsAll(selectedDispatchChannelSnapshots.keySet())
+            || !selectedDefinitions.keySet().containsAll(selectedDispatchSecretBindings.keySet());
     if (selectedSnapshotsReferenceUnknownJobs) {
       throw invalidSnapshot();
     }
@@ -259,8 +255,7 @@ public class WorkflowRunReplaySnapshotResolver {
         if (!"DISPATCH".equals(definition.jobType())) {
           throw invalidSnapshot();
         }
-        Object rawDispatchChannelSnapshots =
-            selectedDispatchChannelSnapshots.get(entry.getKey());
+        Object rawDispatchChannelSnapshots = selectedDispatchChannelSnapshots.get(entry.getKey());
         Map<String, String> dispatchChannelSnapshots =
             readProtectedDispatchChannelSnapshots(rawDispatchChannelSnapshots);
         identity.put("frozenDispatchChannelSnapshots", dispatchChannelSnapshots);

@@ -84,7 +84,7 @@ public interface TriggerRequestMapper {
       @Param("requestStatus") String requestStatus);
 
   /**
-   * CAS-style conditional update: only changes status when current status matches {@code
+   * CAS 式条件更新：仅当当前状态与 {@code
    * expectedStatus}.
    */
   int updateRequestStatusConditional(

@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
-import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogMarkRetryFailureParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -20,9 +17,11 @@ import io.github.pinpols.batch.console.domain.notification.entity.WebhookDeliver
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookSubscriptionMapper;
+import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogMarkRetryFailureParam;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.junit.jupiter.api.BeforeEach;
@@ -132,7 +131,8 @@ class WebhookDeliveryRelayTest {
     // attempt 应为原 row.attempt(3) + 1 = 4
     verify(deliveryLogRepository).markRetrySuccess(101L, 4, null);
     verify(deliveryLogRepository, never())
-        .markRetryFailure(org.mockito.ArgumentMatchers.any(ConsoleWebhookDeliveryLogMarkRetryFailureParam.class));
+        .markRetryFailure(
+            ArgumentMatchers.any(ConsoleWebhookDeliveryLogMarkRetryFailureParam.class));
     verify(deliveryLogRepository, never()).markGiveUp(anyLong(), anyInt(), any(), anyString());
   }
 
@@ -150,7 +150,12 @@ class WebhookDeliveryRelayTest {
     relay.poll();
 
     verify(deliveryLogRepository)
-        .markRetryFailure(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.id(), 102L) && java.util.Objects.equals(parameters.attempt(), 4) && java.util.Objects.equals(parameters.httpStatus(), 503) && java.util.Objects.equals(parameters.responseBody(), "service unavailable") && parameters.nextRetryAt() != null));
+        .markRetryFailure(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.id(), 102L)
+            && Objects.equals(parameters.attempt(), 4)
+            && Objects.equals(parameters.httpStatus(), 503)
+            && Objects.equals(parameters.responseBody(), "service unavailable")
+            && parameters.nextRetryAt() != null));
     verify(deliveryLogRepository, never()).markRetrySuccess(anyLong(), anyInt(), any());
     verify(deliveryLogRepository, never()).markGiveUp(anyLong(), anyInt(), any(), anyString());
     assertThat(meterRegistry.counter("batch_webhook_delivery_give_up_total").count())

@@ -67,6 +67,7 @@ public class ConsoleOpsController {
 
   /** 清理已发布 / 已放弃的 outbox 事件（保留最近 retainDays 天）。 */
   @PostMapping("/outbox/cleanup")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   @AuditAction(action = "outbox.cleanup", aggregateType = "outbox", targetTenantParam = "#tenantId")
   public CommonResponse<ConsoleOutboxCleanupResponse> outboxCleanup(
       @RequestParam @NotBlank String tenantId,
@@ -76,6 +77,7 @@ public class ConsoleOpsController {
 
   /** 手动重投指定 outbox 事件（仅 FAILED / GIVE_UP 状态可重投）。 */
   @PostMapping("/outbox/republish")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   @AuditAction(
       action = "outbox.republish",
       aggregateType = "outbox",

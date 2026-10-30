@@ -215,8 +215,9 @@ public class DispatchReceiptPollScheduler {
     Long fileId = row.fileId();
     String channelCode = row.channelCode();
     String externalRequestId = row.externalRequestId();
-    boolean receiptPollIdentityIsIncomplete =
-        EmptyChecks.isNull(fileId) || !Texts.hasText(channelCode) || !Texts.hasText(externalRequestId);
+    boolean receiptPollIdentityIsIncomplete = EmptyChecks.isNull(fileId)
+        || !Texts.hasText(channelCode)
+        || !Texts.hasText(externalRequestId);
     if (receiptPollIdentityIsIncomplete) {
       return;
     }

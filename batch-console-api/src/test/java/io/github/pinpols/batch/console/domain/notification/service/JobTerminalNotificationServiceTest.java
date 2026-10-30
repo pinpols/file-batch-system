@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
-import io.github.pinpols.batch.console.domain.notification.param.WorkflowTerminalNotificationInsertWebhookParam;
-
-
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -12,21 +9,30 @@ import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhook
 import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.WorkflowTerminalNotificationMapper;
 import java.util.List;
+import java.util.Objects;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @DisplayName("Job 终态接纳:状态与 Workflow 隔离、重投和干运行")
+@ExtendWith(MockitoExtension.class)
 class JobTerminalNotificationServiceTest {
-  private final WorkflowTerminalNotificationMapper mapper =
-      mock(WorkflowTerminalNotificationMapper.class);
-  private final ConsoleWebhookSubscriptionMapper subscriptions =
-      mock(ConsoleWebhookSubscriptionMapper.class);
-  private final SubscriptionRuleMapper rules = mock(SubscriptionRuleMapper.class);
-  private final WorkflowTerminalNotificationService service =
-      new WorkflowTerminalNotificationService(
-          mapper, subscriptions, rules, mock(JobPushIntakeService.class));
+  @Mock
+  private WorkflowTerminalNotificationMapper mapper;
+
+  @Mock
+  private ConsoleWebhookSubscriptionMapper subscriptions;
+
+  @Mock
+  private SubscriptionRuleMapper rules;
+
+  private WorkflowTerminalNotificationService service;
 
   @ParameterizedTest
   @ValueSource(strings = {"SUCCESS", "FAILED", "PARTIAL_FAILED"})
@@ -43,9 +49,20 @@ class JobTerminalNotificationServiceTest {
     when(subscriptions.findEnabledByTenant("ta")).thenReturn(List.of(job, workflow));
     service.acceptJob(key, payload(status, false));
     verify(mapper)
-        .insertWebhook(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "ta") && java.util.Objects.equals(parameters.recipientId(), 1L) && java.util.Objects.equals(parameters.eventKey(), key) && java.util.Objects.equals(parameters.eventType(), status.equals("SUCCESS") ? "JOB_SUCCESS" : "JOB_FAILED") && parameters.payload() != null));
-    verify(mapper, never()).insertWebhook(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "ta") && java.util.Objects.equals(parameters.recipientId(), 2L) && parameters.eventKey() != null && parameters.eventType() != null && parameters.payload() != null));
+        .insertWebhook(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.tenantId(), "ta")
+            && Objects.equals(parameters.recipientId(), 1L)
+            && Objects.equals(parameters.eventKey(), key)
+            && Objects.equals(
+                parameters.eventType(), status.equals("SUCCESS") ? "JOB_SUCCESS" : "JOB_FAILED")
+            && parameters.payload() != null));
+    verify(mapper, never())
+        .insertWebhook(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.tenantId(), "ta")
+            && Objects.equals(parameters.recipientId(), 2L)
+            && parameters.eventKey() != null
+            && parameters.eventType() != null
+            && parameters.payload() != null));
   }
 
   @ParameterizedTest
@@ -85,5 +102,11 @@ class JobTerminalNotificationServiceTest {
          "jobCode":"IMPORT","terminalVersion":5,"instanceStatus":"%s","dryRun":%s,
          "bizDate":"2026-10-19","finishedAt":"2026-10-20T01:00:00Z"}
         """.formatted(status, dryRun);
+  }
+
+  @BeforeEach
+  void initializeSubject() {
+    service = new WorkflowTerminalNotificationService(
+        mapper, subscriptions, rules, mock(JobPushIntakeService.class));
   }
 }

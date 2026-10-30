@@ -1,13 +1,12 @@
 package io.github.pinpols.batch.orchestrator.application.engine;
 
-import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
-
-
 import io.github.pinpols.batch.common.context.RunModeSupport;
+import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.enums.SchedulingPriorityBand;
 import io.github.pinpols.batch.common.event.DomainEvent;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.kafka.SchedulingContext;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
@@ -16,6 +15,7 @@ import io.github.pinpols.batch.common.observability.W3cTraceContext;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.BizDateArithmetic;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -76,8 +76,7 @@ public class TaskDispatchOutboxService {
    * 据此区分"首次执行"与"补偿/重放"行为；传 null 保留 payload 原状。
    */
   @Transactional(propagation = Propagation.MANDATORY)
-  public void writeDispatchEvent(
-      TaskDispatchEventCommand command) {
+  public void writeDispatchEvent(TaskDispatchEventCommand command) {
     JobInstanceEntity jobInstance = command.jobInstance();
     JobTaskEntity task = command.task();
     JobPartitionEntity partition = command.partition();
@@ -104,7 +103,7 @@ public class TaskDispatchOutboxService {
     // 时由 EffectiveTaskConfig 返回;此处只保留 task key + 路由元数据。
     // runModeOverride 在 v1 时通过 payload 注入,v2 后改由 worker CLAIM 读 job_task.task_payload —
     // retry/reclaim 路径需要把 run_mode 持久化到 task_payload 而非写入 message 临时透传。
-    persistRunModeOverride(task, runModeOverride);
+    persistRunModeOverride(jobInstance, task, runModeOverride);
     String messageVersion = "v2";
     String messageTenantId = task.getTenantId();
     Long messageJobInstanceId = jobInstance.getId();
@@ -119,8 +118,7 @@ public class TaskDispatchOutboxService {
     String messageIdempotencyKey = idempotencyKey;
     Instant messageCreatedAt = BatchDateTimeSupport.utcNow();
     SchedulingContext schedulingContext = buildSchedulingContext(jobInstance);
-    Integer messagePartitionNo =
-        EmptyChecks.isNull(partition) ? null : partition.getPartitionNo();
+    Integer messagePartitionNo = EmptyChecks.isNull(partition) ? null : partition.getPartitionNo();
     Integer partitionCount = resolvePartitionCount(jobInstance);
     W3cTraceContext traceContext = OtelTracePropagation.captureCurrent();
     TaskDispatchMessage message = new TaskDispatchMessage(
@@ -267,18 +265,52 @@ public class TaskDispatchOutboxService {
    * P1-2.2:把 RunMode 持久化到 job_task.task_payload。worker CLAIM 时 EffectiveTaskConfig 从
    * task_payload 读取 run_mode,看到该值即可区分"首次执行"与"补偿/重放"。仅 retry/reclaim 等再派发场景调用(runModeOverride 非 null)。
    */
-  private void persistRunModeOverride(JobTaskEntity task, RunMode runModeOverride) {
+  private void persistRunModeOverride(
+      JobInstanceEntity jobInstance, JobTaskEntity task, RunMode runModeOverride) {
     if (EmptyChecks.isNull(runModeOverride)
         || EmptyChecks.isNull(task)
         || EmptyChecks.isNull(task.getId())) {
       return;
     }
-    Map<String, Object> payload = parsePayloadMap(task.getTaskPayload());
+    if (EmptyChecks.isNotNull(jobInstance.getDryRun())
+        && EmptyChecks.isNotNull(task.getDryRun())
+        && !jobInstance.getDryRun().equals(task.getDryRun())) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_payload_unsafe");
+    }
+    Map<String, Object> payload = requireRetryPayload(task);
     RunModeSupport.putCanonical(payload, runModeOverride);
     String merged = JsonUtils.toJson(payload);
-    jobTaskMapper.updatePayload(task.getTenantId(), task.getId(), merged);
+    if (jobTaskMapper.updatePayload(task.getTenantId(), task.getId(), merged) != 1) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, ResultCode.STATE_CONFLICT.detailKey());
+    }
     // 同步内存对象,避免后续逻辑读到陈旧 payload
     task.setTaskPayload(merged);
+  }
+
+  private Map<String, Object> requireRetryPayload(JobTaskEntity task) {
+    Object value;
+    try {
+      value = JsonUtils.fromJson(task.getTaskPayload(), Object.class);
+    } catch (IllegalArgumentException exception) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_payload_unsafe");
+    }
+    if (!(value instanceof Map<?, ?> payload)) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_payload_unsafe");
+    }
+    Object dryRun = payload.get("dryRun");
+    boolean payloadDryRun =
+        EmptyChecks.isNotNull(dryRun) && "true".equalsIgnoreCase(dryRun.toString());
+    if (EmptyChecks.isNotNull(task.getDryRun()) && task.getDryRun() != payloadDryRun) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_payload_unsafe");
+    }
+    Map<String, Object> result = new LinkedHashMap<>();
+    for (Map.Entry<?, ?> entry : payload.entrySet()) {
+      if (!(entry.getKey() instanceof String key)) {
+        throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_payload_unsafe");
+      }
+      result.put(key, entry.getValue());
+    }
+    return result;
   }
 
   @SuppressWarnings("unchecked")
@@ -295,7 +327,7 @@ public class TaskDispatchOutboxService {
       SwallowedExceptionLogger.warn(
           TaskDispatchOutboxService.class, "catch:RuntimeException", ignored);
 
-      // 载荷 JSON 异常时忽略并退回空 Map，仍可为消息打上 run_mode。
+      // 参数快照不可解析时保留既有空映射回退，不影响任务载荷校验。
     }
     return new LinkedHashMap<>();
   }

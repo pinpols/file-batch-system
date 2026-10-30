@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.web;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -25,6 +25,7 @@ import io.github.pinpols.batch.console.application.contract.response.config.Conf
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncImportResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncLogResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncPreviewResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncRequestStatusResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncSummaryResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
@@ -69,6 +70,22 @@ class ConsoleConfigSyncControllerTest {
         .setControllerAdvice(exceptionHandler)
         .setValidator(validator)
         .build();
+  }
+
+  @Test
+  @DisplayName("响应丢失后按原幂等键查询，未找到保持未知")
+  void shouldQueryOriginalRequestIdentityWithoutApplyingAgain() throws Exception {
+    when(service.requestStatus("ta", "original-key"))
+        .thenReturn(new ConfigSyncRequestStatusResponse(false, null));
+
+    mockMvc
+        .perform(get("/api/console/config/sync/requests/status")
+            .param("tenantId", "ta")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "original-key"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.found").value(false));
+
+    verify(service).requestStatus("ta", "original-key");
   }
 
   @Test

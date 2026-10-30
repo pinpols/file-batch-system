@@ -1,11 +1,5 @@
 package io.github.pinpols.batch.worker.processes.stage;
 
-import io.github.pinpols.batch.worker.processes.domain.ProcessInvocationIdentity;
-
-
-import io.github.pinpols.batch.worker.processes.query.ProcessInvocationFenceCurrentInvocationIdQuery;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.inOrder;
@@ -16,10 +10,12 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.processes.domain.ProcessInvocationIdentity;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
 import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocationFenceMapper;
+import io.github.pinpols.batch.worker.processes.query.ProcessInvocationFenceCurrentInvocationIdQuery;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.DisplayName;
@@ -49,12 +45,12 @@ class PlatformProcessInvocationFenceTest {
     AtomicBoolean executed = new AtomicBoolean();
     String generationId = UUID.randomUUID().toString();
     when(mapper.selectCurrentInvocationId(ProcessInvocationFenceCurrentInvocationIdQuery.builder()
-        .tenantId("tenant-a")
-        .taskId(12L)
-        .jobInstanceId(34L)
-        .jobPartitionId(56L)
-        .workerId("worker-a")
-        .build()))
+            .tenantId("tenant-a")
+            .taskId(12L)
+            .jobInstanceId(34L)
+            .jobPartitionId(56L)
+            .workerId("worker-a")
+            .build()))
         .thenReturn("invocation-a");
     when(generationCoordinator.startComputeGeneration(expectedIdentity(), "process-12"))
         .thenReturn(generationId);
@@ -70,15 +66,16 @@ class PlatformProcessInvocationFenceTest {
     assertThat(executed).isTrue();
     InOrder order = inOrder(mapper);
     order.verify(mapper).acquireInstanceFence("tenant-a", 34L);
-    order.verify(mapper).selectCurrentInvocationId(ProcessInvocationFenceCurrentInvocationIdQuery.builder()
-        .tenantId("tenant-a")
-        .taskId(12L)
-        .jobInstanceId(34L)
-        .jobPartitionId(56L)
-        .workerId("worker-a")
-        .build());
-    verify(generationCoordinator)
-        .startComputeGeneration(expectedIdentity(), "process-12");
+    order
+        .verify(mapper)
+        .selectCurrentInvocationId(ProcessInvocationFenceCurrentInvocationIdQuery.builder()
+            .tenantId("tenant-a")
+            .taskId(12L)
+            .jobInstanceId(34L)
+            .jobPartitionId(56L)
+            .workerId("worker-a")
+            .build());
+    verify(generationCoordinator).startComputeGeneration(expectedIdentity(), "process-12");
   }
 
   @Test
@@ -89,25 +86,22 @@ class PlatformProcessInvocationFenceTest {
     ProcessJobContext context = claimedContext();
     String generationId = UUID.randomUUID().toString();
     when(mapper.selectCurrentInvocationId(ProcessInvocationFenceCurrentInvocationIdQuery.builder()
-        .tenantId("tenant-a")
-        .taskId(12L)
-        .jobInstanceId(34L)
-        .jobPartitionId(56L)
-        .workerId("worker-a")
-        .build()))
+            .tenantId("tenant-a")
+            .taskId(12L)
+            .jobInstanceId(34L)
+            .jobPartitionId(56L)
+            .workerId("worker-a")
+            .build()))
         .thenReturn("invocation-a");
-    when(generationCoordinator.currentGeneration(expectedIdentity()))
-        .thenReturn(generationId);
+    when(generationCoordinator.currentGeneration(expectedIdentity())).thenReturn(generationId);
 
     ProcessStageResult result = fence.execute(
         context, ProcessStage.VALIDATE, () -> ProcessStageResult.success(ProcessStage.VALIDATE));
 
     assertThat(result.success()).isTrue();
     assertThat(context.getStagingGenerationId()).isEqualTo(generationId);
-    verify(generationCoordinator)
-        .currentGeneration(expectedIdentity());
-    verify(generationCoordinator, never())
-        .startComputeGeneration(expectedIdentity(), null);
+    verify(generationCoordinator).currentGeneration(expectedIdentity());
+    verify(generationCoordinator, never()).startComputeGeneration(expectedIdentity(), null);
   }
 
   @Test
@@ -118,12 +112,12 @@ class PlatformProcessInvocationFenceTest {
     ProcessJobContext context = claimedContext();
     AtomicBoolean executed = new AtomicBoolean();
     when(mapper.selectCurrentInvocationId(ProcessInvocationFenceCurrentInvocationIdQuery.builder()
-        .tenantId("tenant-a")
-        .taskId(12L)
-        .jobInstanceId(34L)
-        .jobPartitionId(56L)
-        .workerId("worker-a")
-        .build()))
+            .tenantId("tenant-a")
+            .taskId(12L)
+            .jobInstanceId(34L)
+            .jobPartitionId(56L)
+            .workerId("worker-a")
+            .build()))
         .thenReturn("invocation-b");
 
     assertThatThrownBy(() -> fence.execute(context, ProcessStage.PREPARE, () -> {
@@ -185,8 +179,8 @@ class PlatformProcessInvocationFenceTest {
     context.getAttributes().put(PipelineRuntimeKeys.PARTITION_INVOCATION_ID, "invocation-a");
     return context;
   }
+
   private static ProcessInvocationIdentity expectedIdentity() {
-    return new ProcessInvocationIdentity(
-        "tenant-a", 12L, 34L, 56L, "worker-a", "invocation-a");
+    return new ProcessInvocationIdentity("tenant-a", 12L, 34L, 56L, "worker-a", "invocation-a");
   }
 }

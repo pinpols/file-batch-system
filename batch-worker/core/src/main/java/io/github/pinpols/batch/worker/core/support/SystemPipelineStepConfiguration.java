@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/** 为 JOB_RERUN 根 Workflow 启动选择不可变的 Job 定义快照。 */
+/** 将 Job 的阶段业务参数合并到系统 Pipeline 模板，同时禁止覆盖阶段控制流。 */
 final class SystemPipelineStepConfiguration {
 
   private static final Set<String> CONTROL_FLOW_PARAMS = Set.of(

@@ -1,20 +1,20 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.param.JobInstanceUpdateStatusParam;
-import io.github.pinpols.batch.orchestrator.domain.query.JobInstanceBatchDayCandidatesQuery;
-import io.github.pinpols.batch.orchestrator.domain.query.JobInstanceForensicByBizDateRangeQuery;
-
-
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.CloseRunningPipelineStepsParam;
+import io.github.pinpols.batch.orchestrator.domain.param.JobInstanceUpdateStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkInstanceRunningParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateInstanceProgressParam;
+import io.github.pinpols.batch.orchestrator.domain.query.JobInstanceBatchDayCandidatesQuery;
+import io.github.pinpols.batch.orchestrator.domain.query.JobInstanceForensicByBizDateRangeQuery;
 import io.github.pinpols.batch.orchestrator.domain.query.JobInstanceQuery;
 import io.github.pinpols.batch.orchestrator.domain.view.BatchDayInstanceMetrics;
+import io.github.pinpols.batch.orchestrator.domain.view.FairShareGroupActiveCountView;
+import io.github.pinpols.batch.orchestrator.domain.view.QueueActiveCountView;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 public interface JobInstanceMapper {
@@ -31,6 +31,9 @@ public interface JobInstanceMapper {
       @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
   JobInstanceEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+
+  /** 父作业已处于指定终态后，把未收尾的 Pipeline 尝试记录为中断，不冒报成功。 */
+  int closeRunningPipelineStepsForTerminalInstance(CloseRunningPipelineStepsParam parameters);
 
   /** 通过根请求解析当前受管 Workflow JOB；绝不使用根显示 ID 推断。 */
   JobInstanceEntity selectCurrentByWorkflowRequest(
@@ -68,6 +71,9 @@ public interface JobInstanceMapper {
   int updateProgress(UpdateInstanceProgressParam param);
 
   int markRunning(MarkInstanceRunningParam param);
+
+  /** 当前租约已验证后记录首次执行入口；不覆盖原始派发时间或推进生命周期。 */
+  int markExecutionStarted(@Param("tenantId") String tenantId, @Param("id") Long id);
 
   int updateExpectedPartitionCount(
       @Param("tenantId") String tenantId,
@@ -119,20 +125,12 @@ public interface JobInstanceMapper {
    */
   Integer acquireFairShareGroupAdvisoryLock(@Param("fairShareGroup") String fairShareGroup);
 
-  /**
-   * R7-A3-P1：批量预聚合多个 fair_share_group → count，替代 N+1 单条查询。
-   *
-   * @return {@code Map<{fairShareGroup,cnt}>} 列表；未出现的 group = 0。
-   */
-  List<Map<String, Object>> countActiveByFairShareGroups(
+  /** 批量预聚合多个 fair_share_group → count；未出现的 group 由调用方按 0 处理。 */
+  List<FairShareGroupActiveCountView> countActiveByFairShareGroups(
       @Param("fairShareGroups") Collection<String> fairShareGroups);
 
-  /**
-   * R7-A3-P1：批量预聚合多个 queue_code → count，替代 N+1 单条查询。
-   *
-   * @return {@code Map<{queueCode,cnt}>} 列表；未出现的 queue = 0。
-   */
-  List<Map<String, Object>> countActiveByTenantAndQueueCodes(
+  /** 批量预聚合多个 queue_code → count；未出现的 queue 由调用方按 0 处理。 */
+  List<QueueActiveCountView> countActiveByTenantAndQueueCodes(
       @Param("tenantId") String tenantId, @Param("queueCodes") Collection<String> queueCodes);
 
   /** 统计所有租户已经占用执行容量的实例总量（READY/RUNNING）。 */
@@ -160,11 +158,12 @@ public interface JobInstanceMapper {
    *   <li>{@code jobCodes} 非空 → 仅这些 jobCode 的实例（SUBSET_JOB_CODES 模式）；空集合等价于不限。
    * </ul>
    */
-  List<JobInstanceEntity> selectBatchDayCandidates(
-      JobInstanceBatchDayCandidatesQuery parameters);
+  List<JobInstanceEntity> selectBatchDayCandidates(JobInstanceBatchDayCandidatesQuery parameters);
 
-  int updateStatus(
-      JobInstanceUpdateStatusParam parameters);
+  int updateStatus(JobInstanceUpdateStatusParam parameters);
+
+  /** 实例超时终结时重新确认硬超时已到且实例和至少一个子任务仍在运行。 */
+  int updateStatusWhenTaskRunning(JobInstanceUpdateStatusParam parameters);
 
   /**
    * 非终态生命周期状态 CAS 更新(ADR-044 pause/resume)。

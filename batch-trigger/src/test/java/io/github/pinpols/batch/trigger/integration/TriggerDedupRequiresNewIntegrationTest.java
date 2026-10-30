@@ -29,7 +29,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 /**
  * REQUIRES_NEW 事务边界集成测试 — Trigger 去重（ADR-010 异步路径）。
  *
- * <p>{@code DefaultTriggerService#persistAndForward} 使用 {@code PROPAGATION_REQUIRES_NEW} 在同一事务内原子写
+ * <p>{@code TriggerRequestPersistence#persistAndForward} 使用 {@code PROPAGATION_REQUIRES_NEW} 在同一事务内原子写
  * trigger_request、trigger_outbox_event 和 ACCEPTED 状态。验证：去重检查生效、相关写入原子提交。
  */
 @SpringBootTest(
@@ -106,13 +106,13 @@ class TriggerDedupRequiresNewIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("异步路径下 trigger_request 落 ACCEPTED 状态,outbox 事件在同一 REQUIRES_NEW 事务内原子写入")
   void asyncLaunch_writesBothRequestAndOutboxInSameTransaction() {
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from batch.trigger_request where tenant_id = ? and dedup_key = ?
   """;
-  final String selectRequestStatusSql = """
+    final String selectRequestStatusSql = """
       select request_status from batch.trigger_request where tenant_id = ? and dedup_key = ?\
       """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.trigger_outbox_event where tenant_id = ? and request_id = ?\
       """;
 
@@ -122,26 +122,17 @@ class TriggerDedupRequiresNewIntegrationTest extends AbstractIntegrationTest {
     assertThat(response).isNotNull();
 
     // trigger_request 已写入数据库且状态为 ACCEPTED
-    Integer requestCount = jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        "t1",
-        "idem-async");
+    Integer requestCount =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, "t1", "idem-async");
     assertThat(requestCount).as("trigger_request should be persisted").isEqualTo(1);
 
-    String status = jdbcTemplate.queryForObject(
-        selectRequestStatusSql,
-        String.class,
-        "t1",
-        "idem-async");
+    String status =
+        jdbcTemplate.queryForObject(selectRequestStatusSql, String.class, "t1", "idem-async");
     assertThat(status).as("async path should set ACCEPTED status").isEqualTo("ACCEPTED");
 
     // trigger_outbox_event 与 trigger_request 在同一 REQUIRES_NEW 事务内原子写入数据库
-    Integer outboxCount = jdbcTemplate.queryForObject(
-        selectCountSql2,
-        Integer.class,
-        "t1",
-        "req-async");
+    Integer outboxCount =
+        jdbcTemplate.queryForObject(selectCountSql2, Integer.class, "t1", "req-async");
     assertThat(outboxCount)
         .as("trigger_outbox_event should be written atomically with trigger_request")
         .isEqualTo(1);
@@ -161,11 +152,7 @@ class TriggerDedupRequiresNewIntegrationTest extends AbstractIntegrationTest {
     triggerService.launch(second);
 
     // 两次调用相同 dedupKey，只产生一条记录
-    Integer count = jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        "t1",
-        "idem-twice");
+    Integer count = jdbcTemplate.queryForObject(selectCountSql, Integer.class, "t1", "idem-twice");
     assertThat(count).isEqualTo(1);
   }
 
@@ -182,16 +169,11 @@ class TriggerDedupRequiresNewIntegrationTest extends AbstractIntegrationTest {
     TriggerLaunchCommand command = buildCommand("OUTBOX_FK", "idem-outbox-fk", "req-outbox-fk");
     triggerService.launch(command);
 
-    assertThatThrownBy(() -> jdbcTemplate.update(
-            insertTriggerOutboxEventSql,
-            "t1",
-            "missing-request"))
+    assertThatThrownBy(
+            () -> jdbcTemplate.update(insertTriggerOutboxEventSql, "t1", "missing-request"))
         .hasMessageContaining("fk_trigger_outbox_event_request");
 
-    assertThatThrownBy(() -> jdbcTemplate.update(
-            deleteTriggerRequestSql,
-            "t1",
-            "req-outbox-fk"))
+    assertThatThrownBy(() -> jdbcTemplate.update(deleteTriggerRequestSql, "t1", "req-outbox-fk"))
         .hasMessageContaining("fk_trigger_outbox_event_request");
   }
 
@@ -204,10 +186,7 @@ class TriggerDedupRequiresNewIntegrationTest extends AbstractIntegrationTest {
 
     String workflowCode = "trigger-dedup-" + jobCode.toLowerCase(Locale.ROOT);
     Long workflowId = jdbcTemplate.queryForObject(
-        insertWorkflowDefinitionSql,
-        Long.class,
-        workflowCode,
-        workflowCode);
+        insertWorkflowDefinitionSql, Long.class, workflowCode, workflowCode);
     TriggerLaunchRequest request = new TriggerLaunchRequest();
     request.setTenantId("t1");
     request.setWorkflowDefinitionId(workflowId);

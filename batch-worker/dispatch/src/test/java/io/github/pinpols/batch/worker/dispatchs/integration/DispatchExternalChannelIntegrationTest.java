@@ -347,7 +347,8 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
           '{}', 'SYNC', 30, true, false)
         on conflict (tenant_id, channel_code) do nothing
         """;
-    platformJdbcTemplate().update(insertBatchFileChannelConfigSql, tenantId, channelCode, channelType);
+    platformJdbcTemplate()
+        .update(insertBatchFileChannelConfigSql, tenantId, channelCode, channelType);
   }
 
   private static JdbcTemplate platformJdbcTemplate() {

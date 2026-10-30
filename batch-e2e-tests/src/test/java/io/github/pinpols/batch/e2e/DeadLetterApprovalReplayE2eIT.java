@@ -51,6 +51,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -133,8 +134,8 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
   @BeforeEach
   void authenticateConsoleClient() throws Exception {
     securedConsoleContext = startSecuredConsole();
-    securedConsolePort = Integer.parseInt(
-        securedConsoleContext.getEnvironment().getProperty("local.server.port"));
+    securedConsolePort =
+        Integer.parseInt(securedConsoleContext.getEnvironment().getProperty("local.server.port"));
     ConsoleJwtService securedConsoleJwtService =
         securedConsoleContext.getBean(ConsoleJwtService.class);
     HttpResponse<Void> unauthenticatedCheck = HTTP_CLIENT.send(
@@ -145,8 +146,8 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
         HttpResponse.BodyHandlers.discarding());
     assertThat(unauthenticatedCheck.statusCode()).isEqualTo(401);
 
-    ConsoleAuthTokenResponse issuedToken = securedConsoleJwtService.issueToken(
-        APPROVAL_OPERATOR, TENANT, Set.of("ROLE_ADMIN"));
+    ConsoleAuthTokenResponse issuedToken =
+        securedConsoleJwtService.issueToken(APPROVAL_OPERATOR, TENANT, Set.of("ROLE_ADMIN"));
     consoleJwt = issuedToken.accessToken();
     HttpResponse<Void> authenticatedCheck = HTTP_CLIENT.send(
         HttpRequest.newBuilder()
@@ -160,7 +161,8 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
     String csrfCookie = authenticatedCheck.headers().allValues("Set-Cookie").stream()
         .filter(value -> value.startsWith("XSRF-TOKEN="))
         .findFirst()
-        .orElseThrow(() -> new AssertionError("authenticated Console response must issue CSRF cookie"));
+        .orElseThrow(
+            () -> new AssertionError("authenticated Console response must issue CSRF cookie"));
     int cookieEnd = csrfCookie.indexOf(';');
     String csrfValue = cookieEnd < 0 ? csrfCookie : csrfCookie.substring(0, cookieEnd);
     consoleCsrf = csrfValue.substring("XSRF-TOKEN=".length());
@@ -259,94 +261,94 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
   @DisplayName("认证操作员核实外部动作未执行后经审批仅重试一次并保存证据")
   void shouldReplayUnknownExternalOutcomeOnce_whenVerifiedNotExecutedThroughConsoleApproval()
       throws Exception {
-        final String selectSourceIdSql = """
+    final String selectSourceIdSql = """
             select source_id, payload_ref from batch.dead_letter_task where tenant_id=? and id=?
         """;
-        final String selectJobInstanceIdSql = """
+    final String selectJobInstanceIdSql = """
             select job_instance_id from batch.job_task where tenant_id=? and id=?
         """;
-        final String updateJobTaskSql = """
+    final String updateJobTaskSql = """
             update batch.job_task set task_status='FAILED', error_code='EXTERNAL_OUTCOME_UNKNOWN',\s\
             failure_class='UNKNOWN', error_message='remote action outcome is unknown', finished_at=now(),\s\
             version=version+1 where tenant_id=? and id=?\
             """;
-        final String updateJobPartitionSql = """
+    final String updateJobPartitionSql = """
             update batch.job_partition set partition_status='FAILED', version=version+1 where tenant_id=?\s\
             and id=?\
             """;
-        final String updateJobInstanceSql = """
+    final String updateJobInstanceSql = """
             update batch.job_instance set instance_status='FAILED', failure_class='UNKNOWN',\s\
             failed_partition_count=1, finished_at=now(), version=version+1 where tenant_id=? and id=?\
             """;
-        final String updateDeadLetterTaskSql = """
+    final String updateDeadLetterTaskSql = """
             update batch.dead_letter_task set max_replay_count=0, next_replay_at=null where tenant_id=? and id=?\
             """;
-        final String selectCountSql = """
+    final String selectCountSql = """
             select count(*) from batch.outbox_event where tenant_id=? and aggregate_type='JOB_TASK'\s\
             and aggregate_id=?
         """;
-        final String selectCountSql2 = """
+    final String selectCountSql2 = """
             select count(*) from batch.outbox_event where tenant_id=? and event_type='WORKFLOW_LAUNCH'
         """;
-        final String selectTaskStatusSql = """
+    final String selectTaskStatusSql = """
             select task_status, error_code, external_outcome_resolution_version,
                    external_outcome_resolution_trigger_request_id
             from batch.job_task\s\
             where tenant_id=? and id=?\
             """;
-        final String selectOriginalTaskStatusSql = """
+    final String selectOriginalTaskStatusSql = """
             select task_status from batch.job_task where tenant_id=? and id=?
         """;
-        final String selectVersionSql = """
+    final String selectVersionSql = """
             select version from batch.job_task where tenant_id=? and id=?
         """;
-        final String selectInstanceStatusSql = """
+    final String selectInstanceStatusSql = """
             select instance_status from batch.job_instance where tenant_id=? and id=?
         """;
-        final String selectReplayStatusSql = """
+    final String selectReplayStatusSql = """
             select replay_status from batch.dead_letter_task where tenant_id=? and id=?
         """;
-        final String selectResultSummarySql = """
+    final String selectResultSummarySql = """
             select result_summary::text from batch.compensation_command where tenant_id=? and command_no=?
         """;
-        final String selectApprovalStatusSql = """
+    final String selectApprovalStatusSql = """
             select approval_status from batch.approval_command where tenant_id=? and approval_no=?
         """;
-        final String selectCompensationCommandCountSql = """
+    final String selectCompensationCommandCountSql = """
             select count(*) from batch.compensation_command where tenant_id=? and approval_id=?
         """;
-        final String selectApprovedCommandNoSql = """
+    final String selectApprovedCommandNoSql = """
             select command_no from batch.compensation_command where tenant_id=? and approval_id=?
         """;
-        final String selectCountSql3 = """
+    final String selectCountSql3 = """
             select count(*) from batch.trigger_request where tenant_id=? and request_id=?
         """;
-        final String selectTriggerRequestPrimaryKeySql = """
+    final String selectTriggerRequestPrimaryKeySql = """
             select id from batch.trigger_request where tenant_id=? and request_id=?
             """;
-        final String selectAuthorizedTriggerRequestIdSql = """
+    final String selectAuthorizedTriggerRequestIdSql = """
             select external_outcome_resolution_trigger_request_id
             from batch.job_task where tenant_id=? and id=?
             """;
-        final String selectResolutionLaunchIdentitySql = """
+    final String selectResolutionLaunchIdentitySql = """
             select launch_payload #>> '{params,_externalOutcomeResolutionTaskId}' as source_task_id,
                    launch_payload #>> '{params,_externalOutcomeResolutionVersion}' as source_version
             from batch.trigger_request where tenant_id=? and id=?
             """;
-        final String selectSourceResolutionVersionSql = """
+    final String selectSourceResolutionVersionSql = """
             select external_outcome_resolution_version
             from batch.job_task where tenant_id=? and id=?
             """;
-        final String selectCountSql4 = """
+    final String selectCountSql4 = """
             select count(*) from batch.outbox_event where tenant_id=? and event_type='WORKFLOW_LAUNCH'\s\
             and event_key=?
         """;
-        final String updateSourceParamsSnapshotSql = """
+    final String updateSourceParamsSnapshotSql = """
             update batch.job_instance
             set params_snapshot=?::jsonb
             where tenant_id=? and id=?
             """;
-        final String selectRecoveredWorkflowStatusSql = """
+    final String selectRecoveredWorkflowStatusSql = """
             select wr.run_status, ji.instance_status, jt.task_status
             from batch.workflow_run wr
             join batch.trigger_request tr on tr.tenant_id=wr.tenant_id and tr.id=wr.trigger_request_id
@@ -355,7 +357,7 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
             join batch.job_task jt on jt.tenant_id=ji.tenant_id and jt.job_instance_id=ji.id
             where wr.tenant_id=? and tr.request_id=?
             """;
-        final String selectCustomerCountSql = """
+    final String selectCustomerCountSql = """
             select count(*) from biz.customer_account where customer_no=?
         """;
     final String selectExtraJsonSql = """
@@ -378,50 +380,28 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
         + "\"certificateNo\":\"ID-" + customerNo + "\",\"status\":\"ACTIVE\"}]";
     importParams.put("content", importContent);
     long deadLetterId = seedReplayGraph(seed, traceId, importParams);
-    Map<String, Object> deadLetter = jdbcTemplate.queryForMap(
-        selectSourceIdSql,
-        TENANT,
-        deadLetterId);
+    Map<String, Object> deadLetter =
+        jdbcTemplate.queryForMap(selectSourceIdSql, TENANT, deadLetterId);
     long partitionId = ((Number) deadLetter.get("source_id")).longValue();
     String payloadRef = (String) deadLetter.get("payload_ref");
     String[] sourceReference = payloadRef.split(":", 2);
     assertThat(sourceReference).hasSize(2);
     long taskId = Long.parseLong(sourceReference[1]);
-    long jobInstanceId = jdbcTemplate.queryForObject(
-        selectJobInstanceIdSql,
-        Long.class,
-        TENANT,
-        taskId);
+    long jobInstanceId =
+        jdbcTemplate.queryForObject(selectJobInstanceIdSql, Long.class, TENANT, taskId);
     Map<String, Object> recoveryParams = new LinkedHashMap<>(importParams);
     recoveryParams.put("_rerunConfigVersionPolicy", "USE_LATEST_CONFIG");
     Map<String, Object> effectiveParamsSnapshot = Map.of("effectiveParams", recoveryParams);
     String sourceParamsSnapshotJson = objectMapper.writeValueAsString(effectiveParamsSnapshot);
-    jdbcTemplate.update(updateSourceParamsSnapshotSql, sourceParamsSnapshotJson, TENANT, jobInstanceId);
-        jdbcTemplate.update(
-        updateJobTaskSql,
-        TENANT,
-        taskId);
-        jdbcTemplate.update(
-        updateJobPartitionSql,
-        TENANT,
-        partitionId);
-        jdbcTemplate.update(
-        updateJobInstanceSql,
-        TENANT,
-        jobInstanceId);
-        jdbcTemplate.update(
-        updateDeadLetterTaskSql,
-        TENANT,
-        deadLetterId);
-    long dispatchEventsBefore = jdbcTemplate.queryForObject(
-        selectCountSql,
-        Long.class,
-        TENANT,
-        taskId);
-    long rootLaunchEventsBefore = jdbcTemplate.queryForObject(
-        selectCountSql2,
-        Long.class,
-        TENANT);
+    jdbcTemplate.update(
+        updateSourceParamsSnapshotSql, sourceParamsSnapshotJson, TENANT, jobInstanceId);
+    jdbcTemplate.update(updateJobTaskSql, TENANT, taskId);
+    jdbcTemplate.update(updateJobPartitionSql, TENANT, partitionId);
+    jdbcTemplate.update(updateJobInstanceSql, TENANT, jobInstanceId);
+    jdbcTemplate.update(updateDeadLetterTaskSql, TENANT, deadLetterId);
+    long dispatchEventsBefore =
+        jdbcTemplate.queryForObject(selectCountSql, Long.class, TENANT, taskId);
+    long rootLaunchEventsBefore = jdbcTemplate.queryForObject(selectCountSql2, Long.class, TENANT);
 
     String approvalNo = extractDataText(postConsoleJson(
         "/api/console/jobs/dead-letters/replay",
@@ -432,20 +412,22 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
                 """.formatted(deadLetterId),
         idempotencyKey("dead-letter-unknown-replay")));
 
-    JsonNode pendingApproval = firstItem(getConsoleJson(
-        "/api/console/queries/approvals?tenantId=t1&approvalNo=" + encode(approvalNo)
-            + "&approvalStatus=PENDING&pageNo=1&pageSize=10"));
+    JsonNode pendingApproval =
+        firstItem(getConsoleJson("/api/console/queries/approvals?tenantId=t1&approvalNo="
+            + encode(approvalNo) + "&approvalStatus=PENDING&pageNo=1&pageSize=10"));
     assertThat(pendingApproval.path("actionType").asText()).isEqualTo("DLQ_REPLAY");
 
     AtomicBoolean failFirstExecutedCall = new AtomicBoolean(true);
     OrchestratorInternalRestClient securedConsoleInternalClient =
         securedConsoleContext.getBean(OrchestratorInternalRestClient.class);
     doAnswer(invocation -> {
-      if (failFirstExecutedCall.compareAndSet(true, false)) {
-        throw new ResourceAccessException("simulated lost approval EXECUTED request");
-      }
-      return invocation.callRealMethod();
-    }).when(securedConsoleInternalClient).markApprovalExecuted(anyString(), anyString());
+          if (failFirstExecutedCall.compareAndSet(true, false)) {
+            throw new ResourceAccessException("simulated lost approval EXECUTED request");
+          }
+          return invocation.callRealMethod();
+        })
+        .when(securedConsoleInternalClient)
+        .markApprovalExecuted(anyString(), anyString());
 
     String approvePath = "/api/console/approvals/" + encode(approvalNo) + "/approve";
     String approveBody = """
@@ -460,8 +442,8 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
     Long selectedCompensationCommandCount = jdbcTemplate.queryForObject(
         selectCompensationCommandCountSql, Long.class, TENANT, approvalNo);
     assertThat(selectedCompensationCommandCount).isEqualTo(1L);
-    String firstCommandNo = jdbcTemplate.queryForObject(
-        selectApprovedCommandNoSql, String.class, TENANT, approvalNo);
+    String firstCommandNo =
+        jdbcTemplate.queryForObject(selectApprovedCommandNoSql, String.class, TENANT, approvalNo);
 
     String replayCommandNo = extractDataText(postConsoleJson(
         approvePath, approveBody, idempotencyKey("dead-letter-unknown-approve-retry")));
@@ -475,24 +457,20 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(30))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          Map<String, Object> task = jdbcTemplate.queryForMap(
-              selectTaskStatusSql,
-              TENANT,
-              taskId);
+          Map<String, Object> task = jdbcTemplate.queryForMap(selectTaskStatusSql, TENANT, taskId);
           assertThat(task.get("task_status")).isEqualTo("FAILED");
           assertThat(task.get("error_code")).isEqualTo("EXTERNAL_OUTCOME_UNKNOWN");
           assertThat(task.get("external_outcome_resolution_version")).isNotNull();
-          assertThat(((Number) jdbcTemplate.queryForObject(
-                  selectVersionSql,
-                  Long.class,
-                  TENANT,
-                  taskId)).longValue())
-              .isEqualTo(((Number) task.get("external_outcome_resolution_version")).longValue() + 1);
-          String selectedInstanceStatus =
-              jdbcTemplate.queryForObject(selectInstanceStatusSql, String.class, TENANT, jobInstanceId);
+          Long selectedVersion =
+              jdbcTemplate.queryForObject(selectVersionSql, Long.class, TENANT, taskId);
+          assertThat(((Number) selectedVersion).longValue())
+              .isEqualTo(
+                  ((Number) task.get("external_outcome_resolution_version")).longValue() + 1);
+          String selectedInstanceStatus = jdbcTemplate.queryForObject(
+              selectInstanceStatusSql, String.class, TENANT, jobInstanceId);
           assertThat(selectedInstanceStatus).isEqualTo("FAILED");
-          String selectedReplayStatus =
-              jdbcTemplate.queryForObject(selectReplayStatusSql, String.class, TENANT, deadLetterId);
+          String selectedReplayStatus = jdbcTemplate.queryForObject(
+              selectReplayStatusSql, String.class, TENANT, deadLetterId);
           assertThat(selectedReplayStatus).isEqualTo("SUCCESS");
           Long selectedOutboxEventCount =
               jdbcTemplate.queryForObject(selectCountSql, Long.class, TENANT, taskId);
@@ -502,85 +480,69 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
           assertThat(selectedOutboxEventCountRead2).isEqualTo(rootLaunchEventsBefore + 1);
         });
 
-    String resultSummary = jdbcTemplate.queryForObject(
-        selectResultSummarySql,
-        String.class,
-        TENANT,
-        replayCommandNo);
+    String resultSummary =
+        jdbcTemplate.queryForObject(selectResultSummarySql, String.class, TENANT, replayCommandNo);
     JsonNode resultJson = objectMapper.readTree(resultSummary);
     String launchRequestId = resultJson.path("launchRequestId").asText();
     assertThat(launchRequestId).isNotBlank();
     Long rootTriggerRequestId = jdbcTemplate.queryForObject(
-        selectTriggerRequestPrimaryKeySql,
-        Long.class,
-        TENANT,
-        launchRequestId);
+        selectTriggerRequestPrimaryKeySql, Long.class, TENANT, launchRequestId);
     assertThat(rootTriggerRequestId).isNotNull();
     Long authorizedTriggerRequestId = jdbcTemplate.queryForObject(
-        selectAuthorizedTriggerRequestIdSql,
-        Long.class,
-        TENANT,
-        taskId);
+        selectAuthorizedTriggerRequestIdSql, Long.class, TENANT, taskId);
     assertThat(authorizedTriggerRequestId).isEqualTo(rootTriggerRequestId);
-    Map<String, Object> resolutionLaunchIdentity = jdbcTemplate.queryForMap(
-        selectResolutionLaunchIdentitySql,
-        TENANT,
-        rootTriggerRequestId);
-    Long sourceResolutionVersion = jdbcTemplate.queryForObject(
-        selectSourceResolutionVersionSql,
-        Long.class,
-        TENANT,
-        taskId);
+    Map<String, Object> resolutionLaunchIdentity =
+        jdbcTemplate.queryForMap(selectResolutionLaunchIdentitySql, TENANT, rootTriggerRequestId);
+    Long sourceResolutionVersion =
+        jdbcTemplate.queryForObject(selectSourceResolutionVersionSql, Long.class, TENANT, taskId);
     assertThat(resolutionLaunchIdentity.get("source_task_id")).isEqualTo(Long.toString(taskId));
     assertThat(resolutionLaunchIdentity.get("source_version"))
         .isEqualTo(sourceResolutionVersion.toString());
-        Long selectedTriggerRequestCount =
-            jdbcTemplate.queryForObject(selectCountSql3, Long.class, TENANT, launchRequestId);
-        assertThat(selectedTriggerRequestCount).isEqualTo(1L);
-        Long selectedOutboxEventCountRead3 = jdbcTemplate.queryForObject(
-            selectCountSql4, Long.class, TENANT, TENANT + ":workflow-launch:" + launchRequestId);
-        assertThat(selectedOutboxEventCountRead3).isEqualTo(1L);
+    Long selectedTriggerRequestCount =
+        jdbcTemplate.queryForObject(selectCountSql3, Long.class, TENANT, launchRequestId);
+    assertThat(selectedTriggerRequestCount).isEqualTo(1L);
+    Long selectedOutboxEventCountRead3 = jdbcTemplate.queryForObject(
+        selectCountSql4, Long.class, TENANT, TENANT + ":workflow-launch:" + launchRequestId);
+    assertThat(selectedOutboxEventCountRead3).isEqualTo(1L);
 
     e2eOutboxPublishSupport.publishAllPending(TENANT);
     JdbcTemplate businessJdbcTemplate = new JdbcTemplate(businessDataSource);
-    await().atMost(Duration.ofSeconds(45)).pollInterval(Duration.ofMillis(200)).untilAsserted(() -> {
-      e2eOutboxPublishSupport.publishAllPending(TENANT);
-      List<Map<String, Object>> recoveredRuns = jdbcTemplate.queryForList(
-          selectRecoveredWorkflowStatusSql,
-          TENANT,
-          launchRequestId);
-      assertThat(recoveredRuns).hasSize(1);
-      Map<String, Object> recoveredRun = recoveredRuns.get(0);
-      assertThat(recoveredRun.get("run_status")).isEqualTo("SUCCESS");
-      assertThat(recoveredRun.get("instance_status")).isEqualTo("SUCCESS");
-      assertThat(recoveredRun.get("task_status")).isEqualTo("SUCCESS");
-      Integer selectedCustomerAccountCount =
-          businessJdbcTemplate.queryForObject(selectCustomerCountSql, Integer.class, customerNo);
-      assertThat(selectedCustomerAccountCount).isEqualTo(1);
-      String selectedTaskStatus =
-          jdbcTemplate.queryForObject(selectOriginalTaskStatusSql, String.class, TENANT, taskId);
-      assertThat(selectedTaskStatus).isEqualTo("FAILED");
-      String selectedInstanceStatusRead2 =
-          jdbcTemplate.queryForObject(selectInstanceStatusSql, String.class, TENANT, jobInstanceId);
-      assertThat(selectedInstanceStatusRead2).isEqualTo("FAILED");
-      Long selectedOutboxEventCountRead4 = jdbcTemplate.queryForObject(
-          selectCountSql4, Long.class, TENANT, TENANT + ":workflow-launch:" + launchRequestId);
-      assertThat(selectedOutboxEventCountRead4).isEqualTo(1L);
-    });
+    await()
+        .atMost(Duration.ofSeconds(45))
+        .pollInterval(Duration.ofMillis(200))
+        .untilAsserted(() -> {
+          e2eOutboxPublishSupport.publishAllPending(TENANT);
+          List<Map<String, Object>> recoveredRuns =
+              jdbcTemplate.queryForList(selectRecoveredWorkflowStatusSql, TENANT, launchRequestId);
+          assertThat(recoveredRuns).hasSize(1);
+          Map<String, Object> recoveredRun = recoveredRuns.get(0);
+          assertThat(recoveredRun.get("run_status")).isEqualTo("SUCCESS");
+          assertThat(recoveredRun.get("instance_status")).isEqualTo("SUCCESS");
+          assertThat(recoveredRun.get("task_status")).isEqualTo("SUCCESS");
+          Integer selectedCustomerAccountCount = businessJdbcTemplate.queryForObject(
+              selectCustomerCountSql, Integer.class, customerNo);
+          assertThat(selectedCustomerAccountCount).isEqualTo(1);
+          String selectedTaskStatus = jdbcTemplate.queryForObject(
+              selectOriginalTaskStatusSql, String.class, TENANT, taskId);
+          assertThat(selectedTaskStatus).isEqualTo("FAILED");
+          String selectedInstanceStatusRead2 = jdbcTemplate.queryForObject(
+              selectInstanceStatusSql, String.class, TENANT, jobInstanceId);
+          assertThat(selectedInstanceStatusRead2).isEqualTo("FAILED");
+          Long selectedOutboxEventCountRead4 = jdbcTemplate.queryForObject(
+              selectCountSql4, Long.class, TENANT, TENANT + ":workflow-launch:" + launchRequestId);
+          assertThat(selectedOutboxEventCountRead4).isEqualTo(1L);
+        });
 
-    Map<String, Object> audit = jdbcTemplate.queryForMap(
-        selectExtraJsonSql,
-        TENANT,
-        Long.toString(deadLetterId));
+    Map<String, Object> audit =
+        jdbcTemplate.queryForMap(selectExtraJsonSql, TENANT, Long.toString(deadLetterId));
     JsonNode auditJson = objectMapper.readTree(audit.get("extra_json").toString());
     assertThat(auditJson.path("operatorId").asText()).isEqualTo(APPROVAL_OPERATOR);
-    assertThat(auditJson.path("externalActionOutcome").asText())
-        .isEqualTo("VERIFIED_NOT_EXECUTED");
+    assertThat(auditJson.path("externalActionOutcome").asText()).isEqualTo("VERIFIED_NOT_EXECUTED");
     assertThat(auditJson.path("externalOutcomeEvidenceReference").asText())
         .isEqualTo("incident://INC-E2E-2051/evidence");
-    JsonNode executedApproval = firstItem(getConsoleJson(
-        "/api/console/queries/approvals?tenantId=t1&approvalNo=" + encode(approvalNo)
-            + "&pageNo=1&pageSize=10"));
+    JsonNode executedApproval =
+        firstItem(getConsoleJson("/api/console/queries/approvals?tenantId=t1&approvalNo="
+            + encode(approvalNo) + "&pageNo=1&pageSize=10"));
     assertThat(executedApproval.path("approvalStatus").asText()).isEqualTo("EXECUTED");
 
     String approvalAuditPath = "/api/console/queries/operation-audits?tenantId=t1"
@@ -608,15 +570,20 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
     originalExecution.put("externalActionVerifiedNotExecuted", true);
     originalExecution.put("externalOutcomeEvidenceReference", "incident://INC-E2E-2051/evidence");
     Map<String, Object> unauthorizedChanges = Map.of(
-        "deadLetterId", deadLetterId + 1,
-        "externalActionVerifiedNotExecuted", false,
-        "externalOutcomeEvidenceReference", "incident://unapproved-evidence",
-        "strategy", "FORCE");
+        "deadLetterId",
+        deadLetterId + 1,
+        "externalActionVerifiedNotExecuted",
+        false,
+        "externalOutcomeEvidenceReference",
+        "incident://unapproved-evidence",
+        "strategy",
+        "FORCE");
     for (Map.Entry<String, Object> change : unauthorizedChanges.entrySet()) {
       Map<String, Object> altered = new LinkedHashMap<>(originalExecution);
       altered.put(change.getKey(), change.getValue());
       HttpResponse<String> denied = postConsoleResponse(
-          "/api/console/jobs/dead-letters/replay", objectMapper.writeValueAsString(altered),
+          "/api/console/jobs/dead-letters/replay",
+          objectMapper.writeValueAsString(altered),
           idempotencyKey("tampered-approval"));
       assertThat(denied.statusCode()).as("reject changed %s", change.getKey()).isEqualTo(403);
       assertThat(objectMapper.readTree(denied.body()).path("code").asText()).isEqualTo("FORBIDDEN");
@@ -708,14 +675,15 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
     replayPayload.put("tenantId", TENANT);
     replayPayload.put("reason", "approved retry e2e");
     replayPayload.put("operatorId", APPROVAL_OPERATOR);
-    replayPayload.put("JOB_TASK".equals(targetType) ? "taskId" : "partitionId",
+    replayPayload.put(
+        "JOB_TASK".equals(targetType) ? "taskId" : "partitionId",
         "JOB_TASK".equals(targetType) ? taskId : partitionId);
     String replayBody = objectMapper.writeValueAsString(replayPayload);
     String approvalNo = extractDataText(postConsoleJson(
         requestPath, replayBody, idempotencyKey("approved-retry-submit-" + targetType)));
-    JsonNode pending = firstItem(getConsoleJson(
-        "/api/console/queries/approvals?tenantId=t1&approvalNo=" + encode(approvalNo)
-            + "&pageNo=1&pageSize=10"));
+    JsonNode pending =
+        firstItem(getConsoleJson("/api/console/queries/approvals?tenantId=t1&approvalNo="
+            + encode(approvalNo) + "&pageNo=1&pageSize=10"));
     assertThat(pending.path("approvalStatus").asText()).isEqualTo("PENDING");
     assertThat(pending.path("actionType").asText()).isEqualTo("RETRY");
     assertThat(pending.path("targetType").asText()).isEqualTo(targetType);
@@ -740,23 +708,26 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
     assertThat(selectedApprovalStatus).isEqualTo("EXECUTED");
 
     e2eOutboxPublishSupport.publishAllPending(TENANT);
-    await().atMost(Duration.ofSeconds(45)).pollInterval(Duration.ofMillis(200)).untilAsserted(() -> {
-      String selectedTaskStatusRead2 =
-          jdbcTemplate.queryForObject(selectTaskStateSql, String.class, TENANT, taskId);
-      assertThat(selectedTaskStatusRead2).isEqualTo("SUCCESS");
-      String selectedPartitionStatusRead2 =
-          jdbcTemplate.queryForObject(selectPartitionStateSql, String.class, TENANT, partitionId);
-      assertThat(selectedPartitionStatusRead2).isEqualTo("SUCCESS");
-      Integer selectedCustomerAccountCount = new JdbcTemplate(businessDataSource)
-          .queryForObject(selectCustomerSql, Integer.class, customerNo);
-      assertThat(selectedCustomerAccountCount).isEqualTo(1);
-      String selectedInstanceStatus =
-          jdbcTemplate.queryForObject(selectInstanceStatusSql, String.class, TENANT, taskId);
-      assertThat(selectedInstanceStatus).isEqualTo("SUCCESS");
-      String selectedApprovalStatusRead2 =
-          jdbcTemplate.queryForObject(selectApprovalStatusSql, String.class, TENANT, approvalNo);
-      assertThat(selectedApprovalStatusRead2).isEqualTo("EXECUTED");
-    });
+    await()
+        .atMost(Duration.ofSeconds(45))
+        .pollInterval(Duration.ofMillis(200))
+        .untilAsserted(() -> {
+          String selectedTaskStatusRead2 =
+              jdbcTemplate.queryForObject(selectTaskStateSql, String.class, TENANT, taskId);
+          assertThat(selectedTaskStatusRead2).isEqualTo("SUCCESS");
+          String selectedPartitionStatusRead2 = jdbcTemplate.queryForObject(
+              selectPartitionStateSql, String.class, TENANT, partitionId);
+          assertThat(selectedPartitionStatusRead2).isEqualTo("SUCCESS");
+          Integer selectedCustomerAccountCount = new JdbcTemplate(businessDataSource)
+              .queryForObject(selectCustomerSql, Integer.class, customerNo);
+          assertThat(selectedCustomerAccountCount).isEqualTo(1);
+          String selectedInstanceStatus =
+              jdbcTemplate.queryForObject(selectInstanceStatusSql, String.class, TENANT, taskId);
+          assertThat(selectedInstanceStatus).isEqualTo("SUCCESS");
+          String selectedApprovalStatusRead2 = jdbcTemplate.queryForObject(
+              selectApprovalStatusSql, String.class, TENANT, approvalNo);
+          assertThat(selectedApprovalStatusRead2).isEqualTo("EXECUTED");
+        });
     assertThat(deadLetterId).isPositive();
     Long selectedOutboxEventCountRead2 =
         jdbcTemplate.queryForObject(selectRetryOutboxSql, Long.class, TENANT, taskId);
@@ -916,19 +887,30 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
     Path sourceFile = tempDir.resolve(fileName);
     Files.write(sourceFile, content);
 
-    try (GenericContainer<?> sftp = new GenericContainer<>(DockerImageName.parse("atmoz/sftp:alpine"))
+    try (GenericContainer<?> sftp = new GenericContainer<>(
+            DockerImageName.parse("atmoz/sftp:alpine"))
         .withLabel(TestContainerLabels.OWNER, TestContainerLabels.OWNER_VALUE)
         .withExposedPorts(22)
         .withCommand(sftpUser + ":" + sftpPassword + ":::upload")
         .waitingFor(Wait.forListeningPort())) {
       sftp.start();
       Long fileId = jdbcTemplate.queryForObject(
-          insertFileSql, Long.class, TENANT, "approved-file-" + suffix, fileName, fileName,
-          content.length, sourceFile.toString(), sourceTrace);
+          insertFileSql,
+          Long.class,
+          TENANT,
+          "approved-file-" + suffix,
+          fileName,
+          fileName,
+          content.length,
+          sourceFile.toString(),
+          sourceTrace);
       Map<String, Object> channelConfig = Map.ofEntries(
-          Map.entry("channel_type", "SFTP"), Map.entry("channel_code", channelCode),
-          Map.entry("sftp_host", sftp.getHost()), Map.entry("sftp_port", sftp.getMappedPort(22)),
-          Map.entry("sftp_user", sftpUser), Map.entry("sftp_password", sftpPassword),
+          Map.entry("channel_type", "SFTP"),
+          Map.entry("channel_code", channelCode),
+          Map.entry("sftp_host", sftp.getHost()),
+          Map.entry("sftp_port", sftp.getMappedPort(22)),
+          Map.entry("sftp_user", sftpUser),
+          Map.entry("sftp_password", sftpPassword),
           Map.entry("sftp_remote_directory", "/upload/"),
           Map.entry("sftp_remote_file_name", fileName),
           Map.entry("sftp_strict_host_key_checking", "no"));
@@ -959,9 +941,19 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
       jdbcTemplate.update(failSourceInstanceSql, sourceSnapshot, TENANT, sourceInstanceId);
       jdbcTemplate.update(disableAutomaticReplaySql, TENANT, deadLetterId);
       Long sourcePipelineId = jdbcTemplate.queryForObject(
-          insertSourcePipelineSql, Long.class, TENANT, seed.jobCode(), fileId, sourceInstanceId,
+          insertSourcePipelineSql,
+          Long.class,
+          TENANT,
+          seed.jobCode(),
+          fileId,
+          sourceInstanceId,
           sourceTrace);
-      jdbcTemplate.update(insertUnknownDispatchSql, TENANT, fileId, sourcePipelineId, channelCode,
+      jdbcTemplate.update(
+          insertUnknownDispatchSql,
+          TENANT,
+          fileId,
+          sourcePipelineId,
+          channelCode,
           params.get("externalRequestId"));
       String remotePath = "/home/" + sftpUser + "/upload/" + fileName;
       ExecResult beforeApproval = sftp.execInContainer("test", "!", "-e", remotePath);
@@ -976,29 +968,37 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
           assertThat(startupLog).contains("Started BatchWorkerDispatchApplication");
         });
         Map<String, Object> replayRequest = Map.of(
-            "tenantId", TENANT, "deadLetterId", deadLetterId,
-            "reason", "SFTP reconciliation proves no file was published",
-            "externalActionVerifiedNotExecuted", true,
-            "externalOutcomeEvidenceReference", "incident://approved-sftp/" + suffix);
+            "tenantId",
+            TENANT,
+            "deadLetterId",
+            deadLetterId,
+            "reason",
+            "SFTP reconciliation proves no file was published",
+            "externalActionVerifiedNotExecuted",
+            true,
+            "externalOutcomeEvidenceReference",
+            "incident://approved-sftp/" + suffix);
         String replayBody = objectMapper.writeValueAsString(replayRequest);
-        JsonNode approvalResponse = postConsoleJson("/api/console/jobs/dead-letters/replay",
-            replayBody, idempotencyKey("sftp-submit"));
+        JsonNode approvalResponse = postConsoleJson(
+            "/api/console/jobs/dead-letters/replay", replayBody, idempotencyKey("sftp-submit"));
         String approvalNo = extractDataText(approvalResponse);
         String approvePath = "/api/console/approvals/" + encode(approvalNo) + "/approve";
-        String approveBody = objectMapper.writeValueAsString(Map.of(
-            "tenantId", TENANT, "reason", "confirmed no remote execution"));
-        JsonNode commandResponse = postConsoleJson(
-            approvePath, approveBody, idempotencyKey("sftp-approve"));
+        String approveBody = objectMapper.writeValueAsString(
+            Map.of("tenantId", TENANT, "reason", "confirmed no remote execution"));
+        JsonNode commandResponse =
+            postConsoleJson(approvePath, approveBody, idempotencyKey("sftp-approve"));
         String commandNo = extractDataText(commandResponse);
-        String replayRequestId = jdbcTemplate.queryForObject(
-            selectReplayRequestSql, String.class, TENANT, commandNo);
+        String replayRequestId =
+            jdbcTemplate.queryForObject(selectReplayRequestSql, String.class, TENANT, commandNo);
         assertThat(replayRequestId).isNotBlank();
 
-        await().atMost(Duration.ofSeconds(90)).pollInterval(Duration.ofMillis(200))
+        await()
+            .atMost(Duration.ofSeconds(90))
+            .pollInterval(Duration.ofMillis(200))
             .untilAsserted(() -> {
               e2eOutboxPublishSupport.publishAllPending(TENANT);
-              List<Map<String, Object>> runs = jdbcTemplate.queryForList(
-                  selectRecoverySql, TENANT, replayRequestId);
+              List<Map<String, Object>> runs =
+                  jdbcTemplate.queryForList(selectRecoverySql, TENANT, replayRequestId);
               assertThat(runs).as("Dispatch Worker log: %s", workerLog).hasSize(1);
               Map<String, Object> run = runs.getFirst();
               assertThat(run.get("run_status")).isEqualTo("SUCCESS");
@@ -1006,15 +1006,16 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
               assertThat(run.get("task_status")).isEqualTo("SUCCESS");
               assertThat(run.get("pipeline_id")).isNotEqualTo(sourcePipelineId);
             });
-        Map<String, Object> recoveredRun = jdbcTemplate.queryForMap(
-            selectRecoverySql, TENANT, replayRequestId);
-        Map<String, Object> dispatched = jdbcTemplate.queryForMap(
-            selectDispatchSql, TENANT, fileId, channelCode);
-        assertThat(dispatched.get("pipeline_instance_id")).isEqualTo(recoveredRun.get("pipeline_id"));
+        Map<String, Object> recoveredRun =
+            jdbcTemplate.queryForMap(selectRecoverySql, TENANT, replayRequestId);
+        Map<String, Object> dispatched =
+            jdbcTemplate.queryForMap(selectDispatchSql, TENANT, fileId, channelCode);
+        assertThat(dispatched.get("pipeline_instance_id"))
+            .isEqualTo(recoveredRun.get("pipeline_id"));
         assertThat(dispatched.get("dispatch_status")).isEqualTo("ACKED");
         assertThat(dispatched.get("dispatch_attempt")).isEqualTo(2);
-        Map<String, Object> authorization = jdbcTemplate.queryForMap(
-            selectAuthorizationSql, TENANT, taskId);
+        Map<String, Object> authorization =
+            jdbcTemplate.queryForMap(selectAuthorizationSql, TENANT, taskId);
         assertThat(authorization.get("task_status")).isEqualTo("FAILED");
         assertThat(authorization.get("error_code")).isEqualTo("EXTERNAL_OUTCOME_UNKNOWN");
         assertThat(authorization.get("external_outcome_resolution_consumed_at")).isNotNull();
@@ -1023,19 +1024,19 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
         String expectedContent = new String(content, StandardCharsets.UTF_8);
         assertThat(published.getStdout()).isEqualTo(expectedContent);
 
-        JsonNode repeatedApproval = postConsoleJson(
-            approvePath, approveBody, idempotencyKey("sftp-approve-repeat"));
+        JsonNode repeatedApproval =
+            postConsoleJson(approvePath, approveBody, idempotencyKey("sftp-approve-repeat"));
         String repeatedApprovalNo = extractDataText(repeatedApproval);
         assertThat(repeatedApprovalNo).isEqualTo(approvalNo);
         e2eOutboxPublishSupport.publishAllPending(TENANT);
-        Long replayCount = jdbcTemplate.queryForObject(
-            selectReplayCountSql, Long.class, TENANT, approvalNo);
+        Long replayCount =
+            jdbcTemplate.queryForObject(selectReplayCountSql, Long.class, TENANT, approvalNo);
         assertThat(replayCount).isEqualTo(1L);
-        List<Map<String, Object>> runsAfterRepeat = jdbcTemplate.queryForList(
-            selectRecoverySql, TENANT, replayRequestId);
+        List<Map<String, Object>> runsAfterRepeat =
+            jdbcTemplate.queryForList(selectRecoverySql, TENANT, replayRequestId);
         assertThat(runsAfterRepeat).containsExactly(recoveredRun);
-        Map<String, Object> dispatchAfterRepeat = jdbcTemplate.queryForMap(
-            selectDispatchSql, TENANT, fileId, channelCode);
+        Map<String, Object> dispatchAfterRepeat =
+            jdbcTemplate.queryForMap(selectDispatchSql, TENANT, fileId, channelCode);
         assertThat(dispatchAfterRepeat).isEqualTo(dispatched);
       } finally {
         worker.destroy();
@@ -1055,14 +1056,18 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
       projectRoot = projectRoot.getParent();
     }
     Path buildLog = Files.createTempFile("approved-dispatch-build-", ".log");
-    Process build = new ProcessBuilder("./mvnw", "-o", "-ntp", "-pl", "batch-worker/dispatch",
-        "-am", "-DskipTests", "package")
-        .directory(projectRoot.toFile()).redirectErrorStream(true)
-        .redirectOutput(buildLog.toFile()).start();
+    Process build = new ProcessBuilder(
+            "./mvnw", "-o", "-ntp", "-pl", "batch-worker/dispatch", "-am", "-DskipTests", "package")
+        .directory(projectRoot.toFile())
+        .redirectErrorStream(true)
+        .redirectOutput(buildLog.toFile())
+        .start();
     try {
       boolean completed = build.waitFor(5, TimeUnit.MINUTES);
       assertThat(completed).as("current-source Dispatch build: %s", buildLog).isTrue();
-      assertThat(build.exitValue()).as("current-source Dispatch build: %s", buildLog).isZero();
+      assertThat(build.exitValue())
+          .as("current-source Dispatch build: %s", buildLog)
+          .isZero();
     } finally {
       if (build.isAlive()) {
         build.destroyForcibly();
@@ -1072,13 +1077,14 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
     Path workerJar;
     try (var artifacts = Files.list(projectRoot.resolve("batch-worker/dispatch/target"))) {
       List<Path> executableJars = artifacts
-          .filter(path -> path.getFileName().toString().endsWith("-exec.jar")).toList();
+          .filter(path -> path.getFileName().toString().endsWith("-exec.jar"))
+          .toList();
       assertThat(executableJars).as("current-source Dispatch executable jar").hasSize(1);
       workerJar = executableJars.getFirst();
     }
     Map<String, Object> properties = new LinkedHashMap<>();
-    BiConsumer<String, Supplier<?>> propertyRegistrar = (key, supplier) ->
-        properties.put(key, supplier.get());
+    BiConsumer<String, Supplier<?>> propertyRegistrar =
+        (key, supplier) -> properties.put(key, supplier.get());
     AbstractIntegrationTest.registerDynamicProperties(propertyRegistrar::accept, false);
     properties.put("spring.profiles.active", "test,e2e");
     properties.put("server.port", 0);
@@ -1099,8 +1105,10 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
     String javaBin = Path.of(System.getProperty("java.home"), "bin", "java").toString();
     List<String> command = new ArrayList<>(List.of(javaBin, "-jar", workerJar.toString()));
     properties.forEach((key, value) -> command.add("--" + key + "=" + value));
-    return new ProcessBuilder(command).redirectErrorStream(true)
-        .redirectOutput(logFile.toFile()).start();
+    return new ProcessBuilder(command)
+        .redirectErrorStream(true)
+        .redirectOutput(logFile.toFile())
+        .start();
   }
 
   private JsonNode getConsoleJson(String path) throws Exception {
@@ -1147,8 +1155,8 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
 
   private ConfigurableApplicationContext startSecuredConsole() {
     Map<String, Object> consoleProperties = new HashMap<>();
-    BiConsumer<String, Supplier<?>> propertyRegistrar = (name, supplier) ->
-        consoleProperties.put(name, supplier.get());
+    BiConsumer<String, Supplier<?>> propertyRegistrar =
+        (name, supplier) -> consoleProperties.put(name, supplier.get());
     AbstractIntegrationTest.registerDynamicProperties(propertyRegistrar::accept, false);
     consoleProperties.put("server.port", 0);
     consoleProperties.put("spring.main.web-application-type", "servlet");
@@ -1178,9 +1186,7 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
       BeanPostProcessor spyInternalClient = new BeanPostProcessor() {
         @Override
         public Object postProcessAfterInitialization(Object bean, String beanName) {
-          return bean instanceof OrchestratorInternalRestClient
-              ? org.mockito.Mockito.spy(bean)
-              : bean;
+          return bean instanceof OrchestratorInternalRestClient ? Mockito.spy(bean) : bean;
         }
       };
       applicationContext.getBeanFactory().addBeanPostProcessor(spyInternalClient);
@@ -1239,21 +1245,25 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
   }
 
   private long seedReplayGraph(
-      LaunchSeed seed, String traceId, Map<String, Object> params, String taskType, String workerGroup)
+      LaunchSeed seed,
+      String traceId,
+      Map<String, Object> params,
+      String taskType,
+      String workerGroup)
       throws Exception {
-        final String selectIdSql = """
+    final String selectIdSql = """
             select id
             from batch.job_definition
             where tenant_id = ?
               and job_code = ?
             """;
-        final String selectIdSql2 = """
+    final String selectIdSql2 = """
             select id
             from batch.trigger_request
             where tenant_id = ?
               and request_id = ?
             """;
-        final String insertJobInstanceSql = """
+    final String insertJobInstanceSql = """
             insert into batch.job_instance (
                 tenant_id, job_definition_id, trigger_request_id, job_code, instance_no, biz_date,
                 trigger_type, instance_status, batch_no, operator_id, rerun_flag, retry_flag,
@@ -1270,7 +1280,7 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
             )
             returning id
             """;
-        final String insertJobPartitionSql = """
+    final String insertJobPartitionSql = """
             insert into batch.job_partition (
                 tenant_id, job_instance_id, job_instance_biz_date, partition_no, partition_key,\s\
                 partition_status,
@@ -1284,7 +1294,7 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
             )
             returning id
             """;
-        final String insertJobTaskSql = """
+    final String insertJobTaskSql = """
             insert into batch.job_task (
                 tenant_id, job_instance_id, job_instance_biz_date, job_partition_id, task_type, task_seq,\s\
                 task_status,
@@ -1298,13 +1308,13 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
             )
             returning id
             """;
-        final String insertDeadLetterTaskSql = """
+    final String insertDeadLetterTaskSql = """
         insert into batch.dead_letter_task
           (tenant_id, source_type, source_id, dead_letter_reason, payload_ref,
            replay_status, replay_count, last_replay_at, last_replay_result, trace_id)
         values (?, 'JOB_PARTITION', ?, ?, ?, 'NEW', 0, null, null, ?)
         """;
-        final String selectIdSql3 = """
+    final String selectIdSql3 = """
         select id
         from batch.dead_letter_task
         where tenant_id = ?
@@ -1315,10 +1325,12 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
         limit 1
         """;
 
-    Long jobDefinitionId = jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, seed.jobCode());
+    Long jobDefinitionId =
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, seed.jobCode());
     assertThat(jobDefinitionId).isNotNull();
 
-    Long triggerRequestId = jdbcTemplate.queryForObject(selectIdSql2, Long.class, TENANT, seed.requestId());
+    Long triggerRequestId =
+        jdbcTemplate.queryForObject(selectIdSql2, Long.class, TENANT, seed.requestId());
     assertThat(triggerRequestId).isNotNull();
 
     String instanceNo = "inst-dlq-e2e-" + UUID.randomUUID();
@@ -1352,12 +1364,24 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
     assertThat(partitionId).isNotNull();
 
     Long taskId = jdbcTemplate.queryForObject(
-        insertJobTaskSql, Long.class, TENANT, jobInstanceId, TENANT, jobInstanceId, partitionId,
-        taskType, paramsSnapshot);
+        insertJobTaskSql,
+        Long.class,
+        TENANT,
+        jobInstanceId,
+        TENANT,
+        jobInstanceId,
+        partitionId,
+        taskType,
+        paramsSnapshot);
     assertThat(taskId).isNotNull();
 
-        jdbcTemplate.update(
-        insertDeadLetterTaskSql, TENANT, partitionId, "manual dead letter for e2e", instanceNo + ":" + taskId, traceId);
+    jdbcTemplate.update(
+        insertDeadLetterTaskSql,
+        TENANT,
+        partitionId,
+        "manual dead letter for e2e",
+        instanceNo + ":" + taskId,
+        traceId);
 
     return jdbcTemplate.queryForObject(selectIdSql3, Long.class, TENANT, partitionId, traceId);
   }

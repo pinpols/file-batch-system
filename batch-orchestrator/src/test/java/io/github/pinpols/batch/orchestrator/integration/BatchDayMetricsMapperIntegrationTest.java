@@ -1,23 +1,29 @@
 package io.github.pinpols.batch.orchestrator.integration;
 
-import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceInsertIfAbsentParam;
-import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceTransitionStatusByIdentityParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 
+import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.ExpectedWorkRegistrationService;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.ExternalEventExpectationService;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.FileGroupExpectationService;
+import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeTerminalFinalizer;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceInsertIfAbsentParam;
+import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceTransitionStatusByIdentityParam;
 import io.github.pinpols.batch.orchestrator.domain.view.BatchDayInstanceMetrics;
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.BatchDaySettleScheduler;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
@@ -39,21 +45,27 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.UncategorizedSQLException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
@@ -65,6 +77,18 @@ import org.springframework.web.server.ResponseStatusException;
 class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
 
   private static final String RLS_ROLE = "expected_work_rls_test";
+
+  @MockitoSpyBean
+  private LaunchApplicationService launchApplicationService;
+
+  @MockitoSpyBean
+  private TriggerRequestMapper concurrentTriggerRequestMapper;
+
+  @Autowired
+  private DataSource dataSource;
+
+  @Autowired
+  private SqlSessionTemplate sqlSessionTemplate;
 
   private final JdbcTemplate jdbcTemplate;
   private final TransactionTemplate transactionTemplate;
@@ -113,6 +137,272 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     this.batchDayOperationService = batchDayOperationService;
   }
 
+  @Test
+  @DisplayName("两个恢复器同时读取空补跑键时只创建一个根请求")
+  void shouldCreateOneCatchUpRootWhenRecoveryScansOverlap() throws Exception {
+    final String insertCalendarSql = """
+        insert into batch.business_calendar (tenant_id, calendar_code, calendar_name, timezone, cutoff_time, catch_up_policy)
+        values (?, ?, 'test', 'UTC', '00:00:00', 'AUTO')
+        """;
+    final String markDaySql = """
+        update batch.batch_day_instance set day_status='FAILED' where tenant_id=? and calendar_code=? and biz_date=?
+        """;
+    final String setJobCalendarSql = """
+        update batch.job_instance set calendar_code=? where tenant_id=? and job_code=?
+        """;
+    final String countRootsSql = """
+        select count(*) from batch.trigger_request where tenant_id=? and dedup_key=?
+          and trigger_type='CATCH_UP' and parent_workflow_run_id is null
+        """;
+    final String disableFixtureCatchUpSql = """
+        update batch.business_calendar set catch_up_policy='NONE' where tenant_id=? and calendar_code=?
+        """;
+    String tenant = unique("race-tenant");
+    String calendar = unique("race-calendar");
+    String jobCode = unique("race-job");
+    LocalDate day = LocalDate.of(2026, 9, 10);
+    String dedup = tenant + ":batch-day-catchup:" + calendar + ":" + day + ":" + jobCode;
+    CountDownLatch bothRead = new CountDownLatch(2);
+    AtomicInteger launchCalls = new AtomicInteger();
+    doAnswer(invocation -> {
+          Object found = sqlSessionTemplate.selectOne(
+              "io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper.selectCatchUpRootByDedupKey",
+              Map.of("tenantId", invocation.getArgument(0), "dedupKey", invocation.getArgument(1)));
+          if (tenant.equals(invocation.getArgument(0)) && dedup.equals(invocation.getArgument(1))) {
+            bothRead.countDown();
+            if (!bothRead.await(10, TimeUnit.SECONDS))
+              throw new IllegalStateException("second scan did not arrive");
+          }
+          return found;
+        })
+        .when(concurrentTriggerRequestMapper)
+        .selectCatchUpRootByDedupKey(anyString(), anyString());
+    doAnswer(invocation -> {
+          LaunchRequest request = invocation.getArgument(0);
+          if (tenant.equals(request.tenantId())) {
+            launchCalls.incrementAndGet();
+            return new LaunchResponse("accepted", "trace");
+          }
+          return invocation.callRealMethod();
+        })
+        .when(launchApplicationService)
+        .launchFromTrustedQueue(any());
+    jdbcTemplate.update(insertCalendarSql, tenant, calendar);
+    insertOpenBatchDay(tenant, calendar, day);
+    jdbcTemplate.update(markDaySql, tenant, calendar, day);
+    Long jobDefinitionId = insertJobDefinition(tenant, calendar, jobCode, null);
+    insertJobInstance(tenant, jobDefinitionId, jobCode, day, "FAILED", false);
+    jdbcTemplate.update(setJobCalendarSql, calendar, tenant, jobCode);
+    insertManagedSingleJobWorkflow(tenant, calendar, jobCode, jobDefinitionId);
+
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    try {
+      Future<?> first = pool.submit(batchDaySettleScheduler::settle);
+      Future<?> second = pool.submit(batchDaySettleScheduler::settle);
+      first.get(30, TimeUnit.SECONDS);
+      second.get(30, TimeUnit.SECONDS);
+    } finally {
+      pool.shutdownNow();
+      assertThat(pool.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+      jdbcTemplate.update(disableFixtureCatchUpSql, tenant, calendar);
+    }
+    assertThat(jdbcTemplate.queryForObject(countRootsSql, Integer.class, tenant, dedup))
+        .isEqualTo(1);
+    assertThat(launchCalls.get()).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("失败日提交后启动补跑时原请求已对独立连接可见")
+  void shouldCommitCatchUpRequestBeforePostCommitLaunch() {
+    final String insertCalendarSql = """
+        insert into batch.business_calendar (tenant_id, calendar_code, calendar_name, timezone, cutoff_time, catch_up_policy)
+        values (?, ?, 'test', 'UTC', '00:00:00', 'AUTO')
+        """;
+    final String markDaySql = """
+        update batch.batch_day_instance set day_status='IN_FLIGHT' where tenant_id=? and calendar_code=? and biz_date=?
+        """;
+    final String setJobCalendarSql = """
+        update batch.job_instance set calendar_code=? where tenant_id=? and job_code=?
+        """;
+    final String countRequestSql = """
+        select count(*) from batch.trigger_request where tenant_id=? and request_id=?
+        """;
+    String tenant = unique("commit-tenant");
+    String calendar = unique("commit-calendar");
+    String jobCode = unique("commit-job");
+    LocalDate day = LocalDate.of(2026, 9, 9);
+    AtomicInteger firstObservedCount = new AtomicInteger(-1);
+    AtomicReference<Object> firstBatchDayStatus = new AtomicReference<>();
+    doAnswer(invocation -> {
+          LaunchRequest request = invocation.getArgument(0);
+          if (!tenant.equals(request.tenantId())) return invocation.callRealMethod();
+          firstBatchDayStatus.compareAndSet(null, request.params().get("batchDayStatus"));
+          try (Connection connection = dataSource.getConnection();
+              PreparedStatement statement = connection.prepareStatement(countRequestSql)) {
+            statement.setString(1, tenant);
+            statement.setString(2, request.requestId());
+            try (var results = statement.executeQuery()) {
+              results.next();
+              firstObservedCount.compareAndSet(-1, results.getInt(1));
+            }
+          }
+          return new LaunchResponse("accepted", "trace");
+        })
+        .when(launchApplicationService)
+        .launchFromTrustedQueue(any());
+    jdbcTemplate.update(insertCalendarSql, tenant, calendar);
+    insertOpenBatchDay(tenant, calendar, day);
+    jdbcTemplate.update(markDaySql, tenant, calendar, day);
+    Long jobDefinitionId = insertJobDefinition(tenant, calendar, jobCode, null);
+    insertJobInstance(tenant, jobDefinitionId, jobCode, day, "FAILED", false);
+    jdbcTemplate.update(setJobCalendarSql, calendar, tenant, jobCode);
+    Long workflowId = insertManagedSingleJobWorkflow(tenant, calendar, jobCode, jobDefinitionId);
+    insertWorkflowRun(tenant, workflowId, day, "FAILED", false);
+
+    batchDaySettleScheduler.settle();
+
+    assertThat(firstObservedCount.get()).isEqualTo(1);
+    assertThat(firstBatchDayStatus.get()).isEqualTo("SETTLING");
+  }
+
+  @Test
+  @DisplayName("受管 Workflow 变化后真实数据库中的已接纳补跑仍使用原目标")
+  void shouldReusePersistedCatchUpAfterManagedWorkflowChanges() {
+    final String insertCalendarSql = """
+        insert into batch.business_calendar (tenant_id, calendar_code, calendar_name, timezone, cutoff_time, catch_up_policy)
+        values (?, ?, 'test', 'UTC', '00:00:00', 'AUTO')
+        """;
+    final String markDaySql = """
+        update batch.batch_day_instance set day_status='FAILED' where tenant_id=? and calendar_code=? and biz_date=?
+        """;
+    final String setJobCalendarSql = """
+        update batch.job_instance set calendar_code=? where tenant_id=? and job_code=?
+        """;
+    final String setVersionSql = """
+        update batch.workflow_definition set version=2 where tenant_id=? and id=?
+        """;
+    final String detachWorkflowSql = """
+        update batch.workflow_definition set single_job_definition_id=null where tenant_id=? and id=?
+        """;
+    final String selectStatusSql = """
+        select request_status from batch.trigger_request where tenant_id=? and request_id=?
+        """;
+    final String setCalendarPolicySql = """
+        update batch.business_calendar set catch_up_policy=? where tenant_id=? and calendar_code=?
+        """;
+    final String setRequestStatusSql = """
+        update batch.trigger_request set request_status=? where tenant_id=? and request_id=?
+        """;
+    String tenant = unique("catchup-tenant");
+    String calendar = unique("catchup-calendar");
+    String jobCode = unique("catchup-job");
+    LocalDate day = LocalDate.of(2026, 9, 8);
+    String requestId = unique("catchup-request");
+    AtomicReference<LaunchRequest> received = new AtomicReference<>();
+    doAnswer(invocation -> {
+          LaunchRequest request = invocation.getArgument(0);
+          if (!tenant.equals(request.tenantId())) {
+            return invocation.callRealMethod();
+          }
+          received.set(request);
+          return new LaunchResponse("accepted", "trace");
+        })
+        .when(launchApplicationService)
+        .launchFromTrustedQueue(any());
+
+    jdbcTemplate.update(insertCalendarSql, tenant, calendar);
+    insertOpenBatchDay(tenant, calendar, day);
+    jdbcTemplate.update(markDaySql, tenant, calendar, day);
+    Long jobDefinitionId = insertJobDefinition(tenant, calendar, jobCode, null);
+    insertJobInstance(tenant, jobDefinitionId, jobCode, day, "FAILED", false);
+    jdbcTemplate.update(setJobCalendarSql, calendar, tenant, jobCode);
+    Long originalWorkflow =
+        insertManagedSingleJobWorkflow(tenant, calendar, jobCode, jobDefinitionId);
+    LaunchRequest frozen = LaunchRequest.builder()
+        .tenantId(tenant)
+        .requestId(requestId)
+        .workflowDefinitionId(originalWorkflow)
+        .bizDate(day)
+        .triggerType(TriggerType.CATCH_UP)
+        .build();
+    TriggerRequestEntity accepted = new TriggerRequestEntity();
+    accepted.setTenantId(tenant);
+    accepted.setRequestId(requestId);
+    accepted.setTriggerType("CATCH_UP");
+    accepted.setWorkflowDefinitionId(originalWorkflow);
+    accepted.setBizDate(day);
+    accepted.setDedupKey(tenant + ":batch-day-catchup:" + calendar + ":" + day + ":" + jobCode);
+    accepted.setRequestStatus("ACCEPTED");
+    accepted.setLaunchPayload(JsonUtils.toJson(frozen));
+    assertThat(triggerRequestMapper.insert(accepted)).isEqualTo(1);
+    jdbcTemplate.update(detachWorkflowSql, tenant, originalWorkflow);
+    Long currentWorkflow =
+        insertManagedSingleJobWorkflow(tenant, calendar, jobCode, jobDefinitionId);
+    jdbcTemplate.update(setVersionSql, tenant, currentWorkflow);
+
+    assertThat(batchDayInstanceMapper.selectFailedDaysNeedingCatchUp(1000))
+        .extracting(BatchDayInstanceEntity::tenantId)
+        .contains(tenant);
+    jdbcTemplate.update(setCalendarPolicySql, "MANUAL_APPROVAL", tenant, calendar);
+    assertThat(batchDayInstanceMapper.selectFailedDaysNeedingCatchUp(1000))
+        .extracting(BatchDayInstanceEntity::tenantId)
+        .doesNotContain(tenant);
+    jdbcTemplate.update(setCalendarPolicySql, "AUTO", tenant, calendar);
+
+    batchDaySettleScheduler.settle();
+
+    assertThat(received.get()).isEqualTo(frozen);
+    assertThat(jdbcTemplate.queryForObject(selectStatusSql, String.class, tenant, requestId))
+        .isEqualTo("ACCEPTED");
+    for (String terminalStatus : List.of("LAUNCHED", "REJECTED", "DUPLICATE", "GIVE_UP")) {
+      jdbcTemplate.update(setRequestStatusSql, terminalStatus, tenant, requestId);
+      assertThat(batchDayInstanceMapper.selectFailedDaysNeedingCatchUp(1000))
+          .extracting(BatchDayInstanceEntity::tenantId)
+          .doesNotContain(tenant);
+    }
+  }
+
+  @Test
+  @DisplayName("失败批日补跑恢复按实例冻结日历筛选并排除演练")
+  void shouldRecoverFailedDaysByFrozenCalendarWithoutDryRun() {
+    final String insertCalendarSql = """
+        insert into batch.business_calendar (tenant_id, calendar_code, calendar_name, timezone, cutoff_time, catch_up_policy)
+        values (?, ?, 'test', 'UTC', '00:00:00', 'AUTO')
+        """;
+    final String markDaySql =
+        "update batch.batch_day_instance set day_status='FAILED' where tenant_id=? and calendar_code=? and biz_date=?";
+    final String setCalendarSql =
+        "update batch.job_instance set calendar_code=? where tenant_id=? and job_code=?";
+    final String changeDefinitionSql =
+        "update batch.job_definition set calendar_code=? where tenant_id=? and id=?";
+    String formalTenant = unique("formal");
+    String dryTenant = unique("dry");
+    String calendar = unique("calendar");
+    LocalDate day = LocalDate.of(2026, 9, 8);
+    String formalJob = unique("formal-job");
+    String dryJob = unique("dry-job");
+    jdbcTemplate.update(insertCalendarSql, formalTenant, calendar);
+    jdbcTemplate.update(insertCalendarSql, dryTenant, calendar);
+    insertOpenBatchDay(formalTenant, calendar, day);
+    insertOpenBatchDay(dryTenant, calendar, day);
+    jdbcTemplate.update(markDaySql, formalTenant, calendar, day);
+    jdbcTemplate.update(markDaySql, dryTenant, calendar, day);
+    Long formalDefinition = insertJobDefinition(formalTenant, calendar, formalJob, null);
+    Long dryDefinition = insertJobDefinition(dryTenant, calendar, dryJob, null);
+    insertJobInstance(formalTenant, formalDefinition, formalJob, day, "FAILED", false);
+    insertJobInstance(dryTenant, dryDefinition, dryJob, day, "FAILED", true);
+    jdbcTemplate.update(setCalendarSql, calendar, formalTenant, formalJob);
+    jdbcTemplate.update(setCalendarSql, calendar, dryTenant, dryJob);
+    jdbcTemplate.update(
+        changeDefinitionSql, unique("other-calendar"), formalTenant, formalDefinition);
+
+    var days = batchDayInstanceMapper.selectFailedDaysNeedingCatchUp(1000);
+    assertThat(days)
+        .extracting(dayRow -> dayRow.tenantId())
+        .contains(formalTenant)
+        .doesNotContain(dryTenant);
+  }
+
   @BeforeAll
   static void grantExpectedWorkRlsTestRole(@Autowired JdbcTemplate jdbcTemplate) {
     final String doStatementSql = """
@@ -130,14 +420,11 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         GRANT USAGE ON SCHEMA batch TO %s
     """.formatted(RLS_ROLE);
     jdbcTemplate.execute(grantUsageSql);
-    final String grantSelectSql =
-        """
+    final String grantSelectSql = """
         GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA batch TO %s
     """.formatted(RLS_ROLE);
-    jdbcTemplate.execute(
-        grantSelectSql);
-    final String grantSequenceUsageSql =
-        """
+    jdbcTemplate.execute(grantSelectSql);
+    final String grantSequenceUsageSql = """
         GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA batch TO %s
     """.formatted(RLS_ROLE);
     jdbcTemplate.execute(grantSequenceUsageSql);
@@ -204,10 +491,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     String jobCode = unique("foreign-definition-job");
     LocalDate bizDate = LocalDate.of(2026, 10, 17);
     for (String tenantId : List.of(runTenant, definitionTenant)) {
-      jdbcTemplate.update(
-          insertTenantSql,
-          tenantId,
-          tenantId);
+      jdbcTemplate.update(insertTenantSql, tenantId, tenantId);
     }
     Long foreignDefinitionId =
         insertJobDefinition(definitionTenant, calendarCode, jobCode, unique("group"));
@@ -242,11 +526,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     LocalDate bizDate = LocalDate.of(2026, 9, 10);
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, calendarCode);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
-    jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, bizDate);
     insertWorkflowRun(tenantId, workflowDefinitionId, bizDate, "RUNNING", false);
 
     Integer selectedJobInstanceCount =
@@ -255,11 +535,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     batchDaySettleScheduler.settle();
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("IN_FLIGHT");
 
-    jdbcTemplate.update(
-        updateWorkflowRunSql,
-        tenantId,
-        workflowDefinitionId,
-        bizDate);
+    jdbcTemplate.update(updateWorkflowRunSql, tenantId, workflowDefinitionId, bizDate);
     batchDaySettleScheduler.settle();
 
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("FAILED");
@@ -285,11 +561,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     LocalDate bizDate = LocalDate.of(2026, 9, 12);
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, calendarCode);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
-    jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, bizDate);
     insertWorkflowRun(tenantId, workflowDefinitionId, bizDate, "TERMINATED", false);
 
     Integer selectedJobInstanceCount =
@@ -321,11 +593,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     LocalDate bizDate = LocalDate.of(2026, 9, 13);
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, calendarCode);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
-    jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, bizDate);
     insertWorkflowRun(tenantId, workflowDefinitionId, bizDate, "SUCCESS", false);
 
     Integer selectedJobInstanceCount =
@@ -357,11 +625,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     LocalDate bizDate = LocalDate.of(2026, 9, 11);
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, calendarCode);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
-    jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, bizDate);
     insertWorkflowRun(tenantId, workflowDefinitionId, bizDate, "SUCCESS", false);
 
     try (Connection fence = jdbcTemplate.getDataSource().getConnection();
@@ -397,10 +661,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         values (?, ?, ?, ?) returning id\
         """;
 
-    jdbcTemplate.update(
-        insertTenantSql,
-        tenantId,
-        tenantId);
+    jdbcTemplate.update(insertTenantSql, tenantId, tenantId);
     return jdbcTemplate.queryForObject(
         insertWorkflowDefinitionSql,
         Long.class,
@@ -416,18 +677,13 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
       LocalDate bizDate,
       String status,
       boolean dryRun) {
-        final String insertWorkflowRunSql = """
+    final String insertWorkflowRunSql = """
             insert into batch.workflow_run (tenant_id, workflow_definition_id, biz_date, run_status, dry_run)\s\
             values (?, ?, ?, ?, ?)\
             """;
 
-        jdbcTemplate.update(
-        insertWorkflowRunSql,
-        tenantId,
-        workflowDefinitionId,
-        bizDate,
-        status,
-        dryRun);
+    jdbcTemplate.update(
+        insertWorkflowRunSql, tenantId, workflowDefinitionId, bizDate, status, dryRun);
   }
 
   @Test
@@ -476,10 +732,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     String tenantId = unique("tenant");
     String calendarCode = unique("calendar");
     LocalDate bizDate = LocalDate.of(2026, 9, 7);
-    jdbcTemplate.update(
-        insertTenantSql,
-        tenantId,
-        tenantId);
+    jdbcTemplate.update(insertTenantSql, tenantId, tenantId);
     Long workflowDefinitionId = jdbcTemplate.queryForObject(
         insertWorkflowDefinitionSql,
         Long.class,
@@ -528,20 +781,11 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     String calendarCode = unique("dst-calendar");
     LocalDate bizDate = LocalDate.of(2026, 3, 7);
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, calendarCode);
-    String workflowCode = jdbcTemplate.queryForObject(
-        selectWorkflowCodeSql,
-        String.class,
-        workflowDefinitionId);
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        tenantId,
-        calendarCode);
+    String workflowCode =
+        jdbcTemplate.queryForObject(selectWorkflowCodeSql, String.class, workflowDefinitionId);
+    jdbcTemplate.update(insertBusinessCalendarSql, tenantId, calendarCode);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
-    jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, bizDate);
     jdbcTemplate.update(
         insertScheduledOccurrenceSql,
         tenantId,
@@ -554,11 +798,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     batchDaySettleScheduler.settle();
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("CUTOFF");
 
-    jdbcTemplate.update(
-        updateScheduledOccurrenceSql,
-        tenantId,
-        workflowDefinitionId,
-        bizDate);
+    jdbcTemplate.update(updateScheduledOccurrenceSql, tenantId, workflowDefinitionId, bizDate);
     batchDaySettleScheduler.settle();
 
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("SETTLED");
@@ -600,14 +840,15 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
     jdbcTemplate.update(updateBatchDaySql, tenantId, calendarCode, bizDate);
     Instant dueAt = Instant.now().minusSeconds(60);
-    expectedWorkRegistrationService.register(new ExpectedWorkRegistrationService.FileGroupExpectation(
-        tenantId,
-        calendarCode,
-        workflowDefinitionId,
-        sourceKey,
-        bizDate,
-        dueAt.minusSeconds(300),
-        dueAt));
+    expectedWorkRegistrationService.register(
+        new ExpectedWorkRegistrationService.FileGroupExpectation(
+            tenantId,
+            calendarCode,
+            workflowDefinitionId,
+            sourceKey,
+            bizDate,
+            dueAt.minusSeconds(300),
+            dueAt));
 
     final String createAlertFailureFunctionSql = """
         create function batch.reject_missing_expected_alert_for_test() returns trigger
@@ -680,20 +921,20 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         schedule_version, calendar_code, scheduled_fire_time, biz_date, occurrence_status)\s\
         values (?, ?, ?, 1, ?, ?, ?, 'MISFIRE_PENDING')\
         """;
-  final String insertExpectedWorkOccurrenceSql = """
+    final String insertExpectedWorkOccurrenceSql = """
       insert into batch.expected_work_occurrence (tenant_id, calendar_code, biz_date, workflow_definition_id,\s\
       source_type, source_key, occurrence_status)\s\
       values (?, ?, ?, ?, 'FILE_GROUP', ?, 'ARRIVED'), (?, ?, ?, ?, 'EXTERNAL_EVENT', ?, 'EXPECTED')\
       """;
-  final String updateScheduledOccurrenceSql = """
+    final String updateScheduledOccurrenceSql = """
       update batch.scheduled_occurrence set occurrence_status = 'MISFIRE_SKIPPED' where tenant_id = ?\s\
       and workflow_definition_id = ? and biz_date = ?\
       """;
-  final String updateExpectedWorkOccurrenceSql = """
+    final String updateExpectedWorkOccurrenceSql = """
       update batch.expected_work_occurrence set occurrence_status = 'SATISFIED' where tenant_id = ?\s\
       and calendar_code = ? and biz_date = ? and source_type = 'FILE_GROUP'\
       """;
-  final String updateExpectedWorkOccurrenceSql2 = """
+    final String updateExpectedWorkOccurrenceSql2 = """
       update batch.expected_work_occurrence set occurrence_status = 'SATISFIED' where tenant_id = ?\s\
       and calendar_code = ? and biz_date = ? and source_type = 'EXTERNAL_EVENT'\
       """;
@@ -705,16 +946,9 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     Long jobDefinitionId = insertJobDefinition(tenantId, calendarCode, jobCode, unique("group"));
     Long workflowDefinitionId =
         insertManagedSingleJobWorkflow(tenantId, calendarCode, jobCode, jobDefinitionId);
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        tenantId,
-        workflowDefinitionId);
+    jdbcTemplate.update(updateWorkflowDefinitionSql, tenantId, workflowDefinitionId);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
-    jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, bizDate);
     jdbcTemplate.update(
         insertScheduledOccurrenceSql,
         tenantId,
@@ -739,27 +973,15 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     batchDaySettleScheduler.settle();
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("CUTOFF");
 
-    jdbcTemplate.update(
-        updateScheduledOccurrenceSql,
-        tenantId,
-        workflowDefinitionId,
-        bizDate);
+    jdbcTemplate.update(updateScheduledOccurrenceSql, tenantId, workflowDefinitionId, bizDate);
     batchDaySettleScheduler.settle();
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("CUTOFF");
 
-    jdbcTemplate.update(
-        updateExpectedWorkOccurrenceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateExpectedWorkOccurrenceSql, tenantId, calendarCode, bizDate);
     batchDaySettleScheduler.settle();
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("CUTOFF");
 
-    jdbcTemplate.update(
-        updateExpectedWorkOccurrenceSql2,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateExpectedWorkOccurrenceSql2, tenantId, calendarCode, bizDate);
     batchDaySettleScheduler.settle();
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("SETTLED");
   }
@@ -788,10 +1010,8 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     String calendarCode = unique("calendar");
     LocalDate bizDate = LocalDate.of(2026, 9, 7);
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, calendarCode);
-    String workflowCode = jdbcTemplate.queryForObject(
-        selectWorkflowCodeSql,
-        String.class,
-        workflowDefinitionId);
+    String workflowCode =
+        jdbcTemplate.queryForObject(selectWorkflowCodeSql, String.class, workflowDefinitionId);
     String requestId = unique("request");
     Long triggerRequestId = jdbcTemplate.queryForObject(
         insertTriggerRequestSql,
@@ -817,11 +1037,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
 
     insertWorkflowRun(tenantId, workflowDefinitionId, bizDate, "RUNNING", false);
     jdbcTemplate.update(
-        updateWorkflowRunSql,
-        triggerRequestId,
-        tenantId,
-        workflowDefinitionId,
-        bizDate);
+        updateWorkflowRunSql, triggerRequestId, tenantId, workflowDefinitionId, bizDate);
 
     assertThat(batchDayInstanceMapper.countBlockingScheduledOccurrences(
             tenantId, calendarCode, bizDate))
@@ -863,10 +1079,8 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
       long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
       boolean waitingOnLock = false;
       while (System.nanoTime() < deadline) {
-        Boolean lockWait = jdbcTemplate.queryForObject(
-            selectWaitEventTypeSql,
-            Boolean.class,
-            contenderPid);
+        Boolean lockWait =
+            jdbcTemplate.queryForObject(selectWaitEventTypeSql, Boolean.class, contenderPid);
         if (Boolean.TRUE.equals(lockWait)) {
           waitingOnLock = true;
           break;
@@ -906,11 +1120,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, calendarCode);
     String requestId = unique("waiting-request");
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
-    jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, bizDate);
     jdbcTemplate.update(
         insertTriggerRequestSql,
         tenantId,
@@ -919,11 +1129,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         bizDate,
         unique("dedup"));
     jdbcTemplate.update(
-        insertWorkflowLaunchWaitSql,
-        tenantId,
-        requestId,
-        workflowDefinitionId,
-        bizDate);
+        insertWorkflowLaunchWaitSql, tenantId, requestId, workflowDefinitionId, bizDate);
 
     batchDaySettleScheduler.settle();
 
@@ -953,16 +1159,10 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     String calendarCode = unique("calendar");
     LocalDate bizDate = LocalDate.of(2026, 9, 14);
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, calendarCode);
-    String workflowCode = jdbcTemplate.queryForObject(
-        selectWorkflowCodeSql,
-        String.class,
-        workflowDefinitionId);
+    String workflowCode =
+        jdbcTemplate.queryForObject(selectWorkflowCodeSql, String.class, workflowDefinitionId);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
-    jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, bizDate);
     jdbcTemplate.update(
         insertScheduledOccurrenceSql,
         tenantId,
@@ -1007,27 +1207,13 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     String workflowCode = unique("scheduled-workflow");
     LocalDate bizDate = LocalDate.of(2026, 9, 15);
     Instant cutoff = Instant.parse("2026-09-15T08:00:00Z");
-    jdbcTemplate.update(
-        insertTenantSql,
-        tenantId,
-        tenantId);
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        tenantId,
-        calendarCode);
+    jdbcTemplate.update(insertTenantSql, tenantId, tenantId);
+    jdbcTemplate.update(insertBusinessCalendarSql, tenantId, calendarCode);
     Long workflowDefinitionId = jdbcTemplate.queryForObject(
-        insertWorkflowDefinitionSql,
-        Long.class,
-        tenantId,
-        workflowCode,
-        calendarCode);
+        insertWorkflowDefinitionSql, Long.class, tenantId, workflowCode, calendarCode);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
     jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        Timestamp.from(cutoff),
-        tenantId,
-        calendarCode,
-        bizDate);
+        updateBatchDayInstanceSql, Timestamp.from(cutoff), tenantId, calendarCode, bizDate);
 
     batchDaySettleScheduler.settle();
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("CUTOFF");
@@ -1097,34 +1283,20 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     LocalDate bizDate = LocalDate.of(2026, 9, 15);
     Instant cutoff = Instant.parse("2026-09-15T08:00:00Z");
     Instant fireTime = Instant.parse("2026-09-15T07:30:00Z");
-    jdbcTemplate.update(
-        insertTenantSql,
-        tenantId,
-        tenantId);
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        tenantId,
-        calendarCode);
+    jdbcTemplate.update(insertTenantSql, tenantId, tenantId);
+    jdbcTemplate.update(insertBusinessCalendarSql, tenantId, calendarCode);
     Long workflowDefinitionId = jdbcTemplate.queryForObject(
-        insertWorkflowDefinitionSql,
-        Long.class,
-        tenantId,
-        workflowCode,
-        calendarCode);
+        insertWorkflowDefinitionSql, Long.class, tenantId, workflowCode, calendarCode);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
     jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        Timestamp.from(cutoff),
-        tenantId,
-        calendarCode,
-        bizDate);
+        updateBatchDayInstanceSql, Timestamp.from(cutoff), tenantId, calendarCode, bizDate);
 
     try (Connection publication = jdbcTemplate.getDataSource().getConnection()) {
       publication.setAutoCommit(false);
-      try (PreparedStatement occurrence = publication.prepareStatement(
-              insertScheduledOccurrenceSql);
-          PreparedStatement coverage = publication.prepareStatement(
-              insertScheduledOccurrenceCoverageSql)) {
+      try (PreparedStatement occurrence =
+              publication.prepareStatement(insertScheduledOccurrenceSql);
+          PreparedStatement coverage =
+              publication.prepareStatement(insertScheduledOccurrenceCoverageSql)) {
         occurrence.setString(1, tenantId);
         occurrence.setLong(2, workflowDefinitionId);
         occurrence.setString(3, workflowCode);
@@ -1152,23 +1324,13 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         selectCountSql, Integer.class, tenantId, workflowDefinitionId, bizDate);
     assertThat(selectedScheduledOccurrenceCount).isOne();
 
-    jdbcTemplate.update(
-        updateScheduledOccurrenceSql,
-        tenantId,
-        workflowDefinitionId,
-        bizDate);
+    jdbcTemplate.update(updateScheduledOccurrenceSql, tenantId, workflowDefinitionId, bizDate);
 
-    jdbcTemplate.update(
-        updateBusinessCalendarSql,
-        tenantId,
-        calendarCode);
+    jdbcTemplate.update(updateBusinessCalendarSql, tenantId, calendarCode);
     batchDaySettleScheduler.settle();
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("CUTOFF");
 
-    jdbcTemplate.update(
-        updateScheduledOccurrenceCoverageSql,
-        tenantId,
-        workflowDefinitionId);
+    jdbcTemplate.update(updateScheduledOccurrenceCoverageSql, tenantId, workflowDefinitionId);
     batchDaySettleScheduler.settle();
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("SETTLED");
   }
@@ -1188,18 +1350,18 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         schedule_version, calendar_code, scheduled_fire_time, biz_date, occurrence_status, request_id)\s\
         values (?, ?, ?, 1, ?, ?, ?, 'REQUESTED', ?)\
         """;
-  final String updateBatchDayInstanceSql = """
+    final String updateBatchDayInstanceSql = """
       update batch.batch_day_instance set day_status = 'CUTOFF' where tenant_id = ? and calendar_code = ?\s\
       and biz_date = ?\
       """;
-  final String updateWorkflowRunSql = """
+    final String updateWorkflowRunSql = """
       update batch.workflow_run set trigger_request_id = ? where tenant_id = ? and workflow_definition_id = ?\s\
       and biz_date = ?\
       """;
-  final String updateTriggerRequestSql = """
+    final String updateTriggerRequestSql = """
       update batch.trigger_request set request_status = 'LAUNCHED' where tenant_id = ? and id = ?\
       """;
-  final String updateWorkflowRunSql2 = """
+    final String updateWorkflowRunSql2 = """
       update batch.workflow_run set run_status = 'SUCCESS' where tenant_id = ? and workflow_definition_id = ?\s\
       and biz_date = ?\
       """;
@@ -1208,10 +1370,8 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     String calendarCode = unique("calendar");
     LocalDate bizDate = LocalDate.of(2026, 9, 16);
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, calendarCode);
-    String workflowCode = jdbcTemplate.queryForObject(
-        selectWorkflowCodeSql,
-        String.class,
-        workflowDefinitionId);
+    String workflowCode =
+        jdbcTemplate.queryForObject(selectWorkflowCodeSql, String.class, workflowDefinitionId);
     String requestId = unique("request");
     Long triggerRequestId = jdbcTemplate.queryForObject(
         insertTriggerRequestSql,
@@ -1231,34 +1391,19 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         bizDate,
         requestId);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
-    jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, bizDate);
 
     batchDaySettleScheduler.settle();
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("CUTOFF");
 
     insertWorkflowRun(tenantId, workflowDefinitionId, bizDate, "RUNNING", false);
     jdbcTemplate.update(
-        updateWorkflowRunSql,
-        triggerRequestId,
-        tenantId,
-        workflowDefinitionId,
-        bizDate);
-    jdbcTemplate.update(
-        updateTriggerRequestSql,
-        tenantId,
-        triggerRequestId);
+        updateWorkflowRunSql, triggerRequestId, tenantId, workflowDefinitionId, bizDate);
+    jdbcTemplate.update(updateTriggerRequestSql, tenantId, triggerRequestId);
     batchDaySettleScheduler.settle();
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("IN_FLIGHT");
 
-    jdbcTemplate.update(
-        updateWorkflowRunSql2,
-        tenantId,
-        workflowDefinitionId,
-        bizDate);
+    jdbcTemplate.update(updateWorkflowRunSql2, tenantId, workflowDefinitionId, bizDate);
     batchDaySettleScheduler.settle();
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("SETTLED");
   }
@@ -1278,19 +1423,19 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         schedule_version, calendar_code, scheduled_fire_time, biz_date, occurrence_status, request_id)\s\
         values (?, ?, ?, 1, ?, ?, ?, 'REQUESTED', ?)\
         """;
-  final String updateBatchDayInstanceSql = """
+    final String updateBatchDayInstanceSql = """
       update batch.batch_day_instance set day_status = 'CUTOFF' where tenant_id = ? and calendar_code = ?\s\
       and biz_date = ?\
       """;
-  final String insertWorkflowRunSql = """
+    final String insertWorkflowRunSql = """
       insert into batch.workflow_run (tenant_id, workflow_definition_id, biz_date, run_status, dry_run,\s\
       trigger_request_id) values (?, ?, ?, 'SUCCESS_DRY_RUN', true, ?)\
       """;
-  final String updateScheduledOccurrenceSql = """
+    final String updateScheduledOccurrenceSql = """
       update batch.scheduled_occurrence set request_id = ? where tenant_id = ? and workflow_definition_id = ?\s\
       and biz_date = ?\
       """;
-  final String insertWorkflowRunSql2 = """
+    final String insertWorkflowRunSql2 = """
       insert into batch.workflow_run (tenant_id, workflow_definition_id, biz_date, run_status, dry_run,\s\
       trigger_request_id) values (?, ?, ?, 'RUNNING', false, ?)\
       """;
@@ -1302,10 +1447,8 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     String calendarCode = unique("calendar");
     LocalDate bizDate = LocalDate.of(2026, 9, 21);
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, calendarCode);
-    String workflowCode = jdbcTemplate.queryForObject(
-        selectWorkflowCodeSql,
-        String.class,
-        workflowDefinitionId);
+    String workflowCode =
+        jdbcTemplate.queryForObject(selectWorkflowCodeSql, String.class, workflowDefinitionId);
     String requestId = unique("scheduled-request");
     Long triggerRequestId = jdbcTemplate.queryForObject(
         insertTriggerRequestSql,
@@ -1325,17 +1468,9 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         bizDate,
         requestId);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, bizDate);
     jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
-    jdbcTemplate.update(
-        insertWorkflowRunSql,
-        tenantId,
-        workflowDefinitionId,
-        bizDate,
-        triggerRequestId);
+        insertWorkflowRunSql, tenantId, workflowDefinitionId, bizDate, triggerRequestId);
 
     batchDaySettleScheduler.settle();
 
@@ -1354,17 +1489,9 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         bizDate,
         unique("formal-dedup"));
     jdbcTemplate.update(
-        updateScheduledOccurrenceSql,
-        formalRequestId,
-        tenantId,
-        workflowDefinitionId,
-        bizDate);
+        updateScheduledOccurrenceSql, formalRequestId, tenantId, workflowDefinitionId, bizDate);
     jdbcTemplate.update(
-        insertWorkflowRunSql2,
-        tenantId,
-        workflowDefinitionId,
-        bizDate,
-        formalTriggerRequestId);
+        insertWorkflowRunSql2, tenantId, workflowDefinitionId, bizDate, formalTriggerRequestId);
 
     batchDaySettleScheduler.settle();
 
@@ -1373,10 +1500,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         .isZero();
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("IN_FLIGHT");
 
-    jdbcTemplate.update(
-        updateWorkflowRunSql,
-        tenantId,
-        formalTriggerRequestId);
+    jdbcTemplate.update(updateWorkflowRunSql, tenantId, formalTriggerRequestId);
     batchDaySettleScheduler.settle();
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("SETTLED");
   }
@@ -1410,10 +1534,8 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     String calendarCode = unique("calendar");
     LocalDate bizDate = LocalDate.of(2026, 9, 22);
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, calendarCode);
-    String workflowCode = jdbcTemplate.queryForObject(
-        selectWorkflowCodeSql,
-        String.class,
-        workflowDefinitionId);
+    String workflowCode =
+        jdbcTemplate.queryForObject(selectWorkflowCodeSql, String.class, workflowDefinitionId);
     String requestId = unique("scheduled-request");
     Long triggerRequestId = jdbcTemplate.queryForObject(
         insertTriggerRequestSql,
@@ -1433,11 +1555,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         bizDate,
         requestId);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
-    jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, bizDate);
 
     try (Connection fence = jdbcTemplate.getDataSource().getConnection();
         ExecutorService executor = Executors.newFixedThreadPool(1)) {
@@ -1449,8 +1567,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
 
       try (Connection dryRunCommit = jdbcTemplate.getDataSource().getConnection()) {
         dryRunCommit.setAutoCommit(false);
-        try (PreparedStatement statement = dryRunCommit.prepareStatement(
-            insertWorkflowRunSql)) {
+        try (PreparedStatement statement = dryRunCommit.prepareStatement(insertWorkflowRunSql)) {
           statement.setString(1, tenantId);
           statement.setLong(2, workflowDefinitionId);
           statement.setObject(3, bizDate);
@@ -1495,16 +1612,10 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     String calendarCode = unique("calendar");
     LocalDate bizDate = LocalDate.of(2026, 9, 16);
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, calendarCode);
-    String workflowCode = jdbcTemplate.queryForObject(
-        selectWorkflowCodeSql,
-        String.class,
-        workflowDefinitionId);
+    String workflowCode =
+        jdbcTemplate.queryForObject(selectWorkflowCodeSql, String.class, workflowDefinitionId);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
-    jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, bizDate);
     jdbcTemplate.update(
         insertScheduledOccurrenceSql,
         tenantId,
@@ -1518,11 +1629,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
 
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("CUTOFF");
 
-    jdbcTemplate.update(
-        updateScheduledOccurrenceSql,
-        tenantId,
-        workflowDefinitionId,
-        bizDate);
+    jdbcTemplate.update(updateScheduledOccurrenceSql, tenantId, workflowDefinitionId, bizDate);
     batchDaySettleScheduler.settle();
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("SETTLED");
   }
@@ -1551,16 +1658,10 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     String calendarCode = unique("calendar");
     LocalDate bizDate = LocalDate.of(2026, 9, 17);
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, calendarCode);
-    String workflowCode = jdbcTemplate.queryForObject(
-        selectWorkflowCodeSql,
-        String.class,
-        workflowDefinitionId);
+    String workflowCode =
+        jdbcTemplate.queryForObject(selectWorkflowCodeSql, String.class, workflowDefinitionId);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
-    jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, bizDate);
     jdbcTemplate.update(
         insertScheduledOccurrenceSql,
         tenantId,
@@ -1573,11 +1674,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     batchDaySettleScheduler.settle();
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("CUTOFF");
 
-    jdbcTemplate.update(
-        updateScheduledOccurrenceSql,
-        tenantId,
-        workflowDefinitionId,
-        bizDate);
+    jdbcTemplate.update(updateScheduledOccurrenceSql, tenantId, workflowDefinitionId, bizDate);
     batchDaySettleScheduler.settle();
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("SETTLED");
   }
@@ -1610,34 +1707,16 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     String tenantId = unique("tenant");
     String calendarCode = unique("calendar");
     LocalDate bizDate = LocalDate.of(2026, 9, 18);
-    jdbcTemplate.update(
-        insertTenantSql,
-        tenantId,
-        tenantId);
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        tenantId,
-        calendarCode);
+    jdbcTemplate.update(insertTenantSql, tenantId, tenantId);
+    jdbcTemplate.update(insertBusinessCalendarSql, tenantId, calendarCode);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
-    jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
-    jdbcTemplate.update(
-        insertCalendarDependencyWaitSql,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, bizDate);
+    jdbcTemplate.update(insertCalendarDependencyWaitSql, tenantId, calendarCode, bizDate);
 
     batchDaySettleScheduler.settle();
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("CUTOFF");
 
-    jdbcTemplate.update(
-        updateCalendarDependencyWaitSql,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateCalendarDependencyWaitSql, tenantId, calendarCode, bizDate);
     batchDaySettleScheduler.settle();
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("SETTLED");
   }
@@ -1678,10 +1757,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     String calendarCode = unique("calendar");
     String jobCode = unique("dependent-job");
     LocalDate bizDate = LocalDate.of(2026, 9, 19);
-    jdbcTemplate.update(
-        insertTenantSql,
-        tenantId,
-        tenantId);
+    jdbcTemplate.update(insertTenantSql, tenantId, tenantId);
     Long jobDefinitionId = insertJobDefinition(tenantId, calendarCode, jobCode, unique("group"));
     Long workflowDefinitionId =
         insertManagedSingleJobWorkflow(tenantId, calendarCode, jobCode, jobDefinitionId);
@@ -1694,37 +1770,18 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         workflowDefinitionId,
         bizDate,
         unique("dedup"));
-    jdbcTemplate.update(
-        insertJobDependencyWaitingLaunchSql,
-        tenantId,
-        requestId,
-        jobCode,
-        bizDate);
+    jdbcTemplate.update(insertJobDependencyWaitingLaunchSql, tenantId, requestId, jobCode, bizDate);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
-    jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, bizDate);
 
     batchDaySettleScheduler.settle();
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("CUTOFF");
 
     insertWorkflowRun(tenantId, workflowDefinitionId, bizDate, "SUCCESS", false);
     jdbcTemplate.update(
-        updateWorkflowRunSql,
-        triggerRequestId,
-        tenantId,
-        workflowDefinitionId,
-        bizDate);
-    jdbcTemplate.update(
-        updateTriggerRequestSql,
-        tenantId,
-        triggerRequestId);
-    jdbcTemplate.update(
-        updateJobDependencyWaitingLaunchSql,
-        tenantId,
-        requestId);
+        updateWorkflowRunSql, triggerRequestId, tenantId, workflowDefinitionId, bizDate);
+    jdbcTemplate.update(updateTriggerRequestSql, tenantId, triggerRequestId);
+    jdbcTemplate.update(updateJobDependencyWaitingLaunchSql, tenantId, requestId);
     batchDaySettleScheduler.settle();
 
     assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("SETTLED");
@@ -1747,11 +1804,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     try {
       LocalDate requestFirstDate = LocalDate.of(2026, 9, 11);
       insertOpenBatchDay(tenantId, calendarCode, requestFirstDate);
-      jdbcTemplate.update(
-          updateBatchDayInstanceSql,
-          tenantId,
-          calendarCode,
-          requestFirstDate);
+      jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, requestFirstDate);
       try (Connection admission = jdbcTemplate.getDataSource().getConnection()) {
         admission.setAutoCommit(false);
         insertWorkflowRequest(admission, tenantId, workflowDefinitionId, requestFirstDate);
@@ -1771,11 +1824,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
 
       LocalDate settlementFirstDate = LocalDate.of(2026, 9, 12);
       insertOpenBatchDay(tenantId, calendarCode, settlementFirstDate);
-      jdbcTemplate.update(
-          updateBatchDayInstanceSql,
-          tenantId,
-          calendarCode,
-          settlementFirstDate);
+      jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, settlementFirstDate);
       Future<?> settlementAttempt = executor.submit(batchDaySettleScheduler::settle);
       settlementAttempt.get(10, TimeUnit.SECONDS);
       assertThat(dayStatus(tenantId, calendarCode, settlementFirstDate)).isEqualTo("SETTLED");
@@ -1805,25 +1854,25 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
   @DisplayName("节点释放等待结算围栏后必须重新读取父 Workflow 状态")
   void shouldRejectChildAdmissionWhenParentTerminatesWhileWaitingForSettlementFence()
       throws Exception {
-        final String insertTriggerRequestSql = """
+    final String insertTriggerRequestSql = """
             insert into batch.trigger_request (tenant_id, request_id, trigger_type, job_code, biz_date,\s\
             dedup_key, request_status, parent_workflow_run_id, parent_node_code)\s\
             values (?, ?, 'EVENT', ?, ?, ?, 'ACCEPTED', ?, 'WAIT_NODE')\
             """;
 
-        final String insertWorkflowRunSql = """
+    final String insertWorkflowRunSql = """
             insert into batch.workflow_run (tenant_id, workflow_definition_id, biz_date, run_status, dry_run)\s\
             values (?, ?, ?, 'RUNNING', false) returning id\
             """;
-        final String updateBatchDayInstanceSql = """
+    final String updateBatchDayInstanceSql = """
             update batch.batch_day_instance set day_status = 'CUTOFF' where tenant_id = ? and calendar_code = ?\s\
             and biz_date = ?\
             """;
-        final String updateWorkflowRunSql = """
+    final String updateWorkflowRunSql = """
             update batch.workflow_run set run_status = 'SUCCESS', finished_at = current_timestamp\s\
             where tenant_id = ? and id = ?\
             """;
-  final String updateBatchDayInstanceSql2 = """
+    final String updateBatchDayInstanceSql2 = """
       update batch.batch_day_instance set day_status = 'SETTLED', settled_at = current_timestamp\s\
       where tenant_id = ? and calendar_code = ? and biz_date = ?\
       """;
@@ -1838,17 +1887,9 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     insertJobDefinition(tenantId, calendarCode, jobCode, unique("group"));
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, calendarCode);
     Long workflowRunId = jdbcTemplate.queryForObject(
-        insertWorkflowRunSql,
-        Long.class,
-        tenantId,
-        workflowDefinitionId,
-        bizDate);
+        insertWorkflowRunSql, Long.class, tenantId, workflowDefinitionId, bizDate);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
-        jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, bizDate);
 
     ExecutorService executor = Executors.newSingleThreadExecutor();
     try (Connection settlement = jdbcTemplate.getDataSource().getConnection()) {
@@ -1858,8 +1899,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
       Future<String> childAdmission = executor.submit(() -> {
         try (Connection connection = jdbcTemplate.getDataSource().getConnection()) {
           connection.setAutoCommit(false);
-          try (var statement = connection.prepareStatement(
-              insertTriggerRequestSql)) {
+          try (var statement = connection.prepareStatement(insertTriggerRequestSql)) {
             statement.setString(1, tenantId);
             statement.setString(2, unique("child-request"));
             statement.setString(3, jobCode);
@@ -1875,15 +1915,8 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         }
       });
       awaitBlockedBy(settlementPid);
-      jdbcTemplate.update(
-          updateWorkflowRunSql,
-          tenantId,
-          workflowRunId);
-      jdbcTemplate.update(
-          updateBatchDayInstanceSql2,
-          tenantId,
-          calendarCode,
-          bizDate);
+      jdbcTemplate.update(updateWorkflowRunSql, tenantId, workflowRunId);
+      jdbcTemplate.update(updateBatchDayInstanceSql2, tenantId, calendarCode, bizDate);
       settlement.commit();
 
       assertThat(childAdmission.get(10, TimeUnit.SECONDS)).isEqualTo("BDA01");
@@ -1919,18 +1952,13 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     insertJobDefinition(tenantId, calendarCode, jobCode, unique("group"));
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, calendarCode);
     Long workflowRunId = jdbcTemplate.queryForObject(
-        insertWorkflowRunSql,
-        Long.class,
-        tenantId,
-        workflowDefinitionId,
-        bizDate);
+        insertWorkflowRunSql, Long.class, tenantId, workflowDefinitionId, bizDate);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
 
     try (Connection connection = jdbcTemplate.getDataSource().getConnection()) {
       connection.setAutoCommit(false);
       String sqlState = null;
-      try (PreparedStatement statement = connection.prepareStatement(
-          insertTriggerRequestSql)) {
+      try (PreparedStatement statement = connection.prepareStatement(insertTriggerRequestSql)) {
         statement.setString(1, tenantId);
         statement.setString(2, unique("terminal-parent-child"));
         statement.setString(3, jobCode);
@@ -1984,26 +2012,15 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     LocalDate bizDate = LocalDate.of(2026, 9, 14);
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, calendarCode);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
-    jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, bizDate);
     Long workflowRunId = jdbcTemplate.queryForObject(
-        insertWorkflowRunSql,
-        Long.class,
-        tenantId,
-        workflowDefinitionId,
-        bizDate);
-    jdbcTemplate.update(
-        insertWorkflowNodeRunSql,
-        workflowRunId);
+        insertWorkflowRunSql, Long.class, tenantId, workflowDefinitionId, bizDate);
+    jdbcTemplate.update(insertWorkflowNodeRunSql, workflowRunId);
 
     ExecutorService executor = Executors.newFixedThreadPool(2);
     try (Connection rootLock = jdbcTemplate.getDataSource().getConnection()) {
       rootLock.setAutoCommit(false);
-      try (var lock = rootLock.prepareStatement(
-          selectIdSql)) {
+      try (var lock = rootLock.prepareStatement(selectIdSql)) {
         lock.setString(1, tenantId);
         lock.setLong(2, workflowRunId);
         lock.executeQuery().close();
@@ -2062,14 +2079,12 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         values (?, ?, 'EVENT', ?, ?, ?, 'ACCEPTED', ?, ?)\
         """;
 
-    try (var node = connection.prepareStatement(
-        insertWorkflowNodeRunSql)) {
+    try (var node = connection.prepareStatement(insertWorkflowNodeRunSql)) {
       node.setLong(1, workflowRunId);
       node.setString(2, nodeCode);
       node.executeUpdate();
     }
-    try (var request = connection.prepareStatement(
-        insertTriggerRequestSql)) {
+    try (var request = connection.prepareStatement(insertTriggerRequestSql)) {
       request.setString(1, tenantId);
       request.setString(2, unique("child-request"));
       request.setString(3, nodeCode);
@@ -2093,10 +2108,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
 
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
     while (System.nanoTime() < deadline) {
-      Integer waiting = jdbcTemplate.queryForObject(
-          withLockChainSql,
-          Integer.class,
-          blockerPid);
+      Integer waiting = jdbcTemplate.queryForObject(withLockChainSql, Integer.class, blockerPid);
       if (waiting != null && waiting >= expectedCount) return;
       Thread.sleep(10);
     }
@@ -2111,8 +2123,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         select batch.acquire_batch_day_settlement_fence(?, ?, ?)
     """;
 
-    try (var statement =
-        connection.prepareStatement(selectAcquireBatchDaySettlementFenceSql)) {
+    try (var statement = connection.prepareStatement(selectAcquireBatchDaySettlementFenceSql)) {
       statement.setString(1, tenantId);
       statement.setString(2, calendarCode);
       statement.setObject(3, bizDate);
@@ -2129,11 +2140,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         current_timestamp, false)\
         """;
 
-    jdbcTemplate.update(
-        insertBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(insertBatchDayInstanceSql, tenantId, calendarCode, bizDate);
   }
 
   private void insertWorkflowRequest(
@@ -2144,8 +2151,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         biz_date, dedup_key, request_status) values (?, ?, 'EVENT', ?, ?, ?, 'ACCEPTED')\
         """;
 
-    try (var statement = connection.prepareStatement(
-        insertTriggerRequestSql)) {
+    try (var statement = connection.prepareStatement(insertTriggerRequestSql)) {
       statement.setString(1, tenantId);
       statement.setString(2, unique("request"));
       statement.setLong(3, workflowDefinitionId);
@@ -2162,10 +2168,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
 
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
     while (System.nanoTime() < deadline) {
-      Integer waiting = jdbcTemplate.queryForObject(
-          selectCountSql,
-          Integer.class,
-          blockerPid);
+      Integer waiting = jdbcTemplate.queryForObject(selectCountSql, Integer.class, blockerPid);
       if (waiting != null && waiting > 0) return;
       Thread.sleep(10);
     }
@@ -2179,10 +2182,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
 
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
     while (System.nanoTime() < deadline) {
-      Integer waiting = jdbcTemplate.queryForObject(
-          selectCountSql,
-          Integer.class,
-          blockerPid);
+      Integer waiting = jdbcTemplate.queryForObject(selectCountSql, Integer.class, blockerPid);
       if (waiting != null && waiting >= expectedCount) return;
       Thread.sleep(10);
     }
@@ -2197,11 +2197,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         """;
 
     return jdbcTemplate.queryForObject(
-        selectDayStatusSql,
-        String.class,
-        tenantId,
-        calendarCode,
-        bizDate);
+        selectDayStatusSql, String.class, tenantId, calendarCode, bizDate);
   }
 
   @ParameterizedTest
@@ -2209,10 +2205,10 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
   @DisplayName("人工终结批量日必须与 Trigger 接纳共享结算围栏")
   void shouldSerializeManualTerminalDispositionWithTriggerAdmission(String actionName)
       throws Exception {
-        final String selectPgAdvisoryLockSql = """
+    final String selectPgAdvisoryLockSql = """
             select pg_advisory_lock(?)
         """;
-        final String selectPgAdvisoryUnlockSql = """
+    final String selectPgAdvisoryUnlockSql = """
             select pg_advisory_unlock(?)
         """;
 
@@ -2233,16 +2229,12 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     LocalDate bizDate = LocalDate.of(2026, 9, 14);
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, calendarCode);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
-        jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, bizDate);
 
     String triggerName = unique("wait_for_terminal_disposition").replace('-', '_');
     String functionName = unique("wait_for_terminal_disposition_fn").replace('-', '_');
     long advisoryKey = UUID.randomUUID().getMostSignificantBits() & Long.MAX_VALUE;
-        final String createFunctionSql = """
+    final String createFunctionSql = """
     create function batch.%s() returns trigger language plpgsql as $$
     begin
     if new.day_status in ('SKIPPED', 'SETTLED', 'MANUAL_RELEASED') then
@@ -2252,12 +2244,12 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     end;
     $$
     """.formatted(functionName, advisoryKey);
-        jdbcTemplate.execute(createFunctionSql);
-        final String createTriggerSql = """
+    jdbcTemplate.execute(createFunctionSql);
+    final String createTriggerSql = """
     create trigger %s before update of day_status on batch.batch_day_instance
     for each row execute function batch.%s()
     """.formatted(triggerName, functionName);
-        jdbcTemplate.execute(createTriggerSql);
+    jdbcTemplate.execute(createTriggerSql);
 
     try (ExecutorService executor = Executors.newFixedThreadPool(2);
         Connection blocker = jdbcTemplate.getDataSource().getConnection()) {
@@ -2279,9 +2271,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
       Future<String> admission = null;
       try {
         awaitBlockedBy(blockerPid);
-        Integer operationPid = jdbcTemplate.queryForObject(
-            selectPidSql,
-            Integer.class, blockerPid);
+        Integer operationPid = jdbcTemplate.queryForObject(selectPidSql, Integer.class, blockerPid);
         assertThat(operationPid).isNotNull();
 
         admission = executor.submit(
@@ -2325,8 +2315,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
       final String dropTriggerSql = """
           drop trigger if exists %s on batch.batch_day_instance\
           """.formatted(triggerName);
-      jdbcTemplate.execute(
-          dropTriggerSql);
+      jdbcTemplate.execute(dropTriggerSql);
       final String dropFunctionSql = """
           drop function if exists batch.%s()\
           """.formatted(functionName);
@@ -2365,11 +2354,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     LocalDate bizDate = LocalDate.of(2026, 9, 15);
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, calendarCode);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
-        jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, bizDate);
 
     try (Connection admission = jdbcTemplate.getDataSource().getConnection()) {
       admission.setAutoCommit(false);
@@ -2377,11 +2362,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         insertWorkflowRequest(admission, tenantId, workflowDefinitionId, bizDate);
       } else {
         Long workflowRunId = jdbcTemplate.queryForObject(
-            insertWorkflowRunSql,
-            Long.class,
-            tenantId,
-            workflowDefinitionId,
-            bizDate);
+            insertWorkflowRunSql, Long.class, tenantId, workflowDefinitionId, bizDate);
         insertChildWorkflowRequestAndReadyNode(
             admission, tenantId, workflowRunId, jobCode, bizDate);
       }
@@ -2412,9 +2393,9 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
             bizDate,
             List.of("PENDING", "PROCESSING", "ACCEPTED", "WAITING")))
         .isOne();
-        Integer selectedBatchDayOperationAuditCount =
-            jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId, calendarCode, bizDate);
-        assertThat(selectedBatchDayOperationAuditCount).isZero();
+    Integer selectedBatchDayOperationAuditCount =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId, calendarCode, bizDate);
+    assertThat(selectedBatchDayOperationAuditCount).isZero();
   }
 
   private String tryInsertWorkflowRequest(
@@ -2444,9 +2425,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
       if (admission.isDone()) {
         return false;
       }
-      Integer blocked = jdbcTemplate.queryForObject(
-          selectCountSql,
-          Integer.class, operationPid);
+      Integer blocked = jdbcTemplate.queryForObject(selectCountSql, Integer.class, operationPid);
       if (blocked != null && blocked > 0) {
         return true;
       }
@@ -2474,10 +2453,8 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
 
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
     while (System.nanoTime() < deadline) {
-      Boolean waiting = jdbcTemplate.queryForObject(
-          selectWaitEventTypeSql,
-          Boolean.class,
-          backendPid);
+      Boolean waiting =
+          jdbcTemplate.queryForObject(selectWaitEventTypeSql, Boolean.class, backendPid);
       if (Boolean.TRUE.equals(waiting)) {
         return;
       }
@@ -2497,10 +2474,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     String calendarCode = unique("calendar");
     String jobCode = unique("job");
     LocalDate bizDate = LocalDate.of(2026, 9, 10);
-    jdbcTemplate.update(
-        insertTenantSql,
-        tenantId,
-        tenantId);
+    jdbcTemplate.update(insertTenantSql, tenantId, tenantId);
     insertJobDefinition(tenantId, calendarCode, jobCode, unique("group"));
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, calendarCode);
     BatchDayInstanceEntity settled = BatchDayInstanceEntity.builder()
@@ -2589,10 +2563,10 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("自动空日结算必须对未建立预期清单的 EVENT 与 MIXED 作业失败关闭")
   void shouldCountEnabledEventAndMixedJobsAsUntrackedEmptyDayExpectations() {
-  final String updateWorkflowDefinitionSql = """
+    final String updateWorkflowDefinitionSql = """
       update batch.workflow_definition set trigger_mode = 'EVENT', enabled = true where tenant_id = ? and id = ?\
       """;
-  final String updateWorkflowDefinitionSql2 = """
+    final String updateWorkflowDefinitionSql2 = """
       update batch.workflow_definition set trigger_mode = 'MIXED', enabled = true where tenant_id = ? and id = ?\
       """;
 
@@ -2601,14 +2575,8 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     Long eventWorkflowId = insertWorkflowDefinition(tenantId, calendarCode);
     Long mixedWorkflowId = insertWorkflowDefinition(tenantId, calendarCode);
     insertWorkflowDefinition(tenantId, calendarCode);
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        tenantId,
-        eventWorkflowId);
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql2,
-        tenantId,
-        mixedWorkflowId);
+    jdbcTemplate.update(updateWorkflowDefinitionSql, tenantId, eventWorkflowId);
+    jdbcTemplate.update(updateWorkflowDefinitionSql2, tenantId, mixedWorkflowId);
 
     assertThat(batchDayInstanceMapper.countUntrackedTriggerDefinitions(tenantId, calendarCode))
         .isEqualTo(2);
@@ -2722,43 +2690,30 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     String fileGroupCode = unique("file-group");
     String eventCode = unique("event");
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, calendarCode);
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        tenantId,
-        calendarCode,
-        calendarCode);
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        tenantId,
-        workflowDefinitionId);
+    jdbcTemplate.update(insertBusinessCalendarSql, tenantId, calendarCode, calendarCode);
+    jdbcTemplate.update(updateWorkflowDefinitionSql, tenantId, workflowDefinitionId);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
-    jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
-    expectedWorkOccurrenceMapper.insertIfAbsent(
-        ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
-            .tenantId(tenantId)
-            .calendarCode(calendarCode)
-            .bizDate(bizDate)
-            .workflowDefinitionId(workflowDefinitionId)
-            .sourceType("FILE_GROUP")
-            .sourceKey(fileGroupCode)
-            .expectedAt(Instant.parse("2026-10-15T01:00:00Z"))
-            .dueAt(Instant.parse("2026-10-15T03:00:00Z"))
-            .build());
-    expectedWorkOccurrenceMapper.insertIfAbsent(
-        ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
-            .tenantId(tenantId)
-            .calendarCode(calendarCode)
-            .bizDate(bizDate)
-            .workflowDefinitionId(workflowDefinitionId)
-            .sourceType("EXTERNAL_EVENT")
-            .sourceKey(eventCode)
-            .expectedAt(Instant.parse("2026-10-15T01:00:00Z"))
-            .dueAt(Instant.parse("2026-10-15T03:00:00Z"))
-            .build());
+    jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, bizDate);
+    expectedWorkOccurrenceMapper.insertIfAbsent(ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
+        .tenantId(tenantId)
+        .calendarCode(calendarCode)
+        .bizDate(bizDate)
+        .workflowDefinitionId(workflowDefinitionId)
+        .sourceType("FILE_GROUP")
+        .sourceKey(fileGroupCode)
+        .expectedAt(Instant.parse("2026-10-15T01:00:00Z"))
+        .dueAt(Instant.parse("2026-10-15T03:00:00Z"))
+        .build());
+    expectedWorkOccurrenceMapper.insertIfAbsent(ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
+        .tenantId(tenantId)
+        .calendarCode(calendarCode)
+        .bizDate(bizDate)
+        .workflowDefinitionId(workflowDefinitionId)
+        .sourceType("EXTERNAL_EVENT")
+        .sourceKey(eventCode)
+        .expectedAt(Instant.parse("2026-10-15T01:00:00Z"))
+        .dueAt(Instant.parse("2026-10-15T03:00:00Z"))
+        .build());
     expectedWorkOccurrenceMapper.transitionStatus(
         ExpectedWorkOccurrenceTransitionStatusByIdentityParam.builder()
             .tenantId(tenantId)
@@ -2796,11 +2751,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         selectOccurrenceStatusSql, String.class, tenantId, calendarCode, bizDate);
     assertThat(selectedOccurrenceStatusValues).containsExactly("CANCELLED", "CANCELLED");
     String auditPayload = jdbcTemplate.queryForObject(
-        selectRequestPayloadSql,
-        String.class,
-        tenantId,
-        calendarCode,
-        bizDate);
+        selectRequestPayloadSql, String.class, tenantId, calendarCode, bizDate);
     assertThat(auditPayload).contains("waivedExpectedWork", fileGroupCode, eventCode, "ops-user");
   }
 
@@ -2827,22 +2778,17 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     String fileGroupCode = unique("file-group");
     Long workflowDefinitionId = insertWorkflowDefinition(tenantId, calendarCode);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
-    jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
-    expectedWorkOccurrenceMapper.insertIfAbsent(
-        ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
-            .tenantId(tenantId)
-            .calendarCode(calendarCode)
-            .bizDate(bizDate)
-            .workflowDefinitionId(workflowDefinitionId)
-            .sourceType("FILE_GROUP")
-            .sourceKey(fileGroupCode)
-            .expectedAt(Instant.parse("2026-10-16T01:00:00Z"))
-            .dueAt(Instant.parse("2026-10-16T03:00:00Z"))
-            .build());
+    jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, bizDate);
+    expectedWorkOccurrenceMapper.insertIfAbsent(ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
+        .tenantId(tenantId)
+        .calendarCode(calendarCode)
+        .bizDate(bizDate)
+        .workflowDefinitionId(workflowDefinitionId)
+        .sourceType("FILE_GROUP")
+        .sourceKey(fileGroupCode)
+        .expectedAt(Instant.parse("2026-10-16T01:00:00Z"))
+        .dueAt(Instant.parse("2026-10-16T03:00:00Z"))
+        .build());
 
     transactionTemplate.execute(status -> {
       final String setLocalSql = """
@@ -2888,11 +2834,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         fileGroupCode);
     assertThat(selectedGenerationValues).containsExactly("1:CANCELLED", "2:EXPECTED");
     String reopenAudit = jdbcTemplate.queryForObject(
-        selectRequestPayloadSql,
-        String.class,
-        tenantId,
-        calendarCode,
-        bizDate);
+        selectRequestPayloadSql, String.class, tenantId, calendarCode, bizDate);
     assertThat(reopenAudit)
         .contains(
             "reopenedExpectedWorkCount",
@@ -2922,28 +2864,26 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     String sourceA = unique("source-a");
     String sourceB = unique("source-b");
     Instant expectedAt = Instant.parse("2026-10-15T01:00:00Z");
-    expectedWorkOccurrenceMapper.insertIfAbsent(
-        ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
-            .tenantId(tenantA)
-            .calendarCode(calendarA)
-            .bizDate(bizDate)
-            .workflowDefinitionId(workflowA)
-            .sourceType("FILE_GROUP")
-            .sourceKey(sourceA)
-            .expectedAt(expectedAt)
-            .dueAt(null)
-            .build());
-    expectedWorkOccurrenceMapper.insertIfAbsent(
-        ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
-            .tenantId(tenantB)
-            .calendarCode(calendarB)
-            .bizDate(bizDate)
-            .workflowDefinitionId(workflowB)
-            .sourceType("FILE_GROUP")
-            .sourceKey(sourceB)
-            .expectedAt(expectedAt)
-            .dueAt(null)
-            .build());
+    expectedWorkOccurrenceMapper.insertIfAbsent(ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
+        .tenantId(tenantA)
+        .calendarCode(calendarA)
+        .bizDate(bizDate)
+        .workflowDefinitionId(workflowA)
+        .sourceType("FILE_GROUP")
+        .sourceKey(sourceA)
+        .expectedAt(expectedAt)
+        .dueAt(null)
+        .build());
+    expectedWorkOccurrenceMapper.insertIfAbsent(ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
+        .tenantId(tenantB)
+        .calendarCode(calendarB)
+        .bizDate(bizDate)
+        .workflowDefinitionId(workflowB)
+        .sourceType("FILE_GROUP")
+        .sourceKey(sourceB)
+        .expectedAt(expectedAt)
+        .dueAt(null)
+        .build());
 
     int[] observed = transactionTemplate.execute(status -> {
       final String setLocalSql = """
@@ -2953,16 +2893,10 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
       expectedWorkOccurrenceMapper.setTenantContext(tenantA);
       int visibleForTenantA =
           expectedWorkOccurrenceMapper.countBlockingByCalendarBizDate(tenantA, calendarA, bizDate);
-      int crossTenantUpdates = jdbcTemplate.update(
-          updateExpectedWorkOccurrenceSql,
-          tenantB,
-          calendarB,
-          bizDate);
-      int ownTenantUpdates = jdbcTemplate.update(
-          updateExpectedWorkOccurrenceSql,
-          tenantA,
-          calendarA,
-          bizDate);
+      int crossTenantUpdates =
+          jdbcTemplate.update(updateExpectedWorkOccurrenceSql, tenantB, calendarB, bizDate);
+      int ownTenantUpdates =
+          jdbcTemplate.update(updateExpectedWorkOccurrenceSql, tenantA, calendarA, bizDate);
       return new int[] {visibleForTenantA, crossTenantUpdates, ownTenantUpdates};
     });
 
@@ -3039,12 +2973,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
             tenantId, calendarCode, bizDate, "Asia/Shanghai"))
         .isZero();
     Map<String, Object> expected = jdbcTemplate.queryForMap(
-        selectExpectedAtSql,
-        tenantId,
-        calendarCode,
-        bizDate,
-        workflowDefinitionId,
-        fileGroupCode);
+        selectExpectedAtSql, tenantId, calendarCode, bizDate, workflowDefinitionId, fileGroupCode);
     assertThat(expected)
         .containsEntry("expected_at", Timestamp.from(Instant.parse("2026-10-14T01:15:00Z")))
         .containsEntry("due_at", Timestamp.from(Instant.parse("2026-10-14T02:00:00Z")))
@@ -3054,18 +2983,18 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("禁用 Workflow 不为未来业务日创建文件或事件预期,重新启用后可恢复生成")
   void shouldMaterializeRecurringExpectationsOnlyForEnabledWorkflow() {
-  final String updateWorkflowDefinitionSql = """
+    final String updateWorkflowDefinitionSql = """
       update batch.workflow_definition set trigger_mode = 'EVENT', schedule_enabled = false where tenant_id = ?\s\
       and id = ?\
       """;
-  final String updateWorkflowDefinitionSql2 = """
+    final String updateWorkflowDefinitionSql2 = """
       update batch.workflow_definition set enabled = false where tenant_id = ? and id = ?
   """;
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from batch.expected_work_occurrence where tenant_id = ? and calendar_code = ?\s\
       and biz_date = ?\
       """;
-  final String updateWorkflowDefinitionSql3 = """
+    final String updateWorkflowDefinitionSql3 = """
       update batch.workflow_definition set enabled = true where tenant_id = ? and id = ?
   """;
 
@@ -3078,10 +3007,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     Long jobDefinitionId = insertJobDefinition(tenantId, calendarCode, jobCode, null);
     Long workflowDefinitionId =
         insertManagedSingleJobWorkflow(tenantId, calendarCode, jobCode, jobDefinitionId);
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        tenantId,
-        workflowDefinitionId);
+    jdbcTemplate.update(updateWorkflowDefinitionSql, tenantId, workflowDefinitionId);
     fileGroupExpectationService.configure(new FileGroupExpectationService.DefinitionRequest(
         tenantId,
         calendarCode,
@@ -3104,10 +3030,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     assertThat(externalEventExpectationService.materializeForOpenedBusinessDay(
             tenantId, calendarCode, bizDate, "Asia/Shanghai"))
         .isOne();
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql2,
-        tenantId,
-        workflowDefinitionId);
+    jdbcTemplate.update(updateWorkflowDefinitionSql2, tenantId, workflowDefinitionId);
 
     LocalDate disabledBizDate = bizDate.plusDays(1);
     assertThat(fileGroupExpectationService.materializeForOpenedBusinessDay(
@@ -3123,10 +3046,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         selectCountSql, Integer.class, tenantId, calendarCode, disabledBizDate);
     assertThat(selectedExpectedWorkOccurrenceCountRead2).isZero();
 
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql3,
-        tenantId,
-        workflowDefinitionId);
+    jdbcTemplate.update(updateWorkflowDefinitionSql3, tenantId, workflowDefinitionId);
     assertThat(fileGroupExpectationService.materializeForOpenedBusinessDay(
             tenantId, calendarCode, disabledBizDate, "Asia/Shanghai"))
         .isOne();
@@ -3141,10 +3061,10 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("定义停用后，已启动的关联事件请求仍能结清既有每日预期")
   void shouldMaterializeAndSatisfyRecurringEventExpectationAfterLaunch() {
-  final String updateWorkflowDefinitionSql = """
+    final String updateWorkflowDefinitionSql = """
       update batch.workflow_definition set trigger_mode = 'EVENT' where tenant_id = ? and id = ?
   """;
-  final String updateWorkflowDefinitionSql2 = """
+    final String updateWorkflowDefinitionSql2 = """
       update batch.workflow_definition set enabled = false where tenant_id = ? and id = ?
   """;
 
@@ -3157,10 +3077,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     Long jobDefinitionId = insertJobDefinition(tenantId, calendarCode, jobCode, null);
     Long workflowDefinitionId =
         insertManagedSingleJobWorkflow(tenantId, calendarCode, jobCode, jobDefinitionId);
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        tenantId,
-        workflowDefinitionId);
+    jdbcTemplate.update(updateWorkflowDefinitionSql, tenantId, workflowDefinitionId);
     assertThat(batchDayInstanceMapper.countUntrackedTriggerDefinitions(tenantId, calendarCode))
         .isOne();
 
@@ -3208,10 +3125,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     assertThat(triggerRequestMapper.updateAcceptance(
             tenantId, requestId, "LAUNCHED", launchedJobInstanceId))
         .isOne();
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql2,
-        tenantId,
-        workflowDefinitionId);
+    jdbcTemplate.update(updateWorkflowDefinitionSql2, tenantId, workflowDefinitionId);
     assertThatThrownBy(() -> externalEventExpectationService.markSatisfied(
             new ExternalEventExpectationService.SatisfactionRequest(
                 tenantId,
@@ -3257,10 +3171,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     Long jobDefinitionId = insertJobDefinition(tenantId, calendarCode, jobCode, null);
     Long workflowDefinitionId =
         insertManagedSingleJobWorkflow(tenantId, calendarCode, jobCode, jobDefinitionId);
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        tenantId,
-        workflowDefinitionId);
+    jdbcTemplate.update(updateWorkflowDefinitionSql, tenantId, workflowDefinitionId);
     externalEventExpectationService.configure(new ExternalEventExpectationService.DefinitionRequest(
         tenantId,
         calendarCode,
@@ -3321,16 +3232,9 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     Long jobDefinitionId = insertJobDefinition(tenantId, calendarCode, jobCode, null);
     Long workflowDefinitionId =
         insertManagedSingleJobWorkflow(tenantId, calendarCode, jobCode, jobDefinitionId);
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        tenantId,
-        workflowDefinitionId);
+    jdbcTemplate.update(updateWorkflowDefinitionSql, tenantId, workflowDefinitionId);
     insertOpenBatchDay(tenantId, calendarCode, bizDate);
-    jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, bizDate);
     externalEventExpectationService.configure(new ExternalEventExpectationService.DefinitionRequest(
         tenantId,
         calendarCode,
@@ -3393,14 +3297,14 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("文件与事件预期登记共享结算围栏并拒绝终态后的迟到登记")
   void shouldSerializeExpectedWorkMaterializationWithSettlement() throws Exception {
-  final String updateWorkflowDefinitionSql = """
+    final String updateWorkflowDefinitionSql = """
       update batch.workflow_definition set trigger_mode = 'EVENT' where tenant_id = ? and id = ?
   """;
-  final String updateBatchDayInstanceSql = """
+    final String updateBatchDayInstanceSql = """
       update batch.batch_day_instance set day_status = 'CUTOFF' where tenant_id = ? and calendar_code = ?\s\
       and biz_date = ?\
       """;
-  final String updateBatchDayInstanceSql2 = """
+    final String updateBatchDayInstanceSql2 = """
       update batch.batch_day_instance set day_status = 'CUTOFF' where tenant_id = ? and calendar_code = ?\s\
       and biz_date = ?\
       """;
@@ -3418,10 +3322,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     Long jobDefinitionId = insertJobDefinition(tenantId, calendarCode, jobCode, null);
     Long workflowDefinitionId =
         insertManagedSingleJobWorkflow(tenantId, calendarCode, jobCode, jobDefinitionId);
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        tenantId,
-        workflowDefinitionId);
+    jdbcTemplate.update(updateWorkflowDefinitionSql, tenantId, workflowDefinitionId);
     externalEventExpectationService.configure(new ExternalEventExpectationService.DefinitionRequest(
         tenantId,
         calendarCode,
@@ -3440,11 +3341,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         true));
     insertOpenBatchDay(tenantId, calendarCode, expectationFirstDate);
     insertOpenBatchDay(tenantId, calendarCode, settlementFirstDate);
-    jdbcTemplate.update(
-        updateBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        expectationFirstDate);
+    jdbcTemplate.update(updateBatchDayInstanceSql, tenantId, calendarCode, expectationFirstDate);
 
     ExecutorService executor = Executors.newFixedThreadPool(2);
     try {
@@ -3468,11 +3365,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
               tenantId, calendarCode, expectationFirstDate))
           .isEqualTo(2);
 
-      jdbcTemplate.update(
-          updateBatchDayInstanceSql2,
-          tenantId,
-          calendarCode,
-          settlementFirstDate);
+      jdbcTemplate.update(updateBatchDayInstanceSql2, tenantId, calendarCode, settlementFirstDate);
       try (Connection fence = jdbcTemplate.getDataSource().getConnection()) {
         fence.setAutoCommit(false);
         acquireSettlementFence(fence, tenantId, calendarCode, settlementFirstDate);
@@ -3510,10 +3403,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     Long jobDefinitionId = insertJobDefinition(tenantId, calendarCode, jobCode, null);
     Long workflowDefinitionId =
         insertManagedSingleJobWorkflow(tenantId, calendarCode, jobCode, jobDefinitionId);
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        tenantId,
-        workflowDefinitionId);
+    jdbcTemplate.update(updateWorkflowDefinitionSql, tenantId, workflowDefinitionId);
     assertThat(batchDayInstanceMapper.countUntrackedTriggerDefinitions(tenantId, calendarCode))
         .isOne();
 
@@ -3532,18 +3422,18 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("前一业务日查询跳过节假日并接受周末工作日覆盖")
   void shouldResolveCalendarAwarePreviousBusinessDate() {
-  final String insertBusinessCalendarSql = """
+    final String insertBusinessCalendarSql = """
       insert into batch.business_calendar (tenant_id, calendar_code, calendar_name, timezone)\s\
       values (?, ?, ?, 'Asia/Shanghai')\
       """;
-  final String selectIdSql = """
+    final String selectIdSql = """
       select id from batch.business_calendar where tenant_id = ? and calendar_code = ?
   """;
-  final String insertCalendarHolidaySql = """
+    final String insertCalendarHolidaySql = """
       insert into batch.calendar_holiday (tenant_id, calendar_id, biz_date, day_type, scope)\s\
       values (?, ?, ?, 'HOLIDAY', 'CALENDAR')\
       """;
-  final String insertCalendarHolidaySql2 = """
+    final String insertCalendarHolidaySql2 = """
       insert into batch.calendar_holiday (tenant_id, calendar_id, biz_date, day_type, scope)\s\
       values (?, ?, ?, 'WORKDAY_OVERRIDE', 'CALENDAR')\
       """;
@@ -3552,39 +3442,17 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     String calendarCode = unique("calendar");
     String jobCode = unique("downstream");
     LocalDate monday = LocalDate.of(2026, 10, 12);
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        tenantId,
-        calendarCode,
-        calendarCode);
-    Long calendarId = jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class,
-        tenantId,
-        calendarCode);
+    jdbcTemplate.update(insertBusinessCalendarSql, tenantId, calendarCode, calendarCode);
+    Long calendarId = jdbcTemplate.queryForObject(selectIdSql, Long.class, tenantId, calendarCode);
     insertJobDefinition(tenantId, calendarCode, jobCode, null);
-    jdbcTemplate.update(
-        insertCalendarHolidaySql,
-        tenantId,
-        calendarId,
-        LocalDate.of(2026, 10, 9));
+    jdbcTemplate.update(insertCalendarHolidaySql, tenantId, calendarId, LocalDate.of(2026, 10, 9));
     String overrideCalendarCode = unique("calendar-override");
     jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        tenantId,
-        overrideCalendarCode,
-        overrideCalendarCode);
-    Long overrideCalendarId = jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class,
-        tenantId,
-        overrideCalendarCode);
+        insertBusinessCalendarSql, tenantId, overrideCalendarCode, overrideCalendarCode);
+    Long overrideCalendarId =
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, tenantId, overrideCalendarCode);
     LocalDate workdayOverride = LocalDate.of(2026, 10, 10);
-    jdbcTemplate.update(
-        insertCalendarHolidaySql2,
-        tenantId,
-        overrideCalendarId,
-        workdayOverride);
+    jdbcTemplate.update(insertCalendarHolidaySql2, tenantId, overrideCalendarId, workdayOverride);
 
     assertThat(jobDependencyMapper.selectCalendarCodeByTenantAndJob(tenantId, jobCode))
         .isEqualTo(calendarCode);
@@ -3621,24 +3489,24 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
             'Asia/Shanghai', 'SCHEDULED', ?, true)
           returning id
           """;
-  final String insertScheduledOccurrenceCoverageSql = """
+    final String insertScheduledOccurrenceCoverageSql = """
           insert into batch.scheduled_occurrence_coverage(
             tenant_id, workflow_definition_id, schedule_version, calendar_code,
             coverage_from_at, coverage_through_at
           ) values (?, ?, 6, ?, ?, ?)
           """;
-  final String updateScheduledOccurrenceCoverageSql = """
+    final String updateScheduledOccurrenceCoverageSql = """
       update batch.scheduled_occurrence_coverage set schedule_version = 7 where tenant_id = ?\s\
       and workflow_definition_id = ?\
       """;
-  final String updateBusinessCalendarSql = """
+    final String updateBusinessCalendarSql = """
       update batch.business_calendar set cutoff_time = '05:00:00' where tenant_id = ? and calendar_code = ?\
       """;
-  final String updateScheduledOccurrenceCoverageSql2 = """
+    final String updateScheduledOccurrenceCoverageSql2 = """
       update batch.scheduled_occurrence_coverage set last_success_at = clock_timestamp() where tenant_id = ?\s\
       and workflow_definition_id = ?\
       """;
-  final String updateScheduledOccurrenceCoverageSql3 = """
+    final String updateScheduledOccurrenceCoverageSql3 = """
       update batch.scheduled_occurrence_coverage set coverage_from_at = ? where tenant_id = ?\s\
       and workflow_definition_id = ?\
       """;
@@ -3646,18 +3514,12 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     String tenantId = unique("tenant");
     String calendarCode = unique("calendar");
     String jobCode = unique("scheduled-job");
-    jdbcTemplate.update(
-        insertTenantSql,
-        tenantId,
-        tenantId);
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        tenantId,
-        calendarCode);
-    Long definitionId =
-    jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, tenantId, jobCode, calendarCode);
-    Long workflowDefinitionId =
-    jdbcTemplate.queryForObject(insertWorkflowDefinitionSql, Long.class, tenantId, "wf-" + jobCode, calendarCode);
+    jdbcTemplate.update(insertTenantSql, tenantId, tenantId);
+    jdbcTemplate.update(insertBusinessCalendarSql, tenantId, calendarCode);
+    Long definitionId = jdbcTemplate.queryForObject(
+        insertJobDefinitionSql, Long.class, tenantId, jobCode, calendarCode);
+    Long workflowDefinitionId = jdbcTemplate.queryForObject(
+        insertWorkflowDefinitionSql, Long.class, tenantId, "wf-" + jobCode, calendarCode);
     Instant cutoff = Instant.parse("2026-09-08T08:00:00Z");
 
     assertThat(batchDayInstanceMapper.countUncoveredScheduledDefinitions(
@@ -3675,25 +3537,16 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
             tenantId, calendarCode, cutoff))
         .isEqualTo(1);
 
-    jdbcTemplate.update(
-        updateScheduledOccurrenceCoverageSql,
-        tenantId,
-        workflowDefinitionId);
+    jdbcTemplate.update(updateScheduledOccurrenceCoverageSql, tenantId, workflowDefinitionId);
     assertThat(batchDayInstanceMapper.countUncoveredScheduledDefinitions(
             tenantId, calendarCode, cutoff))
         .isZero();
 
-    jdbcTemplate.update(
-        updateBusinessCalendarSql,
-        tenantId,
-        calendarCode);
+    jdbcTemplate.update(updateBusinessCalendarSql, tenantId, calendarCode);
     assertThat(batchDayInstanceMapper.countUncoveredScheduledDefinitions(
             tenantId, calendarCode, cutoff))
         .isEqualTo(1);
-    jdbcTemplate.update(
-        updateScheduledOccurrenceCoverageSql2,
-        tenantId,
-        workflowDefinitionId);
+    jdbcTemplate.update(updateScheduledOccurrenceCoverageSql2, tenantId, workflowDefinitionId);
     assertThat(batchDayInstanceMapper.countUncoveredScheduledDefinitions(
             tenantId, calendarCode, cutoff))
         .isZero();
@@ -3740,7 +3593,8 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
 
     assertThat(batchDayInstanceMapper.insert(entity)).isOne();
 
-    Map<String, Object> stored = jdbcTemplate.queryForMap(selectDayStatusSql, tenantId, calendarCode, bizDate);
+    Map<String, Object> stored =
+        jdbcTemplate.queryForMap(selectDayStatusSql, tenantId, calendarCode, bizDate);
     assertThat(stored)
         .containsEntry("day_status", "OPEN")
         .containsEntry("late_count", 0)

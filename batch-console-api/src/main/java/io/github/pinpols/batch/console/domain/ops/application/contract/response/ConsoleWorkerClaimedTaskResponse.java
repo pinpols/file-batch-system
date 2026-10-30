@@ -1,20 +1,18 @@
 package io.github.pinpols.batch.console.domain.ops.application.contract.response;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.Instant;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record ConsoleWorkerClaimedTaskResponse(
     Long id,
-    String tenantId,
     Long jobInstanceId,
     Long jobPartitionId,
     String taskType,
     Integer taskSeq,
     String taskStatus,
     String assignedWorkerCode,
-    String taskPayload,
-    String resultSummary,
     String errorCode,
-    String errorMessage,
     Instant startedAt,
     Instant finishedAt,
     Instant createdAt,

@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
-import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionActiveByTenantCountQuery;
-
-
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.scheduler.PartitionThrottle;
@@ -11,6 +8,7 @@ import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorG
 import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.CountActiveByGroupParam;
+import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionActiveByTenantCountQuery;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
@@ -126,15 +124,15 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
   }
 
   private long countTenantActivePartitions(ResourceSchedulingRequest request) {
-    JobPartitionActiveByTenantCountQuery jobPartitionActiveByTenantCountQuery = JobPartitionActiveByTenantCountQuery.builder()
-        .tenantId(request.getTenantId())
-        .waitingStatus(PartitionStatus.WAITING.code())
-        .readyStatus(PartitionStatus.READY.code())
-        .runningStatus(PartitionStatus.RUNNING.code())
-        .retryingStatus(PartitionStatus.RETRYING.code())
-        .build();
-    return jobPartitionMapper.countActiveByTenant(
-        jobPartitionActiveByTenantCountQuery);
+    JobPartitionActiveByTenantCountQuery jobPartitionActiveByTenantCountQuery =
+        JobPartitionActiveByTenantCountQuery.builder()
+            .tenantId(request.getTenantId())
+            .waitingStatus(PartitionStatus.WAITING.code())
+            .readyStatus(PartitionStatus.READY.code())
+            .runningStatus(PartitionStatus.RUNNING.code())
+            .retryingStatus(PartitionStatus.RETRYING.code())
+            .build();
+    return jobPartitionMapper.countActiveByTenant(jobPartitionActiveByTenantCountQuery);
   }
 
   private String resolveQueueWorkerGroup(

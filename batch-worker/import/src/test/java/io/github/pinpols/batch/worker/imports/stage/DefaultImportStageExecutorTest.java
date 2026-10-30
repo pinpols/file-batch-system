@@ -39,10 +39,13 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 /**
  * V6-D-5: DefaultImportStageExecutor 5 路径单测 — success / business-error / infra-error /
@@ -51,7 +54,7 @@ import org.springframework.beans.factory.ObjectProvider;
 // LENIENT 保留:setUp() 在所有用例之前预置了 startStepRun 以及
 // stubStep() 内部对 stage()/implCode()/stepCode()/stepName() 的共享 stub,
 // 但 STEP_NOT_FOUND / PIPELINE_STEP_MISSING 等用例不会触发其中部分调用,严格模式会误报 UnnecessaryStubbing。
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 @MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("导入阶段执行器单测:成功,业务异常,基础设施异常与步骤缺失的结果归类")
 class DefaultImportStageExecutorTest {
@@ -156,6 +159,21 @@ class DefaultImportStageExecutorTest {
         .isEqualTo(8.0);
   }
 
+  @Test
+  @DisplayName("错误产物收尾异常仅记录净化摘要,不改变已成功的阶段结果")
+  void execute_masksCredentialInFinalizeFailure(CapturedOutput output) {
+    when(receiveStep.execute(any())).thenReturn(ImportStageResult.success(ImportStage.RECEIVE));
+    Mockito.doThrow(new IllegalStateException("finalize token=probe-secret failed"))
+        .when(recordGovernanceService)
+        .finalizeErrorOutput(any());
+
+    List<ImportStageResult> results = executor.execute(buildContext());
+
+    assertThat(results).hasSize(1);
+    assertThat(results.getFirst().success()).isTrue();
+    assertThat(output.getOut()).doesNotContain("probe-secret");
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   @DisplayName("导入运行中保护超龄文件,成功收尾删除,失败收尾解锁并保留取证文件")
@@ -237,9 +255,10 @@ class DefaultImportStageExecutorTest {
   }
 
   @Test
-  @DisplayName("步骤抛运行时异常时归类为基础设施错误,并原样保留异常消息")
-  void execute_returnsInfraError_whenStepThrowsRuntimeException() {
-    when(receiveStep.execute(any())).thenThrow(new RuntimeException("sftp connection refused"));
+  @DisplayName("步骤抛运行时异常时归类为基础设施错误,且不保存异常中的凭据")
+  void execute_returnsInfraError_whenStepThrowsRuntimeException(CapturedOutput output) {
+    when(receiveStep.execute(any()))
+        .thenThrow(new RuntimeException("sftp token=probe-secret connection refused"));
     ImportJobContext context = buildContext();
 
     List<ImportStageResult> results = executor.execute(context);
@@ -247,7 +266,11 @@ class DefaultImportStageExecutorTest {
     assertThat(results).hasSize(1);
     assertThat(results.get(0).success()).isFalse();
     assertThat(results.get(0).code()).isEqualTo(StageFailureCode.INFRA_ERROR.name());
-    assertThat(results.get(0).message()).isEqualTo("sftp connection refused");
+    assertThat(results.get(0).message())
+        .contains("connection refused")
+        .doesNotContain("probe-secret");
+    assertThat(results.get(0).errorArgs()).doesNotContain("probe-secret");
+    assertThat(output.getOut()).doesNotContain("probe-secret");
     verify(pipelineRuns).finishStepRunFailure(eq(STEP_RUN_ID), any(), any(), any(), any(), any());
   }
 

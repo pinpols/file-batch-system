@@ -91,67 +91,57 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
         DELETE FROM batch.console_user_account WHERE username LIKE 'itadmin%%' OR username LIKE 'op-itadmin%%'\
         """;
 
-    jdbcTemplate.update(
-        deleteWorkflowDefinitionSql);
-    jdbcTemplate.update(
-        deleteJobDefinitionSql);
-    jdbcTemplate.update(
-        deleteConsoleUserAccountSql);
+    jdbcTemplate.update(deleteWorkflowDefinitionSql);
+    jdbcTemplate.update(deleteJobDefinitionSql);
+    jdbcTemplate.update(deleteConsoleUserAccountSql);
   }
 
   private void seed() {
-  final String insertJobDefinitionSql = """
+    final String insertJobDefinitionSql = """
       INSERT INTO batch.job_definition (tenant_id, job_code, job_name, job_type, biz_type, schedule_type,\s\
       timezone, trigger_mode, queue_code, worker_group, window_code, priority, enabled, created_at, updated_at)\s\
       VALUES ('t1','itadmin2-job','邻近不该被删','GENERAL','TEST','MANUAL','Asia/Shanghai',\s\
       'SCHEDULED','q','IMPORT','always_open',5,true,now(),now())\
       """;
-  final String insertJobDefinitionSql2 = """
+    final String insertJobDefinitionSql2 = """
       INSERT INTO batch.job_definition (tenant_id, job_code, job_name, job_type, biz_type, schedule_type,\s\
       timezone, trigger_mode, queue_code, worker_group, window_code, priority, enabled, created_at, updated_at)\s\
       VALUES ('t1','itadmin-job1','受试','GENERAL','TEST','MANUAL','Asia/Shanghai',\s\
       'SCHEDULED','q','IMPORT','always_open',5,true,now(),now())\
       """;
-  final String insertWorkflowDefinitionSql = """
+    final String insertWorkflowDefinitionSql = """
       INSERT INTO batch.workflow_definition (tenant_id, workflow_code, workflow_name, workflow_type, version,\s\
       enabled, created_at, updated_at) VALUES ('t1','itadmin-wf1','受试 WF','DAG',1,true,now(),now())\
       """;
-  final String selectIdSql = """
+    final String selectIdSql = """
       SELECT id FROM batch.job_definition WHERE tenant_id='t1' AND job_code='itadmin-job1'
   """;
-  final String insertWorkflowDefinitionSql2 = """
+    final String insertWorkflowDefinitionSql2 = """
       INSERT INTO batch.workflow_definition (tenant_id, workflow_code, workflow_name, workflow_type,\s\
       single_job_definition_id, version, enabled, created_at, updated_at)\s\
       VALUES ('t1','managed-itadmin-job1','受管单作业 WF','DAG',?,1,true,now(),now())\
       """;
 
-    jdbcTemplate.update(
-        insertJobDefinitionSql);
-    jdbcTemplate.update(
-        insertJobDefinitionSql2);
-    jdbcTemplate.update(
-        insertWorkflowDefinitionSql);
-    Long managedJobId = jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class);
-    jdbcTemplate.update(
-        insertWorkflowDefinitionSql2,
-        managedJobId);
+    jdbcTemplate.update(insertJobDefinitionSql);
+    jdbcTemplate.update(insertJobDefinitionSql2);
+    jdbcTemplate.update(insertWorkflowDefinitionSql);
+    Long managedJobId = jdbcTemplate.queryForObject(selectIdSql, Long.class);
+    jdbcTemplate.update(insertWorkflowDefinitionSql2, managedJobId);
   }
 
   @Test
   @DisplayName("按前缀清理只删除连字符前缀的作业与流程定义,邻近的同名前缀作业保留")
   void shouldDeleteOnlyHyphenPrefixedRecords_whenCleaningByPrefix() {
-  final String selectCountSql = """
+    final String selectCountSql = """
       SELECT count(*)::int FROM batch.job_definition WHERE job_code LIKE 'itadmin-%'
   """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       SELECT count(*)::int FROM batch.job_definition WHERE job_code = ?
   """;
-  final String selectCountSql3 = """
+    final String selectCountSql3 = """
       SELECT count(*)::int FROM batch.workflow_definition WHERE workflow_code LIKE 'itadmin-%%'\
       """;
-  final String selectCountSql4 = """
+    final String selectCountSql4 = """
       SELECT count(*)::int FROM batch.workflow_definition WHERE workflow_code='managed-itadmin-job1'\
       """;
 
@@ -166,9 +156,7 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
         .uri("/internal/admin/test-data?prefix=" + PREFIX)
         .retrieve()
         .body(new ParameterizedTypeReference<>() {});
-    assertThat(response)
-        .containsEntry("job_definition", 1)
-        .containsEntry("workflow_definition", 2);
+    assertThat(response).containsEntry("job_definition", 1).containsEntry("workflow_definition", 2);
 
     Integer selectedCountRead3 = jdbcTemplate.queryForObject(selectCountSql, Integer.class);
     assertThat(selectedCountRead3).isZero();
@@ -211,8 +199,10 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
     String suffix = Long.toUnsignedString(System.nanoTime(), 36);
     String tenantId = "itexact_" + suffix;
     List<String> requestIds = newCleanupRequestIds();
-    WorkflowCleanupFixture owned = seedCleanupWorkflowFixture("itexact" + suffix, tenantId, requestIds);
-    WorkflowCleanupFixture neighbor = seedCleanupWorkflowFixture("itneighbor" + suffix, "t1", requestIds);
+    WorkflowCleanupFixture owned =
+        seedCleanupWorkflowFixture("itexact" + suffix, tenantId, requestIds);
+    WorkflowCleanupFixture neighbor =
+        seedCleanupWorkflowFixture("itneighbor" + suffix, "t1", requestIds);
     CollisionNeighbor sameIdParent = seedCollisionNeighbor(owned, "t1");
     // 邻居自己的父实例恰好重用所选租户的数字 ID，清理不得清空它的有效父引用。
     String setNeighborParentSql = """
@@ -220,7 +210,8 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
         where tenant_id = ? and id = ? and biz_date = ?
         """;
     Long parentId = sameIdParent.instance().id();
-    jdbcTemplate.update(setNeighborParentSql, parentId, "t1", neighbor.jobInstanceId(), CLEANUP_BIZ_DATE);
+    jdbcTemplate.update(
+        setNeighborParentSql, parentId, "t1", neighbor.jobInstanceId(), CLEANUP_BIZ_DATE);
     Map<String, Object> parentBefore = readCollisionNeighborRows(sameIdParent);
     Map<String, Object> neighborBefore = readCleanupFixtureRows(neighbor);
     assertCleanupFixtureCounts(owned, true);
@@ -249,14 +240,19 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
     String suffix = Long.toUnsignedString(System.nanoTime(), 36);
     String tenantId = "itexact_" + suffix;
     List<String> requestIds = newCleanupRequestIds();
-    WorkflowCleanupFixture owned = seedCleanupWorkflowFixture("itexact" + suffix, tenantId, requestIds);
+    WorkflowCleanupFixture owned =
+        seedCleanupWorkflowFixture("itexact" + suffix, tenantId, requestIds);
     Map<String, Object> before = readCleanupFixtureRows(owned);
-    DataIntegrityViolationException failure = new DataIntegrityViolationException("controlled exact cleanup failure");
+    DataIntegrityViolationException failure =
+        new DataIntegrityViolationException("controlled exact cleanup failure");
     List<String> tenantIds = List.of(tenantId);
-    doThrow(failure).doCallRealMethod()
-        .when(cleanupMapper).cleanupByTenantIds(CleanupTarget.WORKFLOW_DEFINITION, tenantIds);
+    doThrow(failure)
+        .doCallRealMethod()
+        .when(cleanupMapper)
+        .cleanupByTenantIds(CleanupTarget.WORKFLOW_DEFINITION, tenantIds);
 
-    assertThatThrownBy(() -> cleanupExactTenantThroughApi(tenantId)).isInstanceOf(HttpServerErrorException.class);
+    assertThatThrownBy(() -> cleanupExactTenantThroughApi(tenantId))
+        .isInstanceOf(HttpServerErrorException.class);
 
     assertCleanupFixtureCounts(owned, true);
     Map<String, Object> after = readCleanupFixtureRows(owned);
@@ -266,8 +262,12 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
   }
 
   private Map<String, Integer> cleanupExactTenantThroughApi(String tenantId) {
-    return restClient.delete()
-        .uri(uriBuilder -> uriBuilder.path("/internal/admin/test-data/by-ids").queryParam("ids", tenantId).build())
+    return restClient
+        .delete()
+        .uri(uriBuilder -> uriBuilder
+            .path("/internal/admin/test-data/by-ids")
+            .queryParam("ids", tenantId)
+            .build())
         .retrieve()
         .body(new ParameterizedTypeReference<>() {});
   }
@@ -279,7 +279,8 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
     List<String> requestIds = newCleanupRequestIds();
     WorkflowCleanupFixture owned = seedCleanupWorkflowFixture(prefix, "t1", requestIds);
     List<String> neighborRequestIds = newCleanupRequestIds();
-    WorkflowCleanupFixture neighbor = seedCleanupWorkflowFixture(prefix + "2", "t1", neighborRequestIds);
+    WorkflowCleanupFixture neighbor =
+        seedCleanupWorkflowFixture(prefix + "2", "t1", neighborRequestIds);
     // 不同租户复用相同请求号/事件键，防止删除 SQL 只按业务号匹配。
     WorkflowCleanupFixture otherTenant = seedCleanupWorkflowFixture(prefix + "x", "t2", requestIds);
     CleanupInstanceIdentity mirror = seedSameIdentityColdMirror(owned);
@@ -321,12 +322,16 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
     List<String> requestIds = newCleanupRequestIds();
     WorkflowCleanupFixture owned = seedCleanupWorkflowFixture(prefix, "t1", requestIds);
     String prefixLike = prefix + "-%";
-    DataIntegrityViolationException failure = new DataIntegrityViolationException("controlled cleanup failure");
+    DataIntegrityViolationException failure =
+        new DataIntegrityViolationException("controlled cleanup failure");
     doThrow(failure)
         .when(cleanupMapper)
-        .cleanupByPrefix(eq(CleanupTarget.WORKFLOW_DEFINITION), argThat(scope -> prefixLike.equals(scope.prefixLike())));
+        .cleanupByPrefix(
+            eq(CleanupTarget.WORKFLOW_DEFINITION),
+            argThat(scope -> prefixLike.equals(scope.prefixLike())));
 
-    assertThatThrownBy(() -> cleanupThroughApi(prefix)).isInstanceOf(HttpServerErrorException.class);
+    assertThatThrownBy(() -> cleanupThroughApi(prefix))
+        .isInstanceOf(HttpServerErrorException.class);
 
     assertCleanupFixtureCounts(owned, true);
   }
@@ -365,7 +370,8 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
       String selectHotIdCountSql = """
           select count(*) from batch.job_instance where id = ?
           """;
-      Long hotIdCount = jdbcTemplate.queryForObject(selectHotIdCountSql, Long.class, owned.jobInstanceId());
+      Long hotIdCount =
+          jdbcTemplate.queryForObject(selectHotIdCountSql, Long.class, owned.jobInstanceId());
       assertThat(hotIdCount).as("only the selected hot identity remains").isEqualTo(1L);
     }
     assertCleanupFixtureCounts(owned, true);
@@ -373,7 +379,8 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
     Map<String, Object> neighborBefore = readCollisionNeighborRows(neighbor);
     assertThat(neighborBefore.values()).doesNotContainNull();
 
-    assertThatThrownBy(() -> cleanupThroughApi(prefix)).isInstanceOf(HttpClientErrorException.Conflict.class);
+    assertThatThrownBy(() -> cleanupThroughApi(prefix))
+        .isInstanceOf(HttpClientErrorException.Conflict.class);
 
     assertCleanupFixtureCounts(owned, true);
     Map<String, Object> ownedAfter = readCleanupFixtureRows(owned);
@@ -386,11 +393,13 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
     String prefix = "itoutside" + Long.toUnsignedString(System.nanoTime(), 36);
     List<String> requestIds = newCleanupRequestIds();
     String eventKey = "cleanup-event-" + requestIds.getFirst();
-    CleanupFixtureIdentity identity = new CleanupFixtureIdentity(prefix, tenantId, requestIds, eventKey);
+    CleanupFixtureIdentity identity =
+        new CleanupFixtureIdentity(prefix, tenantId, requestIds, eventKey);
     cleanupFixtureIdentities.add(identity);
     Long jobDefinitionId = seedCleanupJob(identity);
     LocalDate neighborDate = CLEANUP_BIZ_DATE.plusDays(1);
-    CleanupInstanceIdentity instance = new CleanupInstanceIdentity(identity, owned.jobInstanceId(), neighborDate);
+    CleanupInstanceIdentity instance =
+        new CleanupInstanceIdentity(identity, owned.jobInstanceId(), neighborDate);
     cleanupInstanceIdentities.add(instance);
     String insertNeighborSql = """
         insert into batch.job_instance (
@@ -399,8 +408,15 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
         ) values (?, ?, ?, ?, ?, ?, 'MANUAL', 'SUCCESS', ?)
         """;
     String instanceNo = prefix + "-instance";
-    Object[] parameters = {instance.id(), tenantId, jobDefinitionId, identity.jobCode(),
-        instanceNo, neighborDate, instanceNo};
+    Object[] parameters = {
+      instance.id(),
+      tenantId,
+      jobDefinitionId,
+      identity.jobCode(),
+      instanceNo,
+      neighborDate,
+      instanceNo
+    };
     // 特意不提供 trigger_request_id，覆盖 NOT(归属谓词) 会漏判的 SQL NULL 分支。
     jdbcTemplate.update(insertNeighborSql, parameters);
     String insertPartitionSql = """
@@ -413,14 +429,16 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
   }
 
   private CleanupInstanceIdentity seedSameIdentityColdMirror(WorkflowCleanupFixture owned) {
-    CleanupInstanceIdentity mirror = new CleanupInstanceIdentity(owned.identity(), owned.jobInstanceId(), CLEANUP_BIZ_DATE);
+    CleanupInstanceIdentity mirror =
+        new CleanupInstanceIdentity(owned.identity(), owned.jobInstanceId(), CLEANUP_BIZ_DATE);
     cleanupColdInstanceIdentities.add(mirror);
     String insertMirrorSql = """
         insert into archive.job_instance_archive
         select (jsonb_populate_record(null::archive.job_instance_archive, to_jsonb(source))).*
           from batch.job_instance source where source.tenant_id = ? and source.id = ? and source.biz_date = ?
         """;
-    jdbcTemplate.update(insertMirrorSql, owned.identity().tenantId(), owned.jobInstanceId(), CLEANUP_BIZ_DATE);
+    jdbcTemplate.update(
+        insertMirrorSql, owned.identity().tenantId(), owned.jobInstanceId(), CLEANUP_BIZ_DATE);
     return mirror;
   }
 
@@ -433,15 +451,18 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
     return jdbcTemplate.queryForObject(selectColdInstanceSql, String.class, parameters);
   }
 
-  private CollisionNeighbor seedColdCollisionNeighbor(WorkflowCleanupFixture owned, String tenantId) {
+  private CollisionNeighbor seedColdCollisionNeighbor(
+      WorkflowCleanupFixture owned, String tenantId) {
     String prefix = "itcold" + Long.toUnsignedString(System.nanoTime(), 36);
     List<String> requestIds = newCleanupRequestIds();
     String eventKey = "cleanup-event-" + requestIds.getFirst();
-    CleanupFixtureIdentity identity = new CleanupFixtureIdentity(prefix, tenantId, requestIds, eventKey);
+    CleanupFixtureIdentity identity =
+        new CleanupFixtureIdentity(prefix, tenantId, requestIds, eventKey);
     cleanupFixtureIdentities.add(identity);
     Long jobDefinitionId = seedCleanupJob(identity);
     LocalDate neighborDate = CLEANUP_BIZ_DATE.plusDays(1);
-    CleanupInstanceIdentity instance = new CleanupInstanceIdentity(identity, owned.jobInstanceId(), neighborDate);
+    CleanupInstanceIdentity instance =
+        new CleanupInstanceIdentity(identity, owned.jobInstanceId(), neighborDate);
     cleanupColdInstanceIdentities.add(instance);
     String insertColdNeighborSql = """
         insert into archive.job_instance_archive
@@ -453,8 +474,17 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
           from batch.job_instance source where source.tenant_id = ? and source.id = ? and source.biz_date = ?
         """;
     String instanceNo = prefix + "-instance";
-    Object[] parameters = {tenantId, jobDefinitionId, identity.jobCode(), instanceNo, instanceNo,
-        neighborDate, owned.identity().tenantId(), owned.jobInstanceId(), CLEANUP_BIZ_DATE};
+    Object[] parameters = {
+      tenantId,
+      jobDefinitionId,
+      identity.jobCode(),
+      instanceNo,
+      instanceNo,
+      neighborDate,
+      owned.identity().tenantId(),
+      owned.jobInstanceId(),
+      CLEANUP_BIZ_DATE
+    };
     jdbcTemplate.update(insertColdNeighborSql, parameters);
     Long eventId = seedCleanupOutboxChildren(identity, instance.id(), "JOB_INSTANCE");
     return new CollisionNeighbor(instance, jobDefinitionId, eventId);
@@ -482,8 +512,13 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
                 where k.tenant_id = owned.tenant_id and k.first_event_id = owned.event_id) dedup_key
         """;
     CleanupInstanceIdentity instance = neighbor.instance();
-    Object[] parameters = {instance.owner().tenantId(), instance.id(), instance.bizDate(),
-        neighbor.jobDefinitionId(), neighbor.outboxEventId()};
+    Object[] parameters = {
+      instance.owner().tenantId(),
+      instance.id(),
+      instance.bizDate(),
+      neighbor.jobDefinitionId(),
+      neighbor.outboxEventId()
+    };
     return jdbcTemplate.queryForMap(selectColdRowsSql, parameters);
   }
 
@@ -506,7 +541,9 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
                   and p.job_instance_biz_date = owned.biz_date) job_partition
         """;
     CleanupInstanceIdentity instance = neighbor.instance();
-    Object[] parameters = {instance.owner().tenantId(), instance.id(), instance.bizDate(), neighbor.jobDefinitionId()};
+    Object[] parameters = {
+      instance.owner().tenantId(), instance.id(), instance.bizDate(), neighbor.jobDefinitionId()
+    };
     return jdbcTemplate.queryForMap(selectNeighborRowsSql, parameters);
   }
 
@@ -519,7 +556,10 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
   private Map<String, Integer> cleanupThroughApi(String prefix) {
     return restClient
         .delete()
-        .uri(uriBuilder -> uriBuilder.path("/internal/admin/test-data").queryParam("prefix", prefix).build())
+        .uri(uriBuilder -> uriBuilder
+            .path("/internal/admin/test-data")
+            .queryParam("prefix", prefix)
+            .build())
         .retrieve()
         .body(new ParameterizedTypeReference<>() {});
   }
@@ -527,7 +567,8 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
   private WorkflowCleanupFixture seedCleanupWorkflowFixture(
       String prefix, String tenantId, List<String> requestIds) {
     String eventKey = "cleanup-event-" + requestIds.getFirst();
-    CleanupFixtureIdentity identity = new CleanupFixtureIdentity(prefix, tenantId, requestIds, eventKey);
+    CleanupFixtureIdentity identity =
+        new CleanupFixtureIdentity(prefix, tenantId, requestIds, eventKey);
     return seedCleanupWorkflowFixture(identity);
   }
 
@@ -547,7 +588,12 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
     seedCleanupExpectationDefinitions(identity, workflowDefinitionId);
     Long outboxEventId = seedCleanupOutboxChildren(identity, workflowRunId);
     return new WorkflowCleanupFixture(
-        identity, jobDefinitionId, workflowDefinitionId, workflowRunId, jobInstanceId, outboxEventId);
+        identity,
+        jobDefinitionId,
+        workflowDefinitionId,
+        workflowRunId,
+        jobInstanceId,
+        outboxEventId);
   }
 
   private Long seedCleanupJob(CleanupFixtureIdentity identity) {
@@ -587,7 +633,12 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
     String requestId = identity.requestIds().getFirst();
     String dedupKey = "dedup-" + requestId;
     return jdbcTemplate.queryForObject(
-        insertRootRequestSql, Long.class, identity.tenantId(), requestId, workflowDefinitionId, dedupKey);
+        insertRootRequestSql,
+        Long.class,
+        identity.tenantId(),
+        requestId,
+        workflowDefinitionId,
+        dedupKey);
   }
 
   private Long seedCleanupWorkflowRun(
@@ -614,7 +665,13 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
     String dedupKey = "dedup-" + requestId;
     String jobCode = identity.jobCode();
     return jdbcTemplate.queryForObject(
-        insertChildRequestSql, Long.class, identity.tenantId(), requestId, jobCode, workflowRunId, dedupKey);
+        insertChildRequestSql,
+        Long.class,
+        identity.tenantId(),
+        requestId,
+        jobCode,
+        workflowRunId,
+        dedupKey);
   }
 
   private Long seedCleanupJobInstance(
@@ -630,9 +687,16 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
     String instanceNo = identity.prefix() + "-instance";
     String dedupKey = "instance-" + identity.requestIds().get(1);
     Long instanceId = jdbcTemplate.queryForObject(
-        insertInstanceSql, Long.class, identity.tenantId(), jobDefinitionId, childRequestId,
-        jobCode, instanceNo, dedupKey);
-    CleanupInstanceIdentity instance = new CleanupInstanceIdentity(identity, instanceId, CLEANUP_BIZ_DATE);
+        insertInstanceSql,
+        Long.class,
+        identity.tenantId(),
+        jobDefinitionId,
+        childRequestId,
+        jobCode,
+        instanceNo,
+        dedupKey);
+    CleanupInstanceIdentity instance =
+        new CleanupInstanceIdentity(identity, instanceId, CLEANUP_BIZ_DATE);
     cleanupInstanceIdentities.add(instance);
     return instanceId;
   }
@@ -654,7 +718,10 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
          where tenant_id = ? and request_id in (?, ?)
         """;
     jdbcTemplate.update(
-        insertTriggerOutboxesSql, identity.tenantId(), identity.requestIds().getFirst(), identity.requestIds().get(1));
+        insertTriggerOutboxesSql,
+        identity.tenantId(),
+        identity.requestIds().getFirst(),
+        identity.requestIds().get(1));
   }
 
   private void seedCleanupOccurrenceHistory(
@@ -668,7 +735,8 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
         """;
     String workflowCode = identity.workflowCode();
     String requestId = identity.requestIds().getFirst();
-    jdbcTemplate.update(insertOccurrenceSql, identity.tenantId(), workflowDefinitionId, workflowCode, requestId);
+    jdbcTemplate.update(
+        insertOccurrenceSql, identity.tenantId(), workflowDefinitionId, workflowCode, requestId);
     String insertAuditSql = """
         insert into batch.scheduled_occurrence_catch_up_audit (
             tenant_id, workflow_definition_id, scheduled_fire_time, biz_date, request_id, requested_by, reason
@@ -687,7 +755,12 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
             source_key, occurrence_status, trigger_request_id
         ) values (?, 'cleanup-calendar', date '2094-04-03', ?, 'WORKFLOW', ?, 'SATISFIED', ?)
         """;
-    jdbcTemplate.update(insertExpectedWorkSql, identity.tenantId(), workflowDefinitionId, identity.prefix(), requestId);
+    jdbcTemplate.update(
+        insertExpectedWorkSql,
+        identity.tenantId(),
+        workflowDefinitionId,
+        identity.prefix(),
+        requestId);
     String insertMisfireSql = """
         insert into batch.trigger_misfire_pending (
             tenant_id, workflow_definition_id, scheduled_fire_time, status, catch_up_request_id
@@ -708,7 +781,10 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
         ) values (?, ?, ?, date '2094-04-03', '{}'::jsonb, 'RESUMED')
         """;
     jdbcTemplate.update(
-        insertWorkflowWaitSql, identity.tenantId(), identity.requestIds().getFirst(), workflowDefinitionId);
+        insertWorkflowWaitSql,
+        identity.tenantId(),
+        identity.requestIds().getFirst(),
+        workflowDefinitionId);
     String insertDependencyWaitSql = """
         insert into batch.job_dependency_waiting_launch (
             tenant_id, request_id, job_code, biz_date, dependency_snapshot, launch_payload, wait_status
@@ -726,26 +802,30 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
     jdbcTemplate.update(insertBatchDayWaitSql, identity.tenantId(), jobCode, childRequestId);
   }
 
-  private void seedCleanupExpectationDefinitions(CleanupFixtureIdentity identity, Long workflowDefinitionId) {
+  private void seedCleanupExpectationDefinitions(
+      CleanupFixtureIdentity identity, Long workflowDefinitionId) {
     String insertFileExpectationSql = """
         insert into batch.file_group_expectation_definition (
             tenant_id, calendar_code, workflow_definition_id, file_group_code, expected_local_time, enabled
         ) values (?, 'cleanup-calendar', ?, ?, time '01:00:00', false)
         """;
-    jdbcTemplate.update(insertFileExpectationSql, identity.tenantId(), workflowDefinitionId, identity.prefix());
+    jdbcTemplate.update(
+        insertFileExpectationSql, identity.tenantId(), workflowDefinitionId, identity.prefix());
     String insertEventExpectationSql = """
         insert into batch.external_event_expectation_definition (
             tenant_id, calendar_code, workflow_definition_id, event_code, expected_local_time, enabled
         ) values (?, 'cleanup-calendar', ?, ?, time '01:00:00', false)
         """;
-    jdbcTemplate.update(insertEventExpectationSql, identity.tenantId(), workflowDefinitionId, identity.prefix());
+    jdbcTemplate.update(
+        insertEventExpectationSql, identity.tenantId(), workflowDefinitionId, identity.prefix());
   }
 
   private Long seedCleanupOutboxChildren(CleanupFixtureIdentity identity, Long workflowRunId) {
     return seedCleanupOutboxChildren(identity, workflowRunId, "WORKFLOW_RUN");
   }
 
-  private Long seedCleanupOutboxChildren(CleanupFixtureIdentity identity, Long aggregateId, String aggregateType) {
+  private Long seedCleanupOutboxChildren(
+      CleanupFixtureIdentity identity, Long aggregateId, String aggregateType) {
     String insertOutboxSql = """
         insert into batch.outbox_event (
             tenant_id, aggregate_type, aggregate_id, event_type, event_key, payload_json, publish_status
@@ -754,7 +834,13 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
         """;
     String eventType = "JOB_INSTANCE".equals(aggregateType) ? "JOB_TERMINAL" : "WORKFLOW_TERMINAL";
     Long eventId = jdbcTemplate.queryForObject(
-        insertOutboxSql, Long.class, identity.tenantId(), aggregateType, aggregateId, eventType, identity.eventKey());
+        insertOutboxSql,
+        Long.class,
+        identity.tenantId(),
+        aggregateType,
+        aggregateId,
+        eventType,
+        identity.eventKey());
     String insertDedupSql = """
         insert into batch.outbox_event_dedup_key (tenant_id, event_key, first_event_id)
         values (?, ?, ?)
@@ -800,9 +886,18 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
             (select count(*) from batch.outbox_event_dedup_key k, owned where k.tenant_id = owned.tenant_id and k.event_key = owned.event_key) outbox_event_dedup_key
         """;
     CleanupFixtureIdentity identity = fixture.identity();
-    Object[] parameters = {identity.tenantId(), fixture.jobDefinitionId(), fixture.workflowDefinitionId(),
-        fixture.workflowRunId(), fixture.jobInstanceId(), fixture.outboxEventId(),
-        identity.requestIds().getFirst(), identity.requestIds().get(1), identity.eventKey(), CLEANUP_BIZ_DATE};
+    Object[] parameters = {
+      identity.tenantId(),
+      fixture.jobDefinitionId(),
+      fixture.workflowDefinitionId(),
+      fixture.workflowRunId(),
+      fixture.jobInstanceId(),
+      fixture.outboxEventId(),
+      identity.requestIds().getFirst(),
+      identity.requestIds().get(1),
+      identity.eventKey(),
+      CLEANUP_BIZ_DATE
+    };
     Map<String, Object> counts = jdbcTemplate.queryForMap(selectFixtureCountsSql, parameters);
     long one = present ? 1L : 0L;
     long two = present ? 2L : 0L;
@@ -852,8 +947,12 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
                 where a.tenant_id = owned.tenant_id and a.request_id = owned.root_request) request_alias
         """;
     CleanupFixtureIdentity identity = fixture.identity();
-    Object[] parameters = {identity.tenantId(), fixture.workflowDefinitionId(),
-        identity.requestIds().getFirst(), identity.requestIds().get(1)};
+    Object[] parameters = {
+      identity.tenantId(),
+      fixture.workflowDefinitionId(),
+      identity.requestIds().getFirst(),
+      identity.requestIds().get(1)
+    };
     Map<String, Object> counts = jdbcTemplate.queryForMap(selectDependencyCountsSql, parameters);
     long expectedCount = present ? 1L : 0L;
     assertThat(counts.values()).containsOnly(expectedCount);
@@ -967,9 +1066,18 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
                 where a.tenant_id = owned.tenant_id and a.request_id = owned.root_request) request_alias
         """;
     CleanupFixtureIdentity identity = fixture.identity();
-    Object[] parameters = {identity.tenantId(), fixture.jobDefinitionId(), fixture.workflowDefinitionId(),
-        fixture.workflowRunId(), fixture.jobInstanceId(), fixture.outboxEventId(),
-        identity.requestIds().getFirst(), identity.requestIds().get(1), identity.eventKey(), CLEANUP_BIZ_DATE};
+    Object[] parameters = {
+      identity.tenantId(),
+      fixture.jobDefinitionId(),
+      fixture.workflowDefinitionId(),
+      fixture.workflowRunId(),
+      fixture.jobInstanceId(),
+      fixture.outboxEventId(),
+      identity.requestIds().getFirst(),
+      identity.requestIds().get(1),
+      identity.eventKey(),
+      CLEANUP_BIZ_DATE
+    };
     return jdbcTemplate.queryForMap(selectFixtureRowsSql, parameters);
   }
 
@@ -998,7 +1106,11 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
     String deleteRequestSql = """
         delete from batch.trigger_request where tenant_id = ? and request_id in (?, ?)
         """;
-    Object[] requestParameters = {identity.tenantId(), identity.requestIds().getFirst(), identity.requestIds().get(1)};
+    Object[] requestParameters = {
+      identity.tenantId(),
+      identity.requestIds().getFirst(),
+      identity.requestIds().get(1)
+    };
     jdbcTemplate.update(deleteTriggerOutboxSql, requestParameters);
     jdbcTemplate.update(deleteRequestSql, requestParameters);
     String deleteWorkflowSql = """
@@ -1027,7 +1139,8 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
         delete from batch.workflow_run where tenant_id = ? and workflow_definition_id in (
             select id from batch.workflow_definition where tenant_id = ? and workflow_code = ?)
         """;
-    jdbcTemplate.update(deleteRunSql, identity.tenantId(), identity.tenantId(), identity.workflowCode());
+    jdbcTemplate.update(
+        deleteRunSql, identity.tenantId(), identity.tenantId(), identity.workflowCode());
     for (CleanupInstanceIdentity instance : cleanupInstanceIdentities) {
       if (identity.equals(instance.owner())) {
         cleanupOwnedInstance(instance);
@@ -1057,18 +1170,29 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
   }
 
   private record CleanupFixtureIdentity(
-      String prefix, String tenantId, List<String> requestIds, String eventKey, String jobCode, String workflowCode) {
-    private CleanupFixtureIdentity(String prefix, String tenantId, List<String> requestIds, String eventKey) {
+      String prefix,
+      String tenantId,
+      List<String> requestIds,
+      String eventKey,
+      String jobCode,
+      String workflowCode) {
+    private CleanupFixtureIdentity(
+        String prefix, String tenantId, List<String> requestIds, String eventKey) {
       this(prefix, tenantId, requestIds, eventKey, prefix + "-job", "managed-" + prefix);
     }
   }
 
-  private record CleanupInstanceIdentity(CleanupFixtureIdentity owner, Long id, LocalDate bizDate) {}
+  private record CleanupInstanceIdentity(
+      CleanupFixtureIdentity owner, Long id, LocalDate bizDate) {}
 
   private record CollisionNeighbor(
       CleanupInstanceIdentity instance, Long jobDefinitionId, Long outboxEventId) {}
 
   private record WorkflowCleanupFixture(
-      CleanupFixtureIdentity identity, Long jobDefinitionId, Long workflowDefinitionId,
-      Long workflowRunId, Long jobInstanceId, Long outboxEventId) {}
+      CleanupFixtureIdentity identity,
+      Long jobDefinitionId,
+      Long workflowDefinitionId,
+      Long workflowRunId,
+      Long jobInstanceId,
+      Long outboxEventId) {}
 }

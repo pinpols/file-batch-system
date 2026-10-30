@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 
+import com.sun.net.httpserver.HttpServer;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerType;
@@ -31,15 +32,29 @@ import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -48,10 +63,12 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -65,14 +82,15 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * 真实 Kafka、平台 HTTP、平台 PG 与独立业务 PG 的普通 SDK 恢复验证。
- * Error 仅模拟 SDK 执行线程退栈；不冒充外部进程 kill 或网络 REPORT 丢失演练。
+ * 执行线程 Error、独立 SDK 进程强杀与 REPORT 响应实际断连分别建立证据。
  */
 @E2eSpringBootTest(
     classes = E2eReportRecoveryOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
       "spring.application.name=sdk-ordinary-lease-recovery-e2e",
-      "batch.retry.poll-interval-millis=600000"
+      "batch.retry.poll-interval-millis=600000",
+      "batch.batch-day.open-scan-interval-millis=600000"
     })
 @DisplayName("普通 SDK 效果提交后失去执行：未知动作阻断，真实幂等动作经 outbox 恢复")
 class SdkOrdinaryLeaseRecoveryE2eIT extends AbstractIntegrationTest {
@@ -95,15 +113,228 @@ class SdkOrdinaryLeaseRecoveryE2eIT extends AbstractIntegrationTest {
       select count(*) from batch.retry_schedule where tenant_id = ?
       """;
 
-  @Autowired private JdbcTemplate platformJdbc;
-  @Autowired private WorkflowRunLaunchService launchService;
-  @Autowired private E2eOutboxPublishSupport outboxPublishSupport;
-  @Autowired private JobPartitionMapper partitionMapper;
-  @Autowired private PartitionReclaimUnit reclaimUnit;
-  @Autowired private AdminTestDataCleanupService cleanupService;
-  @Autowired private KafkaTemplate<String, String> kafkaTemplate;
-  @MockitoSpyBean private TaskControllerApplicationService taskController;
-  @LocalServerPort private int serverPort;
+  @Autowired
+  private JdbcTemplate platformJdbc;
+
+  @Autowired
+  private WorkflowRunLaunchService launchService;
+
+  @Autowired
+  private E2eOutboxPublishSupport outboxPublishSupport;
+
+  @Autowired
+  private JobPartitionMapper partitionMapper;
+
+  @Autowired
+  private PartitionReclaimUnit reclaimUnit;
+
+  @Autowired
+  private AdminTestDataCleanupService cleanupService;
+
+  @Autowired
+  private KafkaTemplate<String, String> kafkaTemplate;
+
+  @MockitoSpyBean
+  private TaskControllerApplicationService taskController;
+
+  @LocalServerPort
+  private int serverPort;
+
+  @Test
+  @DisplayName("独立 SDK 业务提交后强杀进程，租约回收为 UNKNOWN 且原消息不能重复动作")
+  void shouldBlockUnsafeEffectAfterSdkProcessIsKilled() throws Exception {
+    try (Scenario scenario = new Scenario()) {
+      scenario.prepare();
+      try (SdkChild child = new SdkChild(scenario, true, "http://127.0.0.1:" + serverPort)) {
+        child.awaitReady();
+        launch(scenario);
+        await().atMost(WAIT).untilAsserted(() -> {
+          assertThat(Files.exists(child.committed)).isTrue();
+          assertEffectCount(scenario, 1L);
+        });
+        Map<String, Object> running = task(scenario);
+        assertThat(running.get("task_status")).isEqualTo("RUNNING");
+        assertThat(running.get("non_idempotent_started_at")).isNotNull();
+        long taskId = ((Number) running.get("id")).longValue();
+        long partitionId = ((Number) running.get("job_partition_id")).longValue();
+        String originalPayload = dispatchPayload(scenario, taskId, false);
+        child.kill();
+        expireAndReclaim(scenario, partitionId);
+        Map<String, Object> closed = task(scenario);
+        assertThat(closed)
+            .containsEntry("task_status", "FAILED")
+            .containsEntry("error_code", "EXTERNAL_OUTCOME_UNKNOWN");
+        Long retries = platformJdbc.queryForObject(RETRY_COUNT_SQL, Long.class, scenario.tenant);
+        assertThat(retries).isZero();
+        AtomicInteger rejectedClaims = new AtomicInteger();
+        doAnswer(invocation -> {
+              try {
+                return invocation.callRealMethod();
+              } catch (BizException rejected) {
+                if ("error.task.claim_not_available".equals(rejected.getMessageKey())) {
+                  rejectedClaims.incrementAndGet();
+                }
+                throw rejected;
+              }
+            })
+            .when(taskController)
+            .claim(eq(taskId), any(TaskClaimCommand.class));
+        startWorker(scenario, "replacement", false, false);
+        kafkaTemplate
+            .send(BatchTopics.TASK_DISPATCH_ATOMIC, Long.toString(taskId), originalPayload)
+            .get(10, TimeUnit.SECONDS);
+        await()
+            .atMost(WAIT)
+            .untilAsserted(() -> assertThat(rejectedClaims.get()).isPositive());
+        assertThat(scenario.executions.get()).isZero();
+        assertEffectCount(scenario, 1L);
+      }
+    }
+  }
+
+  @Test
+  @DisplayName("独立 SDK REPORT 提交后真实断开 HTTP 响应，重试幂等且业务效果唯一")
+  void shouldRecoverSdkReportAfterCommittedResponseIsDisconnected() throws Exception {
+    try (Scenario scenario = new Scenario()) {
+      scenario.prepare();
+      AtomicInteger reports = new AtomicInteger();
+      List<String> reportKeys = new CopyOnWriteArrayList<>();
+      List<String> reportBodies = new CopyOnWriteArrayList<>();
+      CountDownLatch dropped = new CountDownLatch(1);
+      HttpClient forwardingClient = HttpClient.newHttpClient();
+      ExecutorService forwardingExecutor = Executors.newCachedThreadPool();
+      HttpServer proxy = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+      proxy.setExecutor(forwardingExecutor);
+      proxy.createContext("/", exchange -> {
+        try {
+          byte[] requestBody = exchange.getRequestBody().readAllBytes();
+          URI target = URI.create("http://127.0.0.1:" + serverPort + exchange.getRequestURI());
+          HttpRequest.Builder request = HttpRequest.newBuilder(target)
+              .method(
+                  exchange.getRequestMethod(), HttpRequest.BodyPublishers.ofByteArray(requestBody));
+          exchange.getRequestHeaders().forEach((name, values) -> {
+            if (!List.of("host", "connection", "content-length", "upgrade", "http2-settings")
+                .contains(name.toLowerCase(Locale.ROOT))) {
+              values.forEach(value -> request.header(name, value));
+            }
+          });
+          HttpResponse<byte[]> response =
+              forwardingClient.send(request.build(), HttpResponse.BodyHandlers.ofByteArray());
+          if (exchange.getRequestURI().getPath().endsWith("/report")) {
+            reportKeys.add(exchange.getRequestHeaders().getFirst("Idempotency-Key"));
+            reportBodies.add(new String(requestBody, StandardCharsets.UTF_8));
+            if (reports.getAndIncrement() == 0) {
+              assertThat(response.statusCode()).isEqualTo(200);
+              dropped.countDown();
+              // 后端已经提交；不发送任何 HTTP 状态行，实际关闭 SDK 的响应连接。
+              return;
+            }
+          }
+          response
+              .headers()
+              .firstValue("Content-Type")
+              .ifPresent(value -> exchange.getResponseHeaders().set("Content-Type", value));
+          exchange.sendResponseHeaders(response.statusCode(), response.body().length);
+          exchange.getResponseBody().write(response.body());
+        } catch (InterruptedException interrupted) {
+          Thread.currentThread().interrupt();
+          throw new IOException(interrupted);
+        } finally {
+          exchange.close();
+        }
+      });
+      proxy.start();
+      try (SdkChild child =
+          new SdkChild(scenario, false, "http://127.0.0.1:" + proxy.getAddress().getPort())) {
+        child.awaitReady();
+        launch(scenario);
+        assertThat(dropped.await(45, TimeUnit.SECONDS)).isTrue();
+        await().atMost(WAIT).untilAsserted(() -> {
+          assertThat(reports.get()).isGreaterThanOrEqualTo(2);
+          Map<String, Object> completed = task(scenario);
+          assertThat(completed.get("task_status")).isEqualTo("SUCCESS");
+          assertEffectCount(scenario, 1L);
+        });
+        assertThat(reportKeys).doesNotContainNull().allMatch(reportKeys.getFirst()::equals);
+        assertThat(reportBodies).allMatch(reportBodies.getFirst()::equals);
+      } finally {
+        proxy.stop(0);
+        forwardingExecutor.shutdownNow();
+      }
+    }
+  }
+
+  private final class SdkChild implements AutoCloseable {
+    private final Path directory;
+    private final Path committed;
+    private final Path ready;
+    private final Path log;
+    private final Process process;
+
+    private SdkChild(Scenario scenario, boolean block, String baseUrl) throws Exception {
+      directory = Files.createTempDirectory("sdk-fault-boundary-");
+      committed = directory.resolve("committed");
+      ready = directory.resolve("ready");
+      log = directory.resolve("worker.log");
+      Properties properties = new Properties();
+      properties.setProperty("business.url", businessJdbcUrl());
+      properties.setProperty("business.username", businessJdbcUsername());
+      properties.setProperty("business.password", businessJdbcPassword());
+      properties.setProperty("tenant", scenario.tenant);
+      properties.setProperty("marker", scenario.marker);
+      properties.setProperty("base-url", baseUrl);
+      properties.setProperty("worker-code", scenario.workerCode("first"));
+      properties.setProperty("group", scenario.tenant + "-consumer");
+      properties.setProperty("kafka-bootstrap", KAFKA.getBootstrapServers());
+      properties.setProperty("block-after-commit", Boolean.toString(block));
+      properties.setProperty("committed", committed.toString());
+      properties.setProperty("ready", ready.toString());
+      Path configuration = directory.resolve("worker.properties");
+      try (var output = Files.newOutputStream(configuration)) {
+        properties.store(output, "isolated SDK fault fixture");
+      }
+      String classpath =
+          System.getProperty("surefire.test.class.path", System.getProperty("java.class.path"));
+      String java = Path.of(System.getProperty("java.home"), "bin", "java").toString();
+      process = new ProcessBuilder(
+              java,
+              "-cp",
+              classpath,
+              SdkCommittedEffectChildProcess.class.getName(),
+              configuration.toString())
+          .redirectErrorStream(true)
+          .redirectOutput(log.toFile())
+          .start();
+    }
+
+    private void awaitReady() {
+      await().atMost(WAIT).untilAsserted(() -> {
+        assertThat(process.isAlive()).as("SDK child log: %s", log).isTrue();
+        assertThat(Files.exists(ready)).isTrue();
+        String selectWorkerSql = "select count(*) from batch.worker_registry where worker_code = ?";
+        String worker = "";
+        try (var input = Files.newInputStream(directory.resolve("worker.properties"))) {
+          Properties properties = new Properties();
+          properties.load(input);
+          worker = properties.getProperty("worker-code");
+        }
+        Integer workers = platformJdbc.queryForObject(selectWorkerSql, Integer.class, worker);
+        assertThat(workers).isPositive();
+      });
+    }
+
+    private void kill() throws Exception {
+      process.destroyForcibly();
+      assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+      assertThat(process.isAlive()).isFalse();
+    }
+
+    @Override
+    public void close() throws Exception {
+      kill();
+      Files.deleteIfExists(directory.resolve("worker.properties"));
+    }
+  }
 
   @Test
   @DisplayName("普通 INSERT 已提交后 Error 退栈，过期回收为 UNKNOWN 且原消息再投也不能重复动作")
@@ -172,7 +403,8 @@ class SdkOrdinaryLeaseRecoveryE2eIT extends AbstractIntegrationTest {
       scenario.prepare();
       BatchPlatformClient first = startWorker(scenario, "first", false, true);
       // 只观察真实执行器公开的提交计数，覆盖CLAIM阶段；不替换执行器或模拟业务动作。
-      TaskDispatcher dispatcher = (TaskDispatcher) ReflectionTestUtils.getField(first, "dispatcher");
+      TaskDispatcher dispatcher =
+          (TaskDispatcher) ReflectionTestUtils.getField(first, "dispatcher");
       assertThat(dispatcher).isNotNull();
       launch(scenario);
       assertCrashedAfterCommittedEffect(scenario, first, true);
@@ -184,7 +416,8 @@ class SdkOrdinaryLeaseRecoveryE2eIT extends AbstractIntegrationTest {
       String topic = BatchTopics.directDispatchTopic(
           BatchTopics.TASK_DISPATCH_ATOMIC, scenario.workerCode("first"));
 
-      var replay = kafkaTemplate.send(topic, Long.toString(taskId), originalPayload)
+      var replay = kafkaTemplate
+          .send(topic, Long.toString(taskId), originalPayload)
           .get(10, TimeUnit.SECONDS);
       long nextOffset = replay.getRecordMetadata().offset() + 1L;
       awaitRedeliverySettled(scenario, first, dispatcher, topic, nextOffset);
@@ -233,8 +466,8 @@ class SdkOrdinaryLeaseRecoveryE2eIT extends AbstractIntegrationTest {
       String selectRunModeSql = """
           select task_payload ->> 'run_mode' from batch.job_task where tenant_id = ? and id = ?
           """;
-      String recoveredRunMode = platformJdbc.queryForObject(
-          selectRunModeSql, String.class, scenario.tenant, taskId);
+      String recoveredRunMode =
+          platformJdbc.queryForObject(selectRunModeSql, String.class, scenario.tenant, taskId);
       assertThat(recoveredRunMode).isEqualTo("RECOVER");
       startWorker(scenario, "replacement", true, false);
       outboxPublishSupport.publishAllPending(scenario.tenant);
@@ -254,7 +487,11 @@ class SdkOrdinaryLeaseRecoveryE2eIT extends AbstractIntegrationTest {
           """;
       await().atMost(WAIT).untilAsserted(() -> {
         String status = platformJdbc.queryForObject(
-            selectWorkflowStatusSql, String.class, scenario.tenant, scenario.tenant, scenario.seed.requestId());
+            selectWorkflowStatusSql,
+            String.class,
+            scenario.tenant,
+            scenario.tenant,
+            scenario.seed.requestId());
         assertThat(status).isEqualTo("SUCCESS");
       });
     }
@@ -263,8 +500,13 @@ class SdkOrdinaryLeaseRecoveryE2eIT extends AbstractIntegrationTest {
   private void launch(Scenario scenario) {
     Map<String, Object> parameters = Map.of("recoveryMarker", scenario.marker);
     LaunchRequest request = new LaunchRequest(
-        scenario.tenant, scenario.seed.workflowDefinitionId(), BIZ_DATE, TriggerType.API,
-        scenario.seed.requestId(), scenario.marker, parameters);
+        scenario.tenant,
+        scenario.seed.workflowDefinitionId(),
+        BIZ_DATE,
+        TriggerType.API,
+        scenario.seed.requestId(),
+        scenario.marker,
+        parameters);
     launchService.launch(request);
     outboxPublishSupport.publishAllPending(scenario.tenant);
   }
@@ -287,21 +529,24 @@ class SdkOrdinaryLeaseRecoveryE2eIT extends AbstractIntegrationTest {
         .httpTimeout(Duration.ofSeconds(5))
         .build();
     SdkTaskHandler handler = new BusinessEffectHandler(scenario, safe, crash);
-    BatchPlatformClient client = BatchPlatformClient.builder(config).register(handler).build();
+    BatchPlatformClient client =
+        BatchPlatformClient.builder(config).register(handler).build();
     scenario.clients.add(client);
     client.start();
     try (AdminClient admin = adminClient()) {
       await().atMost(WAIT).untilAsserted(() -> {
         SdkClientMetrics metrics = client.metrics();
         assertThat(metrics.healthy()).isTrue();
-          try {
-          var descriptions = admin.describeConsumerGroups(List.of(groupId)).all().get(5, TimeUnit.SECONDS);
+        try {
+          var descriptions =
+              admin.describeConsumerGroups(List.of(groupId)).all().get(5, TimeUnit.SECONDS);
           var group = descriptions.get(groupId);
-          boolean assigned = group.members().stream().anyMatch(member ->
-              member.assignment().topicPartitions().stream().anyMatch(partition ->
-                  BatchTopics.TASK_DISPATCH_ATOMIC.equals(partition.topic())));
+          boolean assigned = group.members().stream()
+              .anyMatch(member -> member.assignment().topicPartitions().stream()
+                  .anyMatch(
+                      partition -> BatchTopics.TASK_DISPATCH_ATOMIC.equals(partition.topic())));
           assertThat(assigned).isTrue();
-        } catch (java.util.concurrent.ExecutionException missing) {
+        } catch (ExecutionException missing) {
           if (missing.getCause() instanceof GroupIdNotFoundException) {
             throw new AssertionError("waiting for SDK consumer group registration", missing);
           }
@@ -341,11 +586,13 @@ class SdkOrdinaryLeaseRecoveryE2eIT extends AbstractIntegrationTest {
   }
 
   private Map<String, Object> task(Scenario scenario) {
-    return platformJdbc.queryForMap(SELECT_TASK_SQL, scenario.tenant, scenario.seed.jobCode(), BIZ_DATE);
+    return platformJdbc.queryForMap(
+        SELECT_TASK_SQL, scenario.tenant, scenario.seed.jobCode(), BIZ_DATE);
   }
 
   private void assertEffectCount(Scenario scenario, long expected) {
-    Long actual = scenario.businessJdbc.queryForObject(EFFECT_COUNT_SQL, Long.class, scenario.tenant);
+    Long actual =
+        scenario.businessJdbc.queryForObject(EFFECT_COUNT_SQL, Long.class, scenario.tenant);
     assertThat(actual).isEqualTo(expected);
   }
 
@@ -366,22 +613,35 @@ class SdkOrdinaryLeaseRecoveryE2eIT extends AbstractIntegrationTest {
          where tenant_id = ? and aggregate_type = 'JOB_TASK' and aggregate_id = ?
            and (event_key like ?) = ? order by id limit 1
         """;
-    return platformJdbc.queryForObject(selectSql, String.class, scenario.tenant, taskId,
-        scenario.tenant + ":reclaim:%", recovered);
+    return platformJdbc.queryForObject(
+        selectSql,
+        String.class,
+        scenario.tenant,
+        taskId,
+        scenario.tenant + ":reclaim:%",
+        recovered);
   }
 
   private void awaitRedeliverySettled(
-      Scenario scenario, BatchPlatformClient client, TaskDispatcher dispatcher,
-      String topic, long nextOffset) throws Exception {
+      Scenario scenario,
+      BatchPlatformClient client,
+      TaskDispatcher dispatcher,
+      String topic,
+      long nextOffset)
+      throws Exception {
     TopicPartition partition = new TopicPartition(topic, 0);
     try (AdminClient admin = adminClient()) {
       await().atMost(WAIT).untilAsserted(() -> {
         SdkClientMetrics metrics = client.metrics();
         if (!dispatcher.isFatal() && metrics.started()) {
-          var offsets = admin.listConsumerGroupOffsets(scenario.tenant + "-consumer")
-              .partitionsToOffsetAndMetadata().get(5, TimeUnit.SECONDS);
+          var offsets = admin
+              .listConsumerGroupOffsets(scenario.tenant + "-consumer")
+              .partitionsToOffsetAndMetadata()
+              .get(5, TimeUnit.SECONDS);
           OffsetAndMetadata committed = offsets.get(partition);
-          assertThat(committed).as("actual delayed replay reached the SDK consumer").isNotNull();
+          assertThat(committed)
+              .as("actual delayed replay reached the SDK consumer")
+              .isNotNull();
           assertThat(committed.offset()).isGreaterThanOrEqualTo(nextOffset);
         }
         // Kafka的SUBMITTED回执早于异步执行；提交计数归零后才读取业务库，避免假通过。
@@ -395,17 +655,21 @@ class SdkOrdinaryLeaseRecoveryE2eIT extends AbstractIntegrationTest {
         BatchTopics.TASK_DISPATCH_ATOMIC, scenario.workerCode("first"));
     TopicPartition partition = new TopicPartition(topic, 0);
     try (AdminClient admin = adminClient()) {
-      var offsets = admin.listConsumerGroupOffsets(scenario.tenant + "-consumer")
-          .partitionsToOffsetAndMetadata().get(10, TimeUnit.SECONDS);
+      var offsets = admin
+          .listConsumerGroupOffsets(scenario.tenant + "-consumer")
+          .partitionsToOffsetAndMetadata()
+          .get(10, TimeUnit.SECONDS);
       OffsetAndMetadata committed = offsets.get(partition);
-      assertThat(committed).as("first message is committed before recovery publication").isNotNull();
+      assertThat(committed)
+          .as("first message is committed before recovery publication")
+          .isNotNull();
       assertThat(committed.offset()).isGreaterThanOrEqualTo(1L);
     }
   }
 
   private AdminClient adminClient() {
-    Map<String, Object> properties = Map.of(
-        AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers());
+    Map<String, Object> properties =
+        Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers());
     return AdminClient.create(properties);
   }
 
@@ -445,16 +709,17 @@ class SdkOrdinaryLeaseRecoveryE2eIT extends AbstractIntegrationTest {
               (tenant_id, customer_no, customer_name, customer_type, status, source_batch_no)
           values (?, ?, ?, 'PERSONAL', 'ACTIVE', ?)
           """;
-      String idempotentInsertSql = insertEffectSql
-          + " on conflict (tenant_id, customer_no) do nothing";
+      String idempotentInsertSql =
+          insertEffectSql + " on conflict (tenant_id, customer_no) do nothing";
       String writeSql = safe ? idempotentInsertSql : insertEffectSql;
-      scenario.businessJdbc.update(writeSql, scenario.tenant, customerNo, scenario.marker, scenario.marker);
+      scenario.businessJdbc.update(
+          writeSql, scenario.tenant, customerNo, scenario.marker, scenario.marker);
       String selectEffectSql = """
           select customer_name, source_batch_no from biz.customer_account
            where tenant_id = ? and customer_no = ?
           """;
-      Map<String, Object> effect = scenario.businessJdbc.queryForMap(
-          selectEffectSql, scenario.tenant, customerNo);
+      Map<String, Object> effect =
+          scenario.businessJdbc.queryForMap(selectEffectSql, scenario.tenant, customerNo);
       if (!scenario.marker.equals(effect.get("customer_name"))
           || !scenario.marker.equals(effect.get("source_batch_no"))) {
         throw new IllegalStateException("existing business key has different frozen effect data");
@@ -480,7 +745,8 @@ class SdkOrdinaryLeaseRecoveryE2eIT extends AbstractIntegrationTest {
     private final List<String> invocations = new CopyOnWriteArrayList<>();
     private final CountDownLatch crashExited = new CountDownLatch(1);
     private final AtomicReference<Throwable> uncaught = new AtomicReference<>();
-    private final Error crash = new AssertionError("SDK execution terminated after business commit");
+    private final Error crash =
+        new AssertionError("SDK execution terminated after business commit");
     private final JdbcTemplate businessJdbc;
     private LaunchSeed seed;
 
@@ -504,30 +770,42 @@ class SdkOrdinaryLeaseRecoveryE2eIT extends AbstractIntegrationTest {
       preparation.bizDate(BIZ_DATE).retryPolicy("FIXED").retryMaxCount(2);
       seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(preparation);
       try (AdminClient admin = adminClient()) {
-        String firstTopic = BatchTopics.directDispatchTopic(
-            BatchTopics.TASK_DISPATCH_ATOMIC, workerCode("first"));
+        String firstTopic =
+            BatchTopics.directDispatchTopic(BatchTopics.TASK_DISPATCH_ATOMIC, workerCode("first"));
         String replacementTopic = BatchTopics.directDispatchTopic(
             BatchTopics.TASK_DISPATCH_ATOMIC, workerCode("replacement"));
-        List<String> topics = List.of(BatchTopics.TASK_DISPATCH_ATOMIC, firstTopic, replacementTopic);
+        List<String> topics =
+            List.of(BatchTopics.TASK_DISPATCH_ATOMIC, firstTopic, replacementTopic);
         for (String topic : topics) {
           try {
             NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
             admin.createTopics(List.of(newTopic)).all().get(10, TimeUnit.SECONDS);
             if (!BatchTopics.TASK_DISPATCH_ATOMIC.equals(topic)) createdTopics.add(topic);
-          } catch (java.util.concurrent.ExecutionException exists) {
+          } catch (ExecutionException exists) {
             if (!(exists.getCause() instanceof TopicExistsException)) throw exists;
           }
         }
         // 固定空消费组的起点，避免 SDK latest 在异步分配后才取日志末尾而漏掉首次派单。
         Map<TopicPartition, OffsetSpec> latest = new LinkedHashMap<>();
         for (String topic : topics) latest.put(new TopicPartition(topic, 0), OffsetSpec.latest());
-        var ends = admin.listOffsets(latest).all().get(10, TimeUnit.SECONDS);
-        Map<TopicPartition, OffsetAndMetadata> initialOffsets = new LinkedHashMap<>();
-        ends.forEach((partition, end) ->
-            initialOffsets.put(partition, new OffsetAndMetadata(end.offset())));
-        admin.alterConsumerGroupOffsets(tenant + "-consumer", initialOffsets)
-            .all().get(10, TimeUnit.SECONDS);
-        consumerOffsetsSeeded = true;
+        await().atMost(WAIT).untilAsserted(() -> {
+          try {
+            var ends = admin.listOffsets(latest).all().get(10, TimeUnit.SECONDS);
+            Map<TopicPartition, OffsetAndMetadata> initialOffsets = new LinkedHashMap<>();
+            ends.forEach((partition, end) ->
+                initialOffsets.put(partition, new OffsetAndMetadata(end.offset())));
+            admin
+                .alterConsumerGroupOffsets(tenant + "-consumer", initialOffsets)
+                .all()
+                .get(10, TimeUnit.SECONDS);
+            consumerOffsetsSeeded = true;
+          } catch (ExecutionException propagation) {
+            if (propagation.getCause() instanceof UnknownTopicOrPartitionException) {
+              throw new AssertionError("waiting for newly created topic metadata", propagation);
+            }
+            throw propagation;
+          }
+        });
       }
     }
 
@@ -551,7 +829,8 @@ class SdkOrdinaryLeaseRecoveryE2eIT extends AbstractIntegrationTest {
       try {
         cleanupKafka();
       } catch (Exception failure) {
-        if (cleanupFailure == null) cleanupFailure = new IllegalStateException("owned Kafka cleanup failed", failure);
+        if (cleanupFailure == null)
+          cleanupFailure = new IllegalStateException("owned Kafka cleanup failed", failure);
         else cleanupFailure.addSuppressed(failure);
       }
       if (cleanupFailure != null) throw cleanupFailure;
@@ -560,6 +839,19 @@ class SdkOrdinaryLeaseRecoveryE2eIT extends AbstractIntegrationTest {
     private void cleanupKafka() throws Exception {
       try (AdminClient admin = adminClient()) {
         if (consumerOffsetsSeeded) {
+          // SIGKILL 无法发送 LeaveGroup；仅移除本场景自有组中已停止的进程成员。
+          var group = admin
+              .describeConsumerGroups(List.of(tenant + "-consumer"))
+              .all()
+              .get(10, TimeUnit.SECONDS)
+              .get(tenant + "-consumer");
+          if (!group.members().isEmpty()) {
+            admin
+                .removeMembersFromConsumerGroup(
+                    tenant + "-consumer", new RemoveMembersFromConsumerGroupOptions())
+                .all()
+                .get(10, TimeUnit.SECONDS);
+          }
           admin.deleteConsumerGroups(List.of(tenant + "-consumer")).all().get(10, TimeUnit.SECONDS);
         }
         if (!createdTopics.isEmpty()) {
@@ -574,11 +866,14 @@ class SdkOrdinaryLeaseRecoveryE2eIT extends AbstractIntegrationTest {
     String deleteDeadLettersSql = "delete from batch.dead_letter_task where tenant_id = ?";
     String deleteWorkersSql = "delete from batch.worker_registry where tenant_id = ?";
     String deleteCalendarsSql = "delete from batch.business_calendar where tenant_id = ?";
+    String deleteCatchupControlsSql =
+        "delete from batch.batch_day_catchup_control where tenant_id = ?";
     String deleteEffectsSql = "delete from biz.customer_account where tenant_id = ?";
     platformJdbc.update(deleteRetriesSql, scenario.tenant);
     platformJdbc.update(deleteDeadLettersSql, scenario.tenant);
     cleanupService.cleanupByExactTenantIds(List.of(scenario.tenant));
     platformJdbc.update(deleteWorkersSql, scenario.tenant);
+    platformJdbc.update(deleteCatchupControlsSql, scenario.tenant);
     platformJdbc.update(deleteCalendarsSql, scenario.tenant);
     scenario.businessJdbc.update(deleteEffectsSql, scenario.tenant);
     String selectRemainingOwnedSql = """
@@ -593,9 +888,18 @@ class SdkOrdinaryLeaseRecoveryE2eIT extends AbstractIntegrationTest {
           (select count(*) from batch.retry_schedule where tenant_id = ?) +
           (select count(*) from batch.dead_letter_task where tenant_id = ?)
         """;
-    Long remaining = platformJdbc.queryForObject(selectRemainingOwnedSql, Long.class,
-        scenario.tenant, scenario.tenant, scenario.tenant, scenario.tenant, scenario.tenant,
-        scenario.tenant, scenario.tenant, scenario.tenant, scenario.tenant);
+    Long remaining = platformJdbc.queryForObject(
+        selectRemainingOwnedSql,
+        Long.class,
+        scenario.tenant,
+        scenario.tenant,
+        scenario.tenant,
+        scenario.tenant,
+        scenario.tenant,
+        scenario.tenant,
+        scenario.tenant,
+        scenario.tenant,
+        scenario.tenant);
     assertThat(remaining).as("owned platform fixture cleanup").isZero();
     assertEffectCount(scenario, 0L);
   }

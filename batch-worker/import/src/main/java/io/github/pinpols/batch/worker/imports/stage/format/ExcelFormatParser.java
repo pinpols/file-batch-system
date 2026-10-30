@@ -466,12 +466,7 @@ public class ExcelFormatParser implements FormatParser {
         String errorColumn = resolveErrorColumn();
         SourceLocator sourceLocator = new SourceLocator(physicalRow, errorColumn);
         support.recordParseError(
-            context,
-            recordNo,
-            ERROR_CODE_EXCEL_INVALID,
-            errorMessage,
-            cells,
-            sourceLocator);
+            context, recordNo, ERROR_CODE_EXCEL_INVALID, errorMessage, cells, sourceLocator);
       }
       // Item 3：preview 抽样到上限,早停,不全量解析剩余行。
       if (previewRows > 0 && recordNo >= previewRows) {

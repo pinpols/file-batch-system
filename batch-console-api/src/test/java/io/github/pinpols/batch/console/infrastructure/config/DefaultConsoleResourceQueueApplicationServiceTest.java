@@ -1,11 +1,8 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
-import io.github.pinpols.batch.console.domain.ops.query.ResourceQueueQuery;
-import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueListRequest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -16,9 +13,12 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueCreateRequest;
+import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueListRequest;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
+import io.github.pinpols.batch.console.domain.ops.query.ResourceQueueQuery;
+import io.github.pinpols.batch.console.domain.ops.view.ResourceQueueRow;
+import io.github.pinpols.batch.console.domain.param.ResourceQueueInsertParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -43,7 +43,7 @@ class DefaultConsoleResourceQueueApplicationServiceTest {
   private DefaultConsoleResourceQueueApplicationService service;
 
   @Captor
-  private ArgumentCaptor<Map<String, Object>> paramsCaptor;
+  private ArgumentCaptor<ResourceQueueInsertParam> paramsCaptor;
 
   @BeforeEach
   void setUp() {
@@ -56,31 +56,55 @@ class DefaultConsoleResourceQueueApplicationServiceTest {
     ResourceQueueCreateRequest request = request("Dispatch-Queue");
     when(mapper.selectByUniqueKey(eq("ta"), anyString())).thenReturn(null);
     doAnswer(invocation -> {
-          Map<String, Object> params = invocation.getArgument(0);
-          params.put("id", 9L);
+          ResourceQueueInsertParam params = invocation.getArgument(0);
+          params.setId(9L);
           return 1;
         })
         .when(mapper)
-        .insert(anyMap());
-    when(mapper.selectById("ta", 9L)).thenReturn(Map.of("id", 9L, "queue_code", "dispatch_queue"));
+        .insert(any(ResourceQueueInsertParam.class));
+    when(mapper.selectById("ta", 9L))
+        .thenReturn(new ResourceQueueRow(
+            9L,
+            "ta",
+            "dispatch_queue",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null));
 
     assertThat(service.create(request).queueCode()).isEqualTo("dispatch_queue");
 
     verify(mapper).selectByUniqueKey("ta", "dispatch_queue");
     verify(mapper).insert(paramsCaptor.capture());
-    assertThat(paramsCaptor.getValue()).containsEntry("queue_code", "dispatch_queue");
+    assertThat(paramsCaptor.getValue().getQueueCode()).isEqualTo("dispatch_queue");
   }
 
   @DisplayName("拒绝已有规范队列的别名")
   @Test
   void shouldRejectAliasOfExistingCanonicalQueue() {
-    when(mapper.selectByUniqueKey(eq("ta"), anyString())).thenReturn(Map.of("id", 9L));
+    when(mapper.selectByUniqueKey(eq("ta"), anyString()))
+        .thenReturn(new ResourceQueueRow(
+            9L, "ta", null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null));
 
     assertThatThrownBy(() -> service.create(request("Dispatch-Queue")))
         .isInstanceOf(BizException.class);
 
     verify(mapper).selectByUniqueKey("ta", "dispatch_queue");
-    verify(mapper, never()).insert(anyMap());
+    verify(mapper, never()).insert(any(ResourceQueueInsertParam.class));
   }
 
   @DisplayName("查询使用规范队列引用")

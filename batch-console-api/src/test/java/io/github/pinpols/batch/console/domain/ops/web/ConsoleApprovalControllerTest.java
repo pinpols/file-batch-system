@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.ops.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -26,6 +25,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
@@ -33,13 +35,19 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 @DisplayName("审批接口:缺少幂等键与请求体非法时拒绝, 成功时透传操作人与原因并返回业务结果")
+@ExtendWith(MockitoExtension.class)
 class ConsoleApprovalControllerTest {
 
-  private final ConsoleApprovalApplicationService approvalApplicationService =
-      mock(ConsoleApprovalApplicationService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleApprovalApplicationService approvalApplicationService;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
+
+  @Mock
+  private ConsoleTenantGuard tenantGuard;
 
   @BeforeEach
   void setUp() {
@@ -58,8 +66,6 @@ class ConsoleApprovalControllerTest {
 
     // R4-P0-2：Controller 现在依赖 ConsoleTenantGuard 强校验请求体 tenantId。
     // 测试用 mock guard，resolveTenant 简单返回入参（与原 body 直传等价）。
-    ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
-    when(tenantGuard.resolveTenant(any())).thenAnswer(inv -> inv.getArgument(0));
 
     mockMvc = MockMvcBuilders.standaloneSetup(
             new ConsoleApprovalController(approvalApplicationService, responseFactory, tenantGuard))
@@ -91,6 +97,7 @@ class ConsoleApprovalControllerTest {
   @Test
   @DisplayName("审批成功:操作人取认证主体用户名而不信任请求体")
   void shouldApproveAndReturnCommonResponseOnSuccess() throws Exception {
+    when(tenantGuard.resolveTenant(any())).thenAnswer(inv -> inv.getArgument(0));
     when(approvalApplicationService.approve(anyString(), anyString(), anyString(), anyString()))
         .thenReturn("OK");
 

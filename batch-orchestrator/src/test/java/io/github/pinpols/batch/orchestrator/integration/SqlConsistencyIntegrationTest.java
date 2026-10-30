@@ -86,8 +86,8 @@ class SqlConsistencyIntegrationTest {
               and column_name = ?
             """;
 
-    Integer actualLength = jdbc.queryForObject(
-        selectCharacterMaximumLengthSql, Integer.class, table, column);
+    Integer actualLength =
+        jdbc.queryForObject(selectCharacterMaximumLengthSql, Integer.class, table, column);
     assertThat(actualLength).isEqualTo(expectedLength);
   }
 

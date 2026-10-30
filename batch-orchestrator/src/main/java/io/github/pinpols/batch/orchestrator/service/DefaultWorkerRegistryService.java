@@ -271,7 +271,8 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
       }
       // Lane C:在持久化前对 descriptor.defaults / inputSchema 做凭据静态拒入,
       // 拒了就让整次 register 抛 BizException(400),阻止凭据落入 custom_task_type_registry JSONB。
-      String ctxLabel = "sdk.taskType.descriptor[" + taskTypeCode + "]";
+      // code 来自上报载荷，不能拼入对外错误文案；拒入原因只保留固定上下文。
+      String ctxLabel = "sdk.taskType.descriptor";
       SensitiveDataValidator.rejectIfContainsSensitiveKeys(descriptor.defaults(), ctxLabel);
       SensitiveDataValidator.rejectIfContainsSensitiveKeys(descriptor.inputSchema(), ctxLabel);
       customTaskTypeRegistryMapper.upsertDeclared(CustomTaskTypeUpsertParam.builder()

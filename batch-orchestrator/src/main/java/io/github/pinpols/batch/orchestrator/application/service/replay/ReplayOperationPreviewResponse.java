@@ -4,8 +4,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import lombok.Builder;
 
 /** 日期区间重放的冻结影响范围与一次性提交凭证。 */
+@Builder
 public record ReplayOperationPreviewResponse(
     String tenantId,
     UUID operationKey,

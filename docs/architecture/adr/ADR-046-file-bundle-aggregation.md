@@ -73,16 +73,29 @@ worker CLAIM 的粒度是 **partition**;IMPORT/EXPORT 是「一个文件 = 一�
 
 > ⚠️ 关键(2026-06-21 评审收敛):省控制面 churn 靠「**批量认领 / 批量上报**」,**不靠**把束做成一个有内部循环的大 task。partition 还是各自独立的执行单元,束只是它们的**编排批量化**。
 
-```
-一个 job_instance(= 用户一次提交的束)
-   ├── partition 1   (file→template→表;独立认领 / 执行 / 报告 / 重试 / lease / 幂等)
-   ├── partition 2   ...
-   └── partition K
-worker 一次 claim K 个 partition、处理完一次 report K 个  →  控制面往返 O(N)→O(N/K)
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+%% 当前代码边界；开关默认值与运行证据见文末。
+flowchart TB
+  subgraph C0["认领"]
+    direction LR
+    J["独立 Partition"] --> C["单条 / 批量 CLAIM"] --> V["逐项 CAS 与配置身份核对"]
+  end
+  subgraph W0["执行与租约"]
+    direction LR
+    L["登记全部已领租约"] --> E["批内串行 · 跨 listener 可并发"]
+    L -.-> H["排队 / 执行中续租 · invocation 围栏"]
+    H -.-> E
+  end
+  subgraph R0["报告交付"]
+    direction LR
+    R["本项同步 REPORT · 可选微批"] --> S["服务端逐项事务"] --> F["逐项确认 / 原 Outbox 交接"]
+  end
+  C0 --> W0 --> R0
 ```
 
-- **orchestrator 侧**:launch 一次建束 + K 个 partition;claim/report 支持**多行**(一次领 / 报 K 个),outbox 批写。降的是**往返次数**,不是把 K 个文件合并成一个不可分单元。
-- **worker 侧**:批量领到 K 个 partition 后,**每个 partition 照现有方式独立处理**(各自 template/表/下游、各自 checkpoint、per-partition try/catch),处理完批量报。**不引入「束 task 内部循环 / 束状态机 / 束执行生命周期」。**
+- **Orchestrator 侧**：一次 launch 按 manifest 创建独立 partition；CLAIM/REPORT 端点合并 HTTP 往返，保留逐项 CAS、事务和原 Outbox 写入路径，不将整束设为一个事务。
+- **Worker 侧**：认领成功后先登记所有租约，再在批内串行、逐 partition 独立执行。每项完成后同步报告或交给原 Outbox；可选 REPORT 微批只合并同时段、同租户的并发 listener 完成项，不等整批任务结束。没有并发完成项时，微批可以只有一项。
 - **三根墙原样不动**:partition 本身不变,所以幂等(`jobInstanceId:partitionNo`)、隔离(partition 独立失败/重试)、checkpoint(partition 级)全部沿用,**零新增语义**。
 
 ### 2. 落地形态:扩展 `job_partition`(异构 + 批量领报),**不新建实体、不加束状态机**
@@ -188,7 +201,7 @@ launch 不懂 manifest 格式,只读 DB(file_record),模块边界干净,且正�
 
 > 修正:本 ADR 早先把到达组写成「不做种子/正交另一条线」**说保守了**。准确表述:**束有两个合法种子——① 用户单次提交集合(主场景),② 满足条件的到达组(opt-in)**,两者都是「已知集合 → 束」,非竞争。
 
-## 改动点(落地后,非本 PR)
+## 原实施改动设计（当前实现状态见文末源码核对）
 
 - **batch-orchestrator**:
   - launch/plan:`DefaultSchedulePlanBuilder` / `DefaultPartitionDispatchService` 支持束作业按 manifest **展成 N 个异构 partition**;一次插入。
@@ -197,7 +210,7 @@ launch 不懂 manifest 格式,只读 DB(file_record),模块边界干净,且正�
 - **DB**:`job_partition` 加 per-file 绑定列(`source_file_id`/`template_code`/`target_ref`,+ 同步 archive 冷表镜像,`ArchiveSchemaDriftCheck` 启动 fail-fast)。**纯加列,不改 partition 的 UNIQUE/PK**(故不动 `ON CONFLICT` 幂等契约;若确需改则必 `grep 'on conflict'` 全量核)。
 - **console-api / FE**:监控页支持「束(job_instance)→ partition」下钻——**复用现有 job_instance→partition 下钻**,不新增层。
 
-## 实施分阶段
+## 原实施拆分（当前实现状态见文末源码核对）
 
 > **轻量化说明(2026-06-21)**:原 Phase 2 含「束生命周期 + worker 束执行」被评审判为**改动太大且不必要**——省 churn 靠批量领报即可,partition 仍独立。下列已收敛成**纯加法**,无重构。
 
@@ -205,6 +218,10 @@ launch 不懂 manifest 格式,只读 DB(file_record),模块边界干净,且正�
 2. **Phase 1 — 通用束骨架 + 首个绑定 profile(IMPORT)+ launch/outbox 批量化(低风险先行)**:做**通用束骨架**(`job_instance` + K 异构 partition + manifest,**全类型复用**)+ IMPORT 绑定 profile;launch 一次展成 N 个异构 partition + outbox 批写。**运行时仍 N 个独立 partition**,claim/report 暂不动。验证低千量级是否已够(很可能够)。
 3. **Phase 2 — 多行 claim / 多行 report(通用、命中上万再上)**:把 claim/report 改成一次领/报 K 个独立 partition,O(N)→O(N/K)。**通用、不挑 worker 类型**;仅此一项优化,partition 语义/状态机/worker 执行全不变;无束状态机、无 worker 束循环。
 4. **Phase 3 — 补绑定 profile(EXPORT / DISPATCH,按需 PROCESS / ATOMIC)**:在通用骨架上加各类型的 partition 绑定 profile(见 §适用范围),**不是各造一套束机制**。export/dispatch 先做;process(独立批量提交才需)、atomic(批量原子任务才需)按真实场景补。
+
+## 到达组确定性坏数据的当前处理
+
+确定性坏数据隔离保持暂缓，不新增 `QUARANTINED` 状态或 Console 人工恢复接口。当前 launch 失败保持 `WAITING_ARRIVAL`，并递增 `batch.file.arrival.bundle.launch.failed` 指标；该指标用于发现重复失败并触发运维告警。只有生产证据确认同一坏组持续重试且需要自动隔离时，才重新评估状态机和恢复入口。
 
 ## Consequences
 
@@ -222,3 +239,41 @@ launch 不懂 manifest 格式,只读 DB(file_record),模块边界干净,且正�
 4. **Phase 1 先行,Phase 2(多行 claim/report)按实测上。** 低千:Phase 1 配置收敛 + launch/outbox 批量化,大概率够;上万:claim/report 往返仍顶,上 Phase 2 的**多行 claim/report**(只此一项优化,partition 全不变)。两个 Phase 都是纯加法,不再有原来那个重量级 Phase 2。
 
 > 配置层结论见 §配置模型:1 束作业 + M 模板(批量导/可复用)+ manifest,不 per-表配 job。
+
+## 当前批量传输实现（2026-10-25 源码核对）
+
+| 边界 | 当前代码事实 |
+|---|---|
+| 服务端 CLAIM | `TaskController` 的 `/internal/tasks/claim-batch` 逐项执行认领 CAS 并返回身份和结果；不是整批共享幂等 |
+| 服务端 REPORT | `/internal/tasks/report-batch` 逐项调用 `TaskReportRetryExecutor` 和原事务路径；某项失败不回滚其他已提交项。没有采用旧方案建议的整批事务、savepoint 或单次 Outbox 批写 |
+| Worker 认领与执行 | `TaskDispatchExecutor.executeBatchDetailed` 批量 CLAIM 后按任务身份核对有效配置；全部成功项提前登记租约。批内串行执行，跨 listener 并发仍受现有准入和线程池限制 |
+| Worker 续租 | 批量响应按 taskId 关联，确认明确结果后才更新本地租约；缺项、重复、陌生身份或解析异常回原单条确认，保留原 tenant/worker/invocation CAS |
+| Worker REPORT | 独立开关启用 `TaskReportBatcher` 同步微批。等待规整为0–100ms，HTTP上限复用CLAIM批大小；同租户且同taskId只放一份。flusher必须包含自身，HTTP在途/队满/关闭时回原单条，避免异租户后置等待。已确认项不重报；未确认批消耗原预算一次，剩余预算用尽后按原Outbox/失败恢复路径处理 |
+| 消费边界 | `AbstractTaskConsumer` 保留逐项失败、毒丸与重投判定，跨租户按现有租户作用域执行。Worker 的批量 listener 由 `batch.worker.batch-claim.enabled` 控制，默认关闭 |
+| 服务端配置 | `BundleBatchClaimProperties.maxBatchSize` 已被端点消费；`enabled/jobOverrides` 目前只有取值方法，没有热路径调用，不能作为关闭批量端点的措施。该缺口登记在 TODO，不在文档整理中改变运行行为 |
+| 验证范围 | B200候选源码的136个不同用例已通过并按SHA写入实际分支，包含响应身份、未知协议、授权拒绝、部分失败、重试预算、租约交接和关闭；受控N8报告证明HTTP8→1，未证明吞吐或延迟改善。实际联合治理77例、七个生产模块PMD限定检查点通过；更新运行包受影响SIM10/10、REPORT开/关各4分区成功（claim均1次/4项，report分别0次与4次），详见[本批证据](../../verifications/wdi-local-closure-2026-10-25.md)。原始WARN失败、新SSE候选及并发Console新增范围保留，不能外推发布放行 |
+
+### REPORT 微批与逐项恢复路径
+
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48}}}%%
+flowchart TB
+  R["本项业务已完成"] --> E{"REPORT 微批启用？"}
+  E -->|否| S["原单条 REPORT · 有限重试"]
+  E -->|是| Q{"可加入当前攒批？"}
+  Q -->|队满 / HTTP在途 / 已关闭| S
+  Q -->|可加入| B["有限等待 · 同租户 / 唯一taskId"]
+  B --> H["一次 report-batch · 服务端逐项事务"]
+  H --> V{"本项身份与成功结果明确？"}
+  V -->|是| D["本项返回 · 保留原消费确认边界"]
+  V -->|否| F["该批已消耗1次预算 · 只用剩余次数"]
+  F --> S
+  S -->|确认成功| D
+  S -->|预算耗尽| O{"原 Outbox 持久接收成功？"}
+  O -->|是| P["本项返回 · 后台只重投报告"]
+  O -->|否| X["保留丢报告指标 · 交既有租约恢复"]
+```
+
+未发送批HTTP的旁路不消耗一次预算；身份不明不能算成功。HTTP与Outbox均失败时保留原丢报告与恢复语义，不把它称为已持久交付，也不把上报失败抛回Kafka重新执行业务。生产启用与回退配置见[开关手册](../../runbook/feature-switches.md#worker-批量-claim-与-report)。
+
+批量传输优化、BUNDLE manifest 展开和多 Workflow 批量发起是三个不同边界。生产是否启用需按[容量治理](../../runbook/production-capacity-governance.md)证明吞吐、租约、逐项结果、重投恢复和资源预算；旧方案中的“Worker 已批量 REPORT”和“必须采用 savepoint”不再是实现依据。

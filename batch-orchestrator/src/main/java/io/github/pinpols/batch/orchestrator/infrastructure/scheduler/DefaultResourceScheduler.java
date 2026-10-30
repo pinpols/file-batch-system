@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
-import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionActiveByTenantCountQuery;
-
-
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TaskStatus;
@@ -23,6 +20,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.BatchWindowEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.CountActiveByGroupParam;
+import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionActiveByTenantCountQuery;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceAdmissionAction;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
@@ -277,8 +275,10 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     FairnessLoad fairnessLoad = new FairnessLoad(
         tenantActiveJobs, tenantActivePartitions, queueActiveJobs, queueActivePartitions);
     FairnessScoreContext fairnessContext = new FairnessScoreContext(fairnessWeights, fairnessLoad);
-    long fairnessScore = resolveFairnessScore(fairnessContext);
-    fairnessScore += resolveAgingBonus(request);
+    long baseScore = resolveFairnessScore(fairnessContext);
+    long agingBonus = resolveAgingBonus(request);
+    long fairnessScore =
+        baseScore > Long.MAX_VALUE - agingBonus ? Long.MAX_VALUE : baseScore + agingBonus;
     decision.setTenantWeight(tenantWeight);
     decision.setQueueWeight(queueWeight);
     decision.setTenantActiveJobs(tenantActiveJobs);
@@ -336,19 +336,17 @@ public class DefaultResourceScheduler implements ResourceScheduler {
       return 0;
     }
     String tenantId = request.getTenantId();
-    long count = cachedCount(
-        "tp:" + tenantId,
-        () -> {
-          JobPartitionActiveByTenantCountQuery jobPartitionActiveByTenantCountQuery = JobPartitionActiveByTenantCountQuery.builder()
+    long count = cachedCount("tp:" + tenantId, () -> {
+      JobPartitionActiveByTenantCountQuery jobPartitionActiveByTenantCountQuery =
+          JobPartitionActiveByTenantCountQuery.builder()
               .tenantId(tenantId)
               .waitingStatus(PartitionStatus.WAITING.code())
               .readyStatus(PartitionStatus.READY.code())
               .runningStatus(PartitionStatus.RUNNING.code())
               .retryingStatus(PartitionStatus.RETRYING.code())
               .build();
-          return jobPartitionMapper.countActiveByTenant(
-            jobPartitionActiveByTenantCountQuery);
-        });
+      return jobPartitionMapper.countActiveByTenant(jobPartitionActiveByTenantCountQuery);
+    });
     return safeNarrow(count);
   }
 
@@ -434,13 +432,19 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     long elapsedSeconds = waitedDuration.toSeconds();
     long waitedSeconds = Math.max(0L, elapsedSeconds);
     long configuredStepSeconds = resourceSchedulerProperties.getPriorityAgingStepSeconds();
-    long stepSeconds = Math.max(1L, configuredStepSeconds);
+    long stepSeconds = configuredStepSeconds > 0 ? configuredStepSeconds : 60L;
     long steps = waitedSeconds / stepSeconds;
     long configuredBonusPerStep = resourceSchedulerProperties.getPriorityAgingBonusPerStep();
     long bonusPerStep = Math.max(0L, configuredBonusPerStep);
-    long bonus = steps * bonusPerStep;
     long configuredMaximumBonus = resourceSchedulerProperties.getPriorityAgingMaxBonus();
     long nonnegativeMaximumBonus = Math.max(0L, configuredMaximumBonus);
-    return Math.min(bonus, nonnegativeMaximumBonus);
+    if (steps == 0 || bonusPerStep == 0 || nonnegativeMaximumBonus == 0) {
+      return 0;
+    }
+    // 先比较商再乘，避免上限截断前发生 long 溢出并颠倒调度顺序。
+    if (steps > nonnegativeMaximumBonus / bonusPerStep) {
+      return nonnegativeMaximumBonus;
+    }
+    return steps * bonusPerStep;
   }
 }

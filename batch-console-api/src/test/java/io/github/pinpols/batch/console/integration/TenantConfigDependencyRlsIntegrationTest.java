@@ -21,6 +21,7 @@ import io.github.pinpols.batch.console.application.contract.request.config.Tenan
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigCopyRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigCopyRequest.ConfigType;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
+import io.github.pinpols.batch.console.domain.config.param.ConfigSyncLogUpdateParam;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDependencyRuleRequest;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleResourceTagService;
 import io.github.pinpols.batch.console.domain.rbac.service.ResourceTagUpsertInput;
@@ -28,7 +29,6 @@ import io.github.pinpols.batch.console.mapper.ConfigSyncLogMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.SQLException;
 import java.time.Duration;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -364,10 +364,14 @@ class TenantConfigDependencyRlsIntegrationTest extends AbstractIntegrationTest {
         """;
     List<Map<String, Object>> receipts = jdbc.queryForList(selectReceiptOutcomeSql, sourceTenant);
     assertThat(receipts).hasSize(2);
-    assertThat(receipts).anySatisfy(receipt -> assertThat(receipt)
-        .containsEntry("tenant_id", targets.getFirst()).containsEntry("success", "true"));
-    assertThat(receipts).anySatisfy(receipt -> assertThat(receipt)
-        .containsEntry("tenant_id", failedTenant).containsEntry("success", "false"));
+    assertThat(receipts)
+        .anySatisfy(receipt -> assertThat(receipt)
+            .containsEntry("tenant_id", targets.getFirst())
+            .containsEntry("success", "true"));
+    assertThat(receipts)
+        .anySatisfy(receipt -> assertThat(receipt)
+            .containsEntry("tenant_id", failedTenant)
+            .containsEntry("success", "false"));
   }
 
   @ParameterizedTest
@@ -439,7 +443,8 @@ class TenantConfigDependencyRlsIntegrationTest extends AbstractIntegrationTest {
                     assertThat(sql.getSQLState()).isEqualTo(transientFailure ? "40001" : "23514"));
       }
       for (String target : targets) {
-        Integer selectedJobDefinitionCount = jdbc.queryForObject(selectCountSql, Integer.class, target);
+        Integer selectedJobDefinitionCount =
+            jdbc.queryForObject(selectCountSql, Integer.class, target);
         assertThat(selectedJobDefinitionCount).isEqualTo(3);
         Integer selectedJobDependencyCount =
             jdbc.queryForObject(selectCountSql2, Integer.class, target);
@@ -527,15 +532,16 @@ class TenantConfigDependencyRlsIntegrationTest extends AbstractIntegrationTest {
 
     Long logId =
         jdbc.queryForObject(insertConfigSyncLogSql, Long.class, sourceTenant, sourceTenant);
-    Map<String, Object> update = new HashMap<>();
-    update.put("tenantId", sourceTenant);
-    update.put("id", logId);
-    update.put("syncStatus", "RUNNING");
-    update.put("successItems", 0);
-    update.put("failedItems", 0);
-    update.put("skippedItems", 0);
-    update.put("mergeDetail", true);
-    update.put("detailJson", "{\"error\":\"error.common.system_error\",\"outcomeKnown\":false}");
+    ConfigSyncLogUpdateParam update = ConfigSyncLogUpdateParam.builder()
+        .tenantId(sourceTenant)
+        .id(logId)
+        .syncStatus("RUNNING")
+        .successItems(0)
+        .failedItems(0)
+        .skippedItems(0)
+        .mergeDetail(true)
+        .detailJson("{\"error\":\"error.common.system_error\",\"outcomeKnown\":false}")
+        .build();
 
     assertThat(asApplicationRole(() -> {
           syncLogMapper.setTenantContext(sourceTenant);
@@ -1126,8 +1132,8 @@ class TenantConfigDependencyRlsIntegrationTest extends AbstractIntegrationTest {
           .atMost(Duration.ofSeconds(20))
           .pollInterval(Duration.ofMillis(50))
           .untilAsserted(() -> {
-            Integer selectedPgLocksCount =
-                jdbc.queryForObject(selectCountSql, Integer.class, lockKey >>> 32, lockKey & 0xffff_ffffL);
+            Integer selectedPgLocksCount = jdbc.queryForObject(
+                selectCountSql, Integer.class, lockKey >>> 32, lockKey & 0xffff_ffffL);
             assertThat(selectedPgLocksCount).isOne();
           });
 
@@ -1208,8 +1214,8 @@ class TenantConfigDependencyRlsIntegrationTest extends AbstractIntegrationTest {
           .atMost(Duration.ofSeconds(20))
           .pollInterval(Duration.ofMillis(50))
           .untilAsserted(() -> {
-            Integer selectedPgLocksCount =
-                jdbc.queryForObject(selectCountSql, Integer.class, lockKey >>> 32, lockKey & 0xffff_ffffL);
+            Integer selectedPgLocksCount = jdbc.queryForObject(
+                selectCountSql, Integer.class, lockKey >>> 32, lockKey & 0xffff_ffffL);
             assertThat(selectedPgLocksCount).isOne();
           });
 
@@ -1223,8 +1229,8 @@ class TenantConfigDependencyRlsIntegrationTest extends AbstractIntegrationTest {
 
       assertThatThrownBy(() -> attachment.get(20, TimeUnit.SECONDS))
           .hasCauseInstanceOf(BizException.class);
-      Integer selectedResourceTagCount =
-          jdbc.queryForObject(selectCountSql2, Integer.class, sourceTenant, jobCode, renamedJobCode);
+      Integer selectedResourceTagCount = jdbc.queryForObject(
+          selectCountSql2, Integer.class, sourceTenant, jobCode, renamedJobCode);
       assertThat(selectedResourceTagCount).isZero();
     } finally {
       executor.shutdownNow();
@@ -1314,8 +1320,8 @@ class TenantConfigDependencyRlsIntegrationTest extends AbstractIntegrationTest {
           .atMost(Duration.ofSeconds(20))
           .pollInterval(Duration.ofMillis(50))
           .untilAsserted(() -> {
-            Integer selectedPgLocksCount =
-                jdbc.queryForObject(selectCountSql, Integer.class, lockKey >>> 32, lockKey & 0xffff_ffffL);
+            Integer selectedPgLocksCount = jdbc.queryForObject(
+                selectCountSql, Integer.class, lockKey >>> 32, lockKey & 0xffff_ffffL);
             assertThat(selectedPgLocksCount).isOne();
           });
 
@@ -1415,8 +1421,8 @@ class TenantConfigDependencyRlsIntegrationTest extends AbstractIntegrationTest {
           .atMost(Duration.ofSeconds(20))
           .pollInterval(Duration.ofMillis(50))
           .untilAsserted(() -> {
-            Integer selectedPgLocksCount =
-                jdbc.queryForObject(selectCountSql, Integer.class, lockKey >>> 32, lockKey & 0xffff_ffffL);
+            Integer selectedPgLocksCount = jdbc.queryForObject(
+                selectCountSql, Integer.class, lockKey >>> 32, lockKey & 0xffff_ffffL);
             assertThat(selectedPgLocksCount).isOne();
           });
 
@@ -1761,7 +1767,8 @@ class TenantConfigDependencyRlsIntegrationTest extends AbstractIntegrationTest {
         return RlsTenantContextHolder.runWithTenant(sourceTenant, () -> {
           T result = operation.get();
           assertThat(RlsTenantContextHolder.get()).isEqualTo(sourceTenant);
-          String selectedCurrentSetting = jdbc.queryForObject(selectCurrentSettingSql, String.class);
+          String selectedCurrentSetting =
+              jdbc.queryForObject(selectCurrentSettingSql, String.class);
           assertThat(selectedCurrentSetting).isNotIn(targets);
           return result;
         });

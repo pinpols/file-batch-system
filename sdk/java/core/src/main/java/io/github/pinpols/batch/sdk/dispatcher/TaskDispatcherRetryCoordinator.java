@@ -64,8 +64,9 @@ final class TaskDispatcherRetryCoordinator {
         PlatformHttpClient.TaskClaimResponse response =
             httpClient.claim(message.taskId(), idempotencyKey, body);
         resetClientErrorStreak();
-        PlatformHttpClient.TaskClaimResponse claimResponse =
-            EmptyChecks.isNull(response) ? new PlatformHttpClient.TaskClaimResponse(null) : response;
+        PlatformHttpClient.TaskClaimResponse claimResponse = EmptyChecks.isNull(response)
+            ? new PlatformHttpClient.TaskClaimResponse(null)
+            : response;
         return new ClaimResult(true, claimResponse);
       } catch (PlatformHttpException httpEx) {
         if (httpEx.isAuthError()) {

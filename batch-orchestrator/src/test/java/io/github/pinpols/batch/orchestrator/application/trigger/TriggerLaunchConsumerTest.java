@@ -153,6 +153,21 @@ class TriggerLaunchConsumerTest {
   }
 
   @Test
+  @DisplayName("启动暂不可用时交给监听器重试，不确认消息")
+  void consume_serviceUnavailable_propagatesWithoutAcknowledging() {
+    LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-in-progress");
+    when(launchApplicationService.launchFromTrustedQueue(any(LaunchRequest.class)))
+        .thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "retry"));
+
+    assertThatThrownBy(() -> consumer.consume(consumerRecord(envelope), ack))
+        .isInstanceOf(ResponseStatusException.class)
+        .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
+            .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
+    verify(ack, never()).acknowledge();
+    assertThat(failed("http_503")).isEqualTo(1.0);
+  }
+
+  @Test
   @DisplayName("启动被限流时不确认消息, 按延迟重投并累计限流失败计数")
   void consume_rateLimited_doesNotAckSoKafkaCanRedeliver() {
     LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-rate");

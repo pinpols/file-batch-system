@@ -7,8 +7,8 @@
 # ACCESS EXCLUSIVE 长锁、改列类型重写大表、重命名列破坏 mybatis 绑定)在评审里容易漏。
 # 2026-06-10 分区脚本实跑致 orchestrator outbox 全写失败回滚就是同类痛。
 #
-# 策略:squawk 对存量历史会大量报(1875 条),故只对「相对 base 新增/改动」的 db/migration/*.sql 跑;
-# 规则集见 .squawk.toml(只留危险锁/数据丢失/破坏应用类)。无改动迁移则直接通过。
+# 策略:squawk 对存量历史会大量报(1875 条),故只对「相对 base 新增/改动有效 SQL」的迁移跑;
+# 纯 SQL 注释 / COMMENT ON 元数据改动不触发结构安全 lint。规则集见 .squawk.toml。
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -51,10 +51,28 @@ if [[ "${#changed[@]}" -eq 0 ]]; then
   exit 0
 fi
 
-echo "ℹ️  对 ${#changed[@]} 个新增/改动迁移跑 squawk:"
-printf '   - %s\n' "${changed[@]}"
+to_lint=()
+comment_only_count=0
+if ! classifications="$(python3 "$ROOT_DIR/scripts/ci/flyway_sql_diff.py" "$BASE_REF" "${changed[@]}")"; then
+  echo "❌ ERROR: cannot classify migration changes safely"
+  exit 1
+fi
+while IFS=$'\t' read -r classification migration; do
+  case "$classification" in
+    COMMENT) comment_only_count=$((comment_only_count + 1)) ;;
+    SQL|NEW) to_lint+=("$migration") ;;
+  esac
+done <<< "$classifications"
+
+if [[ "${#to_lint[@]}" -eq 0 ]]; then
+  echo "⏭️ 跳过 | code=${GATE_CODE} | gate=${GATE_NAME} | reason=仅有 SQL 注释/COMMENT ON 元数据变更 (${comment_only_count} 个文件)"
+  exit 0
+fi
+
+echo "ℹ️  对 ${#to_lint[@]} 个新增/改动迁移跑 squawk:"
+printf '   - %s\n' "${to_lint[@]}"
 echo
 
 # squawk 命中危险规则即非零退出 → fail PR。
-"$SQUAWK_BIN" "${changed[@]}"
+"$SQUAWK_BIN" "${to_lint[@]}"
 echo "✅ 通过 | code=${GATE_CODE} | gate=${GATE_NAME}"

@@ -3,10 +3,10 @@ package io.github.pinpols.batch.console.domain.notification.service;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.WebhookRelayProperties;
-import io.github.pinpols.batch.console.domain.notification.view.TerminalNotificationArchiveCandidate;
 import io.github.pinpols.batch.console.domain.notification.mapper.TerminalNotificationArchiveMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.TerminalNotificationArchiveMapper.Family;
 import io.github.pinpols.batch.console.domain.notification.mapper.WorkflowTerminalNotificationMapper;
+import io.github.pinpols.batch.console.domain.notification.view.TerminalNotificationArchiveCandidate;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.BooleanSupplier;
@@ -101,7 +101,8 @@ public class TerminalNotificationArchiveService {
       archive.copyFamily(candidate, family);
       long mismatches = archive.mismatches(candidate, family);
       if (mismatches != 0) {
-        throw new IllegalStateException("terminal notification archive differs from source: " + family);
+        throw new IllegalStateException(
+            "terminal notification archive differs from source: " + family);
       }
     }
     if (cleanupEnabled) {

@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -139,15 +140,17 @@ public final class ImportStageSupport {
       String targetStatus,
       Map<String, Object> metadata) {
     Map<String, Object> attributes = context.getAttributes();
+    if (DryRunGuard.fromAttributes(attributes).isDryRun()) {
+      return;
+    }
     Object fileIdValue = attributes.get(PipelineRuntimeKeys.FILE_ID);
     Long fileId = PlatformRuntimeValues.toLong(fileIdValue);
     try {
       fileRecords.updateFileStatus(fileId, targetStatus, metadata);
     } catch (BizException exception) {
-      boolean recoverableStatusConflict =
-          exception.getCode() == ResultCode.STATE_CONFLICT
-              && (isReplayOrRecoveryMode(context) || isPartitionedImport(context))
-              && fileStatusAlreadyAtOrAfter(fileRecords, fileId, targetStatus);
+      boolean recoverableStatusConflict = exception.getCode() == ResultCode.STATE_CONFLICT
+          && (isReplayOrRecoveryMode(context) || isPartitionedImport(context))
+          && fileStatusAlreadyAtOrAfter(fileRecords, fileId, targetStatus);
       if (!recoverableStatusConflict) {
         throw exception;
       }

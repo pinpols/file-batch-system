@@ -1,9 +1,7 @@
 package io.github.pinpols.batch.console.domain.notification.mapper;
 
-import io.github.pinpols.batch.console.domain.notification.query.AlertEventActiveAlertsInAmGroupCountQuery;
-
-
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
+import io.github.pinpols.batch.console.domain.notification.query.AlertEventActiveAlertsInAmGroupCountQuery;
 import io.github.pinpols.batch.console.domain.notification.query.AlertEventQuery;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -23,8 +21,7 @@ public interface AlertEventMapper {
       @Param("severity") String severity,
       @Param("status") String status);
 
-  long countActiveAlertsInAmGroup(
-      AlertEventActiveAlertsInAmGroupCountQuery parameters);
+  long countActiveAlertsInAmGroup(AlertEventActiveAlertsInAmGroupCountQuery parameters);
 
   int updateStatus(
       @Param("tenantId") String tenantId, @Param("id") Long id, @Param("status") String status);

@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.web;
 
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -22,15 +21,22 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 @DisplayName("容量画像控制器: 查询参数透传与租户越权拒绝")
+@ExtendWith(MockitoExtension.class)
 class ConsoleCapacityProfileControllerTest {
 
-  private final ConsoleOrchestratorPort orchestratorProxy = mock(ConsoleOrchestratorPort.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleOrchestratorPort orchestratorProxy;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -40,10 +46,6 @@ class ConsoleCapacityProfileControllerTest {
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(orchestratorProxy.capacityProfile(
-            "ta", "2026-06-30T00:00:00Z", "2026-06-30T01:00:00Z", "JOB", 10))
-        .thenReturn(CommonResponse.success(new CapacityProfileResponse(
-            null, "ta", null, "JOB", "BFS_HOT_TABLES", List.of(), null, null)));
     mockMvc = MockMvcBuilders.standaloneSetup(
             new ConsoleCapacityProfileController(orchestratorProxy, responseFactory))
         .setControllerAdvice(exceptionHandler)
@@ -53,6 +55,10 @@ class ConsoleCapacityProfileControllerTest {
   @Test
   @DisplayName("查询容量画像时, 分组、时间范围与条数上限全部透传到编排端口")
   void shouldDelegateAllQueryParameters_whenQueryingCapacity() throws Exception {
+    when(orchestratorProxy.capacityProfile(
+            "ta", "2026-06-30T00:00:00Z", "2026-06-30T01:00:00Z", "JOB", 10))
+        .thenReturn(CommonResponse.success(new CapacityProfileResponse(
+            null, "ta", null, "JOB", "BFS_HOT_TABLES", List.of(), null, null)));
     mockMvc
         .perform(get("/api/console/capacity-profile")
             .param("tenantId", "ta")

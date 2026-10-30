@@ -10,7 +10,7 @@ import lombok.Builder;
  * <ul>
  *   <li>L1 CONFIG_VALIDATE — 至少需要 tenantId + jobCode；bizDate / params 可空。
  *   <li>L2 SCHEDULE_PLAN — 必须 bizDate；输出预计 instance / partition / worker 信号。
- *   <li>L3 EXECUTION_PLAN — 必须 bizDate；下钻到 task 级 SQL explain / 文件路径 / endpoint reachability。
+ *   <li>L3 EXECUTION_PLAN — 必须 bizDate；下钻到 task 级 SQL 静态检查 / 文件路径 / endpoint reachability。
  * </ul>
  */
 @Builder

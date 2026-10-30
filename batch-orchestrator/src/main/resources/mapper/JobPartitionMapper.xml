@@ -508,16 +508,57 @@
         limit #{batchSize}
     </select>
 
-    <select id="selectWaitingPartitionsGlobal" resultMap="JobPartitionResultMap">
-        select *
+    <resultMap id="WaitingPartitionScanCursorMap" type="io.github.pinpols.batch.orchestrator.domain.query.WaitingPartitionScanCursor">
+        <constructor>
+            <arg column="last_partition_id" javaType="_long"/>
+            <arg column="cycle_upper_id" javaType="_long"/>
+            <arg column="cycle_dry_run" javaType="_boolean"/>
+            <arg column="version" javaType="_long"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectWaitingPartitionScanCursor" resultMap="WaitingPartitionScanCursorMap">
+        select last_partition_id, cycle_upper_id, cycle_dry_run, version from batch.waiting_partition_scan_cursor where singleton_id = 1
+    </select>
+
+    <update id="advanceWaitingPartitionScanCursor">
+        update batch.waiting_partition_scan_cursor
+        set last_partition_id = #{lastPartitionId}, cycle_upper_id = #{cycleUpperId},
+            cycle_dry_run = #{dryRunPhase}, version = version + 1, updated_at = current_timestamp
+        where singleton_id = 1 and version = #{expectedVersion}
+    </update>
+
+    <select id="selectLatestPartitionId" resultType="long">
+        select coalesce(max(id), 0) from batch.job_partition
+    </select>
+
+    <sql id="WaitingPartitionsGlobalPredicate">
         from batch.job_partition
         where partition_status = #{waitingStatus}
-          and not exists (
-              select 1
-              from batch.job_instance ji
-              where ji.id = job_partition.job_instance_id
-                and ji.instance_status = 'PAUSED'
+          and exists (
+              select 1 from batch.job_instance ji
+              where ji.tenant_id = job_partition.tenant_id
+                and ji.id = job_partition.job_instance_id
+                and ji.instance_status in ('WAITING', 'RUNNING')
           )
+          and not exists (
+              select 1 from batch.workflow_node_run node
+              join batch.workflow_run run on run.id = node.workflow_run_id
+              where run.tenant_id = job_partition.tenant_id
+                and node.job_instance_id = job_partition.job_instance_id
+                and run.run_status not in ('CREATED', 'RUNNING')
+          )
+    </sql>
+
+    <select id="selectWaitingPartitionsGlobal" resultMap="JobPartitionResultMap">
+        select * <include refid="WaitingPartitionsGlobalPredicate"/>
+        order by id asc
+        limit #{batchSize}
+    </select>
+
+    <select id="selectWaitingPartitionsGlobalInCycle" resultMap="JobPartitionResultMap">
+        select * <include refid="WaitingPartitionsGlobalPredicate"/>
+          and id &gt; #{afterId} and id &lt;= #{upperId} and dry_run = #{dryRun}
         order by id asc
         limit #{batchSize}
     </select>

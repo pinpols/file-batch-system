@@ -1,12 +1,5 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
-import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiTurnStartInput;
-
-import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiConversationAllocateTurnNoParam;
-import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationPageByOwnerQuery;
-import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationTurnsQuery;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -24,18 +17,22 @@ import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.page.CursorCodec;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiTurnStartInput;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiConversationEntity;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiConversationMapper;
+import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationPageByOwnerQuery;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -73,8 +70,12 @@ class ConsoleAiConversationServiceTest {
     when(mapper.selectForUpdate(eq("tenant-a"), anyString())).thenReturn(null);
     when(mapper.selectRecentCompleteTurns(eq("tenant-a"), anyString(), eq(12)))
         .thenReturn(List.of());
-    when(mapper.allocateTurnNo(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "tenant-a") && parameters.conversationId() != null && parameters.ownerUserId() != null && parameters.expiresAt() != null && parameters.contextVersion() != null)))
+    when(mapper.allocateTurnNo(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.tenantId(), "tenant-a")
+            && parameters.conversationId() != null
+            && parameters.ownerUserId() != null
+            && parameters.expiresAt() != null
+            && parameters.contextVersion() != null)))
         .thenReturn(1L);
 
     ConsoleAiTurnStartInput turnInput = ConsoleAiTurnStartInput.builder()
@@ -84,8 +85,7 @@ class ConsoleAiConversationServiceTest {
         .contextVersion("v1")
         .prompt("show failed jobs")
         .build();
-    ConsoleAiConversationService.StartedTurn turn =
-        service.beginTurn(turnInput);
+    ConsoleAiConversationService.StartedTurn turn = service.beginTurn(turnInput);
 
     assertThat(UUID.fromString(turn.conversationId())).isNotNull();
     assertThat(turn.turnNo()).isEqualTo(1L);
@@ -101,8 +101,12 @@ class ConsoleAiConversationServiceTest {
         .thenAnswer(invocation -> invocation.getArgument(0));
     when(mapper.selectRecentCompleteTurns(eq("tenant-a"), anyString(), eq(12)))
         .thenReturn(List.of());
-    when(mapper.allocateTurnNo(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "tenant-a") && parameters.conversationId() != null && parameters.ownerUserId() != null && parameters.expiresAt() != null && parameters.contextVersion() != null)))
+    when(mapper.allocateTurnNo(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.tenantId(), "tenant-a")
+            && parameters.conversationId() != null
+            && parameters.ownerUserId() != null
+            && parameters.expiresAt() != null
+            && parameters.contextVersion() != null)))
         .thenReturn(1L);
     when(mapper.insertTurn(any())).thenReturn(0);
 
@@ -115,8 +119,7 @@ class ConsoleAiConversationServiceTest {
         .clientTurnId(UUID.randomUUID())
         .attachmentIds(List.of())
         .build();
-    assertThatThrownBy(() -> service.beginTurn(turnInput))
-        .isInstanceOf(BizException.class);
+    assertThatThrownBy(() -> service.beginTurn(turnInput)).isInstanceOf(BizException.class);
   }
 
   @Test
@@ -133,8 +136,7 @@ class ConsoleAiConversationServiceTest {
         .contextVersion("v1")
         .prompt("show failed jobs")
         .build();
-    assertThatThrownBy(() ->
-            service.beginTurn(turnInput))
+    assertThatThrownBy(() -> service.beginTurn(turnInput))
         .isInstanceOfSatisfying(
             BizException.class,
             exception -> assertThat(exception.getCode()).isEqualTo(ResultCode.NOT_FOUND));
@@ -148,8 +150,12 @@ class ConsoleAiConversationServiceTest {
     conversation.setOwnerUserId("operator-a");
     conversation.setExpiresAt(OffsetDateTime.now(ZoneOffset.UTC).plusDays(1));
     when(mapper.selectForUpdate("tenant-a", "conversation-1")).thenReturn(conversation);
-    when(mapper.allocateTurnNo(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "tenant-a") && java.util.Objects.equals(parameters.conversationId(), "conversation-1") && java.util.Objects.equals(parameters.ownerUserId(), "operator-a") && parameters.expiresAt() != null && java.util.Objects.equals(parameters.contextVersion(), "v1"))))
+    when(mapper.allocateTurnNo(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.tenantId(), "tenant-a")
+            && Objects.equals(parameters.conversationId(), "conversation-1")
+            && Objects.equals(parameters.ownerUserId(), "operator-a")
+            && parameters.expiresAt() != null
+            && Objects.equals(parameters.contextVersion(), "v1"))))
         .thenReturn(null);
 
     ConsoleAiTurnStartInput turnInput = ConsoleAiTurnStartInput.builder()
@@ -159,8 +165,7 @@ class ConsoleAiConversationServiceTest {
         .contextVersion("v1")
         .prompt("show failed jobs")
         .build();
-    assertThatThrownBy(() ->
-            service.beginTurn(turnInput))
+    assertThatThrownBy(() -> service.beginTurn(turnInput))
         .isInstanceOfSatisfying(
             BizException.class,
             exception -> assertThat(exception.getCode()).isEqualTo(ResultCode.NOT_FOUND));
@@ -210,7 +215,11 @@ class ConsoleAiConversationServiceTest {
         .isInstanceOfSatisfying(
             BizException.class,
             exception -> assertThat(exception.getCode()).isEqualTo(ResultCode.NOT_FOUND));
-    verify(mapper, never()).selectTurns(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.conversationId() != null && parameters.ownerUserId() != null));
+    verify(mapper, never())
+        .selectTurns(ArgumentMatchers.argThat(parameters -> parameters != null
+            && parameters.tenantId() != null
+            && parameters.conversationId() != null
+            && parameters.ownerUserId() != null));
   }
 
   @Test
@@ -223,9 +232,7 @@ class ConsoleAiConversationServiceTest {
         .contextVersion("v2")
         .prompt("show failed jobs")
         .build();
-    assertThatThrownBy(() ->
-            service.beginTurn(turnInput))
-        .isInstanceOf(BizException.class);
+    assertThatThrownBy(() -> service.beginTurn(turnInput)).isInstanceOf(BizException.class);
     verify(mapper, never()).setTenantContext(anyString());
   }
 
@@ -296,15 +303,20 @@ class ConsoleAiConversationServiceTest {
     ConsoleAiConversationEntity third = conversation("conversation-3", updatedAt);
     ConsoleAiConversationEntity second = conversation("conversation-2", updatedAt);
     ConsoleAiConversationEntity first = conversation("conversation-1", updatedAt);
-    when(mapper.selectPageByOwner(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "tenant-a") && java.util.Objects.equals(parameters.ownerUserId(), "operator-a") && parameters.beforeUpdatedAt() == null && parameters.beforeId() == null && java.util.Objects.equals(parameters.limit(), 3))))
+    when(mapper.selectPageByOwner(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.tenantId(), "tenant-a")
+            && Objects.equals(parameters.ownerUserId(), "operator-a")
+            && parameters.beforeUpdatedAt() == null
+            && parameters.beforeId() == null
+            && Objects.equals(parameters.limit(), 3))))
         .thenReturn(List.of(third, second, first));
     when(mapper.selectPageByOwner(ConsoleAiConversationPageByOwnerQuery.builder()
-        .tenantId("tenant-a")
-        .ownerUserId("operator-a")
-        .beforeUpdatedAt(updatedAt)
-        .beforeId("conversation-2")
-        .limit(3)
-        .build()))
+            .tenantId("tenant-a")
+            .ownerUserId("operator-a")
+            .beforeUpdatedAt(updatedAt)
+            .beforeId("conversation-2")
+            .limit(3)
+            .build()))
         .thenReturn(List.of(first));
 
     PageResponse<ConsoleAiConversationService.ConversationView> firstPage =
@@ -332,7 +344,10 @@ class ConsoleAiConversationServiceTest {
     assertThatThrownBy(() -> service.page("tenant-a", "operator-a", "not-a-cursor", 20))
         .isInstanceOf(BizException.class);
     verify(mapper, never())
-        .selectPageByOwner(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.ownerUserId() != null && parameters.beforeId() != null));
+        .selectPageByOwner(ArgumentMatchers.argThat(parameters -> parameters != null
+            && parameters.tenantId() != null
+            && parameters.ownerUserId() != null
+            && parameters.beforeId() != null));
   }
 
   private static ConsoleAiConversationEntity conversation(String id, Instant updatedAt) {

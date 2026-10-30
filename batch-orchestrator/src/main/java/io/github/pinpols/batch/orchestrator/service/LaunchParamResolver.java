@@ -64,6 +64,9 @@ public class LaunchParamResolver {
     if (request != null && request.params() != null) {
       merged.putAll(request.params());
     }
+    // 文件束身份只能由分区绑定生成，不能从调用方或作业默认参数继承。
+    merged.remove("bundleSourceFileId");
+    merged.remove("bundleTargetRef");
     TriggerType triggerType = request == null ? null : request.triggerType();
     RunMode resolvedRunMode = resolveRunMode(triggerType, merged);
     return RunModeSupport.copyWithDefault(merged, resolvedRunMode);
@@ -454,10 +457,6 @@ public class LaunchParamResolver {
   }
 
   Long toPositiveLong(Object candidate) {
-    if (candidate instanceof Number n) {
-      long v = n.longValue();
-      return v > 0 ? v : null;
-    }
     if (candidate == null) {
       return null;
     }

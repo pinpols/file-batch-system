@@ -66,6 +66,7 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.WF_DEF_SHEET;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.WF_EDGE_SHEET;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.WF_NODE_SHEET;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.WORKFLOW_MONITORING_POLICY_SHEET;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.BATCH_WINDOW_COLUMNS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.BUSINESS_CALENDAR_COLUMNS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.CHANNEL_COLUMNS;
@@ -76,10 +77,12 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.WF_DEF_COLUMNS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.WF_EDGE_COLUMNS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.WF_NODE_COLUMNS;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.WORKFLOW_MONITORING_POLICY_COLUMNS;
 import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.addDropdownValidation;
 import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.optionalColumn;
 import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.requiredColumn;
 
+import io.github.pinpols.batch.common.enums.AlertSeverity;
 import io.github.pinpols.batch.common.enums.BatchWindowEndStrategy;
 import io.github.pinpols.batch.common.enums.CatchUpPolicyType;
 import io.github.pinpols.batch.common.enums.DictEnum;
@@ -134,7 +137,10 @@ public final class ConfigPackageSheetSpecs {
   private static final String SCENARIO_IMPORT = "IMPORT";
   private static final String SCENARIO_EXPORT = "EXPORT";
   private static final String SCENARIO_WORKFLOW = "WORKFLOW";
-  private static final String[] JOB_MONITORING_SEVERITY_CHOICES = {"WARN", "ERROR", "CRITICAL"};
+  private static final String DEFAULT_MONITORING_SEVERITY = AlertSeverity.WARN.code();
+  private static final String[] JOB_MONITORING_SEVERITY_CHOICES = {
+    DEFAULT_MONITORING_SEVERITY, AlertSeverity.ERROR.code(), AlertSeverity.CRITICAL.code()
+  };
 
   /**
    * 枚举下拉数组 — 单一权威源，全部从 enum 声明顺序 + ConfigPackageExcelValidator 集合派生。
@@ -203,7 +209,9 @@ public final class ConfigPackageSheetSpecs {
   private static final String[] WORKFLOW_TYPE_DROPDOWN =
       DictEnum.codeList(WorkflowType.class).toArray(String[]::new);
   private static final String[] WORKFLOW_NODE_TYPE_DROPDOWN =
-      DictEnum.codeList(WorkflowNodeType.class).toArray(String[]::new);
+      DictEnum.codeList(WorkflowNodeType.class).stream()
+          .filter(code -> !WorkflowNodeType.TASK.code().equals(code))
+          .toArray(String[]::new);
   private static final String[] WORKFLOW_EDGE_TYPE_DROPDOWN =
       DictEnum.codeList(WorkflowEdgeType.class).toArray(String[]::new);
   private static final String[] FILE_CHECKSUM_TYPE_DROPDOWN =
@@ -252,7 +260,7 @@ public final class ConfigPackageSheetSpecs {
 
   /**
    * import 的
-   * query_param_schema.jdbcMappedImport：schema/table/columnMappings/conflictColumns/systemBindings。
+   * query_param_schema.jdbcMappedImport 的字段包括 schema、table、columnMappings、conflictColumns 和 systemBindings。
    */
   private static final String EXAMPLE_IMPORT_QUERY_PARAM_SCHEMA =
       GUIDANCE.fragment("importQueryParamSchema");
@@ -335,40 +343,58 @@ public final class ConfigPackageSheetSpecs {
       BiConsumer<Sheet, Locale> validationApplier) {}
 
   public List<SheetDef> build() {
-    return List.of(
+    Map<String, ColumnGuide> resourceQueueGuides = buildResourceQueueGuides();
+    Map<String, ColumnGuide> businessCalendarGuides = buildBusinessCalendarGuides();
+    Map<String, ColumnGuide> batchWindowGuides = buildBatchWindowGuides();
+    Map<String, ColumnGuide> jobGuides = buildJobGuides();
+    Map<String, ColumnGuide> jobMonitoringPolicyGuides = buildJobMonitoringPolicyGuides();
+    Map<String, ColumnGuide> channelGuides = buildChannelGuides();
+    Map<String, ColumnGuide> fileTemplateGuides = buildFileTemplateGuides();
+    Map<String, ColumnGuide> workflowDefinitionGuides = buildWfDefGuides();
+    Map<String, ColumnGuide> workflowNodeGuides = buildWfNodeGuides();
+    Map<String, ColumnGuide> workflowEdgeGuides = buildWfEdgeGuides();
+    Map<String, ColumnGuide> workflowMonitoringPolicyGuides = buildWorkflowMonitoringPolicyGuides();
+
+    List<SheetDef> sheetDefinitions = List.of(
         new SheetDef(
             RESOURCE_QUEUE_SHEET,
             RESOURCE_QUEUE_COLUMNS,
-            buildResourceQueueGuides(),
+            resourceQueueGuides,
             this::applyResourceQueueValidations),
         new SheetDef(
             BUSINESS_CALENDAR_SHEET,
             BUSINESS_CALENDAR_COLUMNS,
-            buildBusinessCalendarGuides(),
+            businessCalendarGuides,
             this::applyBusinessCalendarValidations),
         new SheetDef(
             BATCH_WINDOW_SHEET,
             BATCH_WINDOW_COLUMNS,
-            buildBatchWindowGuides(),
+            batchWindowGuides,
             this::applyBatchWindowValidations),
-        new SheetDef(JOB_SHEET, JOB_COLUMNS, buildJobGuides(), this::applyJobValidations),
+        new SheetDef(JOB_SHEET, JOB_COLUMNS, jobGuides, this::applyJobValidations),
         new SheetDef(
             JOB_MONITORING_POLICY_SHEET,
             JOB_MONITORING_POLICY_COLUMNS,
-            buildJobMonitoringPolicyGuides(),
+            jobMonitoringPolicyGuides,
             this::applyJobMonitoringPolicyValidations),
-        new SheetDef(
-            CHANNEL_SHEET, CHANNEL_COLUMNS, buildChannelGuides(), this::applyChannelValidations),
+        new SheetDef(CHANNEL_SHEET, CHANNEL_COLUMNS, channelGuides, this::applyChannelValidations),
         new SheetDef(
             FILE_TEMPLATE_SHEET,
             FILE_TEMPLATE_COLUMNS,
-            buildFileTemplateGuides(),
+            fileTemplateGuides,
             this::applyFileTemplateValidations),
-        new SheetDef(WF_DEF_SHEET, WF_DEF_COLUMNS, buildWfDefGuides(), this::applyWfDefValidations),
         new SheetDef(
-            WF_NODE_SHEET, WF_NODE_COLUMNS, buildWfNodeGuides(), this::applyWfNodeValidations),
+            WF_DEF_SHEET, WF_DEF_COLUMNS, workflowDefinitionGuides, this::applyWfDefValidations),
         new SheetDef(
-            WF_EDGE_SHEET, WF_EDGE_COLUMNS, buildWfEdgeGuides(), this::applyWfEdgeValidations));
+            WF_NODE_SHEET, WF_NODE_COLUMNS, workflowNodeGuides, this::applyWfNodeValidations),
+        new SheetDef(
+            WF_EDGE_SHEET, WF_EDGE_COLUMNS, workflowEdgeGuides, this::applyWfEdgeValidations),
+        new SheetDef(
+            WORKFLOW_MONITORING_POLICY_SHEET,
+            WORKFLOW_MONITORING_POLICY_COLUMNS,
+            workflowMonitoringPolicyGuides,
+            this::applyJobMonitoringPolicyValidations));
+    return sheetDefinitions;
   }
 
   /**
@@ -420,6 +446,7 @@ public final class ConfigPackageSheetSpecs {
         includedSheets.add(WF_DEF_SHEET);
         includedSheets.add(WF_NODE_SHEET);
         includedSheets.add(WF_EDGE_SHEET);
+        includedSheets.add(WORKFLOW_MONITORING_POLICY_SHEET);
       }
       case "SCHEDULE" -> {
         includedSheets.add(BUSINESS_CALENDAR_SHEET);
@@ -473,6 +500,7 @@ public final class ConfigPackageSheetSpecs {
                 COL_JOB_TYPE,
                 ConfigPackageExcelSchema.COL_SCHEDULE_TYPE);
           case JOB_MONITORING_POLICY_SHEET -> Set.of(COL_JOB_CODE);
+          case WORKFLOW_MONITORING_POLICY_SHEET -> Set.of(COL_WORKFLOW_CODE, COL_WORKFLOW_VERSION);
           case CHANNEL_SHEET ->
             Set.of(
                 COL_CHANNEL_CODE,
@@ -544,6 +572,17 @@ public final class ConfigPackageSheetSpecs {
                 COL_COMPLETION_DEADLINE_LOCAL_TIME,
                 COL_COMPLETION_DEADLINE_DAY_OFFSET,
                 COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS,
+                COL_COMPLETION_DEADLINE_SEVERITY);
+          case WORKFLOW_MONITORING_POLICY_SHEET ->
+            Set.of(
+                COL_WORKFLOW_CODE,
+                COL_WORKFLOW_VERSION,
+                COL_SOFT_RUNTIME_SECONDS,
+                COL_SOFT_RUNTIME_SEVERITY,
+                COL_START_GRACE_SECONDS,
+                COL_START_GRACE_SEVERITY,
+                COL_COMPLETION_DEADLINE_LOCAL_TIME,
+                COL_COMPLETION_DEADLINE_DAY_OFFSET,
                 COL_COMPLETION_DEADLINE_SEVERITY);
           case WF_NODE_SHEET ->
             Set.of(
@@ -1166,7 +1205,7 @@ public final class ConfigPackageSheetSpecs {
   }
 
   private Map<String, ColumnGuide> buildJobMonitoringPolicyGuides() {
-    return Map.ofEntries(
+    Map<String, ColumnGuide> guides = Map.ofEntries(
         Map.entry(COL_TENANT_ID, optionalColumn("所属租户，留空使用当前租户。", GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
         Map.entry(
             COL_JOB_CODE, requiredColumn("策略对应的作业编码，需在本包或当前租户中存在。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
@@ -1176,7 +1215,11 @@ public final class ConfigPackageSheetSpecs {
                 "作业开始执行后运行超过此秒数时告警；所有调度类型均适用。新建作业不统一启用默认值；配置包中 0 或留空表示关闭。", GUIDE_INT, "")),
         Map.entry(
             COL_SOFT_RUNTIME_SEVERITY,
-            optionalColumn("运行超时告警级别。", GUIDE_ENUM, "WARN", JOB_MONITORING_SEVERITY_CHOICES)),
+            optionalColumn(
+                "运行超时告警级别。",
+                GUIDE_ENUM,
+                DEFAULT_MONITORING_SEVERITY,
+                JOB_MONITORING_SEVERITY_CHOICES)),
         Map.entry(
             COL_START_GRACE_SECONDS,
             optionalColumn(
@@ -1185,7 +1228,11 @@ public final class ConfigPackageSheetSpecs {
                 "300")),
         Map.entry(
             COL_START_GRACE_SEVERITY,
-            optionalColumn("启动过晚告警级别。", GUIDE_ENUM, "WARN", JOB_MONITORING_SEVERITY_CHOICES)),
+            optionalColumn(
+                "启动过晚告警级别。",
+                GUIDE_ENUM,
+                DEFAULT_MONITORING_SEVERITY,
+                JOB_MONITORING_SEVERITY_CHOICES)),
         Map.entry(
             COL_COMPLETION_DEADLINE_LOCAL_TIME,
             optionalColumn(
@@ -1201,7 +1248,46 @@ public final class ConfigPackageSheetSpecs {
                 "")),
         Map.entry(
             COL_COMPLETION_DEADLINE_SEVERITY,
-            optionalColumn("完成过晚告警级别。", GUIDE_ENUM, "WARN", JOB_MONITORING_SEVERITY_CHOICES)));
+            optionalColumn(
+                "完成过晚告警级别。",
+                GUIDE_ENUM,
+                DEFAULT_MONITORING_SEVERITY,
+                JOB_MONITORING_SEVERITY_CHOICES)));
+    return guides;
+  }
+
+  private Map<String, ColumnGuide> buildWorkflowMonitoringPolicyGuides() {
+    ColumnGuide tenantGuide = optionalColumn("所属租户，留空使用当前租户。", GUIDE_STR, GUIDE_TENANT_EXAMPLE);
+    ColumnGuide workflowCodeGuide =
+        requiredColumn("策略对应的工作流编码，需在本包或当前租户中存在。", GUIDE_STR, "daily_settlement");
+    ColumnGuide workflowVersionGuide = requiredColumn("策略对应的工作流版本号。", GUIDE_INT, GUIDE_VERSION_ONE);
+    ColumnGuide softRuntimeSecondsGuide =
+        optionalColumn("工作流开始后运行超过此秒数时告警；0 或留空表示关闭。", GUIDE_INT, "0");
+    ColumnGuide softRuntimeSeverityGuide = optionalColumn(
+        "运行超时告警级别。", GUIDE_ENUM, DEFAULT_MONITORING_SEVERITY, JOB_MONITORING_SEVERITY_CHOICES);
+    ColumnGuide startGraceSecondsGuide =
+        optionalColumn("工作流进入执行资格后允许延迟启动的时长（秒）；0 或留空表示关闭。", GUIDE_INT, "0");
+    ColumnGuide startGraceSeverityGuide = optionalColumn(
+        "启动过晚告警级别。", GUIDE_ENUM, DEFAULT_MONITORING_SEVERITY, JOB_MONITORING_SEVERITY_CHOICES);
+    ColumnGuide completionDeadlineTimeGuide =
+        optionalColumn("工作流完成截止钟点（HH:mm）；到期仍未结束时告警，留空关闭。", GUIDE_STR, "04:00");
+    ColumnGuide completionDeadlineDayOffsetGuide =
+        optionalColumn("截止日期相对计划触发日的偏移，0 当日，1 次日。", GUIDE_ENUM, "0", "0", "1");
+    ColumnGuide completionDeadlineSeverityGuide = optionalColumn(
+        "完成过晚告警级别。", GUIDE_ENUM, DEFAULT_MONITORING_SEVERITY, JOB_MONITORING_SEVERITY_CHOICES);
+
+    Map<String, ColumnGuide> guides = Map.ofEntries(
+        Map.entry(COL_TENANT_ID, tenantGuide),
+        Map.entry(COL_WORKFLOW_CODE, workflowCodeGuide),
+        Map.entry(COL_WORKFLOW_VERSION, workflowVersionGuide),
+        Map.entry(COL_SOFT_RUNTIME_SECONDS, softRuntimeSecondsGuide),
+        Map.entry(COL_SOFT_RUNTIME_SEVERITY, softRuntimeSeverityGuide),
+        Map.entry(COL_START_GRACE_SECONDS, startGraceSecondsGuide),
+        Map.entry(COL_START_GRACE_SEVERITY, startGraceSeverityGuide),
+        Map.entry(COL_COMPLETION_DEADLINE_LOCAL_TIME, completionDeadlineTimeGuide),
+        Map.entry(COL_COMPLETION_DEADLINE_DAY_OFFSET, completionDeadlineDayOffsetGuide),
+        Map.entry(COL_COMPLETION_DEADLINE_SEVERITY, completionDeadlineSeverityGuide));
+    return guides;
   }
 
   private Map<String, ColumnGuide> buildChannelGuides() {
@@ -1405,8 +1491,7 @@ public final class ConfigPackageSheetSpecs {
         Map.entry(COL_NODE_CODE, requiredColumn("节点唯一编码。", GUIDE_STR, "NODE_IMPORT")),
         Map.entry(COL_NODE_NAME, requiredColumn("节点名称。", GUIDE_STR, "导入节点")),
         Map.entry(
-            COL_NODE_TYPE,
-            requiredColumn("节点类型。", GUIDE_ENUM, "JOB", "TASK", "GATEWAY", "START", "END")),
+            COL_NODE_TYPE, requiredColumn("节点类型。", GUIDE_ENUM, "JOB", WORKFLOW_NODE_TYPE_DROPDOWN)),
         Map.entry(
             COL_RELATED_JOB_CODE,
             optionalColumn(

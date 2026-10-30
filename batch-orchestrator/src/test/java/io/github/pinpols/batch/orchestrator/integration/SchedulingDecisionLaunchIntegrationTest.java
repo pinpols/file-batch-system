@@ -88,10 +88,7 @@ class SchedulingDecisionLaunchIntegrationTest extends AbstractIntegrationTest {
     Long launchedJobInstanceId = LaunchIntegrationFixture.selectDispatchedJobInstanceId(
         jdbcTemplate, TENANT, response.instanceNo());
     Integer waiting = jdbcTemplate.queryForObject(
-        waitingPartitionCountSql,
-        Integer.class,
-        TENANT,
-        launchedJobInstanceId);
+        waitingPartitionCountSql, Integer.class, TENANT, launchedJobInstanceId);
     assertThat(waiting).isNotNull().isGreaterThanOrEqualTo(1);
   }
 }

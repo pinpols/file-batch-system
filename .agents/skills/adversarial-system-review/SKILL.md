@@ -1,9 +1,11 @@
 ---
 name: adversarial-system-review
-description: 用户要求对项目或关键链路做全面、对抗式安全/韧性/容量审查时使用。跨信任边界构造可验证失效路径，不替代针对单个 diff 的常规代码审查。
+description: 用户明确要求攻击路径、跨信任边界绕过或多故障组合的安全/韧性审查时使用。普通代码Bug/变更使用code-review-and-gates；工程规约与双仓治理分别由project-engineering-review、cross-repo-governance-review负责。
 ---
 
 # 对抗式系统审查
+
+本技能专门构造攻击者/故障源、边界穿越和事件交错，验证防护与恢复不变量。只有明确的攻击/故障组合任务才作为主入口；普通 Bug、代码规约和工程成熟度不触发本流程。Bug 的成立与证据分层复用[代码审查统一标准](../code-review-and-gates/references/bug-mechanisms.md)，本技能增加对抗时间线和绕过反例，不复制通用 Bug 清单。
 
 ## 定义审查边界
 
@@ -19,7 +21,7 @@ description: 用户要求对项目或关键链路做全面、对抗式安全/韧
   - **容量、背压与公平性**：线程/队列/连接池/请求体/文件大小是否有界，pre-claim admission、租户公平、重跑隔离、outbox/Kafka lag 收敛、固定批处理窗口和容量余量。
   - **故障恢复与灾备**：Worker 全队崩溃、lease 回收、PG failover/PITR、Kafka/Redis/对象存储中断、DLQ/replay、checkpoint 恢复、RPO/RTO 和恢复后数据一致性。
   - **数据生命周期与迁移**：Flyway/手工业务库脚本、复合键和分布约束、锁与耗时、回滚、分区、保留、archive 镜像和 PITR 覆盖。
-  - **模块边界与复杂度**：领域所有权、依赖方向、跨模块直写、重复抽象/过度封装、死代码、资源生命周期、系统是否偏离批量运行控制面范围。
+  - **边界失守路径**：仅沿当前攻击/故障假设检查跨域写入、危险依赖、资源拥有权和绕过入口；纯复杂度、重复/死代码与抽象偏好归工程规约治理。
   - **API、Console 与用户工作流**：异常到 HTTP 契约、分页/排序一致性、权限映射、空态/失败恢复、键盘可访问性、响应式布局及关键操作是否真实生效。
   - **SDK 与外部兼容性**：多语言 wire contract、offset disposition、lease/heartbeat/cancel/shutdown/backpressure、未知协议版本、真实 transport 与 fixture 差异、滚动升级兼容。
   - **部署、配置与供应链**：生产 overlay、危险开关 fail-safe、版本/镜像对齐、依赖与许可证、容器/Kubernetes 安全、GitHub Actions 权限、路径过滤、required checks 和发布回滚。
@@ -42,7 +44,8 @@ description: 用户要求对项目或关键链路做全面、对抗式安全/韧
 
 ## 领域技能路由
 
-- 单个 PR/diff 的缺陷审查：`code-review-and-gates`
+- 普通代码 Bug（模块/diff/全工程）与 PR 变更审查：`code-review-and-gates`
+- 后端工程/规约及双仓治理：分别使用 `project-engineering-review`、`cross-repo-governance-review`
 - Worker、Outbox、Kafka 与执行恢复：`worker-pipeline-review`
 - 安全工具与扫描覆盖：`security-scan-governance`
 - 数据库性能、迁移、灾备和业务验收：分别使用 `sql-query-performance`、`database-migration-safety`、`disaster-recovery-validation`、`acceptance-validation`。
@@ -51,5 +54,5 @@ description: 用户要求对项目或关键链路做全面、对抗式安全/韧
 
 - `docs/standards/go-live-audit-checklist.md`：业务真实性、数据可信、容量/恢复、租户隔离、调度、时区、生命周期、迁移、兼容和安全的审核维度及“形式化落地”反例。
 - `docs/audit/backend-six-round-adversarial-audit-2026-07-27.md`、`docs/audit/backend-adversarial-audit-2026-07-27.md`：模块边界、安全/租户、数据库/迁移、并发/状态机、资源、部署与 staging 证据的分轮审查方式。
-- `docs/archive/audit/deep-scan-summary-2026-06-03.md`：后端架构/资源/安全/业务运维、前端交互/反馈/布局/a11y、SDK 数据完整性和 CI/CD 的多 lane 覆盖方法。
-- 上述均为历史报告，用于提取审查维度，不作为当前缺陷或修复状态依据。当前状态以最新代码、守护和验证记录为准。
+- `docs/standards/convention-drift-guard-index.md`：后端架构/资源/安全/业务运维、前端交互/反馈/布局/a11y、SDK 数据完整性和 CI/CD 的多 lane 覆盖方法。
+- 上述审计报告只提供原基线的风险线索；守护总账提供现行复扫路由。当前状态以最新代码、守护和验证记录为准。

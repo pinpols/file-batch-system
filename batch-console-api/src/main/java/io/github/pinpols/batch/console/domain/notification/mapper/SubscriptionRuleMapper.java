@@ -1,21 +1,25 @@
 package io.github.pinpols.batch.console.domain.notification.mapper;
 
+import io.github.pinpols.batch.console.domain.notification.param.SubscriptionRuleInsertParam;
+import io.github.pinpols.batch.console.domain.notification.param.SubscriptionRuleUpdateParam;
+import io.github.pinpols.batch.console.domain.notification.view.EnabledSubscriptionRuleRow;
+import io.github.pinpols.batch.console.domain.notification.view.SubscriptionRuleRow;
 import java.util.List;
-import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 public interface SubscriptionRuleMapper {
 
-  List<Map<String, Object>> selectByTenant(@Param("tenantId") String tenantId);
+  List<SubscriptionRuleRow> selectByTenant(@Param("tenantId") String tenantId);
 
-  List<Map<String, Object>> selectEnabledByEventType(
+  /** 读取启用的租户候选，调用方必须执行事件类型及其余规则匹配。 */
+  List<EnabledSubscriptionRuleRow> selectEnabledByEventType(
       @Param("tenantId") String tenantId, @Param("eventType") String eventType);
 
-  Map<String, Object> selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+  SubscriptionRuleRow selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  int insert(Map<String, Object> params);
+  int insert(SubscriptionRuleInsertParam params);
 
-  int update(Map<String, Object> params);
+  int update(SubscriptionRuleUpdateParam params);
 
   int deleteById(@Param("tenantId") String tenantId, @Param("id") Long id);
 }

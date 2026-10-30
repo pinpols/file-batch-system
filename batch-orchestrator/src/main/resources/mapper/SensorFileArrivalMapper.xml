@@ -2,11 +2,29 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.orchestrator.mapper.SensorFileArrivalMapper">
 
+    <resultMap id="sensorFileArrivalView" type="io.github.pinpols.batch.orchestrator.domain.view.SensorFileArrivalView">
+        <constructor>
+            <idArg column="fileId" javaType="java.lang.Long"/>
+            <arg column="fileName" javaType="java.lang.String"/>
+            <arg column="arrivalTime" javaType="java.time.OffsetDateTime"/>
+            <arg column="storagePath" javaType="java.lang.String"/>
+            <arg column="bizDate" javaType="java.time.LocalDate"/>
+            <arg column="fileGroupCode" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+    <resultMap id="sensorFileArrivalMatchView" type="io.github.pinpols.batch.orchestrator.domain.view.SensorFileArrivalMatchView">
+        <constructor>
+            <idArg column="fileId" javaType="java.lang.Long"/>
+            <arg column="fileName" javaType="java.lang.String"/>
+            <arg column="arrivalTime" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
     <!--
       ADR-028 FILE_ARRIVAL sensor：查最新到达的 INPUT 文件。
-      由 FileArrivalSensorPolicy 调用：name pattern * → %，调用方传入 since（now - maxAgeSeconds）。
+      由 FileArrivalSensorPolicy 调用：name pattern 使用 ! 转义 SQL 通配符，再将 * 转为 %；调用方传入 since（now - maxAgeSeconds）。
     -->
-    <select id="selectLatestArrival" resultType="java.util.LinkedHashMap">
+    <select id="selectLatestArrival" resultMap="sensorFileArrivalView">
         SELECT id          AS "fileId",
                file_name   AS "fileName",
                created_at  AS "arrivalTime",
@@ -16,7 +34,7 @@
           FROM batch.file_record file
          WHERE file.tenant_id = #{tenantId}
            AND file.file_category = 'INPUT'
-           AND file.file_name LIKE #{namePattern}
+           AND file.file_name LIKE #{namePattern} ESCAPE '!'
            AND file.created_at &gt;= #{since}
         <if test="bizDate != null">
            AND file.biz_date = #{bizDate}
@@ -44,7 +62,7 @@
          LIMIT 1
     </select>
 
-    <select id="recentMatches" resultType="java.util.LinkedHashMap">
+    <select id="recentMatches" resultMap="sensorFileArrivalMatchView">
         SELECT id          AS "fileId",
                file_name   AS "fileName",
                created_at  AS "arrivalTime"

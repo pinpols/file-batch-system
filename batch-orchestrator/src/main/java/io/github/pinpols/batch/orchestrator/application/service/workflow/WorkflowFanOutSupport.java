@@ -82,12 +82,11 @@ public final class WorkflowFanOutSupport {
    */
   public static void bindDispatchTargetRefs(
       SchedulePlan plan, List<Object> items, List<SchedulePlan.PartitionPlan> partitions) {
-    boolean dispatchPlanHasUnmatchedFanOutInputs =
-        EmptyChecks.isNull(plan)
-            || !"DISPATCH".equalsIgnoreCase(plan.getDefaultWorkerType())
-            || EmptyChecks.isNull(items)
-            || EmptyChecks.isNull(partitions)
-            || items.size() != partitions.size();
+    boolean dispatchPlanHasUnmatchedFanOutInputs = EmptyChecks.isNull(plan)
+        || !"DISPATCH".equalsIgnoreCase(plan.getDefaultWorkerType())
+        || EmptyChecks.isNull(items)
+        || EmptyChecks.isNull(partitions)
+        || items.size() != partitions.size();
     if (dispatchPlanHasUnmatchedFanOutInputs) {
       return;
     }

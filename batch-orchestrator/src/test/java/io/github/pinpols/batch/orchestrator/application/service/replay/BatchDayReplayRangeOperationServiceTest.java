@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.replay;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -24,9 +24,13 @@ import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.DisasterDayOverrideMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationPreviewTokenMapper;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
-import java.time.LocalDate;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -34,6 +38,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 
 @DisplayName("日期区间重放 operation: 范围验证先于日历和候选查询")
 class BatchDayReplayRangeOperationServiceTest {
@@ -71,15 +76,18 @@ class BatchDayReplayRangeOperationServiceTest {
   @Test
   @DisplayName("超过显式日期上限时拒绝，不查询业务日历或候选")
   void shouldRejectRangeBeyondConfiguredLimitBeforePlanning() {
-    BatchDayReplayRangeCommand command = command(
-        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    BatchDayReplayRangeCommand command =
+        command(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
 
     assertThatThrownBy(() -> service.preview(command))
         .isInstanceOf(RuntimeException.class)
         .hasMessageContaining("range_too_large");
 
     verifyNoInteractions(
-        singleDayReplayService, operationMapper, previewTokenMapper, planCalendarMapper,
+        singleDayReplayService,
+        operationMapper,
+        previewTokenMapper,
+        planCalendarMapper,
         disasterDayOverrideMapper);
   }
 
@@ -97,21 +105,24 @@ class BatchDayReplayRangeOperationServiceTest {
     assertThat(response.days().getFirst().bizDate()).isEqualTo(fromDate);
     assertThat(response.days().getLast().bizDate()).isEqualTo(throughDate);
     assertThat(response.totalCandidateCount()).isEqualTo(31);
-    verify(singleDayReplayService, org.mockito.Mockito.times(31)).previewImpact(any());
+    verify(singleDayReplayService, Mockito.times(31)).previewImpact(any());
   }
 
   @Test
   @DisplayName("反向日期区间在访问日历前拒绝")
   void shouldRejectReversedDatesBeforePlanning() {
-    BatchDayReplayRangeCommand command = command(
-        LocalDate.of(2026, 1, 2), LocalDate.of(2026, 1, 1));
+    BatchDayReplayRangeCommand command =
+        command(LocalDate.of(2026, 1, 2), LocalDate.of(2026, 1, 1));
 
     assertThatThrownBy(() -> service.preview(command))
         .isInstanceOf(RuntimeException.class)
         .hasMessageContaining("invalid_argument");
 
     verifyNoInteractions(
-        singleDayReplayService, operationMapper, previewTokenMapper, planCalendarMapper,
+        singleDayReplayService,
+        operationMapper,
+        previewTokenMapper,
+        planCalendarMapper,
         disasterDayOverrideMapper);
   }
 
@@ -136,22 +147,42 @@ class BatchDayReplayRangeOperationServiceTest {
     ReplayOperationPreviewResponse preview = service.preview(initialCommand);
 
     assertThat(preview.totalCandidateCount()).isEqualTo(2);
-    assertThat(preview.days()).extracting(ReplayOperationPreviewResponse.DayPreview::bizDate)
+    assertThat(preview.days())
+        .extracting(ReplayOperationPreviewResponse.DayPreview::bizDate)
         .containsExactly(firstDate, secondDate);
-    assertThat(storedToken.get().operationKey()).isEqualTo(preview.operationKey().toString());
+    assertThat(storedToken.get().operationKey())
+        .isEqualTo(preview.operationKey().toString());
     assertThat(storedToken.get().snapshotPayload()).doesNotContain("child-preview-token");
 
     BatchDayReplayRangeCommand submitCommand = new BatchDayReplayRangeCommand(
-        "tenant", "CAL", firstDate, secondDate, "ALL_FAILED", null, null, null, null,
-        null, "reason", "operator", false, "trace", "REPLAY", "EXISTING_INSTANCES",
-        preview.operationKey(), preview.previewToken());
+        "tenant",
+        "CAL",
+        firstDate,
+        secondDate,
+        "ALL_FAILED",
+        null,
+        null,
+        null,
+        null,
+        null,
+        "reason",
+        "operator",
+        false,
+        "trace",
+        "REPLAY",
+        "EXISTING_INSTANCES",
+        preview.operationKey(),
+        preview.previewToken());
     when(operationMapper.selectByIdentity("tenant", preview.operationKey().toString()))
         .thenReturn(null)
-        .thenAnswer(invocation -> operation().toBuilder().id(70L).operationKey(preview.operationKey().toString()).build());
+        .thenAnswer(invocation -> operation().toBuilder()
+            .id(70L)
+            .operationKey(preview.operationKey().toString())
+            .build());
     when(previewTokenMapper.selectForUpdate("tenant", sha256(preview.previewToken())))
         .thenReturn(storedToken.get());
     when(previewTokenMapper.consume(
-        eq("tenant"), eq(sha256(preview.previewToken())), any(Instant.class)))
+            eq("tenant"), eq(sha256(preview.previewToken())), any(Instant.class)))
         .thenReturn(1);
     when(operationMapper.insert(any(ReplayOperationEntity.class))).thenReturn(1);
     when(singleDayReplayService.preview(any()))
@@ -169,17 +200,18 @@ class BatchDayReplayRangeOperationServiceTest {
     when(previewTokenMapper.linkOperation("tenant", sha256(preview.previewToken()), 70L))
         .thenReturn(1);
     when(operationMapper.refreshFromChildSessions(eq("tenant"), eq(70L), any())).thenReturn(1);
-    when(operationMapper.selectById("tenant", 70L)).thenReturn(operation().toBuilder()
-        .id(70L)
-        .operationKey(preview.operationKey().toString())
-        .build());
+    when(operationMapper.selectById("tenant", 70L))
+        .thenReturn(operation().toBuilder()
+            .id(70L)
+            .operationKey(preview.operationKey().toString())
+            .build());
 
     ReplayOperationEntity accepted = service.submit(submitCommand);
 
     assertThat(accepted.id()).isEqualTo(70L);
     ArgumentCaptor<BatchDayReplaySubmitCommand> childCommandCaptor =
         ArgumentCaptor.forClass(BatchDayReplaySubmitCommand.class);
-    verify(singleDayReplayService, org.mockito.Mockito.times(2))
+    verify(singleDayReplayService, Mockito.times(2))
         .submitForOperation(childCommandCaptor.capture(), eq(70L));
     assertThat(childCommandCaptor.getAllValues())
         .extracting(BatchDayReplaySubmitCommand::bizDate)
@@ -191,35 +223,42 @@ class BatchDayReplayRangeOperationServiceTest {
     ArgumentCaptor<ReplayOperationEntity> insertedOperationCaptor =
         ArgumentCaptor.forClass(ReplayOperationEntity.class);
     verify(operationMapper).insert(insertedOperationCaptor.capture());
-    ReplayOperationEntity persistedOperation = insertedOperationCaptor.getValue().toBuilder()
-        .id(70L)
-        .build();
-    org.mockito.Mockito.doReturn(persistedOperation)
+    ReplayOperationEntity persistedOperation =
+        insertedOperationCaptor.getValue().toBuilder().id(70L).build();
+    Mockito.doReturn(persistedOperation)
         .when(operationMapper)
         .selectByIdentity("tenant", preview.operationKey().toString());
 
     BatchDayReplayRangeCommand retriedCommand = new BatchDayReplayRangeCommand(
-        submitCommand.tenantId(), submitCommand.calendarCode(), submitCommand.fromDate(),
-        submitCommand.throughDate(), submitCommand.scope(), submitCommand.jobCodes(),
-        submitCommand.versionIds(), submitCommand.resultPolicy(), submitCommand.configVersionPolicy(),
-        submitCommand.configVersion(), submitCommand.reason(), submitCommand.requestedBy(),
-        submitCommand.autoApprove(), "retry-trace", submitCommand.executionMode(),
-        submitCommand.candidateSource(), submitCommand.operationKey(), submitCommand.previewToken());
+        submitCommand.tenantId(),
+        submitCommand.calendarCode(),
+        submitCommand.fromDate(),
+        submitCommand.throughDate(),
+        submitCommand.scope(),
+        submitCommand.jobCodes(),
+        submitCommand.versionIds(),
+        submitCommand.resultPolicy(),
+        submitCommand.configVersionPolicy(),
+        submitCommand.configVersion(),
+        submitCommand.reason(),
+        submitCommand.requestedBy(),
+        submitCommand.autoApprove(),
+        "retry-trace",
+        submitCommand.executionMode(),
+        submitCommand.candidateSource(),
+        submitCommand.operationKey(),
+        submitCommand.previewToken());
     ReplayOperationEntity retried = service.submit(retriedCommand);
 
     assertThat(retried).isEqualTo(persistedOperation);
-    verify(singleDayReplayService, org.mockito.Mockito.times(2))
-        .submitForOperation(any(), eq(70L));
+    verify(singleDayReplayService, Mockito.times(2)).submitForOperation(any(), eq(70L));
   }
 
   @Test
   @DisplayName("同一审批人重试已完成的父操作审批时返回既有操作")
   void shouldReturnExistingOperation_whenApprovalWasAlreadyAppliedBySameOperator() {
-    ReplayOperationEntity alreadyApproved = operation().toBuilder()
-        .id(70L)
-        .status("RUNNING")
-        .approvedBy("admin")
-        .build();
+    ReplayOperationEntity alreadyApproved =
+        operation().toBuilder().id(70L).status("RUNNING").approvedBy("admin").build();
     when(operationMapper.selectForUpdate("tenant", 70L)).thenReturn(alreadyApproved);
 
     ReplayOperationEntity result = service.approve("tenant", 70L, "admin");
@@ -232,9 +271,12 @@ class BatchDayReplayRangeOperationServiceTest {
   @DisplayName("只按租户和区间父操作读取每日子 session")
   void shouldListSessionsOnlyAfterTenantScopedOperationExists() {
     ReplayOperationEntity parent = operation().toBuilder().id(70L).build();
-    List<BatchDayReplaySessionEntity> expected = List.of(
-        BatchDayReplaySessionEntity.builder().id(101L).tenantId("tenant")
-            .replayOperationId(70L).bizDate(LocalDate.of(2026, 1, 5)).build());
+    List<BatchDayReplaySessionEntity> expected = List.of(BatchDayReplaySessionEntity.builder()
+        .id(101L)
+        .tenantId("tenant")
+        .replayOperationId(70L)
+        .bizDate(LocalDate.of(2026, 1, 5))
+        .build());
     when(operationMapper.selectById("tenant", 70L)).thenReturn(parent);
     when(sessionMapper.selectByReplayOperation("tenant", 70L)).thenReturn(expected);
 
@@ -257,19 +299,49 @@ class BatchDayReplayRangeOperationServiceTest {
 
   private static BatchDayReplayRangeCommand command(LocalDate from, LocalDate through) {
     return new BatchDayReplayRangeCommand(
-        "tenant", "CAL", from, through, "ALL_FAILED", null, null, null, null,
-        null, "reason", "operator", false, "trace", "REPLAY", "EXISTING_INSTANCES", null, null);
+        "tenant",
+        "CAL",
+        from,
+        through,
+        "ALL_FAILED",
+        null,
+        null,
+        null,
+        null,
+        null,
+        "reason",
+        "operator",
+        false,
+        "trace",
+        "REPLAY",
+        "EXISTING_INSTANCES",
+        null,
+        null);
   }
 
   private static BatchDayReplayPreviewResponse preview(
       BatchDayReplaySubmitCommand command, String previewToken) {
     BatchDayReplayPreviewResponse.PreviewEntry entry =
-        new BatchDayReplayPreviewResponse.PreviewEntry("JOB_A", 500L, null, "RERUN_INSTANCE", "job:JOB_A");
+        new BatchDayReplayPreviewResponse.PreviewEntry(
+            "JOB_A", 500L, null, "RERUN_INSTANCE", "job:JOB_A");
     return new BatchDayReplayPreviewResponse(
-        command.tenantId(), command.calendarCode(), command.bizDate(), command.scope(), "REPLAY",
-        "EXISTING_INSTANCES", "CREATE_NEW_VERSION", "USE_ORIGINAL_CONFIG", null,
-        previewToken, previewToken == null ? null : Instant.parse("2026-01-05T12:05:00Z"),
-        1, List.of(entry), List.of(), List.of(), List.of(), List.of());
+        command.tenantId(),
+        command.calendarCode(),
+        command.bizDate(),
+        command.scope(),
+        "REPLAY",
+        "EXISTING_INSTANCES",
+        "CREATE_NEW_VERSION",
+        "USE_ORIGINAL_CONFIG",
+        null,
+        previewToken,
+        previewToken == null ? null : Instant.parse("2026-01-05T12:05:00Z"),
+        1,
+        List.of(entry),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of());
   }
 
   private static ReplayOperationEntity operation() {
@@ -292,9 +364,9 @@ class BatchDayReplayRangeOperationServiceTest {
 
   private static String sha256(String value) {
     try {
-      var digest = java.security.MessageDigest.getInstance("SHA-256");
-      return java.util.HexFormat.of().formatHex(digest.digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
-    } catch (java.security.NoSuchAlgorithmException impossible) {
+      var digest = MessageDigest.getInstance("SHA-256");
+      return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
+    } catch (NoSuchAlgorithmException impossible) {
       throw new IllegalStateException(impossible);
     }
   }

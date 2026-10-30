@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.orchestrator.integration;
 
-import io.github.pinpols.batch.orchestrator.domain.query.JobInstanceBatchDayCandidatesQuery;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
@@ -14,15 +11,15 @@ import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.application.service.governance.CompensationService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.ApprovalWorkflowService;
+import io.github.pinpols.batch.orchestrator.application.service.governance.CompensationService;
 import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayRangeCommand;
 import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayRangeOperationService;
 import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayService;
+import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayTerminalReconciler;
 import io.github.pinpols.batch.orchestrator.application.service.replay.ReplayOperationPreviewResponse;
 import io.github.pinpols.batch.orchestrator.application.service.replay.WorkflowNodeReplayCommand;
 import io.github.pinpols.batch.orchestrator.application.service.replay.WorkflowNodeReplayOperationService;
-import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayTerminalReconciler;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionPromoteService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
@@ -33,6 +30,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEnt
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
+import io.github.pinpols.batch.orchestrator.domain.query.JobInstanceBatchDayCandidatesQuery;
 import io.github.pinpols.batch.orchestrator.domain.query.JobTaskQuery;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.BatchDayReplayDispatcher;
@@ -50,8 +48,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -154,13 +152,15 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
     String tenant = tenant();
     Source source = source(tenant);
     long sessionId = session(tenant, 1);
-    final String failSessionSql = "update batch.batch_day_replay_session set status='PARTIAL_FAILED' where id=?";
+    final String failSessionSql =
+        "update batch.batch_day_replay_session set status='PARTIAL_FAILED' where id=?";
     final String insertEntrySql = """
         insert into batch.batch_day_replay_entry
             (session_id,tenant_id,job_code,source_instance_id,status,failure_reason)
         values (?,?,?,?,'FAILED','SUBMIT_FAILED') returning id
         """;
-    final String selectEntrySql = "select status,rerun_instance_id,failure_reason from batch.batch_day_replay_entry where id=?";
+    final String selectEntrySql =
+        "select status,rerun_instance_id,failure_reason from batch.batch_day_replay_entry where id=?";
     jdbc.update(failSessionSql, sessionId);
     long entryId = jdbc.queryForObject(
         insertEntrySql, Long.class, sessionId, tenant, source.code(), source.job());
@@ -208,8 +208,8 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
     final String countReplayRequestSql = """
         select count(*) from batch.trigger_request where tenant_id=? and request_id=?
         """;
-    Integer replayRequestCount = jdbc.queryForObject(
-        countReplayRequestSql, Integer.class, tenant, replayRequestId);
+    Integer replayRequestCount =
+        jdbc.queryForObject(countReplayRequestSql, Integer.class, tenant, replayRequestId);
     assertThat(replayRequestCount).isEqualTo(1);
     Instant blockedRetryAt = Instant.now();
     int blockedRetryCount = entries.retryFailedUnbound(tenant, sessionId, entryId, blockedRetryAt);
@@ -219,6 +219,11 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("日期区间重放中单日提交失败可并发安全重试并汇总完成")
   void shouldRecoverRangeReplay_whenOneDaySubmissionFailsAndRetryCompetes() throws Exception {
+    final String selectCompensationStatusSql = """
+        select command_status from batch.compensation_command
+        where tenant_id=? and compensation_type='JOB' and target_id=?
+        order by id
+        """;
     final String disableSourceWorkflowSql = """
         update batch.workflow_definition set enabled=false
         where tenant_id=? and single_job_definition_id=(
@@ -241,31 +246,33 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
     Source failedSource = source(tenantId, failedBizDate);
     Source runningSource = source(tenantId, runningBizDate);
 
-    BatchDayReplayRangeCommand previewCommand = rangeCommand(
-        tenantId, failedBizDate, runningBizDate, null, null);
+    BatchDayReplayRangeCommand previewCommand =
+        rangeCommand(tenantId, failedBizDate, runningBizDate, null, null);
     ReplayOperationPreviewResponse preview = rangeReplay.preview(previewCommand);
-    assertThat(preview.days()).extracting(ReplayOperationPreviewResponse.DayPreview::candidateCount)
+    assertThat(preview.days())
+        .extracting(ReplayOperationPreviewResponse.DayPreview::candidateCount)
         .containsExactly(1, 1);
 
     BatchDayReplayRangeCommand submitCommand = rangeCommand(
         tenantId, failedBizDate, runningBizDate, preview.operationKey(), preview.previewToken());
     ReplayOperationEntity operation = rangeReplay.submit(submitCommand);
     List<BatchDayReplaySessionEntity> sessions = rangeReplay.sessions(tenantId, operation.id());
-    assertThat(sessions).extracting(BatchDayReplaySessionEntity::bizDate)
+    assertThat(sessions)
+        .extracting(BatchDayReplaySessionEntity::bizDate)
         .containsExactly(failedBizDate, runningBizDate);
     BatchDayReplaySessionEntity failedSession = sessions.getFirst();
     BatchDayReplaySessionEntity runningSession = sessions.getLast();
-    List<BatchDayReplayEntryEntity> failedEntries = entries.selectBySessionAndStatus(
-        failedSession.id(), tenantId, "PENDING", 10);
-    List<BatchDayReplayEntryEntity> runningEntries = entries.selectBySessionAndStatus(
-        runningSession.id(), tenantId, "PENDING", 10);
+    List<BatchDayReplayEntryEntity> failedEntries =
+        entries.selectBySessionAndStatus(failedSession.id(), tenantId, "PENDING", 10);
+    List<BatchDayReplayEntryEntity> runningEntries =
+        entries.selectBySessionAndStatus(runningSession.id(), tenantId, "PENDING", 10);
     assertThat(failedEntries).hasSize(1);
     assertThat(runningEntries).hasSize(1);
     BatchDayReplayEntryEntity failedEntry = failedEntries.getFirst();
     BatchDayReplayEntryEntity runningEntry = runningEntries.getFirst();
 
-    int disabledWorkflows = jdbc.update(
-        disableSourceWorkflowSql, tenantId, tenantId, failedSource.job());
+    int disabledWorkflows =
+        jdbc.update(disableSourceWorkflowSql, tenantId, tenantId, failedSource.job());
     assertThat(disabledWorkflows).isEqualTo(1);
 
     boolean wasEnabled = replayProperties.isEnabled();
@@ -278,21 +285,28 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
       replayProperties.setEnabled(wasEnabled);
     }
 
-    List<BatchDayReplayEntryEntity> failedAfterDispatch = entries.selectBySessionAndStatus(
-        failedSession.id(), tenantId, null, 10);
-    List<BatchDayReplayEntryEntity> runningAfterDispatch = entries.selectBySessionAndStatus(
-        runningSession.id(), tenantId, null, 10);
+    List<BatchDayReplayEntryEntity> failedAfterDispatch =
+        entries.selectBySessionAndStatus(failedSession.id(), tenantId, null, 10);
+    List<BatchDayReplayEntryEntity> runningAfterDispatch =
+        entries.selectBySessionAndStatus(runningSession.id(), tenantId, null, 10);
     assertThat(failedAfterDispatch.getFirst().status()).isEqualTo("FAILED");
     assertThat(failedAfterDispatch.getFirst().rerunInstanceId()).isNull();
     assertThat(runningAfterDispatch.getFirst().status()).isEqualTo("RUNNING");
     assertThat(runningAfterDispatch.getFirst().rerunInstanceId()).isNull();
+    assertThat(jdbc.queryForList(
+            selectCompensationStatusSql, String.class, tenantId, failedSource.job()))
+        .containsExactly("FAILED");
+    assertThat(jdbc.queryForList(
+            selectCompensationStatusSql, String.class, tenantId, runningSource.job()))
+        .containsExactly("SUCCESS");
     ReplayOperationEntity runningOperation = rangeReplay.get(tenantId, operation.id());
     assertThat(runningOperation.status()).isEqualTo("RUNNING");
     assertThat(runningOperation.totalCount()).isEqualTo(2);
     assertThat(runningOperation.failedCount()).isEqualTo(1);
     assertThat(runningOperation.inFlightCount()).isEqualTo(1);
 
-    Replay runningReplay = consume(dispatched(runningSource, runningSession.id(), runningEntry.id()));
+    Replay runningReplay =
+        consume(dispatched(runningSource, runningSession.id(), runningEntry.id()));
     boolean wasEnabledAfterLaunch = replayProperties.isEnabled();
     try {
       replayProperties.setEnabled(true);
@@ -306,12 +320,12 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
     assertThat(partiallyFailedOperation.inFlightCount()).isZero();
 
     String failedRequestId = "replay-" + failedSession.id() + "-" + failedEntry.id();
-    Integer failedRequestCount = jdbc.queryForObject(
-        selectReplayRequestCountSql, Integer.class, tenantId, failedRequestId);
+    Integer failedRequestCount =
+        jdbc.queryForObject(selectReplayRequestCountSql, Integer.class, tenantId, failedRequestId);
     assertThat(failedRequestCount).isZero();
 
-    int enabledWorkflows = jdbc.update(
-        enableSourceWorkflowSql, tenantId, tenantId, failedSource.job());
+    int enabledWorkflows =
+        jdbc.update(enableSourceWorkflowSql, tenantId, tenantId, failedSource.job());
     assertThat(enabledWorkflows).isEqualTo(1);
     CountDownLatch retriesReady = new CountDownLatch(2);
     CountDownLatch beginRetries = new CountDownLatch(1);
@@ -323,16 +337,16 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
           tenantId, failedSession.id(), failedEntry.id(), retriesReady, beginRetries));
       assertThat(retriesReady.await(10, TimeUnit.SECONDS)).isTrue();
       beginRetries.countDown();
-      List<String> retryResults = List.of(
-          firstRetry.get(10, TimeUnit.SECONDS), competingRetry.get(10, TimeUnit.SECONDS));
+      List<String> retryResults =
+          List.of(firstRetry.get(10, TimeUnit.SECONDS), competingRetry.get(10, TimeUnit.SECONDS));
       assertThat(retryResults).containsExactlyInAnyOrder("RETRIED", "STATE_CONFLICT");
     } finally {
       beginRetries.countDown();
       retryExecutor.shutdownNow();
     }
 
-    BatchDayReplaySessionEntity reopenedSession = replaySessions.selectById(
-        tenantId, failedSession.id());
+    BatchDayReplaySessionEntity reopenedSession =
+        replaySessions.selectById(tenantId, failedSession.id());
     assertThat(reopenedSession.status()).isEqualTo("RUNNING");
     ReplayOperationEntity reopenedOperation = rangeReplay.get(tenantId, operation.id());
     assertThat(reopenedOperation.status()).isEqualTo("RUNNING");
@@ -348,8 +362,8 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
       replayProperties.setEnabled(dispatchWasEnabled);
     }
 
-    Integer retriedRequestCount = jdbc.queryForObject(
-        selectReplayRequestCountSql, Integer.class, tenantId, failedRequestId);
+    Integer retriedRequestCount =
+        jdbc.queryForObject(selectReplayRequestCountSql, Integer.class, tenantId, failedRequestId);
     assertThat(retriedRequestCount).isEqualTo(1);
     Replay failedReplay = consume(dispatched(failedSource, failedSession.id(), failedEntry.id()));
     boolean wasEnabledAfterRetryLaunch = replayProperties.isEnabled();
@@ -396,18 +410,27 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
         .containsExactly(1, 1, 1);
 
     ReplayOperationEntity operation = rangeReplay.submit(rangeCommand(
-        tenantId, bizDates.getFirst(), bizDates.getLast(), preview.operationKey(), preview.previewToken()));
+        tenantId,
+        bizDates.getFirst(),
+        bizDates.getLast(),
+        preview.operationKey(),
+        preview.previewToken()));
     List<BatchDayReplaySessionEntity> sessions = rangeReplay.sessions(tenantId, operation.id());
-    assertThat(sessions).extracting(BatchDayReplaySessionEntity::bizDate).containsExactlyElementsOf(bizDates);
+    assertThat(sessions)
+        .extracting(BatchDayReplaySessionEntity::bizDate)
+        .containsExactlyElementsOf(bizDates);
     BatchDayReplaySessionEntity firstFailedSession = sessions.getFirst();
     BatchDayReplaySessionEntity secondFailedSession = sessions.get(1);
     BatchDayReplaySessionEntity successfulSession = sessions.getLast();
-    BatchDayReplayEntryEntity firstFailedEntry = entries.selectBySessionAndStatus(
-        firstFailedSession.id(), tenantId, "PENDING", 10).getFirst();
-    BatchDayReplayEntryEntity secondFailedEntry = entries.selectBySessionAndStatus(
-        secondFailedSession.id(), tenantId, "PENDING", 10).getFirst();
-    BatchDayReplayEntryEntity successfulEntry = entries.selectBySessionAndStatus(
-        successfulSession.id(), tenantId, "PENDING", 10).getFirst();
+    BatchDayReplayEntryEntity firstFailedEntry = entries
+        .selectBySessionAndStatus(firstFailedSession.id(), tenantId, "PENDING", 10)
+        .getFirst();
+    BatchDayReplayEntryEntity secondFailedEntry = entries
+        .selectBySessionAndStatus(secondFailedSession.id(), tenantId, "PENDING", 10)
+        .getFirst();
+    BatchDayReplayEntryEntity successfulEntry = entries
+        .selectBySessionAndStatus(successfulSession.id(), tenantId, "PENDING", 10)
+        .getFirst();
 
     int affectedSourceWorkflowEnabledRows = jdbc.update(
         updateSourceWorkflowEnabledSql, false, tenantId, tenantId, firstFailedSource.job());
@@ -427,20 +450,30 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
       replayProperties.setEnabled(wasEnabled);
     }
 
-    assertThat(entries.selectBySessionAndStatus(
-        firstFailedSession.id(), tenantId, null, 10).getFirst().status()).isEqualTo("FAILED");
-    assertThat(entries.selectBySessionAndStatus(
-        secondFailedSession.id(), tenantId, null, 10).getFirst().status()).isEqualTo("FAILED");
-    assertThat(entries.selectBySessionAndStatus(
-        successfulSession.id(), tenantId, null, 10).getFirst().status()).isEqualTo("RUNNING");
-    ReplayOperationEntity operationWithTwoSubmissionFailures = rangeReplay.get(tenantId, operation.id());
+    assertThat(entries
+            .selectBySessionAndStatus(firstFailedSession.id(), tenantId, null, 10)
+            .getFirst()
+            .status())
+        .isEqualTo("FAILED");
+    assertThat(entries
+            .selectBySessionAndStatus(secondFailedSession.id(), tenantId, null, 10)
+            .getFirst()
+            .status())
+        .isEqualTo("FAILED");
+    assertThat(entries
+            .selectBySessionAndStatus(successfulSession.id(), tenantId, null, 10)
+            .getFirst()
+            .status())
+        .isEqualTo("RUNNING");
+    ReplayOperationEntity operationWithTwoSubmissionFailures =
+        rangeReplay.get(tenantId, operation.id());
     assertThat(operationWithTwoSubmissionFailures.status()).isEqualTo("RUNNING");
     assertThat(operationWithTwoSubmissionFailures.totalCount()).isEqualTo(3);
     assertThat(operationWithTwoSubmissionFailures.failedCount()).isEqualTo(2);
     assertThat(operationWithTwoSubmissionFailures.inFlightCount()).isEqualTo(1);
 
-    Replay successfulReplay = consume(
-        dispatched(successfulSource, successfulSession.id(), successfulEntry.id()));
+    Replay successfulReplay =
+        consume(dispatched(successfulSource, successfulSession.id(), successfulEntry.id()));
     target.scheduledDispatch();
     report(successfulReplay);
 
@@ -451,7 +484,8 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
     assertThat(partiallyFailedOperation.inFlightCount()).isZero();
 
     String firstFailedRequestId = "replay-" + firstFailedSession.id() + "-" + firstFailedEntry.id();
-    String secondFailedRequestId = "replay-" + secondFailedSession.id() + "-" + secondFailedEntry.id();
+    String secondFailedRequestId =
+        "replay-" + secondFailedSession.id() + "-" + secondFailedEntry.id();
     Integer selectedReplayRequestCount = jdbc.queryForObject(
         selectReplayRequestCountSql, Integer.class, tenantId, firstFailedRequestId);
     assertThat(selectedReplayRequestCount).isZero();
@@ -475,14 +509,16 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
           tenantId, secondFailedSession.id(), secondFailedEntry.id(), retriesReady, beginRetries));
       assertThat(retriesReady.await(10, TimeUnit.SECONDS)).isTrue();
       beginRetries.countDown();
-      assertThat(List.of(firstRetry.get(10, TimeUnit.SECONDS), secondRetry.get(10, TimeUnit.SECONDS)))
+      assertThat(
+              List.of(firstRetry.get(10, TimeUnit.SECONDS), secondRetry.get(10, TimeUnit.SECONDS)))
           .containsExactly("RETRIED", "RETRIED");
     } finally {
       beginRetries.countDown();
       retryExecutor.shutdownNow();
     }
 
-    ReplayOperationEntity operationWithBothRetriesQueued = rangeReplay.get(tenantId, operation.id());
+    ReplayOperationEntity operationWithBothRetriesQueued =
+        rangeReplay.get(tenantId, operation.id());
     assertThat(operationWithBothRetriesQueued.status()).isEqualTo("RUNNING");
     assertThat(operationWithBothRetriesQueued.totalCount()).isEqualTo(3);
     assertThat(operationWithBothRetriesQueued.succeededCount()).isEqualTo(1);
@@ -505,10 +541,10 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
         selectReplayRequestCountSql, Integer.class, tenantId, secondFailedRequestId);
     assertThat(selectedReplayRequestCountRead4).isEqualTo(1);
 
-    Replay firstRetryReplay = consume(
-        dispatched(firstFailedSource, firstFailedSession.id(), firstFailedEntry.id()));
-    Replay secondRetryReplay = consume(
-        dispatched(secondFailedSource, secondFailedSession.id(), secondFailedEntry.id()));
+    Replay firstRetryReplay =
+        consume(dispatched(firstFailedSource, firstFailedSession.id(), firstFailedEntry.id()));
+    Replay secondRetryReplay =
+        consume(dispatched(secondFailedSource, secondFailedSession.id(), secondFailedEntry.id()));
     target.scheduledDispatch();
     target.scheduledDispatch();
     report(firstRetryReplay);
@@ -547,22 +583,27 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
     for (LocalDate bizDate : expectedDates) {
       sources.put(bizDate, source(tenantId, bizDate));
     }
-    BatchDayReplayRangeCommand previewCommand = rangeCommand(
-        tenantId, expectedDates.getFirst(), expectedDates.getLast(), null, null);
+    BatchDayReplayRangeCommand previewCommand =
+        rangeCommand(tenantId, expectedDates.getFirst(), expectedDates.getLast(), null, null);
     ReplayOperationPreviewResponse preview = rangeReplay.preview(previewCommand);
     assertThat(preview.days()).hasSize(dayCount);
     assertThat(preview.days())
         .extracting(ReplayOperationPreviewResponse.DayPreview::bizDate)
         .containsExactlyElementsOf(expectedDates);
-    assertThat(preview.days()).allSatisfy(day -> assertThat(day.candidateCount()).isEqualTo(1));
+    assertThat(preview.days())
+        .allSatisfy(day -> assertThat(day.candidateCount()).isEqualTo(1));
     BatchDayReplayRangeCommand submitCommand = rangeCommand(
-        tenantId, expectedDates.getFirst(), expectedDates.getLast(),
-        preview.operationKey(), preview.previewToken());
+        tenantId,
+        expectedDates.getFirst(),
+        expectedDates.getLast(),
+        preview.operationKey(),
+        preview.previewToken());
     ReplayOperationEntity operation = rangeReplay.submit(submitCommand);
     ReplayOperationEntity repeatedOperation = rangeReplay.submit(submitCommand);
     assertThat(repeatedOperation.id()).isEqualTo(operation.id());
     List<BatchDayReplaySessionEntity> sessions = rangeReplay.sessions(tenantId, operation.id());
-    assertThat(sessions).extracting(BatchDayReplaySessionEntity::bizDate)
+    assertThat(sessions)
+        .extracting(BatchDayReplaySessionEntity::bizDate)
         .containsExactlyElementsOf(expectedDates);
     Set<Long> completedSessions = new HashSet<>();
     List<Long> replayJobIds = new ArrayList<>();
@@ -582,8 +623,8 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
           if (completedSessions.contains(session.id())) {
             continue;
           }
-          List<BatchDayReplayEntryEntity> sessionEntries = entries.selectBySessionAndStatus(
-              session.id(), tenantId, null, 10);
+          List<BatchDayReplayEntryEntity> sessionEntries =
+              entries.selectBySessionAndStatus(session.id(), tenantId, null, 10);
           assertThat(sessionEntries).hasSize(1);
           BatchDayReplayEntryEntity entry = sessionEntries.getFirst();
           if ("PENDING".equals(entry.status())) {
@@ -594,9 +635,10 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
           Accepted accepted = dispatched(source, session.id(), entry.id());
           Replay replay = consume(accepted);
           report(replay);
-          Map<String, Object> identity = jdbc.queryForMap(
-              selectReplayIdentitySql, tenantId, replay.job());
-          assertThat(identity.get("biz_date").toString()).isEqualTo(session.bizDate().toString());
+          Map<String, Object> identity =
+              jdbc.queryForMap(selectReplayIdentitySql, tenantId, replay.job());
+          assertThat(identity.get("biz_date").toString())
+              .isEqualTo(session.bizDate().toString());
           assertThat(identity.get("source_instance_id")).isEqualTo(source.job());
           assertThat(identity.get("run_status")).isEqualTo("SUCCESS");
           var originalJob = jobs.selectById(tenantId, source.job());
@@ -623,8 +665,10 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
     assertThat(completedOperation.failedCount()).isZero();
     assertThat(completedOperation.inFlightCount()).isZero();
     assertThat(completedOperation.completedAt()).isNotNull();
-    List<BatchDayReplaySessionEntity> completedChildren = rangeReplay.sessions(tenantId, operation.id());
-    assertThat(completedChildren).hasSize(dayCount)
+    List<BatchDayReplaySessionEntity> completedChildren =
+        rangeReplay.sessions(tenantId, operation.id());
+    assertThat(completedChildren)
+        .hasSize(dayCount)
         .allSatisfy(session -> assertThat(session.status()).isEqualTo("SUCCEEDED"));
   }
 
@@ -665,31 +709,40 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
     """;
 
     Source source = source(tenant());
-    Long sourceRunId = jdbc.queryForObject(
-        selectWorkflowRunIdSql,
-        Long.class,
-        source.job());
-    Long sourceNodeRunId = jdbc.queryForObject(
-        selectIdSql,
-        Long.class,
-        sourceRunId,
-        source.job());
+    Long sourceRunId = jdbc.queryForObject(selectWorkflowRunIdSql, Long.class, source.job());
+    Long sourceNodeRunId = jdbc.queryForObject(selectIdSql, Long.class, sourceRunId, source.job());
     String selectedRunStatus =
         jdbc.queryForObject(selectRunStatusSql, String.class, source.tenant(), sourceRunId);
     assertThat(selectedRunStatus).isEqualTo("FAILED");
 
-    WorkflowNodeReplayCommand previewRequest = new WorkflowNodeReplayCommand(
-        source.tenant(), sourceRunId, sourceNodeRunId,
-        "Replay the exact failed JOB node", "r25-node-replay",
-        "CREATE_NEW_VERSION", "USE_ORIGINAL_CONFIG", null, "r25-source-trace", null, null);
+    WorkflowNodeReplayCommand previewRequest = WorkflowNodeReplayCommand.builder()
+        .tenantId(source.tenant())
+        .workflowRunId(sourceRunId)
+        .workflowNodeRunId(sourceNodeRunId)
+        .reason("Replay the exact failed JOB node")
+        .requestedBy("r25-node-replay")
+        .resultPolicy("CREATE_NEW_VERSION")
+        .configVersionPolicy("USE_ORIGINAL_CONFIG")
+        .configVersion(null)
+        .traceId("r25-source-trace")
+        .operationKey(null)
+        .previewToken(null)
+        .build();
     var replayPreview = workflowNodeReplayOperationService.preview(previewRequest);
-    var pendingOperation = workflowNodeReplayOperationService.submitForApproval(
-        new WorkflowNodeReplayCommand(
-            source.tenant(), sourceRunId, sourceNodeRunId,
-            "Replay the exact failed JOB node", "r25-node-replay",
-            replayPreview.resultPolicy(), replayPreview.configVersionPolicy(),
-            replayPreview.configVersion(), "r25-source-trace",
-            replayPreview.operationKey(), replayPreview.previewToken()));
+    var pendingOperation =
+        workflowNodeReplayOperationService.submitForApproval(WorkflowNodeReplayCommand.builder()
+            .tenantId(source.tenant())
+            .workflowRunId(sourceRunId)
+            .workflowNodeRunId(sourceNodeRunId)
+            .reason("Replay the exact failed JOB node")
+            .requestedBy("r25-node-replay")
+            .resultPolicy(replayPreview.resultPolicy())
+            .configVersionPolicy(replayPreview.configVersionPolicy())
+            .configVersion(replayPreview.configVersion())
+            .traceId("r25-source-trace")
+            .operationKey(replayPreview.operationKey())
+            .previewToken(replayPreview.previewToken())
+            .build());
 
     Map<String, Object> approvalPayload = new LinkedHashMap<>();
     approvalPayload.put("tenantId", source.tenant());
@@ -706,8 +759,8 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
     approvalPayload.put("configVersionPolicy", replayPreview.configVersionPolicy());
     approvalPayload.put("previewToken", replayPreview.previewToken());
     String approvalPayloadJson = JsonUtils.toJson(approvalPayload);
-    String approvalNo = approvalWorkflowService.submit(
-        ApprovalWorkflowService.ApprovalSubmitCommand.of(
+    String approvalNo =
+        approvalWorkflowService.submit(ApprovalWorkflowService.ApprovalSubmitCommand.of(
             source.tenant(),
             new ApprovalWorkflowService.ApprovalTarget(
                 "COMPENSATION",
@@ -736,10 +789,7 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
         .reason("Replay the exact failed JOB node")
         .build());
 
-    var command = jdbc.queryForMap(
-        selectStatementSql,
-        source.tenant(),
-        commandNo);
+    var command = jdbc.queryForMap(selectStatementSql, source.tenant(), commandNo);
     assertThat(command)
         .containsEntry("compensation_type", "WORKFLOW_NODE")
         .containsEntry("target_id", sourceNodeRunId)
@@ -750,18 +800,17 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
     assertThat(((Number) result.get("sourceWorkflowRunId")).longValue()).isEqualTo(sourceRunId);
     assertThat(((Number) result.get("sourceWorkflowNodeRunId")).longValue())
         .isEqualTo(sourceNodeRunId);
-    assertThat(((Number) result.get("sourceJobInstanceId")).longValue())
-        .isEqualTo(source.job());
+    assertThat(((Number) result.get("sourceJobInstanceId")).longValue()).isEqualTo(source.job());
 
     String envelope = jdbc.queryForObject(
         selectPayloadJsonSql,
         String.class,
         source.tenant(),
         source.tenant() + ":workflow-launch:" + requestId);
-    var record = new ConsumerRecord<>(
-        BatchTopics.TRIGGER_LAUNCH_V1, 0, 0L, requestId, envelope);
+    var record = new ConsumerRecord<>(BatchTopics.TRIGGER_LAUNCH_V1, 0, 0L, requestId, envelope);
     consumer.consume(record, () -> {});
-    Long replayJobId = jobs.selectCurrentByWorkflowRequest(source.tenant(), requestId, source.code())
+    Long replayJobId = jobs.selectCurrentByWorkflowRequest(
+            source.tenant(), requestId, source.code())
         .getId();
     assertThat(replayJobId).isNotEqualTo(source.job());
     var replayJob = jobs.selectById(source.tenant(), replayJobId);
@@ -775,15 +824,11 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
         .isEqualTo(sourceNodeRunId);
     assertThat(((Number) requestParams.get("sourceJobInstanceId")).longValue())
         .isEqualTo(source.job());
-    Long replayRunId = jdbc.queryForObject(
-        selectIdSql2,
-        Long.class,
-        source.tenant(),
-        source.tenant(),
-        requestId);
+    Long replayRunId =
+        jdbc.queryForObject(selectIdSql2, Long.class, source.tenant(), source.tenant(), requestId);
     assertThat(replayRunId).isNotEqualTo(sourceRunId);
-    Map<String, Object> replayOperation = jdbc.queryForMap(
-        selectReplayOperationSql, source.tenant(), sourceRunId, sourceNodeRunId);
+    Map<String, Object> replayOperation =
+        jdbc.queryForMap(selectReplayOperationSql, source.tenant(), sourceRunId, sourceNodeRunId);
     assertThat(((Number) replayOperation.get("target_workflow_run_id")).longValue())
         .isEqualTo(replayRunId);
     assertThat(replayOperation)
@@ -800,7 +845,8 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
         .containsEntry("in_flight_count", 1);
 
     consumer.consume(record, () -> {});
-    assertThat(jobs.selectCurrentByWorkflowRequest(source.tenant(), requestId, source.code()).getId())
+    assertThat(jobs.selectCurrentByWorkflowRequest(source.tenant(), requestId, source.code())
+            .getId())
         .isEqualTo(replayJobId);
     Integer selectedWorkflowRunCount = jdbc.queryForObject(
         selectCountSql, Integer.class, source.tenant(), source.tenant(), requestId);
@@ -830,33 +876,26 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
     """;
 
     Source source = source(tenant());
-    Long sourceRunId = jdbc.queryForObject(
-        selectWorkflowRunIdSql,
-        Long.class,
-        source.job());
-    Long sourceNodeRunId = jdbc.queryForObject(
-        selectIdSql,
-        Long.class,
-        sourceRunId,
-        source.job());
-    jdbc.update(
-        updateJobTaskSql,
-        source.tenant(),
-        source.job());
-    long requestsBefore = jdbc.queryForObject(
-        selectCountSql,
-        Long.class,
-        source.tenant());
-    long launchesBefore = jdbc.queryForObject(
-        selectCountSql2,
-        Long.class,
-        source.tenant());
+    Long sourceRunId = jdbc.queryForObject(selectWorkflowRunIdSql, Long.class, source.job());
+    Long sourceNodeRunId = jdbc.queryForObject(selectIdSql, Long.class, sourceRunId, source.job());
+    jdbc.update(updateJobTaskSql, source.tenant(), source.job());
+    long requestsBefore = jdbc.queryForObject(selectCountSql, Long.class, source.tenant());
+    long launchesBefore = jdbc.queryForObject(selectCountSql2, Long.class, source.tenant());
 
-    assertThatThrownBy(() -> workflowNodeReplayOperationService.preview(
-            new WorkflowNodeReplayCommand(
-                source.tenant(), sourceRunId, sourceNodeRunId,
-                "Do not duplicate an unresolved external effect", "r25-node-replay-unknown",
-                "CREATE_NEW_VERSION", "USE_ORIGINAL_CONFIG", null, "r25-unknown-trace", null, null)))
+    assertThatThrownBy(
+            () -> workflowNodeReplayOperationService.preview(WorkflowNodeReplayCommand.builder()
+                .tenantId(source.tenant())
+                .workflowRunId(sourceRunId)
+                .workflowNodeRunId(sourceNodeRunId)
+                .reason("Do not duplicate an unresolved external effect")
+                .requestedBy("r25-node-replay-unknown")
+                .resultPolicy("CREATE_NEW_VERSION")
+                .configVersionPolicy("USE_ORIGINAL_CONFIG")
+                .configVersion(null)
+                .traceId("r25-unknown-trace")
+                .operationKey(null)
+                .previewToken(null)
+                .build()))
         .hasMessageContaining("error.workflow.replay_external_outcome_unknown");
 
     Long selectedTriggerRequestCount =
@@ -980,8 +1019,8 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
           Integer assertedSecondPid = secondPid.get();
           assertThat(assertedSecondPid).isPositive();
           Integer queriedSecondPid = secondPid.get();
-          Integer blockingPidCount = jdbc.queryForObject(
-              selectCardinalitySql, Integer.class, queriedSecondPid);
+          Integer blockingPidCount =
+              jdbc.queryForObject(selectCardinalitySql, Integer.class, queriedSecondPid);
           assertThat(blockingPidCount).isPositive();
         });
         assertThat(sessionRow(session))
@@ -1018,11 +1057,7 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
     Source source = source(tenant());
     long session = session(source.tenant(), 1);
     Accepted accepted = accept(source, session);
-    jdbc.update(
-        updateWorkflowDefinitionSql,
-        source.tenant(),
-        source.tenant(),
-        source.job());
+    jdbc.update(updateWorkflowDefinitionSql, source.tenant(), source.tenant(), source.job());
     consumer.consume(
         new ConsumerRecord<>(
             BatchTopics.TRIGGER_LAUNCH_V1, 0, 0L, accepted.requestId(), accepted.envelope()),
@@ -1058,10 +1093,7 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
 
     Source source = source(tenant());
     Accepted accepted = accept(source, session(source.tenant(), 1));
-    jdbc.update(
-        updateJobDefinitionSql,
-        source.tenant(),
-        source.code());
+    jdbc.update(updateJobDefinitionSql, source.tenant(), source.code());
     cache.evictJobDefinition(source.tenant(), source.code());
     Replay replay = consume(accepted);
     var child = jobs.selectById(source.tenant(), replay.job());
@@ -1069,10 +1101,7 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
     assertThat(child.getPriority()).isEqualTo(5);
     assertThat(replayJobPolicy(child.getId())).containsEntry("resultPolicy", "CREATE_NEW_VERSION");
     report(replay);
-    var result = jdbc.queryForMap(
-        selectStatusSql,
-        source.tenant(),
-        replay.job());
+    var result = jdbc.queryForMap(selectStatusSql, source.tenant(), replay.job());
     assertThat(result)
         .containsEntry("status", "EFFECTIVE")
         .containsEntry("promotion_policy", "AUTO_LATEST");
@@ -1092,13 +1121,8 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
 
     Source source = source(tenant());
     long session = session(source.tenant(), 1);
-    jdbc.update(
-        updateBatchDayReplaySessionSql,
-        session);
-    jdbc.update(
-        updateJobDefinitionSql,
-        source.tenant(),
-        source.code());
+    jdbc.update(updateBatchDayReplaySessionSql, session);
+    jdbc.update(updateJobDefinitionSql, source.tenant(), source.code());
     cache.evictJobDefinition(source.tenant(), source.code());
     Replay replay = replay(source, session);
     var child = jobs.selectById(source.tenant(), replay.job());
@@ -1124,19 +1148,11 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
 
     Source source = source(tenant());
     long session = session(source.tenant(), 1);
-    jdbc.update(
-        updateBatchDayReplaySessionSql,
-        session);
-    jdbc.update(
-        updateJobDefinitionSql,
-        source.tenant(),
-        source.code());
+    jdbc.update(updateBatchDayReplaySessionSql, session);
+    jdbc.update(updateJobDefinitionSql, source.tenant(), source.code());
     cache.evictJobDefinition(source.tenant(), source.code());
     Accepted accepted = accept(source, session);
-    jdbc.update(
-        updateJobDefinitionSql2,
-        source.tenant(),
-        source.code());
+    jdbc.update(updateJobDefinitionSql2, source.tenant(), source.code());
     cache.evictJobDefinition(source.tenant(), source.code());
     Replay replay = consume(accepted);
     var child = jobs.selectById(source.tenant(), replay.job());
@@ -1169,15 +1185,11 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
     Source source = new Source(
         failedSource.tenant(), failedSource.code(), priorReplay.job(), failedSource.worker());
     long session = session(source.tenant(), 1);
-    jdbc.update(
-        updateBatchDayReplaySessionSql, session);
+    jdbc.update(updateBatchDayReplaySessionSql, session);
     Replay replay = replay(source, session);
     assertThat(replayJobPolicy(replay.job())).containsEntry("resultPolicy", "KEEP_BOTH");
     report(replay);
-    var result = jdbc.queryForMap(
-        selectStatusSql,
-        source.tenant(),
-        replay.job());
+    var result = jdbc.queryForMap(selectStatusSql, source.tenant(), replay.job());
     assertThat(result)
         .containsEntry("status", "PENDING")
         .containsEntry("promotion_policy", "MANUAL_APPROVAL");
@@ -1205,18 +1217,11 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
 
     Source source = source(tenant());
     long session = session(source.tenant(), 1);
-    jdbc.update(
-        updateBatchDayReplaySessionSql,
-        session);
+    jdbc.update(updateBatchDayReplaySessionSql, session);
     Replay replay = replay(source, session);
     report(replay);
-    Long versionId = jdbc.queryForObject(
-        selectIdSql,
-        Long.class,
-        source.tenant(),
-        replay.job());
-    var pending = jdbc.queryForMap(
-        selectStatusSql, versionId);
+    Long versionId = jdbc.queryForObject(selectIdSql, Long.class, source.tenant(), replay.job());
+    var pending = jdbc.queryForMap(selectStatusSql, versionId);
     assertThat(pending)
         .containsEntry("status", "PENDING")
         .containsEntry("promotion_policy", "MANUAL_APPROVAL");
@@ -1246,13 +1251,14 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
 
     Source source = source(tenant());
     long session = session(source.tenant(), 1);
-    long entry =
-        jdbc.queryForObject(insertBatchDayReplayEntrySql, Long.class, session, source.tenant(), source.code(), source.job());
-    jdbc.update(
-        updateWorkflowDefinitionSql,
+    long entry = jdbc.queryForObject(
+        insertBatchDayReplayEntrySql,
+        Long.class,
+        session,
         source.tenant(),
-        source.tenant(),
+        source.code(),
         source.job());
+    jdbc.update(updateWorkflowDefinitionSql, source.tenant(), source.tenant(), source.job());
     boolean prior = replayProperties.isEnabled();
     try {
       replayProperties.setEnabled(true);
@@ -1290,13 +1296,8 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
 
     Source source = source(tenant());
     long session = session(source.tenant(), 1);
-    jdbc.update(
-        updateBatchDayReplaySessionSql,
-        session);
-    jdbc.update(
-        updateWorkerRegistrySql,
-        source.tenant(),
-        source.worker());
+    jdbc.update(updateBatchDayReplaySessionSql, session);
+    jdbc.update(updateWorkerRegistrySql, source.tenant(), source.worker());
     workerCache.evict(source.tenant(), "DEFAULT");
     Replay replay = replay(source, session);
     report(replay);
@@ -1320,18 +1321,42 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
     Source source = source(tenant());
     assertThat(jobs.selectById(source.tenant(), source.job()).getCalendarCode())
         .isEqualTo("JOB_CALENDAR");
-    jdbc.update(
-        updateJobDefinitionSql,
-        source.tenant(),
-        source.code());
-    assertThat(jobs.selectBatchDayCandidates(
-            JobInstanceBatchDayCandidatesQuery.builder()
-                .tenantId(source.tenant())
-                .calendarCode("JOB_CALENDAR")
-                .bizDate(DAY)
-                .statuses(List.of("FAILED"))
-                .jobCodes(List.of(source.code()))
-                .build()))
+    jdbc.update(updateJobDefinitionSql, source.tenant(), source.code());
+    assertThat(jobs.selectBatchDayCandidates(JobInstanceBatchDayCandidatesQuery.builder()
+            .tenantId(source.tenant())
+            .calendarCode("JOB_CALENDAR")
+            .bizDate(DAY)
+            .statuses(List.of("FAILED"))
+            .jobCodes(List.of(source.code()))
+            .build()))
+        .extracting(j -> j.getId())
+        .containsExactly(source.job());
+    assertThat(jobs.selectBatchDayCatchUpCandidates(source.tenant(), "JOB_CALENDAR", DAY))
+        .extracting(j -> j.getId())
+        .containsExactly(source.job());
+  }
+
+  @Test
+  @DisplayName("历史演练失败不得成为正式批日重放或自动补跑源")
+  void shouldExcludeDryRunSourcesFromReplayAndCatchUp() {
+    final String setDryRunSql =
+        "update batch.job_instance set dry_run=? where tenant_id=? and id=?";
+    Source source = source(tenant());
+    var query = JobInstanceBatchDayCandidatesQuery.builder()
+        .tenantId(source.tenant())
+        .calendarCode("JOB_CALENDAR")
+        .bizDate(DAY)
+        .statuses(List.of("FAILED"))
+        .jobCodes(List.of(source.code()))
+        .build();
+    jdbc.update(setDryRunSql, true, source.tenant(), source.job());
+
+    assertThat(jobs.selectBatchDayCandidates(query)).isEmpty();
+    assertThat(jobs.selectBatchDayCatchUpCandidates(source.tenant(), "JOB_CALENDAR", DAY))
+        .isEmpty();
+
+    jdbc.update(setDryRunSql, false, source.tenant(), source.job());
+    assertThat(jobs.selectBatchDayCandidates(query))
         .extracting(j -> j.getId())
         .containsExactly(source.job());
     assertThat(jobs.selectBatchDayCatchUpCandidates(source.tenant(), "JOB_CALENDAR", DAY))
@@ -1382,7 +1407,8 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
         values (?,'JOB_CALENDAR',?,'ALL','CREATE_NEW_VERSION','USE_ORIGINAL_CONFIG','R25 execution proof','RUNNING',?,?,'r25-test') returning id
         """;
 
-    return jdbc.queryForObject(insertBatchDayReplaySessionSql, Long.class, tenant, DAY, total, total);
+    return jdbc.queryForObject(
+        insertBatchDayReplaySessionSql, Long.class, tenant, DAY, total, total);
   }
 
   private Accepted accept(Source source, long session) {
@@ -1395,8 +1421,13 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
         and event_key=?
     """;
 
-    long entry =
-        jdbc.queryForObject(insertBatchDayReplayEntrySql, Long.class, session, source.tenant(), source.code(), source.job());
+    long entry = jdbc.queryForObject(
+        insertBatchDayReplayEntrySql,
+        Long.class,
+        session,
+        source.tenant(),
+        source.code(),
+        source.job());
     String command = compensation.submit(CompensationSubmitCommand.builder()
         .tenantId(source.tenant())
         .compensationType("JOB")
@@ -1430,8 +1461,8 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
         select payload_json::text from batch.outbox_event
         where tenant_id=? and event_type='WORKFLOW_LAUNCH' and event_key=?
         """;
-    String envelope = jdbc.queryForObject(
-        selectPayloadJsonSql, String.class, source.tenant(), eventKey);
+    String envelope =
+        jdbc.queryForObject(selectPayloadJsonSql, String.class, source.tenant(), eventKey);
     return new Accepted(source, session, entry, "batch-day-replay-dispatcher", requestId, envelope);
   }
 
@@ -1447,8 +1478,14 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
       throw new IllegalStateException("timed out waiting to start competing range retries");
     }
     try {
-      RlsTenantContextHolder.runWithTenant(tenantId, () -> dayReplay.retryFailedSubmission(
-          tenantId, sessionId, entryId, "r25-range-operator", "Retry confirmed unsubmitted replay entry"));
+      RlsTenantContextHolder.runWithTenant(
+          tenantId,
+          () -> dayReplay.retryFailedSubmission(
+              tenantId,
+              sessionId,
+              entryId,
+              "r25-range-operator",
+              "Retry confirmed unsubmitted replay entry"));
       return "RETRIED";
     } catch (BizException conflict) {
       return conflict.getCode().code();
@@ -1525,8 +1562,7 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
         select status from batch.batch_day_replay_entry where id=?
     """;
 
-    return jdbc.queryForObject(
-        selectStatusSql, String.class, replay.entry());
+    return jdbc.queryForObject(selectStatusSql, String.class, replay.entry());
   }
 
   private Map<String, Object> sessionRow(long id) {
@@ -1543,8 +1579,7 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
         select rerun_policy_snapshot from batch.job_instance where id=?
     """;
 
-    String snapshot = jdbc.queryForObject(
-        selectRerunPolicySnapshotSql, String.class, jobId);
+    String snapshot = jdbc.queryForObject(selectRerunPolicySnapshotSql, String.class, jobId);
     return JsonUtils.fromJson(snapshot, Map.class);
   }
 

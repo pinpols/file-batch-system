@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -18,14 +19,19 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentMatchers;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.mock.env.MockEnvironment;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -34,6 +40,60 @@ import org.springframework.web.client.RestClient;
  */
 @DisplayName("HTTP 任务执行客户端: 端点轮询, 重试退避与批量领取续期")
 class HttpTaskExecutionClientTest {
+
+  @Test
+  @DisplayName("执行入口确认携带当前身份和布尔标记，普通续租仍使用原批量报文")
+  void shouldKeepExecutionStartDetailsOutsideOrdinaryBatchRenewal() throws Exception {
+    try (MockWebServer server = new MockWebServer()) {
+      server.enqueue(jsonResponse("{\"cancelRequested\":false}"));
+      server.enqueue(jsonResponse(
+          "{\"results\":[{\"taskId\":2,\"renewed\":true,\"cancelRequested\":false}]}"));
+      server.start();
+      HttpTaskExecutionClient client =
+          newClient(clientProperties(server.getPort()), new WorkerBatchClaimProperties());
+      TaskLeaseRenewItem start = TaskLeaseRenewItem.executionStart("t1", 1L, "w1", "inv-1");
+      TaskLeaseRenewItem renewal = new TaskLeaseRenewItem("t1", 2L, "w1", "inv-2");
+      List<TaskLeaseRenewItem> items = List.of(start, renewal);
+
+      Map<Long, TaskLeaseRenewResult> result = client.renewLeasesBatch(items);
+
+      assertThat(result)
+          .containsEntry(1L, TaskLeaseRenewResult.renewed(1L))
+          .containsEntry(2L, TaskLeaseRenewResult.renewed(2L));
+      var confirmation = server.takeRequest();
+      assertThat(confirmation.getUrl().encodedPath()).isEqualTo("/internal/tasks/1/renew");
+      assertThat(confirmation.getBody().utf8())
+          .contains(
+              "\"tenantId\":\"t1\"",
+              "\"workerId\":\"w1\"",
+              "\"partitionInvocationId\":\"inv-1\"",
+              "\"details\":{\"executionStarted\":true}");
+      var ordinary = server.takeRequest();
+      assertThat(ordinary.getUrl().encodedPath()).isEqualTo("/internal/tasks/leases/renew-batch");
+      assertThat(ordinary.getBody().utf8()).contains("inv-2").doesNotContain("executionStarted");
+    }
+  }
+
+  @Test
+  @DisplayName("执行入口 CAS 被拒绝时不得改为普通续租后继续执行业务")
+  void shouldRejectExecutionStartWithoutOrdinaryRenewFallback() throws Exception {
+    try (MockWebServer server = new MockWebServer()) {
+      server.enqueue(new MockResponse.Builder().code(409).build());
+      server.start();
+      HttpTaskExecutionClient client =
+          newClient(clientProperties(server.getPort()), new WorkerBatchClaimProperties());
+      TaskLeaseRenewItem start = TaskLeaseRenewItem.executionStart("t1", 1L, "w1", "stale-inv");
+      List<TaskLeaseRenewItem> items = List.of(start);
+
+      Map<Long, TaskLeaseRenewResult> result = client.renewLeasesBatch(items);
+
+      assertThat(result).containsEntry(1L, TaskLeaseRenewResult.rejected(1L));
+      assertThat(server.getRequestCount()).isOne();
+      var confirmation = server.takeRequest();
+      assertThat(confirmation.getUrl().encodedPath()).isEqualTo("/internal/tasks/1/renew");
+      assertThat(confirmation.getBody().utf8()).contains("\"executionStarted\":true", "stale-inv");
+    }
+  }
 
   @Test
   @DisplayName("配置多个端点时领取与上报请求轮流分发, 两个端点各承担一半")
@@ -217,6 +277,94 @@ class HttpTaskExecutionClientTest {
       assertThat(results.get(0).claimed()).isTrue();
       assertThat(results.get(1).claimed()).isFalse();
     }
+  }
+
+  @ParameterizedTest
+  @MethodSource("untrustedClaimResponses")
+  @DisplayName("批量领取不能把同长度乱序或错误身份的配置绑定到另一任务")
+  void shouldMatchClaimResponseByTaskIdentity(String response, boolean fallbackExpected)
+      throws Exception {
+    try (MockWebServer server = new MockWebServer()) {
+      server.enqueue(jsonResponse(response));
+      if (fallbackExpected) {
+        server.enqueue(jsonResponse("""
+            {"taskId":1,"payload":"payload-1"}
+            """));
+        server.enqueue(jsonResponse("""
+            {"taskId":2,"payload":"payload-2"}
+            """));
+      }
+      server.start();
+      HttpTaskExecutionClient client = newClient(server.getPort());
+      List<TaskClaimItem> items =
+          List.of(new TaskClaimItem("t1", 1L, "w1"), new TaskClaimItem("t1", 2L, "w1"));
+
+      List<TaskClaimResult> results = client.claimBatch(items);
+
+      assertThat(results).hasSize(2);
+      assertThat(results).allSatisfy(result -> {
+        assertThat(result.claimed()).isTrue();
+        assertThat(result.config()).isNotNull();
+      });
+      assertThat(results.get(0).config().taskId()).isEqualTo(1L);
+      assertThat(results.get(0).config().payload()).isEqualTo("payload-1");
+      assertThat(results.get(1).config().taskId()).isEqualTo(2L);
+      assertThat(results.get(1).config().payload()).isEqualTo("payload-2");
+      assertThat(server.getRequestCount()).isEqualTo(fallbackExpected ? 3 : 1);
+      if (fallbackExpected) {
+        server.takeRequest();
+        assertThat(server.takeRequest().getUrl().encodedPath())
+            .isEqualTo("/internal/tasks/1/claim");
+        assertThat(server.takeRequest().getUrl().encodedPath())
+            .isEqualTo("/internal/tasks/2/claim");
+      }
+    }
+  }
+
+  private static Stream<Object[]> untrustedClaimResponses() {
+    return Stream.of(
+        new Object[] {"""
+          {"results":[
+            {"taskId":2,"claimed":true,"config":{"taskId":2,"payload":"payload-2"}},
+            {"taskId":1,"claimed":true,"config":{"taskId":1,"payload":"payload-1"}}
+          ]}
+          """, false},
+        new Object[] {"""
+          {"results":[
+            {"taskId":1,"claimed":true,"config":{"taskId":1,"payload":"payload-1"}},
+            {"taskId":1,"claimed":true,"config":{"taskId":1,"payload":"payload-1"}}
+          ]}
+          """, true},
+        new Object[] {"""
+          {"results":[
+            {"taskId":1,"claimed":true,"config":{"taskId":1,"payload":"payload-1"}},
+            {"taskId":999,"claimed":true,"config":{"taskId":999,"payload":"foreign"}}
+          ]}
+          """, true},
+        new Object[] {"""
+          {"results":[
+            {"taskId":1,"claimed":true,"config":{"taskId":2,"payload":"wrong"}},
+            {"taskId":2,"claimed":true,"config":{"taskId":1,"payload":"wrong"}}
+          ]}
+          """, true},
+        new Object[] {"""
+          {"results":[
+            {"taskId":1,"claimed":true,"config":{"taskId":1,"tenantId":"foreign","payload":"payload-1"}},
+            {"taskId":2,"claimed":true,"config":{"taskId":2,"tenantId":"foreign","payload":"payload-2"}}
+          ]}
+          """, true},
+        new Object[] {"""
+          {"results":[
+            {"taskId":1,"config":{"taskId":1,"payload":"payload-1"}},
+            {"taskId":2,"claimed":true,"config":{"taskId":2,"payload":"payload-2"}}
+          ]}
+          """, true},
+        new Object[] {"""
+          {"results":[
+            {"taskId":1,"claimed":true,"config":null},
+            {"taskId":2,"claimed":true,"config":{"taskId":2,"payload":"payload-2"}}
+          ]}
+          """, true});
   }
 
   private HttpTaskExecutionClient newClient(int port) {
@@ -521,6 +669,150 @@ class HttpTaskExecutionClientTest {
       assertThat(server.takeRequest().getUrl().encodedPath())
           .isEqualTo("/internal/tasks/leases/renew-batch");
       assertThat(server.takeRequest().getUrl().encodedPath()).isEqualTo("/internal/tasks/19/renew");
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("untrustedRenewResponses")
+  @DisplayName("批量续租按任务身份匹配续租与取消，歧义响应回单条并保留owner及invocation")
+  void shouldMatchRenewResponseByTaskIdentity(String response, boolean fallbackExpected)
+      throws Exception {
+    try (MockWebServer server = new MockWebServer()) {
+      server.enqueue(jsonResponse(response));
+      if (fallbackExpected) {
+        server.enqueue(jsonResponse("""
+            {"cancelRequested":true}
+            """));
+        server.enqueue(new MockResponse.Builder().code(409).build());
+      }
+      server.start();
+      HttpTaskExecutionClient client = newClient(server.getPort());
+      List<TaskLeaseRenewItem> items = List.of(
+          new TaskLeaseRenewItem("t1", 1L, "w1", "inv-1"),
+          new TaskLeaseRenewItem("t1", 2L, "w1", "inv-2"));
+
+      Map<Long, TaskLeaseRenewResult> results = client.renewLeasesBatch(items);
+
+      TaskLeaseRenewResult first = results.get(1L);
+      TaskLeaseRenewResult second = results.get(2L);
+      assertThat(first.renewed()).isTrue();
+      assertThat(first.cancelRequested()).isTrue();
+      assertThat(second.renewed()).isFalse();
+      assertThat(second.cancelRequested()).isFalse();
+      assertThat(server.getRequestCount()).isEqualTo(fallbackExpected ? 3 : 1);
+      if (fallbackExpected) {
+        server.takeRequest();
+        var firstRequest = server.takeRequest();
+        var secondRequest = server.takeRequest();
+        assertThat(firstRequest.getUrl().encodedPath()).isEqualTo("/internal/tasks/1/renew");
+        assertThat(secondRequest.getUrl().encodedPath()).isEqualTo("/internal/tasks/2/renew");
+        assertThat(firstRequest.getBody().utf8()).contains("inv-1", "w1", "t1");
+        assertThat(secondRequest.getBody().utf8()).contains("inv-2", "w1", "t1");
+      }
+    }
+  }
+
+  private static Stream<Object[]> untrustedRenewResponses() {
+    return Stream.of(
+        new Object[] {"""
+          {"results":[
+            {"taskId":2,"renewed":false,"cancelRequested":false},
+            {"taskId":1,"renewed":true,"cancelRequested":true}
+          ]}
+          """, false},
+        new Object[] {"""
+          {"results":[
+            {"taskId":1,"renewed":true,"cancelRequested":true},
+            {"taskId":1,"renewed":true,"cancelRequested":true}
+          ]}
+          """, true},
+        new Object[] {"""
+          {"results":[
+            {"taskId":1,"renewed":true,"cancelRequested":true},
+            {"taskId":999,"renewed":true,"cancelRequested":true}
+          ]}
+          """, true},
+        new Object[] {"""
+          {"results":[
+            {"taskId":1,"renewed":true,"cancelRequested":true},
+            {"renewed":true,"cancelRequested":true}
+          ]}
+          """, true},
+        new Object[] {"""
+          {"results":[
+            {"taskId":1,"cancelRequested":true},
+            {"taskId":2,"renewed":false,"cancelRequested":false}
+          ]}
+          """, true});
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"claim", "renew"})
+  @DisplayName("无法解码的批响应按原单接口核对，不把协议未知误作明确业务结果")
+  void shouldConfirmThroughSingleEndpoint_whenBatchJsonCannotBeDecoded(String operation)
+      throws Exception {
+    try (MockWebServer server = new MockWebServer()) {
+      server.enqueue(jsonResponse("not-json"));
+      String singleResponse = operation.equals("claim") ? """
+            {"taskId":1,"payload":"payload-1"}
+            """ : """
+            {"cancelRequested":true}
+            """;
+      server.enqueue(jsonResponse(singleResponse));
+      server.start();
+      HttpTaskExecutionClient client = newClient(server.getPort());
+
+      boolean confirmed;
+      if (operation.equals("claim")) {
+        TaskClaimItem item = new TaskClaimItem("t1", 1L, "w1");
+        List<TaskClaimResult> results = client.claimBatch(List.of(item));
+        TaskClaimResult result = results.getFirst();
+        confirmed = result.claimed();
+        assertThat(result.config().taskId()).isEqualTo(1L);
+      } else {
+        TaskLeaseRenewItem item = new TaskLeaseRenewItem("t1", 1L, "w1", "inv-1");
+        Map<Long, TaskLeaseRenewResult> results = client.renewLeasesBatch(List.of(item));
+        TaskLeaseRenewResult result = results.get(1L);
+        confirmed = result.renewed();
+        assertThat(result.cancelRequested()).isTrue();
+      }
+
+      assertThat(confirmed).isTrue();
+      assertThat(server.getRequestCount()).isEqualTo(2);
+      var batchRequest = server.takeRequest();
+      var singleRequest = server.takeRequest();
+      String expectedBatchPath = operation.equals("claim")
+          ? "/internal/tasks/claim-batch"
+          : "/internal/tasks/leases/renew-batch";
+      assertThat(batchRequest.getUrl().encodedPath()).isEqualTo(expectedBatchPath);
+      assertThat(singleRequest.getUrl().encodedPath()).isEqualTo("/internal/tasks/1/" + operation);
+      assertThat(singleRequest.getBody().utf8()).contains("t1", "w1");
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"claim", "renew"})
+  @DisplayName("批接口认证拒绝保持原失败策略，不被解码异常回退吞掉")
+  void shouldPropagateAuthenticationRejection_withoutSingleFallback(String operation)
+      throws Exception {
+    try (MockWebServer server = new MockWebServer()) {
+      server.enqueue(new MockResponse.Builder().code(401).build());
+      server.enqueue(jsonResponse("{}"));
+      server.start();
+      HttpTaskExecutionClient client = newClient(server.getPort());
+
+      assertThatThrownBy(() -> {
+            if (operation.equals("claim")) {
+              TaskClaimItem item = new TaskClaimItem("t1", 1L, "w1");
+              client.claimBatch(List.of(item));
+            } else {
+              TaskLeaseRenewItem item = new TaskLeaseRenewItem("t1", 1L, "w1", "inv-1");
+              client.renewLeasesBatch(List.of(item));
+            }
+          })
+          .isInstanceOf(HttpClientErrorException.class)
+          .hasMessageContaining("401");
+      assertThat(server.getRequestCount()).isEqualTo(1);
     }
   }
 

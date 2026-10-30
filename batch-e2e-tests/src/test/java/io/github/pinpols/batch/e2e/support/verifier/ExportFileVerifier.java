@@ -15,20 +15,16 @@ import java.util.stream.Collectors;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Content-level verifier for Export pipeline E2E tests.
+ * 用于 Export 流程 E2E 测试的内容校验器。
  *
  * <p>Asserts the "状态 + 产物 + 审计" triple-check for export jobs:
  *
  * <ol>
- *   <li><b>File record</b>: {@code file_record} row has {@code storage_path} set and {@code
- *       file_status = 'GENERATED'} (or 'COMPLETED')
+ *   <li><b>File record</b>: the job's output {@code file_record} has a {@code storage_path}.
  *   <li><b>Amount rollup</b>: {@code settlement_batch.total_amount} meets the expected minimum
- *   <li><b>Object content</b> (best-effort): file read through the active test backend
- *       (MinIO/S3 or filesystem root) is non-empty and contains expected content snippets
+ *   <li><b>Object content</b>: file read through the active test backend is non-empty and contains
+ *       expected content snippets.
  * </ol>
- *
- * <p>Unused assertions are omitted by not setting the corresponding builder fields. The content
- * check is silently skipped for LOCAL-type storage paths (e.g. {@code /...} or {@code file://...}).
  */
 public final class ExportFileVerifier implements E2eVerifier {
 
@@ -64,34 +60,35 @@ public final class ExportFileVerifier implements E2eVerifier {
     }
   }
 
-  // ─── Individual assertion methods (package-visible for direct test use) ───
-
   private void verifyFileRecord() {
     final String selectStoragePathSql = """
-            select fr.storage_path, fr.file_status, fr.file_size_bytes
-            from batch.file_record fr
-            join batch.job_instance ji on ji.tenant_id = fr.tenant_id
+            select fr.storage_path, fr.storage_bucket, fr.file_status, fr.file_size_bytes
+            from batch.job_instance ji
+            join batch.pipeline_instance pi on pi.tenant_id = ji.tenant_id
+                and pi.related_job_instance_id = ji.id
+            join batch.file_record fr on fr.tenant_id = pi.tenant_id and fr.id = pi.file_id
             where ji.tenant_id = ? and ji.dedup_key = ?
               and fr.file_category = 'OUTPUT'
             order by fr.id desc
             limit 1
             """;
 
-    List<Map<String, Object>> fileRecords = platformJdbc.queryForList(selectStoragePathSql, tenantId, dedupKey);
+    List<Map<String, Object>> fileRecords =
+        platformJdbc.queryForList(selectStoragePathSql, tenantId, dedupKey);
 
-    if (fileRecords.isEmpty()) {
-      // No file_record yet — could be a pipeline without file output; skip.
-      return;
-    }
+    assertThat(fileRecords)
+        .as("export: output file record for this job must exist")
+        .isNotEmpty();
 
     Map<String, Object> fileRecord = fileRecords.get(0);
     assertThat(fileRecord.get("storage_path"))
         .as("export: file_record.storage_path must be set")
         .isNotNull();
 
-    if (!expectedContentSnippets.isEmpty()) {
+    if (!expectedContentSnippets.isEmpty() || expectedMinFileRows > 0) {
       String storagePath = String.valueOf(fileRecord.get("storage_path"));
-      tryAssertObjectContent(storagePath);
+      String bucket = (String) fileRecord.get("storage_bucket");
+      assertObjectContent(storagePath, bucket == null ? s3Bucket : bucket);
     }
   }
 
@@ -100,11 +97,8 @@ public final class ExportFileVerifier implements E2eVerifier {
         select total_amount from biz.settlement_batch where tenant_id = ? and batch_no = ?
     """;
 
-    BigDecimal totalAmount = businessJdbc.queryForObject(
-        selectTotalAmountSql,
-        BigDecimal.class,
-        tenantId,
-        batchNo);
+    BigDecimal totalAmount =
+        businessJdbc.queryForObject(selectTotalAmountSql, BigDecimal.class, tenantId, batchNo);
     if (expectedMinTotalAmount != null) {
       assertThat(totalAmount)
           .as("export: settlement_batch.total_amount must be >= %s", expectedMinTotalAmount)
@@ -117,17 +111,11 @@ public final class ExportFileVerifier implements E2eVerifier {
     }
   }
 
-  /** Best-effort: silently skips if MinIO is unreachable or path is LOCAL. */
-  private void tryAssertObjectContent(String storagePath) {
-    boolean exportUsesFilesystemStorage = storagePath == null
-        || storagePath.startsWith("/")
-        || storagePath.startsWith("file://")
-        || s3Bucket == null;
-    if (exportUsesFilesystemStorage) {
-      return;
-    }
+  private void assertObjectContent(String storagePath, String bucket) {
+    assertThat(bucket)
+        .as("export: storage bucket is required for content verification")
+        .isNotBlank();
     try {
-      String bucket = s3Bucket;
       String objectKey = storagePath.startsWith(bucket + "/")
           ? storagePath.substring(bucket.length() + 1)
           : storagePath;
@@ -156,10 +144,8 @@ public final class ExportFileVerifier implements E2eVerifier {
           }
         }
       }
-    } catch (AssertionError ae) {
-      throw ae; // re-throw assertion failures
     } catch (Exception ex) {
-      // Backend unavailable or file not present — skip content check (best-effort)
+      throw new AssertionError("export: failed to read output object " + storagePath, ex);
     }
   }
 

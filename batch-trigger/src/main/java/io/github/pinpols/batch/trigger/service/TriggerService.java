@@ -19,6 +19,9 @@ public interface TriggerService {
 
   LaunchResponse launch(TriggerLaunchCommand command);
 
+  /** 按原键和完整业务载荷核验补跑回执，不接纳新请求。 */
+  LaunchResponse verifyCatchUpSubmission(TriggerLaunchCommand command);
+
   ExternalEventLaunchResponse launchExternalEvent(ExternalEventLaunchCommand command);
 
   ExternalEventLaunchStatus findExternalEventStatus(

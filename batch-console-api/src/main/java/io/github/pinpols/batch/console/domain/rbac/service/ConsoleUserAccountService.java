@@ -1,14 +1,9 @@
 package io.github.pinpols.batch.console.domain.rbac.service;
 
-import io.github.pinpols.batch.console.domain.rbac.param.ConsoleUserAccountInsertParam;
-import io.github.pinpols.batch.console.domain.rbac.param.ConsoleUserAccountInsertProvisionedParam;
-
-
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.persistence.BatchColumnNames;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -16,13 +11,16 @@ import io.github.pinpols.batch.console.domain.rbac.application.contract.response
 import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleUserAccountInsertParam;
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleUserAccountInsertProvisionedParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsolePasswordHasher;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSessionRegistry;
+import io.github.pinpols.batch.console.domain.rbac.view.ConsoleUserAccountRow;
+import io.github.pinpols.batch.console.domain.rbac.view.TenantRow;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -34,8 +32,6 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ConsoleUserAccountService {
 
-  private static final String COL_TENANT_ID = BatchColumnNames.TENANT_ID;
-  private static final String COL_USERNAME = BatchColumnNames.USERNAME;
   private static final String USERNAME_REQUIRED = "username is required";
 
   /**
@@ -53,7 +49,7 @@ public class ConsoleUserAccountService {
   public PageResponse<ConsoleUserAccountResponse> list(
       String tenantId, String keyword, Boolean enabled, PageRequest pageRequest) {
     String effectiveTenantId = enforceTenantScope(tenantId);
-    List<Map<String, Object>> rows =
+    List<ConsoleUserAccountRow> rows =
         userAccountMapper.selectByQuery(effectiveTenantId, keyword, enabled, pageRequest);
     long total = userAccountMapper.countByQuery(effectiveTenantId, keyword, enabled);
     List<ConsoleUserAccountResponse> items = rows.stream().map(this::toResponse).toList();
@@ -61,8 +57,8 @@ public class ConsoleUserAccountService {
   }
 
   public ConsoleUserAccountResponse get(long id) {
-    Map<String, Object> row = assertExists(id);
-    assertSameTenantOrGlobal(str(row, COL_TENANT_ID));
+    ConsoleUserAccountRow row = assertExists(id);
+    assertSameTenantOrGlobal(row.tenantId());
     return toResponse(row);
   }
 
@@ -88,21 +84,21 @@ public class ConsoleUserAccountService {
     String normalizedAuthorities = normalizeAuthorities(authoritiesCsv);
     enforceGrantableAuthorities(normalizedAuthorities);
     enforceRoleTenantBinding(effectiveTenantId, normalizedAuthorities);
-    Map<String, Object> existingAccount = userAccountMapper.selectByUsername(username);
+    ConsoleUserAccountRow existingAccount = userAccountMapper.selectByUsername(username);
     if (EmptyChecks.isNotNull(existingAccount)) {
       throw BizException.of(ResultCode.CONFLICT, "error.username.already_exists", username);
     }
-    ConsoleUserAccountInsertParam consoleUserAccountInsertParam = ConsoleUserAccountInsertParam.builder()
-        .tenantId(effectiveTenantId)
-        .username(username)
-        .displayName(displayName)
-        .passwordHash(passwordHasher.encode(password))
-        .authoritiesCsv(normalizedAuthorities)
-        .createdBy(null)
-        .build();
-    userAccountMapper.insert(
-        consoleUserAccountInsertParam);
-    Map<String, Object> createdAccount = userAccountMapper.selectByUsername(username);
+    ConsoleUserAccountInsertParam consoleUserAccountInsertParam =
+        ConsoleUserAccountInsertParam.builder()
+            .tenantId(effectiveTenantId)
+            .username(username)
+            .displayName(displayName)
+            .passwordHash(passwordHasher.encode(password))
+            .authoritiesCsv(normalizedAuthorities)
+            .createdBy(null)
+            .build();
+    userAccountMapper.insert(consoleUserAccountInsertParam);
+    ConsoleUserAccountRow createdAccount = userAccountMapper.selectByUsername(username);
     return toResponse(createdAccount);
   }
 
@@ -114,39 +110,39 @@ public class ConsoleUserAccountService {
     String normalizedRole = normalizeAuthorities(role);
     enforceGrantableAuthorities(normalizedRole);
     enforceRoleTenantBinding(effectiveTenantId, normalizedRole);
-    Map<String, Object> existingAccount = userAccountMapper.selectByUsername(username);
+    ConsoleUserAccountRow existingAccount = userAccountMapper.selectByUsername(username);
     if (EmptyChecks.isNotNull(existingAccount)) {
       throw BizException.of(ResultCode.CONFLICT, "error.username.already_exists", username);
     }
-    ConsoleUserAccountInsertProvisionedParam consoleUserAccountInsertProvisionedParam = ConsoleUserAccountInsertProvisionedParam.builder()
-        .tenantId(effectiveTenantId)
-        .username(username)
-        .displayName(displayName)
-        .passwordHash(passwordHasher.encode(password))
-        .authoritiesCsv(normalizedRole)
-        .build();
-    userAccountMapper.insertProvisioned(
-        consoleUserAccountInsertProvisionedParam);
-    Map<String, Object> createdAccount = userAccountMapper.selectByUsername(username);
+    ConsoleUserAccountInsertProvisionedParam consoleUserAccountInsertProvisionedParam =
+        ConsoleUserAccountInsertProvisionedParam.builder()
+            .tenantId(effectiveTenantId)
+            .username(username)
+            .displayName(displayName)
+            .passwordHash(passwordHasher.encode(password))
+            .authoritiesCsv(normalizedRole)
+            .build();
+    userAccountMapper.insertProvisioned(consoleUserAccountInsertProvisionedParam);
+    ConsoleUserAccountRow createdAccount = userAccountMapper.selectByUsername(username);
     return toResponse(createdAccount);
   }
 
   public ConsoleUserAccountResponse update(long id, String displayName, String authoritiesCsv) {
-    Map<String, Object> row = assertExists(id);
-    assertSameTenantOrGlobal(str(row, COL_TENANT_ID));
+    ConsoleUserAccountRow row = assertExists(id);
+    assertSameTenantOrGlobal(row.tenantId());
     String normalizedAuthorities = normalizeAuthorities(authoritiesCsv);
     enforceGrantableAuthorities(normalizedAuthorities);
     userAccountMapper.updateProfile(id, displayName, normalizedAuthorities);
-    Map<String, Object> updatedAccount = userAccountMapper.selectById(id);
+    ConsoleUserAccountRow updatedAccount = userAccountMapper.selectById(id);
     return toResponse(updatedAccount);
   }
 
   /** 管理员重置他人密码:置 must_change_password=true,提醒被重置者尽快改密;并踢掉其现有会话。 */
   public void resetPassword(long id, String newPassword) {
-    Map<String, Object> account = assertExists(id);
-    assertSameTenantOrGlobal(str(account, COL_TENANT_ID));
+    ConsoleUserAccountRow account = assertExists(id);
+    assertSameTenantOrGlobal(account.tenantId());
     userAccountMapper.updatePasswordHashAndMustChange(id, passwordHasher.encode(newPassword), true);
-    sessionRegistry.invalidateSession(str(account, COL_USERNAME), str(account, COL_TENANT_ID));
+    sessionRegistry.invalidateSession(account.username(), account.tenantId());
   }
 
   /**
@@ -178,24 +174,24 @@ public class ConsoleUserAccountService {
   }
 
   public ConsoleUserAccountResponse enable(long id) {
-    Map<String, Object> row = assertExists(id);
-    assertSameTenantOrGlobal(str(row, COL_TENANT_ID));
+    ConsoleUserAccountRow row = assertExists(id);
+    assertSameTenantOrGlobal(row.tenantId());
     userAccountMapper.updateEnabled(id, true);
-    Map<String, Object> enabledAccount = userAccountMapper.selectById(id);
+    ConsoleUserAccountRow enabledAccount = userAccountMapper.selectById(id);
     return toResponse(enabledAccount);
   }
 
   public ConsoleUserAccountResponse disable(long id) {
-    Map<String, Object> account = assertExists(id);
-    assertSameTenantOrGlobal(str(account, COL_TENANT_ID));
+    ConsoleUserAccountRow account = assertExists(id);
+    assertSameTenantOrGlobal(account.tenantId());
     userAccountMapper.updateEnabled(id, false);
-    sessionRegistry.invalidateSession(str(account, COL_USERNAME), str(account, COL_TENANT_ID));
-    Map<String, Object> disabledAccount = userAccountMapper.selectById(id);
+    sessionRegistry.invalidateSession(account.username(), account.tenantId());
+    ConsoleUserAccountRow disabledAccount = userAccountMapper.selectById(id);
     return toResponse(disabledAccount);
   }
 
-  private Map<String, Object> assertExists(long id) {
-    Map<String, Object> account = userAccountMapper.selectById(id);
+  private ConsoleUserAccountRow assertExists(long id) {
+    ConsoleUserAccountRow account = userAccountMapper.selectById(id);
     return Guard.requireFound(account, "user account not found: " + id);
   }
 
@@ -284,8 +280,8 @@ public class ConsoleUserAccountService {
     if (!Texts.hasText(tenantId)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.account.tenant_not_active");
     }
-    Map<String, Object> tenant = tenantMapper.selectByTenantId(tenantId);
-    if (EmptyChecks.isNull(tenant) || !"ACTIVE".equals(tenant.get("status"))) {
+    TenantRow tenant = tenantMapper.selectByTenantId(tenantId);
+    if (EmptyChecks.isNull(tenant) || !"ACTIVE".equals(tenant.status())) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.account.tenant_not_active", tenantId);
     }
@@ -298,18 +294,21 @@ public class ConsoleUserAccountService {
         .collect(Collectors.toSet());
   }
 
-  private ConsoleUserAccountResponse toResponse(Map<String, Object> row) {
-    Object rawId = row.get("id");
-    Long id = rawId instanceof Number number ? number.longValue() : null;
-    String tenantId = str(row, COL_TENANT_ID);
-    String username = str(row, COL_USERNAME);
-    String displayName = str(row, "display_name");
-    String authoritiesCsv = str(row, "authorities_csv");
-    boolean enabled = Boolean.TRUE.equals(row.get("enabled"));
-    String createdAt = str(row, "created_at");
-    String updatedAt = str(row, "updated_at");
+  private ConsoleUserAccountResponse toResponse(ConsoleUserAccountRow row) {
+    boolean enabled = Boolean.TRUE.equals(row.enabled());
+    String createdAtText =
+        EmptyChecks.isNull(row.createdAt()) ? null : String.valueOf(row.createdAt());
+    String updatedAtText =
+        EmptyChecks.isNull(row.updatedAt()) ? null : String.valueOf(row.updatedAt());
     return new ConsoleUserAccountResponse(
-        id, tenantId, username, displayName, authoritiesCsv, enabled, createdAt, updatedAt);
+        row.id(),
+        row.tenantId(),
+        row.username(),
+        row.displayName(),
+        row.authoritiesCsv(),
+        enabled,
+        createdAtText,
+        updatedAtText);
   }
 
   private String normalizeAuthorities(String raw) {
@@ -319,10 +318,5 @@ public class ConsoleUserAccountService {
     String trimmedAuthorities = raw.trim();
     String normalizedAuthorities = trimmedAuthorities.toUpperCase();
     return normalizedAuthorities;
-  }
-
-  private static String str(Map<String, Object> row, String key) {
-    Object v = row.get(key);
-    return v == null ? null : String.valueOf(v);
   }
 }

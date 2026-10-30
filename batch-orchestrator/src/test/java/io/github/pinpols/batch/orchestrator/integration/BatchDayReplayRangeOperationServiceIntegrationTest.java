@@ -2,11 +2,11 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
-import static org.awaitility.Awaitility.await;
 
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayPreviewResponse;
@@ -73,18 +73,20 @@ class BatchDayReplayRangeOperationServiceIntegrationTest extends AbstractIntegra
     BatchDayReplayRangeCommand previewCommand = command(tenantId, null, null);
     configureCalendarAndPreviews();
     ReplayOperationPreviewResponse preview = rangeOperationService.preview(previewCommand);
-    BatchDayReplayRangeCommand submitCommand = command(
-        tenantId, preview.operationKey(), preview.previewToken());
+    BatchDayReplayRangeCommand submitCommand =
+        command(tenantId, preview.operationKey(), preview.previewToken());
 
     doAnswer(invocation -> {
-      BatchDayReplaySubmitCommand childCommand = invocation.getArgument(0);
-      if (childCommand.bizDate().equals(THROUGH_DATE)) {
-        throw new IllegalStateException("injected second-day admission failure");
-      }
-      insertChildSession(childCommand, invocation.getArgument(1));
-      return sessionMapper.selectActiveByCalendarBizDate(
-          tenantId, childCommand.calendarCode(), childCommand.bizDate());
-    }).when(singleDayReplayService).submitForOperation(any(), anyLong());
+          BatchDayReplaySubmitCommand childCommand = invocation.getArgument(0);
+          if (childCommand.bizDate().equals(THROUGH_DATE)) {
+            throw new IllegalStateException("injected second-day admission failure");
+          }
+          insertChildSession(childCommand, invocation.getArgument(1));
+          return sessionMapper.selectActiveByCalendarBizDate(
+              tenantId, childCommand.calendarCode(), childCommand.bizDate());
+        })
+        .when(singleDayReplayService)
+        .submitForOperation(any(), anyLong());
 
     assertThatThrownBy(() -> rangeOperationService.submit(submitCommand))
         .isInstanceOf(IllegalStateException.class)
@@ -107,10 +109,10 @@ class BatchDayReplayRangeOperationServiceIntegrationTest extends AbstractIntegra
   void shouldCreateSingleOperation_whenSamePreviewIsSubmittedConcurrently() throws Exception {
     String tenantId = newTenantId();
     configureCalendarAndPreviews();
-    ReplayOperationPreviewResponse preview = rangeOperationService.preview(
-        command(tenantId, null, null));
-    BatchDayReplayRangeCommand submitCommand = command(
-        tenantId, preview.operationKey(), preview.previewToken());
+    ReplayOperationPreviewResponse preview =
+        rangeOperationService.preview(command(tenantId, null, null));
+    BatchDayReplayRangeCommand submitCommand =
+        command(tenantId, preview.operationKey(), preview.previewToken());
     CountDownLatch firstSubmissionInsideTransaction = new CountDownLatch(1);
     CountDownLatch releaseFirstSubmission = new CountDownLatch(1);
     AtomicBoolean pauseFirstChildPreview = new AtomicBoolean(true);
@@ -118,29 +120,29 @@ class BatchDayReplayRangeOperationServiceIntegrationTest extends AbstractIntegra
 
     try {
       doAnswer(invocation -> {
-        if (pauseFirstChildPreview.compareAndSet(true, false)) {
-          firstSubmissionInsideTransaction.countDown();
-          if (!releaseFirstSubmission.await(10, TimeUnit.SECONDS)) {
-            throw new IllegalStateException("timed out waiting to release first admission");
-          }
-        }
-        return childPreview(invocation.getArgument(0), "child-token");
-      }).when(singleDayReplayService).preview(any());
+            if (pauseFirstChildPreview.compareAndSet(true, false)) {
+              firstSubmissionInsideTransaction.countDown();
+              if (!releaseFirstSubmission.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("timed out waiting to release first admission");
+              }
+            }
+            return childPreview(invocation.getArgument(0), "child-token");
+          })
+          .when(singleDayReplayService)
+          .preview(any());
       insertChildSessionsForOperation(tenantId);
 
-      Future<ReplayOperationEntity> firstSubmission = executor.submit(
-          () -> rangeOperationService.submit(submitCommand));
+      Future<ReplayOperationEntity> firstSubmission =
+          executor.submit(() -> rangeOperationService.submit(submitCommand));
       assertThat(firstSubmissionInsideTransaction.await(10, TimeUnit.SECONDS)).isTrue();
-      Future<ReplayOperationEntity> duplicateSubmission = executor.submit(
-          () -> rangeOperationService.submit(submitCommand));
+      Future<ReplayOperationEntity> duplicateSubmission =
+          executor.submit(() -> rangeOperationService.submit(submitCommand));
 
-      await()
-          .atMost(Duration.ofSeconds(10))
-          .untilAsserted(() -> {
-            int lockWaiters = jdbcTemplate.queryForObject(
-                selectPreviewTokenLockWaiterCountSql, Integer.class);
-            assertThat(lockWaiters).isGreaterThanOrEqualTo(1);
-          });
+      await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+        int lockWaiters =
+            jdbcTemplate.queryForObject(selectPreviewTokenLockWaiterCountSql, Integer.class);
+        assertThat(lockWaiters).isGreaterThanOrEqualTo(1);
+      });
       releaseFirstSubmission.countDown();
 
       ReplayOperationEntity accepted = firstSubmission.get(10, TimeUnit.SECONDS);
@@ -161,20 +163,22 @@ class BatchDayReplayRangeOperationServiceIntegrationTest extends AbstractIntegra
 
   private void configureCalendarAndPreviews() {
     when(planCalendarMapper.selectEffectiveDayType(any(), any(), any())).thenReturn("WORKDAY");
-    when(singleDayReplayService.previewImpact(any())).thenAnswer(
-        invocation -> childPreview(invocation.getArgument(0), null));
-    when(singleDayReplayService.preview(any())).thenAnswer(
-        invocation -> childPreview(invocation.getArgument(0), "child-token"));
+    when(singleDayReplayService.previewImpact(any()))
+        .thenAnswer(invocation -> childPreview(invocation.getArgument(0), null));
+    when(singleDayReplayService.preview(any()))
+        .thenAnswer(invocation -> childPreview(invocation.getArgument(0), "child-token"));
   }
 
   private void insertChildSessionsForOperation(String tenantId) {
     doAnswer(invocation -> {
-      BatchDayReplaySubmitCommand childCommand = invocation.getArgument(0);
-      Long operationId = invocation.getArgument(1);
-      insertChildSession(childCommand, operationId);
-      return sessionMapper.selectActiveByCalendarBizDate(
-          tenantId, childCommand.calendarCode(), childCommand.bizDate());
-    }).when(singleDayReplayService).submitForOperation(any(), anyLong());
+          BatchDayReplaySubmitCommand childCommand = invocation.getArgument(0);
+          Long operationId = invocation.getArgument(1);
+          insertChildSession(childCommand, operationId);
+          return sessionMapper.selectActiveByCalendarBizDate(
+              tenantId, childCommand.calendarCode(), childCommand.bizDate());
+        })
+        .when(singleDayReplayService)
+        .submitForOperation(any(), anyLong());
   }
 
   private void insertChildSession(BatchDayReplaySubmitCommand command, Long operationId) {
@@ -210,18 +214,46 @@ class BatchDayReplayRangeOperationServiceIntegrationTest extends AbstractIntegra
         new BatchDayReplayPreviewResponse.PreviewEntry(
             "JOB_A", 500L, null, "RERUN_INSTANCE", "job:JOB_A");
     return new BatchDayReplayPreviewResponse(
-        command.tenantId(), command.calendarCode(), command.bizDate(), command.scope(),
-        "REPLAY", "EXISTING_INSTANCES", "CREATE_NEW_VERSION", "USE_ORIGINAL_CONFIG", null,
-        previewToken, Instant.now().plusSeconds(60), 1, List.of(entry), List.of(), List.of(),
-        List.of(), List.of());
+        command.tenantId(),
+        command.calendarCode(),
+        command.bizDate(),
+        command.scope(),
+        "REPLAY",
+        "EXISTING_INSTANCES",
+        "CREATE_NEW_VERSION",
+        "USE_ORIGINAL_CONFIG",
+        null,
+        previewToken,
+        Instant.now().plusSeconds(60),
+        1,
+        List.of(entry),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of());
   }
 
   private static BatchDayReplayRangeCommand command(
       String tenantId, UUID operationKey, String previewToken) {
     return new BatchDayReplayRangeCommand(
-        tenantId, "CAL-RANGE-IT", FROM_DATE, THROUGH_DATE, "ALL_FAILED", null, null,
-        "CREATE_NEW_VERSION", "USE_ORIGINAL_CONFIG", null, "integration", "operator", false,
-        "trace-range-it", "REPLAY", "EXISTING_INSTANCES", operationKey, previewToken);
+        tenantId,
+        "CAL-RANGE-IT",
+        FROM_DATE,
+        THROUGH_DATE,
+        "ALL_FAILED",
+        null,
+        null,
+        "CREATE_NEW_VERSION",
+        "USE_ORIGINAL_CONFIG",
+        null,
+        "integration",
+        "operator",
+        false,
+        "trace-range-it",
+        "REPLAY",
+        "EXISTING_INSTANCES",
+        operationKey,
+        previewToken);
   }
 
   private static String newTenantId() {

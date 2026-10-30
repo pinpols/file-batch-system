@@ -69,7 +69,8 @@ public class FeedbackStep implements ImportStageStep {
         .operatorId(context.getWorkerId());
     Object traceId = attrs.get(PipelineRuntimeKeys.TRACE_ID);
     String traceIdText = String.valueOf(traceId);
-    FileAuditParam audit = auditParam.traceId(traceIdText)
+    FileAuditParam audit = auditParam
+        .traceId(traceIdText)
         .evidenceRef(null)
         .detailSummary(detailSummary)
         .build();

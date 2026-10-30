@@ -11,7 +11,13 @@
 
 本特性引入持久化「续跑位点」表 `batch.pipeline_progress`,LoadStep 每完成一个 chunk
 就 UPSERT 当前行号 + 已处理累计;重派时从最后一次 advance 的行号续跑,前面已处理的 chunk
-不重做。
+不重做。LOAD 的 `position_marker` 格式为 `<物理行号>:<SHA-256>`，不匹配时保留位点和暂存文件，先核对业务记录及文件来源。
+
+文件重建后若内容不同，不应直接复用旧位点；须先确认该操作及插件的幂等和补偿策略，再通过受控恢复流程处置，不能盲目删除位点。 `IMPORT_LOAD_FAILED` 属于不可自动重试错误；人工分区重试还要求父作业及所属 Workflow 处于可执行状态，不能仅因位点存在就认定系统会自动续跑。
+
+LOAD 位点已完成时，恢复会使用位点的累计记录数回填加载和成功统计，并先更新文件状态再清理暂存文件；状态更新失败时保留暂存文件供后续重试。这里的成功数不替代业务库数据核对。 正式 LOAD 在校验暂存文件缺失，或有校验记录但文件为空时失败；校验阶段提供记录数时，LOAD 在写入每个分块前拒绝超过该数量的分块，并在完成前核对加载累计数，不匹配不完成位点。较早分块可能已经提交；恢复仍依赖幂等或执行围栏。单分区 LOAD 位点同时绑定校验文件的 SHA-256；重试时内容或顺序改变会拒绝续跑。每次启用位点的 LOAD 都会额外顺序读取文件计算摘要，性能与容量影响待单独测量；摘要计算后到消费期间的文件变化不在此保证范围内。旧的纯行号位点不能识别文件身份，会失败关闭；本方案仅按空库部署约定处理，不提供旧位点兼容。
+
+LOAD 插件必须确认整个分块：返回数须等于输入逻辑行数，幂等重放中已存在且确认完成的记录也计入。返回数不一致时阶段失败、不推进该分块位点并保留暂存文件；非幂等副作用按执行围栏处理。自定义插件应核对此返回契约，不能只返回新增行数。
 
 ## 开关
 
@@ -111,14 +117,14 @@ ADR-038 §决策二要求「chunk 业务写 + 位点更新同事务」。实际�
 ## Export GENERATE 续跑(P3,2026-06-05)
 
 Export 的「全量重跑」痛点与 Import 同源:GENERATE 写大文件途中崩溃 / lease 回收,重派从第 0 行重新拉数据 + 重写文件。
-P3 用**单文件 + 字节位点截断**方案接入(spike `docs/archive/design/export-file-recovery-options-2026-06-05.md` 原选 chunk-分片+STORE 拼接 Option A;
+P3 用**单文件 + 字节位点截断**方案接入；实现选择和边界记录在 [ADR-038](../architecture/adr/ADR-038-platform-worker-checkpoint-resume.md)；
 落地时改用更轻的单文件法 —— 崩溃安全性等价、无 concat 数据完整性风险、且与本配置 javadoc 既有的「续 cursor」语义一致)。
 
 机制:
 - **确定化文件路径**:续跑开启时生成文件落 `${java.io.tmpdir}/file-batch-export/inst-<pipelineInstanceId>.<ext>`(关闭时仍为随机 temp,行为不变)。同实例重派落同一文件,崩溃后能找回残文件。
 - **页边界 fsync + 位点**:每完成一页(`loadDetailPage` 一批)就 `flush + FileDescriptor.sync()` 落盘,把 `<byteOffset>@<typed-cursor>` 记进 `batch.pipeline_progress`(stage=`GENERATE`)。位点**仅在还有后继页时记**;终页 cursor=null 不记(交由完成时补记总行数),保证存下的 cursor 永远是有效续跑起点。
 - **续跑**:`FileChannel.truncate(byteOffset)` 截断崩溃残尾 → 数据插件从 `cursor` 续拉下一页 → append 续写。崩溃窗口最多重做「最后一个已记位点之后那一页」,因 truncate 先于重写故**不重复、不丢行**;JSON 收尾 `]}` 只在整体完成时写一次。
-- **幂等跳过**:GENERATE 已 `completed` 且文件仍在(STORE 未消费)→ 重派不重生成,补齐下游 attribute 即可。
+- **幂等跳过**:GENERATE 已 `completed` 且文件仍在(STORE 未消费)→ 重派不重生成,补齐下游 attribute 即可。 演练 STORE 成功计算摘要后也会删除本地生成文件；文件不可读或删除失败时 STORE 返回失败，不标记完成。文件不存在时保留现有处理语义。
 
 ### 前置约束(对齐 Import 的幂等校验)
 
@@ -192,6 +198,12 @@ WHERE stage = 'LOAD' AND completed = true
   AND completed_at > current_timestamp - interval '24 hours'
 ORDER BY completed_at DESC;
 ```
+
+### 中断尝试与最终结果
+
+Worker进程中断后，checkpoint续跑可能使最新尝试成功。Job进入终态时，Orchestrator在同一收尾事务中将仍为RUNNING/RETRYING的历史Pipeline步骤标为FAILED，错误码为`PIPELINE_ATTEMPT_INTERRUPTED`；这表示该次尝试未完成，不代表最新尝试或整个Job失败。已结束步骤保持原结果，迟到Worker不能覆盖步骤终态。Job仍活跃时不会按这个规则关闭步骤，避免干扰并行分区。
+
+排查时同时核对Job终态、每阶段最新`run_seq`、历史尝试的错误码以及`pipeline_progress`的处理条数/完成标记；业务唯一行与checkpoint应独立对照，不能只以Pipeline成功或进度条100%判断无重无漏。
 
 ### 关闭 / 回滚
 

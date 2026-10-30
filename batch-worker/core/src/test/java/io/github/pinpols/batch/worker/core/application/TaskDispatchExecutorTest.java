@@ -148,8 +148,7 @@ class TaskDispatchExecutorTest {
     assertThat(task.getRangeEndExclusive()).isEqualTo(100L);
     assertThat(task.getExpectedRows()).isEqualTo(100L);
     assertThat(task.getPartitionInvocationId()).isEqualTo("inv-fresh");
-    assertThat(task.getDependencyResultSnapshot())
-        .containsExactly(upstreamResult);
+    assertThat(task.getDependencyResultSnapshot()).containsExactly(upstreamResult);
     assertThat(task.getReplayExecutionGuard()).isEqualTo(replayExecutionGuard);
   }
 

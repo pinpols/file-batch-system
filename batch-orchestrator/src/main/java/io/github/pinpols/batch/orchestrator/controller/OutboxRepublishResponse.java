@@ -1,4 +1,4 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
-/** Stable response contract for outbox republish operations. */
+/** Outbox 重新发布操作的稳定响应契约。 */
 public record OutboxRepublishResponse(int requested, int reset, int dryRun) {}

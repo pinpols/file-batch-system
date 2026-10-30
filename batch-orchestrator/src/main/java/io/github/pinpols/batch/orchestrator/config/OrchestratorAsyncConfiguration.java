@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.config;
 
+import io.github.pinpols.batch.common.config.BatchSchedulingProperties;
 import java.util.concurrent.ThreadPoolExecutor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -31,7 +32,7 @@ public class OrchestratorAsyncConfiguration {
    * {@code @Qualifier(OUTBOX_POLL_SCHEDULER)} 精确取本 bean。
    */
   @Bean(name = OUTBOX_POLL_SCHEDULER, destroyMethod = "shutdown", defaultCandidate = false)
-  public ThreadPoolTaskScheduler outboxPollTaskScheduler() {
+  public ThreadPoolTaskScheduler outboxPollTaskScheduler(BatchSchedulingProperties properties) {
     ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
     scheduler.setPoolSize(1);
     scheduler.setThreadNamePrefix("outbox-poll-scheduler-");
@@ -40,24 +41,37 @@ public class OrchestratorAsyncConfiguration {
     scheduler.setDaemon(false);
     scheduler.setRemoveOnCancelPolicy(true);
     // outbox 事件已经落库，关闭时允许当前投递轮次完成；未投递事件会由下一副本继续扫描。
-    scheduler.setWaitForTasksToCompleteOnShutdown(true);
-    scheduler.setAwaitTerminationSeconds(30);
+    configureShutdown(scheduler, properties, 30);
     scheduler.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
     return scheduler;
   }
 
   /** 作业监控独占调度线程，监控阻塞或过载时不挤占 Outbox 和共享定时任务。 */
   @Bean(name = JOB_MONITORING_SCHEDULER, destroyMethod = "shutdown", defaultCandidate = false)
-  public ThreadPoolTaskScheduler jobMonitoringTaskScheduler() {
+  public ThreadPoolTaskScheduler jobMonitoringTaskScheduler(BatchSchedulingProperties properties) {
     ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
     scheduler.setPoolSize(1);
     scheduler.setThreadNamePrefix("job-monitoring-scheduler-");
     scheduler.setDaemon(false);
     scheduler.setRemoveOnCancelPolicy(true);
-    scheduler.setWaitForTasksToCompleteOnShutdown(true);
-    scheduler.setAwaitTerminationSeconds(15);
+    configureShutdown(scheduler, properties, 15);
     scheduler.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
     return scheduler;
+  }
+
+  /** 采用共享环境停机策略，但保留各专用池既有的生产等待上限。 */
+  private static void configureShutdown(
+      ThreadPoolTaskScheduler scheduler,
+      BatchSchedulingProperties properties,
+      int maximumAwaitSeconds) {
+    scheduler.setPhase(properties.getPhase());
+    scheduler.setWaitForTasksToCompleteOnShutdown(properties.isWaitForTasksToCompleteOnShutdown());
+    int configuredAwaitSeconds = Math.max(0, properties.getAwaitTerminationSeconds());
+    scheduler.setAwaitTerminationSeconds(Math.min(maximumAwaitSeconds, configuredAwaitSeconds));
+    scheduler.setContinueExistingPeriodicTasksAfterShutdownPolicy(
+        properties.isContinueExistingPeriodicTasksAfterShutdown());
+    scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(
+        properties.isExecuteExistingDelayedTasksAfterShutdown());
   }
 
   // applicationTaskExecutor 由 Spring Boot TaskExecutionAutoConfiguration 提供:

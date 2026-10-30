@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service;
 
-import io.github.pinpols.batch.orchestrator.domain.param.DeadLetterTaskMarkReplayFailureParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
@@ -45,6 +42,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
@@ -181,7 +179,7 @@ class DefaultRetryGovernanceServiceTest {
   void shouldCreateDeadLetterWhenRetryCountExhausted() {
     when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 2));
 
-    // partition already has 2 retries, max is 2 → exhausted
+    // 该分区已重试 2 次，达到最大次数 2，重试耗尽。
     boolean result = service.scheduleRetryIfNecessary(
         task("t1", 1L, 1L), partition(1L, 2), jobInstance(1L), "ERR", "exhausted");
 
@@ -371,8 +369,10 @@ class DefaultRetryGovernanceServiceTest {
 
     assertThatThrownBy(() -> service.replayDeadLetter("t1", 1L)).isInstanceOf(BizException.class);
     verify(deadLetterTaskMapper)
-        .markReplayFailure(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.targetStatus() != null && parameters.lastReplayResult() != null));
+        .markReplayFailure(ArgumentMatchers.argThat(parameters -> parameters != null
+            && parameters.tenantId() != null
+            && parameters.targetStatus() != null
+            && parameters.lastReplayResult() != null));
   }
 
   @Test
@@ -389,8 +389,10 @@ class DefaultRetryGovernanceServiceTest {
 
     verify(deadLetterTaskMapper).markGiveUp("t1", 1L);
     verify(deadLetterTaskMapper, never())
-        .markReplayFailure(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.targetStatus() != null && parameters.lastReplayResult() != null));
+        .markReplayFailure(ArgumentMatchers.argThat(parameters -> parameters != null
+            && parameters.tenantId() != null
+            && parameters.targetStatus() != null
+            && parameters.lastReplayResult() != null));
   }
 
   // ── dispatchDueRetries — no retries ──────────────────────────────────────
@@ -398,11 +400,11 @@ class DefaultRetryGovernanceServiceTest {
   @Test
   @DisplayName("没有到期的重试计划时不做任何处理")
   void shouldDoNothingWhenNoRetrySchedulesDue() {
-    when(retryScheduleMapper.selectByQuery(any())).thenReturn(List.of());
+    when(retryScheduleMapper.selectDueNotPaused(any())).thenReturn(List.of());
 
     service.dispatchDueRetries();
 
-    verify(retryScheduleMapper).selectByQuery(any());
+    verify(retryScheduleMapper).selectDueNotPaused(any());
     verify(retryScheduleMapper, never())
         .markRunning(anyString(), anyLong(), anyString(), anyString());
   }
@@ -414,7 +416,7 @@ class DefaultRetryGovernanceServiceTest {
     schedule.setId(1L);
     schedule.setTenantId("t1");
     schedule.setRelatedId(100L);
-    when(retryScheduleMapper.selectByQuery(any())).thenReturn(List.of(schedule));
+    when(retryScheduleMapper.selectDueNotPaused(any())).thenReturn(List.of(schedule));
     when(retryScheduleMapper.markRunning(
             "t1", 1L, RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code()))
         .thenReturn(0);
@@ -433,7 +435,7 @@ class DefaultRetryGovernanceServiceTest {
     RetryScheduleEntity t2 = new RetryScheduleEntity();
     t2.setId(2L);
     t2.setTenantId("t2");
-    when(retryScheduleMapper.selectByQuery(any())).thenReturn(List.of(t1, t2));
+    when(retryScheduleMapper.selectDueNotPaused(any())).thenReturn(List.of(t1, t2));
     Mockito.doAnswer(invocation -> {
           String tenantId = invocation.getArgument(0);
           assertThat(RlsTenantContextHolder.get()).isEqualTo(tenantId);

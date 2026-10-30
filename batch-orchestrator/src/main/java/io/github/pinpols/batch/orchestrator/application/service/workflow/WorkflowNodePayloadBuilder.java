@@ -265,7 +265,11 @@ public class WorkflowNodePayloadBuilder {
         WorkflowRunContext workflowRunContext = loadWorkflowRunContext(workflowRun);
         Object resolved = workflowParamResolver.resolve(map, workflowRunContext);
         if (resolved instanceof Map<?, ?> resolvedMap) {
-          ((Map<String, Object>) resolvedMap).forEach(payload::putIfAbsent);
+          ((Map<String, Object>) resolvedMap).forEach((key, value) -> {
+            if (!payload.containsKey(key)) {
+              payload.put(key, value);
+            }
+          });
         }
       }
     } catch (IllegalArgumentException ignored) {

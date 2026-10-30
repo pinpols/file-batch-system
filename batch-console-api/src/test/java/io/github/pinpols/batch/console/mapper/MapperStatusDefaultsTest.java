@@ -1,12 +1,5 @@
 package io.github.pinpols.batch.console.mapper;
 
-import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentBindParam;
-import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentMarkDraftParam;
-import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogMarkRetryFailureParam;
-import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogUpdateGiveUpParam;
-import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogUpdateRetryFailureParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
@@ -19,12 +12,17 @@ import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAttachmentMa
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAttachmentMapper.BindTransitionParam;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAttachmentMapper.DraftTransitionParam;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiConversationMapper;
-import io.github.pinpols.batch.console.domain.notification.view.JobPushDelivery;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentBindParam;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentMarkDraftParam;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.JobPushDeliveryMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.TerminalNotificationRecoveryMapper;
+import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogMarkRetryFailureParam;
+import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogUpdateGiveUpParam;
+import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogUpdateRetryFailureParam;
 import io.github.pinpols.batch.console.domain.notification.param.JobPushDeliveryClaimParam;
 import io.github.pinpols.batch.console.domain.notification.param.JobPushDeliveryReconcileStoppedParam;
+import io.github.pinpols.batch.console.domain.notification.view.JobPushDelivery;
 import io.github.pinpols.batch.console.domain.ops.mapper.ConfigApprovalMapper;
 import io.github.pinpols.batch.console.domain.ops.param.ConfigApprovalTransitionParam;
 import java.time.Instant;
@@ -50,21 +48,22 @@ class MapperStatusDefaultsTest {
     doReturn(1).when(mapper).transitionToBound(any());
 
     assertThat(mapper.markDraft(ConsoleAiAttachmentMarkDraftParam.builder()
-        .tenantId("tenant-a")
-        .id(id)
-        .mediaType("image/png")
-        .byteSize(128L)
-        .width(10)
-        .height(20)
-        .build())).isEqualTo(1);
+            .tenantId("tenant-a")
+            .id(id)
+            .mediaType("image/png")
+            .byteSize(128L)
+            .width(10)
+            .height(20)
+            .build()))
+        .isEqualTo(1);
     assertThat(mapper.bind(ConsoleAiAttachmentBindParam.builder()
-        .tenantId("tenant-a")
-        .id(id)
-        .ownerUserId("user-a")
-        .conversationId("conversation-a")
-        .turnNo(7L)
-        .expiresAt(expiresAt)
-        .build()))
+            .tenantId("tenant-a")
+            .id(id)
+            .ownerUserId("user-a")
+            .conversationId("conversation-a")
+            .turnNo(7L)
+            .expiresAt(expiresAt)
+            .build()))
         .isEqualTo(1);
 
     verify(mapper)
@@ -105,32 +104,37 @@ class MapperStatusDefaultsTest {
     doReturn(List.of()).when(mapper).findEligibleRetriesByStatuses(now, 15, eligibleStatuses);
     doReturn(1).when(mapper).claimForRetryByStatuses(9L, eligibleStatuses);
     doReturn(1).when(mapper).updateRetrySuccess(9L, 2, 204, "SUCCESS");
-    doReturn(1).when(mapper).updateRetryFailure(ConsoleWebhookDeliveryLogUpdateRetryFailureParam.builder()
-        .id(9L)
-        .attempt(2)
-        .httpStatus(503)
-        .responseBody("down")
-        .nextRetryAt(now)
-        .deliveryStatus("EXHAUSTED")
-        .build());
-    doReturn(1).when(mapper).updateGiveUp(ConsoleWebhookDeliveryLogUpdateGiveUpParam.builder()
-        .id(9L)
-        .attempt(3)
-        .httpStatus(503)
-        .responseBody("down")
-        .deliveryStatus("GIVE_UP")
-        .build());
+    doReturn(1)
+        .when(mapper)
+        .updateRetryFailure(ConsoleWebhookDeliveryLogUpdateRetryFailureParam.builder()
+            .id(9L)
+            .attempt(2)
+            .httpStatus(503)
+            .responseBody("down")
+            .nextRetryAt(now)
+            .deliveryStatus("EXHAUSTED")
+            .build());
+    doReturn(1)
+        .when(mapper)
+        .updateGiveUp(ConsoleWebhookDeliveryLogUpdateGiveUpParam.builder()
+            .id(9L)
+            .attempt(3)
+            .httpStatus(503)
+            .responseBody("down")
+            .deliveryStatus("GIVE_UP")
+            .build());
 
     assertThat(mapper.findEligibleRetries(now, 15)).isEmpty();
     assertThat(mapper.claimForRetry(9L)).isEqualTo(1);
     assertThat(mapper.markRetrySuccess(9L, 2, 204)).isEqualTo(1);
     assertThat(mapper.markRetryFailure(ConsoleWebhookDeliveryLogMarkRetryFailureParam.builder()
-        .id(9L)
-        .attempt(2)
-        .httpStatus(503)
-        .responseBody("down")
-        .nextRetryAt(now)
-        .build())).isEqualTo(1);
+            .id(9L)
+            .attempt(2)
+            .httpStatus(503)
+            .responseBody("down")
+            .nextRetryAt(now)
+            .build()))
+        .isEqualTo(1);
     assertThat(mapper.markGiveUp(9L, 3, 503, "down")).isEqualTo(1);
   }
 
@@ -178,12 +182,12 @@ class MapperStatusDefaultsTest {
   @Test
   @DisplayName("设备领取的固定目标状态可由 MyBatis 读取，领取参数行形状保持不变")
   void shouldExposeFixedPushClaimStatusToMyBatis() {
-    JobPushDelivery row = new JobPushDelivery(
-        8L, "tenant-a", "event-a", "operator-a", 9L, "fingerprint-a", "{}", 0);
+    JobPushDelivery row =
+        new JobPushDelivery(8L, "tenant-a", "event-a", "operator-a", 9L, "fingerprint-a", "{}", 0);
     Instant now = Instant.parse("2026-10-24T00:00:00Z");
     Instant until = now.plusSeconds(60);
-    JobPushDeliveryClaimParam claim = new JobPushDeliveryClaimParam(
-        row, "00000000-0000-0000-0000-000000000001", now, until, 4);
+    JobPushDeliveryClaimParam claim =
+        new JobPushDeliveryClaimParam(row, "00000000-0000-0000-0000-000000000001", now, until, 4);
     MetaObject bindings = SystemMetaObject.forObject(claim);
 
     Object targetStatus = bindings.getValue("targetStatus");

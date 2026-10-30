@@ -16,4 +16,5 @@ public record BatchDayView(
     Long totalJobCount,
     Long successJobCount,
     Long failedJobCount,
-    Long inFlightJobCount) {}
+    Long inFlightJobCount,
+    Boolean frozen) {}

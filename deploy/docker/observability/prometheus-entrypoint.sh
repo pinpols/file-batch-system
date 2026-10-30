@@ -6,6 +6,11 @@ set -eu
 
 generate_targets() {
 mode=${BATCH_DEPLOY_MODE:-container}
+# 同一部署的目标与维护信号必须使用相同范围；空值保持告警，不扩大抑制。
+maintenance_scope=${BATCH_MAINTENANCE_ALERT_SCOPE:-}
+case "$maintenance_scope" in
+  *[!A-Za-z0-9_.:-]*) echo "Invalid BATCH_MAINTENANCE_ALERT_SCOPE" >&2; exit 2 ;;
+esac
 target_dir=/prometheus/targets
 mkdir -p "$target_dir"
 
@@ -75,8 +80,8 @@ while [ "$#" -gt 0 ]; do
   else
     printf ',\n' >> "$tmp_file"
   fi
-  printf '  {"targets":["%s:%s"],"labels":{"job":"%s","__metrics_path__":"/actuator/prometheus"}}' \
-    "$host" "$port" "$job" >> "$tmp_file"
+  printf '  {"targets":["%s:%s"],"labels":{"job":"%s","maintenance_scope":"%s","__metrics_path__":"/actuator/prometheus"}}' \
+    "$host" "$port" "$job" "$maintenance_scope" >> "$tmp_file"
 done
 printf '\n]\n' >> "$tmp_file"
 mv "$tmp_file" "$target_dir/app-targets.json"

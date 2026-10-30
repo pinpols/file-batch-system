@@ -16,6 +16,7 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentMatchers;
 
 @DisplayName("部署命名空间对象存储:物理路径隔离并保持调用方逻辑 key")
 class NamespacedObjectStoreTest {
@@ -60,11 +61,11 @@ class NamespacedObjectStoreTest {
 
     verify(delegate)
         .put(
-            org.mockito.ArgumentMatchers.eq("bucket"),
-            org.mockito.ArgumentMatchers.eq("blue/reports/a.csv"),
-            org.mockito.ArgumentMatchers.any(),
-            org.mockito.ArgumentMatchers.eq(4L),
-            org.mockito.ArgumentMatchers.eq("text/csv"));
+            ArgumentMatchers.eq("bucket"),
+            ArgumentMatchers.eq("blue/reports/a.csv"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.eq(4L),
+            ArgumentMatchers.eq("text/csv"));
     verify(delegate).copy("bucket", "blue/reports/a.csv", "blue/reports/copy.csv");
     verify(delegate).delete("bucket", "blue/reports/copy.csv");
   }

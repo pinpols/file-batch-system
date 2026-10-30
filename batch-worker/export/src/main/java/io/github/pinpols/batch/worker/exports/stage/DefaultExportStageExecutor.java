@@ -2,6 +2,8 @@ package io.github.pinpols.batch.worker.exports.stage;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
@@ -154,22 +156,21 @@ public class DefaultExportStageExecutor
       return ExportStageResult.failure(
           stage, StageFailureCode.BUSINESS_ERROR.name(), exception, ERROR_OBJECT_MAPPER);
     } catch (Exception exception) {
+      String failureSummary = SwallowedExceptionLogger.summary(exception);
       log.error(
-          "export stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
+          "export stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}, cause={}",
           stage,
-          step.stepCode(),
-          step.implCode(),
-          context.getTenantId(),
-          context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
-          exception);
-      String localizedMessageArgument = exception.getMessage();
-      String fallbackMessage = exception.getMessage();
+          LogSanitizer.value(step.stepCode()),
+          LogSanitizer.value(step.implCode()),
+          LogSanitizer.value(context.getTenantId()),
+          LogSanitizer.value(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
+          failureSummary);
       return ExportStageResult.failure(
           stage,
           StageFailureCode.INFRA_ERROR.name(),
           "error.worker.stage_infra_error",
-          new Object[] {localizedMessageArgument},
-          fallbackMessage,
+          new Object[] {failureSummary},
+          failureSummary,
           ERROR_OBJECT_MAPPER);
     }
   }

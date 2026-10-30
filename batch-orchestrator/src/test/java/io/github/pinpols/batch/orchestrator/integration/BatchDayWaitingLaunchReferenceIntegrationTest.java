@@ -45,12 +45,11 @@ class BatchDayWaitingLaunchReferenceIntegrationTest extends AbstractIntegrationT
     insertRequest("retention-tenant", "retained-request-id");
     insertWaiting("retention-tenant", "retained-request-id");
 
-    String deleteTriggerRequestSql =
-        """
+    String deleteTriggerRequestSql = """
         delete from batch.trigger_request where tenant_id=? and request_id=?
     """;
-    assertThatThrownBy(() -> jdbcTemplate.update(
-            deleteTriggerRequestSql, "retention-tenant", "retained-request-id"))
+    assertThatThrownBy(() ->
+            jdbcTemplate.update(deleteTriggerRequestSql, "retention-tenant", "retained-request-id"))
         .isInstanceOf(DataIntegrityViolationException.class)
         .hasRootCauseInstanceOf(SQLException.class);
   }
@@ -61,8 +60,7 @@ class BatchDayWaitingLaunchReferenceIntegrationTest extends AbstractIntegrationT
     insertRequest("update-tenant", "immutable-request-id");
     insertWaiting("update-tenant", "immutable-request-id");
 
-    String updateTriggerRequestTenantSql =
-        """
+    String updateTriggerRequestTenantSql = """
         update batch.trigger_request set tenant_id=? where tenant_id=? and request_id=?
     """;
     assertThatThrownBy(() -> jdbcTemplate.update(

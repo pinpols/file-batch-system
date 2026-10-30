@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.worker.atomic.spark;
 
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.SensitiveDataValidator;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
 import io.github.pinpols.batch.common.spi.task.ResourceKind;
@@ -8,6 +10,7 @@ import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.io.BufferedReader;
@@ -136,21 +139,26 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
       SensitiveDataValidator.rejectIfContainsSensitiveKeys(
           ctx.parameters(), "atomic.spark.parameters");
       SparkInvocation inv = parseInvocation(ctx);
+      SensitiveDataValidator.rejectIfContainsInlineCredentials(inv.argv, "atomic.spark.argv");
 
       if (ctx.isDryRun()) {
-        // ADR-026:演练不 fork,仅回传将执行的 spark-submit argv(凭据已被 Lane C 拦,argv 里无密钥)。
+        // 演练不 fork；展示参数先净化，嵌在列表值中的凭据不受 Map key 拒入闸门覆盖。
         Map<String, Object> planned = new LinkedHashMap<>();
         planned.put(PipelineRuntimeKeys.DRY_RUN, true);
         planned.put("plannedAction", "spark-submit");
-        planned.put("argv", inv.argv);
+        planned.put(
+            "argv",
+            inv.argv.stream()
+                .map(arg -> SwallowedExceptionLogger.safeMessage(arg, 4096))
+                .toList());
         if (!inv.outputPath.isBlank()) {
-          planned.put("outputUri", inv.outputPath);
+          planned.put("outputUri", SecretMasking.maskEndpoint(inv.outputPath));
         }
         log.info(
             "spark executor dry-run skipped submit: tenantId={}, jobCode={}, appResource={}",
             ctx.tenantId(),
             ctx.jobCode(),
-            inv.appResource);
+            SecretMasking.maskEndpoint(inv.appResource));
         return TaskResult.ok("dry-run: spark-submit argv built (not forked)", planned);
       }
       return runSubmit(ctx, inv);
@@ -166,10 +174,10 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
           AtomicErrorCode.SECURITY_REJECTED, "SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
     } catch (RuntimeException ex) {
       log.error(
-          "spark executor unexpected error: tenantId={}, jobCode={}",
-          ctx.tenantId(),
-          ctx.jobCode(),
-          ex);
+          "spark executor unexpected error: tenantId={}, jobCode={}, cause={}",
+          LogSanitizer.value(ctx.tenantId()),
+          LogSanitizer.value(ctx.jobCode()),
+          SwallowedExceptionLogger.summary(ex));
       String exceptionMessage = ex.getMessage();
       String failureMessage =
           EmptyChecks.isNull(exceptionMessage) ? ex.getClass().getSimpleName() : ex.getMessage();
@@ -193,15 +201,19 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
     Map<String, Object> params = ctx.parameters();
 
     String appResource = requireString(params.get(PARAM_APP_RESOURCE), PARAM_APP_RESOURCE);
+    SensitiveDataValidator.rejectIfContainsInlineCredential(
+        appResource, "atomic.spark.appResource");
     validateAppResourceAllowed(appResource);
 
     String master = optionalString(params.get(PARAM_MASTER), props.getDefaultMaster());
+    SensitiveDataValidator.rejectIfContainsInlineCredential(master, "atomic.spark.master");
     if (master.isBlank()) {
       throw new SparkValidationException(
           "master is not specified and no defaultMaster is configured");
     }
     validateMasterAllowed(master);
     String deployMode = optionalString(params.get(PARAM_DEPLOY_MODE), props.getDefaultDeployMode());
+    SensitiveDataValidator.rejectIfContainsInlineCredential(deployMode, "atomic.spark.deployMode");
     if ("cluster".equalsIgnoreCase(deployMode)) {
       // #3:cluster 模式 driver 在远端,spark-submit 提交完即 exit=0(=已提交,非已完成)。
       // 远端终态轮询未实现前直接拒绝,**不让 cluster 静默假成功**。需要时按类注释接状态轮询后再放开。
@@ -211,6 +223,8 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
     }
     String mainClass = optionalString(params.get(PARAM_MAIN_CLASS), "");
     String name = optionalString(params.get(PARAM_NAME), "");
+    SensitiveDataValidator.rejectIfContainsInlineCredential(mainClass, "atomic.spark.mainClass");
+    SensitiveDataValidator.rejectIfContainsInlineCredential(name, "atomic.spark.name");
 
     List<String> argv = new ArrayList<>();
     argv.add(props.getSparkSubmitBin());
@@ -234,6 +248,7 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
     // 注入给 Spark app 读取(契约:app 用 sparkConf.get(outputPathConfKey) 拿落盘目录),
     // 并在成功时回写 TaskResult.output["outputUri"],下游(EXPORT / console 下载 / 下一节点)按它取。
     String outputPath = optionalString(params.get(PARAM_OUTPUT_PATH), "");
+    SensitiveDataValidator.rejectIfContainsInlineCredential(outputPath, "atomic.spark.outputPath");
     if (!outputPath.isBlank()) {
       argv.add("--conf");
       argv.add(props.getOutputPathConfKey() + "=" + outputPath);
@@ -252,7 +267,10 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
     if (allow.isEmpty()) {
       return; // 未配置 = 不校验(仅限本地/联调;生产务必收紧)
     }
-    boolean ok = allow.stream().anyMatch(appResource::startsWith);
+    // 本地路径消去父目录段后再比较，避免目录前缀被 ../ 绕过。
+    String resourceForCheck =
+        appResource.startsWith("/") ? Path.of(appResource).normalize().toString() : appResource;
+    boolean ok = allow.stream().anyMatch(resourceForCheck::startsWith);
     if (!ok) {
       throw new SparkValidationException(
           "appResource does not match an allowed prefix: " + appResource + ", allowed=" + allow);
@@ -281,12 +299,15 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
     Map<String, String> conf = new LinkedHashMap<>();
     for (Map.Entry<?, ?> e : map.entrySet()) {
       String k = String.valueOf(e.getKey());
+      String value = String.valueOf(e.getValue());
+      SensitiveDataValidator.rejectIfContainsInlineCredential(value, "atomic.spark.sparkConf");
       boolean confKeyIsOutsideConfiguredPrefixes =
-          !EmptyChecks.isEmpty(Objects.requireNonNull(allowedPrefixes)) && allowedPrefixes.stream().noneMatch(k::startsWith);
+          !EmptyChecks.isEmpty(Objects.requireNonNull(allowedPrefixes))
+              && allowedPrefixes.stream().noneMatch(k::startsWith);
       if (confKeyIsOutsideConfiguredPrefixes) {
         throw new SparkValidationException("sparkConf key does not match an allowed prefix: " + k);
       }
-      conf.put(k, String.valueOf(e.getValue()));
+      conf.put(k, value);
     }
     return conf;
   }
@@ -309,8 +330,10 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
         throw new SparkValidationException("appArgs contains a null element");
       }
       String arg = String.valueOf(o);
+      SensitiveDataValidator.rejectIfContainsInlineCredential(arg, "atomic.spark.appArgs");
       boolean appArgMatchesNoConfiguredPattern =
-          !EmptyChecks.isEmpty(Objects.requireNonNull(allowRegex)) && allowRegex.stream().noneMatch(arg::matches);
+          !EmptyChecks.isEmpty(Objects.requireNonNull(allowRegex))
+              && allowRegex.stream().noneMatch(arg::matches);
       if (appArgMatchesNoConfiguredPattern) {
         throw new SparkValidationException("appArg does not match any allowed pattern: " + arg);
       }

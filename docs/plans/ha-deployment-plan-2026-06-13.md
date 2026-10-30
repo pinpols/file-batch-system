@@ -31,24 +31,30 @@ PG 层的真相:
 
 ## 1. 目标拓扑
 
-```
-                          ┌──────────────── K8s 集群 ────────────────┐
-  应用(Helm,已就绪)      │  orchestrator×3  console×3  worker×N       │  ← 分支无关,只镜像 tag 不同
-                          │        │ 连 svc 名(非 IP),经 PgBouncer    │
-  ┌─────────── 通用 HA(现在可落,服务两分支)───────────────────────┐ │
-  │ etcd ×3 (Patroni DCS)                                            │ │
-  │ 普通 Patroni:PG primary + replica(单 coordinator group)        │ │  ← P0-2;main / feature-未分布 通用
-  │ pgBackRest → MinIO(WAL 归档 + base,PITR)                       │ │  ← P0-3
-  │ Strimzi: Kafka ×3 (KRaft, RF=3, min.insync=2)                   │ │  ← P0-1
-  │ Redis: Sentinel(1主2从+3哨兵)                                  │ │  ← P1-1
-  │ MinIO Operator: distributed tenant(≥4 盘 纠删码)              │ │
-  │ PgBouncer ×2(transaction mode)                                 │ │  ← P1-2
-  └──────────────────────────────────────────────────────────────────┘ │
-  ┌─────────── PG 层增量(仅 Citus go 后,其余组件不动)──────────────┐ │
-  │ Patroni 切 Citus 模式:coordinator group + worker group 0..N     │ │  ← 阶段4,前置=feature 合 main
-  │ 各 group leader+replica;failover 自动 citus_update_node          │ │
-  └──────────────────────────────────────────────────────────────────┘ │
-                          └────────────────────────────────────────────┘
+此图为本文目标部署方案，副本数与连线不代表目标环境已部署或通过故障演练；前置条件、验收与阶段状态仍以下文为准。
+
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  subgraph k8s[目标 K8s 拓扑]
+    A[Orchestrator ×3 / Console ×3 / Worker ×N]
+    B[PgBouncer ×2<br/>transaction mode]
+    P[Patroni：PG 主备]
+    E[etcd ×3：Patroni DCS]
+    K[Kafka ×3<br/>KRaft / RF 3 / min ISR 2]
+    R[Redis：1 主 2 从 + 3 Sentinel]
+    M[MinIO：分布式租户，至少 4 盘]
+    G[pgBackRest：WAL 与 base backup]
+    A --> B
+    B --> P
+    E -. 故障选主协调 .-> P
+    A --> K
+    A --> R
+    A --> M
+    P --> G
+    G --> M
+  end
+  C[Citus 多 group：可选后续阶段] -. benchmark 与合入前置满足后 .-> P
 ```
 **反亲和**:每类有状态件副本散在不同 K8s node(podAntiAffinity required)。
 

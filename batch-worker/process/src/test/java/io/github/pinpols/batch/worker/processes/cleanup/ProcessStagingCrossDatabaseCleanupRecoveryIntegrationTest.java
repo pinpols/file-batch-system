@@ -16,6 +16,7 @@ import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocatio
 import io.github.pinpols.batch.worker.processes.stage.PlatformProcessInvocationFence;
 import io.github.pinpols.batch.worker.processes.stage.PlatformProcessStagingGenerationCoordinator;
 import io.github.pinpols.batch.worker.processes.stage.ProcessInvocationFence;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
@@ -113,6 +114,57 @@ class ProcessStagingCrossDatabaseCleanupRecoveryIntegrationTest {
       applicationContext.close();
     }
     RlsTenantContextHolder.clear();
+  }
+
+  @Test
+  @DisplayName("跨库清理扫描空代际回收后的下一页，并保留当前调用代际")
+  void shouldContinueCleanupAfterEmptyGenerationsAreReclaimed() {
+    String createTenantSql = "create table batch.tenant (tenant_id text primary key)";
+    String insertTenantSql = "insert into batch.tenant (tenant_id) values (?)";
+    String insertEmptyGenerationsSql = """
+        insert into batch.process_staging_generation
+          (generation_id, tenant_id, job_task_id, batch_key, generation_status, created_at)
+        select md5('cleanup-candidate-' || n)::uuid, ?, ?, ?, 'OPEN',
+               now() - interval '4 days' + n * interval '1 second'
+        from generate_series(1, 100) n
+        """;
+    String reclaimedCountSql = """
+        select count(*) from batch.process_staging_generation
+        where tenant_id = ? and generation_status = 'RECLAIMED'
+        """;
+    String insertCurrentGenerationSql = """
+        insert into batch.process_staging_generation
+          (generation_id, tenant_id, job_task_id, batch_key, generation_status, created_at)
+        values (cast(? as uuid), ?, ?, ?, 'OPEN', now() - interval '3 days')
+        """;
+    String insertCurrentRowSql = """
+        insert into batch.process_staging (tenant_id, staging_generation_id, batch_key)
+        values (?, cast(? as uuid), ?)
+        """;
+    platformJdbc.execute(createTenantSql);
+    platformJdbc.update(insertTenantSql, TENANT);
+    businessJdbc.update(insertEmptyGenerationsSql, TENANT, TASK_ID, BATCH_KEY);
+    businessJdbc.update(insertCurrentGenerationSql, CURRENT_GENERATION, TENANT, TASK_ID, BATCH_KEY);
+    businessJdbc.update(insertCurrentRowSql, TENANT, CURRENT_GENERATION, BATCH_KEY);
+    ProcessStagingCleanupProperties properties = new ProcessStagingCleanupProperties();
+    properties.setDeletionEnabled(true);
+    properties.setBatchSize(100);
+    ProcessStagingOrphanCleaner cleaner = new ProcessStagingOrphanCleaner(
+        applicationContext.getBean(ProcessStagingMapper.class),
+        properties,
+        applicationContext.getBeanProvider(MeterRegistry.class),
+        platformMapper,
+        applicationContext.getBean(ProcessStagingBusinessCleanupService.class),
+        cleanupFence);
+
+    assertThat(cleaner.cleanOnce()).isEqualTo(2);
+    assertThat(readBusinessGenerationStatus()).isEqualTo("RECLAIMED");
+    assertThat(countBusinessStagingRows()).isZero();
+    assertThat(businessJdbc.queryForObject(reclaimedCountSql, Integer.class, TENANT))
+        .isEqualTo(101);
+    assertThat(readPlatformCurrentGeneration()).isEqualTo(CURRENT_GENERATION);
+    assertThat(readBusinessGenerationStatus(CURRENT_GENERATION)).isEqualTo("OPEN");
+    assertThat(countBusinessStagingRows(CURRENT_GENERATION)).isEqualTo(1);
   }
 
   @Test
@@ -221,8 +273,7 @@ class ProcessStagingCrossDatabaseCleanupRecoveryIntegrationTest {
     final String dropSqlValue5 = """
         drop trigger fail_process_staging_delete_for_newer_row on batch.process_staging
     """;
-    businessJdbc.execute(
-        dropSqlValue5);
+    businessJdbc.execute(dropSqlValue5);
     final String dropSqlValue6 = """
         drop function batch.fail_process_staging_delete_for_newer_row()
     """;
@@ -241,25 +292,31 @@ class ProcessStagingCrossDatabaseCleanupRecoveryIntegrationTest {
     final String deleteBatchJobTaskSql = """
         delete from batch.job_task where tenant_id = ? and id = ?
     """;
-    platformJdbc.update(
-        deleteBatchJobTaskSql, TENANT, TASK_ID);
+    platformJdbc.update(deleteBatchJobTaskSql, TENANT, TASK_ID);
     final String insertArchiveJobTaskArchiveSql = """
         insert into archive.job_task_archive
           (tenant_id, id, job_instance_id, process_staging_generation_id)
         values (?, ?, ?, cast(? as uuid))
         """;
-    platformJdbc.update(insertArchiveJobTaskArchiveSql, TENANT, TASK_ID, INSTANCE_ID, ARCHIVED_CURRENT_GENERATION);
+    platformJdbc.update(
+        insertArchiveJobTaskArchiveSql, TENANT, TASK_ID, INSTANCE_ID, ARCHIVED_CURRENT_GENERATION);
     final String insertBatchProcessStagingGenerationSql = """
         insert into batch.process_staging_generation
           (generation_id, tenant_id, job_task_id, batch_key, generation_status, created_at)
         values (cast(? as uuid), ?, ?, ?, 'OPEN', now() - interval '3 days')
         """;
-    businessJdbc.update(insertBatchProcessStagingGenerationSql, ARCHIVED_CURRENT_GENERATION, TENANT, TASK_ID, BATCH_KEY);
+    businessJdbc.update(
+        insertBatchProcessStagingGenerationSql,
+        ARCHIVED_CURRENT_GENERATION,
+        TENANT,
+        TASK_ID,
+        BATCH_KEY);
     final String insertBatchProcessStagingSql = """
         insert into batch.process_staging (tenant_id, staging_generation_id, batch_key, staged_at)
         values (?, cast(? as uuid), ?, now() - interval '2 days')
         """;
-    businessJdbc.update(insertBatchProcessStagingSql, TENANT, ARCHIVED_CURRENT_GENERATION, BATCH_KEY);
+    businessJdbc.update(
+        insertBatchProcessStagingSql, TENANT, ARCHIVED_CURRENT_GENERATION, BATCH_KEY);
 
     assertThat(platformMapper.selectTaskInstanceId(TENANT, TASK_ID)).isEqualTo(INSTANCE_ID);
     assertThat(platformMapper.selectTaskCurrentStagingGeneration(TENANT, TASK_ID))
@@ -302,7 +359,12 @@ class ProcessStagingCrossDatabaseCleanupRecoveryIntegrationTest {
           (generation_id, tenant_id, job_task_id, batch_key, generation_status, created_at)
         values (cast(? as uuid), ?, ?, ?, 'OPEN', now() - interval '3 days')
         """;
-    businessJdbc.update(insertBatchProcessStagingGenerationSqlValue7, CURRENT_GENERATION, TENANT, TASK_ID, BATCH_KEY);
+    businessJdbc.update(
+        insertBatchProcessStagingGenerationSqlValue7,
+        CURRENT_GENERATION,
+        TENANT,
+        TASK_ID,
+        BATCH_KEY);
     final String insertBatchProcessStagingSqlValue8 = """
         insert into batch.process_staging (tenant_id, staging_generation_id, batch_key, staged_at)
         values (?, cast(? as uuid), ?, now() - interval '2 days')
@@ -354,7 +416,11 @@ class ProcessStagingCrossDatabaseCleanupRecoveryIntegrationTest {
           where tenant_id = ? and staging_generation_id = cast(? as uuid) and batch_key = ?
               """;
       Integer selectedProcessStagingCount = businessJdbc.queryForObject(
-          selectBatchProcessStagingSqlValue10, Integer.class, TENANT, CURRENT_GENERATION, BATCH_KEY);
+          selectBatchProcessStagingSqlValue10,
+          Integer.class,
+          TENANT,
+          CURRENT_GENERATION,
+          BATCH_KEY);
       assertThat(selectedProcessStagingCount).isEqualTo(2);
     } finally {
       allowCheckpointToFinish.countDown();
@@ -371,7 +437,12 @@ class ProcessStagingCrossDatabaseCleanupRecoveryIntegrationTest {
           (generation_id, tenant_id, job_task_id, batch_key, generation_status, created_at)
         values (cast(? as uuid), ?, ?, ?, 'OPEN', now() - interval '3 days')
         """;
-    businessJdbc.update(insertBatchProcessStagingGenerationSqlValue11, CURRENT_GENERATION, TENANT, TASK_ID, BATCH_KEY);
+    businessJdbc.update(
+        insertBatchProcessStagingGenerationSqlValue11,
+        CURRENT_GENERATION,
+        TENANT,
+        TASK_ID,
+        BATCH_KEY);
     final String insertBatchProcessStagingSqlValue12 = """
         insert into batch.process_staging (tenant_id, staging_generation_id, batch_key, staged_at)
         values (?, cast(? as uuid), ?, now() - interval '2 days')
@@ -413,8 +484,7 @@ class ProcessStagingCrossDatabaseCleanupRecoveryIntegrationTest {
         final String selectBatchCleanupGateSql = """
             select id from batch.cleanup_gate where id = 1 for update
         """;
-        businessJdbc.queryForObject(
-            selectBatchCleanupGateSql, Integer.class);
+        businessJdbc.queryForObject(selectBatchCleanupGateSql, Integer.class);
         businessGateLocked.countDown();
         awaitLatch(releaseBusinessGate);
         return null;
@@ -527,15 +597,13 @@ class ProcessStagingCrossDatabaseCleanupRecoveryIntegrationTest {
         final String selectSql = """
             select set_config('app.process_staging_generation_id', ?, true)
         """;
-        businessJdbc.queryForObject(
-            selectSql,
-            String.class,
-            CURRENT_GENERATION);
+        businessJdbc.queryForObject(selectSql, String.class, CURRENT_GENERATION);
         final String insertBatchProcessStagingSqlValue15 = """
             insert into batch.process_staging (tenant_id, staging_generation_id, batch_key)
             values (?, cast(? as uuid), ?)
             """;
-        businessJdbc.update(insertBatchProcessStagingSqlValue15, TENANT, CURRENT_GENERATION, BATCH_KEY);
+        businessJdbc.update(
+            insertBatchProcessStagingSqlValue15, TENANT, CURRENT_GENERATION, BATCH_KEY);
         return ProcessStageResult.success(ProcessStage.VALIDATE);
       });
     });
@@ -546,9 +614,7 @@ class ProcessStagingCrossDatabaseCleanupRecoveryIntegrationTest {
       final String selectPgLocksSql = """
           select count(*) from pg_locks where locktype = 'advisory' and not granted
       """;
-      Integer waiting = platformJdbc.queryForObject(
-          selectPgLocksSql,
-          Integer.class);
+      Integer waiting = platformJdbc.queryForObject(selectPgLocksSql, Integer.class);
       assertThat(waiting).isGreaterThan(0);
     });
   }
@@ -558,8 +624,7 @@ class ProcessStagingCrossDatabaseCleanupRecoveryIntegrationTest {
       final String selectPgLocksSqlValue16 = """
           select count(*) from pg_locks where locktype = 'advisory' and granted
       """;
-      Integer granted = platformJdbc.queryForObject(
-          selectPgLocksSqlValue16, Integer.class);
+      Integer granted = platformJdbc.queryForObject(selectPgLocksSqlValue16, Integer.class);
       assertThat(granted).isGreaterThan(0);
     });
   }
@@ -568,15 +633,13 @@ class ProcessStagingCrossDatabaseCleanupRecoveryIntegrationTest {
       DataSource dataSource, ClassPathResource mapperResource) throws Exception {
     Configuration configuration = new Configuration(new Environment(
         "process-staging-cleanup-recovery", new SpringManagedTransactionFactory(), dataSource));
-    if (mapperResource == null) {
-      configuration.addMapper(ProcessInvocationFenceMapper.class);
-    }
     SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
     factoryBean.setDataSource(dataSource);
     factoryBean.setConfiguration(configuration);
-    if (mapperResource != null) {
-      factoryBean.setMapperLocations(mapperResource);
-    }
+    factoryBean.setMapperLocations(
+        mapperResource == null
+            ? new ClassPathResource("mapper/ProcessInvocationFenceMapper.xml")
+            : mapperResource);
     SqlSessionFactory factory = factoryBean.getObject();
     if (factory == null) {
       throw new IllegalStateException("MyBatis factory was not initialized");
@@ -643,13 +706,20 @@ class ProcessStagingCrossDatabaseCleanupRecoveryIntegrationTest {
         values (?, ?, ?, ?, 'RUNNING', cast(? as uuid), ?)
         """;
     platformJdbc.update(
-        insertBatchJobTaskSql, TENANT, TASK_ID, INSTANCE_ID, PARTITION_ID, CURRENT_GENERATION, BATCH_KEY);
+        insertBatchJobTaskSql,
+        TENANT,
+        TASK_ID,
+        INSTANCE_ID,
+        PARTITION_ID,
+        CURRENT_GENERATION,
+        BATCH_KEY);
     final String insertBatchJobPartitionSql = """
         insert into batch.job_partition(
           tenant_id, id, job_instance_id, partition_status, worker_code, current_invocation_id)
         values (?, ?, ?, 'RUNNING', ?, ?)
         """;
-    platformJdbc.update(insertBatchJobPartitionSql, TENANT, PARTITION_ID, INSTANCE_ID, WORKER_ID, INVOCATION_ID);
+    platformJdbc.update(
+        insertBatchJobPartitionSql, TENANT, PARTITION_ID, INSTANCE_ID, WORKER_ID, INVOCATION_ID);
   }
 
   private void createBusinessFixture() {
@@ -720,13 +790,21 @@ class ProcessStagingCrossDatabaseCleanupRecoveryIntegrationTest {
           (generation_id, tenant_id, job_task_id, batch_key, generation_status, created_at)
         values (cast(? as uuid), ?, ?, ?, 'OPEN', now() - interval '3 days')
         """;
-    businessJdbc.update(insertBatchProcessStagingGenerationSqlValue27, OLD_GENERATION, TENANT, TASK_ID, BATCH_KEY);
+    businessJdbc.update(
+        insertBatchProcessStagingGenerationSqlValue27, OLD_GENERATION, TENANT, TASK_ID, BATCH_KEY);
     final String insertBatchProcessStagingSqlValue28 = """
         insert into batch.process_staging (tenant_id, staging_generation_id, batch_key, staged_at)
         values (?, cast(? as uuid), ?, now() - interval '2 days'),
                (?, cast(? as uuid), ?, now() - interval '1 day')
         """;
-    businessJdbc.update(insertBatchProcessStagingSqlValue28, TENANT, OLD_GENERATION, BATCH_KEY, TENANT, OLD_GENERATION, BATCH_KEY);
+    businessJdbc.update(
+        insertBatchProcessStagingSqlValue28,
+        TENANT,
+        OLD_GENERATION,
+        BATCH_KEY,
+        TENANT,
+        OLD_GENERATION,
+        BATCH_KEY);
   }
 
   private String readPlatformCurrentGeneration() {
@@ -751,7 +829,12 @@ class ProcessStagingCrossDatabaseCleanupRecoveryIntegrationTest {
             select generation_status from batch.process_staging_generation
             where tenant_id = ? and generation_id = cast(? as uuid) and batch_key = ?
             """;
-        return businessJdbc.queryForObject(selectBatchProcessStagingGenerationSqlValue29, String.class, TENANT, generationId, BATCH_KEY);
+        return businessJdbc.queryForObject(
+            selectBatchProcessStagingGenerationSqlValue29,
+            String.class,
+            TENANT,
+            generationId,
+            BATCH_KEY);
       });
     });
   }
@@ -769,15 +852,13 @@ class ProcessStagingCrossDatabaseCleanupRecoveryIntegrationTest {
         final String selectSqlValue30 = """
             select set_config('app.process_staging_generation_id', ?, true)
         """;
-        businessJdbc.queryForObject(
-            selectSqlValue30,
-            String.class,
-            generationId);
+        businessJdbc.queryForObject(selectSqlValue30, String.class, generationId);
         final String selectBatchProcessStagingSqlValue31 = """
             select count(*) from batch.process_staging
             where tenant_id = ? and staging_generation_id = cast(? as uuid) and batch_key = ?
             """;
-        return businessJdbc.queryForObject(selectBatchProcessStagingSqlValue31, Integer.class, TENANT, generationId, BATCH_KEY);
+        return businessJdbc.queryForObject(
+            selectBatchProcessStagingSqlValue31, Integer.class, TENANT, generationId, BATCH_KEY);
       });
     });
   }

@@ -1,30 +1,32 @@
 # 代码量统计说明
 
-历史 `loc-YYYY-MM-DD.md` 多数使用物理行数（`cat | wc -l`）快照，适合看仓库体量趋势，但会被换行格式、注释、文档、迁移 SQL 和生成文件放大。
+当前快照为 [loc-current-lean.md](loc-current-lean.md)，由 [lean-loc-report.py](../../scripts/dev/lean-loc-report.py)维护；它不代表质量、吞吐或交付完成度。仅统计 Git 跟踪文件，排除 docs、构建/生成产物、依赖和 Flyway；根 test-data 按测试资产统计。
 
-新的精简口径使用 [scripts/dev/lean-loc-report.py](../../scripts/dev/lean-loc-report.py)。注意：主流工具（Sonar `NCLOC`、cloc、scc、tokei）的默认结果通常仍是“物理非空/非注释行”，不是逻辑语句行；本口径专门用于回答“格式化换行带来的体量水分”。
+Lean logical LOC 近似按语句/块/配置项计数，与 Sonar NCLOC、cloc/scc/tokei 物理行不能直接比较。旧物理统计还包含文档等资产，历史数据不重新计算或改写为当前口径。
 
-当前快照：[loc-current-lean.md](./loc-current-lean.md)，标题固定为“当前快照”，不使用生成当天日期；日期只用于归档快照，避免本地时区与 CI 时区生成不同内容。
+## 历史规模摘要
 
-归档说明：[archive/README.md](../archive/stats/README.md)。历史快照已移入 `docs/archive/stats/`，不作为当前代码量基线。
+以下数值逐份从原快照提取，仅保留规模趋势。源文件的原基线、SHA-256和删除决定见[逐文件处置清单](../audit/archive-document-disposition-2026-10-25.csv)。旧快照完整正文保留在[历史统计索引](../archive/stats/README.md)，不同口径不合并计算。
 
-历史快照：
+| 日期 | 原口径 | 文件数 | 物理行数 | Lean logical LOC | 原基线 |
+|---|---|---:|---:|---:|---|
+| 2026-05-29 | 全仓物理口径 | 2,893 | 307,844 | — | 原快照工作区；未给出独立SHA |
+| 2026-06-03 | 全仓物理口径 | 3,506 | 395,223 | — | 原快照工作区；未给出独立SHA |
+| 2026-06-09 | 全仓物理口径 | 3,835 | 442,985 | — | 原快照工作区；未给出独立SHA |
+| 2026-07-13 | 全仓物理口径 | 4,411 | 529,266 | — | 6f8736cea |
+| 2026-07-19 | 全仓物理口径 | 4,447 | 532,718 | — | caa5a090c |
+| 2026-07-22 | 精简口径 | 3,857 | 427,345 | 212,129 | c48fd14cc + 当时工作区 |
+| 2026-07-31 | 精简口径 | 3,861 | 422,536 | 212,772 | 格式化 PR 分支，基于当时 origin/main；未给出独立SHA |
+| 2026-08-02 | 精简口径 | 3,879 | 424,298 | 213,782 | 6bf9f7351 |
+| 2026-08-04 | 精简口径 | 3,914 | 424,875 | 214,005 | d8ba62146 + 当时工作区 |
+| 2026-08-09 | 精简口径 | 3,937 | 428,953 | 216,364 | 5eba48dc3 |
+| 2026-09-01 | 精简口径 | 4,028 | 437,258 | 221,026 | edf61871d |
+| 2026-09-24 | 精简口径 | 4,489 | 463,998 | 233,734 | 9da50c92b + 当时工作区 |
 
-- 物理行口径：见 [`archive/`](../archive/stats)，包括 2026-05-29 至 2026-07-19 快照。
-- 精简口径：见 [`archive/`](../archive/stats)，包括 2026-07-22 至 2026-09-24 快照。
-
-- 只统计 git 跟踪文件。
-- 排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration。
-- 主指标为 `Lean logical LOC`，按语句、块、配置项或 SQL statement 近似计数，减少多行参数、链式调用和格式化换行带来的虚高。
-
-复跑示例：
+## 复跑与当前机器清单
 
 ```bash
 python3 scripts/dev/lean-loc-report.py --write docs/stats/loc-current-lean.md
 ```
 
-## 当前治理机器清单
-
-[java-readability-inventory.md](java-readability-inventory.md) 由 pre-push 持续刷新，只列候选，不作为日期化审计结论；复核裁定按日期保存在 [audit/](../audit/README.md)。
-
-根 test-data/ 是测试输入资产，在代码量统计中归入 test；目录迁移不应把这批 SQL/JSON 解释为生产代码。
+[java-readability-inventory.md](java-readability-inventory.md)只列机器候选；人工裁定和验证以日期化审计记录为准，不把候选数量当缺陷数量。

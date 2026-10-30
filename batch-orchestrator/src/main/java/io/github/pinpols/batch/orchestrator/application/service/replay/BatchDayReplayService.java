@@ -1,9 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service.replay;
 
-import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplaySessionUpdateCountsParam;
-import io.github.pinpols.batch.orchestrator.domain.query.JobInstanceBatchDayCandidatesQuery;
-
-
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.enums.BatchDayReplayCandidateSource;
 import io.github.pinpols.batch.common.enums.BatchDayReplayExecutionMode;
@@ -34,8 +30,10 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplaySessionUpdateCountsParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplayEntryStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplaySessionStatusParam;
+import io.github.pinpols.batch.orchestrator.domain.query.JobInstanceBatchDayCandidatesQuery;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayPlanCalendarMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayPreviewTokenMapper;
@@ -44,8 +42,8 @@ import io.github.pinpols.batch.orchestrator.mapper.DisasterDayOverrideMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
-import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper;
+import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.view.BatchDayReplayAssetPartitionImpactView;
 import io.github.pinpols.batch.orchestrator.mapper.view.BatchDayReplayDispatchImpactView;
 import java.nio.charset.StandardCharsets;
@@ -65,6 +63,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
@@ -166,14 +165,15 @@ public class BatchDayReplayService {
       throw invalidPreviewToken();
     }
 
-    BatchDayReplaySessionEntity.BatchDayReplaySessionEntityBuilder sessionBuilder = BatchDayReplaySessionEntity.builder()
-        .tenantId(command.tenantId())
-        .replayOperationId(replayOperationId)
-        .calendarCode(command.calendarCode())
-        .bizDate(command.bizDate())
-        .scope(scope)
-        .executionMode(executionMode)
-        .candidateSource(candidateSource);
+    BatchDayReplaySessionEntity.BatchDayReplaySessionEntityBuilder sessionBuilder =
+        BatchDayReplaySessionEntity.builder()
+            .tenantId(command.tenantId())
+            .replayOperationId(replayOperationId)
+            .calendarCode(command.calendarCode())
+            .bizDate(command.bizDate())
+            .scope(scope)
+            .executionMode(executionMode)
+            .candidateSource(candidateSource);
     String scopePayload = buildScopePayload(command, scope);
     sessionBuilder.scopePayload(scopePayload);
     String resultPolicy = resolveResultPolicy(command, executionMode);
@@ -256,13 +256,7 @@ public class BatchDayReplayService {
     String previewRequestHash = requestHash(command, prepared);
     String previewSnapshotHash = snapshotHash(prepared.response());
     BatchDayReplayPreviewTokenEntity previewToken = new BatchDayReplayPreviewTokenEntity(
-        tenantId,
-        tokenHash,
-        previewRequestHash,
-        previewSnapshotHash,
-        expiresAt,
-        null,
-        null);
+        tenantId, tokenHash, previewRequestHash, previewSnapshotHash, expiresAt, null, null);
     previewTokenMapper.insert(previewToken);
     BatchDayReplayPreviewResponse response = prepared.response();
     return BatchDayReplayPreviewResponse.builder()
@@ -431,6 +425,7 @@ public class BatchDayReplayService {
       List<BatchDayReplayEntryEntity> entries,
       BatchDayReplayPreviewResponse response) {}
 
+  @Builder
   private record ReplayRequestFingerprint(
       String tenantId,
       String calendarCode,
@@ -448,6 +443,7 @@ public class BatchDayReplayService {
       String executionMode,
       String candidateSource) {}
 
+  @Builder
   private record ReplaySnapshotFingerprint(
       String tenantId,
       String calendarCode,
@@ -497,8 +493,7 @@ public class BatchDayReplayService {
   @Transactional
   public BatchDayReplaySessionEntity retryFailedSubmission(
       String tenantId, Long sessionId, Long entryId, String operatorId, String reason) {
-    boolean retrySubmissionIdentityIsIncomplete =
-        !Texts.hasText(tenantId)
+    boolean retrySubmissionIdentityIsIncomplete = !Texts.hasText(tenantId)
         || EmptyChecks.isNull(sessionId)
         || EmptyChecks.isNull(entryId)
         || !Texts.hasText(operatorId)
@@ -509,42 +504,51 @@ public class BatchDayReplayService {
     BatchDayReplaySessionEntity session = loadForUpdateWithOperationLock(tenantId, sessionId);
     if (!STATUS_PARTIAL_FAILED.equals(session.status())
         || BatchDayReplayScope.OUTPUTS_ONLY.code().equals(session.scope())) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.batch_day_replay.retry_state_invalid");
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT, "error.batch_day_replay.retry_state_invalid");
     }
     BatchDayReplayEntryEntity entry = entryMapper.selectByIdForUpdate(tenantId, sessionId, entryId);
-    boolean replayEntryCannotBeRetried =
-        EmptyChecks.isNull(entry) || !"FAILED".equals(entry.status()) || EmptyChecks.isNotNull(entry.rerunInstanceId());
+    boolean replayEntryCannotBeRetried = EmptyChecks.isNull(entry)
+        || !"FAILED".equals(entry.status())
+        || EmptyChecks.isNotNull(entry.rerunInstanceId());
     if (replayEntryCannotBeRetried) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.batch_day_replay.retry_entry_invalid");
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT, "error.batch_day_replay.retry_entry_invalid");
     }
     Instant now = dateTimeSupport.nowInstant();
     if (sessionMapper.reopenPartialFailedForRetry(tenantId, sessionId, now) != 1
         || entryMapper.retryFailedUnbound(tenantId, sessionId, entryId, now) != 1) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.batch_day_replay.retry_state_invalid");
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT, "error.batch_day_replay.retry_state_invalid");
     }
     long succeededCount = entryMapper.countBySessionAndStatus(sessionId, "SUCCEEDED");
     long failedCount = entryMapper.countBySessionAndStatus(sessionId, "FAILED");
     long pendingCount = entryMapper.countBySessionAndStatus(sessionId, "PENDING");
     long runningCount = entryMapper.countBySessionAndStatus(sessionId, "RUNNING");
     int inFlightCount = Math.toIntExact(pendingCount + runningCount);
-    BatchDayReplaySessionUpdateCountsParam batchDayReplaySessionUpdateCountsParam = BatchDayReplaySessionUpdateCountsParam.builder()
-        .tenantId(tenantId)
-        .id(sessionId)
-        .succeededCount(Math.toIntExact(succeededCount))
-        .failedCount(Math.toIntExact(failedCount))
-        .inFlightCount(inFlightCount)
-        .totalCount(session.totalCount())
-        .now(now)
-        .build();
-    sessionMapper.updateCounts(
-        batchDayReplaySessionUpdateCountsParam);
+    BatchDayReplaySessionUpdateCountsParam batchDayReplaySessionUpdateCountsParam =
+        BatchDayReplaySessionUpdateCountsParam.builder()
+            .tenantId(tenantId)
+            .id(sessionId)
+            .succeededCount(Math.toIntExact(succeededCount))
+            .failedCount(Math.toIntExact(failedCount))
+            .inFlightCount(inFlightCount)
+            .totalCount(session.totalCount())
+            .now(now)
+            .build();
+    sessionMapper.updateCounts(batchDayReplaySessionUpdateCountsParam);
     appendRetryAudit(tenantId, sessionId, entryId, operatorId, reason, now);
     refreshReplayOperation(session, now);
     return sessionMapper.selectById(tenantId, sessionId);
   }
 
   private void appendRetryAudit(
-      String tenantId, Long sessionId, Long entryId, String operatorId, String reason, Instant now) {
+      String tenantId,
+      Long sessionId,
+      Long entryId,
+      String operatorId,
+      String reason,
+      Instant now) {
     JobExecutionLogEntity audit = new JobExecutionLogEntity();
     audit.setTenantId(tenantId);
     audit.setLogLevel("INFO");
@@ -646,17 +650,17 @@ public class BatchDayReplayService {
             SwallowedExceptionLogger.summary(failure));
       }
     }
-    BatchDayReplaySessionUpdateCountsParam batchDayReplaySessionUpdateCountsParam2 = BatchDayReplaySessionUpdateCountsParam.builder()
-        .tenantId(tenantId)
-        .id(sessionId)
-        .succeededCount(succeeded)
-        .failedCount(failed)
-        .inFlightCount(0)
-        .totalCount(session.totalCount())
-        .now(now)
-        .build();
-    sessionMapper.updateCounts(
-        batchDayReplaySessionUpdateCountsParam2);
+    BatchDayReplaySessionUpdateCountsParam batchDayReplaySessionUpdateCountsParam2 =
+        BatchDayReplaySessionUpdateCountsParam.builder()
+            .tenantId(tenantId)
+            .id(sessionId)
+            .succeededCount(succeeded)
+            .failedCount(failed)
+            .inFlightCount(0)
+            .totalCount(session.totalCount())
+            .now(now)
+            .build();
+    sessionMapper.updateCounts(batchDayReplaySessionUpdateCountsParam2);
     String terminalStatus = failed > 0 ? STATUS_PARTIAL_FAILED : STATUS_SUCCEEDED;
     UpdateBatchDayReplaySessionStatusParam sessionStatusUpdate =
         UpdateBatchDayReplaySessionStatusParam.completed(
@@ -684,8 +688,7 @@ public class BatchDayReplayService {
   // ── helpers ─────────────────────────────────────────────────────────────
 
   private void validateCommand(BatchDayReplaySubmitCommand command) {
-    boolean replaySubmitCommandIsInvalid =
-        EmptyChecks.isNull(command)
+    boolean replaySubmitCommandIsInvalid = EmptyChecks.isNull(command)
         || !Texts.hasText(command.tenantId())
         || !Texts.hasText(command.calendarCode())
         || command.bizDate() == null
@@ -826,15 +829,16 @@ public class BatchDayReplayService {
       Instant now,
       List<String> statuses,
       List<String> jobCodes) {
-    JobInstanceBatchDayCandidatesQuery jobInstanceBatchDayCandidatesQuery = JobInstanceBatchDayCandidatesQuery.builder()
-        .tenantId(command.tenantId())
-        .calendarCode(command.calendarCode())
-        .bizDate(command.bizDate())
-        .statuses(statuses)
-        .jobCodes(jobCodes)
-        .build();
-    List<JobInstanceEntity> candidates = jobInstanceMapper.selectBatchDayCandidates(
-        jobInstanceBatchDayCandidatesQuery);
+    JobInstanceBatchDayCandidatesQuery jobInstanceBatchDayCandidatesQuery =
+        JobInstanceBatchDayCandidatesQuery.builder()
+            .tenantId(command.tenantId())
+            .calendarCode(command.calendarCode())
+            .bizDate(command.bizDate())
+            .statuses(statuses)
+            .jobCodes(jobCodes)
+            .build();
+    List<JobInstanceEntity> candidates =
+        jobInstanceMapper.selectBatchDayCandidates(jobInstanceBatchDayCandidatesQuery);
     if (candidates == null) {
       return List.of();
     }
@@ -904,8 +908,8 @@ public class BatchDayReplayService {
       String jobCode = definition.jobCode();
       String businessDate = command.bizDate().toString();
       Map<String, Object> scheduleParams = Map.of();
-      SchedulePlanCommand schedulePlanCommand = new SchedulePlanCommand(
-          tenantId, jobCode, businessDate, scheduleParams, definition);
+      SchedulePlanCommand schedulePlanCommand =
+          new SchedulePlanCommand(tenantId, jobCode, businessDate, scheduleParams, definition);
       SchedulePlan plan = schedulePlanBuilder.build(schedulePlanCommand);
       String entryTenantId = command.tenantId();
       String entryJobCode = definition.jobCode();
@@ -1030,7 +1034,8 @@ public class BatchDayReplayService {
       if (version == null) {
         throw BizException.of(ResultCode.NOT_FOUND, "error.result_version.not_found");
       }
-      BatchDayReplayEntryEntity.BatchDayReplayEntryEntityBuilder entryBuilder = BatchDayReplayEntryEntity.builder();
+      BatchDayReplayEntryEntity.BatchDayReplayEntryEntityBuilder entryBuilder =
+          BatchDayReplayEntryEntity.builder();
       entryBuilder.tenantId(command.tenantId());
       String jobCode = deriveJobCode(version.businessKey());
       entryBuilder.jobCode(jobCode);
@@ -1154,9 +1159,10 @@ public class BatchDayReplayService {
 
   private Map<Long, String> loadVersionBusinessKeys(
       BatchDayReplaySubmitCommand command, String scope) {
-    boolean outputReplaySelectionIsInvalid = !BatchDayReplayScope.OUTPUTS_ONLY.code().equals(scope)
-        || command.versionIds() == null
-        || command.versionIds().isEmpty();
+    boolean outputReplaySelectionIsInvalid =
+        !BatchDayReplayScope.OUTPUTS_ONLY.code().equals(scope)
+            || EmptyChecks.isNull(command.versionIds())
+            || EmptyChecks.isEmpty(command.versionIds());
     if (outputReplaySelectionIsInvalid) {
       return Map.of();
     }
@@ -1188,11 +1194,13 @@ public class BatchDayReplayService {
     return session;
   }
 
-  private BatchDayReplaySessionEntity loadForUpdateWithOperationLock(String tenantId, Long sessionId) {
+  private BatchDayReplaySessionEntity loadForUpdateWithOperationLock(
+      String tenantId, Long sessionId) {
     BatchDayReplaySessionEntity candidate = loadOrThrow(tenantId, sessionId);
     if (EmptyChecks.isNotNull(candidate.replayOperationId())) {
       replayOperationMapper.setTenantContext(tenantId);
-      if (EmptyChecks.isNull(replayOperationMapper.lockForProgressRefresh(tenantId, candidate.replayOperationId()))) {
+      if (EmptyChecks.isNull(
+          replayOperationMapper.lockForProgressRefresh(tenantId, candidate.replayOperationId()))) {
         throw BizException.of(ResultCode.NOT_FOUND, "error.batch_day_replay.operation_not_found");
       }
     }

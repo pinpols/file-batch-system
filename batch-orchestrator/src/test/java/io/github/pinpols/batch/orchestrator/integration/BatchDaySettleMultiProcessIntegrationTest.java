@@ -86,15 +86,8 @@ class BatchDaySettleMultiProcessIntegrationTest extends AbstractIntegrationTest 
     String calendarCode = "CAL_" + tenantId;
     String workflowCode = "WF_" + tenantId;
     LocalDate bizDate = LocalDate.of(2026, 10, 17);
-    jdbcTemplate.update(
-        insertTenantSql,
-        tenantId,
-        tenantId);
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        tenantId,
-        calendarCode,
-        calendarCode);
+    jdbcTemplate.update(insertTenantSql, tenantId, tenantId);
+    jdbcTemplate.update(insertBusinessCalendarSql, tenantId, calendarCode, calendarCode);
     Long workflowDefinitionId = jdbcTemplate.queryForObject(
         insertWorkflowDefinitionSql,
         Long.class,
@@ -102,16 +95,8 @@ class BatchDaySettleMultiProcessIntegrationTest extends AbstractIntegrationTest 
         workflowCode,
         workflowCode,
         calendarCode);
-    jdbcTemplate.update(
-        insertWorkflowRunSql,
-        tenantId,
-        workflowDefinitionId,
-        bizDate);
-    jdbcTemplate.update(
-        insertBatchDayInstanceSql,
-        tenantId,
-        calendarCode,
-        bizDate);
+    jdbcTemplate.update(insertWorkflowRunSql, tenantId, workflowDefinitionId, bizDate);
+    jdbcTemplate.update(insertBatchDayInstanceSql, tenantId, calendarCode, bizDate);
 
     int contenderCount = 4;
     String[] instanceNames = new String[contenderCount];
@@ -126,8 +111,7 @@ class BatchDaySettleMultiProcessIntegrationTest extends AbstractIntegrationTest 
     }
     try (Connection fence = jdbcTemplate.getDataSource().getConnection()) {
       fence.setAutoCommit(false);
-      try (var statement =
-          fence.prepareStatement(selectAcquireBatchDaySettlementFenceSql)) {
+      try (var statement = fence.prepareStatement(selectAcquireBatchDaySettlementFenceSql)) {
         statement.setString(1, tenantId);
         statement.setString(2, calendarCode);
         statement.setObject(3, bizDate);
@@ -173,18 +157,18 @@ class BatchDaySettleMultiProcessIntegrationTest extends AbstractIntegrationTest 
   @DisplayName("多实例混合接纳、人工释放与结算并发时不丢失已接纳义务")
   void shouldPreserveAcceptedWorkDuringMixedAdmissionDispositionAndSettlementContention()
       throws Exception {
-        final String insertTenantSql = """
+    final String insertTenantSql = """
             insert into batch.tenant (tenant_id, tenant_name, status) values (?, ?, 'ACTIVE')
         """;
-        final String insertBusinessCalendarSql = """
+    final String insertBusinessCalendarSql = """
             insert into batch.business_calendar (tenant_id, calendar_code, calendar_name, timezone)\s\
             values (?, ?, ?, 'UTC')\
             """;
-        final String insertWorkflowDefinitionSql = """
+    final String insertWorkflowDefinitionSql = """
             insert into batch.workflow_definition (tenant_id, workflow_code, workflow_name, workflow_type,\s\
             version, enabled, calendar_code) values (?, ?, ?, 'DAG', 1, true, ?) returning id\
             """;
-        final String insertWorkflowRunSql = """
+    final String insertWorkflowRunSql = """
             insert into batch.workflow_run (tenant_id, workflow_definition_id, biz_date, run_status, dry_run)\s\
             values (?, ?, ?, 'SUCCESS', false)\
             """;
@@ -210,15 +194,8 @@ class BatchDaySettleMultiProcessIntegrationTest extends AbstractIntegrationTest 
     String workflowCode = "WF_" + tenantId;
     int dayCount = 9;
     LocalDate firstBizDate = LocalDate.of(2026, 10, 1);
-        jdbcTemplate.update(
-        insertTenantSql,
-        tenantId,
-        tenantId);
-        jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        tenantId,
-        calendarCode,
-        calendarCode);
+    jdbcTemplate.update(insertTenantSql, tenantId, tenantId);
+    jdbcTemplate.update(insertBusinessCalendarSql, tenantId, calendarCode, calendarCode);
     Long workflowDefinitionId = jdbcTemplate.queryForObject(
         insertWorkflowDefinitionSql,
         Long.class,
@@ -230,16 +207,8 @@ class BatchDaySettleMultiProcessIntegrationTest extends AbstractIntegrationTest 
     for (int index = 0; index < dayCount; index++) {
       LocalDate bizDate = firstBizDate.plusDays(index);
       bizDates.add(bizDate);
-      jdbcTemplate.update(
-          insertWorkflowRunSql,
-          tenantId,
-          workflowDefinitionId,
-          bizDate);
-      jdbcTemplate.update(
-          insertBatchDayInstanceSql,
-          tenantId,
-          calendarCode,
-          bizDate);
+      jdbcTemplate.update(insertWorkflowRunSql, tenantId, workflowDefinitionId, bizDate);
+      jdbcTemplate.update(insertBatchDayInstanceSql, tenantId, calendarCode, bizDate);
     }
 
     int settlementProcessCount = 2;
@@ -299,17 +268,9 @@ class BatchDaySettleMultiProcessIntegrationTest extends AbstractIntegrationTest 
         assertThat(admissionResult).isIn("ACCEPTED", "CLOSED_DAY_REJECTED");
         LocalDate bizDate = bizDates.get(index);
         String finalStatus = jdbcTemplate.queryForObject(
-            selectDayStatusSql,
-            String.class,
-            tenantId,
-            calendarCode,
-            bizDate);
+            selectDayStatusSql, String.class, tenantId, calendarCode, bizDate);
         Integer requestCount = jdbcTemplate.queryForObject(
-            selectCountSql,
-            Integer.class,
-            tenantId,
-            workflowDefinitionId,
-            bizDate);
+            selectCountSql, Integer.class, tenantId, workflowDefinitionId, bizDate);
         Integer unlaunchedCount = triggerRequestCount(tenantId, calendarCode, bizDate);
         if ("ACCEPTED".equals(admissionResult)) {
           assertThat(requestCount).isOne();
@@ -427,8 +388,7 @@ class BatchDaySettleMultiProcessIntegrationTest extends AbstractIntegrationTest 
 
     try (Connection connection = jdbcTemplate.getDataSource().getConnection()) {
       connection.setAutoCommit(false);
-      try (var statement = connection.prepareStatement(
-          insertTriggerRequestSql)) {
+      try (var statement = connection.prepareStatement(insertTriggerRequestSql)) {
         statement.setString(1, tenantId);
         statement.setString(2, "r11-mixed-" + UUID.randomUUID().toString().replace("-", ""));
         statement.setLong(3, workflowDefinitionId);
@@ -461,11 +421,7 @@ class BatchDaySettleMultiProcessIntegrationTest extends AbstractIntegrationTest 
         """;
 
     return jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        tenantId,
-        calendarCode,
-        bizDate);
+        selectCountSql, Integer.class, tenantId, calendarCode, bizDate);
   }
 
   private void acquireSettlementFence(
@@ -475,8 +431,7 @@ class BatchDaySettleMultiProcessIntegrationTest extends AbstractIntegrationTest 
         select batch.acquire_batch_day_settlement_fence(?, ?, ?)
     """;
 
-    try (var statement =
-        connection.prepareStatement(selectAcquireBatchDaySettlementFenceSql)) {
+    try (var statement = connection.prepareStatement(selectAcquireBatchDaySettlementFenceSql)) {
       statement.setString(1, tenantId);
       statement.setString(2, calendarCode);
       statement.setObject(3, bizDate);
@@ -523,8 +478,8 @@ class BatchDaySettleMultiProcessIntegrationTest extends AbstractIntegrationTest 
         .atMost(Duration.ofSeconds(90))
         .pollInterval(Duration.ofMillis(100))
         .untilAsserted(() -> {
-          Integer selectedPgStatActivityCount =
-              jdbcTemplate.queryForObject(selectCountSql, Integer.class, applicationName, blockerPid);
+          Integer selectedPgStatActivityCount = jdbcTemplate.queryForObject(
+              selectCountSql, Integer.class, applicationName, blockerPid);
           assertThat(selectedPgStatActivityCount).isGreaterThanOrEqualTo(count);
         });
   }

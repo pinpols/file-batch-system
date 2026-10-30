@@ -116,10 +116,7 @@ public class DatasetRuleEvaluator {
           + actualCount;
       Map<String, Object> rowCountMismatchDetails = Map.copyOf(details);
       ValidationIssue rowCountMismatchIssue = new ValidationIssue(
-          null,
-          rowCountErrorCode,
-          rowCountMismatchMessage,
-          rowCountMismatchDetails);
+          null, rowCountErrorCode, rowCountMismatchMessage, rowCountMismatchDetails);
       datasetIssues.add(rowCountMismatchIssue);
       return;
     }
@@ -130,10 +127,7 @@ public class DatasetRuleEvaluator {
       Map<String, Object> minimumRowCountDetails =
           Map.of(KEY_MIN, minCount, KEY_ACTUAL, actualCount);
       ValidationIssue minimumRowCountIssue = new ValidationIssue(
-          null,
-          rowCountErrorCode,
-          minimumRowCountMessage,
-          minimumRowCountDetails);
+          null, rowCountErrorCode, minimumRowCountMessage, minimumRowCountDetails);
       datasetIssues.add(minimumRowCountIssue);
       return;
     }
@@ -144,10 +138,7 @@ public class DatasetRuleEvaluator {
       Map<String, Object> maximumRowCountDetails =
           Map.of(KEY_MAX, maxCount, KEY_ACTUAL, actualCount);
       ValidationIssue maximumRowCountIssue = new ValidationIssue(
-          null,
-          rowCountErrorCode,
-          maximumRowCountMessage,
-          maximumRowCountDetails);
+          null, rowCountErrorCode, maximumRowCountMessage, maximumRowCountDetails);
       datasetIssues.add(maximumRowCountIssue);
     }
   }
@@ -158,7 +149,8 @@ public class DatasetRuleEvaluator {
   private void evaluateControlRecord(ValidationSession session) {
     Map<String, Object> rule =
         configSupport.firstMap(session.ruleSet(), "controlRecordCheck", "control_record_check");
-    boolean ruleIsNotConfiguredOrDisabled = EmptyChecks.isEmpty(Objects.requireNonNull(rule)) || !enabled(rule);
+    boolean ruleIsNotConfiguredOrDisabled =
+        EmptyChecks.isEmpty(Objects.requireNonNull(rule)) || !enabled(rule);
     if (ruleIsNotConfiguredOrDisabled) {
       return;
     }
@@ -172,8 +164,7 @@ public class DatasetRuleEvaluator {
       session.appliedChecks().add("control_record_check");
       List<ValidationIssue> datasetIssues = session.datasetIssues();
       String controlRecordErrorCode = ImportValidationErrorCode.CONTROL_RECORD.code();
-      Map<String, Object> missingDeclaredCountDetails =
-          Map.of("reason", "MISSING_DECLARED_COUNT");
+      Map<String, Object> missingDeclaredCountDetails = Map.of("reason", "MISSING_DECLARED_COUNT");
       ValidationIssue missingDeclaredCountIssue = new ValidationIssue(
           null,
           controlRecordErrorCode,
@@ -211,7 +202,8 @@ public class DatasetRuleEvaluator {
       List<ValidationIssue> datasetIssues,
       Set<String> appliedChecks) {
     Map<String, Object> rule = configSupport.firstMap(ruleSet, "checksumCheck", "checksum_check");
-    boolean ruleIsNotConfiguredOrDisabled = EmptyChecks.isEmpty(Objects.requireNonNull(rule)) || !enabled(rule);
+    boolean ruleIsNotConfiguredOrDisabled =
+        EmptyChecks.isEmpty(Objects.requireNonNull(rule)) || !enabled(rule);
     if (ruleIsNotConfiguredOrDisabled) {
       return;
     }
@@ -238,13 +230,10 @@ public class DatasetRuleEvaluator {
       String checksumErrorCode = ImportValidationErrorCode.CHECKSUM.code();
       String checksumMismatchMessage =
           "checksum mismatch, expected=" + expectedChecksum + MSG_ACTUAL_SUFFIX + actualChecksum;
-      Map<String, Object> checksumMismatchDetails = Map.of(
-          "algorithm", algorithm, "expected", expectedChecksum, KEY_ACTUAL, actualChecksum);
+      Map<String, Object> checksumMismatchDetails =
+          Map.of("algorithm", algorithm, "expected", expectedChecksum, KEY_ACTUAL, actualChecksum);
       ValidationIssue checksumMismatchIssue = new ValidationIssue(
-          null,
-          checksumErrorCode,
-          checksumMismatchMessage,
-          checksumMismatchDetails);
+          null, checksumErrorCode, checksumMismatchMessage, checksumMismatchDetails);
       datasetIssues.add(checksumMismatchIssue);
     }
   }
@@ -255,7 +244,8 @@ public class DatasetRuleEvaluator {
       List<ValidationIssue> datasetIssues,
       Set<String> appliedChecks) {
     Map<String, Object> rule = configSupport.firstMap(ruleSet, "schemaCheck", "schema_check");
-    boolean ruleIsNotConfiguredOrDisabled = EmptyChecks.isEmpty(Objects.requireNonNull(rule)) || !enabled(rule);
+    boolean ruleIsNotConfiguredOrDisabled =
+        EmptyChecks.isEmpty(Objects.requireNonNull(rule)) || !enabled(rule);
     if (ruleIsNotConfiguredOrDisabled) {
       return;
     }

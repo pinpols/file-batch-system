@@ -73,6 +73,15 @@ public final class EmptyChecks {
     return value == null || value.length == 0;
   }
 
+  @Contract("null -> true")
+  public static boolean isEmpty(@Nullable byte[] value) {
+    return value == null || value.length == 0;
+  }
+
+  public static boolean isNotEmpty(byte[] value) {
+    return !isEmpty(value);
+  }
+
   public static boolean isNotEmpty(Object[] value) {
     return !isEmpty(value);
   }

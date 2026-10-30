@@ -1,17 +1,13 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
 import io.github.pinpols.batch.orchestrator.domain.param.ExternalEventExpectationDefinitionUpsertParam;
-
-
 import io.github.pinpols.batch.orchestrator.domain.query.ExternalEventExpectationDefinition;
-import java.time.LocalTime;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
 public interface ExternalEventExpectationDefinitionMapper {
 
-  int upsert(
-      ExternalEventExpectationDefinitionUpsertParam parameters);
+  int upsert(ExternalEventExpectationDefinitionUpsertParam parameters);
 
   int delete(
       @Param("tenantId") String tenantId,

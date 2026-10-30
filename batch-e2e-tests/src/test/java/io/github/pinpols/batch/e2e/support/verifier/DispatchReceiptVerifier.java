@@ -8,7 +8,7 @@ import java.util.Map;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Content-level verifier for Dispatch pipeline E2E tests.
+ * 用于 Dispatch 流程 E2E 测试的内容校验器。
  *
  * <p>Asserts the "状态 + 回执 + 审计" triple-check for dispatch jobs:
  *
@@ -58,8 +58,7 @@ public final class DispatchReceiptVerifier implements E2eVerifier {
         select file_status from batch.file_record where id = ?
     """;
 
-    String status = platformJdbc.queryForObject(
-        selectFileStatusSql, String.class, fileId);
+    String status = platformJdbc.queryForObject(selectFileStatusSql, String.class, fileId);
     assertThat(status)
         .as(
             "dispatch: file_record.file_status must be '%s' for file id=%d",
@@ -79,7 +78,8 @@ public final class DispatchReceiptVerifier implements E2eVerifier {
     if (expectedReceiptCode == null && expectedChannelCode == null) {
       return;
     }
-    List<Map<String, Object>> receipts = platformJdbc.queryForList(selectReceiptCodeSql, tenantId, fileId);
+    List<Map<String, Object>> receipts =
+        platformJdbc.queryForList(selectReceiptCodeSql, tenantId, fileId);
 
     assertThat(receipts)
         .as("dispatch: file_dispatch_record must exist for tenant=%s, fileId=%d", tenantId, fileId)
@@ -107,11 +107,7 @@ public final class DispatchReceiptVerifier implements E2eVerifier {
     if (expectedMinAuditCount <= 0) {
       return;
     }
-    Long auditCount = platformJdbc.queryForObject(
-        selectCountSql,
-        Long.class,
-        tenantId,
-        fileId);
+    Long auditCount = platformJdbc.queryForObject(selectCountSql, Long.class, tenantId, fileId);
     assertThat(auditCount)
         .as(
             "dispatch: file_audit_log must have at least %d entries for fileId=%d",

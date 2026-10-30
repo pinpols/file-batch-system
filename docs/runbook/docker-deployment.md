@@ -24,6 +24,14 @@
 - `COMPOSE_PROJECT_NAME` 仍可由压测或隔离环境显式覆盖，但不同工作树不能共用固定的
   `batch-*` 容器名；切换工作树前应先停止上一套栈。
 
+## 应用容器停机宽限
+
+`deploy/docker/compose/app.yml` 的 8 个应用服务（Console API、Trigger、Orchestrator 和五类 Worker）共用 `stop_grace_period`，默认 `300s`。在所选 env 文件中设置 `BATCH_APP_STOP_GRACE_PERIOD` 可覆盖，例如 `600s` 或 `10m`；该配置由 Compose 消费，修改后需重新创建应用容器才生效；仅重启已有容器不会更新其停止宽限。
+
+该值是发送停止信号后允许进程退出的最长等待时间，进程提前退出不会等待满额。它不改变 Worker 默认 120 秒的排空上限，也不改变 Spring 每个关闭阶段的超时。提高应用内部超时、切换 profile 或引入更长的关闭阶段时，应按总关闭耗时增加此值；命令行显式指定更短的 `stop --timeout` 会覆盖服务宽限。部署 overlay 继承此配置，Helm 停机配置仍按各组件维护。
+
+本地裸 JVM 的 `scripts/local/stop-all.sh` 保留开发便利例外：默认每阶段等待 30 秒后强制结束残留进程，可用 `STOP_WAIT_SEC` 覆盖。该例外不代表长任务的完整优雅停机保障。
+
 ## 构建应用镜像
 
 ```bash

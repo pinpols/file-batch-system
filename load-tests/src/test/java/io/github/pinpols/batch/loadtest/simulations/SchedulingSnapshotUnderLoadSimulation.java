@@ -15,7 +15,7 @@ import static io.gatling.javaapi.core.CoreDsl.*;
 import static io.gatling.javaapi.http.HttpDsl.*;
 
 /**
- * Mixed load: sustained job launches (trigger) while polling orchestrator scheduler snapshot
+ * 混合负载：持续发起作业（trigger），同时轮询 Orchestrator 调度器快照。
  * ({@code GET /internal/scheduler/snapshot}). Exercises read latency on an internal scheduling probe
  * under write pressure.
  *

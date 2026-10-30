@@ -71,6 +71,19 @@ class AlertLabelsTest {
   }
 
   @Test
+  @DisplayName("Workflow 根级三类时限进入 SLA 通知组并使用对应路由团队")
+  void shouldRouteWorkflowMonitoringToSlaTeam() {
+    for (String alertType : new String[] {
+      "WORKFLOW_RUNNING_TOO_LONG",
+      "WORKFLOW_NOT_STARTED_BY_DEADLINE",
+      "WORKFLOW_NOT_COMPLETED_BY_DEADLINE"
+    }) {
+      assertThat(AlertLabels.alertGroup(alertType)).isEqualTo("sla");
+      assertThat(AlertLabels.team(alertType)).isEqualTo("batch-sla");
+    }
+  }
+
+  @Test
   @DisplayName("team 由 alert_group 一一派生")
   void team_derivesFromGroup() {
     assertThat(AlertLabels.team("DISPATCH_X")).isEqualTo("batch-dispatch");

@@ -1,16 +1,12 @@
 package io.github.pinpols.batch.worker.processes.stage;
 
-import io.github.pinpols.batch.worker.processes.domain.ProcessInvocationIdentity;
-
-
-import io.github.pinpols.batch.worker.processes.param.ProcessInvocationFenceRotateCurrentStagingGenerationParam;
-import io.github.pinpols.batch.worker.processes.query.ProcessInvocationFenceCurrentStagingGenerationQuery;
-
-
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.worker.processes.domain.ProcessInvocationIdentity;
 import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocationFenceMapper;
+import io.github.pinpols.batch.worker.processes.param.ProcessInvocationFenceRotateCurrentStagingGenerationParam;
+import io.github.pinpols.batch.worker.processes.query.ProcessInvocationFenceCurrentStagingGenerationQuery;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
@@ -18,7 +14,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** resetForRetry 会清除已持久化的分配信息。让下方用于 */
+/** 在独立平台库事务中按当前调用身份切换或读取 PROCESS staging 代际。 */
 @Component
 public class PlatformProcessStagingGenerationCoordinator
     implements ProcessStagingGenerationCoordinator {
@@ -47,18 +43,20 @@ public class PlatformProcessStagingGenerationCoordinator
     UUID generationUuid = UUID.randomUUID();
     String generationId = generationUuid.toString();
     Integer updated = requiresNew.execute(status -> {
-      ProcessInvocationFenceRotateCurrentStagingGenerationParam processInvocationFenceRotateCurrentStagingGenerationParam = ProcessInvocationFenceRotateCurrentStagingGenerationParam.builder()
-          .tenantId(tenantId)
-          .taskId(taskId)
-          .jobInstanceId(jobInstanceId)
-          .jobPartitionId(jobPartitionId)
-          .workerId(workerId)
-          .invocationId(invocationId)
-          .batchKey(batchKey)
-          .generationId(generationId)
-          .build();
+      ProcessInvocationFenceRotateCurrentStagingGenerationParam
+          processInvocationFenceRotateCurrentStagingGenerationParam =
+              ProcessInvocationFenceRotateCurrentStagingGenerationParam.builder()
+                  .tenantId(tenantId)
+                  .taskId(taskId)
+                  .jobInstanceId(jobInstanceId)
+                  .jobPartitionId(jobPartitionId)
+                  .workerId(workerId)
+                  .invocationId(invocationId)
+                  .batchKey(batchKey)
+                  .generationId(generationId)
+                  .build();
       return mapper.rotateCurrentStagingGeneration(
-        processInvocationFenceRotateCurrentStagingGenerationParam);
+          processInvocationFenceRotateCurrentStagingGenerationParam);
     });
     if (EmptyChecks.isNull(updated) || updated != 1) {
       throw stateConflict();
@@ -76,16 +74,18 @@ public class PlatformProcessStagingGenerationCoordinator
     String invocationId = identity.invocationId();
 
     String generationId = requiresNew.execute(status -> {
-      ProcessInvocationFenceCurrentStagingGenerationQuery processInvocationFenceCurrentStagingGenerationQuery = ProcessInvocationFenceCurrentStagingGenerationQuery.builder()
-          .tenantId(tenantId)
-          .taskId(taskId)
-          .jobInstanceId(jobInstanceId)
-          .jobPartitionId(jobPartitionId)
-          .workerId(workerId)
-          .invocationId(invocationId)
-          .build();
+      ProcessInvocationFenceCurrentStagingGenerationQuery
+          processInvocationFenceCurrentStagingGenerationQuery =
+              ProcessInvocationFenceCurrentStagingGenerationQuery.builder()
+                  .tenantId(tenantId)
+                  .taskId(taskId)
+                  .jobInstanceId(jobInstanceId)
+                  .jobPartitionId(jobPartitionId)
+                  .workerId(workerId)
+                  .invocationId(invocationId)
+                  .build();
       return mapper.selectCurrentStagingGeneration(
-        processInvocationFenceCurrentStagingGenerationQuery);
+          processInvocationFenceCurrentStagingGenerationQuery);
     });
     if (EmptyChecks.isNull(generationId) || EmptyChecks.isBlank(generationId)) {
       throw stateConflict();

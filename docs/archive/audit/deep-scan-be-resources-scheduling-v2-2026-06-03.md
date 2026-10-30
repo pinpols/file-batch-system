@@ -1,3 +1,5 @@
+> 历史原始记录：本轮恢复保留，正文中的结论、参数、状态和操作步骤仅适用于原日期/基线。提炼方法不替代原始证据；当前事实须按[文档治理](../../standards/document-governance.md)重新核实。本轮未执行原测试或扫描。
+
 # BE 资源 + 调度 深度扫描报告 v2(2026-06-03 复扫)
 
 > **v1 补充扫描**:基线 `docs/archive/audit/deep-scan-be-resources-scheduling-2026-06-03.md` 已覆盖 Hikari 总账 / Kafka producer&consumer / 线程池 / @Scheduled 节奏 / 心跳 lease reclaim / outbox 三表分流。

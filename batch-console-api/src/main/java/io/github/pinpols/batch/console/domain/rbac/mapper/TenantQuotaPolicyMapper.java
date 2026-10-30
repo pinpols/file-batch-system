@@ -3,13 +3,13 @@ package io.github.pinpols.batch.console.domain.rbac.mapper;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.console.domain.param.TenantQuotaPolicyUpdateParam;
 import io.github.pinpols.batch.console.domain.param.TenantQuotaPolicyUpsertParam;
+import io.github.pinpols.batch.console.domain.rbac.view.TenantQuotaPolicyRow;
 import java.util.List;
-import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 public interface TenantQuotaPolicyMapper {
 
-  List<Map<String, Object>> selectByQuery(
+  List<TenantQuotaPolicyRow> selectByQuery(
       @Param("tenantId") String tenantId,
       @Param("policyCode") String policyCode,
       @Param("enabled") Boolean enabled,
@@ -20,9 +20,9 @@ public interface TenantQuotaPolicyMapper {
       @Param("policyCode") String policyCode,
       @Param("enabled") Boolean enabled);
 
-  Map<String, Object> selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+  TenantQuotaPolicyRow selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  Map<String, Object> selectByUniqueKey(
+  TenantQuotaPolicyRow selectByUniqueKey(
       @Param("tenantId") String tenantId, @Param("policyCode") String policyCode);
 
   int upsertTenantQuotaPolicy(TenantQuotaPolicyUpsertParam param);

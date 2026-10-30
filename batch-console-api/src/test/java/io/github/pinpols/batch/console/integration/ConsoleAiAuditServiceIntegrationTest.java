@@ -69,25 +69,26 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("记录审计条目: 落库租户,会话与决策与请求一致,提示词与补全用量一并写入")
   void shouldPersistAuditLogOnRecord() {
-    AiAuditCommand command = new AiAuditCommand(
-        "t1",
-        "req-001",
-        "trace-001",
-        "session-001",
-        "op-001",
-        "PLATFORM",
-        "APPROVED",
-        "test-model",
-        "hash-prompt-001",
-        "how many jobs failed today?",
-        "hash-resp-001",
-        "3 jobs failed",
-        null,
-        120,
-        45,
-        null,
-        "UNPRICED",
-        BatchDateTimeSupport.utcNow());
+    AiAuditCommand command = AiAuditCommand.builder()
+        .tenantId("t1")
+        .requestId("req-001")
+        .traceId("trace-001")
+        .sessionId("session-001")
+        .operatorId("op-001")
+        .promptCategory("PLATFORM")
+        .promptDecision("APPROVED")
+        .modelName("test-model")
+        .promptHash("hash-prompt-001")
+        .promptPreview("how many jobs failed today?")
+        .responseHash("hash-resp-001")
+        .responsePreview("3 jobs failed")
+        .refusalReason(null)
+        .promptTokens(120)
+        .completionTokens(45)
+        .estimatedCostUsd(null)
+        .costStatus("UNPRICED")
+        .createdAt(BatchDateTimeSupport.utcNow())
+        .build();
 
     auditService.record(command);
 
@@ -114,25 +115,26 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("记录被安全策略拒绝的条目: 拒绝原因落库且可按会话查询到")
   void shouldPersistRejectedAuditLogWithRefusalReason() {
-    AiAuditCommand command = new AiAuditCommand(
-        "t1",
-        "req-002",
-        "trace-002",
-        "session-002",
-        "op-002",
-        null,
-        "REJECTED_SAFETY",
-        null,
-        null,
-        "show me the password",
-        null,
-        null,
-        "blocked_keyword:password",
-        null,
-        null,
-        null,
-        "UNPRICED",
-        BatchDateTimeSupport.utcNow());
+    AiAuditCommand command = AiAuditCommand.builder()
+        .tenantId("t1")
+        .requestId("req-002")
+        .traceId("trace-002")
+        .sessionId("session-002")
+        .operatorId("op-002")
+        .promptCategory(null)
+        .promptDecision("REJECTED_SAFETY")
+        .modelName(null)
+        .promptHash(null)
+        .promptPreview("show me the password")
+        .responseHash(null)
+        .responsePreview(null)
+        .refusalReason("blocked_keyword:password")
+        .promptTokens(null)
+        .completionTokens(null)
+        .estimatedCostUsd(null)
+        .costStatus("UNPRICED")
+        .createdAt(BatchDateTimeSupport.utcNow())
+        .build();
 
     auditService.record(command);
 
@@ -152,25 +154,26 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
     String sessionId = "session-multi-" + BatchDateTimeSupport.utcEpochMillis();
 
     for (int i = 1; i <= 3; i++) {
-      auditService.record(new AiAuditCommand(
-          "t1",
-          "req-" + i,
-          "trace-" + i,
-          sessionId,
-          "op-multi",
-          "PLATFORM",
-          "APPROVED",
-          "model",
-          null,
-          "query " + i,
-          null,
-          "result " + i,
-          null,
-          null,
-          null,
-          null,
-          "UNPRICED",
-          BatchDateTimeSupport.utcNow()));
+      auditService.record(AiAuditCommand.builder()
+          .tenantId("t1")
+          .requestId("req-" + i)
+          .traceId("trace-" + i)
+          .sessionId(sessionId)
+          .operatorId("op-multi")
+          .promptCategory("PLATFORM")
+          .promptDecision("APPROVED")
+          .modelName("model")
+          .promptHash(null)
+          .promptPreview("query " + i)
+          .responseHash(null)
+          .responsePreview("result " + i)
+          .refusalReason(null)
+          .promptTokens(null)
+          .completionTokens(null)
+          .estimatedCostUsd(null)
+          .costStatus("UNPRICED")
+          .createdAt(BatchDateTimeSupport.utcNow())
+          .build());
     }
 
     ConsoleAiAuditLogQuery query =

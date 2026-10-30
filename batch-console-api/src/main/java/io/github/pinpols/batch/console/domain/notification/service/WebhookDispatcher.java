@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
-import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogMarkRetryFailureParam;
-
-
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
@@ -12,6 +9,7 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
+import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogMarkRetryFailureParam;
 import io.github.pinpols.batch.console.domain.notification.param.WebhookDeliveryLogInsertParam;
 import io.github.pinpols.batch.console.support.security.SsrfGuardedDns;
 import jakarta.annotation.PreDestroy;
@@ -28,7 +26,6 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.stream.Stream;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
@@ -37,6 +34,7 @@ import java.util.concurrent.ThreadPoolExecutor.AbortPolicy;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.extern.slf4j.Slf4j;
@@ -199,14 +197,10 @@ public class WebhookDispatcher {
       return List.of();
     }
     String normalizedEventType = normalizeEventType(eventType);
-    Instant payloadEmittedAt = EmptyChecks.isNull(emittedAt) ? BatchDateTimeSupport.utcNow() : emittedAt;
+    Instant payloadEmittedAt =
+        EmptyChecks.isNull(emittedAt) ? BatchDateTimeSupport.utcNow() : emittedAt;
     WebhookEventPayload payload = new WebhookEventPayload(
-        tenantId,
-        normalizedEventType,
-        stream,
-        cursor,
-        payloadEmittedAt,
-        data);
+        tenantId, normalizedEventType, stream, cursor, payloadEmittedAt, data);
     String payloadJson = JsonUtils.toJson(payload);
     List<PendingWebhookDelivery> pendingDeliveries = new ArrayList<>();
     for (WebhookSubscriptionEntity subscription : subscriptions) {
@@ -248,15 +242,17 @@ public class WebhookDispatcher {
         sleep(backoffMillis);
         backoffMillis *= 2;
       } else {
-        ConsoleWebhookDeliveryLogMarkRetryFailureParam consoleWebhookDeliveryLogMarkRetryFailureParam = ConsoleWebhookDeliveryLogMarkRetryFailureParam.builder()
-            .id(pending.deliveryLogId())
-            .attempt(attempt)
-            .httpStatus(result.httpStatus())
-            .responseBody(result.errorSummary())
-            .nextRetryAt(BatchDateTimeSupport.utcNow().plusSeconds(INITIAL_RELAY_DELAY_SECONDS))
-            .build();
-        deliveryLogRepository.markRetryFailure(
-            consoleWebhookDeliveryLogMarkRetryFailureParam);
+        ConsoleWebhookDeliveryLogMarkRetryFailureParam
+            consoleWebhookDeliveryLogMarkRetryFailureParam =
+                ConsoleWebhookDeliveryLogMarkRetryFailureParam.builder()
+                    .id(pending.deliveryLogId())
+                    .attempt(attempt)
+                    .httpStatus(result.httpStatus())
+                    .responseBody(result.errorSummary())
+                    .nextRetryAt(
+                        BatchDateTimeSupport.utcNow().plusSeconds(INITIAL_RELAY_DELAY_SECONDS))
+                    .build();
+        deliveryLogRepository.markRetryFailure(consoleWebhookDeliveryLogMarkRetryFailureParam);
       }
     }
   }
@@ -301,13 +297,16 @@ public class WebhookDispatcher {
         .header("X-Batch-Event-Type", payload.eventType())
         .header("X-Batch-Event-Stream", payload.stream() == null ? "" : payload.stream())
         .post(RequestBody.create(payloadJson, JSON));
+    boolean alertmanagerNotification =
+        "alertmanager".equals(payload.stream()) && "ALERTMANAGER".equals(payload.eventType());
     boolean terminalBusinessEvent = ("workflow-runs".equals(payload.stream())
             && ("WORKFLOW_SUCCESS".equals(payload.eventType())
                 || "WORKFLOW_FAILED".equals(payload.eventType())))
         || ("job-instances".equals(payload.stream())
             && ("JOB_SUCCESS".equals(payload.eventType())
                 || "JOB_FAILED".equals(payload.eventType())));
-    if (terminalBusinessEvent && EmptyChecks.isNotBlank(payload.cursor())) {
+    boolean receiverCanDeduplicate = alertmanagerNotification || terminalBusinessEvent;
+    if (receiverCanDeduplicate && EmptyChecks.isNotBlank(payload.cursor())) {
       Base64.Encoder idempotencyKeyEncoder = Base64.getUrlEncoder().withoutPadding();
       byte[] cursorBytes = payload.cursor().getBytes(StandardCharsets.UTF_8);
       String idempotencyKey = idempotencyKeyEncoder.encodeToString(cursorBytes);
@@ -354,10 +353,10 @@ public class WebhookDispatcher {
     if ("*".equals(configuredEventTypes.trim())) {
       return true;
     }
-    Stream<String> configuredEventTypeTokens =
-        Arrays.stream(configuredEventTypes.split(","));
+    Stream<String> configuredEventTypeTokens = Arrays.stream(configuredEventTypes.split(","));
     Stream<String> trimmedEventTypes = configuredEventTypeTokens.map(String::trim);
-    Stream<String> nonBlankEventTypes = trimmedEventTypes.filter(value -> !EmptyChecks.isBlank(Objects.requireNonNull(value)));
+    Stream<String> nonBlankEventTypes =
+        trimmedEventTypes.filter(value -> !EmptyChecks.isBlank(Objects.requireNonNull(value)));
     Stream<String> normalizedEventTypes =
         nonBlankEventTypes.map(value -> value.toUpperCase(Locale.ROOT));
     return normalizedEventTypes.anyMatch(value -> value.equals(eventType));
@@ -375,8 +374,7 @@ public class WebhookDispatcher {
     try {
       Mac mac = Mac.getInstance(CryptoAlgorithms.HMAC_SHA256);
       byte[] secretBytes = secret.getBytes(StandardCharsets.UTF_8);
-      SecretKeySpec signingKey =
-          new SecretKeySpec(secretBytes, CryptoAlgorithms.HMAC_SHA256);
+      SecretKeySpec signingKey = new SecretKeySpec(secretBytes, CryptoAlgorithms.HMAC_SHA256);
       mac.init(signingKey);
       byte[] payloadBytes = payloadJson.getBytes(StandardCharsets.UTF_8);
       byte[] digest = mac.doFinal(payloadBytes);
@@ -387,7 +385,9 @@ public class WebhookDispatcher {
   }
 
   private String sanitize(String text) {
-    return ConsoleTextSanitizer.safeDisplay(text, 2048);
+    String normalized = ConsoleTextSanitizer.normalize(text);
+    String safeMessage = SwallowedExceptionLogger.safeMessage(normalized, 2048);
+    return ConsoleTextSanitizer.safeDisplay(safeMessage, 2048);
   }
 
   private static String readBoundedErrorBody(ResponseBody body) throws IOException {

@@ -1,9 +1,8 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.param.StaleCompensationFailureParam;
 import io.github.pinpols.batch.orchestrator.domain.entity.CompensationCommandEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.StaleCompensationFailureParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateCompensationStatusParam;
-import java.time.Instant;
 import org.apache.ibatis.annotations.Param;
 
 public interface CompensationCommandMapper {
@@ -11,6 +10,11 @@ public interface CompensationCommandMapper {
   int insert(CompensationCommandEntity entity);
 
   CompensationCommandEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+
+  Long lockRunningCommand(
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("runningStatus") String runningStatus);
 
   CompensationCommandEntity selectByCommandNo(
       @Param("tenantId") String tenantId, @Param("commandNo") String commandNo);

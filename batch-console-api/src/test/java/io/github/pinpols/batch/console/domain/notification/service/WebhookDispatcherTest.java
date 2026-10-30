@@ -157,8 +157,43 @@ class WebhookDispatcherTest {
   }
 
   @Test
-  @DisplayName("只有正式 Job/Workflow 终态有事实幂等键,普通变更游标不能被错误合并")
-  void shouldApplyTerminalIdempotencyOnlyToTerminalBusinessEvents() throws Exception {
+  @DisplayName("Webhook 非成功响应正文中的凭据不进入失败摘要")
+  void shouldMaskCredentialsInWebhookErrorResponse() throws Exception {
+    byte[] errorBody =
+        "password=probe-secret; ｔｏｋｅｎ=unicode-secret; retry later".getBytes(StandardCharsets.UTF_8);
+    var endpoint = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    endpoint.createContext("/error", exchange -> {
+      exchange.getRequestBody().readAllBytes();
+      exchange.sendResponseHeaders(503, errorBody.length);
+      try (var body = exchange.getResponseBody()) {
+        body.write(errorBody);
+      }
+    });
+    String original = System.getProperty("batch.security.ssrf-guard.allow-private");
+    System.setProperty("batch.security.ssrf-guard.allow-private", "true");
+    endpoint.start();
+    try {
+      var subscription = new WebhookSubscriptionEntity();
+      subscription.setCallbackUrl("http://127.0.0.1:" + endpoint.getAddress().getPort() + "/error");
+      var payload = new WebhookEventPayload(
+          "tenant-a", "JOB_FAILED", "job-instances", null, Instant.now(), Map.of());
+
+      WebhookDeliveryResult result = dispatcher.attemptDelivery(subscription, payload, "{}");
+
+      assertThat(result.success()).isFalse();
+      assertThat(result.httpStatus()).isEqualTo(503);
+      assertThat(result.errorSummary()).contains("password=****", "token=****", "retry later");
+      assertThat(result.errorSummary()).doesNotContain("probe-secret", "unicode-secret");
+    } finally {
+      endpoint.stop(0);
+      if (original == null) System.clearProperty("batch.security.ssrf-guard.allow-private");
+      else System.setProperty("batch.security.ssrf-guard.allow-private", original);
+    }
+  }
+
+  @Test
+  @DisplayName("Job/Workflow 终态和告警通知传稳定幂等键，普通变更游标不冒用")
+  void shouldApplyStableIdempotencyToTerminalAndAlertmanagerEvents() throws Exception {
     var received = new LinkedBlockingQueue<Optional<String>>();
     var endpoint = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     endpoint.createContext("/headers", exchange -> {
@@ -197,6 +232,17 @@ class WebhookDispatcherTest {
               .isEqualTo(cursor);
         }
       }
+      String alertmanagerCursor = "ta:alertmanager:entity:firing";
+      WebhookEventPayload alertmanagerPayload = new WebhookEventPayload(
+          "ta", "ALERTMANAGER", "alertmanager", alertmanagerCursor, Instant.now(), Map.of());
+      WebhookDeliveryResult alertmanagerResult =
+          dispatcher.attemptDelivery(subscription, alertmanagerPayload, "{}");
+      assertThat(alertmanagerResult.success()).isTrue();
+      Optional<String> alertmanagerKey = received.poll(5, TimeUnit.SECONDS);
+      assertThat(alertmanagerKey).isPresent();
+      String decodedAlertmanagerKey = new String(
+          Base64.getUrlDecoder().decode(alertmanagerKey.orElseThrow()), StandardCharsets.UTF_8);
+      assertThat(decodedAlertmanagerKey).isEqualTo(alertmanagerCursor);
     } finally {
       endpoint.stop(0);
       if (original == null) System.clearProperty("batch.security.ssrf-guard.allow-private");

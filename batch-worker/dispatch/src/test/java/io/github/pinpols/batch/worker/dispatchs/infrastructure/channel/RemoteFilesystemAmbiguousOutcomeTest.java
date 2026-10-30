@@ -105,7 +105,7 @@ class RemoteFilesystemAmbiguousOutcomeTest {
     AtomicInteger writes = new AtomicInteger();
     doAnswer(invocation -> {
           if (writes.incrementAndGet() == 2) {
-            throw new IllegalStateException("manifest response lost");
+            throw new IllegalStateException("password=manifest-secret-marker");
           }
           return null;
         })
@@ -127,6 +127,7 @@ class RemoteFilesystemAmbiguousOutcomeTest {
     assertThat(result.success()).isFalse();
     assertThat(result.externalOutcomeUnknown()).isTrue();
     assertThat(result.message()).contains("EXTERNAL_OUTCOME_UNKNOWN");
+    assertThat(result.message()).doesNotContain("manifest-secret-marker");
     assertThat(writes).hasValue(2);
     verify(objectStore, times(2))
         .put(anyString(), anyString(), any(InputStream.class), anyLong(), anyString());
@@ -140,7 +141,7 @@ class RemoteFilesystemAmbiguousOutcomeTest {
     when(resolver.openInputStream(fileRecord))
         .thenReturn(new ByteArrayInputStream("oss-payload".getBytes(StandardCharsets.UTF_8)));
     BatchObjectStore objectStore = mock(BatchObjectStore.class);
-    doThrow(new ObjectStoreAccessException("access denied"))
+    doThrow(new ObjectStoreAccessException("password=prepublication-secret-marker"))
         .when(objectStore)
         .put(anyString(), anyString(), any(InputStream.class), anyLong(), anyString());
 
@@ -153,6 +154,7 @@ class RemoteFilesystemAmbiguousOutcomeTest {
 
     assertThat(result.success()).isFalse();
     assertThat(result.externalOutcomeUnknown()).isFalse();
+    assertThat(result.message()).doesNotContain("prepublication-secret-marker");
   }
 
   private static DispatchCommand command(

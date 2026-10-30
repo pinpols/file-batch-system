@@ -1,13 +1,7 @@
 package io.github.pinpols.batch.console.domain.observability.application.contract.response;
 
-import static io.github.pinpols.batch.console.domain.observability.application.contract.response.ObservabilityResponseFieldReader.instantValue;
-import static io.github.pinpols.batch.console.domain.observability.application.contract.response.ObservabilityResponseFieldReader.integerValue;
-import static io.github.pinpols.batch.console.domain.observability.application.contract.response.ObservabilityResponseFieldReader.longValue;
-import static io.github.pinpols.batch.console.domain.observability.application.contract.response.ObservabilityResponseFieldReader.stringValue;
-
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.ExecutionProgressView;
 import java.time.Instant;
-import java.util.Map;
 import lombok.Builder;
 
 /**
@@ -46,25 +40,6 @@ public record ConsoleExecutionProgressResponse(
         .progressPercent(row.progressPercent())
         .startedAt(row.startedAt())
         .finishedAt(row.finishedAt())
-        .build();
-  }
-
-  public static ConsoleExecutionProgressResponse from(Map<String, Object> row) {
-    if (row == null) {
-      return null;
-    }
-    return ConsoleExecutionProgressResponse.builder()
-        .id(longValue(row, "id"))
-        .jobCode(stringValue(row, "jobCode"))
-        .instanceNo(stringValue(row, "instanceNo"))
-        .instanceStatus(stringValue(row, "instanceStatus"))
-        .expectedPartitions(integerValue(row, "expectedPartitions"))
-        .successPartitions(integerValue(row, "successPartitions"))
-        .failedPartitions(integerValue(row, "failedPartitions"))
-        .completedPartitions(integerValue(row, "completedPartitions"))
-        .progressPercent(longValue(row, "progressPercent"))
-        .startedAt(instantValue(row, "startedAt"))
-        .finishedAt(instantValue(row, "finishedAt"))
         .build();
   }
 }

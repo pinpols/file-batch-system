@@ -2,7 +2,10 @@ package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.constants.NodeOutputKeys;
+import io.github.pinpols.batch.common.enums.DictEnum;
+import io.github.pinpols.batch.common.enums.WorkflowJoinMode;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
+import io.github.pinpols.batch.common.model.WorkflowJoinThreshold;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -169,7 +172,7 @@ public class WorkflowGraphValidator {
       errors.addAll(waitSensorSpecValidator.validate(n));
     }
 
-    validateGatewayJoinMode(byCode.values(), incoming, errors);
+    validateNodeJoinMode(byCode.values(), incoming, errors);
 
     Map<String, JobDefinitionEntity> jobDefByCode = loadJobDefinitions(byCode, errors);
     Set<String> optionalNodes = collectOptionalNodes(byCode);
@@ -279,35 +282,30 @@ public class WorkflowGraphValidator {
     }
   }
 
-  private void validateGatewayJoinMode(
+  private void validateNodeJoinMode(
       Collection<WorkflowNodeEntity> nodes,
       Map<String, List<String>> incoming,
       List<ValidationIssue> errors) {
     for (WorkflowNodeEntity n : nodes) {
-      if (!WorkflowNodeType.GATEWAY.code().equalsIgnoreCase(n.getNodeType())) continue;
       int incomingCount = incoming.getOrDefault(n.getNodeCode(), List.of()).size();
-      JoinMode joinMode = parseJoinMode(n.getNodeParams());
-      if (joinMode == null) continue;
-      if (joinMode.allOf && incomingCount < 2) {
-        errors.add(issue(
-            "V9",
-            "GATEWAY join_mode=ALL_OF requires ≥2 incoming, got " + incomingCount,
-            n.getNodeCode()));
+      if (incomingCount == 0) continue;
+      boolean gateway = WorkflowNodeType.GATEWAY.code().equalsIgnoreCase(n.getNodeType());
+      String configuredMode = readNodeJoinMode(n.getNodeParams());
+      boolean missingRequiredMode = gateway && incomingCount >= 2 && !Texts.hasText(configuredMode);
+      boolean unknownMode = Texts.hasText(configuredMode)
+          && EmptyChecks.isNull(DictEnum.fromCode(WorkflowJoinMode.class, configuredMode));
+      if (missingRequiredMode || unknownMode) {
+        errors.add(issue("V9", "Node joinMode must be ALL, ANY or N_OF", n.getNodeCode()));
       }
-      if (joinMode.nOfM != null) {
-        int n1 = joinMode.nOfM[0];
-        int m1 = joinMode.nOfM[1];
-        if (n1 > m1 || m1 != incomingCount) {
-          errors.add(issue(
-              "V10",
-              "GATEWAY join_mode=N_OF_M ("
-                  + n1
-                  + "/"
-                  + m1
-                  + ") inconsistent with incoming count "
-                  + incomingCount,
-              n.getNodeCode()));
-        }
+      int[] thresholdAndTotal = parseJoinMode(n.getNodeParams(), incomingCount);
+      if (EmptyChecks.isNull(thresholdAndTotal)) continue;
+      int required = thresholdAndTotal[0];
+      int total = thresholdAndTotal[1];
+      if (required < 1 || required > total || total != incomingCount) {
+        errors.add(issue(
+            "V10",
+            "Node join threshold invalid or inconsistent with incoming count " + incomingCount,
+            n.getNodeCode()));
       }
     }
   }
@@ -419,23 +417,21 @@ public class WorkflowGraphValidator {
       }
       // V5
       if (!contract.contains(outputKey)) {
-        String unknownOutputContractMessage =
-            "DSL ref $.nodes."
-                + referencedNodeCode
-                + ".output."
-                + outputKey
-                + " not in known output contract for jobType="
-                + refJobDef.jobType();
+        String unknownOutputContractMessage = "DSL ref $.nodes."
+            + referencedNodeCode
+            + ".output."
+            + outputKey
+            + " not in known output contract for jobType="
+            + refJobDef.jobType();
         warnings.add(warning("V5", unknownOutputContractMessage, node.getNodeCode()));
       } else {
         // V12 占位 — contract type info 留 worker SPI 扩展（@WorkerOutputContract 注解未来注入）；
         // 当前只对 contract-hit 输出 key 记一条信息级 hint，避免 type 误判
-        String knownOutputContractMessage =
-            "DSL ref $.nodes."
-                + referencedNodeCode
-                + ".output."
-                + outputKey
-                + " hits contract; type-check pending worker SPI";
+        String knownOutputContractMessage = "DSL ref $.nodes."
+            + referencedNodeCode
+            + ".output."
+            + outputKey
+            + " hits contract; type-check pending worker SPI";
         warnings.add(warning("V12", knownOutputContractMessage, node.getNodeCode()));
       }
     }
@@ -482,8 +478,7 @@ public class WorkflowGraphValidator {
     for (WorkflowEdgeEntity e : edges) {
       boolean workflowEdgeIdentityIsIncomplete =
           e == null || !Texts.hasText(e.getFromNodeCode()) || !Texts.hasText(e.getToNodeCode());
-      if (workflowEdgeIdentityIsIncomplete)
-        continue;
+      if (workflowEdgeIdentityIsIncomplete) continue;
       String key = outgoingDirection ? e.getFromNodeCode() : e.getToNodeCode();
       String value = outgoingDirection ? e.getToNodeCode() : e.getFromNodeCode();
       adj.computeIfAbsent(key, k -> new ArrayList<>()).add(value);
@@ -568,12 +563,11 @@ public class WorkflowGraphValidator {
       if (Texts.hasText(dep.bizDateRange())) {
         Integer days = parseRangeDays(dep.bizDateRange());
         if (days != null && days > MAX_RANGE_DAYS) {
-          String rangeLimitMessage =
-              "cross_day_dep range "
-                  + dep.bizDateRange()
-                  + " exceeds max "
-                  + MAX_RANGE_DAYS
-                  + " days";
+          String rangeLimitMessage = "cross_day_dep range "
+              + dep.bizDateRange()
+              + " exceeds max "
+              + MAX_RANGE_DAYS
+              + " days";
           errors.add(issue("V7", rangeLimitMessage, node.getNodeCode()));
         }
       }
@@ -609,7 +603,18 @@ public class WorkflowGraphValidator {
     }
   }
 
-  private JoinMode parseJoinMode(String nodeParams) {
+  private String readNodeJoinMode(String nodeParams) {
+    if (!Texts.hasText(nodeParams)) return null;
+    try {
+      Map<?, ?> params = JsonUtils.fromJson(nodeParams, Map.class);
+      Object mode = EmptyChecks.isNull(params) ? null : params.get("joinMode");
+      return EmptyChecks.isNull(mode) ? null : mode.toString();
+    } catch (IllegalArgumentException invalid) {
+      return null;
+    }
+  }
+
+  private int[] parseJoinMode(String nodeParams, int incomingCount) {
     if (!Texts.hasText(nodeParams)) return null;
     try {
       Map<?, ?> map = JsonUtils.fromJson(nodeParams, Map.class);
@@ -619,22 +624,23 @@ public class WorkflowGraphValidator {
       String rawJoinMode = jm.toString();
       String trimmedJoinMode = rawJoinMode.trim();
       String joinModeText = trimmedJoinMode.toUpperCase(Locale.ROOT);
-      if ("ALL_OF".equals(joinModeText)) return new JoinMode(true, null);
+      if ("N_OF".equals(joinModeText) && incomingCount >= 2) {
+        Integer threshold = WorkflowJoinThreshold.parse(map.get("joinThreshold"));
+        int required = EmptyChecks.isNull(threshold) ? 0 : threshold;
+        return new int[] {required, incomingCount};
+      }
       if (joinModeText.matches("^\\d+_OF_\\d+$")) {
         String[] parts = joinModeText.split("_OF_");
         int requiredMatches = Integer.parseInt(parts[0]);
         int totalOptions = Integer.parseInt(parts[1]);
         int[] nOfM = {requiredMatches, totalOptions};
-        return new JoinMode(false, nOfM);
+        return nOfM;
       }
       return null;
     } catch (Exception ignore) {
       return null;
     }
   }
-
-  @SuppressWarnings("java:S6218")
-  private record JoinMode(boolean allOf, int[] nOfM) {}
 
   private ValidationIssue issue(String code, String message, String nodeCode) {
     return ValidationIssue.builder()

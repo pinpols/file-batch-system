@@ -86,7 +86,7 @@ class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileId", String.valueOf(fileId));
-    // No file_channel_config row exists for this channel code
+    // 该渠道代码对应的 file_channel_config 记录不存在。
     params.put("channelCode", "channel_does_not_exist");
     params.put("dispatchTarget", "/tmp");
     params.put("externalRequestId", "e2e-fail-ext-" + System.nanoTime());
@@ -109,13 +109,13 @@ class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String status = jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
+          String status = jdbcTemplate.queryForObject(
+              selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
           assertThat(status).isEqualTo("FAILED");
         });
 
-    // File record must NOT have been marked DISPATCHED on failure
-    String fileStatus = jdbcTemplate.queryForObject(
-        selectFileStatusSql, String.class, fileId);
+    // 失败时文件记录不得标记为 DISPATCHED。
+    String fileStatus = jdbcTemplate.queryForObject(selectFileStatusSql, String.class, fileId);
     assertThat(fileStatus).isNotEqualTo(FileStatus.DISPATCHED.code());
   }
 }

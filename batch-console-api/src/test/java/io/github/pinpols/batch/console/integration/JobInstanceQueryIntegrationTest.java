@@ -10,13 +10,17 @@ import io.github.pinpols.batch.console.domain.job.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.console.domain.job.query.JobInstanceQuery;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Date;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
 
 /** 集成测试：控制台 JobInstanceMapper 对真实数据库的查询验证。 */
 @SpringBootTest(
@@ -145,6 +149,59 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
     List<JobInstanceEntity> page1 = jobInstanceMapper.selectByQuery(query);
 
     assertThat(page1).hasSize(3);
+  }
+
+  @Test
+  @Transactional
+  @DisplayName("SLA 超期筛选与运维计数按业务状态、截止时间和租户一致")
+  void shouldKeepSlaFilterAndOpsCountConsistent() {
+    String tenantId = "sla-query-" + UUID.randomUUID();
+    String otherTenant = "sla-query-" + UUID.randomUUID();
+    String jobCode = "SLA_JOB";
+    List<String> eligible = List.of("CREATED", "WAITING", "READY", "RUNNING", "PARTIAL_FAILED");
+    List<String> excluded = List.of(
+        "PAUSED",
+        "SUCCESS",
+        "FAILED",
+        "CANCELLED",
+        "TERMINATED",
+        "SUCCESS_DRY_RUN",
+        "FAILED_DRY_RUN");
+    for (String status : eligible) {
+      insertSlaInstance(tenantId, jobCode, status, "expired-" + status, "past");
+    }
+    for (String status : excluded) {
+      insertSlaInstance(tenantId, jobCode, status, "excluded-" + status, "past");
+    }
+    insertSlaInstance(tenantId, jobCode, "RUNNING", "future", "future");
+    insertSlaInstance(tenantId, jobCode, "RUNNING", "no-deadline", "none");
+    insertSlaInstance(otherTenant, jobCode, "RUNNING", "other-tenant", "past");
+
+    JobInstanceQuery query = JobInstanceQuery.builder()
+        .tenantId(tenantId)
+        .slaBreached(true)
+        .pageRequest(new PageRequest(0, 20))
+        .build();
+    assertThat(jobInstanceMapper.selectByQuery(query))
+        .extracting(JobInstanceEntity::getInstanceStatus)
+        .containsExactlyInAnyOrderElementsOf(eligible);
+    assertThat(jobInstanceMapper.countByQuery(query)).isEqualTo(5);
+    assertThat(jobInstanceMapper.countSlaBreaches(tenantId, eligible)).isEqualTo(5);
+  }
+
+  private void insertSlaInstance(
+      String tenantId, String jobCode, String status, String instanceNo, String deadlineKind) {
+    insertJobInstance(tenantId, jobCode, status, instanceNo, "trace-" + instanceNo);
+    Timestamp deadline =
+        switch (deadlineKind) {
+          case "past" -> Timestamp.from(Instant.now().minusSeconds(3600));
+          case "future" -> Timestamp.from(Instant.now().plusSeconds(3600));
+          default -> null;
+        };
+    String updateDeadlineSql = """
+        update batch.job_instance set deadline_at = ? where tenant_id = ? and instance_no = ?
+        """;
+    jdbcTemplate.update(updateDeadlineSql, deadline, tenantId, instanceNo);
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────

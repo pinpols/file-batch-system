@@ -93,10 +93,18 @@ class ApprovalCommandQueryIntegrationTest extends AbstractIntegrationTest {
     approval_status, requester_id, source_trace_id, source_idempotency_key, approval_reason,
     created_at, updated_at)
     VALUES (?, ?, ?, ?, 'JOB', '1', '{}'::jsonb,
-    ?, 'u1', 'trace-1', 'idem-1', 'reason',
+    ?, 'u1', ?, ?, 'reason',
     now(), now())
     """;
-    jdbcTemplate.update(insertApprovalSql, tenantId, approvalNo, approvalType, actionType, status);
+    jdbcTemplate.update(
+        insertApprovalSql,
+        tenantId,
+        approvalNo,
+        approvalType,
+        actionType,
+        status,
+        "trace-" + approvalNo,
+        "idem-" + approvalNo);
   }
 
   private void insertApprovalRich(

@@ -59,6 +59,7 @@ import org.mockito.quality.Strictness;
  * 防止有人改 isGatewayNode/isJobNode 判断后 silently 把所有节点都走错分支。
  */
 @ExtendWith(MockitoExtension.class)
+// LENIENT 原因：共享准备覆盖节点版本锁、运行快照与节点写入；网关、START 和提前拒绝分支不会触发全部协作者桩。
 @MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("流程节点派发类型分支: 子作业, 网关与起点节点的路由口径")
 class DefaultWorkflowNodeDispatchServiceAllTypesTest {
@@ -187,8 +188,7 @@ class DefaultWorkflowNodeDispatchServiceAllTypesTest {
   void shouldCompleteDirectEndWithoutWorkerDispatch() {
     WorkflowNodeEntity end = nodeWithType(WorkflowNodeType.END.code());
     end.setNodeCode("END");
-    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(50L, "END"))
-        .thenReturn(end);
+    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(50L, "END")).thenReturn(end);
     WorkflowRunEntity run = workflowRun();
     DagNodeResolution target = new DagNodeResolution("END", "END");
 

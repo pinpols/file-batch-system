@@ -1,9 +1,9 @@
 package io.github.pinpols.batch.console.domain.rbac.support.captcha;
 
-import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
@@ -132,7 +132,8 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
         requestHeaders.put(k, v);
       }
     });
-    OutboundHttpContent httpContent = new OutboundHttpContent(body, "application/json; charset=utf-8");
+    OutboundHttpContent httpContent =
+        new OutboundHttpContent(body, "application/json; charset=utf-8");
     OutboundHttpRequest httpRequest = OutboundHttpRequest.post(
         url,
         requestHeaders,
@@ -184,11 +185,8 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
       headerLines.append(e.getKey()).append(':').append(e.getValue().trim()).append('\n');
     }
 
-    String canonicalRequest = "POST\n/\n\n" + headerLines
-        + '\n'
-        + signedHeaders
-        + '\n'
-        + hashedPayload;
+    String canonicalRequest =
+        "POST\n/\n\n" + headerLines + '\n' + signedHeaders + '\n' + hashedPayload;
 
     String stringToSign = ALGORITHM + '\n' + CaptchaCrypto.sha256Hex(canonicalRequest);
     String signature = CaptchaCrypto.hmacSha256Hex(accessKeySecret, stringToSign);

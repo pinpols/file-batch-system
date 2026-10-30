@@ -12,6 +12,14 @@ source "$ROOT/scripts/lib/gate-result.sh"
 batch_require_python
 export BATCH_GATE_GROUP="${BATCH_GATE_GROUP:-local-pre-commit}"
 
+# 门禁自测会创建临时 Git 仓库，不能继承提交 hook 的仓库与索引变量。
+run_python_unit_tests() (
+  while IFS= read -r variable; do
+    unset "$variable"
+  done < <(git rev-parse --local-env-vars)
+  "$PYTHON_BIN" -m unittest "$@"
+)
+
 staged_files=()
 while IFS= read -r -d '' file; do
   staged_files+=("$file")
@@ -41,7 +49,7 @@ gate_run PRE_COMMIT_DIFF_CHECK "暂存区空白与冲突标记" git diff --cache
 gate_run PRE_COMMIT_UTF8_ENCODING "仓库文本 UTF-8 编码" \
   "$PYTHON_BIN" scripts/ci/check-utf8-encoding.py --staged
 gate_run PRE_COMMIT_UTF8_ENCODING_TEST "UTF-8 编码门禁测试" \
-  "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_utf8_encoding.py
+  run_python_unit_tests scripts/ci/tests/test_check_utf8_encoding.py
 
 java_files=()
 suppression_files=()
@@ -88,7 +96,7 @@ for file in "${staged_files[@]}"; do
   [[ "$file" == helm/* ]] && helm_changed=1
   [[ "$file" == test-data/tenant-config-packages/*.xlsx \
     || "$file" == batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelSchema.java \
-    || "$file" == scripts/fix-fixture-xlsx.py \
+    || "$file" == scripts/sim/fix-fixture-xlsx.py \
     || "$file" == scripts/local/append-tenant-coverage.py \
     || "$file" == scripts/local/gen-default-tenant-excel.py ]] \
     && sim_xlsx_fixture_changed=1
@@ -125,38 +133,38 @@ if ((${#java_files[@]} > 0)); then
   gate_run PRE_COMMIT_JAVA_CONTRACT "Java 固定契约与协议值治理" \
     "$PYTHON_BIN" scripts/ci/check-java-contract-governance.py "${java_files[@]}"
   gate_run PRE_COMMIT_JAVA_CONTRACT_TEST "Java 契约治理门禁测试" \
-    "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_java_contract_governance.py
+    run_python_unit_tests scripts/ci/tests/test_check_java_contract_governance.py
   gate_run PRE_COMMIT_JAVA_LOGGING_TEST "Java 日志治理门禁测试" \
-    "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_java_logging_governance.py
+    run_python_unit_tests scripts/ci/tests/test_check_java_logging_governance.py
   gate_run PRE_COMMIT_JAVA_READABILITY "Java 可读性约定" \
     "$PYTHON_BIN" scripts/ci/check-java-readability.py "${java_files[@]}"
   gate_run PRE_COMMIT_JAVA_LOMBOK_INJECTION "Java Lombok 与依赖注入规约" \
     "$PYTHON_BIN" scripts/ci/check-java-lombok-injection.py --staged
   gate_run PRE_COMMIT_JAVA_LOMBOK_INJECTION_TEST "Java Lombok 与依赖注入门禁测试" \
-    "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_java_lombok_injection.py
+    run_python_unit_tests scripts/ci/tests/test_check_java_lombok_injection.py
   gate_run PRE_COMMIT_JAVA_TEXT_BLOCK_STYLE "Java 文本块格式" \
     "$PYTHON_BIN" scripts/ci/check-java-text-block-style.py "${java_files[@]}"
   gate_run PRE_COMMIT_JAVA_STRUCTURED_STRING_CONCAT "Java 结构化多行字符串" \
     "$PYTHON_BIN" scripts/ci/check-java-structured-string-concat.py "${java_files[@]}"
   gate_run PRE_COMMIT_JAVA_STRUCTURED_STRING_CONCAT_TEST "Java 结构化多行字符串门禁测试" \
-    "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_java_structured_string_concat.py
+    run_python_unit_tests scripts/ci/tests/test_check_java_structured_string_concat.py
   gate_run PRE_COMMIT_JAVA_SUPPRESSION_REGISTRY "Java 抑制项注册表" \
     "$PYTHON_BIN" scripts/ci/check-java-suppression-registry.py "${suppression_files[@]}"
   gate_run PRE_COMMIT_JAVA_SUPPRESSION_REGISTRY_TEST "Java 抑制项注册表门禁测试" \
-    "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_java_suppression_registry.py
+    run_python_unit_tests scripts/ci/tests/test_check_java_suppression_registry.py
   gate_run PRE_COMMIT_MAPOF_NULL_VALUES "Map/List/Set.of 空值风险" \
     "$PYTHON_BIN" scripts/ci/check-mapof-null-values.py "${java_files[@]}"
   # 摘要键契约是跨文件的(回灌键 ↔ buildOutputSummary ↔ 前端计数键),不做单文件裁剪,直接全仓扫描。
   gate_run PRE_COMMIT_PIPELINE_SUMMARY_KEYS "Pipeline 摘要键契约" \
     "$PYTHON_BIN" scripts/ci/check-pipeline-summary-keys.py
   gate_run PRE_COMMIT_PIPELINE_SUMMARY_KEYS_TEST "Pipeline 摘要键契约门禁测试" \
-    "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_pipeline_summary_keys.py
+    run_python_unit_tests scripts/ci/tests/test_check_pipeline_summary_keys.py
   # 测试 @DisplayName 约定是跨文件的（类树 + 注解归属），不做单文件裁剪，直接全仓扫描；
   # 只对相对基线新增的缺口失败，口径见 docs/coding-conventions.md §14.5。
   gate_run PRE_COMMIT_TEST_CONVENTIONS "测试 @DisplayName 约定" \
     "$PYTHON_BIN" scripts/ci/check-test-conventions.py --check-baseline docs/governance/test-conventions-baseline.txt
   gate_run PRE_COMMIT_TEST_CONVENTIONS_TEST "测试 @DisplayName 约定门禁测试" \
-    "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_test_conventions.py
+    run_python_unit_tests scripts/ci/tests/test_check_test_conventions.py
   for file in "${java_files[@]}"; do
     [[ -f "$file" ]] && git add -- "$file"
   done
@@ -166,14 +174,14 @@ if ((${#suppression_files[@]} > 0 && ${#java_files[@]} == 0)); then
   gate_run PRE_COMMIT_JAVA_SUPPRESSION_REGISTRY "静态检查抑制项注册表" \
     "$PYTHON_BIN" scripts/ci/check-java-suppression-registry.py "${suppression_files[@]}"
   gate_run PRE_COMMIT_JAVA_SUPPRESSION_REGISTRY_TEST "静态检查抑制项注册表门禁测试" \
-    "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_java_suppression_registry.py
+    run_python_unit_tests scripts/ci/tests/test_check_java_suppression_registry.py
 fi
 
 if ((contract_governance_changed == 1)); then
   gate_run PRE_COMMIT_JAVA_CONTRACT_RESCAN "Java 契约治理规则全量复扫" \
     "$PYTHON_BIN" scripts/ci/check-java-contract-governance.py
   gate_run PRE_COMMIT_JAVA_CONTRACT_RESCAN_TEST "Java 契约治理门禁测试" \
-    "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_java_contract_governance.py
+    run_python_unit_tests scripts/ci/tests/test_check_java_contract_governance.py
 fi
 
 if ((config_registry_changed == 1)); then
@@ -234,7 +242,7 @@ if ((workflow_changed == 1 || scripts_changed == 1)); then
   gate_run PRE_COMMIT_ACTION_PINNING "GitHub Actions SHA 固定" \
     "$PYTHON_BIN" scripts/ci/check-github-action-pinning.py
   gate_run PRE_COMMIT_ACTION_PINNING_TEST "GitHub Actions SHA 固定门禁测试" \
-    "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_github_action_pinning.py
+    run_python_unit_tests scripts/ci/tests/test_check_github_action_pinning.py
 fi
 
 if ((workflow_changed == 1)); then
@@ -263,7 +271,9 @@ if ((scripts_changed == 1)); then
   gate_run PRE_COMMIT_SCRIPT_GOVERNANCE "脚本治理" \
     "$PYTHON_BIN" scripts/ci/check-script-governance.py
   gate_run PRE_COMMIT_CI_QUALITY_GUARD_TESTS "CI 质量治理门禁测试" \
-    "$PYTHON_BIN" -m unittest \
+    run_python_unit_tests \
+    scripts/ci/tests/test_validate_flyway_schema.py \
+    scripts/ci/tests/test_check_migration_safety.py \
     scripts/ci/tests/test_check_github_action_pinning.py \
     scripts/ci/tests/test_check_script_governance.py \
     scripts/ci/tests/test_check_docs_structure.py \
@@ -289,9 +299,9 @@ if ((scripts_changed == 1)); then
 fi
 if ((sim_xlsx_fixture_changed == 1)); then
   gate_run PRE_COMMIT_SIM_XLSX_FIXTURES "Sim 配置包 Excel schema" \
-    "$PYTHON_BIN" scripts/fix-fixture-xlsx.py --check
+    "$PYTHON_BIN" scripts/sim/fix-fixture-xlsx.py --check
   gate_run PRE_COMMIT_SIM_XLSX_FIXTURE_TEST "Sim 配置包 Excel schema 门禁测试" \
-    "$PYTHON_BIN" -m unittest scripts/ci/tests/test_fix_fixture_xlsx.py
+    run_python_unit_tests scripts/ci/tests/test_fix_fixture_xlsx.py
 fi
 if ((docs_changed == 1)); then
   gate_run PRE_COMMIT_DOCS_STRUCTURE "文档结构" \

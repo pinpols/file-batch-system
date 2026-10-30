@@ -343,7 +343,7 @@ class LoadStepCheckpointPrecheckTest {
   void disabled_unknownPlugin_marksExecutionBeforeFirstChunk() throws Exception {
     checkpointProps.setEnabled(false);
     when(plugin.idempotencyCapability()).thenReturn(IdempotencyCapability.UNKNOWN);
-    when(plugin.loadChunk(any(), any())).thenReturn(1);
+    when(plugin.loadChunk(any(), any())).thenReturn(2, 1);
     when(taskExecutionClient.markNonIdempotentExecutionStarted(TENANT, 41L, "w1", "inv-1"))
         .thenReturn(true);
 
@@ -362,6 +362,31 @@ class LoadStepCheckpointPrecheckTest {
     executionOrder.verify(plugin, times(2)).loadChunk(any(), any());
     verify(taskExecutionClient).markNonIdempotentExecutionStarted(TENANT, 41L, "w1", "inv-1");
     // 不进位点路径:positionStore 不被调
+    verify(positionStore, never()).load(any(), ArgumentMatchers.anyLong(), any());
+  }
+
+  @Test
+  @DisplayName("未知插件部分确认时先建立围栏，再失败并保留暂存文件")
+  void disabled_unknownPlugin_partialAcknowledgementPreservesFence() throws Exception {
+    checkpointProps.setEnabled(false);
+    when(plugin.idempotencyCapability()).thenReturn(IdempotencyCapability.UNKNOWN);
+    when(plugin.loadChunk(any(), any())).thenReturn(1);
+    when(taskExecutionClient.markNonIdempotentExecutionStarted(TENANT, 41L, "w1", "inv-1"))
+        .thenReturn(true);
+    Path validated = writeNdjson(List.of(row("C1"), row("C2")));
+    ImportJobContext ctx = streamingContext(validated);
+    ctx.getAttributes().put(PipelineRuntimeKeys.TASK_ID, 41L);
+    ctx.getAttributes().put(PipelineRuntimeKeys.PARTITION_INVOCATION_ID, "inv-1");
+
+    ImportStageResult result = loadStep.execute(ctx);
+
+    assertThat(result.success()).isFalse();
+    assertThat(Files.exists(validated)).isTrue();
+    InOrder executionOrder = inOrder(taskExecutionClient, plugin);
+    executionOrder
+        .verify(taskExecutionClient)
+        .markNonIdempotentExecutionStarted(TENANT, 41L, "w1", "inv-1");
+    executionOrder.verify(plugin).loadChunk(any(), any());
     verify(positionStore, never()).load(any(), ArgumentMatchers.anyLong(), any());
   }
 

@@ -2,7 +2,21 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper">
 
-    <select id="selectByQuery" resultType="map">
+    <resultMap id="TenantRowMap"
+               type="io.github.pinpols.batch.console.domain.rbac.view.TenantRow">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="tenant_name" javaType="java.lang.String"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="description" javaType="java.lang.String"/>
+            <arg column="created_by" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.lang.Object"/>
+            <arg column="updated_at" javaType="java.lang.Object"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="TenantRowMap">
         select id, tenant_id, tenant_name, status, description, created_at, updated_at, created_by
         from batch.tenant
         <where>
@@ -32,7 +46,7 @@
         </where>
     </select>
 
-    <select id="selectByTenantId" resultType="map">
+    <select id="selectByTenantId" resultMap="TenantRowMap">
         select id, tenant_id, tenant_name, status, description, created_at, updated_at, created_by
         from batch.tenant
         where tenant_id = #{tenantId}
@@ -40,7 +54,7 @@
     </select>
 
     <!-- R7-A3-P1: 批量按 tenant_id 取，替代 batch create N+1。 -->
-    <select id="selectByTenantIds" resultType="map">
+    <select id="selectByTenantIds" resultMap="TenantRowMap">
         select id, tenant_id, tenant_name, status, description, created_at, updated_at, created_by
         from batch.tenant
         where tenant_id in

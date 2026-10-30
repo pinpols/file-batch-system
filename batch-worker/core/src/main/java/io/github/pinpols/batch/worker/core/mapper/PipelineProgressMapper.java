@@ -1,9 +1,7 @@
 package io.github.pinpols.batch.worker.core.mapper;
 
-import io.github.pinpols.batch.worker.core.param.PipelineProgressAdvanceParam;
-
-
 import io.github.pinpols.batch.worker.core.domain.PipelineProgressEntity;
+import io.github.pinpols.batch.worker.core.param.PipelineProgressAdvanceParam;
 import org.apache.ibatis.annotations.Param;
 
 /**
@@ -24,8 +22,7 @@ public interface PipelineProgressMapper {
    * UPSERT 位点；返回0表示父实例不存在或不属于调用租户，调用方必须拒绝成功。{@code processedCountIncrement} 累加到当前 processed_count。已
    * completed 的行不会被回写位点(防止迟到 chunk 把已完成位点撤回)。
    */
-  int advance(
-      PipelineProgressAdvanceParam parameters);
+  int advance(PipelineProgressAdvanceParam parameters);
 
   /** 阶段整体完成时调用;completed=true + completed_at = now。幂等(已 completed 不变)。 */
   int markCompleted(

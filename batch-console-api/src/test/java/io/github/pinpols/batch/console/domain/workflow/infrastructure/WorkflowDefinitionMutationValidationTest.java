@@ -19,6 +19,7 @@ import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.support.JobResourceAssignmentGuard;
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.ActiveCalendarRow;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService.LockHolder;
@@ -40,7 +41,6 @@ import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -109,7 +109,7 @@ class WorkflowDefinitionMutationValidationTest {
   @DisplayName("create:validator 抛错 → 异常传播,绝不 insert 节点/边")
   void create_blocksPersist_whenValidatorThrows() {
     // arrange
-    when(definitionMapper.selectByUniqueKey(TENANT, "WF_CYCLE", 1)).thenReturn(null);
+    when(definitionMapper.selectLatestByCode(TENANT, "WF_CYCLE")).thenReturn(null);
     doThrow(BizException.of(ResultCode.VALIDATION_ERROR, "error.workflow.dag.cycle_detected"))
         .when(dagValidator)
         .validate(eq(TENANT), any());
@@ -124,7 +124,7 @@ class WorkflowDefinitionMutationValidationTest {
   @Test
   @DisplayName("create:拒绝当前租户不存在的日历,不写入定义")
   void create_blocksPersist_whenCalendarReferenceIsUnknown() {
-    when(definitionMapper.selectByUniqueKey(TENANT, "WF_CYCLE", 1)).thenReturn(null);
+    when(definitionMapper.selectLatestByCode(TENANT, "WF_CYCLE")).thenReturn(null);
     WorkflowDefinitionSaveRequest body = request();
     body.setCalendarCode("missing-calendar");
     when(businessCalendarMapper.selectActiveByTenantAndCalendarCode(TENANT, "missing_calendar"))
@@ -181,7 +181,8 @@ class WorkflowDefinitionMutationValidationTest {
     when(designLockService.currentHolder(TENANT, DEF_ID))
         .thenReturn(new LockHolder("alice", Instant.MAX));
     when(businessCalendarMapper.selectActiveByTenantAndCalendarCode(TENANT, "new_calendar"))
-        .thenReturn(Map.of());
+        .thenReturn(
+            new ActiveCalendarRow(1L, TENANT, "new_calendar", null, null, null, null, null, null));
     when(definitionMapper.hasCalendarScopedExpectations(TENANT, DEF_ID)).thenReturn(true);
     WorkflowDefinitionSaveRequest body = request();
     body.setCalendarCode("new_calendar");

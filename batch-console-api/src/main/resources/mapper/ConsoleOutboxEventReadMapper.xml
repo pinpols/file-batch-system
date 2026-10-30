@@ -9,11 +9,21 @@
           and publish_status = #{publishStatus}
     </select>
 
-    <select id="statsByStatus" resultType="map">
-        select publish_status as "publishStatus",
-               count(*)       as "count",
-               min(created_at) as "oldest",
-               max(created_at) as "newest"
+    <resultMap id="OutboxEventStatusStatMap"
+               type="io.github.pinpols.batch.console.domain.ops.view.OutboxEventStatusStat">
+        <constructor>
+            <arg column="publish_status" javaType="java.lang.String"/>
+            <arg column="status_count" javaType="long"/>
+            <arg column="oldest" javaType="java.time.Instant"/>
+            <arg column="newest" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <select id="statsByStatus" resultMap="OutboxEventStatusStatMap">
+        select publish_status,
+               count(*)        as status_count,
+               min(created_at) as oldest,
+               max(created_at) as newest
         from batch.outbox_event
         where tenant_id = #{tenantId}
         group by publish_status

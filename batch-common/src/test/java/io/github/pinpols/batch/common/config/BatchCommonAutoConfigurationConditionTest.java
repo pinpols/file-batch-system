@@ -78,7 +78,8 @@ class BatchCommonAutoConfigurationConditionTest {
     contextRunner
         .withConfiguration(AutoConfigurations.of(
             BatchKafkaNamespaceAutoConfiguration.class,
-            BatchObjectCryptoAutoConfiguration.class, BatchObjectStoreAutoConfiguration.class))
+            BatchObjectCryptoAutoConfiguration.class,
+            BatchObjectStoreAutoConfiguration.class))
         .withPropertyValues(
             "spring.profiles.active=test",
             "batch.storage.backend=filesystem",

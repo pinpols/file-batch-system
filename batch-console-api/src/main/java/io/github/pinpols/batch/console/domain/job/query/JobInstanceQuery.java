@@ -1,10 +1,10 @@
 package io.github.pinpols.batch.console.domain.job.query;
 
-import lombok.Builder;
-
 import io.github.pinpols.batch.common.model.PageRequest;
 import java.time.Instant;
 import java.util.List;
+import lombok.Builder;
+
 @Builder
 public record JobInstanceQuery(
     String tenantId,

@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.config.RuntimeInfrastructureInspector;
 import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
 import io.github.pinpols.batch.common.stateful.StatefulBackendIdentity;
 import io.github.pinpols.batch.orchestrator.config.QuotaProperties;
+import java.util.Locale;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -12,7 +13,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
 
-/** Refuses unmarked quota runtime-store or connection-location changes at startup. */
+/** 启动时拒绝未标记的配额运行时存储或连接位置变更。 */
 @Slf4j
 @Component
 public class QuotaRuntimeBackendGuard implements ApplicationRunner, Ordered {
@@ -50,19 +51,10 @@ public class QuotaRuntimeBackendGuard implements ApplicationRunner, Ordered {
   StatefulBackendGuard.DesiredBackend desiredBackend() {
     String configuredRuntimeStore = properties.getRuntimeStore();
     String trimmedRuntimeStore = configuredRuntimeStore.trim();
-    String backend = trimmedRuntimeStore.toLowerCase();
+    String backend = trimmedRuntimeStore.toLowerCase(Locale.ROOT);
     String identity =
         switch (backend) {
-          case QuotaRuntimeBackends.REDIS -> {
-            RuntimeInfrastructureInspector.RedisCoordinates redis =
-                infrastructureInspector.redisCoordinates();
-            yield StatefulBackendIdentity.redis(
-                redis.host(),
-                redis.port(),
-                redis.database(),
-                redis.sentinelMaster(),
-                redis.sentinelNodes());
-          }
+          case QuotaRuntimeBackends.REDIS -> infrastructureInspector.redisBackendIdentity();
           case QuotaRuntimeBackends.DATABASE ->
             StatefulBackendIdentity.database(infrastructureInspector.datasourceUrl());
           default ->

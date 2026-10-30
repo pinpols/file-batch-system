@@ -82,6 +82,20 @@ class CalendarBizDateResolverTest {
   }
 
   @Test
+  @DisplayName("DST 回拨后的重复时段不能把已切换的业务日再退回前一天")
+  void shouldKeepBusinessDayMonotonic_whenClockRepeatsBeforeCutoff() {
+    CalendarBizDateDefinition calendar =
+        calendar("America/New_York", LocalTime.of(1, 30), "SKIP", Set.of(), Set.of());
+    LocalDate expected = LocalDate.of(2026, 11, 1);
+    LocalDate afterFirstCutoff =
+        resolver.resolve(instant("2026-11-01T05:40:00Z"), ZoneId.of("UTC"), calendar);
+    LocalDate repeatedHourBeforeCutoff =
+        resolver.resolve(instant("2026-11-01T06:10:00Z"), ZoneId.of("UTC"), calendar);
+    assertThat(afterFirstCutoff).isEqualTo(expected);
+    assertThat(repeatedHourBeforeCutoff).isEqualTo(expected);
+  }
+
+  @Test
   @DisplayName("回退到的业务日期是节假日且滚动规则为 SKIP 时返回 null,提示调用方跳过调度")
   void shouldSkipWhenPreviousBusinessDayIsHolidayAndRuleIsSkip() {
     LocalDate bizDate = resolver.resolve(

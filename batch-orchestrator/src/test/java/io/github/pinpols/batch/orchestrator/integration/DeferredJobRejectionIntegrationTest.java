@@ -111,9 +111,7 @@ class DeferredJobRejectionIntegrationTest extends AbstractIntegrationTest {
         jdbc, tenant, "DISPATCH", "DEFERRED_UPSTREAM", TriggerType.API, BIZ_DATE);
     jdbc.update(insertJobDependencySql, tenant, downstream.jobCode(), upstream.jobCode());
     if (failureHandler) {
-      jdbc.update(
-          updateWorkflowNodeSql,
-          downstream.workflowDefinitionId());
+      jdbc.update(updateWorkflowNodeSql, downstream.workflowDefinitionId());
       jdbc.update(insertWorkflowNodeSql, tenant, downstream.workflowDefinitionId());
       jdbc.update(updateWorkflowEdgeSql, downstream.workflowDefinitionId());
       jdbc.update(insertWorkflowEdgeSql, tenant, downstream.workflowDefinitionId());
@@ -131,10 +129,7 @@ class DeferredJobRejectionIntegrationTest extends AbstractIntegrationTest {
         RlsTenantContextHolder.runWithTenant(tenant, () -> launchService.launch(request))
             .instanceNo());
     childRequestId = jdbc.queryForObject(selectRequestIdSql, String.class, tenant, runId);
-    nodeRunId = jdbc.queryForObject(
-        selectIdSql,
-        Long.class,
-        runId);
+    nodeRunId = jdbc.queryForObject(selectIdSql, Long.class, runId);
     String selectedWaitStatus = jdbc.queryForObject(selectWaitStatusSql, String.class, tenant);
     assertThat(selectedWaitStatus).isEqualTo("WAITING");
   }
@@ -236,9 +231,7 @@ class DeferredJobRejectionIntegrationTest extends AbstractIntegrationTest {
     startRealDeferredJob();
     corruptWait();
     // 建立已进入下一尝试的前置事实；核心动作仍是被测恢复器处理旧请求。
-    jdbc.update(
-        updateWorkflowNodeRunSql,
-        nodeRunId);
+    jdbc.update(updateWorkflowNodeRunSql, nodeRunId);
     Long newer = jdbc.queryForObject(insertWorkflowNodeRunSql, Long.class, runId);
     reconciler.reconcileTenant(tenant);
     String selectedNodeStatus = jdbc.queryForObject(selectNodeStatusSql, String.class, newer);
@@ -342,10 +335,8 @@ class DeferredJobRejectionIntegrationTest extends AbstractIntegrationTest {
     RlsTenantContextHolder.runWithTenant(tenant, () -> waitingService.rejectInvalidWait(waiting));
     jdbc.execute(doStatementSql);
     jdbc.execute(grantUsageSql);
-    jdbc.execute(
-        grantSelectSql);
-    jdbc.execute(
-        grantUsageSql2);
+    jdbc.execute(grantSelectSql);
+    jdbc.execute(grantUsageSql2);
     new TransactionTemplate(transactionManager).execute(tx -> {
       jdbc.execute(setLocalSql);
       Boolean currentRoleHasNoRlsBypassPrivilege = jdbc.queryForObject(selectNotSql, Boolean.class);
@@ -409,9 +400,7 @@ class DeferredJobRejectionIntegrationTest extends AbstractIntegrationTest {
     jdbc.update(deleteOutboxEventSql, tenant);
     jdbc.update(deleteOutboxEventDedupKeySql, tenant);
     jdbc.update(deleteJobDependencyWaitingLaunchSql, tenant);
-    jdbc.update(
-        deleteTriggerRequestSql,
-        tenant);
+    jdbc.update(deleteTriggerRequestSql, tenant);
     jdbc.update(deleteWorkflowNodeRunSql, tenant);
     jdbc.update(deleteWorkflowRunSql, tenant);
     jdbc.update(deleteTriggerRequestSql2, tenant);

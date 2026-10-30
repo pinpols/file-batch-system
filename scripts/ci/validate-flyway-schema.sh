@@ -9,10 +9,10 @@
 # 2) 版本号连续单调:不允许跳号产生空洞(eg V79 之后直接 V81 漏 V80,人工生 SQL 易撞)
 # 3) 空文件 / 全注释文件:防开发者只 commit 文件名忘 SQL 主体
 # 4) BOM / CRLF:防 Windows 编辑器引入,Flyway 计算 checksum 时与 LF 不一致
-# 5) 已 commit 的 V## 文件被改动(checksum drift):git diff base..HEAD 检查 db/migration/V##
-#    如果某个 V## 在 base 已存在 + HEAD 内容变了,失败 — Flyway 启动时会因 checksum mismatch 拒绝迁移。
-#    唯一例外:HEAD 精确恢复为 base 的父提交版本,用于撤销刚误合入主线的 checksum 漂移。
-#    新增的 V## 文件不算漂移
+# 5) 已有 V## 文件改动:拒绝有效 SQL 改动；只改 SQL 注释或 COMMENT ON 元数据时放行。
+#    注释改动仍会改变 Flyway checksum，仅适用于从全新空库部署，不兼容原库原位升级。
+#    唯一恢复例外:HEAD 精确恢复为 base 的父提交版本，用于撤销刚误合入主线的 checksum 漂移。
+#    新增的 V## 文件不受 checksum 检查。
 #
 # 不做(留给 IT 阶段或 ops):
 # - 真起 postgres 跑 migrate(IT 已覆盖)
@@ -20,6 +20,7 @@
 # =========================================================
 set -euo pipefail
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 MIGRATION_DIR="${1:-db/migration}"
 GATE_CODE="FLYWAY_SCHEMA"
 GATE_NAME="Flyway 迁移静态校验"
@@ -66,17 +67,18 @@ while IFS= read -r file; do
     echo "❌ ERROR: migration version V$v out of order (expected >= $expected_next)"
     errors=$((errors + 1))
   elif [[ "$v" -gt "$expected_next" ]]; then
-    echo "⚠️  WARNING: gap in migration versions (expected V$expected_next, got V$v) — file: $base"
+    echo "❌ ERROR: gap in migration versions (expected V$expected_next, got V$v) — file: $base"
+    errors=$((errors + 1))
   fi
   expected_next=$((v + 1))
-done < <(ls "$MIGRATION_DIR"/V*.sql 2>/dev/null | sort -V)
+done < <(find "$MIGRATION_DIR" -maxdepth 1 -type f -name 'V*.sql' -print | sort -V)
 
 if [[ $file_count -eq 0 ]]; then
   echo "❌ 不通过 | code=${GATE_CODE} | gate=${GATE_NAME} | exit_code=1"
   echo "  - no V*.sql files found under $MIGRATION_DIR"
   exit 1
 fi
-echo "ℹ️  $file_count migration files name/uniqueness/order check ok"
+echo "ℹ️  Checked names, uniqueness and order of $file_count migration files"
 
 # ── 校验 3: 完全空文件(0 字节) ─────────────────────────────────────────────
 # 注:全注释占位是允许的(eg V35 历史脚本被 V51 替代后保留空 body 维持 checksum 连续性);
@@ -109,40 +111,62 @@ echo "ℹ️  No BOM / CRLF in migration files"
 if git rev-parse --git-dir >/dev/null 2>&1 && git rev-parse "$BASE_REF" >/dev/null 2>&1; then
   drifted=""
   restored=""
-  while IFS= read -r changed; do
-    [[ -z "$changed" ]] && continue
-    if [[ "$changed" =~ ^${MIGRATION_DIR}/V[0-9]+__.+\.sql$ ]]; then
-      # 文件在 BASE_REF 已存在 → 不允许修改
-      if git cat-file -e "$BASE_REF:$changed" 2>/dev/null; then
-        # 允许把刚在 base 中误改的 migration 精确恢复为 base^ 内容。只比较完整 blob,
-        # 不允许在恢复时顺带修改任何 SQL 或注释。
-        if git cat-file -e "$BASE_REF^:$changed" 2>/dev/null \
-          && git show "$BASE_REF^:$changed" | cmp -s - "$changed"; then
-          restored="${restored:+$restored$'\n'}   - $changed"
-          continue
-        fi
-        drifted="${drifted:+$drifted$'\n'}   - $changed"
-      fi
-    fi
-  done < <(
+  comment_only=""
+  mapfile -t migration_changes < <(
     {
       git diff --name-only "$BASE_REF...HEAD" 2>/dev/null || true
       git diff --name-only --diff-filter=M -- "$MIGRATION_DIR/V*.sql"
       git diff --cached --name-only --diff-filter=M -- "$MIGRATION_DIR/V*.sql"
-    } | sort -u
+    } | sort -u | while IFS= read -r changed; do
+      [[ "$changed" =~ ^${MIGRATION_DIR}/V[0-9]+__.+\.sql$ ]] && printf '%s\n' "$changed"
+    done
   )
+
+  if [[ "${#migration_changes[@]}" -gt 0 ]]; then
+    if ! classifications="$(python3 "$ROOT_DIR/scripts/ci/flyway_sql_diff.py" "$BASE_REF" "${migration_changes[@]}")"; then
+      echo "❌ ERROR: cannot classify existing migration changes safely"
+      errors=$((errors + 1))
+    else
+      while IFS=$'\t' read -r classification changed; do
+        case "$classification" in
+          COMMENT)
+            comment_only="${comment_only:+$comment_only$'\n'}   - $changed"
+            ;;
+          SQL)
+            # 允许把刚在 base 中误改的 migration 精确恢复为 base^ 内容。
+            if git cat-file -e "$BASE_REF^:$changed" 2>/dev/null \
+              && git show "$BASE_REF^:$changed" | cmp -s - "$changed"; then
+              restored="${restored:+$restored$'\n'}   - $changed"
+            else
+              drifted="${drifted:+$drifted$'\n'}   - $changed"
+            fi
+            ;;
+        esac
+      done <<< "$classifications"
+    fi
+  fi
 
   if [[ -n "$restored" ]]; then
     echo "⚠️  migration checksum restored exactly to $BASE_REF^:"
     echo "$restored"
   fi
+  if [[ -n "$comment_only" ]]; then
+    count=$(printf '%s\n' "$comment_only" | wc -l | tr -d ' ')
+    echo "⚠️  $count existing migration(s) only change SQL comments / COMMENT ON metadata."
+    echo "   Flyway checksums change; deploy only by creating a fresh empty database."
+  fi
   if [[ -n "$drifted" ]]; then
-    echo "❌ ERROR: existing migration file(s) modified in this PR (Flyway checksum drift):"
-    echo "$drifted"
-    echo "   action: 不要改已 commit 的 V<num>__*.sql,要修就新建 V<next>__fix_xxx.sql 走重做语义"
-    errors=$((errors + 1))
+    if [[ "${FLYWAY_ALLOW_EXISTING_DDL_CHANGES:-false}" == "true" ]]; then
+      echo "⚠️  temporary exception: existing migration SQL changes are allowed for fresh empty databases only:"
+      echo "$drifted"
+    else
+      echo "❌ ERROR: existing migration file(s) modified in this PR (Flyway checksum drift):"
+      echo "$drifted"
+      echo "   action: 不要改已 commit 的 V<num>__*.sql,要修就新建 V<next>__fix_xxx.sql 走重做语义"
+      errors=$((errors + 1))
+    fi
   else
-    echo "ℹ️  No checksum drift on existing migrations vs $BASE_REF"
+    echo "ℹ️  No effective SQL drift on existing migrations vs $BASE_REF"
   fi
 else
   echo "⚠️  skipping checksum drift check (not in git repo or BASE_REF unavailable)"

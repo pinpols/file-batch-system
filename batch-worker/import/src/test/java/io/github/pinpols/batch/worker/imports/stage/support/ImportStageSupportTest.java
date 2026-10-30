@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.FileStatus;
@@ -24,6 +25,19 @@ import org.junit.jupiter.api.Test;
 
 @DisplayName("导入阶段支撑工具单测:分块大小上限与文件状态恢复感知更新的语义")
 class ImportStageSupportTest {
+
+  @Test
+  @DisplayName("演练复用已有文件时不推进正式文件状态")
+  void shouldNotUpdateExistingFileStatus_whenDryRun() {
+    PlatformFileRecordRepository repository = mock(PlatformFileRecordRepository.class);
+    ImportJobContext context = context(99L);
+    context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
+
+    ImportStageSupport.updateFileStatusRecoverAware(
+        repository, context, FileStatus.PARSING.code(), Map.of());
+
+    verifyNoInteractions(repository);
+  }
 
   @Test
   @DisplayName("模板分块大小在上限内时,按模板值生效")

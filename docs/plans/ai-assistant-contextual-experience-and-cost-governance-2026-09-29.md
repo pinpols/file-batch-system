@@ -67,16 +67,17 @@ Console AI 应帮助用户处理批量调度系统内的问题，例如任务失
 ## 4. 服务端能力链
 
 ```mermaid
-flowchart LR
-    UI[全局入口 / 页面上下文] --> AUTH[认证、AI 权限、租户校验]
-    AUTH --> QUOTA[速率、并发、日/月成本预算]
-    QUOTA --> SCOPE[领域意图与安全门禁]
-    SCOPE -->|拒绝| AUDIT[审计拒绝原因]
-    SCOPE -->|允许| CTX[上下文白名单与权限复核]
-    CTX --> RAG[知识检索 / 租户内只读工具]
-    RAG --> LLM[指定 provider / 模型]
-    LLM --> MSG[会话回复]
-    MSG --> AUDIT
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  U[页面上下文 / 全局入口] --> A[认证、AI 权限与租户校验]
+  A --> Q[速率、并发与成本预算]
+  Q --> S{领域与安全门禁}
+  S -->|拒绝| L[审计原因]
+  S -->|允许| C[上下文白名单与权限复核]
+  C --> R[租户内只读检索 / 工具]
+  R --> M[指定 provider / 模型]
+  M --> P[会话回复]
+  P --> L
 ```
 
 实现约束：

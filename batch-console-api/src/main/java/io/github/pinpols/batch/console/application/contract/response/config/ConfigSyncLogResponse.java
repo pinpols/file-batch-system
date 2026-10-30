@@ -1,13 +1,8 @@
 package io.github.pinpols.batch.console.application.contract.response.config;
 
-import static io.github.pinpols.batch.console.application.contract.response.config.ResponseFieldReader.instantValue;
-import static io.github.pinpols.batch.console.application.contract.response.config.ResponseFieldReader.integerValue;
-import static io.github.pinpols.batch.console.application.contract.response.config.ResponseFieldReader.longValue;
-import static io.github.pinpols.batch.console.application.contract.response.config.ResponseFieldReader.stringValue;
-import static io.github.pinpols.batch.console.application.contract.response.config.ResponseFieldReader.value;
-
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.console.domain.config.view.ConfigSyncLogRow;
 import java.time.Instant;
-import java.util.Map;
 import lombok.Builder;
 
 /** 单次配置同步审计日志。 */
@@ -28,22 +23,25 @@ public record ConfigSyncLogResponse(
     String operatorId,
     Instant createdAt) {
 
-  public static ConfigSyncLogResponse from(Map<String, Object> row) {
+  public static ConfigSyncLogResponse from(ConfigSyncLogRow row) {
+    if (EmptyChecks.isNull(row)) {
+      return null;
+    }
     return ConfigSyncLogResponse.builder()
-        .id(longValue(row, "id"))
-        .tenantId(stringValue(row, "tenantId"))
-        .syncDirection(stringValue(row, "syncDirection"))
-        .sourceEnv(stringValue(row, "sourceEnv"))
-        .targetEnv(stringValue(row, "targetEnv"))
-        .configTypes(stringValue(row, "configTypes"))
-        .totalItems(integerValue(row, "totalItems"))
-        .successItems(integerValue(row, "successItems"))
-        .failedItems(integerValue(row, "failedItems"))
-        .skippedItems(integerValue(row, "skippedItems"))
-        .syncStatus(stringValue(row, "syncStatus"))
-        .detailJson(value(row, "detailJson"))
-        .operatorId(stringValue(row, "operatorId"))
-        .createdAt(instantValue(row, "createdAt"))
+        .id(row.id())
+        .tenantId(row.tenantId())
+        .syncDirection(row.syncDirection())
+        .sourceEnv(row.sourceEnv())
+        .targetEnv(row.targetEnv())
+        .configTypes(row.configTypes())
+        .totalItems(row.totalItems())
+        .successItems(row.successItems())
+        .failedItems(row.failedItems())
+        .skippedItems(row.skippedItems())
+        .syncStatus(row.syncStatus())
+        .detailJson(row.detailJson())
+        .operatorId(row.operatorId())
+        .createdAt(row.createdAt())
         .build();
   }
 }

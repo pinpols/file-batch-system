@@ -29,7 +29,7 @@
 | 数据库与 SQL | `check-biz-table-tenant-rls.py`、`check-db-comment-coverage.sh`、`check-db-scripts-safety.sh`、`check-migration-safety.sh`、`check-mybatis-generated-key-columns.py`、`check-new-table-doc-coverage.py`、`check-no-positional-insert-select-star.py`、`check-postgres-client-fallback.sh`、`check-schema-governance-assets.py`、`check-sql-config-boundaries.py`、`check-sql-config-boundaries.sh`、`validate-flyway-schema.sh` |
 | API 与兼容 | `check-console-openapi-paths.py`、`check-openapi-breaking.sh` |
 | Java 质量 | `check-empty-checks.py`、`check-java-lombok-injection.py`、`check-java-logging-governance.py`、`check-java-readability.py`、`check-java-text-block-style.py`、`check-java-structured-string-concat.py`（增量阻止结构化多行模板拼接）、`check-java-suppression-registry.py`、`check-mapof-null-values.py`、`check-pipeline-summary-keys.py`（stage 摘要键 / 续跑回灌键 / 前端计数键契约）、`check-required-java-docs.sh` |
-| 测试完整性 | `check-e2e-run-completeness.sh`、`check-e2e-shard-coverage.sh`、`check-integration-test-coverage.py`、`check-module-test-coverage.sh`、`check-no-silent-disabled-tests.sh`、`check-test-conventions.py`（中文 `@DisplayName` 类级/方法级 + 测试方法命名，增量拦截）、`check-flaky-test-governance.py`、`check-diff-coverage.py`、`run-critical-mutation.sh`、`report-ci-quality-trends.py`、`scripts/fix-fixture-xlsx.py --check`（四份 Sim 配置包 Excel schema 与内容约束） |
+| 测试完整性 | `check-e2e-run-completeness.sh`、`check-e2e-shard-coverage.sh`、`check-integration-test-coverage.py`、`check-module-test-coverage.sh`、`check-no-silent-disabled-tests.sh`、`check-test-conventions.py`（中文 `@DisplayName` 类级/方法级 + 测试方法命名，增量拦截）、`check-flaky-test-governance.py`、`check-diff-coverage.py`、`run-critical-mutation.sh`、`report-ci-quality-trends.py`、`scripts/sim/fix-fixture-xlsx.py --check`（四份 Sim 配置包 Excel schema 与内容约束） |
 | 安全与许可 | `check-dependency-licenses.sh`、`license-allowlist.sh`、`check-license-compliance.sh`、`check-sbom-sync.sh`、`check-trivy-ignore-expiry.py` |
 | 观测 | `check-helm-prometheusrule-sync.sh`、`check-log-lifecycle.sh`、`check-observability-contract.py` |
 
@@ -45,7 +45,7 @@
 | 数据库 / SQL | 业务表缺租户隔离、迁移有破坏风险、位置式 `INSERT ... SELECT *`、SQL 绕过独立文件与变量传值 | 由权威状态/配置来源驱动的 SQL；经过登记并有专项测试的精确例外 | `check-biz-table-tenant-rls.py`、`check-migration-safety.sh`、`check-no-positional-insert-select-star.py`、`check-sql-config-boundaries.sh` |
 | API 与 SDK | OpenAPI 出现未登记破坏性变更、五语言共享契约不一致、运行时版本超出声明范围 | 只改变实现且不改变公开契约的内部重构；允许的兼容新增字段；ADR-048 批准的全新库同步切换仅登记精确列出的旧 Workflow/Pipeline 契约及计划 I6/R35 的 `POST workflow-runs/{id}/skip-node` 必填 query `reason`，其他 breaking 仍失败 | `check-openapi-breaking.sh`、`check-console-openapi-paths.py`、SDK parity workflow |
 | Java 规约与架构 | 新增空检查、字段注入/日志违规、固定协议值漂移、结构化多行字符串退化、依赖越界 | 不在规则覆盖范围内的测试 fixture/说明文本；已精确登记且有理由的例外 | `check-empty-checks.py`、`check-java-contract-governance.py`、`check-java-lombok-injection.py`、`check-dependency-boundaries.py` |
-| 测试完整性 | 测试被静默禁用、E2E 分片漏场景、差异覆盖率不足、测试展示名称不符合约定；模块测试 profile 重复维护共享默认项；Sim 配置包 Excel 表头或内容约束与当前导入 schema 漂移 | 按契约定义的负向用例、明确标记且登记的 flaky 隔离项、Java 测试为特定场景显式覆盖配置 | `check-no-silent-disabled-tests.sh`、`check-e2e-run-completeness.sh`、`check-e2e-shard-coverage.sh`、`check-diff-coverage.py`、`check-test-config-sources.py`、`scripts/fix-fixture-xlsx.py --check` |
+| 测试完整性 | 测试被静默禁用、E2E 分片漏场景、差异覆盖率不足、测试展示名称不符合约定；模块测试 profile 重复维护共享默认项；Sim 配置包 Excel 表头或内容约束与当前导入 schema 漂移 | 按契约定义的负向用例、明确标记且登记的 flaky 隔离项、Java 测试为特定场景显式覆盖配置 | `check-no-silent-disabled-tests.sh`、`check-e2e-run-completeness.sh`、`check-e2e-shard-coverage.sh`、`check-diff-coverage.py`、`check-test-config-sources.py`、`scripts/sim/fix-fixture-xlsx.py --check` |
 | 安全 / 供应链 / 许可 | 未登记的高危漏洞豁免、例外到期、禁止许可证、SBOM 与 POM 不一致、Action 使用可变引用 | 扫描器确认的误报可按规则与路径精确登记；许可结论明确且符合项目策略的依赖 | `check-trivy-ignore-expiry.py`、`check-license-compliance.sh`、`check-sbom-sync.sh`、`check-github-action-pinning.py` |
 | 可观测性 | 告警定义与服务指标契约漂移、日志生命周期破坏敏感信息保护要求 | 业务日志内容变化但不改变受守护字段、生命周期或敏感信息规则 | `check-observability-contract.py`、`check-helm-prometheusrule-sync.sh`、`check-log-lifecycle.sh` |
 
@@ -93,7 +93,24 @@ Git hook、GitHub workflow 和独立事实来源检查统一输出最终状态�
 ⏭️ 忽略 | code=LOCAL_EXPERIMENT | gate=本地实验检查 | group=quality | mode=ignore | exit_code=0 | action=none | reason=统一控制配置未执行该门禁
 ```
 
-字段顺序固定为状态、`code`、`gate`、`group`、`mode`、`exit_code`、`action`；存在补充说明时只在固定字段后追加 `reason`。共享 shell 门禁由 `scripts/lib/gate-result.sh` / `scripts/ci/run-gate.sh` 生成。`gate_run` 会过滤被调用检查器输出的旧式状态行（缺少 `group` 或 `mode`），保留诊断内容和已合规的嵌套状态行，再输出本门禁唯一权威结果；因此 CI workflow 中必须经统一执行器调用门禁。独立检查器直接运行时仍应遵循同一格式。扫描器报告、测试清单和运行进度不是门禁状态行，不强行改成该格式。
+字段顺序固定为状态、`code`、`gate`、`group`、`mode`、`exit_code`、`action`；补充信息只在末尾追加`reason`。日志和GitHub步骤摘要使用同一条结果，`code`保留各仓既有命名空间，不改required check名称。
+
+| 状态 | 含义与退出规则 |
+|---|---|
+| PASS / 通过 | 命令成功，`exit_code=0`，`action=none` |
+| FAIL / 不通过 | 保留原命令非零退出码，`action=fix_and_retry`；收集模式最后统一非零退出 |
+| SKIP / 跳过 | 条件不满足，`mode=conditional`并给出原因，不作为已执行或已通过 |
+| REPORT / 报告 | 仍执行命令，保留实际非零`exit_code`，`action=review_report`；报告模式本身返回0，不冒充PASS |
+| IGNORE / 忽略 | 控制配置要求不执行，`mode=ignore`并给出原因，不冒充PASS |
+
+门禁自测使用独立的控制输入、失败账本和摘要文件；预设负例不进入调用方的真实CI摘要。真实执行器只发布本次实际结果，本地自测通过不等于远端CI已通过。
+
+结果字段始终保持单行：百分号、管道、回车、换行、制表符分别编码为`%25`、`%7C`、`%0D`、`%0A`、`%09`。非法状态、执行器参数缺失及无命令均输出结构化错误并返回2，不能落成空命令PASS。
+
+旧检查器缺少`group`/`mode`的成功状态行去重；旧失败、报告、忽略和跳过以`诊断 |`前缀保留，避免丢掉唯一原因；已合规的嵌套结果、扫描报告、测试进度和构建日志保留。最终门禁状态由执行器给出，不能从外围命令退出0推断所有子检查都执行过。失败汇总逐项复用同一格式，最后输出`GATE_COLLECTION_SUMMARY`、失败数并返回1。
+
+定向自测：`bash scripts/ci/tests/test-gate-result-collection.sh`（包含控制模式和共用格式契约），复用PR/Full既有自测步骤。
+
 
 ### 分组、开关和模式
 
@@ -249,7 +266,7 @@ python3 scripts/ci/check-comment-language.py --base-ref origin/main
 python3 scripts/ci/check-comment-language.py --paths scripts load-tests/scripts load-tests/sql
 ```
 
-当前作为本地增量预检接入 `scripts/local/pre-commit-checks.sh`，仅检查暂存 diff 新增的说明性注释，不扫描存量文件。PR/Full CI 暂不阻断；后续评估历史迁移 checksum 风险及误报率后，再单独启用 CI 门禁。Flyway checksum 校验仍独立生效，不能因改动仅涉及注释就跳过：已应用迁移文件内容变化会造成校验和差异，部署前必须按迁移治理流程处理。
+当前作为本地增量预检接入 `scripts/local/pre-commit-checks.sh`，仅检查暂存 diff 新增的说明性注释，不扫描存量文件。PR/Full CI 暂不阻断。Flyway 已提交迁移的注释修改会改变 checksum；本项目只支持全新空库部署，不支持已应用旧迁移的数据库原位升级。结构校验仅在有效 SQL 未变化时放行注释和 `COMMENT ON` 元数据修改；对已提交迁移的 DDL/DML 变化仍会阻断，修复应新增迁移版本。
 
 ## `check-empty-checks.py`
 
@@ -335,7 +352,7 @@ bash scripts/ci/run-staging-live-smoke.sh
 
 PR / Full Gate 的各 Java shard 在现有测试后生成 JaCoCo XML，并由 `check-diff-coverage.py` 校验本 shard 变更可执行行覆盖率不低于 80%。Console API 的 PR shard 在单测后另跑配置包和配置定义的定向 Testcontainers 集成测试，追加 JaCoCo 执行数据；Full Gate 仍执行 Console API 完整单测与集成测试。这样保留覆盖率门槛，同时避免将所有慢速集成测试重复塞入 PR。每周或手动 Full Gate 通过 `run-critical-mutation.sh` 对文件状态机和生命周期映射器运行 PIT，不扩展到全仓。
 
-Full Gate 汇总 Surefire/Failsafe 报告与最近 30 次工作流运行，使用 `report-ci-quality-trends.py` 输出 JSON 和 Markdown，保存 90 天。
+Full Gate 汇总 Surefire/Failsafe 报告与最近 30 次工作流运行，使用 `report-ci-quality-trends.py` 输出 JSON 和 Markdown，保存 90 天。报告区分 E2E 套件全部跳过与成功，并按分片统计 XML 中的测试累计时间；该时间不含排队或作业准备，不能作为墙钟耗时。
 
 ```bash
 bash scripts/ci/collect-flaky.sh
@@ -345,6 +362,8 @@ bash scripts/ci/collect-flaky.sh -- --json build/flaky.json --warn-threshold 3
 ## `security-scan.sh`
 
 本地 / CI 安全扫描一键入口：先打包 `security-scan` 独立 Java 模块，再按参数执行 secret、依赖、SAST、文件系统、镜像和 ZAP 扫描。默认执行全量扫描，可通过 `--mode` 收窄范围。
+PR 和 Full CI 的 secret 模式打包时运行独立模块单测；显式 `--skip-tests` 会跳过它们。
+SAST 模式需要 `python3` 汇总完整 Semgrep 报告；高危规则命中或扫描错误、警告使其失败，中低级别保留供人工复核。具体语义见 [安全扫描手册](../../docs/runbook/security-scan.md)。
 
 ```bash
 bash scripts/ci/security-scan.sh --help
@@ -469,6 +488,7 @@ python3 scripts/ci/check-config-governance.py --write  # 新增配置类后重�
 每条命中给出分类建议（`PROJECT_CONFIG`、`SECRET_CONFIG`、`SPRING_INFRA`、`JVM_SYSTEM`、
 `TEST_ONLY`）并标记是否命中白名单。口径见
 [`docs/runbook/config-key-access-governance.md`](../../docs/runbook/config-key-access-governance.md)。
+扫描排除根目录 `logs/` 的验证快照，保留项目源码及未跟踪源码的检查。
 
 阶段 0（报告模式，当前接入 Full Gate `static-checks`）只输出清单、恒以 `0` 退出，
 不阻断历史存量；同时输出 `build/config-key-access.json` 供治理看板使用：
@@ -502,6 +522,24 @@ python3 scripts/ci/check-direct-config-key-access.py --check-baseline \
 `config/quality/pmd-ruleset.xml` 按 `docs/coding-conventions.md` §1 执行三档约束：Mapper 公共方法达到5个、Service公共接口达到6个、其它方法达到7个参数时必须封装。Mapper/Service规则只补5/6参数区间，避免与普通方法规则重复报告；构造器、record、DTO与Spring构造注入沿用既有豁免，不用公共上下文容器隐藏依赖。
 
 `python3 -m unittest discover -s scripts/ci/tests -p test_pmd_parameter_policy.py` 使用与根POM相同版本的真实PMD，核对4/5/6/7边界、接口隐式public、普通public/private方法、构造器及record；包含构造器的文件仍必须拦截其它违规方法。本机离线运行需预先缓存该Maven插件；该检查不连接业务数据库。XPath上下文规则参考[PMD官方说明](https://pmd.github.io/pmd/pmd_userdocs_suppressing_warnings.html#the-property-violationsuppressxpath)。
+
+## `check-migration-safety.sh`
+
+通过 Squawk 检查新增迁移及已有迁移中的有效 SQL 改动；纯注释与 `COMMENT ON` 差异不重扫已有 DDL。范围分类的正反例由本地脚本预检及 PR/Full CI 质量守卫测试组执行，也可单独运行：
+
+```bash
+python3 -m unittest scripts.ci.tests.test_check_migration_safety
+```
+
+## `validate-flyway-schema.sh`
+
+静态检查迁移名称、从 V1 开始的连续性、重复版本、空文件、BOM/CRLF 和已有迁移有效 SQL 漂移。版本缺号会使检查失败；历史注释或 `COMMENT ON` 变更仍会改变 checksum，仅适用于新建空库。版本连续、缺号和重复的正反例接入本地脚本域预检及 PR/Full 的 CI 质量守卫测试组，也可单独执行：
+
+当前本仓 `fix/wdi-current` 发起的 PR 临时设置 `FLYWAY_ALLOW_EXISTING_DDL_CHANGES=true`，只放开已有迁移有效 SQL 漂移阻断，并打印空库部署提示；版本连续性及其他检查不变。其他分支、手动运行和 merge queue 默认严格检查。该 PR 合并后删除工作流例外与脚本开关，避免后续复用同名分支时继续放行。
+
+```bash
+python3 -m unittest scripts.ci.tests.test_validate_flyway_schema
+```
 
 ## `check-test-conventions.py`
 
@@ -549,6 +587,7 @@ bash scripts/ci/check-db-scripts-safety.sh
 python3 scripts/ci/check-destructive-ops-governance.py
 python3 -m unittest scripts/ci/tests/test_sim_runtime_cleanup.py
 python3 -m unittest scripts/ci/tests/test_sim_sftp_known_hosts.py
+python3 -m unittest scripts/ci/tests/test_sim_export_partition_evidence.py
 python3 -m unittest scripts/ci/tests/test_sim_fault_channel_cleanup.py
 python3 -m unittest scripts/ci/tests/test_sim_worker_readiness.py
 python3 -m unittest scripts/ci/tests/test_heal_stuck_outbox_dry_run.py
@@ -607,7 +646,9 @@ bash scripts/ci/check-version-alignment.sh
 
 ## `check-e2e-run-completeness.sh`
 
-e2e 运行侧闭环守护。`-Dsurefire.failIfNoSpecifiedTests=false` 会把「shard 清单列了某 `*E2eIT`、但因路径/改名没被选中」静默吞成绿色。本脚本在 Full/Staging 六片中的每个 e2e shard 跑完后比对：该 shard 实际产出的 surefire testsuite report 数必须等于清单声明的类数。与 `check-e2e-shard-coverage.sh`（静态双向集合校验）互补。
+e2e 运行侧闭环守护。`-Dsurefire.failIfNoSpecifiedTests=false` 会把「shard 清单列了某 `*E2eIT`、但因路径/改名没被选中」静默吞成绿色。本脚本要求每个类有唯一报告且至少一个用例实际执行；全类跳过或空报告失败，部分跳过仍单独保留报告。与 `check-e2e-shard-coverage.sh`（静态校验漏项、失效项及重复类）互补；PR 和 Full CI 运行其正反例 `test_e2e_shard_coverage.py`。
+
+当选择器包含 `类名#方法一+方法二` 时，静态守卫核对该类全部测试方法各分配一次；运行侧读取 Surefire XML，逐方法要求集合完全一致且无失败或跳过。方法选择仅支持不带通配符的明确名称，无法识别源码测试时失败关闭。对应正反例由 PR 和 Full CI 执行。
 
 ```bash
 bash scripts/ci/check-e2e-run-completeness.sh "<逗号分隔类名>" <surefire-reports-dir>
@@ -620,6 +661,7 @@ Full 和 Staging Gate 的 `java-governance` job 单独执行这些测试；业�
 源码从 Git 已跟踪文件及未忽略的未跟踪文件枚举，按 `src/test/java` 边界确定模块；已跟踪文件即使命中
 忽略规则仍会检查，当前工作区已删除的文件不再要求报告。未跟踪的忽略目录（包括验证快照）不计入，
 真实源码的重复全限定名继续失败。该检查要求可用的 Git 工作树；Git 枚举失败时明确报错，不回退为目录扫描。
+`MyBatisSqlAnnotationConventionTest` 扫描 Java 生产和测试源码，禁止 MyBatis SQL 注解、Provider 注解及 `@SelectKey`；注释、字符串和其他同名注解不计入。
 `MapperStatusWriteConventionTest` 在该分片扫描全部 Mapper XML，禁止写语句的
 `SET`（包括 `ON CONFLICT ... DO UPDATE SET`）回退为固定状态字面量；查询中的共享生命周期集合另由 Mapper 契约测试与枚举精确对照。
 
@@ -939,6 +981,7 @@ Stage 5b 只启用具有专属名称 `[SIM:dispatch-stage5b]` 的 `tb/tb_api_fai
 | [check-testcontainers-reuse-label.py](check-testcontainers-reuse-label.py) | Testcontainers 复用标签判定。 |
 | [check-trivy-ignore-expiry.py](check-trivy-ignore-expiry.py) | Trivy 忽略项有效期。 |
 | [check-utf8-encoding.py](check-utf8-encoding.py) | 仓库文本 UTF-8 编码。 |
+| [flyway_sql_diff.py](flyway_sql_diff.py) | 比较 Flyway 迁移有效 SQL，识别纯注释 / COMMENT ON 元数据改动，供迁移安全与 Flyway 校验复用。 |
 | [check-version-alignment.sh](check-version-alignment.sh) | 应用与基础设施版本对齐。 |
 | [collect-flaky.py](collect-flaky.py) | 汇总 Surefire 与 Failsafe 报告中的不稳定测试。 |
 | [collect-flaky.sh](collect-flaky.sh) | surefire/failsafe flaky 汇总薄封装。 |
@@ -963,7 +1006,7 @@ Stage 5b 只启用具有专属名称 `[SIM:dispatch-stage5b]` 的 `tb/tb_api_fai
 | [run-staging-live-smoke.sh](run-staging-live-smoke.sh) | 调用统一回归入口执行 staging 升级与回滚 smoke。 |
 | [sdk-happy-eyeballs-fixture.py](sdk-happy-eyeballs-fixture.py) | 为五语言 SDK 提供真实 loopback socket 的 Happy Eyeballs 故障矩阵。 |
 | [security-scan.sh](security-scan.sh) | 编排密钥、依赖、代码、镜像与动态安全扫描。 |
-| [select-affected-tests.py](select-affected-tests.py) | Test Impact Analysis (TIA) POC — 测试类粒度。 |
+| [select-affected-tests.py](select-affected-tests.py) | Test Impact Analysis (TIA) POC — 测试类粒度；从 Git 跟踪及未忽略的未跟踪文件枚举当前源码，按实际顶层测试类名输出，正反例 `python3 -m unittest scripts/ci/tests/test_select_affected_tests.py`。变更范围仅比较指定 Git 提交且不覆盖配置、SQL 等变更，不作为完整回归或 PR 选测门禁。 |
 | [select-affected-tests.sh](select-affected-tests.sh) | Test Impact Analysis (TIA) POC — bash 入口,封装 python 实现。 |
 | [sql/count-sdk-worker.sql](sql/count-sdk-worker.sql) | CI 门禁及运行验证的配套 SQL；由场景入口或参数化路径选择，执行边界见所属说明。 |
 | [sql/insert-sdk-api-key.sql](sql/insert-sdk-api-key.sql) | CI 门禁及运行验证的配套 SQL；由场景入口或参数化路径选择，执行边界见所属说明。 |
@@ -986,3 +1029,14 @@ Stage 5b 只启用具有专属名称 `[SIM:dispatch-stage5b]` 的 `tb/tb_api_fai
 - `python3 -m unittest scripts/ci/tests/test_check_script_governance.py scripts/ci/tests/test_check_docs_structure.py scripts/ci/tests/test_document_naming_policy.py scripts/ci/tests/test_sql_config_boundaries.py scripts/ci/tests/test_detect_change_scope.py`：覆盖漏字段、纯英文说明、失效/漏登记链接、日期分类、基线搬迁和跨目录范围路由。已接入现有PR/Full/local测试组。
 - Pipeline源码清单改用Git可版本化文件，包含未跟踪生产源码，排除被忽略的历史副本；正反例见 `tests/test_check_pipeline_summary_keys.py`，不能以移除真实源码命中获得通过。
 - Pipeline摘要键R2只识别Java代码中的真实键常量引用：屏蔽字符串、字符和文本块；裸常量须来自已知键类的静态导入或键类自身，导入声明本身不算读写。状态枚举和同名展示文本不算键引用；显式限定、静态导入及通配静态导入的真实混用仍须拦截。规则回归运行 `python3 -m unittest scripts/ci/tests/test_check_pipeline_summary_keys.py`。
+
+### SIM 导入前工作簿准备回归
+
+`FULL_SIM_XLSX_FIXTURE_TEST` 同时执行 `test_fix_fixture_xlsx.py`、`test_sim_tenant_fixture.py` 与 `test_config_package_fixture_generators.py`，覆盖 schema、规范渠道键、host/docker 私有上传副本、内容指纹和退出清理。原 Compose 模板不得写回宿主地址。新增的三组清理操作仅针对本轮 mktemp 目录和 O_EXCL 创建的精确文件，已审查目标、失败清理与邻居保留测试后逐项登记；未全量刷新破坏性预算。
+
+
+### Helm 双 Release 监控范围回归
+
+`python3 -m unittest scripts/ci/tests/test_helm_service_monitor_scope.py` 渲染同命名空间两个 Release,
+核对应用与 Collector 的 ServiceMonitor 只匹配本 Release 的 Service, 并核对 Console/应用 target
+使用同一维护范围。需要本地 Helm; 不操作真实集群, 不替代 Prometheus 采集或最终收件验证。

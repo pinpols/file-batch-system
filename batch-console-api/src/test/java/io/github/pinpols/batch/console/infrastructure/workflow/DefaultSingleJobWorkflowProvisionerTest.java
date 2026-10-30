@@ -12,12 +12,12 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.ActiveCalendarRow;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowNodeUpsertParam;
-import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -44,7 +44,8 @@ class DefaultSingleJobWorkflowProvisionerTest {
     job.setWindowCode("NIGHT");
     job.setCalendarCode("calendar-a");
     when(businessCalendarMapper.selectActiveByTenantAndCalendarCode("tenant-a", "calendar_a"))
-        .thenReturn(Map.of("calendarCode", "calendar_a"));
+        .thenReturn(new ActiveCalendarRow(
+            1L, "tenant-a", "calendar_a", null, null, null, null, null, null));
     doAnswer(invocation -> {
           ((WorkflowDefinitionEntity) invocation.getArgument(0)).setId(28L);
           return 1;
@@ -73,7 +74,8 @@ class DefaultSingleJobWorkflowProvisionerTest {
     DefaultSingleJobWorkflowProvisioner provisioner = new DefaultSingleJobWorkflowProvisioner(
         definitionMapper, businessCalendarMapper, nodeMapper, edgeMapper);
     when(businessCalendarMapper.selectActiveByTenantAndCalendarCode("tenant-a", "default_calendar"))
-        .thenReturn(Map.of("calendarCode", "default_calendar"));
+        .thenReturn(new ActiveCalendarRow(
+            1L, "tenant-a", "default_calendar", null, null, null, null, null, null));
     JobDefinitionEntity job = new JobDefinitionEntity();
     job.setTenantId("tenant-a");
     job.setId(17L);

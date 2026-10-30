@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -15,11 +14,16 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 /** {@link MeteredObjectStore} 单测:成功/失败都打点(operation+outcome 标签),且不改语义透传委托。 */
 @DisplayName("计量对象存储:验证成功与失败调用的指标打点标签、原始异常透传以及能力探测不打点")
+@ExtendWith(MockitoExtension.class)
 class MeteredObjectStoreTest {
 
   private static final String TIMER = "batch.objectstore.op";
@@ -27,8 +31,11 @@ class MeteredObjectStoreTest {
   private static final String KEY = "k";
 
   private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
-  private final BatchObjectStore delegate = mock(BatchObjectStore.class);
-  private final MeteredObjectStore metered = new MeteredObjectStore(delegate, registry);
+
+  @Mock
+  private BatchObjectStore delegate;
+
+  private MeteredObjectStore metered;
 
   @Test
   @DisplayName("读取成功时按操作与结果标签累计一次耗时计数,并原样返回底层数据流")
@@ -85,5 +92,10 @@ class MeteredObjectStoreTest {
     assertThat(metered.supportsPresignPut()).isFalse();
     // 能力探测不打点。
     assertThat(registry.find(TIMER).timers()).isEmpty();
+  }
+
+  @BeforeEach
+  void initializeSubject() {
+    metered = new MeteredObjectStore(delegate, registry);
   }
 }

@@ -77,7 +77,7 @@ transition 是明确的事故降级，会允许无租户上下文读取，期间
 ```bash
 docker exec -i batch-postgres \
   psql -U batch_user -d batch_business -v ON_ERROR_STOP=1 \
-  < docs/sql/business/create_biz_tables.sql
+  < scripts/db/business/create_biz_tables.sql
 ```
 
 ## 脚本与配套 SQL 索引

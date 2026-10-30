@@ -7,24 +7,10 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Platform 文件运行态 Mapper 的值转换与参数构造工具。 */
+/** Platform 文件运行态值转换工具；固定 Mapper 参数由各自具名对象承载。 */
 public final class PlatformRuntimeValues {
 
-  static final String PIPELINE_INSTANCE_ID = "pipelineInstanceId";
-  static final String CURRENT_STAGE = "currentStage";
-  static final String TENANT_ID = "tenantId";
-  static final String FILE_ID = "fileId";
-  static final String ID = "id";
-
   private PlatformRuntimeValues() {}
-
-  static Map<String, Object> params(Object... pairs) {
-    Map<String, Object> values = new LinkedHashMap<>();
-    for (int index = 0; index < pairs.length; index += 2) {
-      values.put(String.valueOf(pairs[index]), pairs[index + 1]);
-    }
-    return values;
-  }
 
   public static Long toLong(Object value) {
     if (value instanceof Number number) {

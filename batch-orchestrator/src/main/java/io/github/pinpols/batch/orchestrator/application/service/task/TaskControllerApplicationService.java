@@ -156,7 +156,7 @@ public class TaskControllerApplicationService {
    *
    * <p>设计取舍:不在单事务里做 savepoint 批量推进 —— {@code applyTaskOutcome} 自身 {@code @Transactional} + 父汇总
    * 父汇总 + 死锁 {@code @Retryable},逐项独立事务隔离最强、复用已验证路径,风险最低; 真正的 churn 收益在「一次 HTTP 报 K
-   * 个」。outbox 单 INSERT 批写是更高风险的次要微优,后置(见计划 §2.2)。
+   * 个」。outbox 单 INSERT 批写是更高风险的次要微优,后置；当前实现边界见 ADR-046。
    *
    * <p>批大小受 {@link BundleBatchClaimProperties#effectiveBatchSize()} 守卫,超限直接拒绝。
    */

@@ -1,11 +1,11 @@
 package io.github.pinpols.batch.console.domain.ops.mapper;
 
 import io.github.pinpols.batch.console.domain.ops.view.cluster.ActiveTaskWorkerIssueView;
+import io.github.pinpols.batch.console.domain.ops.view.cluster.ClusterStatusCountView;
 import io.github.pinpols.batch.console.domain.ops.view.cluster.DeliveryStatusCountView;
 import io.github.pinpols.batch.console.domain.ops.view.cluster.JobInstanceDiagnosticView;
 import io.github.pinpols.batch.console.domain.ops.view.cluster.OutboxStatusCountView;
 import io.github.pinpols.batch.console.domain.ops.view.cluster.ShedLockView;
-import io.github.pinpols.batch.console.domain.ops.view.cluster.StatusCountView;
 import io.github.pinpols.batch.console.domain.ops.view.cluster.WorkerGroupCapacityView;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -57,10 +57,10 @@ public interface ConsoleClusterDiagnosticMapper {
 
   List<WorkerGroupCapacityView> workerGroupCapacity(@Param("tenantId") String tenantId);
 
-  List<StatusCountView> partitionStatusCounts(
+  List<ClusterStatusCountView> partitionStatusCounts(
       @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
-  List<StatusCountView> taskStatusCounts(
+  List<ClusterStatusCountView> taskStatusCounts(
       @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
   List<ActiveTaskWorkerIssueView> activeTaskWorkerIssues(

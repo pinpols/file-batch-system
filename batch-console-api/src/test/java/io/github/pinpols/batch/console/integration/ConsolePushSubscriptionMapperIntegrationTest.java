@@ -38,8 +38,7 @@ class ConsolePushSubscriptionMapperIntegrationTest extends AbstractIntegrationTe
   @ParameterizedTest
   @ValueSource(ints = {201, 410})
   @SuppressWarnings("unchecked")
-  void shouldFenceLateResponse_whenDeviceCredentialsRotated(int status)
-      throws Exception {
+  void shouldFenceLateResponse_whenDeviceCredentialsRotated(int status) throws Exception {
     String tenant = "push-rotation-" + UUID.randomUUID();
     String endpoint = "https://push.example.test/" + UUID.randomUUID();
     var original = PushDeviceFixtures.device(tenant, "alice", endpoint);

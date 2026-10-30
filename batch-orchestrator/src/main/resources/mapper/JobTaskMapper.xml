@@ -519,6 +519,39 @@
           and external_outcome_resolution_consumed_at is null
     </update>
 
+    <!-- 授权仅在绑定根请求的子 Job 首次开始时消费；CAS 与开始标记同事务，失败不放行外部动作。 -->
+    <update id="consumeExternalOutcomeResolution">
+        update batch.job_task source
+        set external_outcome_resolution_consumed_at = current_timestamp,
+            updated_at = current_timestamp
+        where source.tenant_id = #{tenantId}
+          and source.id = #{sourceTaskId}
+          and source.task_status = 'FAILED'
+          and source.error_code = 'EXTERNAL_OUTCOME_UNKNOWN'
+          and source.external_outcome_resolution_version = #{sourceVersion}
+          and source.version = #{sourceVersion} + 1
+          and source.external_outcome_resolution_consumed_at is null
+          and exists (
+              select 1
+              from batch.job_task retry_task
+              join batch.job_instance retry_instance
+                on retry_instance.tenant_id = retry_task.tenant_id
+               and retry_instance.id = retry_task.job_instance_id
+               and retry_instance.biz_date = retry_task.job_instance_biz_date
+              join batch.workflow_node_run node
+                on node.job_instance_id = retry_instance.id
+              join batch.workflow_run root
+                on root.tenant_id = retry_instance.tenant_id
+               and root.id = node.workflow_run_id
+               and root.biz_date = retry_instance.biz_date
+              where retry_task.tenant_id = source.tenant_id
+                and retry_task.id = #{retryTaskId}
+                and retry_instance.parent_instance_id = source.job_instance_id
+                and retry_instance.biz_date = source.job_instance_biz_date
+                and root.trigger_request_id = source.external_outcome_resolution_trigger_request_id
+          )
+    </update>
+
     <update id="resetForLeaseReclaim">
         update batch.job_task
         <include refid="ResetTaskForRetryAssignments"/>
@@ -582,6 +615,20 @@
           and id = #{id}
           and task_status = 'RUNNING'
           and cancel_requested = false
+    </update>
+
+    <update id="requestCancelIfTimedOut">
+        update batch.job_task
+        set cancel_requested = true,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and version = #{expectedVersion}
+          and task_status = 'RUNNING'
+          and cancel_requested = false
+          and started_at is not null
+          and task_timeout_seconds &gt; 0
+          and started_at &lt; current_timestamp - (task_timeout_seconds * interval '1 second')
     </update>
 
     <update id="requestCancelByInstance">

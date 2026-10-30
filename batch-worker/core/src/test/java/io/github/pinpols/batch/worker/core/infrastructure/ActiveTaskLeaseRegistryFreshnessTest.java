@@ -42,4 +42,22 @@ class ActiveTaskLeaseRegistryFreshnessTest {
         .isFalse();
     assertThat(registry.snapshot().iterator().next().getPartitionInvocationId()).isEqualTo("inv-1");
   }
+
+  @Test
+  @DisplayName("批次清理只能移除未启动的本 invocation，不能清除在执行项或新所有者")
+  void shouldOnlyRemoveMatchingQueuedClaim_whenBatchExits() {
+    ActiveTaskLeaseRegistry registry = new ActiveTaskLeaseRegistry();
+    registry.registerClaimed("42", "tenant-1", "worker-1", "inv-42");
+    registry.removeQueuedClaim("42", "tenant-1", "worker-1", "other-invocation");
+    assertThat(registry.size()).isEqualTo(1);
+    registry.beginExecution("42", "tenant-1", "worker-1", "inv-42");
+    registry.removeQueuedClaim("42", "tenant-1", "worker-1", "inv-42");
+    assertThat(registry.size()).isEqualTo(1);
+    registry.registerClaimed("43", "tenant-1", "worker-1", "inv-43");
+    registry.removeQueuedClaim("43", "tenant-1", "worker-1", "inv-43");
+    assertThat(registry.size()).isEqualTo(1);
+    assertThat(registry.snapshot())
+        .extracting(ActiveTaskLeaseRegistry.ActiveTaskLease::getTaskId)
+        .containsExactly("42");
+  }
 }

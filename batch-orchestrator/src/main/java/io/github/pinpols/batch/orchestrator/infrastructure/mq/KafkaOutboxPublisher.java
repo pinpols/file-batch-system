@@ -6,9 +6,9 @@ import io.github.pinpols.batch.common.i18n.BizExceptionUtils;
 import io.github.pinpols.batch.common.i18n.BizMessageResolver;
 import io.github.pinpols.batch.common.i18n.LocalizedError;
 import io.github.pinpols.batch.common.kafka.BatchEventMessage;
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchMessageType;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
-import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.mq.MqMessage;
@@ -16,8 +16,10 @@ import io.github.pinpols.batch.common.mq.MqMessagePublisher;
 import io.github.pinpols.batch.common.mq.MqPublishResult;
 import io.github.pinpols.batch.common.observability.OtelTracePropagation;
 import io.github.pinpols.batch.common.observability.W3cTraceContext;
+import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.orchestrator.application.engine.OutboxPublisher;
 import io.github.pinpols.batch.orchestrator.application.outbox.OutboxChildRecordService;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
@@ -36,6 +38,7 @@ import java.util.concurrent.Executor;
 import org.apache.kafka.common.utils.Utils;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
+import org.springframework.web.util.HtmlUtils;
 
 /**
  * Outbox → Kafka 的投递器。
@@ -124,25 +127,25 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
       CompletableFuture<MqPublishResult> publishFuture =
           sendWithTraceContext(targetTopic, kafkaKey, payloadJson, traceContext);
       return publishFuture.handleAsync(
-              (result, ex) -> {
-                if (ex == null) {
-                  recordDelivery(
-                      event,
-                      targetTopic,
-                      workerId,
-                      OutboxPublishStatus.PUBLISHED.code(),
-                      LocalizedError.EMPTY);
-                  return true;
-                }
-                recordDelivery(
-                    event,
-                    targetTopic,
-                    workerId,
-                    OutboxPublishStatus.FAILED.code(),
-                    BizExceptionUtils.toLocalizedError(ex, bizMessageResolver, objectMapper));
-                throw new CompletionException(ex);
-              },
-              deliveryLogExecutor);
+          (result, ex) -> {
+            if (EmptyChecks.isNull(ex)) {
+              recordDelivery(
+                  event,
+                  targetTopic,
+                  workerId,
+                  OutboxPublishStatus.PUBLISHED.code(),
+                  LocalizedError.EMPTY);
+              return true;
+            }
+            recordDelivery(
+                event,
+                targetTopic,
+                workerId,
+                OutboxPublishStatus.FAILED.code(),
+                BizExceptionUtils.toLocalizedError(ex, bizMessageResolver, objectMapper));
+            throw new CompletionException(ex);
+          },
+          deliveryLogExecutor);
     }
 
     // R6 P0-4：ADR-030 §F verifier.failure.v1 走专用 topic，运维告警 / SLO 直接订阅，
@@ -157,25 +160,25 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
       CompletableFuture<MqPublishResult> publishFuture =
           mqMessagePublisher.publish(dedicatedMessage);
       return publishFuture.handleAsync(
-              (result, ex) -> {
-                if (ex == null) {
-                  recordDelivery(
-                      event,
-                      dedicatedTopic,
-                      null,
-                      OutboxPublishStatus.PUBLISHED.code(),
-                      LocalizedError.EMPTY);
-                  return true;
-                }
-                recordDelivery(
-                    event,
-                    dedicatedTopic,
-                    null,
-                    OutboxPublishStatus.FAILED.code(),
-                    BizExceptionUtils.toLocalizedError(ex, bizMessageResolver, objectMapper));
-                throw new CompletionException(ex);
-              },
-              deliveryLogExecutor);
+          (result, ex) -> {
+            if (EmptyChecks.isNull(ex)) {
+              recordDelivery(
+                  event,
+                  dedicatedTopic,
+                  null,
+                  OutboxPublishStatus.PUBLISHED.code(),
+                  LocalizedError.EMPTY);
+              return true;
+            }
+            recordDelivery(
+                event,
+                dedicatedTopic,
+                null,
+                OutboxPublishStatus.FAILED.code(),
+                BizExceptionUtils.toLocalizedError(ex, bizMessageResolver, objectMapper));
+            throw new CompletionException(ex);
+          },
+          deliveryLogExecutor);
     }
 
     // fallback：非任务派发类 outbox，统一包装成 BatchEventMessage 投递到默认 topic，便于通用消费者/审计。
@@ -202,25 +205,25 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
     MqMessage mqMessage = MqMessage.of(fallbackTopic, messageEventKey, messageJson);
     CompletableFuture<MqPublishResult> publishFuture = mqMessagePublisher.publish(mqMessage);
     return publishFuture.handleAsync(
-            (result, ex) -> {
-              if (ex == null) {
-                recordDelivery(
-                    event,
-                    fallbackTopic,
-                    null,
-                    OutboxPublishStatus.PUBLISHED.code(),
-                    LocalizedError.EMPTY);
-                return true;
-              }
-              recordDelivery(
-                  event,
-                  fallbackTopic,
-                  null,
-                  OutboxPublishStatus.FAILED.code(),
-                  BizExceptionUtils.toLocalizedError(ex, bizMessageResolver, objectMapper));
-              throw new CompletionException(ex);
-            },
-            deliveryLogExecutor);
+        (result, ex) -> {
+          if (EmptyChecks.isNull(ex)) {
+            recordDelivery(
+                event,
+                fallbackTopic,
+                null,
+                OutboxPublishStatus.PUBLISHED.code(),
+                LocalizedError.EMPTY);
+            return true;
+          }
+          recordDelivery(
+              event,
+              fallbackTopic,
+              null,
+              OutboxPublishStatus.FAILED.code(),
+              BizExceptionUtils.toLocalizedError(ex, bizMessageResolver, objectMapper));
+          throw new CompletionException(ex);
+        },
+        deliveryLogExecutor);
   }
 
   private CompletableFuture<MqPublishResult> sendWithTraceContext(
@@ -285,8 +288,10 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
   private static String plannedPartitionKafkaKey(TaskDispatchMessage message) {
     Integer partitionNo = message.partitionNo();
     Integer partitionCount = message.partitionCount();
-    boolean partitionMetadataIsInvalid =
-        EmptyChecks.isNull(partitionNo) || EmptyChecks.isNull(partitionCount) || partitionNo <= 0 || partitionCount <= 1;
+    boolean partitionMetadataIsInvalid = EmptyChecks.isNull(partitionNo)
+        || EmptyChecks.isNull(partitionCount)
+        || partitionNo <= 0
+        || partitionCount <= 1;
     if (partitionMetadataIsInvalid) {
       return null;
     }
@@ -347,12 +352,59 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
     summary.put("payloadPreview", payloadPreview);
     log.setDeliverySummary(JsonUtils.toJson(summary));
     if (error != null) {
-      log.setErrorMessage(error.renderedMessage());
+      log.setErrorMessage(safeDeliveryErrorText(error.renderedMessage()));
       log.setErrorKey(error.key());
-      log.setErrorArgs(error.argsJson());
+      log.setErrorArgs(safeDeliveryErrorArgs(error.argsJson()));
     }
     log.setTraceId(event.getTraceId());
     outboxChildRecordService.recordDelivery(log);
+  }
+
+  private static String safeDeliveryErrorText(String value) {
+    if (EmptyChecks.isNull(value)) {
+      return null;
+    }
+    String normalized = ConsoleTextSanitizer.normalize(HtmlUtils.htmlUnescape(value));
+    if (!SwallowedExceptionLogger.containsCredentialSyntax(normalized)) {
+      return value;
+    }
+    int maxLength = Math.max(4, normalized.length());
+    return SwallowedExceptionLogger.safeMessage(normalized, maxLength);
+  }
+
+  private static String safeDeliveryErrorArgs(String argsJson) {
+    if (EmptyChecks.isNull(argsJson) || argsJson.isBlank()) { // empty-check: allow - 保留 JDK 字符串空白判定
+      return argsJson;
+    }
+    try {
+      Object parsed = JsonUtils.fromJson(argsJson, Object.class);
+      return JsonUtils.toJson(maskDeliveryErrorValue(parsed));
+    } catch (RuntimeException failure) {
+      // 参数无法安全解析时不持久化原文，保留已净化的错误消息。
+      return null;
+    }
+  }
+
+  private static Object maskDeliveryErrorValue(Object value) {
+    if (value instanceof String text) {
+      return safeDeliveryErrorText(text);
+    }
+    if (value instanceof List<?> items) {
+      return items.stream().map(KafkaOutboxPublisher::maskDeliveryErrorValue).toList();
+    }
+    if (value instanceof Map<?, ?> entries) {
+      Map<String, Object> masked = new LinkedHashMap<>();
+      entries.forEach((key, item) -> {
+        String name = String.valueOf(key);
+        String normalizedName = ConsoleTextSanitizer.normalize(HtmlUtils.htmlUnescape(name));
+        Object safeItem = SecretMasking.isSensitive(normalizedName) && EmptyChecks.isNotNull(item)
+            ? SecretMasking.MASKED_VALUE
+            : maskDeliveryErrorValue(item);
+        masked.put(name, safeItem);
+      });
+      return masked;
+    }
+    return value;
   }
 
   @SuppressWarnings("unchecked")

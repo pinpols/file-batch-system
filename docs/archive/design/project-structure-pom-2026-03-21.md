@@ -1,3 +1,5 @@
+> 历史原始记录：本轮恢复保留，正文中的结论、参数、状态和操作步骤仅适用于原日期/基线。提炼方法不替代原始证据；当前事实须按[文档治理](../../standards/document-governance.md)重新核实。本轮未执行原测试或扫描。
+
 ## 17. 项目结构、模块划分与 POM 设计
 
 > **历史设计稿**：本文来自早期 mega 设计文档拆分，保留依赖选型、模块规划和 POM 设计背景。当前仓库真实结构、根 Maven reactor、平台运行时固定模块、SDK 与前端配对仓库边界，以 [`../architecture/project-structure.md`](../../architecture/project-structure.md) 为准。

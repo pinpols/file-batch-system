@@ -1,3 +1,5 @@
+> 历史证据（2026-10-25 存量核对）：V134–V143 迁移注释及 DBA 工具仍引用的逐表审查来源；不改历史迁移。正文仅表示原日期/基线；当前规则与状态见[现行入口](../../design/database-schema-governance.md)及 TODO，本轮没有重新执行原测试或扫描。
+
 # DBA Schema 审查报告（file-batch-system）
 
 > 路径沿革：已发布迁移注释中的 `docs/analysis/dba-schema-review-2026-05-20.md` 是历史来源路径。迁移SQL保持原内容与校验和；正文已归入当前审计分类，路径映射见本轮目录治理记录。

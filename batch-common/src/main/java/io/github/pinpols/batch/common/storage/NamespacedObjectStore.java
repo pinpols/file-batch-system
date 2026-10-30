@@ -16,7 +16,8 @@ public final class NamespacedObjectStore implements BatchObjectStore {
   private final String prefix;
 
   public NamespacedObjectStore(BatchObjectStore delegate, String namespace) {
-    if (EmptyChecks.isNull(namespace) || !VALID_NAMESPACE.matcher(namespace.trim()).matches()) {
+    if (EmptyChecks.isNull(namespace)
+        || !VALID_NAMESPACE.matcher(namespace.trim()).matches()) {
       throw new IllegalArgumentException("object storage namespace is invalid");
     }
     this.delegate = delegate;

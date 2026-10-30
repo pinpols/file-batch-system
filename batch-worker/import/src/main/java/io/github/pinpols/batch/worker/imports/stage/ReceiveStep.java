@@ -12,6 +12,7 @@ import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -155,9 +156,9 @@ public class ReceiveStep implements ImportStageStep {
           stage(), TaskErrorCodes.FROZEN_FILE_TEMPLATE_INVALID, invalidTemplate, objectMapper);
     }
     Long existingFileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
-    if (existingFileId == null) {
+    if (EmptyChecks.isNull(existingFileId) && !DryRunGuard.fromAttributes(attrs).isDryRun()) {
       createAndBindReceivedFile(context, importPayload, templateConfig, payloadLength, attrs);
-    } else {
+    } else if (EmptyChecks.isNotNull(existingFileId)) {
       // ADR-046 文件束:复用 scanner 预建的 file_record(orchestrator 把 partition.source_file_id
       // 落进 task payload 的 sourceFileId,worker-core 据此设了 FILE_ID,基类已加载 FILE_RECORD)。
       // 束的 task payload 只带 sourceFileId/templateCode,不带存储坐标——从 file_record 回填
@@ -250,8 +251,7 @@ public class ReceiveStep implements ImportStageStep {
     return resolveTemplateConfig(context, importPayload.templateCode());
   }
 
-  private Map<String, Object> resolveTemplateConfig(
-      ImportJobContext context, String templateCode) {
+  private Map<String, Object> resolveTemplateConfig(ImportJobContext context, String templateCode) {
     Map<String, Object> attributes = context.getAttributes();
     FileTemplateConfigRequest templateRequest = new FileTemplateConfigRequest(
         context.getTenantId(),

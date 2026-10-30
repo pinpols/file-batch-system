@@ -36,6 +36,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -45,6 +47,20 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("任务执行接口,验证认领与上报的限流拒绝,认领成功与冲突及任务不存在,租户边界,有效配置下发,续约与批量续约以及取消请求的响应")
 class TaskControllerTest {
+
+  @ParameterizedTest
+  @ValueSource(strings = {"", "\"taskId\":9999,"})
+  @DisplayName("单项报告使用路径任务 ID，正文缺失或不一致不改变目标")
+  void shouldUsePathTaskIdForSingleReport(String bodyId) throws Exception {
+    mockMvc
+        .perform(post("/internal/tasks/5/report")
+            .contentType(APPLICATION_JSON)
+            .content("{" + bodyId + "\"tenantId\":\"t1\",\"workerId\":\"w1\",\"success\":true}"))
+        .andExpect(status().isOk());
+    ArgumentCaptor<TaskOutcomeCommand> captor = ArgumentCaptor.forClass(TaskOutcomeCommand.class);
+    verify(taskOutcomeService).applyTaskOutcome(captor.capture());
+    assertThat(captor.getValue().taskId()).isEqualTo(5L);
+  }
 
   @Mock
   private TaskExecutionService taskExecutionService;

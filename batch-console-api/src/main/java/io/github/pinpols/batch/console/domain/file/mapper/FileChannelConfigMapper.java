@@ -18,12 +18,12 @@ public interface FileChannelConfigMapper {
       @Param("channelType") String channelType,
       @Param("enabled") Boolean enabled);
 
-  Map<String, Object> selectByUniqueKey(
+  FileChannelConfigQueryView selectByUniqueKey(
       @Param("tenantId") String tenantId, @Param("channelCode") String channelCode);
 
   int upsertFileChannelConfig(@Param("p") FileChannelConfigUpsertParam param);
 
-  Map<String, Object> selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+  FileChannelConfigQueryView selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
   int toggleEnabled(
       @Param("tenantId") String tenantId, @Param("id") Long id, @Param("enabled") Boolean enabled);

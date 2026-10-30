@@ -11,6 +11,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
@@ -23,6 +24,8 @@ import io.github.pinpols.batch.console.application.contract.response.config.Tena
 import io.github.pinpols.batch.console.config.JobMonitoringDefaultsProperties;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
+import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
+import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDependencyRuleRequest;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
@@ -47,12 +50,14 @@ import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitio
 import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionWriteSupport;
 import java.lang.reflect.Method;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -63,7 +68,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
 /**
- * Unit tests for DefaultConsoleTenantConfigInitApplicationService.
+ * DefaultConsoleTenantConfigInitApplicationService 的单元测试。
  *
  * <p>Covers: multi-tenant fan-out, SKIP_EXISTING vs UPSERT modes, per-item create/skip/update
  * counts, partial tenant failure isolation.
@@ -75,7 +80,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   @Test
   @DisplayName("退役配置字段在反序列化边界拒绝，不再保留旧Pipeline数据模型")
   void shouldRejectRetiredConfigurationFieldAtJsonBoundary() {
-    org.assertj.core.api.Assertions.assertThatThrownBy(() -> new ObjectMapper()
+    Assertions.assertThatThrownBy(() -> new ObjectMapper()
             .readValue(
                 "{\"targetTenantIds\":[\"t1\"],\"pipelineDefinitions\":[{}]}",
                 TenantConfigBatchInitRequest.class))
@@ -141,46 +146,169 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
 
   @BeforeEach
   void setUp() {
-    TenantConfigInitApplyHandlers handlers = new TenantConfigInitApplyHandlers(
-        new TenantDefinitionConfigMappers(
-            jobDefinitionMapper, workflowDefinitionMapper, workflowNodeMapper, workflowEdgeMapper),
-        new PlatformTransactionManager() {
-          @Override
-          public TransactionStatus getTransaction(TransactionDefinition definition) {
-            return new SimpleTransactionStatus();
-          }
+    TenantDefinitionConfigMappers definitions = new TenantDefinitionConfigMappers(
+        jobDefinitionMapper, workflowDefinitionMapper, workflowNodeMapper, workflowEdgeMapper);
+    JobMonitoringDefaultsProperties defaults = new JobMonitoringDefaultsProperties();
+    WorkflowDefinitionWriteSupport snapshots = new WorkflowDefinitionWriteSupport(
+        workflowNodeMapper,
+        workflowEdgeMapper,
+        workflowDefinitionVersionMapper,
+        new ObjectMapper());
+    WorkflowDefinitionDagInspector inspector =
+        new WorkflowDefinitionDagInspector(jobDefinitionMapper);
+    TenantJobDefinitionApplySupport jobs = new TenantJobDefinitionApplySupport(
+        jobDefinitionMapper, defaults, singleJobWorkflowProvisioner);
+    TenantWorkflowDefinitionApplySupport workflows =
+        new TenantWorkflowDefinitionApplySupport(definitions, snapshots, inspector);
+    PlatformTransactionManager manager = new PlatformTransactionManager() {
+      @Override
+      public TransactionStatus getTransaction(TransactionDefinition definition) {
+        return new SimpleTransactionStatus();
+      }
 
-          @Override
-          public void commit(TransactionStatus status) {
-            // no-op: config-init unit tests only verify mapper calls inside the callback.
-          }
+      @Override
+      public void commit(TransactionStatus status) {
+        // 无需执行实际操作：配置初始化单元测试只校验回调中的 Mapper 调用。
+      }
 
-          @Override
-          public void rollback(TransactionStatus status) {
-            // no-op: config-init unit tests do not simulate transaction rollback.
-          }
-        },
-        new TenantFileConfigApplySupport(fileChannelConfigMapper, fileTemplateConfigMapper),
-        new TenantOperationalConfigApplySupport(
-            resourceQueueMapper,
-            batchWindowMapper,
-            businessCalendarMapper,
-            calendarHolidayMapper,
-            tenantQuotaPolicyMapper,
-            alertRoutingConfigMapper),
-        new JobMonitoringDefaultsProperties(),
-        new WorkflowDefinitionWriteSupport(
-            workflowNodeMapper,
-            workflowEdgeMapper,
-            workflowDefinitionVersionMapper,
-            new ObjectMapper()),
-        singleJobWorkflowProvisioner,
-        new WorkflowDefinitionDagInspector(jobDefinitionMapper));
+      @Override
+      public void rollback(TransactionStatus status) {
+        // 无需执行实际操作：配置初始化单元测试不模拟事务回滚。
+      }
+    };
+    TenantFileConfigApplySupport files = new TenantFileConfigApplySupport(
+        fileChannelConfigMapper, fileTemplateConfigMapper, new ObjectMapper());
+    TenantOperationalConfigApplySupport operational = new TenantOperationalConfigApplySupport(
+        resourceQueueMapper,
+        batchWindowMapper,
+        businessCalendarMapper,
+        calendarHolidayMapper,
+        tenantQuotaPolicyMapper,
+        alertRoutingConfigMapper);
+    TenantConfigInitApplyHandlers handlers =
+        new TenantConfigInitApplyHandlers(jobs, manager, files, operational, workflows);
     service = new DefaultConsoleTenantConfigInitApplicationService(
         new TenantConfigInitTenantExecutor(handlers, cacheInvalidationService));
   }
 
   // ------------------------------------------------------------------ job definitions
+
+  @Test
+  @DisplayName("批量更新回传脱敏默认参数时保留原凭据，同时应用普通字段修改")
+  void shouldPreserveStoredCredential_whenInitUpsertsMaskedJobDefaults() throws Exception {
+    TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
+    request.setMode(InitMode.UPSERT);
+    request.getJobDefinitions().getFirst().setDefaultParams("""
+        {"connection":{"password":"****"},"limit":2}
+        """);
+    JobDefinitionEntity existing = existingJobWithDefaults("""
+        {"connection":{"password":"stored-credential"},"limit":1}
+        """);
+    when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(existing);
+
+    TenantConfigBatchInitResponse response =
+        service.batchInit(request, "admin", "masked-job-upsert");
+
+    assertThat(response.results().getFirst().jobDefinitions().updated()).isOne();
+    ArgumentCaptor<JobDefinitionMaintenanceUpdateParam> captor =
+        ArgumentCaptor.forClass(JobDefinitionMaintenanceUpdateParam.class);
+    verify(jobDefinitionMapper).updateJobDefinitionMaintenance(captor.capture());
+    JsonNode persisted = new ObjectMapper().readTree(captor.getValue().getDefaultParams());
+    assertThat(persisted.path("connection").path("password").asText())
+        .isEqualTo("stored-credential");
+    assertThat(persisted.path("limit").asInt()).isEqualTo(2);
+    assertThat(captor.getValue().isDefaultParamsSpecified()).isTrue();
+  }
+
+  @Test
+  @DisplayName("批量新建仅有脱敏占位符的作业时拒绝写入并报告条目失败")
+  void shouldRejectMaskedCredential_whenInitCreatesJobWithoutStoredValue() {
+    TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
+    request.getJobDefinitions().getFirst().setDefaultParams("""
+        {"connection":{"password":"****"}}
+        """);
+
+    TenantConfigBatchInitResponse response =
+        service.batchInit(request, "admin", "masked-job-create");
+
+    assertThat(response.results().getFirst().jobDefinitions().failed()).isOne();
+    assertThat(response.results().getFirst().jobDefinitions().created()).isZero();
+    verify(jobDefinitionMapper, never()).insert(any());
+  }
+
+  @Test
+  @DisplayName("批量更新找不到同位置原凭据时拒绝占位符覆盖")
+  void shouldRejectUnresolvedCredential_whenInitUpdatesJobWithoutMatchingValue() {
+    TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
+    request.setMode(InitMode.UPSERT);
+    request.getJobDefinitions().getFirst().setDefaultParams("""
+        {"connection":{"password":"****"}}
+        """);
+    JobDefinitionEntity existing = existingJobWithDefaults("{\"limit\":1}");
+    when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(existing);
+
+    TenantConfigBatchInitResponse response =
+        service.batchInit(request, "admin", "masked-job-missing");
+
+    assertThat(response.results().getFirst().jobDefinitions().failed()).isOne();
+    assertThat(response.results().getFirst().jobDefinitions().updated()).isZero();
+    verify(jobDefinitionMapper, never()).updateJobDefinitionMaintenance(any());
+  }
+
+  @Test
+  @DisplayName("批量更新显式新值时替换原值，普通字段中的星号保持原样")
+  void shouldApplyExplicitDefaults_whenInitReplacesCredentialAndOrdinaryMaskText()
+      throws Exception {
+    TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
+    request.setMode(InitMode.UPSERT);
+    request.getJobDefinitions().getFirst().setDefaultParams("""
+        {"connection":{"password":"replacement-credential"},"label":"****"}
+        """);
+    JobDefinitionEntity existing = existingJobWithDefaults("""
+        {"connection":{"password":"stored-credential"},"label":"old"}
+        """);
+    when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(existing);
+
+    TenantConfigBatchInitResponse response =
+        service.batchInit(request, "admin", "explicit-job-defaults");
+
+    assertThat(response.results().getFirst().jobDefinitions().updated()).isOne();
+    ArgumentCaptor<JobDefinitionMaintenanceUpdateParam> captor =
+        ArgumentCaptor.forClass(JobDefinitionMaintenanceUpdateParam.class);
+    verify(jobDefinitionMapper).updateJobDefinitionMaintenance(captor.capture());
+    JsonNode persisted = new ObjectMapper().readTree(captor.getValue().getDefaultParams());
+    assertThat(persisted.path("connection").path("password").asText())
+        .isEqualTo("replacement-credential");
+    assertThat(persisted.path("label").asText()).isEqualTo("****");
+  }
+
+  @Test
+  @DisplayName("批量更新省略默认参数时不指定该列，保留已有参数")
+  void shouldKeepDefaultsUnspecified_whenInitOmitsJobDefaults() {
+    TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
+    request.setMode(InitMode.UPSERT);
+    JobDefinitionEntity existing = existingJobWithDefaults("{\"limit\":1}");
+    when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(existing);
+
+    TenantConfigBatchInitResponse response =
+        service.batchInit(request, "admin", "omitted-job-defaults");
+
+    assertThat(response.results().getFirst().jobDefinitions().updated()).isOne();
+    ArgumentCaptor<JobDefinitionMaintenanceUpdateParam> captor =
+        ArgumentCaptor.forClass(JobDefinitionMaintenanceUpdateParam.class);
+    verify(jobDefinitionMapper).updateJobDefinitionMaintenance(captor.capture());
+    assertThat(captor.getValue().isDefaultParamsSpecified()).isFalse();
+    assertThat(captor.getValue().getDefaultParams()).isNull();
+  }
+
+  private JobDefinitionEntity existingJobWithDefaults(String defaults) {
+    JobDefinitionEntity existing = new JobDefinitionEntity();
+    existing.setTenantId("t1");
+    existing.setJobCode("job-1");
+    existing.setScheduleType("MANUAL");
+    existing.setDefaultParams(defaults);
+    return existing;
+  }
 
   @Test
   @DisplayName("作业定义不存在时,新建并写入上游依赖字段")
@@ -361,7 +489,8 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   @DisplayName("跳过模式下文件通道已存在时,计入跳过数且不写库")
   void batchInit_skipsFileChannelWhenExistsInSkipMode() {
     TenantConfigBatchInitRequest request = requestWithChannel("ch-1", List.of("t1"));
-    when(fileChannelConfigMapper.selectByUniqueKey("t1", "ch-1")).thenReturn(Map.of("id", 1));
+    when(fileChannelConfigMapper.selectByUniqueKey("t1", "ch-1"))
+        .thenReturn(FileChannelConfigQueryView.builder().id(1L).build());
 
     TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 
@@ -374,7 +503,8 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   void batchInit_upsertsFileChannelInUpsertMode() {
     TenantConfigBatchInitRequest request = requestWithChannel("ch-1", List.of("t1"));
     request.setMode(InitMode.UPSERT);
-    when(fileChannelConfigMapper.selectByUniqueKey("t1", "ch-1")).thenReturn(Map.of("id", 1));
+    when(fileChannelConfigMapper.selectByUniqueKey("t1", "ch-1"))
+        .thenReturn(FileChannelConfigQueryView.builder().id(1L).build());
 
     TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 
@@ -383,6 +513,51 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   }
 
   // ------------------------------------------------------------------ file templates
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  @DisplayName("租户初始化和演练均拒绝启用的无效定长映射")
+  void batchInit_rejectsInvalidFixedWidthMapping(boolean dryRun) {
+    TenantConfigBatchInitRequest request = requestWithTemplate("tpl-1", List.of("t1"));
+    request.setDryRun(dryRun);
+    FileTemplateSpec spec = request.getFileTemplates().getFirst();
+    spec.setFileFormatType("FIXED_WIDTH");
+    spec.setFieldMappingsJson("[{\"target\":\"name\",\"start\":1.5,\"length\":2}]");
+
+    TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
+
+    assertThat(response.results().getFirst().fileTemplates().failed()).isOne();
+    verify(fileTemplateConfigMapper, never()).upsertFileTemplateConfig(any());
+  }
+
+  @Test
+  @DisplayName("租户初始化允许禁用模板暂存不完整定长映射")
+  void batchInit_allowsDisabledFixedWidthDraft() {
+    TenantConfigBatchInitRequest request = requestWithTemplate("tpl-1", List.of("t1"));
+    FileTemplateSpec spec = request.getFileTemplates().getFirst();
+    spec.setEnabled(false);
+    spec.setFileFormatType("FIXED_WIDTH");
+    spec.setFieldMappingsJson("[{\"target\":\"name\",\"start\":1.5,\"length\":2}]");
+
+    TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
+
+    assertThat(response.results().getFirst().fileTemplates().created()).isOne();
+    verify(fileTemplateConfigMapper).upsertFileTemplateConfig(any());
+  }
+
+  @Test
+  @DisplayName("租户初始化接受有效的定长映射")
+  void batchInit_acceptsValidFixedWidthMapping() {
+    TenantConfigBatchInitRequest request = requestWithTemplate("tpl-1", List.of("t1"));
+    FileTemplateSpec spec = request.getFileTemplates().getFirst();
+    spec.setFileFormatType("FIXED_WIDTH");
+    spec.setFieldMappingsJson("[{\"target\":\"name\",\"start\":1,\"length\":2}]");
+
+    TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
+
+    assertThat(response.results().getFirst().fileTemplates().created()).isOne();
+    verify(fileTemplateConfigMapper).upsertFileTemplateConfig(any());
+  }
 
   @Test
   @DisplayName("文件模板不存在时,新建并计入创建数")
@@ -400,7 +575,8 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   @DisplayName("跳过模式下文件模板已存在时,计入跳过数且不写库")
   void batchInit_skipsFileTemplateWhenExistsInSkipMode() {
     TenantConfigBatchInitRequest request = requestWithTemplate("tpl-1", List.of("t1"));
-    when(fileTemplateConfigMapper.selectByUniqueKey("t1", "tpl-1", 1)).thenReturn(Map.of("id", 1));
+    when(fileTemplateConfigMapper.selectByUniqueKey("t1", "tpl-1", 1))
+        .thenReturn(FileTemplateConfigQueryView.builder().id(1L).build());
 
     TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 
@@ -495,6 +671,58 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
 
   // ------------------------------------------------------------------ workflow definitions
 
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  @DisplayName("工作流节点缺少名称时正式初始化和演练均计为失败")
+  void batchInit_rejectsWorkflowNodeWithoutName(boolean dryRun) {
+    TenantConfigBatchInitRequest request = requestWithWorkflow("wf-1", List.of("t1"));
+    request.setDryRun(dryRun);
+    WorkflowDefinitionSpec.NodeSpec node = new WorkflowDefinitionSpec.NodeSpec();
+    node.setNodeCode("start");
+    node.setNodeType("START");
+    request.getWorkflowDefinitions().getFirst().setNodes(List.of(node));
+
+    TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
+
+    assertThat(response.results().getFirst().workflowDefinitions().failed()).isOne();
+    assertThat(response.results().getFirst().workflowDefinitions().created()).isZero();
+    verify(workflowDefinitionMapper, never()).upsertWorkflowDefinition(any());
+  }
+
+  @Test
+  @DisplayName("跳过现有工作流时不校验不执行的节点配置")
+  void batchInit_skipsExistingWorkflowEvenWhenNodeNameIsMissing() {
+    TenantConfigBatchInitRequest request = requestWithWorkflow("wf-1", List.of("t1"));
+    WorkflowDefinitionSpec.NodeSpec node = new WorkflowDefinitionSpec.NodeSpec();
+    node.setNodeCode("start");
+    node.setNodeType("START");
+    request.getWorkflowDefinitions().getFirst().setNodes(List.of(node));
+    when(workflowDefinitionMapper.selectLatestByCode("t1", "wf-1"))
+        .thenReturn(new WorkflowDefinitionEntity());
+
+    TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
+
+    assertThat(response.results().getFirst().workflowDefinitions().skipped()).isOne();
+    verify(workflowDefinitionMapper, never()).upsertWorkflowDefinition(any());
+  }
+
+  @Test
+  @DisplayName("有名称的工作流节点可通过演练")
+  void batchInit_acceptsWorkflowNodeWithName_whenDryRun() {
+    TenantConfigBatchInitRequest request = requestWithWorkflow("wf-1", List.of("t1"));
+    request.setDryRun(true);
+    WorkflowDefinitionSpec.NodeSpec node = new WorkflowDefinitionSpec.NodeSpec();
+    node.setNodeCode("start");
+    node.setNodeName("Start");
+    node.setNodeType("START");
+    request.getWorkflowDefinitions().getFirst().setNodes(List.of(node));
+
+    TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
+
+    assertThat(response.results().getFirst().workflowDefinitions().created()).isOne();
+    verify(workflowDefinitionMapper, never()).upsertWorkflowDefinition(any());
+  }
+
   @Test
   @DisplayName("工作流定义不存在时,新建并计入创建数")
   void batchInit_createsWorkflowWhenNotExists() {
@@ -516,16 +744,14 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     managedJob.setId(51L);
     managedJob.setJobCode("job-1");
     when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(managedJob);
-    when(workflowDefinitionMapper.selectByQuery(any())).thenReturn(List.of());
-    when(workflowDefinitionMapper.selectByUniqueKey("t1", "wf-1", 1)).thenReturn(null);
-    // After upsert, simulate saved entity
+    when(workflowDefinitionMapper.selectLatestByCode("t1", "wf-1")).thenReturn(null);
+    // 执行 upsert 后，模拟已保存的实体。
     WorkflowDefinitionEntity saved = new WorkflowDefinitionEntity();
     saved.setId(10L);
     saved.setWorkflowCode("wf-1");
     when(workflowDefinitionMapper.upsertWorkflowDefinition(any())).thenReturn(1);
     when(workflowDefinitionMapper.selectByUniqueKey("t1", "wf-1", 1))
-        .thenReturn(null) // first call (check existence) = not found
-        .thenReturn(saved); // second call (after upsert) = found
+        .thenReturn(saved); // 创建后按精确版本读取刚保存的定义。
 
     TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 
@@ -545,7 +771,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     TenantConfigBatchInitRequest request = requestWithWorkflow("wf-1", List.of("t1"));
     WorkflowDefinitionEntity existing = new WorkflowDefinitionEntity();
     existing.setId(1L);
-    when(workflowDefinitionMapper.selectByQuery(any())).thenReturn(List.of(existing));
+    when(workflowDefinitionMapper.selectLatestByCode("t1", "wf-1")).thenReturn(existing);
 
     TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 

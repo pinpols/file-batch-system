@@ -2,9 +2,8 @@ package io.github.pinpols.batch.console.domain.notification.application.contract
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
+import io.github.pinpols.batch.console.domain.notification.view.SubscriptionRuleRow;
 import java.time.Instant;
-import java.util.Map;
 import lombok.Builder;
 
 /**
@@ -32,23 +31,23 @@ public record ConsoleSubscriptionRuleResponse(
     @JsonProperty("created_at") Instant createdAt,
     @JsonProperty("updated_at") Instant updatedAt) {
 
-  public static ConsoleSubscriptionRuleResponse from(Map<String, Object> row) {
+  public static ConsoleSubscriptionRuleResponse from(SubscriptionRuleRow row) {
     if (row == null) {
       return null;
     }
     return ConsoleSubscriptionRuleResponse.builder()
-        .id(ConsoleResponseFieldReader.longValue(row, "id"))
-        .tenantId(ConsoleResponseFieldReader.stringValue(row, "tenant_id"))
-        .ruleName(ConsoleResponseFieldReader.stringValue(row, "rule_name"))
-        .channelCode(ConsoleResponseFieldReader.stringValue(row, "channel_code"))
-        .eventTypes(ConsoleResponseFieldReader.stringValue(row, "event_types"))
-        .severityFilter(ConsoleResponseFieldReader.stringValue(row, "severity_filter"))
-        .jobCodeFilter(ConsoleResponseFieldReader.stringValue(row, "job_code_filter"))
-        .enabled(ConsoleResponseFieldReader.booleanValue(row, "enabled"))
-        .createdBy(ConsoleResponseFieldReader.stringValue(row, "created_by"))
-        .updatedBy(ConsoleResponseFieldReader.stringValue(row, "updated_by"))
-        .createdAt(ConsoleResponseFieldReader.instantValue(row, "created_at"))
-        .updatedAt(ConsoleResponseFieldReader.instantValue(row, "updated_at"))
+        .id(row.id())
+        .tenantId(row.tenantId())
+        .ruleName(row.ruleName())
+        .channelCode(row.channelCode())
+        .eventTypes(row.eventTypes())
+        .severityFilter(row.severityFilter())
+        .jobCodeFilter(row.jobCodeFilter())
+        .enabled(row.enabled())
+        .createdBy(row.createdBy())
+        .updatedBy(row.updatedBy())
+        .createdAt(row.createdAt())
+        .updatedAt(row.updatedAt())
         .build();
   }
 }

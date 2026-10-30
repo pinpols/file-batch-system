@@ -203,34 +203,21 @@ class AssetPartitionCacheTransactionIntegrationTest extends AbstractIntegrationT
     String assetCountSql = """
         select count(*) from batch.data_asset where tenant_id = ? and asset_code = ?
         """;
-    return jdbcTemplate.queryForObject(
-        assetCountSql,
-        Long.class,
-        TENANT,
-        jobCode);
+    return jdbcTemplate.queryForObject(assetCountSql, Long.class, TENANT, jobCode);
   }
 
   private long partitionCount(String jobCode) {
     String partitionCountSql = """
         select count(*) from batch.asset_partition where tenant_id = ? and asset_code = ?
         """;
-    return jdbcTemplate.queryForObject(
-        partitionCountSql,
-        Long.class,
-        TENANT,
-        jobCode);
+    return jdbcTemplate.queryForObject(partitionCountSql, Long.class, TENANT, jobCode);
   }
 
   private String assetRowVersion(String jobCode) {
-    String assetRowVersionSql =
-        """
+    String assetRowVersionSql = """
         select xmin::text from batch.data_asset where tenant_id = ? and asset_code = ?
     """;
-    return jdbcTemplate.queryForObject(
-        assetRowVersionSql,
-        String.class,
-        TENANT,
-        jobCode);
+    return jdbcTemplate.queryForObject(assetRowVersionSql, String.class, TENANT, jobCode);
   }
 
   private static void awaitLatch(CountDownLatch latch) {

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.query.JobMonitoringRecheckQuery;
 import io.github.pinpols.batch.orchestrator.domain.view.JobMonitoringAlertCandidate;
 import java.time.Instant;
 import java.util.List;
@@ -28,6 +29,9 @@ public interface JobMonitoringMapper {
       @Param("id") Long id,
       @Param("slaAlertedAt") Instant slaAlertedAt);
 
+  JobInstanceEntity selectSlaViolationCandidate(
+      @Param("tenantId") String tenantId, @Param("id") Long id);
+
   List<JobMonitoringAlertCandidate> selectRunningTooLong(@Param("limit") int limit);
 
   List<JobMonitoringAlertCandidate> selectNotStarted(@Param("limit") int limit);
@@ -36,6 +40,16 @@ public interface JobMonitoringMapper {
 
   List<JobMonitoringAlertCandidate> selectFinalPartitionFailures(
       @Param("limit") int limit, @Param("lookbackSeconds") int lookbackSeconds);
+
+  boolean tryAcquireInstanceAdvisoryLock(
+      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
+
+  boolean tryAcquireRequestAdvisoryLock(
+      @Param("tenantId") String tenantId, @Param("triggerRequestId") Long triggerRequestId);
+
+  String setTenantContext(@Param("tenantId") String tenantId);
+
+  JobMonitoringAlertCandidate selectCandidateForRecheck(JobMonitoringRecheckQuery query);
 
   int claimAlert(
       @Param("tenantId") String tenantId,

@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.enums.OperationResult;
 import io.github.pinpols.batch.common.enums.SkipAction;
 import io.github.pinpols.batch.common.enums.SkipThresholdMode;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
+import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.common.utils.ContentMaskingUtils;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -91,13 +92,11 @@ public class ImportRecordGovernanceService {
     return resolveSkipAction() == SkipAction.MANUAL_REVIEW;
   }
 
-
   /** 带 Excel 物理定位({@link SourceLocator})的跳过记录;locator 为空时退化为不带定位的行为。 */
   public void recordSkippedRecord(ImportJobContext context, BadRecordCommand command) {
     BadRecordContext badRecordContext = toBadRecordContext(context, command, true);
     recordBadRecord(badRecordContext);
   }
-
 
   /** 带 Excel 物理定位({@link SourceLocator})的失败记录;locator 为空时退化为不带定位的行为。 */
   public void recordFailedRecord(ImportJobContext context, BadRecordCommand command) {
@@ -128,9 +127,7 @@ public class ImportRecordGovernanceService {
       String errorCode,
       String errorMessage,
       Object rawRecord,
-      SourceLocator locator) {
-
-  }
+      SourceLocator locator) {}
 
   /**
    * Excel 物理定位:{@code rowNum} 为 1-based 物理行号(SAX 的 0-based rowNum +1), {@code column}
@@ -174,6 +171,10 @@ public class ImportRecordGovernanceService {
   }
 
   public void finalizeErrorOutput(ImportJobContext context) {
+    if (EmptyChecks.isNotNull(context)
+        && DryRunGuard.fromAttributes(context.getAttributes()).isDryRun()) {
+      return;
+    }
     List<ImportBadRecordEntity> badRecords = badRecords(context);
     if (badRecords.isEmpty()) {
       return;
@@ -181,15 +182,22 @@ public class ImportRecordGovernanceService {
     Map<String, Object> attrs = context.getAttributes();
     Object fileIdValue = attrs.get(PipelineRuntimeKeys.FILE_ID);
     Long fileId = PlatformRuntimeValues.toLong(fileIdValue);
-    boolean hasRequiredFileContext = EmptyChecks.isNotNull(fileId) && Texts.hasText(context.getTenantId());
+    boolean hasRequiredFileContext =
+        EmptyChecks.isNotNull(fileId) && Texts.hasText(context.getTenantId());
     if (!hasRequiredFileContext) {
       return;
     }
     String errorOutputPath = null;
     ErrorSinkType sinkType = resolveErrorSinkType();
     if (sinkType == ErrorSinkType.ERROR_FILE || sinkType == ErrorSinkType.BOTH) {
+      ErrorMaskingPolicy masking = errorMaskingPolicy(attrs);
+      List<ImportBadRecordEntity> outputRecords = masking.enabled()
+          ? badRecords.stream()
+              .map(record -> maskBadRecord(record, masking.ruleSet()))
+              .toList()
+          : badRecords;
       errorOutputPath = errorOutputStorage.writeErrorOutput(
-          context.getTenantId(), String.valueOf(fileId), badRecords);
+          context.getTenantId(), String.valueOf(fileId), outputRecords);
     }
     Map<String, Object> metadata = new LinkedHashMap<>();
     metadata.put("badRecordCount", badRecords.size());
@@ -216,9 +224,7 @@ public class ImportRecordGovernanceService {
     boolean manualReviewRequired =
         Boolean.TRUE.equals(attrs.get(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED))
             || shouldManualReview();
-    metadata.put(
-        ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED,
-        manualReviewRequired);
+    metadata.put(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED, manualReviewRequired);
     if (Texts.hasText(errorOutputPath)) {
       metadata.put("errorOutputPath", errorOutputPath);
     }
@@ -310,7 +316,9 @@ public class ImportRecordGovernanceService {
       }
     }
 
-    persistBadRecordAudit(brc, badRecord);
+    if (!DryRunGuard.fromAttributes(attrs).isDryRun()) {
+      persistBadRecordAudit(brc, badRecord);
+    }
 
     boolean requiresManualReview = skipped && resolveSkipAction() == SkipAction.MANUAL_REVIEW;
     if (requiresManualReview) {
@@ -343,21 +351,9 @@ public class ImportRecordGovernanceService {
     Long pipelineInstanceId = PlatformRuntimeValues.toLong(pipelineInstanceIdValue);
     Object pipelineStepRunIdValue = attrs.get(PipelineRuntimeKeys.PIPELINE_STEP_RUN_ID);
     Long pipelineStepRunId = PlatformRuntimeValues.toLong(pipelineStepRunIdValue);
-    Object templateConfig = attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
-    boolean errorLineMask = false;
-    String maskingRuleSet = null;
-    if (templateConfig instanceof Map<?, ?> templateMap) {
-      Object flag = templateMap.get("error_line_masking_enabled");
-      boolean booleanFlagEnabled = Boolean.TRUE.equals(flag);
-      boolean textFlagEnabled =
-          !booleanFlagEnabled && "true".equalsIgnoreCase(String.valueOf(flag));
-      errorLineMask = booleanFlagEnabled || textFlagEnabled;
-      Object rule = templateMap.get("masking_rule_set");
-      maskingRuleSet = rule == null ? null : String.valueOf(rule);
-    }
-    if (batchSecurityProperties.isBypassMode()) {
-      errorLineMask = false;
-    }
+    ErrorMaskingPolicy masking = errorMaskingPolicy(attrs);
+    String maskingRuleSet = masking.ruleSet();
+    boolean errorLineMask = masking.enabled();
     String safeMessage = errorLineMask
         ? ContentMaskingUtils.maskPlainText(errorMessage, maskingRuleSet)
         : errorMessage;
@@ -382,6 +378,42 @@ public class ImportRecordGovernanceService {
         .sourceColumn(sourceColumn)
         .build();
     fileAudits.insertFileErrorRecord(errorRecord);
+  }
+
+  private record ErrorMaskingPolicy(boolean enabled, String ruleSet) {}
+
+  private ErrorMaskingPolicy errorMaskingPolicy(Map<String, Object> attrs) {
+    Object templateConfig = attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
+    boolean errorLineMask = false;
+    String maskingRuleSet = null;
+    if (templateConfig instanceof Map<?, ?> templateMap) {
+      Object flag = templateMap.get("error_line_masking_enabled");
+      boolean booleanFlagEnabled = Boolean.TRUE.equals(flag);
+      boolean textFlagEnabled =
+          !booleanFlagEnabled && "true".equalsIgnoreCase(String.valueOf(flag));
+      errorLineMask = booleanFlagEnabled || textFlagEnabled;
+      Object rule = templateMap.get("masking_rule_set");
+      maskingRuleSet = EmptyChecks.isNull(rule) ? null : String.valueOf(rule);
+    }
+    if (batchSecurityProperties.isBypassMode()) {
+      errorLineMask = false;
+    }
+    return new ErrorMaskingPolicy(errorLineMask, maskingRuleSet);
+  }
+
+  private ImportBadRecordEntity maskBadRecord(ImportBadRecordEntity record, String ruleSet) {
+    return ImportBadRecordEntity.builder()
+        .recordNo(record.recordNo())
+        .stageCode(record.stageCode())
+        .errorCode(record.errorCode())
+        .errorMessage(ContentMaskingUtils.maskPlainText(record.errorMessage(), ruleSet))
+        .rawRecord(maskErrorPayload(record.rawRecord(), ruleSet))
+        .skipped(record.skipped())
+        .skipAction(record.skipAction())
+        .createdAt(record.createdAt())
+        .sourceRowNum(record.sourceRowNum())
+        .sourceColumn(record.sourceColumn())
+        .build();
   }
 
   @SuppressWarnings("unchecked")
@@ -415,7 +447,11 @@ public class ImportRecordGovernanceService {
       return ContentMaskingUtils.maskPlainText(text, maskingRuleSet);
     }
     String serializedPayload = JsonUtils.toJson(payload);
-    return ContentMaskingUtils.maskPlainText(serializedPayload, maskingRuleSet);
+    String masked = ContentMaskingUtils.maskPlainText(serializedPayload, maskingRuleSet);
+    if (serializedPayload.startsWith("{") || serializedPayload.startsWith("[")) {
+      return JsonUtils.fromJson(masked, Object.class);
+    }
+    return masked;
   }
 
   private long increment(ImportJobContext context, String key) {

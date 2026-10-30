@@ -3,6 +3,8 @@ package io.github.pinpols.batch.worker.imports.infrastructure.quality;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -23,5 +25,32 @@ class ValidationIssueMaskerTest {
 
     assertThat(outcome.recordIssues()).isEmpty();
     assertThat(outcome.datasetIssues()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("校验问题脱敏后结构化原始行仍保留对象结构")
+  void shouldPreserveStructuredRawRecordWhenMasking() {
+    ImportJobContext context = new ImportJobContext();
+    context
+        .getAttributes()
+        .put(
+            PipelineRuntimeKeys.TEMPLATE_CONFIG,
+            Map.of("log_masking_enabled", true, "masking_rule_set", "STRICT"));
+    ValidationIssue issue = new ValidationIssue(1L, "INVALID", "invalid", Map.of("name", "Alice"));
+    ValidationSession session = ValidationSession.builder()
+        .context(context)
+        .recordIssues(Map.of(1L, issue))
+        .datasetIssues(List.of())
+        .appliedChecks(Set.of())
+        .build();
+
+    Object raw = new ValidationIssueMasker(new BatchSecurityProperties())
+        .maskOutcome(session)
+        .recordIssues()
+        .get(1L)
+        .rawRecord();
+
+    assertThat(raw).isInstanceOf(Map.class);
+    assertThat(String.valueOf(raw)).doesNotContain("Alice");
   }
 }

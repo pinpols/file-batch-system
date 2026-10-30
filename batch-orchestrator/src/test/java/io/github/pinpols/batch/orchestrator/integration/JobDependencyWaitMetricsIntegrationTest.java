@@ -7,8 +7,8 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.application.service.metrics.JobDependencyWaitMetricsQuery;
 import io.github.pinpols.batch.orchestrator.domain.query.JobDependencyWaitBacklog;
+import io.github.pinpols.batch.orchestrator.infrastructure.metrics.JobDependencyWaitMetricsQuery;
 import io.github.pinpols.batch.orchestrator.infrastructure.metrics.JobDependencyWaitMetricsScheduler;
 import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
 import io.github.pinpols.batch.orchestrator.mapper.JobDependencyWaitingLaunchMapper;
@@ -75,8 +75,7 @@ class JobDependencyWaitMetricsIntegrationTest extends AbstractIntegrationTest {
         GRANT USAGE ON SCHEMA batch TO %s
     """.formatted(RLS_ROLE);
     jdbcTemplate.execute(grantUsageSql);
-    final String grantSelectSql =
-        """
+    final String grantSelectSql = """
         GRANT SELECT ON batch.job_dependency_waiting_launch TO %s
     """.formatted(RLS_ROLE);
     jdbcTemplate.execute(grantSelectSql);
@@ -137,23 +136,17 @@ class JobDependencyWaitMetricsIntegrationTest extends AbstractIntegrationTest {
   @DisplayName("全租户汇总依赖等待积压且包含暂停租户")
   @Test
   void shouldPublishGlobalBacklogAcrossActiveAndSuspendedTenants() {
-  final String insertTenantSql = """
+    final String insertTenantSql = """
       insert into batch.tenant (tenant_id, tenant_name, status) values (?, ?, 'ACTIVE')
   """;
-  final String insertTenantSql2 = """
+    final String insertTenantSql2 = """
       insert into batch.tenant (tenant_id, tenant_name, status) values (?, ?, 'SUSPENDED')
   """;
 
     String activeTenant = "it-metrics-active-" + UUID.randomUUID();
     String suspendedTenant = "it-metrics-suspended-" + UUID.randomUUID();
-    jdbcTemplate.update(
-        insertTenantSql,
-        activeTenant,
-        activeTenant);
-    jdbcTemplate.update(
-        insertTenantSql2,
-        suspendedTenant,
-        suspendedTenant);
+    jdbcTemplate.update(insertTenantSql, activeTenant, activeTenant);
+    jdbcTemplate.update(insertTenantSql2, suspendedTenant, suspendedTenant);
     insertWaitingRow(activeTenant, "active-wait-" + UUID.randomUUID(), 3);
     insertWaitingRow(suspendedTenant, "suspended-wait-" + UUID.randomUUID(), 1);
 
@@ -197,8 +190,7 @@ class JobDependencyWaitMetricsIntegrationTest extends AbstractIntegrationTest {
       jdbcTemplate.execute(setLocalSql);
       return RlsTenantContextHolder.runWithTenant(tenantId, () -> {
         long waitingCount = metricsQuery.selectForTenant(tenantId).waitingCount();
-        String sessionTenant = jdbcTemplate.queryForObject(
-            selectCurrentSettingSql, String.class);
+        String sessionTenant = jdbcTemplate.queryForObject(selectCurrentSettingSql, String.class);
         return Map.entry(waitingCount, sessionTenant);
       });
     });
@@ -219,14 +211,14 @@ class JobDependencyWaitMetricsIntegrationTest extends AbstractIntegrationTest {
       LocalDate bizDate,
       String state,
       int ageDays) {
-        final String insertBusinessCalendarSql = """
+    final String insertBusinessCalendarSql = """
     insert into batch.business_calendar(tenant_id,calendar_code,calendar_name,timezone,enabled)
     values (?,'JOB_CALENDAR','Metrics','UTC',true) on conflict (tenant_id,calendar_code) do nothing
     """;
-        final String selectIdSql = """
+    final String selectIdSql = """
             select id from batch.job_definition where tenant_id=? and job_code=?
         """;
-        final String insertJobDefinitionSql = """
+    final String insertJobDefinitionSql = """
     insert into batch.job_definition(tenant_id,job_code,job_name,job_type,schedule_type,timezone,calendar_code)
     values (?,?,'Metrics','GENERAL','MANUAL','UTC','JOB_CALENDAR') returning id
     """;
@@ -244,12 +236,8 @@ class JobDependencyWaitMetricsIntegrationTest extends AbstractIntegrationTest {
     """;
 
     ownedTenants.add(tenantId);
-        jdbcTemplate.update(insertBusinessCalendarSql, tenantId);
-    List<Long> existing = jdbcTemplate.queryForList(
-        selectIdSql,
-        Long.class,
-        tenantId,
-        jobCode);
+    jdbcTemplate.update(insertBusinessCalendarSql, tenantId);
+    List<Long> existing = jdbcTemplate.queryForList(selectIdSql, Long.class, tenantId, jobCode);
     Long jobId = existing.isEmpty()
         ? jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, tenantId, jobCode)
         : existing.getFirst();
@@ -263,7 +251,10 @@ class JobDependencyWaitMetricsIntegrationTest extends AbstractIntegrationTest {
             bizDate,
             TriggerType.API);
     Long nodeId = jdbcTemplate.queryForObject(
-        insertWorkflowNodeRunSql, Long.class, parent.workflowRunId(), "WAITING".equals(state) ? "READY" : "SUCCESS");
+        insertWorkflowNodeRunSql,
+        Long.class,
+        parent.workflowRunId(),
+        "WAITING".equals(state) ? "READY" : "SUCCESS");
     String payload = JsonUtils.toJson(LaunchRequest.builder()
         .tenantId(tenantId)
         .requestId(requestId)
@@ -279,7 +270,7 @@ class JobDependencyWaitMetricsIntegrationTest extends AbstractIntegrationTest {
             "_parentNodeRunId",
             nodeId))
         .build());
-        jdbcTemplate.update(
+    jdbcTemplate.update(
         updateTriggerRequestSql,
         requestId,
         "WAITING".equals(state) ? "WAITING" : "LAUNCHED",
@@ -288,7 +279,14 @@ class JobDependencyWaitMetricsIntegrationTest extends AbstractIntegrationTest {
     RlsTenantContextHolder.runWithTenant(
         tenantId,
         () -> jdbcTemplate.update(
-            insertJobDependencyWaitingLaunchSql, tenantId, requestId, jobCode, bizDate, payload, state, ageDays));
+            insertJobDependencyWaitingLaunchSql,
+            tenantId,
+            requestId,
+            jobCode,
+            bizDate,
+            payload,
+            state,
+            ageDays));
   }
 
   @AfterEach
@@ -329,11 +327,8 @@ class JobDependencyWaitMetricsIntegrationTest extends AbstractIntegrationTest {
     """;
 
     for (String tenant : ownedTenants) {
-      jdbcTemplate.update(
-          deleteJobDependencyWaitingLaunchSql, tenant);
-      jdbcTemplate.update(
-          deleteWorkflowNodeRunSql,
-          tenant);
+      jdbcTemplate.update(deleteJobDependencyWaitingLaunchSql, tenant);
+      jdbcTemplate.update(deleteWorkflowNodeRunSql, tenant);
       jdbcTemplate.update(deleteWorkflowRunSql, tenant);
       jdbcTemplate.update(deleteTriggerRequestSql, tenant);
       jdbcTemplate.update(deleteWorkflowEdgeSql, tenant);

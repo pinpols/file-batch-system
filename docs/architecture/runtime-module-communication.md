@@ -14,82 +14,38 @@
 ## 总览图
 
 ```mermaid
-flowchart LR
-  C["batch-console-api"]
-  T["batch-trigger"]
-  O["batch-orchestrator"]
-  K["Kafka topics<br/>batch.task.dispatch.*"]
-  WD["batch-worker-dispatch"]
-  WI["batch-worker-import"]
-  WE["batch-worker-export"]
-  WP["batch-worker-process"]
-  WSPI["batch-worker-atomic"]
-  M["MinIO bucket<br/>batch-dev"]
-
-  P["batch_platform<br/>trigger_request<br/>trigger_outbox_event (V80, ADR-010)<br/>job_definition<br/>job_instance<br/>job_partition<br/>job_task<br/>workflow_run<br/>workflow_node_run (output JSONB, ADR-009)<br/>worker_registry<br/>retry_schedule<br/>dead_letter_task<br/>outbox_event<br/>file_record<br/>file_channel_config<br/>file_dispatch_record<br/>file_audit_log<br/>..."]
-  KT["Kafka topic<br/>batch.trigger.launch.v1<br/>(ADR-010 异步路径)"]
-
-  B["batch_business<br/>biz.customer_account<br/>biz.settlement_batch<br/>biz.settlement_detail<br/>(可选: BusinessRoutingDataSource 租户→分片, 默认关)"]
-
-  Q["Quartz tables<br/>quartz.QRTZ_*"]
-
-  C -->|"HTTP -> trigger<br/>launch / compensate / rerun"| T
-  C -->|"HTTP -> orchestrator<br/>dead-letter replay"| O
-  C -->|"JDBC query -> batch_platform<br/>job_definition / job_instance / file_record / file_audit_log / worker_registry"| P
-
-  T -->|"JDBC -> batch_platform<br/>trigger_request + trigger_outbox_event<br/>(同事务 INSERT)"| P
-  T -->|"JDBC -> Quartz<br/>quartz.QRTZ_*"| Q
-  T ==>|"Kafka publish ->batch.trigger.launch.v1<br/>(ADR-010 outbox→Kafka)<br/>TriggerOutboxRelay 周期发"| KT
-  KT ==>|"Kafka consume ->TriggerLaunchConsumer<br/>调 LaunchApplicationService.launch"| O
-
-  O -->|"JDBC -> batch_platform<br/>launch / task-state / retry / replay / worker-lifecycle"| P
-  O -->|"Kafka -> batch.task.dispatch.*<br/>dispatch publish"| K
-
-  K -->|"Kafka consume"| WD
-  K -->|"Kafka consume"| WI
-  K -->|"Kafka consume"| WE
-  K -->|"Kafka consume"| WP
-  K -->|"Kafka consume"| WSPI
-
-  WD -->|"HTTP -> orchestrator<br/>register / heartbeat / status / claim / renew / report / report-batch"| O
-  WI -->|"HTTP -> orchestrator<br/>register / heartbeat / status / claim / renew / report / report-batch"| O
-  WE -->|"HTTP -> orchestrator<br/>register / heartbeat / status / claim / renew / report / report-batch"| O
-  WSPI -->|"HTTP -> orchestrator<br/>register / heartbeat / status / claim / renew / report / report-batch"| O
-  WP -->|"HTTP -> orchestrator<br/>register / heartbeat / status / claim / renew / report / report-batch"| O
-
-  WD -->|"JDBC -> batch_platform<br/>file_record / file_channel_config / file_dispatch_record"| P
-  WI -->|"JDBC -> batch_business<br/>customer_account"| B
-  WE -->|"JDBC -> batch_business<br/>settlement_batch / settlement_detail"| B
-  WE -->|"S3 API -> MinIO<br/>export object write"| M
-  WP -->|"JDBC -> batch_business<br/>batch.process_staging (WAP write/audit/publish; 经 processBusinessDataSource, 见 process-worker-known-issues.md P0-1)"| B
-  WP -->|"JDBC -> batch_business<br/>SQL transform source/target tables"| B
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  C["Console API"] -->|"运行发起"| T["Trigger"]
+  C -->|"审批 / 补偿 / 重放"| O["Orchestrator"]
+  C -->|"配置 / 查询"| DB[("平台 PostgreSQL")]
+  T -->|"请求 + Outbox"| DB
+  T --> Q[("Quartz 表")]
+  DB -->|"读取待发事件"| TR["Trigger Relay"] --> KL["Kafka · launch"] --> O
+  O -->|"运行状态 + Outbox"| DB
+  DB -->|"读取待发事件"| OR["Task Outbox Relay"] --> KT["Kafka · task dispatch"]
+  KT --> W["IMPORT / EXPORT / PROCESS / DISPATCH / ATOMIC"]
+  W -->|"HTTP CLAIM / REPORT / 续租"| O
+  W --> B[("业务数据源")]
+  W --> S["对象存储 / 外部通道"]
+  W -->|"受限文件元数据"| FM[("平台文件元数据")]
+  FM --- DB
 ```
 
 ## Orchestrator 写表细化图
 
 ```mermaid
-flowchart LR
-  T["batch-trigger"]
-  W["workers<br/>dispatch / import / export"]
-  C["batch-console-api"]
-  O["batch-orchestrator"]
-  P["batch_platform"]
-
-  T -->|"Kafka batch.trigger.launch.v1<br/>(ADR-010 outbox→Kafka→TriggerLaunchConsumer)"| O
-  W -->|"HTTP /internal/workers/*<br/>register / heartbeat / status"| O
-  W -->|"HTTP /internal/tasks/*<br/>claim / renew / claim-batch"| O
-  W -->|"HTTP /internal/tasks/*<br/>report / report-batch"| O
-  C -->|"审批通过的 DLQ_REPLAY /internal/compensations"| O
-
-  O -->|"launch path -><br/>read/update trigger_request +<br/>WorkflowRun + 冻结图 + START<br/>JOB到达后创建JobInstance +<br/>insert workflow_node_run +<br/>insert job_task +<br/>insert outbox_event"| P
-
-  O -->|"worker lifecycle path -><br/>upsert worker_registry"| P
-
-  O -->|"claim / renew path -><br/>update job_task +<br/>update job_partition"| P
-
-  O -->|"report path -><br/>update job_task +<br/>update job_partition +<br/>update job_instance +<br/>update workflow_run +<br/>insert/update workflow_node_run"| P
-
-  O -->|"retry / dead-letter / replay path -><br/>insert retry_schedule or dead_letter_task +<br/>update dead_letter_task replay status +<br/>新运行/尝试及来源关联<br/>终态不直接复活 +<br/>insert outbox_event"| P
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  T["Trigger · launch 消息"] --> O["Orchestrator · 唯一运行状态主机"]
+  W["五类 Worker · HTTP"] -->|"注册 / 心跳 / CLAIM / 续租 / REPORT"| O
+  C["Console · 审批运维请求"] --> O
+  O --> L[("WorkflowRun / NodeRun / Job / Partition / Task")]
+  O --> R[("worker_registry")]
+  O --> E[("retry_schedule / dead_letter_task")]
+  O --> TX[("outbox_event")]
+  E -. "新尝试保留来源，旧终态不复活" .-> L
+  L -. "同事务" .-> TX
 ```
 
 ### 内部 Task HTTP 协议要点（联调用）

@@ -53,3 +53,11 @@ description: 审查或修改 GitHub Actions、PR gate、full-ci-gate、merge que
 - Dependabot 或 bot PR 策略变化要同时检查 `.github/dependabot.yml`、自动合并 workflow、ruleset 与安全扫描门禁。
 - 失败 run 清理前先确认不会删除仍需追溯的证据；清理后保留 run id、分支和结论摘要。
 - 合并后仍要跟踪目标分支 `full-ci-gate`，不要只凭 PR checks 认定主干已全绿。
+
+## 历史经验方法
+
+优化分片/选测/缓存或复核守卫范围和历史误报时，按需读取 [历史经验方法](references/historical-methods.md)。只复用调查与验证方法，当前规则和原始证据分别维护。
+
+## 脚本行为与运行证据
+
+新增或更名入口时，沿workflow→shell/Python→SQL/fixture→最终报告核对输入、退出码和副作用；参考`script-sql-governance`的运行时方法。命令名含verify、plan或dry-run并非零写入保证，`SKIP/NOT_FOUND`也不能由汇总退出0转成全通过。应用制品的部署晋级改用`release-deployment`；本技能负责workflow的触发、权限和门禁，不重复维护部署状态机。

@@ -24,6 +24,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -75,15 +76,17 @@ public final class FakeBatchPlatform implements AutoCloseable {
   private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
   private final Map<Long, RecordedReport> reports = new ConcurrentHashMap<>();
-  /** 每个派发任务通过 CLAIM 返回的持久化任务载荷。 */
-  private final Map<Long, String> claimPayloads = new ConcurrentHashMap<>();
-  private final Map<Long, String> dispatchedTenants = new ConcurrentHashMap<>();
+  /** 租户和载荷作为同一派单快照发布，避免读到部分写入。 */
+  private record DispatchedTask(String tenantId, String payload) {}
+
+  private final Map<Long, DispatchedTask> dispatchedTasks = new ConcurrentHashMap<>();
 
   private final List<Map<String, Object>> registrations = new CopyOnWriteArrayList<>();
   private final List<Long> claims = new CopyOnWriteArrayList<>();
 
   /** CLAIM 身份由平台产生，不能采信 Kafka 消息或认领请求里的旧 invocation。 */
-  private record ClaimedExecution(String tenantId, String workerId, String invocationId) {}
+  private record ClaimedExecution(
+      String tenantId, String workerId, String invocationId, String payload, boolean completed) {}
 
   private final Map<Long, ClaimedExecution> claimedExecutions = new ConcurrentHashMap<>();
   private final Map<Long, String> nonIdempotentStarts = new ConcurrentHashMap<>();
@@ -152,6 +155,11 @@ public final class FakeBatchPlatform implements AutoCloseable {
    * 便于测试就绪状态；SDK 无提交位点时从 earliest 读取，先派单后启动由真实 Kafka E2E 覆盖。
    */
   public void dispatch(TaskDispatchMessage msg) {
+    if (EmptyChecks.isNull(msg)
+        || EmptyChecks.isNull(msg.taskId())
+        || EmptyChecks.isBlank(msg.tenantId())) {
+      throw new IllegalArgumentException("taskId and tenantId are required");
+    }
     awaitTopicAssignment(ASSIGNMENT_TIMEOUT);
     sleepQuietly(250); // assignment 可见后为消费者完成首次 poll 保留既有缓冲
     byte[] payload;
@@ -159,8 +167,7 @@ public final class FakeBatchPlatform implements AutoCloseable {
       payload = objectMapper.writeValueAsBytes(msg);
       Long taskId = msg.taskId();
       String parametersJson = objectMapper.writeValueAsString(msg.parameters());
-      claimPayloads.put(taskId, parametersJson);
-      dispatchedTenants.put(taskId, msg.tenantId());
+      dispatchedTasks.put(taskId, new DispatchedTask(msg.tenantId(), parametersJson));
     } catch (IOException e) {
       throw new IllegalArgumentException("cannot serialize dispatch message", e);
     }
@@ -172,6 +179,26 @@ public final class FakeBatchPlatform implements AutoCloseable {
       throw new IllegalStateException("dispatch interrupted", e);
     } catch (ExecutionException e) {
       throw new IllegalStateException("dispatch send failed", e);
+    }
+  }
+
+  /** 将已完成的任务显式重置为可认领状态；保留最后一次派单快照，不自动发送新消息。 */
+  public void requeue(Long taskId) {
+    if (EmptyChecks.isNull(taskId)) {
+      throw new IllegalArgumentException("taskId is required");
+    }
+    AtomicBoolean reset = new AtomicBoolean();
+    claimedExecutions.computeIfPresent(taskId, (id, current) -> {
+      if (!current.completed()) {
+        return current;
+      }
+      reports.remove(id);
+      nonIdempotentStarts.remove(id);
+      reset.set(true);
+      return null;
+    });
+    if (!reset.get()) {
+      throw new IllegalStateException("task is not completed: " + taskId);
     }
   }
 
@@ -227,16 +254,26 @@ public final class FakeBatchPlatform implements AutoCloseable {
   private void handleHttp(HttpExchange exchange) throws IOException {
     String path = exchange.getRequestURI().getPath();
     try {
+      boolean supported = path.equals("/internal/workers/register")
+          || path.matches("/internal/workers/[^/]+/(heartbeat|deactivate)")
+          || path.matches("/internal/tasks/[^/]+/(claim|report|renew|non-idempotent-started)");
+      if (!supported) {
+        respond(exchange, 404);
+        return;
+      }
+      if (!"POST".equals(exchange.getRequestMethod())) {
+        respond(exchange, 405);
+        return;
+      }
       if (path.endsWith("/register")) {
         Map<String, Object> registration = readBody(exchange);
         registrations.add(registration);
       } else if (path.endsWith("/report")) {
         Map<String, Object> body = readBody(exchange);
-        if (!hasCurrentClaimOwner(path, body)) {
+        if (!recordReport(taskIdFromPath(path), body)) {
           respond(exchange, 409);
           return;
         }
-        recordReport(body);
       } else if (path.endsWith("/claim")) {
         Long taskId = taskIdFromPath(path);
         Map<String, Object> claimBody = readBody(exchange);
@@ -246,20 +283,17 @@ public final class FakeBatchPlatform implements AutoCloseable {
           return;
         }
         claims.add(taskId);
-        respondWithClaimPayload(exchange, claimPayloads.get(taskId), claimed.invocationId());
+        respondWithClaimPayload(exchange, claimed.payload(), claimed.invocationId());
         return;
       } else if (path.endsWith("/non-idempotent-started")) {
         Map<String, Object> body = readBody(exchange);
-        if (!"POST".equals(exchange.getRequestMethod()) || !hasCurrentClaimOwner(path, body)) {
+        if (!recordStart(taskIdFromPath(path), body)) {
           respond(exchange, 409);
           return;
         }
-        Long taskId = taskIdFromPath(path);
-        ClaimedExecution claimed = claimedExecutions.get(taskId);
-        nonIdempotentStarts.put(taskId, claimed.invocationId());
       } else if (path.endsWith("/renew")) {
         Map<String, Object> body = readBody(exchange);
-        if (!hasCurrentClaimOwner(path, body)) {
+        if (!hasCurrentClaimOwner(path, body, true)) {
           respond(exchange, 409);
           return;
         }
@@ -275,46 +309,82 @@ public final class FakeBatchPlatform implements AutoCloseable {
   private ClaimedExecution claimExecution(Long taskId, Map<String, Object> body) {
     String tenantId = asString(body.get("tenantId"));
     String workerId = asString(body.get("workerId"));
-    if (taskId == null || !claimPayloads.containsKey(taskId)
-        || !dispatchedTenants.get(taskId).equals(tenantId)
-        || workerId == null || workerId.isBlank()) {
+    DispatchedTask dispatched = EmptyChecks.isNull(taskId) ? null : dispatchedTasks.get(taskId);
+    if (EmptyChecks.isNull(dispatched)
+        || !dispatched.tenantId().equals(tenantId)
+        || EmptyChecks.isBlank(workerId)) {
       return null;
     }
-    ClaimedExecution candidate =
-        new ClaimedExecution(tenantId, workerId, UUID.randomUUID().toString());
-    ClaimedExecution existing = claimedExecutions.putIfAbsent(taskId, candidate);
-    ClaimedExecution current = existing == null ? candidate : existing;
-    return current.tenantId().equals(tenantId) && current.workerId().equals(workerId)
-        ? current
-        : null;
+    ClaimedExecution candidate = new ClaimedExecution(
+        tenantId, workerId, UUID.randomUUID().toString(), dispatched.payload(), false);
+    AtomicReference<ClaimedExecution> accepted = new AtomicReference<>();
+    claimedExecutions.compute(taskId, (id, existing) -> {
+      ClaimedExecution current = EmptyChecks.isNull(existing) ? candidate : existing;
+      if (!current.completed()
+          && current.tenantId().equals(tenantId)
+          && current.workerId().equals(workerId)) {
+        accepted.set(current);
+      }
+      return current;
+    });
+    return accepted.get();
   }
 
-  private boolean hasCurrentClaimOwner(String path, Map<String, Object> body) {
+  private boolean hasCurrentClaimOwner(
+      String path, Map<String, Object> body, boolean requireRunning) {
     Long taskId = taskIdFromPath(path);
     if (taskId == null) {
       return false;
     }
     ClaimedExecution current = claimedExecutions.get(taskId);
-    Long reportedTaskId = asLong(body.get("taskId"));
-    return current != null
-        && (reportedTaskId == null || taskId.equals(reportedTaskId))
-        && current.tenantId().equals(asString(body.get("tenantId")))
-        && current.workerId().equals(asString(body.get("workerId")))
-        && current.invocationId().equals(asString(body.get("partitionInvocationId")));
+    return isCurrentClaimOwner(current, body, requireRunning);
   }
 
-  private void recordReport(Map<String, Object> body) {
-    Long taskId = asLong(body.get("taskId"));
-    if (taskId == null) {
-      return;
-    }
+  private boolean isCurrentClaimOwner(
+      ClaimedExecution current, Map<String, Object> body, boolean requireRunning) {
+    String bodyTenantId = asString(body.get("tenantId"));
+    String bodyWorkerId = asString(body.get("workerId"));
+    String bodyInvocationId = asString(body.get("partitionInvocationId"));
+    return current != null
+        && (!requireRunning || !current.completed())
+        && current.tenantId().equals(bodyTenantId)
+        && current.workerId().equals(bodyWorkerId)
+        && current.invocationId().equals(bodyInvocationId);
+  }
+
+  private boolean recordStart(Long taskId, Map<String, Object> body) {
+    if (EmptyChecks.isNull(taskId)) return false;
+    AtomicBoolean accepted = new AtomicBoolean();
+    claimedExecutions.computeIfPresent(taskId, (id, current) -> {
+      if (isCurrentClaimOwner(current, body, true)) {
+        nonIdempotentStarts.put(id, current.invocationId());
+        accepted.set(true);
+      }
+      return current;
+    });
+    return accepted.get();
+  }
+
+  private boolean recordReport(Long taskId, Map<String, Object> body) {
+    if (EmptyChecks.isNull(taskId)) return false;
     boolean success = Boolean.TRUE.equals(body.get("success"));
     String message = asString(body.get("message"));
     Map<String, Object> outputs = asMap(body.get("outputs"));
     String errorCode = asString(body.get("errorCode"));
-    reports.put(
-        taskId,
-        new RecordedReport(taskId, success, message, outputs, errorCode, body));
+    AtomicBoolean accepted = new AtomicBoolean();
+    claimedExecutions.computeIfPresent(taskId, (id, current) -> {
+      if (!isCurrentClaimOwner(current, body, false)) {
+        return current;
+      }
+      accepted.set(true);
+      if (current.completed()) {
+        return current;
+      }
+      reports.put(taskId, new RecordedReport(taskId, success, message, outputs, errorCode, body));
+      return new ClaimedExecution(
+          current.tenantId(), current.workerId(), current.invocationId(), current.payload(), true);
+    });
+    return accepted.get();
   }
 
   private Map<String, Object> readBody(HttpExchange exchange) {
@@ -342,11 +412,13 @@ public final class FakeBatchPlatform implements AutoCloseable {
     }
   }
 
-  private void respondWithClaimPayload(
-      HttpExchange exchange, String payload, String invocationId) throws IOException {
+  private void respondWithClaimPayload(HttpExchange exchange, String payload, String invocationId)
+      throws IOException {
     Map<String, Object> body = Map.of(
-        "payload", EmptyChecks.isNull(payload) ? "{}" : payload,
-        "partitionInvocationId", invocationId);
+        "payload",
+        EmptyChecks.isNull(payload) ? "{}" : payload,
+        "partitionInvocationId",
+        invocationId);
     byte[] response = objectMapper.writeValueAsBytes(body);
     exchange.getResponseHeaders().add(CONTENT_TYPE, JSON_MIME);
     exchange.sendResponseHeaders(200, response.length);
@@ -454,10 +526,6 @@ public final class FakeBatchPlatform implements AutoCloseable {
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
     }
-  }
-
-  private static Long asLong(Object value) {
-    return value instanceof Number n ? n.longValue() : null;
   }
 
   private static String asString(Object value) {

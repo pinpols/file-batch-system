@@ -20,6 +20,8 @@ import io.github.pinpols.batch.orchestrator.application.service.governance.Retry
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControllerApplicationService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
+import io.github.pinpols.batch.orchestrator.infrastructure.timeout.JobInstanceTimeoutEnforcer;
+import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -30,6 +32,8 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
@@ -40,6 +44,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.test.util.AopTestUtils;
 
 /**
  * 端到端测试:专用原子任务 worker 四类原子任务主链路成功闭环(ADR-029)。
@@ -72,6 +77,36 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
 
+  @Test
+  @DisplayName("SQL 原子任务结果经过报告保存为 Workflow 节点输出")
+  void shouldPersistSqlJsonbOutputInWorkflowNode() {
+    final String selectNodeOutputSql = """
+        select nr.output -> 'lastResultSet' -> 0 -> 'payload' ->> 'answer'
+        from batch.workflow_node_run nr
+        join batch.workflow_run wr on wr.id = nr.workflow_run_id
+        join batch.job_instance ji on ji.tenant_id = wr.tenant_id and ji.id = nr.job_instance_id
+        where ji.tenant_id = ? and ji.dedup_key = ?
+        """;
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.workflowDefinitionId(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.API,
+        seed.requestId(),
+        "e2e-atomic-output",
+        Map.of("taskType", "sql", "sql", "SELECT '{\"answer\":42}'::jsonb AS payload")));
+    e2eOutboxPublishSupport.publishAllPending(TENANT);
+
+    await()
+        .atMost(Duration.ofSeconds(120))
+        .pollInterval(Duration.ofMillis(200))
+        .untilAsserted(() -> assertThat(jdbcTemplate.queryForObject(
+                selectNodeOutputSql, String.class, TENANT, seed.dedupKey()))
+            .isEqualTo("42"));
+  }
+
   @Autowired
   private WorkflowRunLaunchService launchService;
 
@@ -86,6 +121,12 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
 
   @Autowired
   private KafkaTemplate<String, String> kafkaTemplate;
+
+  @Autowired
+  private JobInstanceTimeoutEnforcer jobInstanceTimeoutEnforcer;
+
+  @Autowired
+  private JobInstanceMapper jobInstanceMapper;
 
   @MockitoSpyBean
   private TaskControllerApplicationService taskControllerApplicationService;
@@ -120,8 +161,7 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
     """;
 
     // 真 PROCEDURE:executor 经 pg_proc.prokind 判定后发原生 CALL(PG 默认 {call}→SELECT 调真过程会报错)。
-    jdbcTemplate.execute(
-        createProcedureSql);
+    jdbcTemplate.execute(createProcedureSql);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("taskType", "stored_proc");
@@ -150,6 +190,95 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
 
       launchAndAwaitSuccess(params);
     } finally {
+      server.stop(0);
+    }
+  }
+
+  @Test
+  @DisplayName("真实 Worker 开始执行后，硬超时不把之前排队时间计入执行时长")
+  void shouldStartHardTimeoutAtWorkerExecution_whenDispatchWasLongAgo() throws Exception {
+    final String configureTimeoutSql =
+        "update batch.job_definition set timeout_seconds = 60 where tenant_id = ? and job_code = ?";
+    final String ageDispatchSql = """
+        update batch.job_instance set started_at = current_timestamp - interval '1 hour'
+        where tenant_id = ? and dedup_key = ?
+        """;
+    final String selectInstanceSql = """
+        select id from batch.job_instance where tenant_id = ? and dedup_key = ?
+        """;
+    final String selectExecutionSql = """
+        select instance_status, execution_started_at is not null as execution_started,
+               started_at < current_timestamp - interval '30 minutes' as dispatch_is_old
+        from batch.job_instance where tenant_id = ? and id = ?
+        """;
+    final String selectTaskSql = """
+        select task_status from batch.job_task where tenant_id = ? and job_instance_id = ?
+        """;
+    CountDownLatch requestArrived = new CountDownLatch(1);
+    CountDownLatch releaseRequest = new CountDownLatch(1);
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/slow", exchange -> {
+      requestArrived.countDown();
+      try {
+        if (!releaseRequest.await(45, TimeUnit.SECONDS)) {
+          exchange.sendResponseHeaders(503, -1);
+          return;
+        }
+        exchange.sendResponseHeaders(200, -1);
+      } catch (InterruptedException exception) {
+        Thread.currentThread().interrupt();
+      } finally {
+        exchange.close();
+      }
+    });
+    server.start();
+    try {
+      LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+          jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
+      assertThat(jdbcTemplate.update(configureTimeoutSql, TENANT, seed.jobCode()))
+          .isOne();
+      Map<String, Object> params = new LinkedHashMap<>();
+      params.put("taskType", "http");
+      params.put("url", "http://127.0.0.1:" + server.getAddress().getPort() + "/slow");
+      params.put("method", "GET");
+      launchService.launch(new LaunchRequest(
+          TENANT,
+          seed.workflowDefinitionId(),
+          LocalDate.of(2026, 1, 15),
+          TriggerType.API,
+          seed.requestId(),
+          "e2e-hard-timeout-start",
+          params));
+      Long instanceId =
+          jdbcTemplate.queryForObject(selectInstanceSql, Long.class, TENANT, seed.dedupKey());
+      assertThat(instanceId).isNotNull();
+      assertThat(jdbcTemplate.update(ageDispatchSql, TENANT, seed.dedupKey())).isOne();
+      e2eOutboxPublishSupport.publishAllPending(TENANT);
+      assertThat(requestArrived.await(30, TimeUnit.SECONDS)).isTrue();
+      Map<String, Object> instance =
+          jdbcTemplate.queryForMap(selectExecutionSql, TENANT, instanceId);
+      assertThat(instance)
+          .containsEntry("instance_status", "RUNNING")
+          .containsEntry("execution_started", true)
+          .containsEntry("dispatch_is_old", true);
+      assertThat(jdbcTemplate.queryForObject(selectTaskSql, String.class, TENANT, instanceId))
+          .isEqualTo("RUNNING");
+      assertThat(jobInstanceMapper.selectTimedOutCandidates(10000))
+          .extracting(candidate -> candidate.getId())
+          .doesNotContain(instanceId);
+
+      AopTestUtils.<JobInstanceTimeoutEnforcer>getTargetObject(jobInstanceTimeoutEnforcer)
+          .enforce();
+      assertThat(jdbcTemplate.queryForMap(selectExecutionSql, TENANT, instanceId))
+          .containsEntry("instance_status", "RUNNING");
+      releaseRequest.countDown();
+      await()
+          .atMost(Duration.ofSeconds(60))
+          .untilAsserted(() -> assertThat(
+                  jdbcTemplate.queryForObject(selectTaskSql, String.class, TENANT, instanceId))
+              .isEqualTo("SUCCESS"));
+    } finally {
+      releaseRequest.countDown();
       server.stop(0);
     }
   }
@@ -191,6 +320,7 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
       params.put("taskType", "http");
       params.put("url", "http://127.0.0.1:" + server.getAddress().getPort() + "/dry-run");
       params.put("method", "GET");
+      params.put("dryRun", false);
 
       launchService.launch(LaunchRequest.builder()
           .tenantId(TENANT)
@@ -208,13 +338,112 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
           .atMost(Duration.ofSeconds(120))
           .pollInterval(Duration.ofMillis(200))
           .untilAsserted(() -> {
-            Map<String, Object> run = jdbcTemplate.queryForMap(selectRunStatusSql, TENANT, seed.requestId());
+            Map<String, Object> run =
+                jdbcTemplate.queryForMap(selectRunStatusSql, TENANT, seed.requestId());
             assertThat(run)
                 .containsEntry("run_status", "SUCCESS_DRY_RUN")
                 .containsEntry("instance_status", "SUCCESS_DRY_RUN")
                 .containsEntry("task_status", "SUCCESS");
           });
       assertThat(receivedRequests).hasValue(0);
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  @Test
+  @DisplayName("演练 HTTP 任务人工重试经真实 Worker 执行时不产生外部请求")
+  void shouldKeepDryRunDuringManualRetry() throws IOException {
+    final String selectTaskSql = """
+        select t.id as task_id, t.job_partition_id
+        from batch.job_task t
+        join batch.job_instance ji on ji.tenant_id = t.tenant_id and ji.id = t.job_instance_id
+        where t.tenant_id = ? and ji.dedup_key = ?
+        """;
+    final String markOriginalOutboxSql =
+        "update batch.outbox_event set publish_status = 'PUBLISHED' where tenant_id = ? and aggregate_type = 'JOB_TASK' and aggregate_id = ?";
+    final String markTaskFailedSql =
+        "update batch.job_task set task_status = 'FAILED', version = version + 1 where tenant_id = ? and id = ?";
+    final String markPartitionFailedSql =
+        "update batch.job_partition set partition_status = 'FAILED', version = version + 1 where tenant_id = ? and id = ?";
+    final String selectPayloadSql =
+        "select task_payload ->> 'dryRun' as dry_run_payload, task_payload ->> 'run_mode' as run_mode from batch.job_task where tenant_id = ? and id = ?";
+    final String selectTaskStatusSql =
+        "select task_status from batch.job_task where tenant_id = ? and id = ?";
+    AtomicInteger receivedRequests = new AtomicInteger();
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/retry-dry-run", exchange -> {
+      receivedRequests.incrementAndGet();
+      exchange.sendResponseHeaders(200, -1);
+      exchange.close();
+    });
+    server.start();
+    try {
+      LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+          new E2eScenarioFixture.LaunchPreparationSpec(
+                  jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API)
+              .dryRun(true));
+      Map<String, Object> params = new LinkedHashMap<>();
+      params.put("taskType", "http");
+      params.put("url", "http://127.0.0.1:" + server.getAddress().getPort() + "/retry-dry-run");
+      params.put("method", "GET");
+      launchService.launch(LaunchRequest.builder()
+          .tenantId(TENANT)
+          .workflowDefinitionId(seed.workflowDefinitionId())
+          .bizDate(LocalDate.of(2026, 1, 15))
+          .triggerType(TriggerType.API)
+          .requestId(seed.requestId())
+          .traceId("e2e-retry-dry-run")
+          .params(params)
+          .dryRun(true)
+          .build());
+      Map<String, Object> task = jdbcTemplate.queryForMap(selectTaskSql, TENANT, seed.dedupKey());
+      long taskId = ((Number) task.get("task_id")).longValue();
+      long partitionId = ((Number) task.get("job_partition_id")).longValue();
+      // 初始任务失败由夹具构造；只有重试事件交给 Worker。
+      jdbcTemplate.update(markOriginalOutboxSql, TENANT, taskId);
+      jdbcTemplate.update(markTaskFailedSql, TENANT, taskId);
+      jdbcTemplate.update(markPartitionFailedSql, TENANT, partitionId);
+
+      retryGovernanceService.retryPartition(TENANT, partitionId, "dry-retry-" + seed.requestId());
+      assertThat(jdbcTemplate.queryForMap(selectPayloadSql, TENANT, taskId))
+          .containsEntry("dry_run_payload", "true")
+          .containsEntry("run_mode", "RETRY");
+      e2eOutboxPublishSupport.publishAllPending(TENANT);
+      await()
+          .atMost(Duration.ofSeconds(90))
+          .pollInterval(Duration.ofMillis(200))
+          .untilAsserted(() -> assertThat(
+                  jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, taskId))
+              .isEqualTo("SUCCESS"));
+      assertThat(receivedRequests).hasValue(0);
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  @Test
+  @DisplayName("正式 HTTP 任务的业务参数不能将其变成演练")
+  void shouldExecuteHttp_whenFormalParametersRequestDryRun() throws IOException {
+    AtomicInteger receivedRequests = new AtomicInteger();
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/formal", exchange -> {
+      receivedRequests.incrementAndGet();
+      byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
+      exchange.sendResponseHeaders(200, body.length);
+      try (OutputStream output = exchange.getResponseBody()) {
+        output.write(body);
+      }
+    });
+    server.start();
+    try {
+      Map<String, Object> params = new LinkedHashMap<>();
+      params.put("taskType", "http");
+      params.put("url", "http://127.0.0.1:" + server.getAddress().getPort() + "/formal");
+      params.put("method", "GET");
+      params.put("dryRun", true);
+      launchAndAwaitSuccess(params);
+      assertThat(receivedRequests).hasValue(1);
     } finally {
       server.stop(0);
     }
@@ -275,7 +504,8 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
           params));
 
       Long taskId = jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, seed.dedupKey());
-      String payload = jdbcTemplate.queryForObject(selectPayloadJsonSql, String.class, TENANT, taskId);
+      String payload =
+          jdbcTemplate.queryForObject(selectPayloadJsonSql, String.class, TENANT, taskId);
       TaskDispatchMessage message = JsonUtils.fromJson(payload, TaskDispatchMessage.class);
       assertThat(message).isNotNull();
       assertThat(message.selectedWorkerId()).isNotBlank();
@@ -394,12 +624,7 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
     try {
       LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
           jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
-      jdbcTemplate.update(
-          updateJobDefinitionSql,
-          "FIXED",
-          1,
-          TENANT,
-          seed.jobCode());
+      jdbcTemplate.update(updateJobDefinitionSql, "FIXED", 1, TENANT, seed.jobCode());
       Map<String, Object> params = new LinkedHashMap<>();
       params.put("taskType", "http");
       params.put("url", "http://127.0.0.1:" + server.getAddress().getPort() + "/commit-then-fail");
@@ -416,8 +641,10 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
           params));
 
       Long taskId = jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, seed.dedupKey());
-      Long partitionId = jdbcTemplate.queryForObject(selectIdSql2, Long.class, TENANT, seed.dedupKey());
-      Long workflowRunId = jdbcTemplate.queryForObject(selectIdSql3, Long.class, TENANT, seed.requestId());
+      Long partitionId =
+          jdbcTemplate.queryForObject(selectIdSql2, Long.class, TENANT, seed.dedupKey());
+      Long workflowRunId =
+          jdbcTemplate.queryForObject(selectIdSql3, Long.class, TENANT, seed.requestId());
       e2eOutboxPublishSupport.publishAllPending(TENANT);
 
       await()
@@ -427,8 +654,8 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
             String selectedTaskStatus =
                 jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, taskId);
             assertThat(selectedTaskStatus).isEqualTo("FAILED");
-            String selectedRunStatus =
-                jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, workflowRunId);
+            String selectedRunStatus = jdbcTemplate.queryForObject(
+                selectRunStatusSql, String.class, TENANT, workflowRunId);
             assertThat(selectedRunStatus).isEqualTo("FAILED");
             Integer selectedOutboxEventCount =
                 jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, workflowRunId);
@@ -463,44 +690,44 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
   @DisplayName("ATOMIC HTTP 失败后 retry 成功,再投递过期 retry 消息不重复请求目标服务")
   void shouldNotRepeatHttpSideEffect_whenCompletedAtomicRetryMessageIsRedelivered()
       throws Exception {
-        final String updateJobDefinitionSql = """
+    final String updateJobDefinitionSql = """
             update batch.job_definition set retry_policy = ?, retry_max_count = ? where tenant_id = ?\s\
             and job_code = ?\
             """;
-        final String selectIdSql = """
+    final String selectIdSql = """
           select task.id
           from batch.job_task task
           join batch.job_instance ji on ji.id = task.job_instance_id
           where ji.tenant_id = ? and ji.dedup_key = ?
           """;
-        final String selectIdSql2 = """
+    final String selectIdSql2 = """
           select partition.id
           from batch.job_partition partition
           join batch.job_instance ji on ji.tenant_id = partition.tenant_id
               and ji.id = partition.job_instance_id
           where ji.tenant_id = ? and ji.dedup_key = ?
           """;
-        final String selectPayloadJsonSql = """
+    final String selectPayloadJsonSql = """
           select payload_json::text
           from batch.outbox_event
           where tenant_id = ? and aggregate_type = 'JOB_TASK' and aggregate_id = ?
           order by id
           limit 1
           """;
-        final String selectTaskStatusSql = """
+    final String selectTaskStatusSql = """
             select task_status from batch.job_task where tenant_id = ? and id = ?
         """;
-        final String selectCountSql = """
+    final String selectCountSql = """
                 select count(*)::int from batch.retry_schedule
                 where tenant_id = ? and related_type = 'JOB_PARTITION'
                     and related_id = ? and retry_status = 'WAITING'
                 """;
-        final String updateRetryScheduleSql = """
+    final String updateRetryScheduleSql = """
           update batch.retry_schedule set next_retry_at = now() - interval '1 second'
           where tenant_id = ? and related_type = 'JOB_PARTITION'
               and related_id = ? and retry_status = 'WAITING'
           """;
-        final String selectPayloadJsonSql2 = """
+    final String selectPayloadJsonSql2 = """
           select payload_json::text
           from batch.outbox_event
           where tenant_id = ? and aggregate_type = 'JOB_TASK' and aggregate_id = ?
@@ -532,12 +759,7 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
     try {
       LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
           jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
-      jdbcTemplate.update(
-          updateJobDefinitionSql,
-          "FIXED",
-          1,
-          TENANT,
-          seed.jobCode());
+      jdbcTemplate.update(updateJobDefinitionSql, "FIXED", 1, TENANT, seed.jobCode());
       Map<String, Object> params = new LinkedHashMap<>();
       params.put("taskType", "http");
       params.put("url", "http://127.0.0.1:" + server.getAddress().getPort() + "/retry");
@@ -553,8 +775,10 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
           params));
 
       Long taskId = jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, seed.dedupKey());
-      Long partitionId = jdbcTemplate.queryForObject(selectIdSql2, Long.class, TENANT, seed.dedupKey());
-      String initialPayload = jdbcTemplate.queryForObject(selectPayloadJsonSql, String.class, TENANT, taskId);
+      Long partitionId =
+          jdbcTemplate.queryForObject(selectIdSql2, Long.class, TENANT, seed.dedupKey());
+      String initialPayload =
+          jdbcTemplate.queryForObject(selectPayloadJsonSql, String.class, TENANT, taskId);
       TaskDispatchMessage initialDispatch =
           JsonUtils.fromJson(initialPayload, TaskDispatchMessage.class);
       assertThat(initialDispatch)
@@ -597,7 +821,8 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
           jdbcTemplate.update(updateRetryScheduleSql, TENANT, partitionId);
       assertThat(affectedRetryScheduleRows).isEqualTo(1);
       retryGovernanceService.dispatchDueRetries();
-      String retryPayload = jdbcTemplate.queryForObject(selectPayloadJsonSql2, String.class, TENANT, taskId);
+      String retryPayload =
+          jdbcTemplate.queryForObject(selectPayloadJsonSql2, String.class, TENANT, taskId);
       TaskDispatchMessage retryDispatch =
           JsonUtils.fromJson(retryPayload, TaskDispatchMessage.class);
       assertThat(retryDispatch).isNotNull();
@@ -664,7 +889,8 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String status = jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
+          String status = jdbcTemplate.queryForObject(
+              selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
           assertThat(status).isEqualTo("SUCCESS");
         });
   }

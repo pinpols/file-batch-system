@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -53,8 +54,29 @@ class JobMonitoringSchedulerTest {
 
     scheduler.scan();
 
+    assertThat(meterRegistry.get("batch.job.monitoring.enabled").gauge().value())
+        .isZero();
+    assertThat(meterRegistry
+            .get("batch.job.monitoring.poll.interval.seconds")
+            .gauge()
+            .value())
+        .isEqualTo(30.0d);
     verify(mapper, never()).selectRunningTooLong(anyInt());
     verify(emissionService, never()).emitOnce(any(), any());
+  }
+
+  @Test
+  @DisplayName("启动时登记启用状态与扫描周期")
+  void shouldExposeMonitoringConfiguration() {
+    scheduler.registerHealthGauges();
+
+    assertThat(meterRegistry.get("batch.job.monitoring.enabled").gauge().value())
+        .isEqualTo(1.0d);
+    assertThat(meterRegistry
+            .get("batch.job.monitoring.poll.interval.seconds")
+            .gauge()
+            .value())
+        .isEqualTo(30.0d);
   }
 
   @Test
@@ -84,6 +106,23 @@ class JobMonitoringSchedulerTest {
             .timer()
             .count())
         .isEqualTo(1L);
+    double failureTimestamp = scanTimestamp(
+        "batch.job.monitoring.last.failure.timestamp.seconds", Violation.RUNNING_TOO_LONG, "scan");
+    assertThat(failureTimestamp).isGreaterThan(0.0d);
+    assertThat(scanTimestamp(
+            "batch.job.monitoring.last.success.timestamp.seconds",
+            Violation.RUNNING_TOO_LONG,
+            "scan"))
+        .isZero();
+
+    doReturn(List.of()).when(mapper).selectRunningTooLong(anyInt());
+    scheduler.scan();
+
+    assertThat(scanTimestamp(
+            "batch.job.monitoring.last.success.timestamp.seconds",
+            Violation.RUNNING_TOO_LONG,
+            "scan"))
+        .isGreaterThan(failureTimestamp);
   }
 
   @Test
@@ -95,7 +134,8 @@ class JobMonitoringSchedulerTest {
     when(mapper.selectNotStarted(anyInt())).thenReturn(List.of());
     when(mapper.selectNotCompletedByDeadline(anyInt())).thenReturn(List.of());
     when(emissionService.emitOnce(first, Violation.RUNNING_TOO_LONG))
-        .thenThrow(new IllegalStateException("alert persistence failed"));
+        .thenThrow(new IllegalStateException("alert persistence failed"))
+        .thenReturn(true);
 
     scheduler.scan();
 
@@ -107,13 +147,31 @@ class JobMonitoringSchedulerTest {
             .counter()
             .count())
         .isEqualTo(1.0d);
+    double failureTimestamp = scanTimestamp(
+        "batch.job.monitoring.last.failure.timestamp.seconds",
+        Violation.RUNNING_TOO_LONG,
+        "alert_persistence");
+    assertThat(failureTimestamp).isGreaterThan(0.0d);
+    assertThat(scanTimestamp(
+            "batch.job.monitoring.last.success.timestamp.seconds",
+            Violation.RUNNING_TOO_LONG,
+            "alert_persistence"))
+        .isZero();
+
+    scheduler.scan();
+
+    assertThat(scanTimestamp(
+            "batch.job.monitoring.last.success.timestamp.seconds",
+            Violation.RUNNING_TOO_LONG,
+            "alert_persistence"))
+        .isGreaterThan(failureTimestamp);
   }
 
   @Test
   @DisplayName("三类时限违规都扫描并交给告警发射器")
   void shouldScanAndEmitEveryViolationCategory() {
     JobMonitoringAlertCandidate running = candidate(11L);
-    JobMonitoringAlertCandidate notStarted = candidate(12L);
+    JobMonitoringAlertCandidate notStarted = workflowChildRequestCandidate(101L);
     JobMonitoringAlertCandidate notCompleted = candidate(13L);
     when(mapper.selectRunningTooLong(20)).thenReturn(List.of(running));
     when(mapper.selectNotStarted(20)).thenReturn(List.of(notStarted));
@@ -171,5 +229,24 @@ class JobMonitoringSchedulerTest {
         now.minusSeconds(10),
         50,
         2);
+  }
+
+  private static JobMonitoringAlertCandidate workflowChildRequestCandidate(long requestId) {
+    return JobMonitoringAlertCandidate.builder()
+        .tenantId("tenant-a")
+        .jobCode("CHILD_JOB")
+        .instanceStatus("ACCEPTED")
+        .workflowRunId(84L)
+        .triggerRequestId(requestId)
+        .build();
+  }
+
+  private double scanTimestamp(String metricName, Violation violation, String failureStage) {
+    return meterRegistry
+        .get(metricName)
+        .tag("violation_type", violation.name())
+        .tag("failure_stage", failureStage)
+        .gauge()
+        .value();
   }
 }

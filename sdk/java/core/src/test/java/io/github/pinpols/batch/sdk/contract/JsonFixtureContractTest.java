@@ -28,7 +28,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 /**
- * Lane P (drift guard): Java side of the language-agnostic contract-fixture runner.
+ * Lane P（漂移防护）：与语言无关的契约 fixture 执行器中的 Java 实现。
  *
  * <p>每个 {@code docs/api/sdk-contract-fixtures/*.json} 跑一个 parameterized 用例,**只验静态契约**:
  *

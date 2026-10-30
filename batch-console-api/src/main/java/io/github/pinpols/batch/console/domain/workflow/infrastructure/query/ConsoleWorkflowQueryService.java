@@ -150,7 +150,8 @@ public class ConsoleWorkflowQueryService {
         request.getNodeStatus(),
         request.getTraceId(),
         pageRequest,
-        decodedCursorId);
+        decodedCursorId,
+        cursorMode);
     List<WorkflowNodeRunEntity> rows = workflowMappers.workflowNodeRunMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(
@@ -335,40 +336,42 @@ public class ConsoleWorkflowQueryService {
     Instant finishedAt = entity.getFinishedAt();
     Instant createdAt = entity.getCreatedAt();
     Instant updatedAt = entity.getUpdatedAt();
-    return new ConsoleWorkflowRunResponse(
-        id,
-        tenantId,
-        workflowDefinitionId,
-        relatedJobInstanceId,
-        bizDate,
-        runStatus,
-        currentNodeCode,
-        traceId,
-        startedAt,
-        finishedAt,
-        createdAt,
-        updatedAt);
+    return ConsoleWorkflowRunResponse.builder()
+        .id(id)
+        .tenantId(tenantId)
+        .workflowDefinitionId(workflowDefinitionId)
+        .relatedJobInstanceId(relatedJobInstanceId)
+        .bizDate(bizDate)
+        .runStatus(runStatus)
+        .currentNodeCode(currentNodeCode)
+        .traceId(traceId)
+        .startedAt(startedAt)
+        .finishedAt(finishedAt)
+        .createdAt(createdAt)
+        .updatedAt(updatedAt)
+        .build();
   }
 
   private ConsoleWorkflowNodeRunResponse toWorkflowNodeRunResponse(WorkflowNodeRunEntity entity) {
     // i18n 持久化:有 errorKey 时按当前 Locale 重渲染,否则透传 errorMessage(老 literal / 第三方异常)。
     String errorMessage = localizedErrorRenderer.render(entity);
-    ConsoleWorkflowNodeRunResponse response = new ConsoleWorkflowNodeRunResponse(
-        entity.getId(),
-        entity.getWorkflowRunId(),
-        entity.getJobInstanceId(),
-        display(entity.getNodeCode()),
-        display(entity.getNodeType()),
-        entity.getRunSeq(),
-        display(entity.getNodeStatus()),
-        entity.getRetryCount(),
-        display(entity.getErrorCode()),
-        display(errorMessage),
-        display(entity.getSkipReasonCode()),
-        display(entity.getSkipReason()),
-        entity.getStartedAt(),
-        entity.getFinishedAt(),
-        entity.getDurationMs());
+    ConsoleWorkflowNodeRunResponse response = ConsoleWorkflowNodeRunResponse.builder()
+        .id(entity.getId())
+        .workflowRunId(entity.getWorkflowRunId())
+        .jobInstanceId(entity.getJobInstanceId())
+        .nodeCode(display(entity.getNodeCode()))
+        .nodeType(display(entity.getNodeType()))
+        .runSeq(entity.getRunSeq())
+        .nodeStatus(display(entity.getNodeStatus()))
+        .retryCount(entity.getRetryCount())
+        .errorCode(display(entity.getErrorCode()))
+        .errorMessage(display(errorMessage))
+        .skipReasonCode(display(entity.getSkipReasonCode()))
+        .skipReason(display(entity.getSkipReason()))
+        .startedAt(entity.getStartedAt())
+        .finishedAt(entity.getFinishedAt())
+        .durationMs(entity.getDurationMs())
+        .build();
     return response;
   }
 }

@@ -14,6 +14,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -41,11 +42,14 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.Mockito;
 
 /**
  * Unit tests for {@link GenerateStep} — validates export format matrix completeness: DELIMITED (CSV
  * quoting / escaping), FIXED_WIDTH (padding / truncation / alignment), EXCEL (sheet name, header,
- * cursor pagination), and JSON (cursor pagination).
+ * 游标分页）以及 JSON（游标分页）。
  */
 @DisplayName("导出生成阶段单测:分隔符,定长,表格与 JSON 四种格式的落盘与边界语义")
 class GenerateStepTest {
@@ -103,8 +107,10 @@ class GenerateStepTest {
   @DisplayName("回放能力用执行时同一 export_data_ref 选择插件并传入冻结模板")
   void replayCapability_usesSelectedPluginAndFrozenTemplateConfig() {
     Map<String, Object> frozenTemplateConfig = Map.of(
-        "query_param_schema", Map.of("export_data_ref", PLUGIN_ID),
-        "file_format_type", "DELIMITED");
+        "query_param_schema",
+        Map.of("export_data_ref", PLUGIN_ID),
+        "file_format_type",
+        "DELIMITED");
     ReplayCapabilityDeclaration expected = ReplayCapabilityDeclaration.unknown(PLUGIN_ID);
     when(pluginRegistry.replayCapability(PLUGIN_ID, frozenTemplateConfig)).thenReturn(expected);
 
@@ -112,6 +118,33 @@ class GenerateStepTest {
 
     assertThat(actual).isEqualTo(expected);
     verify(pluginRegistry).replayCapability(PLUGIN_ID, frozenTemplateConfig);
+  }
+
+  @Test
+  @DisplayName("正式 SQL 模板导出仍调用数据插件并生成文件")
+  void shouldGenerateSqlTemplate_whenNotDryRun() throws Exception {
+    stubSinglePage(List.of(Map.of("id", 1)));
+    ExportJobContext context =
+        buildContext("JSON", Map.of("export_data_ref", WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE));
+
+    ExportStageResult result = generateStep.execute(context);
+
+    assertThat(result.success()).isTrue();
+    verify(pluginRegistry).require(WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE);
+    verify(dataPlugin).loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"sql_template_export", "SQL_TEMPLATE_EXPORT"})
+  @DisplayName("演练阻止 SQL 模板插件执行，插件标识不区分大小写")
+  void shouldRejectSqlTemplateDryRun_regardlessOfPluginIdCase(String pluginId) {
+    ExportJobContext context = buildContext("JSON", Map.of("export_data_ref", pluginId));
+    context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
+
+    ExportStageResult result = generateStep.execute(context);
+
+    assertThat(result.code()).isEqualTo("EXPORT_DRY_RUN_SQL_UNAVAILABLE");
+    verify(pluginRegistry, Mockito.never()).require(any());
   }
 
   // ── DELIMITED / CSV ────────────────────────────────────────────────────────
@@ -155,7 +188,7 @@ class GenerateStepTest {
 
     assertThat(result.success()).isTrue();
     String content = readGeneratedFile(context);
-    // Value containing comma must be quoted
+    // 包含逗号的值必须加引号。
     assertThat(content).contains("\"Smith, Jr.\"");
   }
 
@@ -175,7 +208,7 @@ class GenerateStepTest {
 
     assertThat(result.success()).isTrue();
     String content = readGeneratedFile(context);
-    // Internal quotes must be doubled: "He said ""hello"""
+    // 值内部的引号必须重复转义："He said ""hello"""。
     assertThat(content).contains("\"He said \"\"hello\"\"\"");
   }
 
@@ -296,7 +329,7 @@ class GenerateStepTest {
 
     assertThat(result.success()).isTrue();
     String content = readGeneratedFile(context);
-    // Every value and header cell quoted
+    // 所有值和表头单元格都必须加引号。
     assertThat(content).contains("\"A\"").contains("\"Alice\"");
   }
 
@@ -347,8 +380,8 @@ class GenerateStepTest {
 
     assertThat(result.success()).isTrue();
     String content = readGeneratedFile(context);
-    // "A" left-padded to 5 chars → "A    "
-    // "10" right-aligned to 8 with '0' → "00000010"
+    // "A" 左侧补空格至 5 个字符："A    "。
+    // "10" 右对齐并用字符 '0' 补足至 8 位："00000010"。
     assertThat(content).contains("A    ").contains("00000010");
   }
 
@@ -371,7 +404,7 @@ class GenerateStepTest {
 
     assertThat(result.success()).isTrue();
     String content = readGeneratedFile(context);
-    // "AliceLongName" truncated to 5 chars → "Alice"
+    // "AliceLongName" 截断为 5 个字符："Alice"。
     assertThat(content).contains("Alice").doesNotContain("AliceLongName");
   }
 
@@ -395,7 +428,7 @@ class GenerateStepTest {
     ExportStageResult result = generateStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    // Each data line must be exactly 20 chars (padded or truncated)
+    // 每行数据必须恰好为 20 个字符（不足时补齐，超出时截断）。
     String content = readGeneratedFile(context);
     content
         .lines()
@@ -418,7 +451,7 @@ class GenerateStepTest {
     ExportStageResult result = generateStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    // Verify file exists and is non-empty
+    // 校验文件存在且内容非空。
     Object generatedFilePath = context.getAttributes().get(PipelineRuntimeKeys.GENERATED_FILE_PATH);
     assertThat(generatedFilePath).isNotNull();
     Path xlsxFile = Path.of(generatedFilePath.toString());
@@ -431,11 +464,11 @@ class GenerateStepTest {
   void excel_sheetNameShouldBeSanitized_whenContainsIllegalChars() throws Exception {
     stubSinglePage(List.of(Map.of("col", "val")));
 
-    // Sheet name with illegal characters for Excel (e.g. '/')
+    // 包含 Excel 非法字符（例如 '/'）的工作表名称。
     ExportJobContext context = buildContext(
         "EXCEL", Map.of("export_data_ref", PLUGIN_ID, "sheet_name", "Report/2026:Q1[1]"));
 
-    // Should not throw; sheet name sanitized to "Report_2026_Q1_1_"
+    // 不应抛出异常；工作表名称应清理为 "Report_2026_Q1_1_"。
     ExportStageResult result = generateStep.execute(context);
     assertThat(result.success()).isTrue();
   }
@@ -445,7 +478,7 @@ class GenerateStepTest {
   void excel_shouldHandleLongSheetName() throws Exception {
     stubSinglePage(List.of(Map.of("col", "val")));
 
-    // Sheet names are limited to 31 chars in Excel
+    // Excel 工作表名称最多为 31 个字符。
     ExportJobContext context = buildContext(
         "EXCEL",
         Map.of(
@@ -477,14 +510,14 @@ class GenerateStepTest {
     String content = readGeneratedFile(context);
     assertThat(content).contains("snapshot").contains("snap-001");
     assertThat(content).contains("TX001");
-    // Jackson serializes the file as valid JSON — verify it is parseable
+    // Jackson 应将文件序列化为有效 JSON；校验结果可以正常解析。
     new ObjectMapper().readTree(content); // throws if invalid JSON
   }
 
   @Test
   @DisplayName("JSON 格式分页:多页游标拉取后记录数累加正确,明细齐全")
   void json_shouldHandleCursorPagination_multiplePages() throws Exception {
-    // Simulate two pages of data
+    // 模拟两页数据。
     List<Map<String, Object>> page1 = List.of(Map.of("id", "1"), Map.of("id", "2"));
     List<Map<String, Object>> page2 = List.of(Map.of("id", "3"));
     when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))

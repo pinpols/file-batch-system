@@ -23,6 +23,8 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 运行时维护状态持有者。
@@ -141,11 +143,21 @@ public class MaintenanceStateHolder {
         current.version() + 1,
         Instant.now(),
         true);
-    state.set(applied);
+    // 请求拦截和通知同步只能观察已提交状态；事务回滚不能留下虚假的维护窗口。
+    if (TransactionSynchronizationManager.isSynchronizationActive()) {
+      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+        @Override
+        public void afterCommit() {
+          state.set(applied);
+        }
+      });
+    } else {
+      state.set(applied);
+    }
     return applied;
   }
 
-  /** shared state unavailable means writes must fail closed until a replica can confirm it. */
+  /** 共享状态不可确认时保持写保护，直至当前副本重新确认状态。 */
   public boolean sharedStateAvailable() {
     return state.get().sharedStateAvailable();
   }

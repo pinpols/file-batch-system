@@ -11,6 +11,7 @@ from pytest_httpx import HTTPXMock
 
 from batch_worker_sdk import BatchPlatformClientConfig, TaskDispatcher, WorkerRuntimeState
 from batch_worker_sdk.dispatcher.dispatcher import DispatchDisposition
+from batch_worker_sdk.exceptions import PlatformError
 from batch_worker_sdk.internal._http import PlatformHttpClient
 from batch_worker_sdk.scheduler._directive import parse_directive
 from batch_worker_sdk.task.context import SdkTaskContext
@@ -41,6 +42,48 @@ async def _make() -> tuple[TaskDispatcher, PlatformHttpClient]:
     cfg = _cfg()
     http = PlatformHttpClient(cfg)
     return TaskDispatcher(cfg, http), http
+
+
+@pytest.mark.parametrize("scenario", ["confirmed", "revoked", "unknown", "cancelled"])
+async def test_execution_start_confirms_current_identity_before_handler(
+    scenario: str, httpx_mock: HTTPXMock
+) -> None:
+    """执行入口确认独立于副作用标记;失败或身份失效时禁止业务执行与失败回报。"""
+    config = _cfg()
+    http = PlatformHttpClient(config)
+    handler = _RecordingHandler("echo", SdkTaskResult.success_with())
+    dispatcher = TaskDispatcher(config, http, handlers={"echo": handler})
+    message = _msg()
+    message["runtimeAttributes"] = {"partitionInvocationId": "inv-stale"}
+    httpx_mock.add_response(
+        url=config.base_url + "/internal/tasks/1/claim",
+        json={"partitionInvocationId": "inv-current", "payload": "{}"},
+    )
+    status = 409 if scenario == "revoked" else 503 if scenario == "unknown" else 200
+    httpx_mock.add_response(
+        url=config.base_url + "/internal/tasks/1/renew",
+        status_code=status,
+        json={"cancelRequested": scenario == "cancelled"},
+    )
+    if scenario in {"confirmed", "cancelled"}:
+        httpx_mock.add_response(url=config.base_url + "/internal/tasks/1/report", json={})
+    try:
+        await dispatcher.on_message(message)
+        await asyncio.gather(*list(dispatcher._in_flight.values()))
+        requests = httpx_mock.get_requests()
+        starts = [request for request in requests if request.url.path.endswith("/renew")]
+        assert len(starts) == 1
+        assert json.loads(starts[0].content) == {
+            "tenantId": "acme",
+            "workerId": "w-1",
+            "partitionInvocationId": "inv-current",
+            "details": {"executionStarted": True},
+        }
+        assert len(handler.calls) == (1 if scenario == "confirmed" else 0)
+        reports = [request for request in requests if request.url.path.endswith("/report")]
+        assert len(reports) == (1 if scenario in {"confirmed", "cancelled"} else 0)
+    finally:
+        await http.close()
 
 
 async def test_tenant_mismatch_drops_message(
@@ -99,11 +142,13 @@ async def test_in_flight_count_tracks_dispatches(httpx_mock: HTTPXMock) -> None:
     http.report = fake_report  # type: ignore[method-assign]
     dispatcher = TaskDispatcher(cfg, http)
     try:
-        await dispatcher.on_message(_msg(task_id=100))
+        pending = asyncio.create_task(dispatcher.on_message(_msg(task_id=100)))
+        await asyncio.sleep(0)
         await asyncio.sleep(0)  # 让 task 起来
         assert dispatcher.in_flight_count() == 1
         assert 100 in dispatcher.in_flight_task_ids()
         blocker.set()
+        await pending
         await asyncio.gather(*list(dispatcher._in_flight.values()), return_exceptions=True)
         assert dispatcher.in_flight_task_ids() == set()
     finally:
@@ -215,6 +260,9 @@ async def _run_with_handler(
         url=cfg.base_url + f"/internal/tasks/{msg['taskId']}/claim",
         status_code=200,
         json=claim_response or {},
+    )
+    httpx_mock.add_response(
+        url=cfg.base_url + f"/internal/tasks/{msg['taskId']}/renew", json={"cancelRequested": False}
     )
     httpx_mock.add_response(
         url=cfg.base_url + f"/internal/tasks/{msg['taskId']}/report", status_code=200, json={}
@@ -355,15 +403,20 @@ async def test_partition_invocation_id_cached_at_claim(httpx_mock: HTTPXMock) ->
     http = PlatformHttpClient(cfg)
     http.claim_status = slow_claim  # type: ignore[method-assign]
     http.report = fake_report  # type: ignore[method-assign]
+    httpx_mock.add_response(
+        url=cfg.base_url + "/internal/tasks/5/renew", json={"cancelRequested": False}
+    )
     handler = _RecordingHandler("echo", SdkTaskResult.success_with())
     dispatcher = TaskDispatcher(cfg, http, handlers={"echo": handler})
     try:
         msg = _msg(task_id=5)
         msg["runtimeAttributes"] = {"partitionInvocationId": "inv-9"}
-        await dispatcher.on_message(msg)
+        pending = asyncio.create_task(dispatcher.on_message(msg))
+        await asyncio.sleep(0)
         await asyncio.sleep(0)
         assert dispatcher.partition_invocation_id(5) == "inv-9"
         blocker.set()
+        await pending
         await asyncio.gather(*list(dispatcher._in_flight.values()), return_exceptions=True)
     finally:
         await http.close()
@@ -374,6 +427,9 @@ async def test_partition_invocation_id_from_claim_is_used_for_report(
 ) -> None:
     """v2 消息不带 invocation id 时,report 必须复用 claim 返回的新值。"""
     cfg = _cfg()
+    httpx_mock.add_response(
+        url=cfg.base_url + "/internal/tasks/6/renew", json={"cancelRequested": False}
+    )
     httpx_mock.add_response(
         url=cfg.base_url + "/internal/tasks/6/claim",
         status_code=200,
@@ -409,4 +465,45 @@ async def test_unsupported_schema_version_drops(
         assert dispatcher.in_flight_count() == 0
         assert any("unsupported schemaVersion" in r.message for r in caplog.records)
     finally:
+        await http.close()
+
+
+async def test_claim_failure_keeps_message_retryable() -> None:
+    """认领未到达平台时不能返回可提交处置, 恢复后允许原消息重试。"""
+    dispatcher, http = await _make()
+
+    async def failed_claim(*_a: Any, **_kw: Any) -> tuple[dict[str, Any], int]:
+        raise PlatformError("offline")
+
+    http.claim_status = failed_claim  # type: ignore[method-assign]
+    try:
+        disposition = await dispatcher.on_message(_msg(task_id=901))
+        await asyncio.gather(*list(dispatcher._in_flight.values()), return_exceptions=True)
+        assert disposition is DispatchDisposition.RETRY_LATER
+        assert dispatcher.in_flight_count() == 0
+    finally:
+        await http.close()
+
+
+async def test_claim_disposition_waits_for_persisted_ownership() -> None:
+    """认领响应前保留提交屏障, 不等业务执行完成才释放。"""
+    dispatcher, http = await _make()
+    claim_started = asyncio.Event()
+    release_claim = asyncio.Event()
+
+    async def slow_claim(*_a: Any, **_kw: Any) -> tuple[dict[str, Any], int]:
+        claim_started.set()
+        await release_claim.wait()
+        return {}, 409
+
+    http.claim_status = slow_claim  # type: ignore[method-assign]
+    pending = asyncio.create_task(dispatcher.on_message(_msg(task_id=902)))
+    try:
+        await asyncio.wait_for(claim_started.wait(), timeout=1)
+        assert not pending.done()
+        release_claim.set()
+        assert await pending is DispatchDisposition.ACCEPTED
+    finally:
+        release_claim.set()
+        await asyncio.gather(pending, *list(dispatcher._in_flight.values()), return_exceptions=True)
         await http.close()

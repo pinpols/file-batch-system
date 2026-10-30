@@ -27,6 +27,11 @@ import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchC
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelHealthService;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.SftpDispatchChannelAdapter;
+import io.github.pinpols.batch.worker.dispatchs.param.FileDispatchBeginAttemptParam;
+import io.github.pinpols.batch.worker.dispatchs.param.FileDispatchBeginVerifiedAttemptParam;
+import io.github.pinpols.batch.worker.dispatchs.param.FileDispatchInsertParam;
+import io.github.pinpols.batch.worker.dispatchs.param.FileDispatchMarkAttemptFailedParam;
+import io.github.pinpols.batch.worker.dispatchs.param.FileDispatchMarkSentParam;
 import io.github.pinpols.batch.worker.dispatchs.stage.DeliverDispatchStep;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -50,9 +55,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.mock.env.MockEnvironment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.mock.env.MockEnvironment;
 import org.testcontainers.containers.Container.ExecResult;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
@@ -66,7 +71,7 @@ class FileDispatchMapperTenantReferenceIntegrationTest {
   private static final String SFTP_USER = "batch";
   private static final String SFTP_PASSWORD = "batch-pass";
   private static final GenericContainer<?> SFTP_SERVER = new GenericContainer<>(
-      DockerImageName.parse("atmoz/sftp:alpine"))
+          DockerImageName.parse("atmoz/sftp:alpine"))
       .withLabel(TestContainerLabels.OWNER, TestContainerLabels.OWNER_VALUE)
       .withExposedPorts(22)
       .withCommand(SFTP_USER + ":" + SFTP_PASSWORD + ":::upload")
@@ -175,13 +180,11 @@ class FileDispatchMapperTenantReferenceIntegrationTest {
     final String insertBatchFileRecordSql = """
         insert into batch.file_record(id, tenant_id) values (10, 't1'), (20, 't2')
     """;
-    jdbcTemplate.update(
-        insertBatchFileRecordSql);
+    jdbcTemplate.update(insertBatchFileRecordSql);
     final String insertBatchPipelineInstanceSql = """
         insert into batch.pipeline_instance(id, tenant_id) values (100, 't1'), (200, 't2')
     """;
-    jdbcTemplate.update(
-        insertBatchPipelineInstanceSql);
+    jdbcTemplate.update(insertBatchPipelineInstanceSql);
 
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
       FileDispatchMapper mapper = session.getMapper(FileDispatchMapper.class);
@@ -189,8 +192,7 @@ class FileDispatchMapperTenantReferenceIntegrationTest {
       assertThat(mapper.insertDispatchRecord(params("t1", 10L, 100L))).isZero();
       assertThat(mapper.insertDispatchRecord(params("t1", 20L, 100L))).isZero();
       assertThat(mapper.insertDispatchRecord(params("t1", 10L, 200L))).isZero();
-      DispatchRecordSnapshot snapshot = mapper.selectLatestDispatchRecord(
-          Map.of("tenantId", "t1", "fileId", 10L, "channelCode", "CH_TEST"));
+      DispatchRecordSnapshot snapshot = mapper.selectLatestDispatchRecord("t1", 10L, "CH_TEST");
       assertThat(snapshot.dispatchStatus()).isEqualTo("CREATED");
       assertThat(snapshot.receiptStatus()).isEqualTo("NONE");
       assertThat(snapshot.externalRequestId()).isEqualTo("request");
@@ -242,29 +244,30 @@ class FileDispatchMapperTenantReferenceIntegrationTest {
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
       FileDispatchMapper mapper = session.getMapper(FileDispatchMapper.class);
       assertThat(mapper.insertDispatchRecord(params("t1", 10L, 100L))).isEqualTo(1);
-      Map<String, Object> dispatchKey =
-          Map.of("tenantId", "t1", "fileId", 10L, "channelCode", "CH_TEST");
-      assertThat(mapper.markAttemptFailed(Map.of(
-              "tenantId", "t1",
-              "fileId", 10L,
-              "channelCode", "CH_TEST",
-              "dispatchStatus", "FAILED",
-              "receiptStatus", "FAILED",
-              "expectedDispatchStatus", "CREATED",
-              "errorCode", "EXTERNAL_OUTCOME_UNKNOWN",
-              "errorMessage", "remote outcome unknown")))
-          .isEqualTo(1);
-      Map<String, Object> attemptParams = Map.of(
-          "tenantId", "t1",
-          "fileId", 10L,
-          "channelCode", "CH_TEST",
-          "unknownOutcomeCode", "EXTERNAL_OUTCOME_UNKNOWN",
-          "dispatchStatus", "CREATED",
-          "receiptStatus", "NONE");
+      FileDispatchMarkAttemptFailedParam unknownOutcomeFailure =
+          FileDispatchMarkAttemptFailedParam.builder()
+              .tenantId("t1")
+              .fileId(10L)
+              .channelCode("CH_TEST")
+              .dispatchStatus("FAILED")
+              .receiptStatus("FAILED")
+              .expectedDispatchStatus("CREATED")
+              .errorCode("EXTERNAL_OUTCOME_UNKNOWN")
+              .errorMessage("remote outcome unknown")
+              .build();
+      assertThat(mapper.markAttemptFailed(unknownOutcomeFailure)).isEqualTo(1);
+      FileDispatchBeginAttemptParam attemptParams = FileDispatchBeginAttemptParam.builder()
+          .tenantId("t1")
+          .fileId(10L)
+          .channelCode("CH_TEST")
+          .unknownOutcomeCode("EXTERNAL_OUTCOME_UNKNOWN")
+          .dispatchStatus("CREATED")
+          .receiptStatus("NONE")
+          .build();
       int unknownOutcomeRetryCount = mapper.beginAttempt(attemptParams);
       assertThat(unknownOutcomeRetryCount).isZero();
 
-      DispatchRecordSnapshot unknown = mapper.selectLatestDispatchRecord(dispatchKey);
+      DispatchRecordSnapshot unknown = mapper.selectLatestDispatchRecord("t1", 10L, "CH_TEST");
       assertThat(unknown.dispatchStatus()).isEqualTo("FAILED");
       assertThat(unknown.errorCode()).isEqualTo("EXTERNAL_OUTCOME_UNKNOWN");
 
@@ -272,8 +275,7 @@ class FileDispatchMapperTenantReferenceIntegrationTest {
           update batch.file_dispatch_record set error_code = 'SMTP_CONNECT_FAILED' where tenant_id = 't1'\s\
           and file_id = 10 and channel_code = 'CH_TEST'\
           """;
-      jdbcTemplate.update(
-          updateBatchFileDispatchRecordSql);
+      jdbcTemplate.update(updateBatchFileDispatchRecordSql);
       int knownFailureRetryCount = mapper.beginAttempt(attemptParams);
       assertThat(knownFailureRetryCount).isEqualTo(1);
       final String selectBatchFileDispatchRecordSqlValue3 = """
@@ -290,33 +292,35 @@ class FileDispatchMapperTenantReferenceIntegrationTest {
       Integer selectedDispatchAttempt =
           jdbcTemplate.queryForObject(selectBatchFileDispatchRecordSqlValue4, Integer.class);
       assertThat(selectedDispatchAttempt).isEqualTo(2);
-      assertThat(mapper.markSent(Map.of(
-              "tenantId", "t1",
-              "fileId", 10L,
-              "channelCode", "CH_TEST",
-              "dispatchStatus", "SENT",
-              "externalRequestId", "request-2",
-              "receiptCode", "receipt-2",
-              "receiptStatus", "NONE",
-              "expectedDispatchStatus", "CREATED")))
-          .isEqualTo(1);
-      assertThat(mapper.markAttemptFailed(Map.of(
-              "tenantId", "t1",
-              "fileId", 10L,
-              "channelCode", "CH_TEST",
-              "dispatchStatus", "FAILED",
-              "receiptStatus", "FAILED",
-              "expectedDispatchStatus", "CREATED",
-              "errorCode", "STALE_ATTEMPT",
-              "errorMessage", "must not overwrite SENT")))
-          .isZero();
+      FileDispatchMarkSentParam sentAttempt = FileDispatchMarkSentParam.builder()
+          .tenantId("t1")
+          .fileId(10L)
+          .channelCode("CH_TEST")
+          .dispatchStatus("SENT")
+          .externalRequestId("request-2")
+          .receiptCode("receipt-2")
+          .receiptStatus("NONE")
+          .expectedDispatchStatus("CREATED")
+          .build();
+      assertThat(mapper.markSent(sentAttempt)).isEqualTo(1);
+      FileDispatchMarkAttemptFailedParam staleAttemptFailure =
+          FileDispatchMarkAttemptFailedParam.builder()
+              .tenantId("t1")
+              .fileId(10L)
+              .channelCode("CH_TEST")
+              .dispatchStatus("FAILED")
+              .receiptStatus("FAILED")
+              .expectedDispatchStatus("CREATED")
+              .errorCode("STALE_ATTEMPT")
+              .errorMessage("must not overwrite SENT")
+              .build();
+      assertThat(mapper.markAttemptFailed(staleAttemptFailure)).isZero();
     }
   }
 
   @Test
   @DisplayName("核实未执行授权只由绑定的新 Workflow Pipeline 消费一次并真实发送到 SFTP")
-  void verifiedUnknownOutcomeAuthorization_isBoundToWorkflowAndDispatchIdentity()
-      throws Exception {
+  void verifiedUnknownOutcomeAuthorization_isBoundToWorkflowAndDispatchIdentity() throws Exception {
     final String insertBatchFileRecordSql = """
         insert into batch.file_record(id, tenant_id) values (10, 't1')
     """;
@@ -399,13 +403,15 @@ class FileDispatchMapperTenantReferenceIntegrationTest {
 
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
       FileDispatchMapper mapper = session.getMapper(FileDispatchMapper.class);
-      Map<String, Object> wrongWorkflow = verifiedAttemptParams(703L, 103L, "CH_TEST");
+      FileDispatchBeginVerifiedAttemptParam wrongWorkflow =
+          verifiedAttemptParams(703L, 103L, "CH_TEST");
       assertThat(mapper.beginVerifiedExternalOutcomeAttempt(wrongWorkflow)).isZero();
 
-      Map<String, Object> wrongJob = verifiedAttemptParams(702L, 102L, "CH_TEST");
+      FileDispatchBeginVerifiedAttemptParam wrongJob = verifiedAttemptParams(702L, 102L, "CH_TEST");
       assertThat(mapper.beginVerifiedExternalOutcomeAttempt(wrongJob)).isZero();
 
-      Map<String, Object> wrongChannel = verifiedAttemptParams(701L, 101L, "OTHER");
+      FileDispatchBeginVerifiedAttemptParam wrongChannel =
+          verifiedAttemptParams(701L, 101L, "OTHER");
       assertThat(mapper.beginVerifiedExternalOutcomeAttempt(wrongChannel)).isZero();
       Long sourcePipelineAssociationBeforeRetry =
           jdbcTemplate.queryForObject(selectSourcePipelineAssociationSql, Long.class);
@@ -414,8 +420,8 @@ class FileDispatchMapperTenantReferenceIntegrationTest {
       byte[] deliveredContent = "approved-external-outcome-retry".getBytes(StandardCharsets.UTF_8);
       String remoteFileName = "authorized-retry.txt";
       String remoteFilePath = "/home/" + SFTP_USER + "/upload/" + remoteFileName;
-      ExecResult remoteFileBeforeRetry = SFTP_SERVER.execInContainer(
-          "sh", "-lc", "test ! -f " + remoteFilePath);
+      ExecResult remoteFileBeforeRetry =
+          SFTP_SERVER.execInContainer("sh", "-lc", "test ! -f " + remoteFilePath);
       assertThat(remoteFileBeforeRetry.getExitCode()).isZero();
 
       DispatchFileContentResolver fileContentResolver = mock(DispatchFileContentResolver.class);
@@ -425,8 +431,8 @@ class FileDispatchMapperTenantReferenceIntegrationTest {
       when(securityProperties.isBypassMode()).thenReturn(true);
       MockEnvironment testEnvironment = new MockEnvironment();
       testEnvironment.setActiveProfiles("test");
-      SftpDispatchChannelAdapter sftpAdapter = new SftpDispatchChannelAdapter(
-          fileContentResolver, securityProperties, testEnvironment);
+      SftpDispatchChannelAdapter sftpAdapter =
+          new SftpDispatchChannelAdapter(fileContentResolver, securityProperties, testEnvironment);
       DispatchChannelCircuitBreaker circuitBreaker = mock(DispatchChannelCircuitBreaker.class);
       when(circuitBreaker.allow(any())).thenReturn(true);
       DispatchChannelHealthService healthService = mock(DispatchChannelHealthService.class);
@@ -453,9 +459,11 @@ class FileDispatchMapperTenantReferenceIntegrationTest {
           Map.entry("sftp_remote_file_name", remoteFileName),
           Map.entry("sftp_strict_host_key_checking", "no"));
       authorizedContext.getAttributes().put(PipelineRuntimeKeys.CHANNEL_CONFIG, sftpChannelConfig);
-      authorizedContext.getAttributes().put(
-          PipelineRuntimeKeys.FILE_RECORD,
-          Map.of("id", 10L, "original_file_name", remoteFileName));
+      authorizedContext
+          .getAttributes()
+          .put(
+              PipelineRuntimeKeys.FILE_RECORD,
+              Map.of("id", 10L, "original_file_name", remoteFileName));
 
       DispatchStageResult result = deliver.execute(authorizedContext);
 
@@ -469,7 +477,8 @@ class FileDispatchMapperTenantReferenceIntegrationTest {
       DispatchStageResult repeatedDelivery = deliver.execute(authorizedContext);
       assertThat(repeatedDelivery.success()).isTrue();
       verify(fileContentResolver, times(1)).openInputStream(any());
-      Map<String, Object> consumedGrantAttempt = verifiedAttemptParams(701L, 101L, "CH_TEST");
+      FileDispatchBeginVerifiedAttemptParam consumedGrantAttempt =
+          verifiedAttemptParams(701L, 101L, "CH_TEST");
       int consumedGrantRows = mapper.beginVerifiedExternalOutcomeAttempt(consumedGrantAttempt);
       assertThat(consumedGrantRows).isZero();
     }
@@ -479,7 +488,8 @@ class FileDispatchMapperTenantReferenceIntegrationTest {
         from batch.file_dispatch_record
         where tenant_id = 't1' and file_id = 10 and channel_code = 'CH_TEST'
         """;
-    Map<String, Object> dispatchRecord = jdbcTemplate.queryForMap(selectAuthorizedDispatchAttemptSql);
+    Map<String, Object> dispatchRecord =
+        jdbcTemplate.queryForMap(selectAuthorizedDispatchAttemptSql);
     assertThat(dispatchRecord.get("dispatch_status")).isEqualTo("SENT");
     assertThat(dispatchRecord.get("dispatch_attempt")).isEqualTo(2);
     assertThat(dispatchRecord.get("error_code")).isNull();
@@ -542,6 +552,81 @@ class FileDispatchMapperTenantReferenceIntegrationTest {
     }
   }
 
+  @Test
+  @DisplayName("具名参数保留发送与确认 CAS、可空回执码、补偿回执策略及租户隔离")
+  void shouldPreserveDispatchReceiptTransitionsWithTypedParams() {
+    final String insertFilesSql = """
+        insert into batch.file_record(id, tenant_id)
+        values (10, 't1'), (11, 't1'), (10, 't2')
+        """;
+    jdbcTemplate.update(insertFilesSql);
+    final String insertPipelinesSql = """
+        insert into batch.pipeline_instance(id, tenant_id)
+        values (100, 't1'), (200, 't2')
+        """;
+    jdbcTemplate.update(insertPipelinesSql);
+
+    try (SqlSession session = sqlSessionFactory.openSession(true)) {
+      FileDispatchRepository repository =
+          new FileDispatchRepository(session.getMapper(FileDispatchMapper.class));
+      FileDispatchRepository.InsertDispatchParam first =
+          new FileDispatchRepository.InsertDispatchParam(
+              "t1", 10L, 100L, "CH_TEST", "target", "receipt", "NONE", "request");
+      FileDispatchRepository.InsertDispatchParam failed =
+          new FileDispatchRepository.InsertDispatchParam(
+              "t1", 11L, 100L, "CH_TEST", "target", null, "NONE", "request-failed");
+      FileDispatchRepository.InsertDispatchParam otherTenant =
+          new FileDispatchRepository.InsertDispatchParam(
+              "t2", 10L, 200L, "CH_TEST", "target", "other-receipt", "NONE", "other-request");
+      assertThat(repository.insertDispatchRecord(first)).isEqualTo(1);
+      assertThat(repository.insertDispatchRecord(failed)).isEqualTo(1);
+      assertThat(repository.insertDispatchRecord(otherTenant)).isEqualTo(1);
+
+      assertThat(repository.markAcked("t1", 10L, "CH_TEST", "too-early")).isZero();
+      assertThat(repository.markSent("t1", 10L, "CH_TEST", "sent-request", null, "PENDING"))
+          .isEqualTo(1);
+      DispatchRecordSnapshot sent =
+          repository.latestDispatchRecord("t1", 10L, "CH_TEST").orElseThrow();
+      assertThat(sent.dispatchStatus()).isEqualTo("SENT");
+      assertThat(sent.receiptCode()).isEqualTo("receipt");
+      assertThat(sent.externalRequestId()).isEqualTo("sent-request");
+      assertThat(repository.listPendingReceiptPolls(10, 3600)).singleElement().satisfies(row -> {
+        assertThat(row.tenantId()).isEqualTo("t1");
+        assertThat(row.fileId()).isEqualTo(10L);
+        assertThat(row.channelCode()).isEqualTo("CH_TEST");
+        assertThat(row.externalRequestId()).isEqualTo("sent-request");
+      });
+
+      assertThat(repository.markSent("t1", 10L, "CH_TEST", "stale", "stale", "NONE"))
+          .isZero();
+      assertThat(repository.markAcked("t1", 10L, "CH_TEST", "ack-receipt")).isEqualTo(1);
+      assertThat(repository.markAcked("t1", 10L, "CH_TEST", "stale-ack")).isZero();
+      assertThat(repository.listPendingReceiptPolls(10, 3600)).isEmpty();
+      assertThat(repository.markCompensated("t1", 10L, "CH_TEST", null, null)).isEqualTo(1);
+      DispatchRecordSnapshot compensated =
+          repository.latestDispatchRecord("t1", 10L, "CH_TEST").orElseThrow();
+      assertThat(compensated.dispatchStatus()).isEqualTo("COMPENSATED");
+      assertThat(compensated.receiptStatus()).isEqualTo("SUCCESS");
+      assertThat(compensated.receiptCode()).isEqualTo("ack-receipt");
+
+      assertThat(repository.markFailed("t1", 11L, "CH_TEST", "KNOWN_FAILURE", null))
+          .isEqualTo(1);
+      assertThat(repository.markCompensated("t1", 11L, "CH_TEST", "COMPENSATION", "failed"))
+          .isEqualTo(1);
+      DispatchRecordSnapshot failedCompensation =
+          repository.latestDispatchRecord("t1", 11L, "CH_TEST").orElseThrow();
+      assertThat(failedCompensation.dispatchStatus()).isEqualTo("COMPENSATED");
+      assertThat(failedCompensation.receiptStatus()).isEqualTo("FAILED");
+      assertThat(failedCompensation.errorCode()).isEqualTo("COMPENSATION");
+      assertThat(failedCompensation.errorMessage()).isEqualTo("failed");
+      DispatchRecordSnapshot untouched =
+          repository.latestDispatchRecord("t2", 10L, "CH_TEST").orElseThrow();
+      assertThat(untouched.dispatchStatus()).isEqualTo("CREATED");
+      assertThat(untouched.externalRequestId()).isEqualTo("other-request");
+      assertThat(untouched.receiptCode()).isEqualTo("other-receipt");
+    }
+  }
+
   private static DispatchJobContext dispatchContext() {
     return dispatchContext(null, 100L);
   }
@@ -570,29 +655,32 @@ class FileDispatchMapperTenantReferenceIntegrationTest {
     private static final long serialVersionUID = 1L;
   }
 
-  private static Map<String, Object> params(String tenantId, Long fileId, Long pipelineInstanceId) {
-    return Map.of(
-        "tenantId", tenantId,
-        "fileId", fileId,
-        "pipelineInstanceId", pipelineInstanceId,
-        "channelCode", "CH_TEST",
-        "dispatchTarget", "target",
-        "dispatchStatus", "CREATED",
-        "receiptCode", "receipt",
-        "receiptStatus", "NONE",
-        "externalRequestId", "request");
+  private static FileDispatchInsertParam params(
+      String tenantId, Long fileId, Long pipelineInstanceId) {
+    return FileDispatchInsertParam.builder()
+        .tenantId(tenantId)
+        .fileId(fileId)
+        .pipelineInstanceId(pipelineInstanceId)
+        .channelCode("CH_TEST")
+        .dispatchTarget("target")
+        .dispatchStatus("CREATED")
+        .receiptCode("receipt")
+        .receiptStatus("NONE")
+        .externalRequestId("request")
+        .build();
   }
 
-  private static Map<String, Object> verifiedAttemptParams(
+  private static FileDispatchBeginVerifiedAttemptParam verifiedAttemptParams(
       Long jobInstanceId, Long pipelineInstanceId, String channelCode) {
-    return Map.of(
-        "tenantId", "t1",
-        "fileId", 10L,
-        "channelCode", channelCode,
-        "jobInstanceId", jobInstanceId,
-        "pipelineInstanceId", pipelineInstanceId,
-        "unknownOutcomeCode", "EXTERNAL_OUTCOME_UNKNOWN",
-        "dispatchStatus", "CREATED",
-        "receiptStatus", "NONE");
+    return FileDispatchBeginVerifiedAttemptParam.builder()
+        .tenantId("t1")
+        .fileId(10L)
+        .channelCode(channelCode)
+        .jobInstanceId(jobInstanceId)
+        .pipelineInstanceId(pipelineInstanceId)
+        .unknownOutcomeCode("EXTERNAL_OUTCOME_UNKNOWN")
+        .dispatchStatus("CREATED")
+        .receiptStatus("NONE")
+        .build();
   }
 }

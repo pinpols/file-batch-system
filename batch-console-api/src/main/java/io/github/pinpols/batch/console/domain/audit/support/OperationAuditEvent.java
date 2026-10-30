@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.domain.audit.support;
 
+import java.time.Instant;
 import lombok.Builder;
 
-import java.time.Instant;
 /**
  * 通用控制台操作审计事件 — Aspect 构造,Service 写入数据库。
  *

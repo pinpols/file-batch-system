@@ -24,8 +24,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * 集成冒烟：确认 ShedLock 在 Flyway 与测试基础设施之后仍可正常装配。
@@ -77,16 +77,15 @@ class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
     String lockName = "it-lock-namespace-" + System.nanoTime();
     Optional<SimpleLock> lock = lockProvider.lock(new LockConfiguration(
         BatchDateTimeSupport.utcNow(), lockName, Duration.ofSeconds(20), Duration.ZERO));
-    StringRedisTemplate rawTemplate =
-        new StringRedisTemplate(redisTemplate.getConnectionFactory());
+    StringRedisTemplate rawTemplate = new StringRedisTemplate(redisTemplate.getConnectionFactory());
     rawTemplate.afterPropertiesSet();
 
     assertThat(lock).isPresent();
     Set<String> lockKeys = rawTemplate.keys("*" + lockName);
     assertThat(lockKeys)
         .isNotEmpty()
-        .allMatch(key -> key.startsWith(
-            "job-lock:shedlock:shedlock-isolation-test:batch-orchestrator:"));
+        .allMatch(
+            key -> key.startsWith("job-lock:shedlock:shedlock-isolation-test:batch-orchestrator:"));
     lock.ifPresent(SimpleLock::unlock);
   }
 
@@ -95,8 +94,7 @@ class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
   void shouldNamespaceTemplateKeysAndHideThemFromOtherDeployments() {
     String logicalKey = "it-template-namespace-" + System.nanoTime();
     String physicalKey = "shedlock-isolation-test:" + logicalKey;
-    StringRedisTemplate rawTemplate =
-        new StringRedisTemplate(redisTemplate.getConnectionFactory());
+    StringRedisTemplate rawTemplate = new StringRedisTemplate(redisTemplate.getConnectionFactory());
     rawTemplate.afterPropertiesSet();
     StringRedisTemplate otherNamespaceTemplate =
         new StringRedisTemplate(redisTemplate.getConnectionFactory());

@@ -132,7 +132,7 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
     assertThat(partitions).isNotEmpty();
     JobPartitionEntity partition = partitions.get(0);
 
-    // 2) Worker claims the task
+    // 2) Worker 认领任务
     LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
     JobTaskEntity claimed =
         taskExecutionService.assignWorker(TENANT, task.getId(), seed.workerCode());
@@ -150,7 +150,7 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
         TENANT, task.getId(), seed.workerCode(), runningPartition.getCurrentInvocationId());
     assertThat(renewed).isTrue();
 
-    // A different worker should not be able to steal the lease
+    // 其他 Worker 不得抢占该租约。
     boolean stolenByRogue =
         taskExecutionService.renewTaskLease(TENANT, task.getId(), "rogue-worker", null);
     assertThat(stolenByRogue).isFalse();
@@ -240,9 +240,56 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
         select count(*) from batch.job_step_instance
         where job_task_id = ? and related_file_id is not null
         """;
-    Integer relatedStepFileCount = jdbcTemplate.queryForObject(
-        relatedStepFileCountSql, Integer.class, task.getId());
+    Integer relatedStepFileCount =
+        jdbcTemplate.queryForObject(relatedStepFileCountSql, Integer.class, task.getId());
     assertThat(relatedStepFileCount).isZero();
+  }
+
+  @Test
+  @DisplayName("结果回报的小数文件号不会关联整数部分对应的文件")
+  void report_doesNotAssociateFractionalFileId() {
+    final String insertFileSql = """
+        insert into batch.file_record (tenant_id, file_category, file_name, file_format_type,
+          storage_type, storage_path, source_type, file_status)
+        values (?, 'OUTPUT', ?, 'BINARY', 'LOCAL', ?, 'SYSTEM', 'RECEIVED') returning id
+        """;
+    final String selectStepFileSql =
+        "select related_file_id from batch.job_step_instance where tenant_id = ? and job_task_id = ?";
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
+        jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
+    LaunchResponse response = workflowRunLaunchService.launch(LaunchRequest.builder()
+        .tenantId(TENANT)
+        .workflowDefinitionId(seed.workflowDefinitionId())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.API)
+        .requestId(seed.requestId())
+        .params(Map.of())
+        .build());
+    Long jobId = LaunchIntegrationFixture.selectDispatchedJobInstanceId(
+        jdbcTemplate, TENANT, response.instanceNo());
+    JobTaskEntity task =
+        jobTaskMapper.selectByQuery(JobTaskQuery.ofJobInstance(TENANT, jobId)).getFirst();
+    Long fileId = jdbcTemplate.queryForObject(
+        insertFileSql,
+        Long.class,
+        TENANT,
+        "fractional-" + seed.requestId(),
+        "/fractional/" + seed.requestId());
+    LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
+    taskExecutionService.assignWorker(TENANT, task.getId(), seed.workerCode());
+    JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, task.getJobPartitionId());
+    taskExecutionService.applyTaskOutcome(TaskOutcomeCommand.builder()
+        .tenantId(TENANT)
+        .taskId(task.getId())
+        .success(true)
+        .resultSummary("{\"relatedFileId\":" + fileId + ".9}")
+        .partitionInvocationId(partition.getCurrentInvocationId())
+        .build());
+
+    assertThat(jobTaskMapper.selectById(TENANT, task.getId()).getTaskStatus())
+        .isEqualTo(TaskStatus.SUCCESS.code());
+    assertThat(jdbcTemplate.queryForObject(selectStepFileSql, Long.class, TENANT, task.getId()))
+        .isNull();
   }
 
   @Test

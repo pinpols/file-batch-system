@@ -237,9 +237,9 @@
           and operation_type in ('WORKFLOW_NODE', 'WORKFLOW_RUN')
           and status = 'RUNNING'
           and in_flight_count > 0
-          and ((#{param.workflowRunId} is not null
+          and ((#{param.workflowRunId,jdbcType=BIGINT} is not null
                 and target_workflow_run_id = #{param.workflowRunId})
-            or (#{param.workflowRunId} is null
+            or (#{param.workflowRunId,jdbcType=BIGINT} is null
                 and target_request_id = #{param.requestId}))
     </update>
 </mapper>

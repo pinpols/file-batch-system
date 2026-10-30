@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.domain.param;
 
+import java.time.LocalTime;
 import lombok.Builder;
 
-import java.time.LocalTime;
 @Builder
 public record AssetFreshnessPolicyUpsertParam(
     Long id,

@@ -270,11 +270,7 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
         ) values (?, ?, ?, 'DAG', 1, true, 'TEST_CAL') returning id
         """;
     Long workflowId = jdbcTemplate.queryForObject(
-        insertWorkflowDefinitionSql,
-        Long.class,
-        tenantId,
-        workflowCode,
-        workflowCode);
+        insertWorkflowDefinitionSql, Long.class, tenantId, workflowCode, workflowCode);
     String insertTriggerRequestSql = """
         insert into batch.trigger_request (
           tenant_id, request_id, trigger_type, workflow_definition_id, biz_date, dedup_key,
@@ -285,13 +281,7 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
     String dedupKey = "fixture-" + requestId;
     String traceId = "trace-" + requestId;
     jdbcTemplate.update(
-        insertTriggerRequestSql,
-        tenantId,
-        requestId,
-        workflowId,
-        businessDate,
-        dedupKey,
-        traceId);
+        insertTriggerRequestSql, tenantId, requestId, workflowId, businessDate, dedupKey, traceId);
     return workflowId;
   }
 
@@ -307,11 +297,7 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
         returning id
         """;
     Long workflowId = jdbcTemplate.queryForObject(
-        insertWorkflowDefinitionSql,
-        Long.class,
-        tenantId,
-        workflowCode,
-        workflowCode);
+        insertWorkflowDefinitionSql, Long.class, tenantId, workflowCode, workflowCode);
     TriggerLaunchRequest request = new TriggerLaunchRequest();
     request.setTenantId(tenantId);
     request.setWorkflowDefinitionId(workflowId);

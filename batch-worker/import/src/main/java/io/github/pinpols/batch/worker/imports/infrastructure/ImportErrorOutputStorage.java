@@ -41,8 +41,7 @@ public class ImportErrorOutputStorage {
 
   public String writeErrorOutput(
       String tenantId, String fileId, List<ImportBadRecordEntity> badRecords) {
-    boolean errorOutputInputIsIncomplete =
-        !Texts.hasText(tenantId)
+    boolean errorOutputInputIsIncomplete = !Texts.hasText(tenantId)
         || !Texts.hasText(fileId)
         || badRecords == null
         || EmptyChecks.isEmpty(badRecords);

@@ -1,9 +1,7 @@
 package io.github.pinpols.batch.console.domain.audit.mapper;
 
-import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiMonthlyUsageSettleParam;
-
-
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiMonthlyUsageEntity;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiMonthlyUsageSettleParam;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -26,8 +24,7 @@ public interface ConsoleAiMonthlyUsageMapper {
       @Param("billingMonth") LocalDate billingMonth,
       @Param("amount") BigDecimal amount);
 
-  int settle(
-      ConsoleAiMonthlyUsageSettleParam parameters);
+  int settle(ConsoleAiMonthlyUsageSettleParam parameters);
 
   int release(
       @Param("tenantId") String tenantId,

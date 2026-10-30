@@ -10,7 +10,7 @@ from pathlib import Path
 from openpyxl import Workbook
 
 
-SCRIPT_PATH = Path(__file__).resolve().parents[2] / "fix-fixture-xlsx.py"
+SCRIPT_PATH = Path(__file__).resolve().parents[2] / "sim" / "fix-fixture-xlsx.py"
 SPEC = importlib.util.spec_from_file_location("fix_fixture_xlsx", SCRIPT_PATH)
 FIXTURE_PATCHER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(FIXTURE_PATCHER)

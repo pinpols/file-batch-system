@@ -24,7 +24,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("冻结定义的计划构建:固定路由和分区策略,拒绝串租户或作业身份")
 class FrozenSchedulePlanDefinitionTest {
 
-  @Mock private OrchestratorConfigCacheService cache;
+  @Mock
+  private OrchestratorConfigCacheService cache;
+
   private DefaultSchedulePlanBuilder builder;
 
   @BeforeEach
@@ -36,8 +38,8 @@ class FrozenSchedulePlanDefinitionTest {
   @DisplayName("已选择的定义决定分区和路由,不再查询当前作业定义")
   void shouldBuildFromSelectedDefinition_whenExecutionVersionIsFrozen() {
     JobDefinitionEntity frozen = definition("ta", "JOB_A");
-    SchedulePlan plan = builder.build(new SchedulePlanCommand(
-        "ta", "JOB_A", "2026-01-15", Map.of(), frozen));
+    SchedulePlan plan =
+        builder.build(new SchedulePlanCommand("ta", "JOB_A", "2026-01-15", Map.of(), frozen));
 
     assertThat(plan.getJobDefinitionId()).isEqualTo(10L);
     assertThat(plan.getPartitionCount()).isEqualTo(2);
@@ -51,8 +53,8 @@ class FrozenSchedulePlanDefinitionTest {
   @CsvSource({"other_tenant,JOB_A", "ta,OTHER_JOB"})
   @DisplayName("冻结定义不属于请求租户或作业时拒绝构建")
   void shouldRejectMismatchedDefinition_whenTenantOrJobDiffers(String tenant, String job) {
-    SchedulePlanCommand command = new SchedulePlanCommand(
-        "ta", "JOB_A", "2026-01-15", Map.of(), definition(tenant, job));
+    SchedulePlanCommand command =
+        new SchedulePlanCommand("ta", "JOB_A", "2026-01-15", Map.of(), definition(tenant, job));
 
     assertThatThrownBy(() -> builder.build(command)).isInstanceOf(BizException.class);
     verify(cache, never()).findEnabledJobDefinition(anyString(), anyString());
@@ -60,9 +62,17 @@ class FrozenSchedulePlanDefinitionTest {
 
   private static JobDefinitionEntity definition(String tenant, String job) {
     return JobDefinitionEntity.builder()
-        .id(10L).tenantId(tenant).jobCode(job).jobType("GENERAL")
-        .shardStrategy("STATIC").defaultParams(Map.of("partitionCount", 2))
-        .queueCode("original_queue").workerGroup("ORIGINAL_GROUP").priority(7)
-        .version(1).enabled(true).build();
+        .id(10L)
+        .tenantId(tenant)
+        .jobCode(job)
+        .jobType("GENERAL")
+        .shardStrategy("STATIC")
+        .defaultParams(Map.of("partitionCount", 2))
+        .queueCode("original_queue")
+        .workerGroup("ORIGINAL_GROUP")
+        .priority(7)
+        .version(1)
+        .enabled(true)
+        .build();
   }
 }

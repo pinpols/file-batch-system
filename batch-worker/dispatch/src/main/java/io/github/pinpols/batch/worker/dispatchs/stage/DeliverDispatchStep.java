@@ -140,8 +140,8 @@ public class DeliverDispatchStep implements DispatchStageStep {
       Long fileId,
       Map<String, Object> fileRecord,
       Map<String, Object> channelConfig) {
-    DispatchStageResult admissionFailure = prepareDeliveryAttempt(
-        context, dispatchPayload, attrs, fileId);
+    DispatchStageResult admissionFailure =
+        prepareDeliveryAttempt(context, dispatchPayload, attrs, fileId);
     if (EmptyChecks.isNotNull(admissionFailure)) {
       return admissionFailure;
     }

@@ -27,7 +27,7 @@ Content-Type: application/json
 X-Internal-Secret: <BATCH_INTERNAL_SECRET>
 ```
 
-- 收到通知 → **即时触发一次 `ImportIngressScanner.scan()`**,对象当下就被发现登记,无需等下一个轮询 tick。
+- 两个扫描开关都开启时，收到通知会调用 `ImportIngressScanner.scan()`；对象是否被发现和登记取决于本次扫描结果。
 - 通知体字段**全部可选**,仅用于日志/可观测定位;实际发现仍交既有扫描器按配置前缀全量扫(语义与轮询完全一致,只是「提前」)。
 - **在途守护**:`AtomicBoolean` 让密集通知合并为「至多一次在途扫描」,事件风暴下不会压垮扫描器。
 - 扫描器只做「发现 + 登记」,**不直接起任务**——起任务仍走 Trigger/Orchestrator 主链,事件驱动不改这条边界。
@@ -50,6 +50,7 @@ X-Internal-Secret: <BATCH_INTERNAL_SECRET>
 | 键 | 默认 | 说明 |
 |---|---|---|
 | `batch.worker.import.scanner.event-arrival.enabled` | `false` | 开启事件驱动端点。关闭时端点存在但只回 `triggered=false`,行为等价历史纯轮询 |
+| `batch.worker.import.scanner.enabled` | `true` | 扫描总开关。关闭时通知返回 `triggered=false`、`reason=scanner-disabled`，不调用扫描器 |
 
 对应环境变量:
 
@@ -67,8 +68,10 @@ orchestrator:
 
 ## 指标
 
-- `batch.import.event_arrival.notifications` — 收到的通知数(含被合并/关闭时的)。
-- `batch.import.event_arrival.scans` — 实际触发的即时扫描数。
+- `batch.import.event_arrival.notifications` — 事件开关开启时收到的通知数，包含扫描总开关关闭及在途合并的通知。
+- `batch.import.event_arrival.scans` — Controller 调用即时扫描器的次数,不代表扫描实际执行或对象成功登记。
+
+当前仅有上述两个计数器,尚无即时/轮询扫描的成功与失败、最近成功时间、登记结果或对象到达至 `file_record` 的延迟指标,也没有对应的 Prometheus 告警。通知撞上在途扫描时会合并并返回 `triggered=false`；扫描器先取对象列表快照,若通知对应对象在快照形成后才落地,本轮可能看不到它,依赖下一轮轮询兜底,当前没有合并数量或事件到登记延迟指标。剩余指标和告警验收跟踪于 [TODO Master OBS-ENV-05](../plans/todo-master.md#事件与可用性监控目标环境验收2026-10-26)。
 
 ## 本地验证
 

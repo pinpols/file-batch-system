@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -14,6 +15,7 @@ import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegratio
 import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowLaunchSeed;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.List;
@@ -92,10 +94,7 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
     JobInstanceEntity instance = jobInstanceMapper.selectById(TENANT, jobInstanceId);
     assertThat(instance).isNotNull();
 
-    return jdbcTemplate.queryForList(
-        selectPartitionNoSql,
-        TENANT,
-        instance.getId());
+    return jdbcTemplate.queryForList(selectPartitionNoSql, TENANT, instance.getId());
   }
 
   private void insertFileRecord(String tenantId, Long fileId) {
@@ -131,6 +130,40 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
   }
 
   @Test
+  @DisplayName("文件束小数文件 ID 不得截断并绑定到其他真实文件")
+  void bundleImport_rejectsFractionalFileIdentity() {
+    final String countPartitionsSql = """
+        select count(*) from batch.job_partition where tenant_id = ? and source_file_id = ?
+        """;
+    final String selectRunSql = """
+        select wr.run_status from batch.workflow_run wr
+        join batch.trigger_request tr on tr.id = wr.trigger_request_id and tr.tenant_id = wr.tenant_id
+        where tr.tenant_id = ? and tr.request_id = ?
+        """;
+    insertFileRecord(TENANT, 997001L);
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareBundleLaunchWithWorker(
+        jdbcTemplate, TENANT, "BUNDLE_IMPORT", "IMPORT");
+    LaunchRequest request = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .workflowDefinitionId(seed.workflowDefinitionId())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.EVENT)
+        .requestId(seed.requestId())
+        .traceId("trace-fractional-file-id")
+        .params(Map.of(
+            "bundleFiles",
+            List.of(
+                Map.of("sourceFileId", new BigDecimal("997001.9"), "templateCode", "TPL_ORDER"))))
+        .build();
+
+    assertThat(workflowRunLaunchService.launch(request).instanceNo()).isNotBlank();
+    assertThat(jdbcTemplate.queryForObject(selectRunSql, String.class, TENANT, seed.requestId()))
+        .isEqualTo("FAILED");
+    assertThat(jdbcTemplate.queryForObject(countPartitionsSql, Integer.class, TENANT, 997001L))
+        .isZero();
+  }
+
+  @Test
   @DisplayName("同一动态束作业被两个 Workflow 节点引用时各自展开并隔离分区")
   void sameDynamicJobInTwoWorkflowNodes_createsIndependentFanOutInstances() {
     final String updateWorkflowDefinitionSql = """
@@ -161,17 +194,17 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
     final String selectExpectedPartitionCountSql = """
         select expected_partition_count from batch.job_instance where tenant_id = ? and id = ?\
         """;
-  final String selectSourceFileIdSql = """
+    final String selectSourceFileIdSql = """
       select source_file_id, template_code from batch.job_partition where tenant_id = ? and job_instance_id = ?\s\
       order by partition_no\
       """;
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from batch.job_task where tenant_id = ? and job_instance_id = ?
   """;
-  final String selectRunStatusSql = """
+    final String selectRunStatusSql = """
       select run_status from batch.workflow_run where id = ?
   """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.workflow_node_run where workflow_run_id = ? and node_code = 'END'\
       """;
 
@@ -180,19 +213,9 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
     WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareBundleLaunchWithWorker(
         jdbcTemplate, TENANT, "BUNDLE_IMPORT", "IMPORT");
     // 该 fixture 默认模拟单作业受管 Workflow；本场景改为组合 DAG，两个节点才能有独立 dedup 身份。
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        TENANT,
-        seed.workflowDefinitionId());
-    jdbcTemplate.update(
-        updateWorkflowNodeSql,
-        TENANT,
-        seed.workflowDefinitionId());
-    jdbcTemplate.update(
-        insertWorkflowNodeSql,
-        TENANT,
-        seed.workflowDefinitionId(),
-        seed.jobCode());
+    jdbcTemplate.update(updateWorkflowDefinitionSql, TENANT, seed.workflowDefinitionId());
+    jdbcTemplate.update(updateWorkflowNodeSql, TENANT, seed.workflowDefinitionId());
+    jdbcTemplate.update(insertWorkflowNodeSql, TENANT, seed.workflowDefinitionId(), seed.jobCode());
     jdbcTemplate.update(
         insertWorkflowEdgeSql,
         TENANT,
@@ -216,16 +239,10 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
     var response = workflowRunLaunchService.launch(request);
 
     Long workflowRunId = jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class,
-        TENANT,
-        seed.workflowDefinitionId(),
-        TENANT,
-        seed.requestId());
+        selectIdSql, Long.class, TENANT, seed.workflowDefinitionId(), TENANT, seed.requestId());
     assertThat(response.instanceNo()).isNotBlank();
-    List<Map<String, Object>> nodeInstances = jdbcTemplate.queryForList(
-        selectNodeCodeSql,
-        workflowRunId);
+    List<Map<String, Object>> nodeInstances =
+        jdbcTemplate.queryForList(selectNodeCodeSql, workflowRunId);
     assertThat(nodeInstances).hasSize(2);
     Long firstInstanceId = (Long) nodeInstances.get(0).get("job_instance_id");
     Long secondInstanceId = (Long) nodeInstances.get(1).get("job_instance_id");
@@ -235,13 +252,12 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
       Integer selectedExpectedPartitionCount = jdbcTemplate.queryForObject(
           selectExpectedPartitionCountSql, Integer.class, TENANT, instanceId);
       assertThat(selectedExpectedPartitionCount).isEqualTo(2);
-      List<Map<String, Object>> partitions = jdbcTemplate.queryForList(
-          selectSourceFileIdSql,
-          TENANT,
-          instanceId);
-      assertThat(partitions).containsExactly(
-          Map.of("source_file_id", 8101L, "template_code", "TPL_A"),
-          Map.of("source_file_id", 8102L, "template_code", "TPL_B"));
+      List<Map<String, Object>> partitions =
+          jdbcTemplate.queryForList(selectSourceFileIdSql, TENANT, instanceId);
+      assertThat(partitions)
+          .containsExactly(
+              Map.of("source_file_id", 8101L, "template_code", "TPL_A"),
+              Map.of("source_file_id", 8102L, "template_code", "TPL_B"));
       Integer selectedJobTaskCount =
           jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, instanceId);
       assertThat(selectedJobTaskCount).isEqualTo(2);
@@ -271,6 +287,13 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
   @Test
   @DisplayName("分发束按源文件展开分区并各自绑定下游渠道,模板为空")
   void bundleDispatch_expandsByFileAndChannelWithoutTemplate() {
+    final String insertChannelsSql = """
+        insert into batch.file_channel_config
+          (tenant_id, channel_code, channel_name, channel_type, config_json)
+        values (?, 'CH_SFTP_A', 'SFTP', 'SFTP', '{}'::jsonb),
+               (?, 'CH_OSS_B', 'OSS', 'OSS', '{}'::jsonb)
+        """;
+    jdbcTemplate.update(insertChannelsSql, TENANT, TENANT);
     List<Map<String, Object>> partitions = launchBundleAndReadPartitions(
         "BUNDLE_DISPATCH",
         "DISPATCH",
@@ -284,6 +307,362 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
     assertThat(partitions.get(0).get("template_code")).isNull();
     assertThat(partitions.get(1)).containsEntry("source_file_id", 2002L);
     assertThat(partitions.get(1)).containsEntry("target_ref", "CH_OSS_B");
+  }
+
+  @Test
+  @DisplayName("文件束分发的真实实例按两个渠道保存冻结配置与密钥版本")
+  void bundleDispatch_persistsChannelAndSecretSnapshots() {
+    final String insertSecretSql = """
+        insert into batch.secret_version
+          (tenant_id, secret_ref, secret_name, version_no, secret_status, current_version)
+        values (?, ?, ?, 1, 'PUBLISHED', true) returning id
+        """;
+    final String insertChannelSql = """
+        insert into batch.file_channel_config
+          (tenant_id, channel_code, channel_name, channel_type, config_json)
+        values (?, ?, ?, 'SFTP', jsonb_build_object('secret_ref', ?::text))
+        """;
+    final String selectSnapshotSql = """
+        select ji.params_snapshot from batch.job_instance ji
+        join batch.job_partition p on p.tenant_id = ji.tenant_id and p.job_instance_id = ji.id
+        where ji.tenant_id = ? and p.source_file_id = ?
+        """;
+    final String selectTaskPayloadSql = """
+        select jt.task_payload from batch.job_task jt
+        join batch.job_partition p on p.tenant_id = jt.tenant_id and p.id = jt.job_partition_id
+        where jt.tenant_id = ? and p.source_file_id = ?
+        """;
+    Long firstSecretId =
+        jdbcTemplate.queryForObject(insertSecretSql, Long.class, TENANT, "bundle/key-one", "first");
+    Long secondSecretId = jdbcTemplate.queryForObject(
+        insertSecretSql, Long.class, TENANT, "bundle/key-two", "second");
+    jdbcTemplate.update(insertChannelSql, TENANT, "BUNDLE_CH_1", "first", "bundle/key-one");
+    jdbcTemplate.update(insertChannelSql, TENANT, "BUNDLE_CH_2", "second", "bundle/key-two");
+
+    launchBundleAndReadPartitions(
+        "BUNDLE_DISPATCH",
+        "DISPATCH",
+        List.of(
+            Map.of("sourceFileId", 991001, "targetRef", "BUNDLE_CH_1"),
+            Map.of("sourceFileId", 991002, "targetRef", "BUNDLE_CH_2")),
+        Map.of("metadata", Map.of("targetRef", "not-a-channel")));
+
+    String snapshot = jdbcTemplate.queryForObject(selectSnapshotSql, String.class, TENANT, 991001L);
+    var effectiveParams = JsonUtils.fromJson(snapshot, JsonNode.class).path("effectiveParams");
+    assertThat(effectiveParams
+            .path("_dispatchSecretBindings")
+            .path("BUNDLE_CH_1")
+            .path("secretVersionId")
+            .asLong())
+        .isEqualTo(firstSecretId);
+    assertThat(effectiveParams
+            .path("_dispatchSecretBindings")
+            .path("BUNDLE_CH_2")
+            .path("secretVersionId")
+            .asLong())
+        .isEqualTo(secondSecretId);
+    assertThat(effectiveParams
+            .path("_frozenDispatchChannelsProtected")
+            .path("BUNDLE_CH_1")
+            .asText())
+        .isNotBlank();
+    assertThat(effectiveParams
+            .path("_frozenDispatchChannelsProtected")
+            .path("BUNDLE_CH_2")
+            .asText())
+        .isNotBlank();
+    for (long fileId : List.of(991001L, 991002L)) {
+      String taskPayload =
+          jdbcTemplate.queryForObject(selectTaskPayloadSql, String.class, TENANT, fileId);
+      var task = JsonUtils.fromJson(taskPayload, JsonNode.class);
+      String expectedChannel = fileId == 991001L ? "BUNDLE_CH_1" : "BUNDLE_CH_2";
+      Long expectedSecretId = fileId == 991001L ? firstSecretId : secondSecretId;
+      assertThat(task.path("bundleSourceFileId").asLong()).isEqualTo(fileId);
+      assertThat(task.path("bundleTargetRef").asText()).isEqualTo(expectedChannel);
+      assertThat(task.path("_dispatchSecretBindings")
+              .path(expectedChannel)
+              .path("secretVersionId")
+              .asLong())
+          .isEqualTo(expectedSecretId);
+      assertThat(task.path("_frozenDispatchChannelsProtected")
+              .path(expectedChannel)
+              .asText())
+          .isNotBlank();
+    }
+  }
+
+  @Test
+  @DisplayName("普通分发不能通过启动参数伪造文件束文件与渠道")
+  void normalDispatch_ignoresCallerBundleBindings() {
+    final String insertChannelsSql = """
+        insert into batch.file_channel_config
+          (tenant_id, channel_code, channel_name, channel_type, config_json)
+        values (?, 'BIND_EXPECTED', 'expected', 'LOCAL', '{}'::jsonb),
+               (?, 'BIND_OTHER', 'other', 'LOCAL', '{}'::jsonb)
+        """;
+    final String selectTaskPayloadSql = """
+        select jt.task_payload from batch.job_task jt
+        join batch.job_instance ji on ji.tenant_id = jt.tenant_id and ji.id = jt.job_instance_id
+        where ji.tenant_id = ? and ji.job_code = ?
+        """;
+    jdbcTemplate.update(insertChannelsSql, TENANT, TENANT);
+    insertFileRecord(TENANT, 994001L);
+    insertFileRecord(TENANT, 994002L);
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareBundleLaunchWithWorker(
+        jdbcTemplate, TENANT, "DISPATCH", "DISPATCH");
+    LaunchRequest request = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .workflowDefinitionId(seed.workflowDefinitionId())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.EVENT)
+        .requestId(seed.requestId())
+        .traceId("trace-forged-bundle-binding")
+        .params(Map.of(
+            "fileId",
+            994001,
+            "channelCode",
+            "BIND_EXPECTED",
+            "bundleSourceFileId",
+            994002,
+            "bundleTargetRef",
+            "BIND_OTHER"))
+        .build();
+
+    assertThat(workflowRunLaunchService.launch(request).instanceNo()).isNotBlank();
+    List<String> taskPayloads =
+        jdbcTemplate.queryForList(selectTaskPayloadSql, String.class, TENANT, seed.jobCode());
+    assertThat(taskPayloads).isNotEmpty();
+    for (String taskPayload : taskPayloads) {
+      var task = JsonUtils.fromJson(taskPayload, JsonNode.class);
+      assertThat(task.path("fileId").asLong()).isEqualTo(994001L);
+      assertThat(task.path("channelCode").asText()).isEqualTo("BIND_EXPECTED");
+      assertThat(task.has("bundleSourceFileId")).isFalse();
+      assertThat(task.has("bundleTargetRef")).isFalse();
+      assertThat(task.path("_frozenDispatchChannelsProtected").has("BIND_EXPECTED"))
+          .isTrue();
+      assertThat(task.path("_frozenDispatchChannelsProtected").has("BIND_OTHER"))
+          .isFalse();
+    }
+  }
+
+  @Test
+  @DisplayName("普通分发目标渠道缺失时拒绝子作业，后续创建渠道不会改变已失败实例")
+  void normalDispatch_rejectsMissingExplicitChannel() {
+    final String insertChannelSql = """
+        insert into batch.file_channel_config
+          (tenant_id, channel_code, channel_name, channel_type, config_json)
+        values (?, 'LATE_CHANNEL', 'late', 'LOCAL', '{}'::jsonb)
+        """;
+    final String selectWorkflowSql = """
+        select wr.id, wr.run_status from batch.workflow_run wr
+        join batch.trigger_request tr on tr.id = wr.trigger_request_id and tr.tenant_id = wr.tenant_id
+        where tr.tenant_id = ? and tr.request_id = ?
+        """;
+    final String selectNodeSql = """
+        select node_status, error_key from batch.workflow_node_run
+        where workflow_run_id = ? and node_code = 'BUNDLE_JOB'
+        """;
+    final String selectChildStatusSql = """
+        select request_status from batch.trigger_request
+        where tenant_id = ? and parent_workflow_run_id = ? and parent_node_code = 'BUNDLE_JOB'
+        """;
+    final String countJobSql = """
+        select count(*) from batch.job_instance where tenant_id = ? and job_code = ?
+        """;
+    insertFileRecord(TENANT, 995001L);
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareBundleLaunchWithWorker(
+        jdbcTemplate, TENANT, "DISPATCH", "DISPATCH");
+    LaunchRequest request = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .workflowDefinitionId(seed.workflowDefinitionId())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.EVENT)
+        .requestId(seed.requestId())
+        .traceId("trace-late-channel")
+        .params(Map.of("fileId", 995001, "channelCode", "LATE_CHANNEL"))
+        .build();
+
+    assertThat(workflowRunLaunchService.launch(request).instanceNo()).isNotBlank();
+    Map<String, Object> workflow =
+        jdbcTemplate.queryForMap(selectWorkflowSql, TENANT, seed.requestId());
+    assertThat(workflow).containsEntry("run_status", "FAILED");
+    Long workflowId = ((Number) workflow.get("id")).longValue();
+    assertThat(jdbcTemplate.queryForMap(selectNodeSql, workflowId))
+        .containsEntry("node_status", "FAILED")
+        .containsEntry("error_key", "error.file_channel.not_found");
+    assertThat(jdbcTemplate.queryForObject(selectChildStatusSql, String.class, TENANT, workflowId))
+        .isEqualTo("REJECTED");
+    jdbcTemplate.update(insertChannelSql, TENANT);
+    assertThat(jdbcTemplate.queryForObject(countJobSql, Integer.class, TENANT, seed.jobCode()))
+        .isZero();
+  }
+
+  @Test
+  @DisplayName("普通分发不因元数据中无关渠道的密钥缺失而拒绝有效目标")
+  void normalDispatch_ignoresUnavailableUnselectedSecret() {
+    final String insertSecretSql = """
+        insert into batch.secret_version
+          (tenant_id, secret_ref, secret_name, version_no, secret_status, current_version)
+        values (?, 'selected/key', 'selected', 1, 'PUBLISHED', true) returning id
+        """;
+    final String insertChannelsSql = """
+        insert into batch.file_channel_config
+          (tenant_id, channel_code, channel_name, channel_type, config_json)
+        values (?, 'SELECTED_CHANNEL', 'selected', 'SFTP', '{"secret_ref":"selected/key"}'::jsonb),
+               (?, 'OTHER_CHANNEL', 'other', 'SFTP', '{"secret_ref":"other/no-version"}'::jsonb)
+        """;
+    final String selectTaskPayloadSql = """
+        select jt.task_payload from batch.job_task jt
+        join batch.job_instance ji on ji.tenant_id = jt.tenant_id and ji.id = jt.job_instance_id
+        where ji.tenant_id = ? and ji.job_code = ?
+        """;
+    Long secretId = jdbcTemplate.queryForObject(insertSecretSql, Long.class, TENANT);
+    jdbcTemplate.update(insertChannelsSql, TENANT, TENANT);
+    insertFileRecord(TENANT, 996001L);
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareBundleLaunchWithWorker(
+        jdbcTemplate, TENANT, "DISPATCH", "DISPATCH");
+    LaunchRequest request = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .workflowDefinitionId(seed.workflowDefinitionId())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.EVENT)
+        .requestId(seed.requestId())
+        .traceId("trace-unrelated-secret")
+        .params(Map.of(
+            "fileId",
+            996001,
+            "channelCode",
+            "SELECTED_CHANNEL",
+            "metadata",
+            Map.of("targetRef", "OTHER_CHANNEL")))
+        .build();
+
+    assertThat(workflowRunLaunchService.launch(request).instanceNo()).isNotBlank();
+    List<String> payloads =
+        jdbcTemplate.queryForList(selectTaskPayloadSql, String.class, TENANT, seed.jobCode());
+    assertThat(payloads).isNotEmpty();
+    for (String payload : payloads) {
+      var task = JsonUtils.fromJson(payload, JsonNode.class);
+      assertThat(task.path("channelCode").asText()).isEqualTo("SELECTED_CHANNEL");
+      var bindings = task.path("_dispatchSecretBindings");
+      assertThat(bindings.path("SELECTED_CHANNEL").path("secretVersionId").asLong())
+          .isEqualTo(secretId);
+      assertThat(bindings.has("OTHER_CHANNEL")).isFalse();
+    }
+  }
+
+  @Test
+  @DisplayName("文件束目标渠道缺失时不生成部分冻结的作业实例")
+  void bundleDispatch_rejectsMissingTargetWithoutJobInstance() {
+    final String insertChannelSql = """
+        insert into batch.file_channel_config
+          (tenant_id, channel_code, channel_name, channel_type, config_json)
+        values (?, 'BUNDLE_PRESENT', 'present', 'LOCAL', '{}'::jsonb)
+        """;
+    final String countJobSql = """
+        select count(*) from batch.job_instance where tenant_id = ? and job_code = ?
+        """;
+    final String selectWorkflowSql = """
+        select wr.id, wr.run_status from batch.workflow_run wr
+        join batch.trigger_request tr on tr.id = wr.trigger_request_id and tr.tenant_id = wr.tenant_id
+        where tr.tenant_id = ? and tr.request_id = ?
+        """;
+    final String selectNodeSql = """
+        select node_status, error_key from batch.workflow_node_run
+        where workflow_run_id = ? and node_code = 'BUNDLE_JOB'
+        """;
+    final String selectChildStatusSql = """
+        select request_status from batch.trigger_request
+        where tenant_id = ? and parent_workflow_run_id = ? and parent_node_code = 'BUNDLE_JOB'
+        """;
+    jdbcTemplate.update(insertChannelSql, TENANT);
+    insertFileRecord(TENANT, 992001L);
+    insertFileRecord(TENANT, 992002L);
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareBundleLaunchWithWorker(
+        jdbcTemplate, TENANT, "BUNDLE_DISPATCH", "DISPATCH");
+    LaunchRequest request = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .workflowDefinitionId(seed.workflowDefinitionId())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.EVENT)
+        .requestId(seed.requestId())
+        .traceId("trace-missing-channel")
+        .params(Map.of(
+            "bundleFiles",
+            List.of(
+                Map.of("sourceFileId", 992001, "targetRef", "BUNDLE_PRESENT"),
+                Map.of("sourceFileId", 992002, "targetRef", "BUNDLE_MISSING"))))
+        .build();
+
+    var response = workflowRunLaunchService.launch(request);
+    assertThat(response.instanceNo()).isNotBlank();
+    Map<String, Object> workflow =
+        jdbcTemplate.queryForMap(selectWorkflowSql, TENANT, seed.requestId());
+    assertThat(workflow).containsEntry("run_status", "FAILED");
+    Long workflowId = ((Number) workflow.get("id")).longValue();
+    assertThat(jdbcTemplate.queryForMap(selectNodeSql, workflowId))
+        .containsEntry("node_status", "FAILED")
+        .containsEntry("error_key", "error.file_channel.not_found");
+    assertThat(jdbcTemplate.queryForObject(selectChildStatusSql, String.class, TENANT, workflowId))
+        .isEqualTo("REJECTED");
+    assertThat(jdbcTemplate.queryForObject(countJobSql, Integer.class, TENANT, seed.jobCode()))
+        .isZero();
+  }
+
+  @Test
+  @DisplayName("文件束渠道的密钥版本缺失时子节点和 Workflow 失败收敛")
+  void bundleDispatch_rejectsMissingSecretAndFinalizesWorkflow() {
+    final String insertChannelSql = """
+        insert into batch.file_channel_config
+          (tenant_id, channel_code, channel_name, channel_type, config_json)
+        values (?, 'BUNDLE_SECRET_MISSING', 'secure', 'SFTP',
+                '{"secret_ref":"bundle/no-version"}'::jsonb)
+        """;
+    final String selectWorkflowSql = """
+        select wr.id, wr.run_status from batch.workflow_run wr
+        join batch.trigger_request tr on tr.id = wr.trigger_request_id and tr.tenant_id = wr.tenant_id
+        where tr.tenant_id = ? and tr.request_id = ?
+        """;
+    final String selectNodeSql = """
+        select node_status, error_code from batch.workflow_node_run
+        where workflow_run_id = ? and node_code = 'BUNDLE_JOB'
+        """;
+    final String selectChildStatusSql = """
+        select request_status from batch.trigger_request
+        where tenant_id = ? and parent_workflow_run_id = ? and parent_node_code = 'BUNDLE_JOB'
+        """;
+    final String countJobSql = """
+        select count(*) from batch.job_instance where tenant_id = ? and job_code = ?
+        """;
+    jdbcTemplate.update(insertChannelSql, TENANT);
+    insertFileRecord(TENANT, 993001L);
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareBundleLaunchWithWorker(
+        jdbcTemplate, TENANT, "BUNDLE_DISPATCH", "DISPATCH");
+    LaunchRequest request = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .workflowDefinitionId(seed.workflowDefinitionId())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.EVENT)
+        .requestId(seed.requestId())
+        .traceId("trace-missing-secret")
+        .params(Map.of(
+            "bundleFiles",
+            List.of(Map.of("sourceFileId", 993001, "targetRef", "BUNDLE_SECRET_MISSING"))))
+        .build();
+
+    var response = workflowRunLaunchService.launch(request);
+    assertThat(response.instanceNo()).isNotBlank();
+    Map<String, Object> workflow =
+        jdbcTemplate.queryForMap(selectWorkflowSql, TENANT, seed.requestId());
+    assertThat(workflow).containsEntry("run_status", "FAILED");
+    Long workflowId = ((Number) workflow.get("id")).longValue();
+    assertThat(jdbcTemplate.queryForMap(selectNodeSql, workflowId))
+        .containsEntry("node_status", "FAILED")
+        .containsEntry("error_code", "CREDENTIAL_REF_UNRESOLVED");
+    assertThat(jdbcTemplate.queryForObject(selectChildStatusSql, String.class, TENANT, workflowId))
+        .isEqualTo("REJECTED");
+    assertThat(jdbcTemplate.queryForObject(countJobSql, Integer.class, TENANT, seed.jobCode()))
+        .isZero();
   }
 
   @Test
@@ -310,30 +689,28 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
         """;
 
     jdbcTemplate.update(
-        updateWorkflowNodeSql,
-        JsonUtils.toJson(nodeParams),
-        seed.workflowDefinitionId());
+        updateWorkflowNodeSql, JsonUtils.toJson(nodeParams), seed.workflowDefinitionId());
   }
 
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   @DisplayName("拒绝把其他租户的文件绑定到文件束分区")
   void bundleImport_rejectsForeignTenantSourceFile(boolean maskWithNodeDefaults) {
-  final String selectIdSql = """
+    final String selectIdSql = """
       select id from batch.trigger_request where tenant_id = ? and request_id = ?
   """;
-  final String selectRequestStatusSql = """
+    final String selectRequestStatusSql = """
       select request_status from batch.trigger_request where id = ?
   """;
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from batch.workflow_run where trigger_request_id = ?
   """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.workflow_node_run node_run\s\
       join batch.workflow_run workflow_run on workflow_run.id = node_run.workflow_run_id\s\
       where workflow_run.trigger_request_id = ?\
       """;
-  final String selectCountSql3 = """
+    final String selectCountSql3 = """
       select count(*) from batch.job_partition where tenant_id = ? and source_file_id = ?
   """;
 
@@ -362,11 +739,8 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
 
     assertThatThrownBy(() -> workflowRunLaunchService.launch(request))
         .hasMessage("error.file.record_not_found");
-    Long triggerRequestId = jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class,
-        TENANT,
-        seed.requestId());
+    Long triggerRequestId =
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, seed.requestId());
     String selectedRequestStatus =
         jdbcTemplate.queryForObject(selectRequestStatusSql, String.class, triggerRequestId);
     assertThat(selectedRequestStatus).isEqualTo("REJECTED");
@@ -384,38 +758,38 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
   @Test
   @DisplayName("运行时 DSL 解析出的外租户文件拒绝子 Job 并使根 Workflow 失败收敛")
   void bundleImport_rejectsForeignTenantDslSourceFileAndFinalizesWorkflow() {
-  final String updateWorkflowEdgeSql = """
+    final String updateWorkflowEdgeSql = """
       update batch.workflow_edge set edge_type = 'FAILURE' where workflow_definition_id = ?\s\
       and from_node_code = 'BUNDLE_JOB' and to_node_code = 'END'\
       """;
-  final String selectIdSql = """
+    final String selectIdSql = """
       select id from batch.trigger_request where tenant_id = ? and request_id = ?
   """;
-  final String selectIdSql2 = """
+    final String selectIdSql2 = """
       select id from batch.workflow_run where trigger_request_id = ?
   """;
-  final String selectRunStatusSql = """
+    final String selectRunStatusSql = """
       select run_status from batch.workflow_run where id = ?
   """;
-  final String selectNodeStatusSql = """
+    final String selectNodeStatusSql = """
       select node_status from batch.workflow_node_run where workflow_run_id = ? and node_type = 'JOB'\
       """;
-  final String selectNodeStatusSql2 = """
+    final String selectNodeStatusSql2 = """
       select node_status from batch.workflow_node_run where workflow_run_id = ? and node_type = 'END'\
       """;
-  final String selectIdSql3 = """
+    final String selectIdSql3 = """
       select id from batch.trigger_request where parent_workflow_run_id = ? and parent_node_code = 'BUNDLE_JOB'\
       """;
-  final String selectRequestStatusSql = """
+    final String selectRequestStatusSql = """
       select request_status from batch.trigger_request where id = ?
   """;
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from batch.job_instance where trigger_request_id = ?
   """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.job_partition where tenant_id = ? and source_file_id = ?
   """;
-  final String selectCountSql3 = """
+    final String selectCountSql3 = """
       select count(*) from batch.outbox_event where tenant_id = ? and aggregate_type = 'WORKFLOW_RUN'\s\
       and aggregate_id = ? and event_type = 'WORKFLOW_TERMINAL'\
       """;
@@ -424,9 +798,7 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
         jdbcTemplate, TENANT, "BUNDLE_IMPORT", "IMPORT");
     long foreignFileId = 900_005L;
     insertFileRecord("t2", foreignFileId);
-    jdbcTemplate.update(
-        updateWorkflowEdgeSql,
-        seed.workflowDefinitionId());
+    jdbcTemplate.update(updateWorkflowEdgeSql, seed.workflowDefinitionId());
     setJobNodeParams(
         seed,
         Map.of(
@@ -444,15 +816,9 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
 
     assertThatCode(() -> workflowRunLaunchService.launch(request)).doesNotThrowAnyException();
 
-    Long rootRequestId = jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class,
-        TENANT,
-        seed.requestId());
-    Long workflowRunId = jdbcTemplate.queryForObject(
-        selectIdSql2,
-        Long.class,
-        rootRequestId);
+    Long rootRequestId =
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, seed.requestId());
+    Long workflowRunId = jdbcTemplate.queryForObject(selectIdSql2, Long.class, rootRequestId);
     String selectedRunStatus =
         jdbcTemplate.queryForObject(selectRunStatusSql, String.class, workflowRunId);
     assertThat(selectedRunStatus).isEqualTo("FAILED");
@@ -462,10 +828,7 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
     String selectedNodeStatusRead2 =
         jdbcTemplate.queryForObject(selectNodeStatusSql2, String.class, workflowRunId);
     assertThat(selectedNodeStatusRead2).isEqualTo("SUCCESS");
-    Long childRequestId = jdbcTemplate.queryForObject(
-        selectIdSql3,
-        Long.class,
-        workflowRunId);
+    Long childRequestId = jdbcTemplate.queryForObject(selectIdSql3, Long.class, workflowRunId);
     String selectedRequestStatus =
         jdbcTemplate.queryForObject(selectRequestStatusSql, String.class, childRequestId);
     assertThat(selectedRequestStatus).isEqualTo("REJECTED");

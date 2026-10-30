@@ -73,6 +73,7 @@ worker report 成功时，平台会把该分片的 `outputs` 和 `verifierFailur
 - 单个成功分片：`workflow_node_run.output` 和 `result_version.payload_json` 保持原始 `outputs` 形状，兼容旧消费者。
 - 多个成功分片：输出包装为 `partitionedOutputs`，包含 `partitionId`、`partitionNo`、`partitionKey` 和该分片 `outputs`，避免最后一个 report 覆盖其它分片产物。
 - 失败分片不进入成功产物集合；`failedPartitionCount` 会保留在包装结构中，终态仍由 `SUCCESS / PARTIAL_FAILED / FAILED` 状态机表达。
+- 历史分片缺少产物时，仅成功报告的 `outputs` 可以作为回退；失败报告中的产物不能补入成功产物。
 - 当前节点 output 只聚合当前 workflow node 的分片；实例 result_version 聚合实例终态时所有成功分片。
 
 示例：

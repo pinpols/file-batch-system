@@ -111,7 +111,10 @@ class DefaultTenantConfigPackageExcelServiceWorkbookTest {
         .map(TenantConfigPackageExcelGuideResponse.SheetGuide::sheetName)
         .toList();
 
-    assertThat(sheetNames).doesNotContain(PIPELINE_SHEET, STEP_SHEET).hasSize(10);
+    assertThat(sheetNames)
+        .doesNotContain(PIPELINE_SHEET, STEP_SHEET)
+        .contains("workflow_monitoring_policy")
+        .hasSize(11);
   }
 
   private static byte[] minimalWorkbook() throws Exception {

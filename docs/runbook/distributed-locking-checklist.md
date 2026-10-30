@@ -19,26 +19,20 @@
 
 ## 二、Decision Tree — 该用哪个？
 
-```
-要做的事是什么？
-├─ 跨实例的"周期性维护"任务（@Scheduled）
-│   ├─ 业务幂等？（重复执行不写异常数据 / 不发重复消息）
-│   │   └─ ✅ ShedLock
-│   └─ 业务非幂等？（必须严格单跑）
-│       └─ ⚠️ ShedLock 不够 → PG advisory lock + 幂等键/终态 CAS
-│
-├─ 多实例从同一队列/表"竞争消费"
-│   ├─ 队列在 PG 里？
-│   │   └─ ✅ FOR UPDATE SKIP LOCKED
-│   └─ 队列在 Kafka？
-│       └─ ✅ Kafka consumer group（不要再加锁）
-│
-├─ 状态机表的"读-改-写"（一行）
-│   └─ ✅ 乐观锁 CAS（version 列 + updateWithCas）
-│       OptimisticLockingFailureException 由调用方决定 retry
-│
-└─ 计数 / 限流 / 幂等键（不是真"锁"）
-    └─ ✅ Redis 单 key 原子操作（SET NX / INCR / Lua）
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  NEED{"需要协调什么？"}
+  NEED --> MAINT{"周期维护任务<br/>业务是否幂等？"}
+  MAINT -->|"是"| SHED["ShedLock"]
+  MAINT -->|"否，要求严格串行"| ADVISORY["PG advisory lock<br/>+ 幂等键 / 终态 CAS"]
+  NEED --> QUEUE{"竞争消费"}
+  QUEUE -->|"PostgreSQL 表"| PG["FOR UPDATE SKIP LOCKED"]
+  QUEUE -->|"Kafka"| KAFKA["Consumer group"]
+  NEED --> ROW["单行状态读改写"]
+  ROW --> CAS["version CAS<br/>调用方决定冲突重试"]
+  NEED --> COUNTER["计数 / 限流 / 幂等键"]
+  COUNTER --> ATOMIC["Redis 单 key 原子操作<br/>不作为通用锁"]
 ```
 
 ---

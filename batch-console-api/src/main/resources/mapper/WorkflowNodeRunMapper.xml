@@ -42,7 +42,7 @@
             and r.trace_id = #{traceId}
         </if>
         <choose>
-            <when test="cursorId != null">
+            <when test="cursorMode">
                 order by n.id desc
                 limit #{pageRequest.pageSize}
             </when>

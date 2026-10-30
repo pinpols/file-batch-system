@@ -37,7 +37,7 @@
             and retry_status = #{retryStatus}
         </if>
         <choose>
-            <when test="cursorId != null">
+            <when test="cursorMode">
                 order by id desc
                 limit #{pageRequest.pageSize}
             </when>

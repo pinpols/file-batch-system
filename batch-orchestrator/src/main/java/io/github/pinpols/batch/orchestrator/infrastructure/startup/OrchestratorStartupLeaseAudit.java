@@ -108,9 +108,7 @@ public class OrchestratorStartupLeaseAudit {
     } catch (RuntimeException ex) {
       // 审计失败不阻塞应用启动；可能是首次启动时部分表未建（Flyway 还没跑完）
       String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn(
-          "Startup lease audit failed (startup continues): {}",
-          causeSummary);
+      log.warn("Startup lease audit failed (startup continues): {}", causeSummary);
     }
   }
 }

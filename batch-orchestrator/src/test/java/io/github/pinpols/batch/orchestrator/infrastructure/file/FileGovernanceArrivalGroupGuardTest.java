@@ -16,8 +16,10 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.orchestrator.config.FileGovernanceProperties;
+import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.FileGovernanceMetricsCacheService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -365,7 +367,39 @@ class FileGovernanceArrivalGroupGuardTest {
 
   private static List<FileGovernanceArrivalViews.ArrivalCandidateView> candidateViews(
       List<Map<String, Object>> rows) {
-    return rows.stream().map(FileGovernanceArrivalViews::arrivalCandidate).toList();
+    return rows.stream()
+        .map(row -> FileGovernanceArrivalViews.arrivalCandidate(candidateRow(row)))
+        .toList();
+  }
+
+  private static FileGovernanceViews.ArrivalCandidateRow candidateRow(Map<String, Object> row) {
+    return new FileGovernanceViews.ArrivalCandidateRow(
+        (Long) row.get("id"),
+        text(row.get("tenant_id")),
+        text(row.get("checksum_type")),
+        text(row.get("file_name")),
+        bizDate(row.get("biz_date")),
+        text(row.get("file_status")),
+        null,
+        null,
+        row.get("metadata_json"),
+        text(row.get("file_group_code")),
+        text(row.get("wait_file_group_mode")),
+        text(row.get("required_file_set")),
+        text(row.get("arrival_timeout_action")),
+        text(row.get("arrival_state")),
+        text(row.get("arrival_reason")),
+        text(row.get("expected_arrival_time")),
+        text(row.get("latest_tolerable_time")),
+        text(row.get("trigger_on_complete")));
+  }
+
+  private static String text(Object value) {
+    return value == null ? null : String.valueOf(value);
+  }
+
+  private static LocalDate bizDate(Object value) {
+    return value == null ? null : LocalDate.parse(String.valueOf(value));
   }
 
   private static Map<String, Object> baseFile(

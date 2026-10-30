@@ -10,8 +10,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
+import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
+import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.event.DomainEvent;
@@ -20,7 +21,6 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.CompensationTransactionExecutor;
 import io.github.pinpols.batch.orchestrator.application.service.governance.DefaultCompensationService;
@@ -33,19 +33,20 @@ import io.github.pinpols.batch.orchestrator.application.service.replay.WorkflowN
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
 import io.github.pinpols.batch.orchestrator.domain.command.CompensationSubmitCommand;
+import io.github.pinpols.batch.orchestrator.domain.entity.ApprovalCommandEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.CompensationCommandEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationPreviewTokenEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.ApprovalCommandEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateCompensationStatusParam;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
-import io.github.pinpols.batch.orchestrator.mapper.CompensationCommandMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ApprovalCommandMapper;
+import io.github.pinpols.batch.orchestrator.mapper.CompensationCommandMapper;
 import io.github.pinpols.batch.orchestrator.mapper.DeadLetterTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
@@ -54,8 +55,8 @@ import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationPreviewTokenMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
-import java.time.LocalDate;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -67,6 +68,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /** 单元测试：{@link DefaultCompensationService} 的校验与守卫条件。 */
 @SuppressWarnings("unchecked")
@@ -89,6 +91,17 @@ class DefaultCompensationServiceTest {
   @BeforeEach
   void setUp() {
     compensationCommandMapper = mock(CompensationCommandMapper.class);
+    Mockito.doAnswer(call -> {
+          CompensationCommandEntity entity = call.getArgument(0);
+          entity.setId(1L);
+          return 1;
+        })
+        .when(compensationCommandMapper)
+        .insert(any(CompensationCommandEntity.class));
+    when(compensationCommandMapper.lockRunningCommand(anyString(), anyLong(), anyString()))
+        .thenReturn(1L);
+    when(compensationCommandMapper.updateStatus(any(UpdateCompensationStatusParam.class)))
+        .thenReturn(1);
     approvalCommandMapper = mock(ApprovalCommandMapper.class);
     jobMappers = new OrchestratorJobMappers(
         mock(JobInstanceMapper.class),
@@ -135,9 +148,37 @@ class DefaultCompensationServiceTest {
   // ── validate() ────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("调用方事务不可注册同步时，在创建补偿命令前失败关闭")
+  void shouldRejectActiveTransactionWithoutSynchronization_beforeCreatingCommand() {
+    TransactionSynchronizationManager.setActualTransactionActive(true);
+    try {
+      assertThatThrownBy(() -> service.submit(command("t1", "PARTITION", 1L)))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("transaction synchronization");
+      verify(compensationCommandMapper, Mockito.never()).insert(any());
+    } finally {
+      TransactionSynchronizationManager.setActualTransactionActive(false);
+    }
+  }
+
+  @Test
   @DisplayName("补偿提交对象为空时抛出业务异常")
   void shouldThrowWhenCommandIsNull() {
     assertThatThrownBy(() -> service.submit(null)).isInstanceOf(BizException.class);
+  }
+
+  @Test
+  @DisplayName("开始前命令已终结时不执行补偿或覆盖对账结果")
+  void shouldRejectBeforeHandler_whenCommandIsNoLongerRunning() {
+    when(compensationCommandMapper.lockRunningCommand(anyString(), anyLong(), anyString()))
+        .thenReturn(null);
+
+    assertThatThrownBy(() -> service.submit(command("t1", "PARTITION", 1L)))
+        .isInstanceOf(BizException.class)
+        .hasMessage("error.compensation.command_not_running");
+    verify(retryGovernanceService, Mockito.never())
+        .retryPartition(anyString(), anyLong(), anyString());
+    verify(compensationCommandMapper, Mockito.never()).updateStatus(any());
   }
 
   @Test
@@ -288,7 +329,7 @@ class DefaultCompensationServiceTest {
     String commandNo = service.submit(cmd);
 
     assertThat(commandNo).isNotBlank();
-    verify(retryGovernanceService).replayDeadLetter("t1", 999L);
+    verify(retryGovernanceService).replayDeadLetterInCurrentTransaction("t1", 999L);
   }
 
   @Test
@@ -310,6 +351,35 @@ class DefaultCompensationServiceTest {
     assertThat(commandNo).isNotBlank();
     verify(retryGovernanceService)
         .retryTask(Mockito.eq("t1"), Mockito.eq(50L), Mockito.anyString());
+  }
+
+  @Test
+  @DisplayName("作业已归档时补偿失败仍落库并保留无作业关联的审计")
+  void shouldRecordFailureWithoutHotJobWhenArchiveWins() {
+    JobStepInstanceEntity step = new JobStepInstanceEntity();
+    step.setId(5L);
+    step.setJobInstanceId(100L);
+    step.setJobTaskId(50L);
+    when(jobMappers.jobStepInstanceMapper.selectById("t1", 5L)).thenReturn(step);
+    Mockito.doThrow(new IllegalStateException("retry failed"))
+        .when(retryGovernanceService)
+        .retryTask(eq("t1"), eq(50L), anyString());
+    when(compensationCommandMapper.updateStatus(any(UpdateCompensationStatusParam.class)))
+        .thenReturn(0, 1);
+
+    assertThatThrownBy(() -> service.submit(command("t1", "STEP", 5L)))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("retry failed");
+
+    var updates = ArgumentCaptor.forClass(UpdateCompensationStatusParam.class);
+    verify(compensationCommandMapper, Mockito.times(2)).updateStatus(updates.capture());
+    assertThat(updates.getAllValues())
+        .extracting(UpdateCompensationStatusParam::getRelatedJobInstanceId)
+        .containsExactly(100L, null);
+    var logs = ArgumentCaptor.forClass(JobExecutionLogEntity.class);
+    verify(taskAssignmentService).appendLog(logs.capture());
+    assertThat(logs.getValue().getJobInstanceId()).isNull();
+    assertThat(logs.getValue().getLogType()).isEqualTo("COMPENSATION");
   }
 
   @Test
@@ -407,8 +477,7 @@ class DefaultCompensationServiceTest {
     approval.setApproverId("approver-1");
     when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "APR-NODE-1"))
         .thenReturn(approval);
-    when(compensationCommandMapper.countRunningByTarget(
-            "t1", "WORKFLOW_NODE", 82L, "RUNNING"))
+    when(compensationCommandMapper.countRunningByTarget("t1", "WORKFLOW_NODE", 82L, "RUNNING"))
         .thenReturn(0);
 
     WorkflowRunEntity sourceRun = new WorkflowRunEntity();
@@ -443,7 +512,8 @@ class DefaultCompensationServiceTest {
     when(jobMappers.jobInstanceMapper.selectCurrentByWorkflowRequest(
             eq("t1"), anyString(), eq("IMPORT_CUSTOMERS")))
         .thenReturn(launchedJob);
-    ReplayOperationPreviewTokenMapper previewTokenMapper = mock(ReplayOperationPreviewTokenMapper.class);
+    ReplayOperationPreviewTokenMapper previewTokenMapper =
+        mock(ReplayOperationPreviewTokenMapper.class);
     AtomicReference<ReplayOperationPreviewTokenEntity> previewToken = new AtomicReference<>();
     AtomicReference<ReplayOperationEntity> pendingOperation = new AtomicReference<>();
     when(previewTokenMapper.insert(any())).thenAnswer(invocation -> {
@@ -454,17 +524,29 @@ class DefaultCompensationServiceTest {
         .thenAnswer(invocation -> previewToken.get());
     when(previewTokenMapper.consume(eq("t1"), any(), any())).thenReturn(1);
     when(previewTokenMapper.linkOperation(eq("t1"), any(), eq(500L))).thenReturn(1);
-    WorkflowNodeReplayOperationService replayOperationService = new WorkflowNodeReplayOperationService(
-        workflowNodeReplayTargetResolver,
-        replayOperationMapper,
-        previewTokenMapper,
-        new BatchDateTimeSupport(
-            Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())));
-    WorkflowNodeReplayCommand previewCommand = new WorkflowNodeReplayCommand(
-        "t1", 71L, 82L, "rerun failed node", "operator-1",
-        "CREATE_NEW_VERSION", "USE_ORIGINAL_CONFIG", null, "trace-source-node", null, null);
+    WorkflowNodeReplayOperationService replayOperationService =
+        new WorkflowNodeReplayOperationService(
+            workflowNodeReplayTargetResolver,
+            replayOperationMapper,
+            previewTokenMapper,
+            new BatchDateTimeSupport(
+                Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())));
+    WorkflowNodeReplayCommand previewCommand = WorkflowNodeReplayCommand.builder()
+        .tenantId("t1")
+        .workflowRunId(71L)
+        .workflowNodeRunId(82L)
+        .reason("rerun failed node")
+        .requestedBy("operator-1")
+        .resultPolicy("CREATE_NEW_VERSION")
+        .configVersionPolicy("USE_ORIGINAL_CONFIG")
+        .configVersion(null)
+        .traceId("trace-source-node")
+        .operationKey(null)
+        .previewToken(null)
+        .build();
     var preview = replayOperationService.preview(previewCommand);
-    when(replayOperationMapper.selectByIdentity(eq("t1"), eq(preview.operationKey().toString())))
+    when(replayOperationMapper.selectByIdentity(
+            eq("t1"), eq(preview.operationKey().toString())))
         .thenAnswer(invocation -> pendingOperation.get() == null
             ? null
             : pendingOperation.get().toBuilder().id(500L).build());
@@ -477,12 +559,25 @@ class DefaultCompensationServiceTest {
     when(replayOperationMapper.startApprovedWorkflowNodeReplay(any())).thenReturn(1);
     when(replayOperationMapper.selectById("t1", 500L))
         .thenAnswer(invocation -> pendingOperation.get().toBuilder()
-            .id(500L).status("RUNNING").targetRequestId("workflow-request-1")
-            .approvedBy("approver-1").inFlightCount(1).build());
-    var pending = replayOperationService.submitForApproval(new WorkflowNodeReplayCommand(
-        "t1", 71L, 82L, "rerun failed node", "operator-1",
-        "CREATE_NEW_VERSION", "USE_ORIGINAL_CONFIG", null, "trace-source-node",
-        preview.operationKey(), preview.previewToken()));
+            .id(500L)
+            .status("RUNNING")
+            .targetRequestId("workflow-request-1")
+            .approvedBy("approver-1")
+            .inFlightCount(1)
+            .build());
+    var pending = replayOperationService.submitForApproval(WorkflowNodeReplayCommand.builder()
+        .tenantId("t1")
+        .workflowRunId(71L)
+        .workflowNodeRunId(82L)
+        .reason("rerun failed node")
+        .requestedBy("operator-1")
+        .resultPolicy("CREATE_NEW_VERSION")
+        .configVersionPolicy("USE_ORIGINAL_CONFIG")
+        .configVersion(null)
+        .traceId("trace-source-node")
+        .operationKey(preview.operationKey())
+        .previewToken(preview.previewToken())
+        .build());
     command = CompensationSubmitCommand.builder()
         .tenantId("t1")
         .compensationType("WORKFLOW_NODE")

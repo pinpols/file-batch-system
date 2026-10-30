@@ -100,6 +100,64 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
   }
 
   @Test
+  @DisplayName("定长映射字段名:真实上传预览拒绝数字，合法映射可应用并落库")
+  void shouldRejectNumericFixedWidthTargetAndApplyValidMapping() throws Exception {
+    String suffix = UUID.randomUUID().toString().replace("-", "");
+    String badCode = "fix_bad_" + suffix;
+    byte[] invalidWorkbook = fixedWidthTemplateWorkbook(badCode, "12");
+    HttpResponse<String> badPreviewResponse = previewWorkbookAsRole(
+        invalidWorkbook, "fixed-bad-" + suffix, "ROLE_ADMIN", "excel-upload-ta");
+    assertThat(badPreviewResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
+    JsonNode badPreview = new ObjectMapper().readTree(badPreviewResponse.body()).path("data");
+    assertThat(badPreview.path("invalidRows").asInt()).isEqualTo(1);
+    HttpResponse<String> badApply = postApply(
+        badPreview.path("uploadToken").asText(),
+        badPreview.path("previewToken").asText(),
+        "fixed-bad-apply-" + suffix);
+    assertThat(badApply.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+    String countSql =
+        "select count(*) from batch.file_template_config where tenant_id = ? and template_code = ?";
+    assertThat(jdbcTemplate.queryForObject(countSql, Integer.class, "excel-upload-ta", badCode))
+        .isZero();
+
+    String goodCode = "fix_good_" + suffix;
+    byte[] validWorkbook = fixedWidthTemplateWorkbook(goodCode, "\"name\"");
+    HttpResponse<String> goodPreviewResponse = previewWorkbookAsRole(
+        validWorkbook, "fixed-good-" + suffix, "ROLE_ADMIN", "excel-upload-ta");
+    assertThat(goodPreviewResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
+    JsonNode goodPreview =
+        new ObjectMapper().readTree(goodPreviewResponse.body()).path("data");
+    assertThat(goodPreview.path("invalidRows").asInt()).isZero();
+    HttpResponse<String> goodApply = postApply(
+        goodPreview.path("uploadToken").asText(),
+        goodPreview.path("previewToken").asText(),
+        "fixed-good-apply-" + suffix);
+    assertThat(goodApply.statusCode()).isEqualTo(HttpStatus.OK.value());
+    String targetSql =
+        "select field_mappings -> 0 ->> 'target' from batch.file_template_config where tenant_id = ? and template_code = ?";
+    assertThat(jdbcTemplate.queryForObject(targetSql, String.class, "excel-upload-ta", goodCode))
+        .isEqualTo("name");
+  }
+
+  private static byte[] fixedWidthTemplateWorkbook(String code, String targetJson)
+      throws Exception {
+    try (XSSFWorkbook workbook =
+            new XSSFWorkbook(new ByteArrayInputStream(tenantPackageWorkbook(true)));
+        ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+      Row template =
+          workbook.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET).getRow(1);
+      List<String> columns = ConfigPackageExcelSchema.FileTemplate.COLUMNS;
+      template.getCell(columns.indexOf("template_code")).setCellValue(code);
+      template.getCell(columns.indexOf("file_format_type")).setCellValue("FIXED_WIDTH");
+      template
+          .getCell(columns.indexOf("field_mappings"))
+          .setCellValue("[{\"start\":0,\"length\":4,\"target\":" + targetJson + "}]");
+      workbook.write(output);
+      return output.toByteArray();
+    }
+  }
+
+  @Test
   @DisplayName("上传租户配置包: 返回成功,并回显文件通道与文件模板各命中一行")
   void shouldUploadMultipartTenantPackageWorkbookIncludingFileSheets() throws Exception {
     byte[] workbook = tenantPackageWorkbook(true);
@@ -1897,10 +1955,10 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
     String workflowCode = "WF_CUSTOMER_EOD";
     String selectedCalendarCode =
         jdbcTemplate.queryForObject(selectCalendarCodeSql, String.class, tenantId, workflowCode);
+    List<Map<String, Object>> selectedWorkflowCode =
+        jdbcTemplate.queryForList(selectWorkflowCodeSql, tenantId, workflowCode);
     assertThat(selectedCalendarCode)
-        .as(
-            "workflow rows after config package apply: %s",
-            jdbcTemplate.queryForList(selectWorkflowCodeSql, tenantId, workflowCode))
+        .as("workflow rows after config package apply: %s", selectedWorkflowCode)
         .isEqualTo("default_calendar");
     String originalDescription =
         jdbcTemplate.queryForObject(selectDescriptionSql, String.class, tenantId, workflowCode);
@@ -2075,7 +2133,9 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
                 """.formatted(table);
       Integer selectedCountRead2 =
           jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId);
-      assertThat(selectedCountRead2).as("imported tenant row count for %s", table).isPositive();
+      assertThat(selectedCountRead2)
+          .as("imported tenant row count for %s", table)
+          .isPositive();
     }
     Integer selectedWorkflowNodeCount =
         jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId);
@@ -2180,9 +2240,11 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
                 """.formatted(table);
       Integer selectedCountRead4 =
           jdbcTemplate.queryForObject(selectCountSql3, Integer.class, copyTargetTenantId);
+      Integer selectedCount2 =
+          jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId);
       assertThat(selectedCountRead4)
           .as("copied tenant row count for %s", table)
-          .isEqualTo(jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId));
+          .isEqualTo(selectedCount2);
     }
     Integer selectedWorkflowNodeCountRead2 =
         jdbcTemplate.queryForObject(selectCountSql, Integer.class, copyTargetTenantId);
@@ -2218,11 +2280,9 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
     List<String> scenarios =
         List.of("IMPORT", "EXPORT", "PROCESS", "DISPATCH", "ATOMIC", "WORKFLOW", "SCHEDULE");
     List<List<Map<String, Object>>> sheets = ConfigPackageSampleDataFactory.sampleSheets(scenarios);
-    // 仍支持读取 Pipeline 定义；已退役租户自有写入。
-    // 租户 Pipeline 工作表已退役；当前契约中的所有可执行工作都由 Job 和
-    sheets.get(7).clear();
-    sheets.get(8).clear();
-    for (Map<String, Object> node : sheets.get(10)) {
+    // 租户 Pipeline 工作表已退役（SHEET_COUNT=10 中不再包含）；
+    // 当前布局 7=workflow_definition、8=workflow_node、9=workflow_edge。
+    for (Map<String, Object> node : sheets.get(8)) {
       if ("JOB".equals(node.get("node_type"))) {
         node.put("node_type", "TASK");
         node.put("related_job_code", null);
@@ -2245,20 +2305,20 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
     List<List<Map<String, Object>>> sheets =
         ConfigPackageSampleDataFactory.sampleSheets("WORKFLOW");
     Map<String, Object> defaultCalendar = new LinkedHashMap<>(sheets.get(1).getFirst());
-    sheets.get(9).getFirst().put("calendar_code", "default-calendar");
-    for (int index = 0; index < 9; index++) {
+    sheets.get(7).getFirst().put("calendar_code", "default-calendar");
+    for (int index = 0; index < 7; index++) {
       sheets.get(index).clear();
     }
     if (includeCalendar) {
       sheets.get(1).add(defaultCalendar);
     }
     if (sparseUpdate) {
-      sheets.get(10).removeIf(row -> !List.of("START", "END").contains(row.get("node_code")));
+      sheets.get(8).removeIf(row -> !List.of("START", "END").contains(row.get("node_code")));
     }
     if (sparseUpdate) {
-      sheets.get(11).clear();
+      sheets.get(9).clear();
       sheets
-          .get(11)
+          .get(9)
           .add(new LinkedHashMap<>(Map.of(
               "workflow_code", "WF_CUSTOMER_EOD",
               "workflow_version", "1",

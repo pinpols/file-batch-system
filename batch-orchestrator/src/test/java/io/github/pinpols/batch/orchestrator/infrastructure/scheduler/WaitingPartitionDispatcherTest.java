@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
-import io.github.pinpols.batch.orchestrator.domain.param.WorkflowRunMarkRunningParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -13,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
@@ -23,10 +21,10 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Orchest
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
-import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkInstanceRunningParam;
+import io.github.pinpols.batch.orchestrator.domain.param.WorkflowRunMarkRunningParam;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
+import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
@@ -36,31 +34,58 @@ import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
+import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 @DisplayName("等待中分区的派发推进:限流与容量准入全部通过后才释放分区并写入派发事件")
 @ExtendWith(MockitoExtension.class)
 class WaitingPartitionDispatcherTest {
 
-  @Mock private JobInstanceMapper jobInstanceMapper;
-  @Mock private WorkflowRunMapper workflowRunMapper;
-  @Mock private TaskDispatchOutboxService taskDispatchOutboxService;
-  @Mock private PartitionLifecycleService partitionLifecycleService;
-  @Mock private TenantActionRateLimiter tenantActionRateLimiter;
-  @Mock private OrchestratorConfigCacheService configCacheService;
-  @Mock private ResourceScheduler resourceScheduler;
-  @Mock private JobPartitionMapper jobPartitionMapper;
-  @Mock private JobTaskMapper jobTaskMapper;
-  @Mock private JobStepInstanceMapper jobStepInstanceMapper;
-  @Mock private TriggerRequestMapper triggerRequestMapper;
-  @Mock private WorkflowNodeMapper workflowNodeMapper;
-  @Mock private WorkflowNodeRunMapper workflowNodeRunMapper;
+  @Mock
+  private JobInstanceMapper jobInstanceMapper;
+
+  @Mock
+  private WorkflowRunMapper workflowRunMapper;
+
+  @Mock
+  private TaskDispatchOutboxService taskDispatchOutboxService;
+
+  @Mock
+  private PartitionLifecycleService partitionLifecycleService;
+
+  @Mock
+  private TenantActionRateLimiter tenantActionRateLimiter;
+
+  @Mock
+  private OrchestratorConfigCacheService configCacheService;
+
+  @Mock
+  private ResourceScheduler resourceScheduler;
+
+  @Mock
+  private JobPartitionMapper jobPartitionMapper;
+
+  @Mock
+  private JobTaskMapper jobTaskMapper;
+
+  @Mock
+  private JobStepInstanceMapper jobStepInstanceMapper;
+
+  @Mock
+  private TriggerRequestMapper triggerRequestMapper;
+
+  @Mock
+  private WorkflowNodeMapper workflowNodeMapper;
+
+  @Mock
+  private WorkflowNodeRunMapper workflowNodeRunMapper;
 
   private WaitingPartitionDispatcher dispatcher;
 
@@ -73,9 +98,7 @@ class WaitingPartitionDispatcherTest {
         jobStepInstanceMapper,
         triggerRequestMapper);
     OrchestratorWorkflowMappers workflowMappers = new OrchestratorWorkflowMappers(
-        workflowNodeMapper,
-        workflowRunMapper,
-        workflowNodeRunMapper);
+        workflowNodeMapper, workflowRunMapper, workflowNodeRunMapper);
     dispatcher = new WaitingPartitionDispatcher(
         jobMappers,
         workflowMappers,
@@ -127,8 +150,11 @@ class WaitingPartitionDispatcherTest {
     assertThat(runningParam.getValue().getTenantId()).isEqualTo("tenant-a");
     assertThat(instance.getVersion()).isEqualTo(1L);
     verify(workflowRunMapper)
-        .markRunning(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "tenant-a") && java.util.Objects.equals(parameters.id(), 99L) && java.util.Objects.equals(parameters.runStatus(), WorkflowRunStatus.RUNNING.code()) && java.util.Objects.equals(parameters.currentNodeCode(), "export")));
+        .markRunning(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.tenantId(), "tenant-a")
+            && Objects.equals(parameters.id(), 99L)
+            && Objects.equals(parameters.runStatus(), WorkflowRunStatus.RUNNING.code())
+            && Objects.equals(parameters.currentNodeCode(), "export")));
   }
 
   @Test
@@ -210,10 +236,11 @@ class WaitingPartitionDispatcherTest {
     when(partitionLifecycleService.releaseForDispatch(any(), any(), any(), any()))
         .thenReturn(true);
 
-    assertThatThrownBy(() ->
-        dispatcher.executeDispatch(partition(), task(), instance, dispatchDecision()))
+    assertThatThrownBy(
+            () -> dispatcher.executeDispatch(partition(), task(), instance, dispatchDecision()))
         .isInstanceOf(BizException.class);
-    verify(workflowRunMapper, never()).markRunning(org.mockito.ArgumentMatchers.any(WorkflowRunMarkRunningParam.class));
+    verify(workflowRunMapper, never())
+        .markRunning(ArgumentMatchers.any(WorkflowRunMarkRunningParam.class));
   }
 
   private static JobInstanceEntity waitingInstance() {

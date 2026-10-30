@@ -2,7 +2,7 @@ package io.github.pinpols.batch.worker.atomic.runtime;
 
 import javax.sql.DataSource;
 
-/** Resolves an explicitly allow-listed DataSource for an atomic executor. */
+/** 为原子执行器解析显式加入允许列表的 DataSource。 */
 @FunctionalInterface
 public interface DataSourceResolver {
 

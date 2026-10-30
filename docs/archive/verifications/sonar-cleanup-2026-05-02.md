@@ -1,3 +1,5 @@
+> 历史证据（2026-10-25 存量核对）：保留问题级commit与548测试的当日治理证据，不作为当前告警状态。正文仅表示原日期/基线；当前规则与状态见[现行入口](../../standards/static-analysis-governance.md)及 TODO，本轮没有重新执行原测试或扫描。
+
 # SonarQube 治理修复日志 — 2026-05-02
 
 > 基准：本地 sonar-scan.sh 跑出 `reports/sonar/2026-05-02_18-31-55/sonar-report.csv`，共 **1024 条** issue

@@ -7,9 +7,9 @@
 | 工作流 | 触发条件 | 用途与结果边界 |
 |---|---|---|
 | [pr-gate.yml](pr-gate.yml) | 非草稿 PR → main、merge_group、手动 | 按变更范围执行静态治理、测试分片和安全扫描；static-checks 汇总静态分组，不代替主干全量回归 |
-| [full-ci-gate.yml](full-ci-gate.yml) | main push（有路径排除）、周日 02:00 UTC、手动 | 主干静态检查、单元/集成测试、六片 E2E、安全扫描；定时/手动补充测试质量分析。main-failure-triage 是本工作流内的失败归责 job，可写 PR 标签/评论或 Issue |
+| [full-ci-gate.yml](full-ci-gate.yml) | main push（有路径排除）、周日 02:00 UTC、手动 | 主干静态检查、单元/集成测试、并行 E2E、安全扫描；定时/手动补充测试质量分析。main-failure-triage 是本工作流内的失败归责 job，可写 PR 标签/评论或 Issue |
 | [codeql.yml](codeql.yml) | PR → main、main push（有路径排除）、周一 03:00 UTC | Java CodeQL；PR 使用无构建模式，main/定时使用编译和扩展查询；上传安全分析结果 |
-| [workflow-lint.yml](workflow-lint.yml) | workflow/action 文件变更的 PR 和 main push | actionlint 与 zizmor 检查 Actions 语法和安全配置 |
+| [workflow-lint.yml](workflow-lint.yml) | workflow/action、Zizmor 配置或其 Python 工具依赖变更的 PR 和 main push | actionlint 与 zizmor 检查 Actions 语法和安全配置 |
 | [license-review.yml](license-review.yml) | main PR 中的 POM、许可脚本及本工作流变更 | 依赖许可证审查；覆盖范围按路径过滤，不能替代漏洞扫描 |
 | [orchestrator-internal-openapi-drift.yml](orchestrator-internal-openapi-drift.yml) | 内部 OpenAPI、Controller 或本工作流变更的 PR；手动 | 检查文档声明的路径是否存在于 Controller；当前是登记的报告型软门禁，不核对反向全集及字段 schema |
 | [sonar-gate.yml](sonar-gate.yml) | main 的 Java/构建/扫描工具变更、每天 18:23 UTC、手动 | 独立执行 Sonar 分析与 Quality Gate 校验；结果与 Full Gate 分开判断 |
@@ -30,7 +30,7 @@
 |---|---|---|
 | [daily-sim-strict-validation.yml](daily-sim-strict-validation.yml) | 每天 13:31 UTC、手动 | 按北京时间检查当日代码/配置变更，依次跑 SIM 与 BE strict；SIM 失败仍尝试 strict，两项成功才调用镜像构建。force 可绕过无变更判断 |
 | [daily-backend-reliability.yml](daily-backend-reliability.yml) | 每天 20:17 UTC、手动 | 在隔离 runner 用 Testcontainers 验证并发、checkpoint、文件完整性和依赖故障恢复；不连接已有 SIM/staging |
-| [staging-gate.yml](staging-gate.yml) | 仅手动 | 后端 Java 治理及六片完整 E2E 复验；使用 runner/Testcontainers，名称不表示会部署或连接 staging 集群 |
+| [staging-gate.yml](staging-gate.yml) | 仅手动 | 后端 Java 治理及并行完整 E2E 复验；使用 runner/Testcontainers，名称不表示会部署或连接 staging 集群 |
 | [strict-verify.yml](strict-verify.yml) | 指定严格验收脚本变更的 main PR；手动 | PR 和默认手动模式只跑前置依赖 dry-run；手动 live 启动隔离 PG/Valkey 与 Console API 做真实数据验证，独立于 PR/Full 聚合 |
 | [fuzzing.yml](fuzzing.yml) | 周二 03:15 UTC、手动 | Jazzer 安全边界模糊测试；结果不等同于全系统安全审计 |
 

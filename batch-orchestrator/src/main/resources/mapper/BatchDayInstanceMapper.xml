@@ -147,6 +147,7 @@
         order by biz_date desc
     </select>
 
+    <!-- 自动补跑需继续处理未终态请求；人工审批只允许创建一次。 -->
     <select id="selectFailedDaysNeedingCatchUp" resultMap="batchDayInstanceMap">
         select day.*
           from batch.batch_day_instance day
@@ -159,12 +160,10 @@
            and exists (
                select 1
                  from batch.job_instance failed
-                 join batch.job_definition definition
-                   on definition.tenant_id = failed.tenant_id
-                  and definition.id = failed.job_definition_id
                 where failed.tenant_id = day.tenant_id
-                  and definition.calendar_code = day.calendar_code
+                  and failed.calendar_code = day.calendar_code
                   and failed.biz_date = day.biz_date
+                  and failed.dry_run = false
                   and failed.instance_status in ('FAILED', 'PARTIAL_FAILED')
                   and not exists (
                       select 1
@@ -172,9 +171,11 @@
                        where request.tenant_id = day.tenant_id
                          and request.dedup_key = day.tenant_id || ':batch-day-catchup:'
                              || day.calendar_code || ':' || day.biz_date::text || ':' || failed.job_code
+                         and request.trigger_type = 'CATCH_UP'
+                         and request.parent_workflow_run_id is null
                          and (
                              calendar.catch_up_policy = 'MANUAL_APPROVAL'
-                             or request.request_status not in ('LAUNCHED', 'REJECTED', 'DUPLICATE')
+                             or request.request_status in ('LAUNCHED', 'REJECTED', 'DUPLICATE', 'GIVE_UP')
                          )
                   )
            )

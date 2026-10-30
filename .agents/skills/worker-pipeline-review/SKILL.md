@@ -28,3 +28,7 @@ description: 审查五类 Worker、批量日 dry-run、pipeline 进度、claim/r
 - SSE/pipeline 进度只能展示后端真实步骤事件，不能由前端猜测完成度。
 - 指标、日志和 trace 要能串起 tenant、batch day、job instance、task、worker、outbox 和 Kafka offset。
 - 报告容量或“全终态”时同时给出 CREATED/READY/RUNNING 残留、HTTP 错误率、重投和业务副作用证据。
+
+## 历史经验方法
+
+核对异步事务、攒批消费、Checkpoint恢复或重复重试故障时，按需读取 [历史经验方法](references/historical-methods.md)。只复用调查与验证方法，当前规则和原始证据分别维护。

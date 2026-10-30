@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.infrastructure.excel;
 
 import io.github.pinpols.batch.common.persistence.BatchColumnNames;
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarQueryRow;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -115,14 +116,6 @@ public final class ConfigPackageExcelSchema {
     public static final String COL_CATCH_UP_MAX_DAYS = "catch_up_max_days";
     public static final String COL_HOLIDAYS = "holidays";
 
-    public static final String ROW_TENANT_ID = "tenantId";
-    public static final String ROW_CALENDAR_CODE = "calendarCode";
-    public static final String ROW_CALENDAR_NAME = "calendarName";
-    public static final String ROW_TIMEZONE = "timezone";
-    public static final String ROW_HOLIDAY_ROLL_RULE = "holidayRollRule";
-    public static final String ROW_CATCH_UP_POLICY = "catchUpPolicy";
-    public static final String ROW_CATCH_UP_MAX_DAYS = "catchUpMaxDays";
-
     public static final List<String> COLUMNS = List.of(
         COL_TENANT_ID,
         COL_CALENDAR_CODE,
@@ -137,18 +130,18 @@ public final class ConfigPackageExcelSchema {
 
     private BusinessCalendar() {}
 
-    public static Map<String, Object> toExportRow(Map<String, Object> row, String holidaysText) {
+    public static Map<String, Object> toExportRow(CalendarQueryRow row, String holidaysText) {
       Map<String, Object> item = new LinkedHashMap<>();
-      item.put(COL_TENANT_ID, row.get(ROW_TENANT_ID));
-      item.put(COL_CALENDAR_CODE, row.get(ROW_CALENDAR_CODE));
-      item.put(COL_CALENDAR_NAME, row.get(ROW_CALENDAR_NAME));
-      item.put(COL_TIMEZONE, row.get(ROW_TIMEZONE));
-      item.put(COL_HOLIDAY_ROLL_RULE, row.get(ROW_HOLIDAY_ROLL_RULE));
-      item.put(COL_CATCH_UP_POLICY, row.get(ROW_CATCH_UP_POLICY));
-      item.put(COL_CATCH_UP_MAX_DAYS, row.get(ROW_CATCH_UP_MAX_DAYS));
+      item.put(COL_TENANT_ID, row.tenantId());
+      item.put(COL_CALENDAR_CODE, row.calendarCode());
+      item.put(COL_CALENDAR_NAME, row.calendarName());
+      item.put(COL_TIMEZONE, row.timezone());
+      item.put(COL_HOLIDAY_ROLL_RULE, row.holidayRollRule());
+      item.put(COL_CATCH_UP_POLICY, row.catchUpPolicy());
+      item.put(COL_CATCH_UP_MAX_DAYS, row.catchUpMaxDays());
       item.put(COL_HOLIDAYS, holidaysText);
-      item.put(COL_ENABLED, row.get(COL_ENABLED));
-      item.put(COL_DESCRIPTION, row.get(COL_DESCRIPTION));
+      item.put(COL_ENABLED, row.enabled());
+      item.put(COL_DESCRIPTION, row.description());
       return item;
     }
   }
@@ -224,6 +217,23 @@ public final class ConfigPackageExcelSchema {
         COL_COMPLETION_DEADLINE_SEVERITY);
 
     private JobMonitoringPolicy() {}
+  }
+
+  public static final class WorkflowMonitoringPolicy {
+    public static final String SHEET_NAME = "workflow_monitoring_policy";
+    public static final List<String> COLUMNS = List.of(
+        COL_TENANT_ID,
+        COL_WORKFLOW_CODE,
+        COL_WORKFLOW_VERSION,
+        COL_SOFT_RUNTIME_SECONDS,
+        COL_SOFT_RUNTIME_SEVERITY,
+        COL_START_GRACE_SECONDS,
+        COL_START_GRACE_SEVERITY,
+        COL_COMPLETION_DEADLINE_LOCAL_TIME,
+        COL_COMPLETION_DEADLINE_DAY_OFFSET,
+        COL_COMPLETION_DEADLINE_SEVERITY);
+
+    private WorkflowMonitoringPolicy() {}
   }
 
   public static final class FileChannel {

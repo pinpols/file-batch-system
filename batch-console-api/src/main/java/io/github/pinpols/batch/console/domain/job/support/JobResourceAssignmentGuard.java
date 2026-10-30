@@ -93,9 +93,10 @@ public class JobResourceAssignmentGuard {
 
   private static void requireTenantAdmin() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    boolean operatorIsNotTenantAdministrator = authentication == null // empty-check: allow - Sonar S2259
-        || !authentication.isAuthenticated()
-        || !hasAuthority(authentication, ConsoleRoles.TENANT_ADMIN);
+    boolean operatorIsNotTenantAdministrator =
+        authentication == null // empty-check: allow - Sonar S2259
+            || !authentication.isAuthenticated()
+            || !hasAuthority(authentication, ConsoleRoles.TENANT_ADMIN);
     if (operatorIsNotTenantAdministrator) {
       throw forbidden();
     }

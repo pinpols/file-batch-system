@@ -1,11 +1,9 @@
 package io.github.pinpols.batch.worker.core.mapper;
 
-import io.github.pinpols.batch.worker.core.param.PipelineProgressAdvanceParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.testing.TestPostgresContainers;
+import io.github.pinpols.batch.worker.core.param.PipelineProgressAdvanceParam;
 import java.io.InputStream;
 import java.util.List;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
@@ -192,20 +190,22 @@ class PipelineProgressMapperIntegrationTest {
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
       PipelineProgressMapper mapper = session.getMapper(PipelineProgressMapper.class);
       assertThat(mapper.advance(PipelineProgressAdvanceParam.builder()
-          .tenantId("ta")
-          .pipelineInstanceId(300L)
-          .stage("LOAD")
-          .positionMarker("row:1")
-          .processedCountIncrement(1L)
-          .build())).isZero();
+              .tenantId("ta")
+              .pipelineInstanceId(300L)
+              .stage("LOAD")
+              .positionMarker("row:1")
+              .processedCountIncrement(1L)
+              .build()))
+          .isZero();
       assertThat(mapper.markCompleted("ta", 300L, "LOAD")).isZero();
       assertThat(mapper.advance(PipelineProgressAdvanceParam.builder()
-          .tenantId("tb")
-          .pipelineInstanceId(300L)
-          .stage("LOAD")
-          .positionMarker("row:1")
-          .processedCountIncrement(1L)
-          .build())).isEqualTo(1);
+              .tenantId("tb")
+              .pipelineInstanceId(300L)
+              .stage("LOAD")
+              .positionMarker("row:1")
+              .processedCountIncrement(1L)
+              .build()))
+          .isEqualTo(1);
       assertThat(mapper.markCompleted("tb", 300L, "LOAD")).isEqualTo(1);
       assertThat(mapper.findByInstanceAndStage("ta", 300L, "LOAD")).isNull();
       assertThat(mapper.findByInstanceAndStage("tb", 300L, "LOAD").completed()).isTrue();

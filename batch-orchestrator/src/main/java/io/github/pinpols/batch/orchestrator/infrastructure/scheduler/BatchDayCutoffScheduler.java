@@ -47,7 +47,7 @@ public class BatchDayCutoffScheduler {
   private final PlatformTransactionManager transactionManager;
 
   @Scheduled(fixedDelayString = "${batch.batch-day.cutoff-scan-interval-millis:60000}")
-  // 命名加模块前缀：与 trigger 同名 ShedLock 会跨服务互斥；两侧业务逻辑不同不应互斥。
+  // 批量日状态推进由 Orchestrator 独占；保留既有锁名以兼容滚动升级。
   @SchedulerLock(
       name = "orchestrator_batch_day_cutoff",
       lockAtMostFor = "PT2M",

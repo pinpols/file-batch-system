@@ -1,29 +1,34 @@
 package io.github.pinpols.batch.trigger.integration;
 
-import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceInsertPlannedParam;
-import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceRecordCoverageParam;
-import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceTransitionStatusParam;
-import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceUpsertObservedParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.trigger.BatchTriggerApplication;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceInsertPlannedParam;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceInsertPlannedWithStatusParam;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceReadinessWaitParam;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceRecordClosedBatchDayRejectionParam;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceRecordCoverageParam;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceTransitionStatusParam;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceUpsertObservedParam;
+import io.github.pinpols.batch.trigger.domain.query.ExpiredReadinessWaitRow;
 import io.github.pinpols.batch.trigger.domain.query.UnobservedPlannedOccurrenceQuery;
+import io.github.pinpols.batch.trigger.infrastructure.QuartzScheduledFireEnumerator;
+import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
+import io.github.pinpols.batch.trigger.infrastructure.scheduler.ReadinessWaitSweeper;
 import io.github.pinpols.batch.trigger.mapper.ScheduledOccurrenceMapper;
 import io.github.pinpols.batch.trigger.service.TriggerScheduledOccurrencePlanner;
 import io.github.pinpols.batch.trigger.support.ScheduledOccurrenceCoverage;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -36,6 +41,7 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -48,6 +54,7 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.quartz.SimpleScheduleBuilder;
 import org.quartz.Trigger;
@@ -87,6 +94,234 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
   private Long workflowDefinitionId;
   private String workflowCode;
 
+  @Test
+  @DisplayName("迟到的关闭日拒绝不能覆盖已绑定待审批补跑请求的 occurrence")
+  void shouldPreserveAcceptedMisfire_whenClosedDayRejectionIsStale() {
+    Instant fire = Instant.parse("2036-05-15T12:00:00Z");
+    LocalDate bizDate = LocalDate.of(2026, 10, 14);
+    String requestId = "pending-before-late-closed";
+    ensureRequest(requestId);
+    final String makeCatchUpSql =
+        "update batch.trigger_request set trigger_type = 'CATCH_UP' where tenant_id = ? and request_id = ?";
+    jdbcTemplate.update(makeCatchUpSql, tenantId, requestId);
+    mapper.upsertObserved(ScheduledOccurrenceUpsertObservedParam.builder()
+        .tenantId(tenantId)
+        .workflowDefinitionId(workflowDefinitionId)
+        .workflowCode(workflowCode)
+        .scheduleVersion(1)
+        .calendarCode("business_day")
+        .scheduledFireTime(fire)
+        .bizDate(bizDate)
+        .status("MISFIRE_PENDING")
+        .requestId(requestId)
+        .build());
+
+    int changed = mapper.recordClosedBatchDayRejection(
+        ScheduledOccurrenceRecordClosedBatchDayRejectionParam.builder()
+            .tenantId(tenantId)
+            .workflowDefinitionId(workflowDefinitionId)
+            .workflowCode(workflowCode)
+            .scheduleVersion(1)
+            .calendarCode("business_day")
+            .scheduledFireTime(fire)
+            .bizDate(bizDate)
+            .status("CLOSED_DAY_REJECTED")
+            .reason("stale closed day")
+            .build());
+
+    assertThat(changed).isZero();
+    assertThat(status(fire)).isEqualTo("MISFIRE_PENDING");
+  }
+
+  @Test
+  @DisplayName("尚未绑定请求的等待 occurrence 仍可记录关闭日拒绝")
+  void shouldRecordClosedDayRejection_whenMisfireHasNoRequest() {
+    Instant fire = Instant.parse("2036-05-16T12:00:00Z");
+    LocalDate bizDate = LocalDate.of(2026, 10, 14);
+    mapper.upsertObserved(ScheduledOccurrenceUpsertObservedParam.builder()
+        .tenantId(tenantId)
+        .workflowDefinitionId(workflowDefinitionId)
+        .workflowCode(workflowCode)
+        .scheduleVersion(1)
+        .calendarCode("business_day")
+        .scheduledFireTime(fire)
+        .bizDate(bizDate)
+        .status("MISFIRE_PENDING")
+        .build());
+
+    int changed = mapper.recordClosedBatchDayRejection(
+        ScheduledOccurrenceRecordClosedBatchDayRejectionParam.builder()
+            .tenantId(tenantId)
+            .workflowDefinitionId(workflowDefinitionId)
+            .workflowCode(workflowCode)
+            .scheduleVersion(1)
+            .calendarCode("business_day")
+            .scheduledFireTime(fire)
+            .bizDate(bizDate)
+            .status("CLOSED_DAY_REJECTED")
+            .reason("closed day")
+            .build());
+
+    assertThat(changed).isEqualTo(1);
+    assertThat(status(fire)).isEqualTo("CLOSED_DAY_REJECTED");
+  }
+
+  @Test
+  @DisplayName("已替代 fire 重新规划后不继承旧等待窗口")
+  void shouldClearOldReadinessWindow_whenFireIsReplanned() {
+    Instant fire = BatchDateTimeSupport.utcNow().plusSeconds(3600).truncatedTo(ChronoUnit.MILLIS);
+    LocalDate bizDate = fire.atZone(ZoneOffset.UTC).toLocalDate();
+    mapper.upsertObserved(ScheduledOccurrenceUpsertObservedParam.builder()
+        .tenantId(tenantId)
+        .workflowDefinitionId(workflowDefinitionId)
+        .workflowCode(workflowCode)
+        .scheduleVersion(1)
+        .scheduledFireTime(fire)
+        .bizDate(bizDate)
+        .status("WAITING_READINESS")
+        .build());
+    mapper.updateReadinessWait(ScheduledOccurrenceReadinessWaitParam.builder()
+        .tenantId(tenantId)
+        .workflowDefinitionId(workflowDefinitionId)
+        .scheduledFireTime(fire)
+        .deferredSince(fire)
+        .deadline(fire.plusSeconds(3600))
+        .build());
+    String supersedeSql =
+        "update batch.scheduled_occurrence set occurrence_status='SUPERSEDED' where tenant_id=? and workflow_definition_id=? and scheduled_fire_time=?";
+    assertThat(
+            jdbcTemplate.update(supersedeSql, tenantId, workflowDefinitionId, Timestamp.from(fire)))
+        .isEqualTo(1);
+    assertThat(
+            mapper.insertPlannedWithStatus(ScheduledOccurrenceInsertPlannedWithStatusParam.builder()
+                .tenantId(tenantId)
+                .workflowDefinitionId(workflowDefinitionId)
+                .workflowCode(workflowCode)
+                .scheduleVersion(2)
+                .scheduledFireTime(fire)
+                .bizDate(bizDate)
+                .targetStatus("PLANNED")
+                .build()))
+        .isEqualTo(1);
+    String selectSql =
+        "select occurrence_status, readiness_deferred_since, readiness_deadline from batch.scheduled_occurrence where tenant_id=? and workflow_definition_id=? and scheduled_fire_time=?";
+    assertThat(jdbcTemplate.queryForMap(
+            selectSql, tenantId, workflowDefinitionId, Timestamp.from(fire)))
+        .containsEntry("occurrence_status", "PLANNED")
+        .containsEntry("readiness_deferred_since", null)
+        .containsEntry("readiness_deadline", null);
+    mapper.upsertObserved(ScheduledOccurrenceUpsertObservedParam.builder()
+        .tenantId(tenantId)
+        .workflowDefinitionId(workflowDefinitionId)
+        .workflowCode(workflowCode)
+        .scheduleVersion(2)
+        .scheduledFireTime(fire)
+        .bizDate(bizDate)
+        .status("WAITING_READINESS")
+        .build());
+    mapper.updateReadinessWait(ScheduledOccurrenceReadinessWaitParam.builder()
+        .tenantId(tenantId)
+        .workflowDefinitionId(workflowDefinitionId)
+        .scheduledFireTime(fire)
+        .deferredSince(fire.plusSeconds(5))
+        .deadline(fire.plusSeconds(7200))
+        .build());
+    assertThat(mapper.selectReadinessWaitWindow(tenantId, workflowDefinitionId, fire, 1))
+        .isNull();
+    assertThat(mapper
+            .selectReadinessWaitWindow(tenantId, workflowDefinitionId, fire, 2)
+            .deadline())
+        .isEqualTo(fire.plusSeconds(7200));
+  }
+
+  @Test
+  @DisplayName("未延长的到期等待只被终结一次")
+  void shouldTimeoutStillExpiredReadinessOnlyOnce() {
+    Instant now = BatchDateTimeSupport.utcNow();
+    Instant fire = now.minusSeconds(7200).truncatedTo(ChronoUnit.MILLIS);
+    mapper.upsertObserved(ScheduledOccurrenceUpsertObservedParam.builder()
+        .tenantId(tenantId)
+        .workflowDefinitionId(workflowDefinitionId)
+        .workflowCode(workflowCode)
+        .scheduleVersion(1)
+        .scheduledFireTime(fire)
+        .bizDate(fire.atZone(ZoneOffset.UTC).toLocalDate())
+        .status("WAITING_READINESS")
+        .build());
+    mapper.updateReadinessWait(ScheduledOccurrenceReadinessWaitParam.builder()
+        .tenantId(tenantId)
+        .workflowDefinitionId(workflowDefinitionId)
+        .scheduledFireTime(fire)
+        .deferredSince(now.minusSeconds(3600))
+        .deadline(now.minusSeconds(60))
+        .build());
+    ExpiredReadinessWaitRow row = mapper.selectExpiredReadinessWaits(now, 100).stream()
+        .filter(candidate -> tenantId.equals(candidate.getTenantId()))
+        .findFirst()
+        .orElseThrow();
+    assertThat(mapper.timeoutExpiredReadinessWait(row, now)).isEqualTo(1);
+    assertThat(mapper.timeoutExpiredReadinessWait(row, now)).isZero();
+    String sql =
+        "select occurrence_status from batch.scheduled_occurrence where tenant_id=? and workflow_definition_id=? and scheduled_fire_time=?";
+    assertThat(jdbcTemplate.queryForObject(
+            sql, String.class, tenantId, workflowDefinitionId, Timestamp.from(fire)))
+        .isEqualTo("READINESS_TIMEOUT");
+  }
+
+  @Test
+  @DisplayName("扫描到期后截止时间延长时，旧快照不能终结新等待")
+  void shouldNotTimeoutWhenReadinessDeadlineMovesAfterScan() {
+    Instant now = BatchDateTimeSupport.utcNow();
+    Instant fire = now.minusSeconds(7200).truncatedTo(ChronoUnit.MILLIS);
+    Instant extendedDeadline = now.plusSeconds(3600);
+    mapper.upsertObserved(ScheduledOccurrenceUpsertObservedParam.builder()
+        .tenantId(tenantId)
+        .workflowDefinitionId(workflowDefinitionId)
+        .workflowCode(workflowCode)
+        .scheduleVersion(1)
+        .scheduledFireTime(fire)
+        .bizDate(fire.atZone(ZoneOffset.UTC).toLocalDate())
+        .status("WAITING_READINESS")
+        .build());
+    ScheduledOccurrenceReadinessWaitParam waiting = ScheduledOccurrenceReadinessWaitParam.builder()
+        .tenantId(tenantId)
+        .workflowDefinitionId(workflowDefinitionId)
+        .scheduledFireTime(fire)
+        .deferredSince(now.minusSeconds(3600))
+        .deadline(now.minusSeconds(60))
+        .build();
+    assertThat(mapper.updateReadinessWait(waiting)).isEqualTo(1);
+    List<ExpiredReadinessWaitRow> ours = mapper.selectExpiredReadinessWaits(now, 100).stream()
+        .filter(row -> tenantId.equals(row.getTenantId()))
+        .toList();
+    assertThat(ours).hasSize(1);
+    doAnswer(invocation -> {
+          String changeDeadlineSql =
+              "update batch.scheduled_occurrence set readiness_deadline=? where tenant_id=? and workflow_definition_id=? and scheduled_fire_time=?";
+          assertThat(jdbcTemplate.update(
+                  changeDeadlineSql,
+                  Timestamp.from(extendedDeadline),
+                  tenantId,
+                  workflowDefinitionId,
+                  Timestamp.from(fire)))
+              .isEqualTo(1);
+          return ours;
+        })
+        .when(mapper)
+        .selectExpiredReadinessWaits(any(Instant.class), ArgumentMatchers.anyInt());
+    SimpleMeterRegistry meters = new SimpleMeterRegistry();
+    ReadinessWaitSweeper sweeper =
+        new ReadinessWaitSweeper(mapper, mock(TriggerGracefulShutdown.class), meters);
+    sweeper.sweep();
+    String sql =
+        "select occurrence_status from batch.scheduled_occurrence where tenant_id=? and workflow_definition_id=? and scheduled_fire_time=?";
+    assertThat(jdbcTemplate.queryForObject(
+            sql, String.class, tenantId, workflowDefinitionId, Timestamp.from(fire)))
+        .isEqualTo("WAITING_READINESS");
+    assertThat(meters.counter("batch.trigger.readiness.wait.timeout.total").count())
+        .isZero();
+  }
+
   @BeforeEach
   void setUp() {
     final String insertTenantSql = """
@@ -103,21 +338,11 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
 
     tenantId = "occ-it-" + System.nanoTime();
     workflowCode = "wf-" + System.nanoTime();
+    jdbcTemplate.update(insertTenantSql, tenantId, tenantId);
     jdbcTemplate.update(
-        insertTenantSql,
-        tenantId,
-        tenantId);
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        tenantId,
-        "occ-calendar",
-        "Occurrence test calendar");
+        insertBusinessCalendarSql, tenantId, "occ-calendar", "Occurrence test calendar");
     workflowDefinitionId = jdbcTemplate.queryForObject(
-        insertWorkflowDefinitionSql,
-        Long.class,
-        tenantId,
-        workflowCode,
-        workflowCode);
+        insertWorkflowDefinitionSql, Long.class, tenantId, workflowCode, workflowCode);
   }
 
   @Test
@@ -135,18 +360,17 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
     Instant firstFire = now.plusSeconds(60);
     LocalDate bizDate = firstFire.atZone(ZoneOffset.UTC).toLocalDate();
     ensureRequest("already-observed");
-    mapper.upsertObserved(
-        ScheduledOccurrenceUpsertObservedParam.builder()
-            .tenantId(tenantId)
-            .workflowDefinitionId(workflowDefinitionId)
-            .workflowCode(workflowCode)
-            .scheduleVersion(1)
-            .calendarCode(null)
-            .scheduledFireTime(firstFire)
-            .bizDate(bizDate)
-            .status("REQUESTED")
-            .requestId("already-observed")
-            .build());
+    mapper.upsertObserved(ScheduledOccurrenceUpsertObservedParam.builder()
+        .tenantId(tenantId)
+        .workflowDefinitionId(workflowDefinitionId)
+        .workflowCode(workflowCode)
+        .scheduleVersion(1)
+        .calendarCode(null)
+        .scheduledFireTime(firstFire)
+        .bizDate(bizDate)
+        .status("REQUESTED")
+        .requestId("already-observed")
+        .build());
     TriggerDescriptor descriptor = new TriggerDescriptor();
     descriptor.setTenantId(tenantId);
     descriptor.setWorkflowDefinitionId(workflowDefinitionId);
@@ -160,7 +384,9 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
             SimpleScheduleBuilder.simpleSchedule().withIntervalInSeconds(2).withRepeatCount(1000))
         .build();
 
-    assertThat(planner.materialize(descriptor, trigger, now)).isEqualTo(1001);
+    assertThat(planner.materialize(
+            descriptor, QuartzScheduledFireEnumerator.fireTimeSource(trigger), now))
+        .isEqualTo(1001);
     Integer selectedScheduledOccurrenceCount =
         jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId, workflowDefinitionId);
     assertThat(selectedScheduledOccurrenceCount).isEqualTo(1001);
@@ -173,7 +399,7 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
         Timestamp.from(firstFire));
     assertThat(selectedRequestId).isEqualTo("already-observed");
     assertThat(status(firstFire.plusSeconds(2000))).isEqualTo("PLANNED");
-    planner.materialize(descriptor, trigger, now);
+    planner.materialize(descriptor, QuartzScheduledFireEnumerator.fireTimeSource(trigger), now);
     Integer selectedScheduledOccurrenceCountRead2 =
         jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId, workflowDefinitionId);
     assertThat(selectedScheduledOccurrenceCountRead2).isEqualTo(1001);
@@ -182,14 +408,14 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("首次物化以首次观察时刻建立可审计 coverage 且不追造此前计划 fire")
   void shouldFirstMaterializationStartCoverageAtFirstObservationWithoutHistoricalBackfill() {
-  final String updateTenantConfigurationRevisionSql = """
+    final String updateTenantConfigurationRevisionSql = """
       update batch.tenant_configuration_revision set updated_at = ? where tenant_id = ?
   """;
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from batch.scheduled_occurrence where tenant_id = ? and workflow_definition_id = ?\s\
       and scheduled_fire_time < ?\
       """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.scheduled_occurrence where tenant_id = ? and workflow_definition_id = ?\s\
       and scheduled_fire_time >= ? and occurrence_status = 'PLANNED'\
       """;
@@ -213,7 +439,9 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
             SimpleScheduleBuilder.simpleSchedule().withIntervalInSeconds(60).withRepeatCount(10))
         .build();
 
-    assertThat(planner.materialize(descriptor, trigger, now)).isEqualTo(6);
+    assertThat(planner.materialize(
+            descriptor, QuartzScheduledFireEnumerator.fireTimeSource(trigger), now))
+        .isEqualTo(6);
 
     ScheduledOccurrenceCoverage coverage =
         mapper.selectCoverage(tenantId, workflowDefinitionId, 1, null);
@@ -247,9 +475,7 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
         """;
 
     Instant now = Instant.parse("2026-03-08T06:59:58Z");
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        tenantId);
+    jdbcTemplate.update(insertBusinessCalendarSql, tenantId);
     jdbcTemplate.update(
         updateTenantConfigurationRevisionSql,
         Timestamp.from(now.minus(Duration.ofDays(1))),
@@ -269,7 +495,9 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
             SimpleScheduleBuilder.simpleSchedule().withIntervalInSeconds(1).withRepeatCount(2))
         .build();
 
-    assertThat(planner.materialize(descriptor, trigger, now)).isEqualTo(3);
+    assertThat(planner.materialize(
+            descriptor, QuartzScheduledFireEnumerator.fireTimeSource(trigger), now))
+        .isEqualTo(3);
 
     List<Timestamp> selectedScheduledFireTimeValues = jdbcTemplate.queryForList(
         selectScheduledFireTimeSql, Timestamp.class, tenantId, workflowDefinitionId);
@@ -313,19 +541,10 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
     Instant fireTime = now.plusSeconds(60);
     LocalDate rawBizDate = LocalDate.of(2026, 3, 8);
     LocalDate rolledBizDate = LocalDate.of(2026, 3, 9);
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        tenantId);
-    Long calendarId = jdbcTemplate.queryForObject(
-        selectIdSql,
-        Long.class,
-        tenantId,
-        "holiday_calendar");
-    jdbcTemplate.update(
-        insertCalendarHolidaySql,
-        tenantId,
-        calendarId,
-        rawBizDate);
+    jdbcTemplate.update(insertBusinessCalendarSql, tenantId);
+    Long calendarId =
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, tenantId, "holiday_calendar");
+    jdbcTemplate.update(insertCalendarHolidaySql, tenantId, calendarId, rawBizDate);
     jdbcTemplate.update(
         updateTenantConfigurationRevisionSql,
         Timestamp.from(now.minus(Duration.ofDays(1))),
@@ -343,7 +562,9 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
         .withSchedule(SimpleScheduleBuilder.simpleSchedule().withRepeatCount(0))
         .build();
 
-    assertThat(planner.materialize(descriptor, trigger, now)).isEqualTo(1);
+    assertThat(planner.materialize(
+            descriptor, QuartzScheduledFireEnumerator.fireTimeSource(trigger), now))
+        .isEqualTo(1);
 
     LocalDate selectedBizDate = jdbcTemplate.queryForObject(
         selectBizDateSql,
@@ -386,25 +607,20 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
 
     Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
     Instant requestedThrough = now.plus(Duration.ofDays(2));
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        tenantId);
+    jdbcTemplate.update(insertBusinessCalendarSql, tenantId);
     long previousRevision = mapper.selectTenantConfigurationRevision(tenantId);
-    assertThat(mapper.recordCoverage(
-            ScheduledOccurrenceRecordCoverageParam.builder()
-                .tenantId(tenantId)
-                .workflowDefinitionId(workflowDefinitionId)
-                .configurationRevision(previousRevision)
-                .scheduleVersion(1)
-                .calendarCode("business_day")
-                .coverageFrom(now.minus(Duration.ofDays(1)))
-                .coverageThrough(requestedThrough)
-                .completedAt(now)
-                .build()))
+    assertThat(mapper.recordCoverage(ScheduledOccurrenceRecordCoverageParam.builder()
+            .tenantId(tenantId)
+            .workflowDefinitionId(workflowDefinitionId)
+            .configurationRevision(previousRevision)
+            .scheduleVersion(1)
+            .calendarCode("business_day")
+            .coverageFrom(now.minus(Duration.ofDays(1)))
+            .coverageThrough(requestedThrough)
+            .completedAt(now)
+            .build()))
         .isEqualTo(1);
-    jdbcTemplate.update(
-        updateBusinessCalendarSql,
-        tenantId);
+    jdbcTemplate.update(updateBusinessCalendarSql, tenantId);
     Instant firstFire = mapper
         .selectTenantConfigurationUpdatedAt(tenantId)
         .plusSeconds(1)
@@ -422,7 +638,8 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
             SimpleScheduleBuilder.simpleSchedule().withIntervalInSeconds(1).repeatForever())
         .build();
 
-    int firstPass = planner.materialize(descriptor, denseTrigger, now);
+    int firstPass = planner.materialize(
+        descriptor, QuartzScheduledFireEnumerator.fireTimeSource(denseTrigger), now);
     assertThat(firstPass).isBetween(1, 100_000);
     ScheduledOccurrenceCoverage partialCoverage =
         mapper.selectCoverage(tenantId, workflowDefinitionId, 1, null);
@@ -434,7 +651,8 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
     assertThat(selectedConfigurationRevision)
         .isEqualTo(mapper.selectTenantConfigurationRevision(tenantId));
 
-    int secondPass = planner.materialize(descriptor, denseTrigger, now);
+    int secondPass = planner.materialize(
+        descriptor, QuartzScheduledFireEnumerator.fireTimeSource(denseTrigger), now);
     assertThat(secondPass).isPositive();
     ScheduledOccurrenceCoverage completedCoverage =
         mapper.selectCoverage(tenantId, workflowDefinitionId, 1, null);
@@ -447,22 +665,12 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
     Integer selectedCount =
         jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId, workflowDefinitionId);
     assertThat(selectedCount).isZero();
-    assertThat(jdbcTemplate
-            .queryForObject(
-                selectMinSql,
-                Timestamp.class,
-                tenantId,
-                workflowDefinitionId)
-            .toInstant())
-        .isEqualTo(firstFire);
-    assertThat(jdbcTemplate
-            .queryForObject(
-                selectMaxSql,
-                Timestamp.class,
-                tenantId,
-                workflowDefinitionId)
-            .toInstant())
-        .isEqualTo(expectedLastFire);
+    Timestamp selectedMin =
+        jdbcTemplate.queryForObject(selectMinSql, Timestamp.class, tenantId, workflowDefinitionId);
+    assertThat(selectedMin.toInstant()).isEqualTo(firstFire);
+    Timestamp selectedMax =
+        jdbcTemplate.queryForObject(selectMaxSql, Timestamp.class, tenantId, workflowDefinitionId);
+    assertThat(selectedMax.toInstant()).isEqualTo(expectedLastFire);
   }
 
   private int occurrenceCount() {
@@ -471,10 +679,7 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
         """;
 
     return jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        tenantId,
-        workflowDefinitionId);
+        selectCountSql, Integer.class, tenantId, workflowDefinitionId);
   }
 
   @Test
@@ -542,18 +747,17 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
     Instant fireTime =
         BatchDateTimeSupport.utcNow().plusSeconds(300).truncatedTo(ChronoUnit.MILLIS);
     LocalDate bizDate = LocalDate.of(2026, 10, 14);
-    mapper.upsertObserved(
-        ScheduledOccurrenceUpsertObservedParam.builder()
-            .tenantId(tenantId)
-            .workflowDefinitionId(workflowDefinitionId)
-            .workflowCode(workflowCode)
-            .scheduleVersion(1)
-            .calendarCode("business_day")
-            .scheduledFireTime(fireTime)
-            .bizDate(bizDate)
-            .status("READINESS_TIMEOUT")
-            .requestId(null)
-            .build());
+    mapper.upsertObserved(ScheduledOccurrenceUpsertObservedParam.builder()
+        .tenantId(tenantId)
+        .workflowDefinitionId(workflowDefinitionId)
+        .workflowCode(workflowCode)
+        .scheduleVersion(1)
+        .calendarCode("business_day")
+        .scheduledFireTime(fireTime)
+        .bizDate(bizDate)
+        .status("READINESS_TIMEOUT")
+        .requestId(null)
+        .build());
 
     assertThat(mapper.countBlockingByCalendarAndBizDate(tenantId, "business_day", bizDate))
         .isZero();
@@ -585,18 +789,17 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
     insert(future, LocalDate.of(2026, 10, 14));
     insert(requested, LocalDate.of(2026, 10, 14));
     ensureRequest("request-2");
-    mapper.upsertObserved(
-        ScheduledOccurrenceUpsertObservedParam.builder()
-            .tenantId(tenantId)
-            .workflowDefinitionId(workflowDefinitionId)
-            .workflowCode(workflowCode)
-            .scheduleVersion(1)
-            .calendarCode("business_day")
-            .scheduledFireTime(requested)
-            .bizDate(LocalDate.of(2026, 10, 14))
-            .status("REQUESTED")
-            .requestId("request-2")
-            .build());
+    mapper.upsertObserved(ScheduledOccurrenceUpsertObservedParam.builder()
+        .tenantId(tenantId)
+        .workflowDefinitionId(workflowDefinitionId)
+        .workflowCode(workflowCode)
+        .scheduleVersion(1)
+        .calendarCode("business_day")
+        .scheduledFireTime(requested)
+        .bizDate(LocalDate.of(2026, 10, 14))
+        .status("REQUESTED")
+        .requestId("request-2")
+        .build());
 
     assertThat(mapper.supersedeAllFuturePlanned(tenantId, workflowCode, now)).isEqualTo(1);
     assertThat(status(due)).isEqualTo("PLANNED");
@@ -618,18 +821,17 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
     insert(fireTime, bizDate);
 
     ensureRequest("request-1");
-    mapper.upsertObserved(
-        ScheduledOccurrenceUpsertObservedParam.builder()
-            .tenantId(tenantId)
-            .workflowDefinitionId(workflowDefinitionId)
-            .workflowCode(workflowCode)
-            .scheduleVersion(1)
-            .calendarCode("business_day")
-            .scheduledFireTime(fireTime)
-            .bizDate(bizDate)
-            .status("REQUESTED")
-            .requestId("request-1")
-            .build());
+    mapper.upsertObserved(ScheduledOccurrenceUpsertObservedParam.builder()
+        .tenantId(tenantId)
+        .workflowDefinitionId(workflowDefinitionId)
+        .workflowCode(workflowCode)
+        .scheduleVersion(1)
+        .calendarCode("business_day")
+        .scheduledFireTime(fireTime)
+        .bizDate(bizDate)
+        .status("REQUESTED")
+        .requestId("request-1")
+        .build());
     assertThat(insert(fireTime, bizDate)).isZero();
 
     assertThat(status(fireTime)).isEqualTo("REQUESTED");
@@ -651,31 +853,29 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
     LocalDate originalBizDate = LocalDate.of(2036, 6, 1);
     ensureRequest("original-request");
     ensureRequest("replacement-request");
-    mapper.upsertObserved(
-        ScheduledOccurrenceUpsertObservedParam.builder()
-            .tenantId(tenantId)
-            .workflowDefinitionId(workflowDefinitionId)
-            .workflowCode(workflowCode)
-            .scheduleVersion(4)
-            .calendarCode("original_calendar")
-            .scheduledFireTime(fireTime)
-            .bizDate(originalBizDate)
-            .status("REQUESTED")
-            .requestId("original-request")
-            .build());
+    mapper.upsertObserved(ScheduledOccurrenceUpsertObservedParam.builder()
+        .tenantId(tenantId)
+        .workflowDefinitionId(workflowDefinitionId)
+        .workflowCode(workflowCode)
+        .scheduleVersion(4)
+        .calendarCode("original_calendar")
+        .scheduledFireTime(fireTime)
+        .bizDate(originalBizDate)
+        .status("REQUESTED")
+        .requestId("original-request")
+        .build());
 
-    mapper.upsertObserved(
-        ScheduledOccurrenceUpsertObservedParam.builder()
-            .tenantId(tenantId)
-            .workflowDefinitionId(workflowDefinitionId)
-            .workflowCode(workflowCode + "_renamed")
-            .scheduleVersion(5)
-            .calendarCode("changed_calendar")
-            .scheduledFireTime(fireTime)
-            .bizDate(originalBizDate.plusDays(1))
-            .status("REQUESTED")
-            .requestId("replacement-request")
-            .build());
+    mapper.upsertObserved(ScheduledOccurrenceUpsertObservedParam.builder()
+        .tenantId(tenantId)
+        .workflowDefinitionId(workflowDefinitionId)
+        .workflowCode(workflowCode + "_renamed")
+        .scheduleVersion(5)
+        .calendarCode("changed_calendar")
+        .scheduledFireTime(fireTime)
+        .bizDate(originalBizDate.plusDays(1))
+        .status("REQUESTED")
+        .requestId("replacement-request")
+        .build());
 
     TriggerDescriptor renamedDescriptor = new TriggerDescriptor();
     renamedDescriptor.setTenantId(tenantId);
@@ -691,15 +891,13 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
         .build();
     assertThat(fireTime.atZone(ZoneId.of("Pacific/Kiritimati")).toLocalDate())
         .isEqualTo(originalBizDate.plusDays(1));
-    assertThat(planner.materialize(
-            renamedDescriptor, renamedSchedule, Instant.parse("2036-05-31T00:00:00Z")))
-        .isEqualTo(1);
+    var renamedFireTimes = QuartzScheduledFireEnumerator.fireTimeSource(renamedSchedule);
+    Instant coverageStart = Instant.parse("2036-05-31T00:00:00Z");
+    int planned = planner.materialize(renamedDescriptor, renamedFireTimes, coverageStart);
+    assertThat(planned).isEqualTo(1);
 
     Map<String, Object> occurrence = jdbcTemplate.queryForMap(
-        selectWorkflowCodeSql,
-        tenantId,
-        workflowDefinitionId,
-        Timestamp.from(fireTime));
+        selectWorkflowCodeSql, tenantId, workflowDefinitionId, Timestamp.from(fireTime));
     assertThat(occurrence)
         .containsEntry("workflow_code", workflowCode)
         .containsEntry("schedule_version", 4)
@@ -718,15 +916,14 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
     ensureRequest(occurrenceRequestId);
     ensureRequest("different-catch-up-request");
     assertThat(insert(fireTime, bizDate)).isEqualTo(1);
-    assertThat(mapper.transitionStatus(
-            ScheduledOccurrenceTransitionStatusParam.builder()
-                .tenantId(tenantId)
-                .workflowDefinitionId(workflowDefinitionId)
-                .scheduledFireTime(fireTime)
-                .expectedStatus("PLANNED")
-                .newStatus("REQUESTED")
-                .requestId(occurrenceRequestId)
-                .build()))
+    assertThat(mapper.transitionStatus(ScheduledOccurrenceTransitionStatusParam.builder()
+            .tenantId(tenantId)
+            .workflowDefinitionId(workflowDefinitionId)
+            .scheduledFireTime(fireTime)
+            .expectedStatus("PLANNED")
+            .newStatus("REQUESTED")
+            .requestId(occurrenceRequestId)
+            .build()))
         .isEqualTo(1);
 
     assertThatThrownBy(() -> insertCatchUpAudit(fireTime, bizDate, "different-catch-up-request"))
@@ -745,26 +942,24 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
       assertThat(insert(firstFire.plusSeconds(index), bizDate)).isEqualTo(1);
     }
     ensureRequest("observed-fire");
-    assertThat(mapper.transitionStatus(
-            ScheduledOccurrenceTransitionStatusParam.builder()
-                .tenantId(tenantId)
-                .workflowDefinitionId(workflowDefinitionId)
-                .scheduledFireTime(firstFire.plusSeconds(2))
-                .expectedStatus("PLANNED")
-                .newStatus("REQUESTED")
-                .requestId("observed-fire")
-                .build()))
+    assertThat(mapper.transitionStatus(ScheduledOccurrenceTransitionStatusParam.builder()
+            .tenantId(tenantId)
+            .workflowDefinitionId(workflowDefinitionId)
+            .scheduledFireTime(firstFire.plusSeconds(2))
+            .expectedStatus("PLANNED")
+            .newStatus("REQUESTED")
+            .requestId("observed-fire")
+            .build()))
         .isEqualTo(1);
-    assertThat(mapper.insertPlanned(
-            ScheduledOccurrenceInsertPlannedParam.builder()
-                .tenantId(tenantId)
-                .workflowDefinitionId(workflowDefinitionId)
-                .workflowCode(workflowCode)
-                .scheduleVersion(2)
-                .calendarCode("business_day")
-                .scheduledFireTime(firstFire.minusSeconds(1))
-                .bizDate(bizDate)
-                .build()))
+    assertThat(mapper.insertPlanned(ScheduledOccurrenceInsertPlannedParam.builder()
+            .tenantId(tenantId)
+            .workflowDefinitionId(workflowDefinitionId)
+            .workflowCode(workflowCode)
+            .scheduleVersion(2)
+            .calendarCode("business_day")
+            .scheduledFireTime(firstFire.minusSeconds(1))
+            .bizDate(bizDate)
+            .build()))
         .isEqualTo(1);
     Instant beforeExclusive = firstFire.plusSeconds(4);
 
@@ -796,15 +991,14 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
     for (int index = 0; index < 101; index++) {
       Instant fireTime = firstFireTime.plusSeconds(index);
       assertThat(insert(fireTime, bizDate)).isEqualTo(1);
-      assertThat(mapper.transitionStatus(
-              ScheduledOccurrenceTransitionStatusParam.builder()
-                  .tenantId(tenantId)
-                  .workflowDefinitionId(workflowDefinitionId)
-                  .scheduledFireTime(fireTime)
-                  .expectedStatus("PLANNED")
-                  .newStatus("MISFIRE_PENDING")
-                  .requestId(null)
-                  .build()))
+      assertThat(mapper.transitionStatus(ScheduledOccurrenceTransitionStatusParam.builder()
+              .tenantId(tenantId)
+              .workflowDefinitionId(workflowDefinitionId)
+              .scheduledFireTime(fireTime)
+              .expectedStatus("PLANNED")
+              .newStatus("MISFIRE_PENDING")
+              .requestId(null)
+              .build()))
           .isEqualTo(1);
     }
 
@@ -815,15 +1009,14 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
 
     for (Instant fireTime : firstPage) {
       ensureRequest("request-" + fireTime.toEpochMilli());
-      assertThat(mapper.transitionStatus(
-              ScheduledOccurrenceTransitionStatusParam.builder()
-                  .tenantId(tenantId)
-                  .workflowDefinitionId(workflowDefinitionId)
-                  .scheduledFireTime(fireTime)
-                  .expectedStatus("MISFIRE_PENDING")
-                  .newStatus("REQUESTED")
-                  .requestId("request-" + fireTime.toEpochMilli())
-                  .build()))
+      assertThat(mapper.transitionStatus(ScheduledOccurrenceTransitionStatusParam.builder()
+              .tenantId(tenantId)
+              .workflowDefinitionId(workflowDefinitionId)
+              .scheduledFireTime(fireTime)
+              .expectedStatus("MISFIRE_PENDING")
+              .newStatus("REQUESTED")
+              .requestId("request-" + fireTime.toEpochMilli())
+              .build()))
           .isEqualTo(1);
     }
 
@@ -849,15 +1042,14 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
     for (int index = 0; index < backlogSize; index++) {
       Instant fireTime = firstBacklogFireTime.plusSeconds(index);
       assertThat(insert(fireTime, bizDate)).isEqualTo(1);
-      assertThat(mapper.transitionStatus(
-              ScheduledOccurrenceTransitionStatusParam.builder()
-                  .tenantId(tenantId)
-                  .workflowDefinitionId(workflowDefinitionId)
-                  .scheduledFireTime(fireTime)
-                  .expectedStatus("PLANNED")
-                  .newStatus("MISFIRE_PENDING")
-                  .requestId(null)
-                  .build()))
+      assertThat(mapper.transitionStatus(ScheduledOccurrenceTransitionStatusParam.builder()
+              .tenantId(tenantId)
+              .workflowDefinitionId(workflowDefinitionId)
+              .scheduledFireTime(fireTime)
+              .expectedStatus("PLANNED")
+              .newStatus("MISFIRE_PENDING")
+              .requestId(null)
+              .build()))
           .isEqualTo(1);
     }
 
@@ -871,15 +1063,14 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
         for (int index = 0; index < arrivalWaves * arrivalsPerPage; index++) {
           Instant arrival = newArrivalFireTime.plusSeconds(index);
           assertThat(insert(arrival, bizDate)).isEqualTo(1);
-          assertThat(mapper.transitionStatus(
-                  ScheduledOccurrenceTransitionStatusParam.builder()
-                      .tenantId(tenantId)
-                      .workflowDefinitionId(workflowDefinitionId)
-                      .scheduledFireTime(arrival)
-                      .expectedStatus("PLANNED")
-                      .newStatus("MISFIRE_PENDING")
-                      .requestId(null)
-                      .build()))
+          assertThat(mapper.transitionStatus(ScheduledOccurrenceTransitionStatusParam.builder()
+                  .tenantId(tenantId)
+                  .workflowDefinitionId(workflowDefinitionId)
+                  .scheduledFireTime(arrival)
+                  .expectedStatus("PLANNED")
+                  .newStatus("MISFIRE_PENDING")
+                  .requestId(null)
+                  .build()))
               .isEqualTo(1);
           if (index == 0) {
             firstArrivalWritten.countDown();
@@ -907,15 +1098,14 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
         assertThat(page).isSortedAccordingTo(Comparator.naturalOrder());
         for (Instant fireTime : page) {
           ensureRequest("request-" + fireTime.toEpochMilli());
-          assertThat(mapper.transitionStatus(
-                  ScheduledOccurrenceTransitionStatusParam.builder()
-                      .tenantId(tenantId)
-                      .workflowDefinitionId(workflowDefinitionId)
-                      .scheduledFireTime(fireTime)
-                      .expectedStatus("MISFIRE_PENDING")
-                      .newStatus("REQUESTED")
-                      .requestId("request-" + fireTime.toEpochMilli())
-                      .build()))
+          assertThat(mapper.transitionStatus(ScheduledOccurrenceTransitionStatusParam.builder()
+                  .tenantId(tenantId)
+                  .workflowDefinitionId(workflowDefinitionId)
+                  .scheduledFireTime(fireTime)
+                  .expectedStatus("MISFIRE_PENDING")
+                  .newStatus("REQUESTED")
+                  .requestId("request-" + fireTime.toEpochMilli())
+                  .build()))
               .isEqualTo(1);
           accepted.add(fireTime);
           if (!producerFinished.get()) {
@@ -966,15 +1156,14 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
     LocalDate bizDate = LocalDate.of(2026, 10, 14);
     for (Instant fireTime : List.of(recoveryFireTime, approvalFireTime)) {
       assertThat(insert(fireTime, bizDate)).isEqualTo(1);
-      assertThat(mapper.transitionStatus(
-              ScheduledOccurrenceTransitionStatusParam.builder()
-                  .tenantId(tenantId)
-                  .workflowDefinitionId(workflowDefinitionId)
-                  .scheduledFireTime(fireTime)
-                  .expectedStatus("PLANNED")
-                  .newStatus("MISFIRE_PENDING")
-                  .requestId(null)
-                  .build()))
+      assertThat(mapper.transitionStatus(ScheduledOccurrenceTransitionStatusParam.builder()
+              .tenantId(tenantId)
+              .workflowDefinitionId(workflowDefinitionId)
+              .scheduledFireTime(fireTime)
+              .expectedStatus("PLANNED")
+              .newStatus("MISFIRE_PENDING")
+              .requestId(null)
+              .build()))
           .isEqualTo(1);
     }
     jdbcTemplate.update(
@@ -1020,27 +1209,22 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
         """;
 
     Instant now = BatchDateTimeSupport.utcNow().truncatedTo(ChronoUnit.MILLIS);
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        tenantId);
+    jdbcTemplate.update(insertBusinessCalendarSql, tenantId);
     long initialConfigurationRevision = mapper.selectTenantConfigurationRevision(tenantId);
-    mapper.recordCoverage(
-        ScheduledOccurrenceRecordCoverageParam.builder()
-            .tenantId(tenantId)
-            .workflowDefinitionId(workflowDefinitionId)
-            .configurationRevision(initialConfigurationRevision)
-            .scheduleVersion(4)
-            .calendarCode("business_day")
-            .coverageFrom(now.minusSeconds(86_400))
-            .coverageThrough(now.plusSeconds(86_400))
-            .completedAt(now.plusSeconds(3_600))
-            .build());
+    mapper.recordCoverage(ScheduledOccurrenceRecordCoverageParam.builder()
+        .tenantId(tenantId)
+        .workflowDefinitionId(workflowDefinitionId)
+        .configurationRevision(initialConfigurationRevision)
+        .scheduleVersion(4)
+        .calendarCode("business_day")
+        .coverageFrom(now.minusSeconds(86_400))
+        .coverageThrough(now.plusSeconds(86_400))
+        .completedAt(now.plusSeconds(3_600))
+        .build());
     assertThat(mapper.isCoverageCurrentForTenantConfiguration(tenantId, workflowDefinitionId))
         .isTrue();
 
-    jdbcTemplate.update(
-        updateBusinessCalendarSql,
-        tenantId);
+    jdbcTemplate.update(updateBusinessCalendarSql, tenantId);
 
     assertThat(mapper.isCoverageCurrentForTenantConfiguration(tenantId, workflowDefinitionId))
         .isFalse();
@@ -1057,17 +1241,16 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
             now.plusSeconds(86_400),
             now))
         .isEqualTo(1);
-    assertThat(mapper.recordCoverage(
-            ScheduledOccurrenceRecordCoverageParam.builder()
-                .tenantId(tenantId)
-                .workflowDefinitionId(workflowDefinitionId)
-                .configurationRevision(initialConfigurationRevision)
-                .scheduleVersion(4)
-                .calendarCode("business_day")
-                .coverageFrom(now.minusSeconds(86_400))
-                .coverageThrough(now.plusSeconds(172_800))
-                .completedAt(now.plusSeconds(7_200))
-                .build()))
+    assertThat(mapper.recordCoverage(ScheduledOccurrenceRecordCoverageParam.builder()
+            .tenantId(tenantId)
+            .workflowDefinitionId(workflowDefinitionId)
+            .configurationRevision(initialConfigurationRevision)
+            .scheduleVersion(4)
+            .calendarCode("business_day")
+            .coverageFrom(now.minusSeconds(86_400))
+            .coverageThrough(now.plusSeconds(172_800))
+            .completedAt(now.plusSeconds(7_200))
+            .build()))
         .isZero();
     Long selectedConfigurationRevisionRead2 = jdbcTemplate.queryForObject(
         selectConfigurationRevisionSql, Long.class, tenantId, workflowDefinitionId);
@@ -1099,19 +1282,16 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
     LocalDate fireDate = futureFire.atZone(ZoneOffset.UTC).toLocalDate();
     Instant dueFire = now.minusSeconds(60);
     LocalDate dueBizDate = now.atZone(ZoneOffset.UTC).toLocalDate().minusDays(1);
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        tenantId);
-    mapper.insertPlanned(
-        ScheduledOccurrenceInsertPlannedParam.builder()
-            .tenantId(tenantId)
-            .workflowDefinitionId(workflowDefinitionId)
-            .workflowCode(workflowCode)
-            .scheduleVersion(7)
-            .calendarCode("business_day")
-            .scheduledFireTime(dueFire)
-            .bizDate(dueBizDate)
-            .build());
+    jdbcTemplate.update(insertBusinessCalendarSql, tenantId);
+    mapper.insertPlanned(ScheduledOccurrenceInsertPlannedParam.builder()
+        .tenantId(tenantId)
+        .workflowDefinitionId(workflowDefinitionId)
+        .workflowCode(workflowCode)
+        .scheduleVersion(7)
+        .calendarCode("business_day")
+        .scheduledFireTime(dueFire)
+        .bizDate(dueBizDate)
+        .build());
 
     TriggerDescriptor descriptor = new TriggerDescriptor();
     descriptor.setTenantId(tenantId);
@@ -1127,18 +1307,19 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
             SimpleScheduleBuilder.simpleSchedule().withIntervalInSeconds(60).withRepeatCount(0))
         .build();
 
-    assertThat(planner.materialize(descriptor, quartzTrigger, now)).isEqualTo(1);
+    assertThat(planner.materialize(
+            descriptor, QuartzScheduledFireEnumerator.fireTimeSource(quartzTrigger), now))
+        .isEqualTo(1);
     assertThat(bizDate(futureFire)).isEqualTo(fireDate.minusDays(1));
 
-    jdbcTemplate.update(
-        updateBusinessCalendarSql,
-        tenantId);
+    jdbcTemplate.update(updateBusinessCalendarSql, tenantId);
     Instant configurationEffectiveAt = now.plusSeconds(60);
     jdbcTemplate.update(
-        updateTenantConfigurationRevisionSql,
-        Timestamp.from(configurationEffectiveAt),
-        tenantId);
-    assertThat(planner.materialize(descriptor, quartzTrigger, now.plusSeconds(600)))
+        updateTenantConfigurationRevisionSql, Timestamp.from(configurationEffectiveAt), tenantId);
+    assertThat(planner.materialize(
+            descriptor,
+            QuartzScheduledFireEnumerator.fireTimeSource(quartzTrigger),
+            now.plusSeconds(600)))
         .isEqualTo(1);
 
     assertThat(bizDate(futureFire)).isEqualTo(fireDate);
@@ -1148,18 +1329,18 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("重新启用日程后重新接纳未发生的计划 occurrence")
   void shouldReenabledScheduleReactivatesSupersededFutureOccurrence() {
-  final String insertBusinessCalendarSql = """
+    final String insertBusinessCalendarSql = """
       insert into batch.business_calendar (tenant_id, calendar_code, calendar_name, timezone)\s\
       values (?, 'business_day', 'Business day', 'UTC')\
       """;
-  final String updateWorkflowDefinitionSql = """
+    final String updateWorkflowDefinitionSql = """
       update batch.workflow_definition set calendar_code = 'business_day', schedule_enabled = true\s\
       where tenant_id = ? and id = ?\
       """;
-  final String updateWorkflowDefinitionSql2 = """
+    final String updateWorkflowDefinitionSql2 = """
       update batch.workflow_definition set schedule_enabled = false where tenant_id = ? and id = ?\
       """;
-  final String updateWorkflowDefinitionSql3 = """
+    final String updateWorkflowDefinitionSql3 = """
       update batch.workflow_definition set schedule_enabled = true where tenant_id = ? and id = ?\
       """;
     final String selectUpdatedAtSql = """
@@ -1172,13 +1353,8 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
 
     Instant now = BatchDateTimeSupport.utcNow().truncatedTo(ChronoUnit.MILLIS);
     Instant fireTime = now.plusSeconds(3600);
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        tenantId);
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql,
-        tenantId,
-        workflowDefinitionId);
+    jdbcTemplate.update(insertBusinessCalendarSql, tenantId);
+    jdbcTemplate.update(updateWorkflowDefinitionSql, tenantId, workflowDefinitionId);
     TriggerDescriptor descriptor = new TriggerDescriptor();
     descriptor.setTenantId(tenantId);
     descriptor.setWorkflowDefinitionId(workflowDefinitionId);
@@ -1193,27 +1369,23 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
             SimpleScheduleBuilder.simpleSchedule().withIntervalInSeconds(60).withRepeatCount(0))
         .build();
 
-    assertThat(planner.materialize(descriptor, quartzTrigger, now)).isEqualTo(1);
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql2,
-        tenantId,
-        workflowDefinitionId);
+    assertThat(planner.materialize(
+            descriptor, QuartzScheduledFireEnumerator.fireTimeSource(quartzTrigger), now))
+        .isEqualTo(1);
+    jdbcTemplate.update(updateWorkflowDefinitionSql2, tenantId, workflowDefinitionId);
     assertThat(planner.supersedeFuturePlans(tenantId, workflowCode, now.plusSeconds(1)))
         .isEqualTo(1);
     assertThat(status(fireTime)).isEqualTo("SUPERSEDED");
 
-    jdbcTemplate.update(
-        updateWorkflowDefinitionSql3,
-        tenantId,
-        workflowDefinitionId);
+    jdbcTemplate.update(updateWorkflowDefinitionSql3, tenantId, workflowDefinitionId);
     Instant reenabledAt = jdbcTemplate
-        .queryForObject(
-            selectUpdatedAtSql,
-            Timestamp.class,
-            tenantId)
+        .queryForObject(selectUpdatedAtSql, Timestamp.class, tenantId)
         .toInstant();
 
-    assertThat(planner.materialize(descriptor, quartzTrigger, reenabledAt.plusMillis(1)))
+    assertThat(planner.materialize(
+            descriptor,
+            QuartzScheduledFireEnumerator.fireTimeSource(quartzTrigger),
+            reenabledAt.plusMillis(1)))
         .isEqualTo(1);
 
     assertThat(status(fireTime)).isEqualTo("PLANNED");
@@ -1245,27 +1417,25 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
     Instant now = BatchDateTimeSupport.utcNow().truncatedTo(ChronoUnit.MILLIS);
     Instant fireTime = now.plusSeconds(3600);
     LocalDate originalBizDate = LocalDate.of(2026, 10, 14);
-    mapper.insertPlanned(
-        ScheduledOccurrenceInsertPlannedParam.builder()
+    mapper.insertPlanned(ScheduledOccurrenceInsertPlannedParam.builder()
+        .tenantId(tenantId)
+        .workflowDefinitionId(workflowDefinitionId)
+        .workflowCode(workflowCode)
+        .scheduleVersion(5)
+        .calendarCode("business_day")
+        .scheduledFireTime(fireTime)
+        .bizDate(originalBizDate)
+        .build());
+
+    assertThat(mapper.insertPlanned(ScheduledOccurrenceInsertPlannedParam.builder()
             .tenantId(tenantId)
             .workflowDefinitionId(workflowDefinitionId)
             .workflowCode(workflowCode)
-            .scheduleVersion(5)
+            .scheduleVersion(4)
             .calendarCode("business_day")
             .scheduledFireTime(fireTime)
-            .bizDate(originalBizDate)
-            .build());
-
-    assertThat(mapper.insertPlanned(
-            ScheduledOccurrenceInsertPlannedParam.builder()
-                .tenantId(tenantId)
-                .workflowDefinitionId(workflowDefinitionId)
-                .workflowCode(workflowCode)
-                .scheduleVersion(4)
-                .calendarCode("business_day")
-                .scheduledFireTime(fireTime)
-                .bizDate(originalBizDate.minusDays(1))
-                .build()))
+            .bizDate(originalBizDate.minusDays(1))
+            .build()))
         .isZero();
     Integer selectedScheduleVersion = jdbcTemplate.queryForObject(
         selectScheduleVersionSql,
@@ -1313,16 +1483,15 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
     Instant currentCoverageThrough = now.plusSeconds(10800);
     LocalDate oldBizDate = LocalDate.of(2026, 10, 13);
     LocalDate currentBizDate = LocalDate.of(2026, 10, 14);
-    mapper.insertPlanned(
-        ScheduledOccurrenceInsertPlannedParam.builder()
-            .tenantId(tenantId)
-            .workflowDefinitionId(workflowDefinitionId)
-            .workflowCode(workflowCode)
-            .scheduleVersion(4)
-            .calendarCode("business_day")
-            .scheduledFireTime(fireTime)
-            .bizDate(oldBizDate)
-            .build());
+    mapper.insertPlanned(ScheduledOccurrenceInsertPlannedParam.builder()
+        .tenantId(tenantId)
+        .workflowDefinitionId(workflowDefinitionId)
+        .workflowCode(workflowCode)
+        .scheduleVersion(4)
+        .calendarCode("business_day")
+        .scheduledFireTime(fireTime)
+        .bizDate(oldBizDate)
+        .build());
     recordCoverage(tenantId, workflowDefinitionId, 4, "business_day", now, oldCoverageThrough, now);
 
     CountDownLatch oldScanReadOldVersion = new CountDownLatch(1);
@@ -1340,31 +1509,29 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
         assertThat(observedVersion).isEqualTo(4);
         oldScanReadOldVersion.countDown();
         awaitLatch(allowOldScanWrite);
-        mapper.insertPlanned(
-            ScheduledOccurrenceInsertPlannedParam.builder()
-                .tenantId(tenantId)
-                .workflowDefinitionId(workflowDefinitionId)
-                .workflowCode(workflowCode)
-                .scheduleVersion(4)
-                .calendarCode("business_day")
-                .scheduledFireTime(fireTime)
-                .bizDate(oldBizDate)
-                .build());
+        mapper.insertPlanned(ScheduledOccurrenceInsertPlannedParam.builder()
+            .tenantId(tenantId)
+            .workflowDefinitionId(workflowDefinitionId)
+            .workflowCode(workflowCode)
+            .scheduleVersion(4)
+            .calendarCode("business_day")
+            .scheduledFireTime(fireTime)
+            .bizDate(oldBizDate)
+            .build());
         recordCoverage(
             tenantId, workflowDefinitionId, 4, "business_day", now, oldCoverageThrough, now);
       }));
 
       assertThat(oldScanReadOldVersion.await(10, TimeUnit.SECONDS)).isTrue();
-      mapper.insertPlanned(
-          ScheduledOccurrenceInsertPlannedParam.builder()
-              .tenantId(tenantId)
-              .workflowDefinitionId(workflowDefinitionId)
-              .workflowCode(workflowCode)
-              .scheduleVersion(5)
-              .calendarCode("business_day")
-              .scheduledFireTime(fireTime)
-              .bizDate(currentBizDate)
-              .build());
+      mapper.insertPlanned(ScheduledOccurrenceInsertPlannedParam.builder()
+          .tenantId(tenantId)
+          .workflowDefinitionId(workflowDefinitionId)
+          .workflowCode(workflowCode)
+          .scheduleVersion(5)
+          .calendarCode("business_day")
+          .scheduledFireTime(fireTime)
+          .bizDate(currentBizDate)
+          .build());
       recordCoverage(
           tenantId,
           workflowDefinitionId,
@@ -1423,10 +1590,17 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
         .build();
     doThrow(new IllegalStateException("injected coverage persistence failure"))
         .when(mapper)
-        .recordCoverage(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), tenantId) && java.util.Objects.equals(parameters.workflowDefinitionId(), workflowDefinitionId) && java.util.Objects.equals(parameters.scheduleVersion(), 6) && parameters.calendarCode() == null && parameters.coverageFrom() != null && parameters.coverageThrough() != null && parameters.completedAt() != null));
+        .recordCoverage(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.tenantId(), tenantId)
+            && Objects.equals(parameters.workflowDefinitionId(), workflowDefinitionId)
+            && Objects.equals(parameters.scheduleVersion(), 6)
+            && parameters.calendarCode() == null
+            && parameters.coverageFrom() != null
+            && parameters.coverageThrough() != null
+            && parameters.completedAt() != null));
 
-    assertThatThrownBy(() -> planner.materialize(descriptor, quartzTrigger, now))
+    assertThatThrownBy(() -> planner.materialize(
+            descriptor, QuartzScheduledFireEnumerator.fireTimeSource(quartzTrigger), now))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("injected coverage persistence failure");
 
@@ -1469,7 +1643,7 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
     CountDownLatch continueAfterTermination = new CountDownLatch(1);
     AtomicInteger backendPid = new AtomicInteger();
     AtomicBoolean terminateOnce = new AtomicBoolean(true);
-        doAnswer(invocation -> {
+    doAnswer(invocation -> {
           int inserted = sqlSessionTemplate.insert(
               "io.github.pinpols.batch.trigger.mapper.ScheduledOccurrenceMapper.insertPlannedBatch",
               invocation.getArgument(0));
@@ -1485,8 +1659,8 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
 
     ExecutorService executor = Executors.newSingleThreadExecutor();
     try {
-      Future<Integer> firstScan =
-          executor.submit(() -> planner.materialize(descriptor, quartzTrigger, now));
+      Future<Integer> firstScan = executor.submit(() -> planner.materialize(
+          descriptor, QuartzScheduledFireEnumerator.fireTimeSource(quartzTrigger), now));
       boolean didWriteBatch = batchWritten.await(10, TimeUnit.SECONDS);
       if (!didWriteBatch && firstScan.isDone()) {
         firstScan.get(1, TimeUnit.SECONDS);
@@ -1505,14 +1679,16 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
 
     assertThat(occurrenceCount()).isZero();
     assertThat(mapper.selectCoverage(tenantId, workflowDefinitionId, 7, null)).isNull();
-    assertThat(planner.materialize(descriptor, quartzTrigger, now)).isEqualTo(2);
+    assertThat(planner.materialize(
+            descriptor, QuartzScheduledFireEnumerator.fireTimeSource(quartzTrigger), now))
+        .isEqualTo(2);
     assertThat(occurrenceCount()).isEqualTo(2);
     assertThat(mapper.selectCoverage(tenantId, workflowDefinitionId, 7, null))
         .isEqualTo(
             new ScheduledOccurrenceCoverage(now.minusMillis(1), now.plus(Duration.ofDays(2))));
-        Integer selectedScheduledOccurrenceCount =
-            jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId, workflowDefinitionId);
-        assertThat(selectedScheduledOccurrenceCount).isEqualTo(2);
+    Integer selectedScheduledOccurrenceCount =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId, workflowDefinitionId);
+    assertThat(selectedScheduledOccurrenceCount).isEqualTo(2);
   }
 
   @Test
@@ -1541,7 +1717,8 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
         .when(mapper)
         .lockTenantConfigurationRevision(tenantId);
 
-    assertThatThrownBy(() -> planner.materialize(descriptor, quartzTrigger, now))
+    assertThatThrownBy(() -> planner.materialize(
+            descriptor, QuartzScheduledFireEnumerator.fireTimeSource(quartzTrigger), now))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("configuration changed");
 
@@ -1569,9 +1746,7 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
 
     Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
     Instant fireTime = now.plusSeconds(300);
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        tenantId);
+    jdbcTemplate.update(insertBusinessCalendarSql, tenantId);
     TriggerDescriptor descriptor = new TriggerDescriptor();
     descriptor.setTenantId(tenantId);
     descriptor.setWorkflowDefinitionId(workflowDefinitionId);
@@ -1596,14 +1771,12 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
         .when(mapper)
         .supersedeFuturePlanned(eq(tenantId), eq(workflowDefinitionId), eq(9), any(Instant.class));
     ExecutorService executor = Executors.newSingleThreadExecutor();
-    Future<Integer> materialization =
-        executor.submit(() -> planner.materialize(descriptor, quartzTrigger, now));
+    Future<Integer> materialization = executor.submit(() -> planner.materialize(
+        descriptor, QuartzScheduledFireEnumerator.fireTimeSource(quartzTrigger), now));
     try {
       assertThat(occurrenceWritten.await(10, TimeUnit.SECONDS)).isTrue();
       long oldRevision = mapper.selectTenantConfigurationRevision(tenantId);
-      jdbcTemplate.update(
-          updateBusinessCalendarSql,
-          tenantId);
+      jdbcTemplate.update(updateBusinessCalendarSql, tenantId);
       long newRevision = mapper.selectTenantConfigurationRevision(tenantId);
       assertThat(newRevision).isGreaterThan(oldRevision);
       configurationChanged.countDown();
@@ -1619,7 +1792,9 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
           .isNull();
 
       Instant retryAt = mapper.selectTenantConfigurationUpdatedAt(tenantId).plusMillis(1);
-      assertThat(planner.materialize(descriptor, quartzTrigger, retryAt)).isEqualTo(1);
+      assertThat(planner.materialize(
+              descriptor, QuartzScheduledFireEnumerator.fireTimeSource(quartzTrigger), retryAt))
+          .isEqualTo(1);
       assertThat(mapper.selectCoverage(tenantId, workflowDefinitionId, 9, "business_day"))
           .isNotNull();
       assertThat(mapper.isCoverageCurrentForTenantConfiguration(tenantId, workflowDefinitionId))
@@ -1656,7 +1831,9 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
             SimpleScheduleBuilder.simpleSchedule().withIntervalInSeconds(60).withRepeatCount(0))
         .build();
 
-    assertThat(planner.materialize(descriptor, quartzTrigger, now)).isEqualTo(1);
+    assertThat(planner.materialize(
+            descriptor, QuartzScheduledFireEnumerator.fireTimeSource(quartzTrigger), now))
+        .isEqualTo(1);
     Boolean selectedConfigurationRevision = jdbcTemplate.queryForObject(
         selectConfigurationRevisionSql, Boolean.class, tenantId, workflowDefinitionId);
     assertThat(selectedConfigurationRevision).isTrue();
@@ -1671,17 +1848,16 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
       Instant coverageThrough,
       Instant completedAt) {
     long configurationRevision = mapper.selectTenantConfigurationRevision(coverageTenantId);
-    return mapper.recordCoverage(
-        ScheduledOccurrenceRecordCoverageParam.builder()
-            .tenantId(coverageTenantId)
-            .workflowDefinitionId(coverageWorkflowDefinitionId)
-            .configurationRevision(configurationRevision)
-            .scheduleVersion(scheduleVersion)
-            .calendarCode(calendarCode)
-            .coverageFrom(coverageFrom)
-            .coverageThrough(coverageThrough)
-            .completedAt(completedAt)
-            .build());
+    return mapper.recordCoverage(ScheduledOccurrenceRecordCoverageParam.builder()
+        .tenantId(coverageTenantId)
+        .workflowDefinitionId(coverageWorkflowDefinitionId)
+        .configurationRevision(configurationRevision)
+        .scheduleVersion(scheduleVersion)
+        .calendarCode(calendarCode)
+        .coverageFrom(coverageFrom)
+        .coverageThrough(coverageThrough)
+        .completedAt(completedAt)
+        .build());
   }
 
   private static void awaitLatch(CountDownLatch latch) {
@@ -1697,16 +1873,15 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
   }
 
   private int insert(Instant fireTime, LocalDate bizDate) {
-    return mapper.insertPlanned(
-        ScheduledOccurrenceInsertPlannedParam.builder()
-            .tenantId(tenantId)
-            .workflowDefinitionId(workflowDefinitionId)
-            .workflowCode(workflowCode)
-            .scheduleVersion(1)
-            .calendarCode("business_day")
-            .scheduledFireTime(fireTime)
-            .bizDate(bizDate)
-            .build());
+    return mapper.insertPlanned(ScheduledOccurrenceInsertPlannedParam.builder()
+        .tenantId(tenantId)
+        .workflowDefinitionId(workflowDefinitionId)
+        .workflowCode(workflowCode)
+        .scheduleVersion(1)
+        .calendarCode("business_day")
+        .scheduledFireTime(fireTime)
+        .bizDate(bizDate)
+        .build());
   }
 
   private void ensureRequest(String requestId) {

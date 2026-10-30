@@ -62,16 +62,16 @@ class WorkflowRunRerunSnapshotIntegrationTest extends AbstractIntegrationTest {
         delete from batch.workflow_node_run where workflow_run_id in (select id from batch.workflow_run\s\
         where tenant_id = ? and workflow_definition_id = ?)\
         """;
-  final String deleteJobInstanceSql = """
+    final String deleteJobInstanceSql = """
       delete from batch.job_instance where tenant_id=? and id=?
   """;
-  final String deleteTriggerRequestSql = """
+    final String deleteTriggerRequestSql = """
       delete from batch.trigger_request where tenant_id=? and parent_workflow_run_id is not null
   """;
-  final String deleteWorkflowRunSql = """
+    final String deleteWorkflowRunSql = """
       delete from batch.workflow_run where tenant_id=? and workflow_definition_id=?
   """;
-  final String deleteTriggerRequestSql2 = """
+    final String deleteTriggerRequestSql2 = """
       delete from batch.trigger_request where tenant_id=?
   """;
     final String deleteWorkflowDefinitionSql = """
@@ -89,12 +89,11 @@ class WorkflowRunRerunSnapshotIntegrationTest extends AbstractIntegrationTest {
 
     String tenant = "rerun_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
     String jobCode = "RERUN_JOB";
-    Long jobDefinitionId = jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, tenant, jobCode);
-    jdbcTemplate.update(
-        insertBusinessCalendarSql,
-        tenant);
-    Long workflowDefinitionId =
-    jdbcTemplate.queryForObject(insertWorkflowDefinitionSql, Long.class, tenant, "WF_" + jobCode, jobDefinitionId);
+    Long jobDefinitionId =
+        jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, tenant, jobCode);
+    jdbcTemplate.update(insertBusinessCalendarSql, tenant);
+    Long workflowDefinitionId = jdbcTemplate.queryForObject(
+        insertWorkflowDefinitionSql, Long.class, tenant, "WF_" + jobCode, jobDefinitionId);
 
     Long sourceJobId = null;
     try {
@@ -162,32 +161,15 @@ class WorkflowRunRerunSnapshotIntegrationTest extends AbstractIntegrationTest {
               latestDefinition))
           .isSameAs(latestDefinition);
     } finally {
-      jdbcTemplate.update(
-          deleteWorkflowNodeRunSql,
-          tenant,
-          workflowDefinitionId);
-      jdbcTemplate.update(
-          deleteJobInstanceSql, tenant, sourceJobId);
-      jdbcTemplate.update(
-          deleteTriggerRequestSql,
-          tenant);
-      jdbcTemplate.update(
-          deleteWorkflowRunSql,
-          tenant,
-          workflowDefinitionId);
+      jdbcTemplate.update(deleteWorkflowNodeRunSql, tenant, workflowDefinitionId);
+      jdbcTemplate.update(deleteJobInstanceSql, tenant, sourceJobId);
+      jdbcTemplate.update(deleteTriggerRequestSql, tenant);
+      jdbcTemplate.update(deleteWorkflowRunSql, tenant, workflowDefinitionId);
       jdbcTemplate.update(deleteTriggerRequestSql2, tenant);
-      jdbcTemplate.update(
-          deleteWorkflowDefinitionSql,
-          tenant,
-          workflowDefinitionId);
-      jdbcTemplate.update(
-          deleteJobDefinitionSql,
-          tenant,
-          jobDefinitionId);
+      jdbcTemplate.update(deleteWorkflowDefinitionSql, tenant, workflowDefinitionId);
+      jdbcTemplate.update(deleteJobDefinitionSql, tenant, jobDefinitionId);
       jdbcTemplate.update(deleteBatchDayInstanceSql, tenant);
-      jdbcTemplate.update(
-          deleteBusinessCalendarSql,
-          tenant);
+      jdbcTemplate.update(deleteBusinessCalendarSql, tenant);
     }
   }
 
@@ -224,16 +206,16 @@ class WorkflowRunRerunSnapshotIntegrationTest extends AbstractIntegrationTest {
         delete from batch.workflow_node_run where workflow_run_id in (select id from batch.workflow_run\s\
         where tenant_id=? and workflow_definition_id=?)\
         """;
-  final String deleteJobInstanceSql = """
+    final String deleteJobInstanceSql = """
       delete from batch.job_instance where tenant_id=? and id=?
   """;
-  final String deleteTriggerRequestSql = """
+    final String deleteTriggerRequestSql = """
       delete from batch.trigger_request where tenant_id=? and parent_workflow_run_id is not null
   """;
-  final String deleteWorkflowRunSql = """
+    final String deleteWorkflowRunSql = """
       delete from batch.workflow_run where tenant_id=? and workflow_definition_id=?
   """;
-  final String deleteTriggerRequestSql2 = """
+    final String deleteTriggerRequestSql2 = """
       delete from batch.trigger_request where tenant_id=?
   """;
     final String deleteWorkflowDefinitionSql = """
@@ -252,10 +234,11 @@ class WorkflowRunRerunSnapshotIntegrationTest extends AbstractIntegrationTest {
     String tenant =
         "rerun_failure_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
     String jobCode = "FAILURE_CLEANUP_JOB";
-    Long jobDefinitionId = jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, tenant, jobCode);
+    Long jobDefinitionId =
+        jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, tenant, jobCode);
     jdbcTemplate.update(insertBusinessCalendarSql, tenant);
-    Long workflowDefinitionId =
-    jdbcTemplate.queryForObject(insertWorkflowDefinitionSql, Long.class, tenant, "WF_" + jobCode, jobDefinitionId);
+    Long workflowDefinitionId = jdbcTemplate.queryForObject(
+        insertWorkflowDefinitionSql, Long.class, tenant, "WF_" + jobCode, jobDefinitionId);
 
     Long sourceRunId = null;
     Long sourceJobId = null;
@@ -270,8 +253,8 @@ class WorkflowRunRerunSnapshotIntegrationTest extends AbstractIntegrationTest {
       assertThat(owner).isNotNull();
       assertThat(owner.getId()).isEqualTo(sourceRunId);
       assertThat(owner.getRunStatus()).isEqualTo("FAILED");
-      Boolean selectedExecutionSnapshot =
-          jdbcTemplate.queryForObject(selectExecutionSnapshotSql, Boolean.class, tenant, sourceRunId);
+      Boolean selectedExecutionSnapshot = jdbcTemplate.queryForObject(
+          selectExecutionSnapshotSql, Boolean.class, tenant, sourceRunId);
       assertThat(selectedExecutionSnapshot).isTrue();
       String selectedNodeCode =
           jdbcTemplate.queryForObject(selectNodeCodeSql, String.class, sourceRunId, sourceJobId);
@@ -301,32 +284,17 @@ class WorkflowRunRerunSnapshotIntegrationTest extends AbstractIntegrationTest {
               .version())
           .isEqualTo(1);
     } finally {
-      jdbcTemplate.update(
-          deleteWorkflowNodeRunSql,
-          tenant,
-          workflowDefinitionId);
+      jdbcTemplate.update(deleteWorkflowNodeRunSql, tenant, workflowDefinitionId);
       if (sourceJobId != null) {
-        jdbcTemplate.update(
-            deleteJobInstanceSql, tenant, sourceJobId);
+        jdbcTemplate.update(deleteJobInstanceSql, tenant, sourceJobId);
       }
-      jdbcTemplate.update(
-          deleteTriggerRequestSql,
-          tenant);
-      jdbcTemplate.update(
-          deleteWorkflowRunSql,
-          tenant,
-          workflowDefinitionId);
+      jdbcTemplate.update(deleteTriggerRequestSql, tenant);
+      jdbcTemplate.update(deleteWorkflowRunSql, tenant, workflowDefinitionId);
       jdbcTemplate.update(deleteTriggerRequestSql2, tenant);
-      jdbcTemplate.update(
-          deleteWorkflowDefinitionSql,
-          tenant,
-          workflowDefinitionId);
-      jdbcTemplate.update(
-          deleteJobDefinitionSql, tenant, jobDefinitionId);
+      jdbcTemplate.update(deleteWorkflowDefinitionSql, tenant, workflowDefinitionId);
+      jdbcTemplate.update(deleteJobDefinitionSql, tenant, jobDefinitionId);
       jdbcTemplate.update(deleteBatchDayInstanceSql, tenant);
-      jdbcTemplate.update(
-          deleteBusinessCalendarSql,
-          tenant);
+      jdbcTemplate.update(deleteBusinessCalendarSql, tenant);
     }
   }
 
@@ -443,40 +411,40 @@ class WorkflowRunRerunSnapshotIntegrationTest extends AbstractIntegrationTest {
 
   private Long insertFailureBranchJobInstance(
       String tenant, Long workflowDefinitionId, Long jobDefinitionId, String jobCode, Long runId) {
-        final String insertTriggerRequestSql = """
+    final String insertTriggerRequestSql = """
     insert into batch.trigger_request (
     tenant_id,request_id,trigger_type,workflow_definition_id,biz_date,dedup_key,request_status)
     values (?,?,'API',?,'2026-10-01',?,'LAUNCHED') returning id
     """;
-        final String updateWorkflowRunSql = """
+    final String updateWorkflowRunSql = """
             update batch.workflow_run set trigger_request_id=? where tenant_id=? and id=?
         """;
-        final String insertWorkflowNodeRunSql = """
+    final String insertWorkflowNodeRunSql = """
     insert into batch.workflow_node_run (
     workflow_run_id,node_code,node_type,run_seq,node_status,retry_count,duration_ms)
     values (?,'PRIMARY_JOB','JOB',1,'FAILED',0,0)
     """;
-  final String insertWorkflowNodeRunSql2 = """
+    final String insertWorkflowNodeRunSql2 = """
         insert into batch.workflow_node_run (
             workflow_run_id,node_code,node_type,run_seq,node_status,retry_count,duration_ms)
         values (?,'FAILURE_CLEANUP','JOB',2,'SUCCESS',0,0) returning id
         """;
-  final String insertTriggerRequestSql2 = """
+    final String insertTriggerRequestSql2 = """
         insert into batch.trigger_request (
             tenant_id,request_id,trigger_type,job_code,biz_date,dedup_key,request_status,
             parent_workflow_run_id,parent_node_code)
         values (?,?,'CATCH_UP',?,'2026-10-01',?,'LAUNCHED',?,'FAILURE_CLEANUP') returning id
         """;
-        final String insertJobInstanceSql = """
+    final String insertJobInstanceSql = """
     insert into batch.job_instance (
     tenant_id,job_definition_id,trigger_request_id,job_code,instance_no,biz_date,
     trigger_type,instance_status,dedup_key,job_definition_version)
     values (?,?,?,?,?,'2026-10-01','CATCH_UP','SUCCESS',?,1) returning id
     """;
-        final String updateWorkflowNodeRunSql = """
+    final String updateWorkflowNodeRunSql = """
             update batch.workflow_node_run set job_instance_id=? where id=?
         """;
-  final String updateWorkflowRunSql2 = """
+    final String updateWorkflowRunSql2 = """
       update batch.workflow_run set run_status='FAILED' where tenant_id=? and id=?
   """;
 
@@ -487,12 +455,8 @@ class WorkflowRunRerunSnapshotIntegrationTest extends AbstractIntegrationTest {
         "failure-root-" + tenant,
         workflowDefinitionId,
         "failure-root-" + tenant);
-        jdbcTemplate.update(
-        updateWorkflowRunSql,
-        rootRequest,
-        tenant,
-        runId);
-        jdbcTemplate.update(insertWorkflowNodeRunSql, runId);
+    jdbcTemplate.update(updateWorkflowRunSql, rootRequest, tenant, runId);
+    jdbcTemplate.update(insertWorkflowNodeRunSql, runId);
     Long nodeRunId = jdbcTemplate.queryForObject(insertWorkflowNodeRunSql2, Long.class, runId);
     Long childRequest = jdbcTemplate.queryForObject(
         insertTriggerRequestSql2,
@@ -511,57 +475,52 @@ class WorkflowRunRerunSnapshotIntegrationTest extends AbstractIntegrationTest {
         jobCode,
         "failure-cleanup-" + tenant,
         "failure-cleanup-" + tenant);
-        jdbcTemplate.update(
-        updateWorkflowNodeRunSql,
-        jobInstanceId,
-        nodeRunId);
-        jdbcTemplate.update(
-        updateWorkflowRunSql2,
-        tenant,
-        runId);
+    jdbcTemplate.update(updateWorkflowNodeRunSql, jobInstanceId, nodeRunId);
+    jdbcTemplate.update(updateWorkflowRunSql2, tenant, runId);
     return jobInstanceId;
   }
 
   /** 按有界分页处理，并保留原始触发时刻和已冻结的业务日期。 */
   private Long insertSnapshotSource(
       String tenant, Long workflow, Long definition, String jobCode, Long run) {
-        final String insertTriggerRequestSql = """
+    final String insertTriggerRequestSql = """
     insert into batch.trigger_request\s\
     (tenant_id,request_id,trigger_type,workflow_definition_id,biz_date,dedup_key,request_status)
     values (?,?,'API',?,'2026-10-01',?,'LAUNCHED') returning id
     """;
-        final String updateWorkflowRunSql = """
+    final String updateWorkflowRunSql = """
             update batch.workflow_run set trigger_request_id=?,run_status='RUNNING' where tenant_id=? and id=?
         """;
-        final String insertWorkflowNodeRunSql = """
+    final String insertWorkflowNodeRunSql = """
     insert into batch.workflow_node_run\s\
     (workflow_run_id,node_code,node_type,run_seq,node_status,retry_count,duration_ms)
     values (?,'JOB','JOB',1,'RUNNING',0,0) returning id
     """;
-  final String insertTriggerRequestSql2 = """
+    final String insertTriggerRequestSql2 = """
         insert into batch.trigger_request\s\
         (tenant_id,request_id,trigger_type,job_code,biz_date,dedup_key,request_status,parent_workflow_run_id,parent_node_code)
         values (?,?,'EVENT',?,'2026-10-01',?,'LAUNCHED',?,'JOB') returning id
         """;
-        final String insertJobInstanceSql = """
+    final String insertJobInstanceSql = """
     insert into batch.job_instance (tenant_id,job_definition_id,trigger_request_id,job_code,instance_no,biz_date,
     trigger_type,instance_status,dedup_key,job_definition_version)
     values (?,?,?,?,?,'2026-10-01','EVENT','SUCCESS',?,1) returning id
     """;
-        final String updateWorkflowNodeRunSql = """
+    final String updateWorkflowNodeRunSql = """
             update batch.workflow_node_run set job_instance_id=?,node_status='SUCCESS' where id=?
         """;
-  final String updateWorkflowRunSql2 = """
+    final String updateWorkflowRunSql2 = """
       update batch.workflow_run set run_status='SUCCESS' where tenant_id=? and id=?
   """;
 
     Long rootRequest = jdbcTemplate.queryForObject(
-        insertTriggerRequestSql, Long.class, tenant, "snapshot-root-" + tenant, workflow, "snapshot-root-" + tenant);
-        jdbcTemplate.update(
-        updateWorkflowRunSql,
-        rootRequest,
+        insertTriggerRequestSql,
+        Long.class,
         tenant,
-        run);
+        "snapshot-root-" + tenant,
+        workflow,
+        "snapshot-root-" + tenant);
+    jdbcTemplate.update(updateWorkflowRunSql, rootRequest, tenant, run);
     Long node = jdbcTemplate.queryForObject(insertWorkflowNodeRunSql, Long.class, run);
     Long childRequest = jdbcTemplate.queryForObject(
         insertTriggerRequestSql2,
@@ -580,14 +539,8 @@ class WorkflowRunRerunSnapshotIntegrationTest extends AbstractIntegrationTest {
         jobCode,
         "snapshot-source-" + tenant,
         "snapshot-source-" + tenant);
-        jdbcTemplate.update(
-        updateWorkflowNodeRunSql,
-        job,
-        node);
-        jdbcTemplate.update(
-        updateWorkflowRunSql2,
-        tenant,
-        run);
+    jdbcTemplate.update(updateWorkflowNodeRunSql, job, node);
+    jdbcTemplate.update(updateWorkflowRunSql2, tenant, run);
     return job;
   }
 

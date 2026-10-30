@@ -110,7 +110,8 @@ public class HttpAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obje
     // 构造请求
     HttpRequest.Builder reqBuilder = HttpRequest.newBuilder(uri);
     Duration requestTimeout = Duration.ofSeconds(config.timeoutSeconds());
-    reqBuilder.timeout(requestTimeout)
+    reqBuilder
+        .timeout(requestTimeout)
         .method(
             method,
             body == null

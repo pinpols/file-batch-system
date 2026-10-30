@@ -77,8 +77,7 @@ public class ImportStepExecutionAdapter
 
   @Override
   public ReplayCapabilityDeclaration resolveReplayCapability(StepExecutionRequest request) {
-    if (EmptyChecks.isNull(request)
-        || !pipelineType().equalsIgnoreCase(request.stepCode())) {
+    if (EmptyChecks.isNull(request) || !pipelineType().equalsIgnoreCase(request.stepCode())) {
       return ReplayCapabilityDeclaration.unknown(ImportWorkerType.IMPORT);
     }
     Map<String, Object> requestContext = request.context();

@@ -190,7 +190,11 @@ public record BatchDayInstanceEntity(
   }
 
   public BatchDayInstanceEntity withCutoff(Instant cutoffAt, Instant updatedAt) {
-    return toBuilder().dayStatus("CUTOFF").cutoffAt(cutoffAt).updatedAt(updatedAt).build();
+    return toBuilder()
+        .dayStatus("CUTOFF")
+        .cutoffAt(cutoffAt)
+        .updatedAt(updatedAt)
+        .build();
   }
 
   public BatchDayInstanceEntity withSettled(

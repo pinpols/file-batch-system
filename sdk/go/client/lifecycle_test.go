@@ -461,8 +461,11 @@ func TestWorker_FatalHeartbeatStopsWorker(t *testing.T) {
 	if err := w.Start(context.Background()); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	// The fatal heartbeat must escalate to a full worker Stop -> deactivate once.
-	waitFor(t, 2*time.Second, func() bool { return len(fp.DeactivateCalls) == 1 })
+	// 异步停机时使用夹具的加锁快照读取次数，避免直接读取正在更新的切片。
+	waitFor(t, 2*time.Second, func() bool {
+		_, _, _, _, _, deactivations := fp.Counts()
+		return deactivations == 1
+	})
 	if !consumer.closed() {
 		t.Fatalf("fatal heartbeat must stop (close) the consumer")
 	}
@@ -516,5 +519,42 @@ func TestWorker_DrainDoesNotCancelCompletingTask(t *testing.T) {
 	}
 	if report.Result.ErrorCode != protocol.ErrorCodeSuccess {
 		t.Fatalf("task completing during drain must report SUCCESS, got %s", report.Result.ErrorCode)
+	}
+}
+
+// 容量暂停时已经拉取的记录必须先处理, 后续提交不能跨过它。
+func TestWorker_BackpressureRetainsFetchedRecord(t *testing.T) {
+	cfg := testConfig()
+	cfg.MaxConcurrentTasks = 1
+	platform := NewFakePlatform()
+	consumer := NewFakeConsumer([]Record{dispatchRecord("first")}, []Record{dispatchRecord("deferred")}, []Record{dispatchRecord("later")})
+	release := make(chan struct{})
+	handler := HandlerFunc(func(ctx *TaskContext) TaskResult {
+		if ctx.TaskID == "first" {
+			<-release
+		}
+		return Success(nil, "done")
+	})
+	worker := NewWorker(cfg, platform, consumer, handler, nil, quietLogger())
+	if err := worker.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer worker.Stop(time.Second)
+	defer func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	}()
+	waitFor(t, time.Second, consumer.IsPaused)
+	close(release)
+	waitFor(t, 2*time.Second, func() bool {
+		_, deferred := platform.ReportFor("deferred")
+		_, later := platform.ReportFor("later")
+		return deferred && later
+	})
+	if got := consumer.commits(); got != 3 {
+		t.Fatalf("commits=%d, want all three claimed records", got)
 	}
 }

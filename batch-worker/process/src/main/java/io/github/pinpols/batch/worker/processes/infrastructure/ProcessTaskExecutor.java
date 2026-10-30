@@ -56,11 +56,7 @@ public class ProcessTaskExecutor implements BatchTaskExecutor {
     Set<ResourceKind> supportedResources = Set.of(ResourceKind.CPU, ResourceKind.DB);
     long capabilityTimeoutSeconds = timeoutProperties.getCapabilityTimeoutSeconds();
     Duration capabilityTimeout = Duration.ofSeconds(capabilityTimeoutSeconds);
-    return new TaskCapability(
-        supportedResources,
-        false,
-        true,
-        capabilityTimeout);
+    return new TaskCapability(supportedResources, false, true, capabilityTimeout);
   }
 
   @Override

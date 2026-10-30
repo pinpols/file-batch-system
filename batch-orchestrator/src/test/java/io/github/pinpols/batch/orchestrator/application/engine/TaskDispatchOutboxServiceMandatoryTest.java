@@ -1,15 +1,17 @@
 package io.github.pinpols.batch.orchestrator.application.engine;
 
-import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.BizDateArithmetic;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -87,20 +89,40 @@ class TaskDispatchOutboxServiceMandatoryTest {
     task.setTaskType("EXPORT");
     task.setTaskSeq(1);
     task.setTaskPayload("{\"key\":\"val\"}");
+    when(jobTaskMapper.updatePayload(eq("t1"), eq(20L), any())).thenReturn(1);
 
     service.writeDispatchEvent(TaskDispatchEventCommand.builder()
-            .jobInstance(jobInstance)
-            .task(task)
-            .partition(null)
-            .traceId("trace-2")
-            .eventKey("evt-key-2")
-            .runModeOverride(RunMode.RETRY)
-            .build());
+        .jobInstance(jobInstance)
+        .task(task)
+        .partition(null)
+        .traceId("trace-2")
+        .eventKey("evt-key-2")
+        .runModeOverride(RunMode.RETRY)
+        .build());
 
     var payloadCaptor = ArgumentCaptor.forClass(String.class);
     verify(jobTaskMapper).updatePayload(eq("t1"), eq(20L), payloadCaptor.capture());
     assertThat(payloadCaptor.getValue()).contains("run_mode").contains("RETRY").contains("\"key\"");
     verify(domainEventPublisher).publish(any());
+  }
+
+  @Test
+  @DisplayName("载荷未成功写入时不得发布派发事件")
+  void shouldRejectDispatchWhenPayloadUpdateMisses() {
+    JobInstanceEntity instance = new JobInstanceEntity();
+    instance.setId(1L);
+    JobTaskEntity task = new JobTaskEntity();
+    task.setId(20L);
+    task.setTenantId("t1");
+    task.setTaskPayload("{}");
+    assertThatThrownBy(() -> service.writeDispatchEvent(TaskDispatchEventCommand.builder()
+            .jobInstance(instance)
+            .task(task)
+            .runModeOverride(RunMode.RETRY)
+            .build()))
+        .isInstanceOf(BizException.class);
+    verify(domainEventPublisher, never()).publish(any());
+    assertThat(task.getTaskPayload()).isEqualTo("{}");
   }
 
   @Test

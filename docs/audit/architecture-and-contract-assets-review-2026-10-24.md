@@ -2,7 +2,7 @@
 
 ## 1. 基线、范围与边界
 
-- 工作树：`/Users/dengchao/.codex/worktrees/workflow-daily-integration/file-batch-system`；分支 `feature/workflow-daily-integration`，核查起点 HEAD `ee01e9751`。
+- 工作树：`~/.codex/worktrees/workflow-daily-integration/file-batch-system`；分支 `feature/workflow-daily-integration`，核查起点 HEAD `ee01e9751`。
 - 与 main 已提交基线相同；实际改造包含大量暂存、未暂存及未跟踪内容，不能以提交差异为空判断没有变化。本次按工作树实际代码与五类文档核对，保留其它会话改动。
 - 范围：architecture 72、design 41、api 39、sdk 12、dict 4，共 **168 个文件**，其中 **133 份 Markdown + 35 份契约/黄金样本/辅助资产**。逐文件清单见 §5。
 - 方法：逐文件检查主题、当前/历史定位、引用与本次变更影响；对命中的模型、图、端点、字段、日期和恢复说明回查 DTO、Controller、Mapper、枚举、迁移及配对前端。未命中直接冲突的文档保留，不为增加更新数量改写。

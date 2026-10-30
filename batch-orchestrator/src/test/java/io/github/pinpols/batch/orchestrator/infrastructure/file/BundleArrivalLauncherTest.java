@@ -1,9 +1,5 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.file;
 
-import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceInsertIfAbsentParam;
-import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceTransitionStatusByGenerationParam;
-
-
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -21,15 +17,17 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceTransitionStatusByGenerationParam;
+import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ExpectedWorkOccurrenceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowDefinitionMapper;
 import java.time.LocalDate;
 import java.time.Month;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -76,12 +74,25 @@ class BundleArrivalLauncherTest {
 
   private static FileGovernanceArrivalViews.ArrivalCandidateView file(
       long id, Object metadataJson) {
-    Map<String, Object> row = new LinkedHashMap<>();
-    row.put("id", id);
-    row.put("tenant_id", "t1");
-    row.put("biz_date", "2026-06-21");
-    row.put("metadata_json", metadataJson);
-    return FileGovernanceArrivalViews.arrivalCandidate(row);
+    return FileGovernanceArrivalViews.arrivalCandidate(new FileGovernanceViews.ArrivalCandidateRow(
+        id,
+        "t1",
+        null,
+        null,
+        LocalDate.of(2026, Month.JUNE, 21),
+        null,
+        null,
+        null,
+        metadataJson,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null));
   }
 
   /** 复刻 JDBC 对 PG jsonb 列的映射结果:org.postgresql.util.PGobject(不是 String)。 */
@@ -130,22 +141,27 @@ class BundleArrivalLauncherTest {
             "{\"bundleWorkflowCode\":\"WF_BUNDLE\",\"bundleTemplateCode\":\"TPL_EXPECTED\"}")));
 
     verify(expectedWorkOccurrenceMapper)
-        .insertIfAbsent(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "t1") && java.util.Objects.equals(parameters.calendarCode(), "CALENDAR_A") && java.util.Objects.equals(parameters.bizDate(), LocalDate.of(2026, 6, 21)) && java.util.Objects.equals(parameters.workflowDefinitionId(), 901L) && java.util.Objects.equals(parameters.sourceType(), "FILE_GROUP") && java.util.Objects.equals(parameters.sourceKey(), "GROUP-EXPECTED") && parameters.dueAt() == null));
+        .insertIfAbsent(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.tenantId(), "t1")
+            && Objects.equals(parameters.calendarCode(), "CALENDAR_A")
+            && Objects.equals(parameters.bizDate(), LocalDate.of(2026, 6, 21))
+            && Objects.equals(parameters.workflowDefinitionId(), 901L)
+            && Objects.equals(parameters.sourceType(), "FILE_GROUP")
+            && Objects.equals(parameters.sourceKey(), "GROUP-EXPECTED")
+            && parameters.dueAt() == null));
     verify(expectedWorkOccurrenceMapper)
-        .transitionStatus(
-            ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
-                .tenantId("t1")
-                .calendarCode("CALENDAR_A")
-                .workflowDefinitionId(901L)
-                .sourceType("FILE_GROUP")
-                .sourceKey("GROUP-EXPECTED")
-                .bizDate(LocalDate.of(2026, 6, 21))
-                .generation(null)
-                .expectedStatus("ARRIVED")
-                .newStatus("SATISFIED")
-                .triggerRequestId("bundle-arrival-t1-901-GROUP-EXPECTED-2026-06-21")
-                .build());
+        .transitionStatus(ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
+            .tenantId("t1")
+            .calendarCode("CALENDAR_A")
+            .workflowDefinitionId(901L)
+            .sourceType("FILE_GROUP")
+            .sourceKey("GROUP-EXPECTED")
+            .bizDate(LocalDate.of(2026, 6, 21))
+            .generation(null)
+            .expectedStatus("ARRIVED")
+            .newStatus("SATISFIED")
+            .triggerRequestId("bundle-arrival-t1-901-GROUP-EXPECTED-2026-06-21")
+            .build());
   }
 
   @Test

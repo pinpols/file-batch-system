@@ -56,9 +56,8 @@ class ArchiveSchemaDriftCoverageIntegrationTest extends AbstractIntegrationTest 
         where table_schema = 'archive' and table_name like '%_archive'
         order by table_name
         """;
-    List<String> physicalArchiveTables = jdbcTemplate.queryForList(
-        physicalArchiveTablesSql,
-        String.class);
+    List<String> physicalArchiveTables =
+        jdbcTemplate.queryForList(physicalArchiveTablesSql, String.class);
 
     Set<String> registered = registeredArchivedTables();
 
@@ -102,9 +101,7 @@ class ArchiveSchemaDriftCoverageIntegrationTest extends AbstractIntegrationTest 
         select count(*)::int from information_schema.tables
         where table_schema = 'archive' and table_name like '%_archive'
         """;
-    int physical = jdbcTemplate.queryForObject(
-            physicalArchiveCountSql,
-            Integer.class)
+    int physical = jdbcTemplate.queryForObject(physicalArchiveCountSql, Integer.class)
         - EXEMPTED_ARCHIVE_TABLES.size();
     int registered = registeredArchivedTables().size();
     assertThat(registered)

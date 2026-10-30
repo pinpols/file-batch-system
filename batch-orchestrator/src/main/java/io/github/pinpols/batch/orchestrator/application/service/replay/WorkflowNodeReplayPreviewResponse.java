@@ -4,8 +4,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import lombok.Builder;
 
 /** 冻结的来源身份、策略、副作用警示与一次性准入凭证。 */
+@Builder
 public record WorkflowNodeReplayPreviewResponse(
     String tenantId,
     UUID operationKey,

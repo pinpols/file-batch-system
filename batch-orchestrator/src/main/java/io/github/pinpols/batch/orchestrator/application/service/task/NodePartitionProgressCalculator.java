@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Pure node-level partition progress calculation used by task outcome processing. */
+/** 供任务结果处理使用的纯节点级分区进度计算逻辑。 */
 final class NodePartitionProgressCalculator {
 
   private NodePartitionProgressCalculator() {}

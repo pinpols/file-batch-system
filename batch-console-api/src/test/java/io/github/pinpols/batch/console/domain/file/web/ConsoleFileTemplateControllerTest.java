@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.domain.file.web;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -20,25 +19,31 @@ import io.github.pinpols.batch.console.domain.file.application.ConsoleFileTempla
 import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftResult;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileProjectionMapper;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.FileNamePreviewResponse;
+import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 @DisplayName("文件模板控制器: 查询、创建、启停、更新与命名预览接口")
+@ExtendWith(MockitoExtension.class)
 class ConsoleFileTemplateControllerTest {
 
-  private final ConsoleFileTemplateApplicationService applicationService =
-      mock(ConsoleFileTemplateApplicationService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleFileTemplateApplicationService applicationService;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -64,7 +69,8 @@ class ConsoleFileTemplateControllerTest {
   @DisplayName("按标识查询模板返回成功与租户信息")
   void shouldReturn200WhenGetTemplateById() throws Exception {
     when(applicationService.get(anyLong(), anyString()))
-        .thenReturn(ConsoleFileProjectionMapper.template(Map.of("id", 1L, "tenant_id", "t1")));
+        .thenReturn(ConsoleFileProjectionMapper.templateView(
+            FileTemplateConfigQueryView.builder().id(1L).tenantId("t1").build()));
 
     mockMvc
         .perform(get("/api/console/file-templates/1").param("tenantId", "t1"))
@@ -113,7 +119,8 @@ class ConsoleFileTemplateControllerTest {
   @DisplayName("更新模板返回成功")
   void shouldReturn200WhenUpdateTemplate() throws Exception {
     when(applicationService.update(anyLong(), any()))
-        .thenReturn(ConsoleFileProjectionMapper.template(Map.of("id", 1L, "tenant_id", "t1")));
+        .thenReturn(ConsoleFileProjectionMapper.templateView(
+            FileTemplateConfigQueryView.builder().id(1L).tenantId("t1").build()));
 
     mockMvc
         .perform(put("/api/console/file-templates/1")

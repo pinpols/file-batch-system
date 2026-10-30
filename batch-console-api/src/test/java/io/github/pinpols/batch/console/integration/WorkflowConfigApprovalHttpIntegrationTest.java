@@ -10,6 +10,8 @@ import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -220,7 +222,7 @@ class WorkflowConfigApprovalHttpIntegrationTest extends AbstractIntegrationTest 
         "triggerMode",
         "MANUAL",
         "nodes",
-        java.util.List.of(
+        List.of(
             Map.of(
                 "nodeCode",
                 "START",
@@ -244,7 +246,7 @@ class WorkflowConfigApprovalHttpIntegrationTest extends AbstractIntegrationTest 
                 "enabled",
                 true)),
         "edges",
-        java.util.List.of(Map.of(
+        List.of(Map.of(
             "fromNodeCode",
             "START",
             "toNodeCode",
@@ -361,8 +363,7 @@ class WorkflowConfigApprovalHttpIntegrationTest extends AbstractIntegrationTest 
   }
 
   private String workflowCode() {
-    return "WF_APPROVAL_"
-        + UUID.randomUUID().toString().replace("-", "").toUpperCase(java.util.Locale.ROOT);
+    return "WF_APPROVAL_" + UUID.randomUUID().toString().replace("-", "").toUpperCase(Locale.ROOT);
   }
 
   private record Credentials(String jwt, String csrf, String tenant) {}

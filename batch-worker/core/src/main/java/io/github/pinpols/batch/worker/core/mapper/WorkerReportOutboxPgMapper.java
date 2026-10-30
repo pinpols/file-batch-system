@@ -3,8 +3,6 @@ package io.github.pinpols.batch.worker.core.mapper;
 import io.github.pinpols.batch.worker.core.param.WorkerReportOutboxPgGiveUpRowParam;
 import io.github.pinpols.batch.worker.core.param.WorkerReportOutboxPgUpdateGiveUpParam;
 import io.github.pinpols.batch.worker.core.param.WorkerReportOutboxPgUpdateRetryParam;
-
-
 import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxRow;
 import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxUpsertParam;
 import java.util.List;
@@ -18,17 +16,19 @@ public interface WorkerReportOutboxPgMapper {
   List<WorkerReportOutboxRow> claimNextReturning(
       @Param("nowEpochMillis") long nowEpochMillis,
       @Param("statusNew") String statusNew,
+      @Param("statusPublishing") String statusPublishing,
+      @Param("claimToken") String claimToken);
+
+  Integer selectAttemptCount(
+      @Param("id") long id,
+      @Param("claimToken") String claimToken,
       @Param("statusPublishing") String statusPublishing);
 
-  Integer selectAttemptCount(@Param("id") long id);
+  int updateGiveUp(WorkerReportOutboxPgUpdateGiveUpParam parameters);
 
-  int updateGiveUp(
-      WorkerReportOutboxPgUpdateGiveUpParam parameters);
+  int updateRetry(WorkerReportOutboxPgUpdateRetryParam parameters);
 
-  int updateRetry(
-      WorkerReportOutboxPgUpdateRetryParam parameters);
-
-  // CPD-OFF: PostgreSQL and SQLite report-outbox mappers intentionally mirror the same contract.
+  // CPD-OFF: PostgreSQL 与 SQLite 的回报 Outbox Mapper 有意保持相同契约。
   int resetStalePublishing(
       @Param("statusNew") String statusNew,
       @Param("now") long now,
@@ -40,9 +40,11 @@ public interface WorkerReportOutboxPgMapper {
   long countStalePublishing(
       @Param("statusPublishing") String statusPublishing, @Param("cutoff") long cutoff);
 
-  int deleteById(@Param("id") long id);
+  int deleteById(
+      @Param("id") long id,
+      @Param("claimToken") String claimToken,
+      @Param("statusPublishing") String statusPublishing);
 
-  int giveUpRow(
-      WorkerReportOutboxPgGiveUpRowParam parameters);
+  int giveUpRow(WorkerReportOutboxPgGiveUpRowParam parameters);
   // CPD-ON
 }

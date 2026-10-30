@@ -92,7 +92,7 @@ func (r *RecordingProgressReporter) Report(percent int, message string) {
 // the SDK supplies NO typed templates (thin BYO SDK).
 type TaskContext struct {
 	TaskID string
-	// Parameters are the authoritative business parameters from the claim-time persisted payload.
+	// Parameters 是任务认领时从持久化载荷中读取的权威业务参数。
 	Parameters      map[string]any
 	EffectiveConfig map[string]any
 	TraceID         string

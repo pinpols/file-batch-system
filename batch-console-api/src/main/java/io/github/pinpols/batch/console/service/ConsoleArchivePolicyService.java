@@ -49,12 +49,13 @@ public class ConsoleArchivePolicyService {
     if (param.retentionDays() < 1) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.retention_days_min");
     }
-    ArchivePolicyUpsertParam.ArchivePolicyUpsertParamBuilder upsertParamBuilder = ArchivePolicyUpsertParam.builder()
-        .tenantId(resolved)
-        .targetTable(normalized)
-        .retentionDays(param.retentionDays())
-        .archiveEnabled(param.archiveEnabled())
-        .cleanupEnabled(param.cleanupEnabled());
+    ArchivePolicyUpsertParam.ArchivePolicyUpsertParamBuilder upsertParamBuilder =
+        ArchivePolicyUpsertParam.builder()
+            .tenantId(resolved)
+            .targetTable(normalized)
+            .retentionDays(param.retentionDays())
+            .archiveEnabled(param.archiveEnabled())
+            .cleanupEnabled(param.cleanupEnabled());
     int effectiveBatchSize = Math.max(param.batchSize(), 100);
     ArchivePolicyUpsertParam upsertParam = upsertParamBuilder
         .batchSize(effectiveBatchSize)

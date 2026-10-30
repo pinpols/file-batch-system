@@ -13,18 +13,19 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.persistence.entity.WorkflowMonitoringPolicyEntity;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.config.JobMonitoringDefaultsProperties;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.param.FileChannelConfigUpsertParam;
+import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
@@ -37,6 +38,7 @@ import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinition
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionVersionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
+import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowMonitoringPolicyMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionUpsertParam;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionVersionInsertParam;
@@ -54,43 +56,71 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @DisplayName("配置包作业监控策略导入:默认值、时限解析与作业引用校验")
+@ExtendWith(MockitoExtension.class)
 class TenantConfigPackageExcelMonitoringPolicyApplyTest {
 
-  private final ResourceQueueMapper resourceQueueMapper = mock(ResourceQueueMapper.class);
-  private final BusinessCalendarMapper businessCalendarMapper = mock(BusinessCalendarMapper.class);
-  private final CalendarHolidayMapper calendarHolidayMapper = mock(CalendarHolidayMapper.class);
-  private final BatchWindowMapper batchWindowMapper = mock(BatchWindowMapper.class);
-  private final FileChannelConfigMapper fileChannelConfigMapper =
-      mock(FileChannelConfigMapper.class);
-  private final FileTemplateConfigMapper fileTemplateConfigMapper =
-      mock(FileTemplateConfigMapper.class);
-  private final JobDefinitionMapper jobDefinitionMapper = mock(JobDefinitionMapper.class);
-  private final WorkflowDefinitionMapper workflowDefinitionMapper =
-      mock(WorkflowDefinitionMapper.class);
-  private final WorkflowNodeMapper workflowNodeMapper = mock(WorkflowNodeMapper.class);
-  private final WorkflowEdgeMapper workflowEdgeMapper = mock(WorkflowEdgeMapper.class);
-  private final WorkflowDefinitionVersionMapper workflowVersionMapper =
-      mock(WorkflowDefinitionVersionMapper.class);
-  private final WorkflowDefinitionWriteSupport workflowWriteSupport =
-      new WorkflowDefinitionWriteSupport(
-          workflowNodeMapper,
-          workflowEdgeMapper,
-          workflowVersionMapper,
-          JsonUtils.newDefaultMapper());
-  private final DefaultSingleJobWorkflowProvisioner singleJobWorkflowProvisioner =
-      mock(DefaultSingleJobWorkflowProvisioner.class);
-  private final JobMonitoringDefaultsProperties monitoringDefaults =
-      new JobMonitoringDefaultsProperties();
-  private final ConsoleConfigCacheInvalidationService cacheInvalidationService =
-      mock(ConsoleConfigCacheInvalidationService.class);
+  @Mock
+  private ResourceQueueMapper resourceQueueMapper;
+
+  @Mock
+  private BusinessCalendarMapper businessCalendarMapper;
+
+  @Mock
+  private CalendarHolidayMapper calendarHolidayMapper;
+
+  @Mock
+  private BatchWindowMapper batchWindowMapper;
+
+  @Mock
+  private FileChannelConfigMapper fileChannelConfigMapper;
+
+  @Mock
+  private FileTemplateConfigMapper fileTemplateConfigMapper;
+
+  @Mock
+  private JobDefinitionMapper jobDefinitionMapper;
+
+  @Mock
+  private WorkflowDefinitionMapper workflowDefinitionMapper;
+
+  @Mock
+  private WorkflowMonitoringPolicyMapper workflowMonitoringPolicyMapper;
+
+  @Mock
+  private WorkflowNodeMapper workflowNodeMapper;
+
+  @Mock
+  private WorkflowEdgeMapper workflowEdgeMapper;
+
+  @Mock
+  private WorkflowDefinitionVersionMapper workflowVersionMapper;
+
+  private WorkflowDefinitionWriteSupport workflowWriteSupport;
+
+  @Mock
+  private DefaultSingleJobWorkflowProvisioner singleJobWorkflowProvisioner;
+
+  private JobMonitoringDefaultsProperties monitoringDefaults;
+
+  @Mock
+  private ConsoleConfigCacheInvalidationService cacheInvalidationService;
 
   private TenantConfigPackageExcelApplyService service;
 
   @BeforeEach
   void setUp() {
+    workflowWriteSupport = new WorkflowDefinitionWriteSupport(
+        workflowNodeMapper,
+        workflowEdgeMapper,
+        workflowVersionMapper,
+        JsonUtils.newDefaultMapper());
+    monitoringDefaults = new JobMonitoringDefaultsProperties();
     monitoringDefaults.setSoftRuntimeSeconds(1800);
     monitoringDefaults.setStartGraceSeconds(300);
     service = new TenantConfigPackageExcelApplyService(
@@ -104,6 +134,7 @@ class TenantConfigPackageExcelMonitoringPolicyApplyTest {
         singleJobWorkflowProvisioner,
         monitoringDefaults,
         workflowDefinitionMapper,
+        workflowMonitoringPolicyMapper,
         workflowNodeMapper,
         workflowEdgeMapper,
         workflowWriteSupport,
@@ -132,6 +163,65 @@ class TenantConfigPackageExcelMonitoringPolicyApplyTest {
     assertThat(policy.getStartGraceSeverity()).isEqualTo("WARN");
     assertThat(policy.getCompletionDeadlineLocalTime()).isEqualTo(LocalTime.of(23, 45));
     assertThat(policy.getCompletionDeadlineDayOffset()).isEqualTo(1);
+    assertThat(policy.getCompletionDeadlineSeverity()).isEqualTo("WARN");
+  }
+
+  @Test
+  @DisplayName("Workflow 策略按租户与工作流版本写入独立监控表")
+  void shouldApplyWorkflowMonitoringPolicyByDefinitionVersion() {
+    WorkflowDefinitionEntity definition = new WorkflowDefinitionEntity();
+    definition.setId(93L);
+    definition.setTenantId("tenant-a");
+    definition.setWorkflowCode("WF_DAILY");
+    definition.setVersion(2);
+    when(workflowDefinitionMapper.selectByUniqueKey("tenant-a", "WF_DAILY", 2))
+        .thenReturn(definition);
+    when(workflowMonitoringPolicyMapper.selectByDefinition("tenant-a", 93L)).thenReturn(null);
+    Map<String, String> row = Map.ofEntries(
+        Map.entry("workflow_code", "WF_DAILY"),
+        Map.entry("workflow_version", "2"),
+        Map.entry(COL_SOFT_RUNTIME_SECONDS, "600"),
+        Map.entry(COL_SOFT_RUNTIME_SEVERITY, "ERROR"),
+        Map.entry(COL_START_GRACE_SECONDS, "120"),
+        Map.entry(COL_START_GRACE_SEVERITY, "CRITICAL"),
+        Map.entry(COL_COMPLETION_DEADLINE_LOCAL_TIME, "04:30"),
+        Map.entry(COL_COMPLETION_DEADLINE_DAY_OFFSET, "1"),
+        Map.entry(COL_COMPLETION_DEADLINE_SEVERITY, "WARN"));
+    SheetResult empty = new SheetResult("empty", 0, List.of(), List.of());
+    SheetResult policies =
+        new SheetResult("workflow_monitoring_policy", 1, List.of(row), List.of());
+    PackageValidationResult result = PackageValidationResult.builder()
+        .resourceQueues(empty)
+        .businessCalendars(empty)
+        .batchWindows(empty)
+        .jobs(empty)
+        .jobMonitoringPolicies(empty)
+        .channels(empty)
+        .fileTemplates(empty)
+        .pipelines(empty)
+        .steps(empty)
+        .wfDefs(empty)
+        .wfNodes(empty)
+        .wfEdges(empty)
+        .workflowMonitoringPolicies(policies)
+        .crossRefIssues(List.of())
+        .build();
+
+    service.applyAll(result, context());
+
+    ArgumentCaptor<WorkflowMonitoringPolicyEntity> captor =
+        ArgumentCaptor.forClass(WorkflowMonitoringPolicyEntity.class);
+    verify(workflowMonitoringPolicyMapper).setTenantContext("tenant-a");
+    verify(workflowMonitoringPolicyMapper).upsert(captor.capture());
+    WorkflowMonitoringPolicyEntity policy = captor.getValue();
+    assertThat(policy.getTenantId()).isEqualTo("tenant-a");
+    assertThat(policy.getWorkflowDefinitionId()).isEqualTo(93L);
+    assertThat(policy.getSoftRuntimeSeconds()).isEqualTo(600);
+    assertThat(policy.getSoftRuntimeSeverity()).isEqualTo("ERROR");
+    assertThat(policy.getStartGraceSeconds()).isEqualTo(120);
+    assertThat(policy.getStartGraceSeverity()).isEqualTo("CRITICAL");
+    assertThat(policy.getCompletionDeadlineLocalTime()).isEqualTo(LocalTime.of(4, 30));
+    assertThat(policy.getCompletionDeadlineDayOffset()).isOne();
     assertThat(policy.getCompletionDeadlineSeverity()).isEqualTo("WARN");
   }
 
@@ -223,7 +313,8 @@ class TenantConfigPackageExcelMonitoringPolicyApplyTest {
             "Asia/Shanghai",
             "SCHEDULED",
             "cn_workday",
-            "JOB_PREVIOUS")))
+            "JOB_PREVIOUS",
+            null)))
         .thenReturn(1);
     Map<String, String> workflowRow = Map.ofEntries(
         Map.entry("workflow_code", "SOURCE_DEFAULT_FLOW"),
@@ -341,7 +432,6 @@ class TenantConfigPackageExcelMonitoringPolicyApplyTest {
   @Test
   @DisplayName("监控策略引用不存在的租户作业时拒绝整包应用")
   void shouldRejectPolicy_whenJobDoesNotExist() {
-    when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_MISSING")).thenReturn(null);
 
     assertThatThrownBy(() -> service.applyAll(validationResult(policyRow("")), context()))
         .isInstanceOf(BizException.class);
@@ -398,15 +488,16 @@ class TenantConfigPackageExcelMonitoringPolicyApplyTest {
   @Test
   @DisplayName("场景化通道更新留空时保留当前端点与认证配置")
   void shouldPreserveExistingChannelValues_whenScenarioRowLeavesOptionalFieldsBlank() {
-    Map<String, Object> existing = Map.of(
-        "channel_name", "Existing channel",
-        "channel_type", "SFTP",
-        "target_endpoint", "sftp://files.example/in",
-        "auth_type", "SSH_KEY",
-        "config_json", "{\"secret_ref\":\"vault://tenant/key\"}",
-        "receipt_policy", "CHECKSUM",
-        "timeout_seconds", 90,
-        "enabled", false);
+    FileChannelConfigQueryView existing = FileChannelConfigQueryView.builder()
+        .channelName("Existing channel")
+        .channelType("SFTP")
+        .targetEndpoint("sftp://files.example/in")
+        .authType("SSH_KEY")
+        .configJson("{\"secret_ref\":\"vault://tenant/key\"}")
+        .receiptPolicy("CHECKSUM")
+        .timeoutSeconds(90)
+        .enabled(false)
+        .build();
     when(fileChannelConfigMapper.selectByUniqueKey("tenant-a", "PARTNER_SFTP"))
         .thenReturn(existing);
     Map<String, String> channelRow = new LinkedHashMap<>();

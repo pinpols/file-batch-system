@@ -1,3 +1,5 @@
+> 历史原始记录：本轮恢复保留，正文中的结论、参数、状态和操作步骤仅适用于原日期/基线。提炼方法不替代原始证据；当前事实须按[文档治理](../../standards/document-governance.md)重新核实。本轮未执行原测试或扫描。
+
 
 > **历史快照**：本文为 2026-04-09 时点记录，保留用于审计当时的差距判断。当前项目结构以 [`project-structure.md`](./project-structure.md) 为准；当前技术栈以根 [`../../pom.xml`](../../pom.xml)、[`.env.example`](../../.env.example) 和部署文档为准。文中 Java 25、Spring Boot 4.0.3、PostgreSQL 16、Flyway V122、Quartz 默认调度等信息均已过期。
 

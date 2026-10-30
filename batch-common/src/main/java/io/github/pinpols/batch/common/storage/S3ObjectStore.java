@@ -182,7 +182,8 @@ public class S3ObjectStore implements BatchObjectStore {
   @Override
   public long statSize(String bucket, String key) {
     try {
-      HeadObjectRequest request = HeadObjectRequest.builder().bucket(bucket).key(key).build();
+      HeadObjectRequest request =
+          HeadObjectRequest.builder().bucket(bucket).key(key).build();
       HeadObjectResponse response = s3Client.headObject(request);
       return response.contentLength();
     } catch (Exception ex) {

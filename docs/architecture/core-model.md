@@ -3,7 +3,7 @@
 > 本文档是批量调度平台的**单一权威模型文档**。
 > 它统一定义四组最容易被分散理解的概念：**统一实例模型、统一状态模型、统一上下文模型、统一恢复模型**。
 >  
-> 阅读顺序建议：先看 [architecture-truth.md](./architecture-truth.md)，再看本文档，最后回看 [maturity-assessment-2026-04-26.md](../archive/audit/maturity-assessment-2026-04-26.md) 和 [scalability-assessment-2026-07-28.md](../archive/audit/scalability-assessment-2026-07-28.md)。
+> 阅读顺序建议：先看 [architecture-truth.md](./architecture-truth.md)，再看本文档，最后回看 [engineering-maturity-roadmap.md](engineering-maturity-roadmap.md) 和 [production-capacity-governance.md](../runbook/production-capacity-governance.md)。
 
 ## 1. 这份文档解决什么问题
 
@@ -50,15 +50,16 @@
 当前开发分支按 ADR-048（替代 ADR-047） 采用 Workflow 顶层运行。所有顶层请求显式指定 `workflowDefinitionId`；受管单作业与组合图使用同一主链。
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  D["WorkflowDefinition / 冻结图"] --> R["WorkflowRun：顶层运行"]
-  R --> N["WorkflowNodeRun：节点运行与输出"]
-  N --> C["START / END / GATEWAY / WAIT：控制与等待"]
-  N --> J["JOB：按节点物化 JobInstance"]
-  J --> P["JobPartition：分区身份、租约与重试"]
-  P --> T["JobTask：Worker CLAIM / EXECUTE / REPORT"]
-  T --> S["JobStepInstance：执行步骤状态与审计"]
-  J -. "文件类作业的阶段观测" .-> PI["PipelineInstance / PipelineStepRun"]
+  D["WorkflowDefinition"] -->|"冻结"| R["WorkflowRun · 顶层"]
+  R --> N["WorkflowNodeRun"]
+  N --> C["START / END / GATEWAY / WAIT"]
+  N -->|"JOB"| J["独立 JobInstance"]
+  J --> P["JobPartition · 身份 / 租约 / 重试"]
+  P --> T["JobTask · CLAIM / EXECUTE / REPORT"]
+  T --> S["JobStepInstance · 步骤审计"]
+  J -. "文件类型阶段观测" .-> PI["PipelineInstance / PipelineStepRun"]
 ```
 
 | 对象 | 原语与身份 | 职责边界 |
@@ -145,29 +146,21 @@ flowchart TB
 
 #### 3.6.1 三个运行时字段的端到端流向
 
-```
-orchestrator                                                    worker
-─────────────────                                               ─────────
-job_partition.partition_no  ──┐
-job_partition.partition_key ──┼─claim()─→ EffectiveTaskConfig
-job_instance.expected_       ──┘                ↓
-       partition_count                     PulledTask
-                                                ↓
-                                       DefaultTaskExecutionWrapper
-                                                ↓
-                                      context.attributes:
-                                        PARTITION_NO     = K (1-based)
-                                        PARTITION_COUNT  = N
-                                        PARTITION_KEY    = "<jobCode>:<bizDate>:<K>"
-                                                ↓
-                                      worker step / plugin
-                                      (ParseStep / ProcessComputePlugin / ...)
-                                                ↓
-                                      自行决定切什么:
-                                       - lineNo % N == K-1   (默认 ParseStep)
-                                       - hash(branchCode) % N == K-1
-                                       - id BETWEEN ... AND ...
-                                       - 按 input_snapshot 字段过滤
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  subgraph O["Orchestrator"]
+    P["partition_no / partition_key"]
+    J["expected_partition_count"]
+    CFG["EffectiveTaskConfig"]
+    P --> CFG
+    J --> CFG
+  end
+  CFG -->|"HTTP CLAIM 响应"| T["PulledTask"]
+  T --> W["DefaultTaskExecutionWrapper"]
+  W --> C["执行上下文 · 分区序号 / 总数 / 键"]
+  C --> PL["Worker step / 业务插件"]
+  PL --> S["按行号 / Hash / ID 范围 / 输入快照切分"]
 ```
 
 **字段语义**（`PipelineRuntimeKeys`）：
@@ -254,7 +247,7 @@ Workflow 的 `crossDay` 是独立的冻结业务载荷契约；Java SDK handler 
 `CREATED`, `WAITING`, `READY`, `RUNNING`, `PAUSED`, `PARTIAL_FAILED`, `SUCCESS`, `FAILED`, `CANCELLED`, `TERMINATED`, `SUCCESS_DRY_RUN`, `FAILED_DRY_RUN`
 <!-- enum-sync:JobInstanceStatus:end -->
 
-`PAUSED` 是可恢复的非终态；dry-run 使用独立成功/失败终态，不能进入正式结果版本的 EFFECTIVE 链。
+`PAUSED` 是可恢复的非终态；dry-run 使用独立成功/失败终态，不能进入正式结果版本的 EFFECTIVE 链。 对已有任务写入 `run_mode` 再派发时，任务载荷必须是 JSON 对象，且父作业、任务和载荷的演练标记必须一致；不一致时整次状态复位和出箱写入回滚，需先核查并修复原始状态。
 
 #### WorkflowRunStatus
 
@@ -515,7 +508,7 @@ task 没有 WAITING / RETRYING；重试等待由 partition、step 或 retry_sche
 ## 9. 需要同步阅读的文档
 
 - [architecture-truth.md](./architecture-truth.md)
-- [maturity-assessment-2026-04-26.md](../archive/audit/maturity-assessment-2026-04-26.md)
-- [scalability-assessment-2026-07-28.md](../archive/audit/scalability-assessment-2026-07-28.md)
+- [engineering-maturity-roadmap.md](engineering-maturity-roadmap.md)
+- [production-capacity-governance.md](../runbook/production-capacity-governance.md)
 - [runtime-module-communication.md](./runtime-module-communication.md)
 - [adr/README.md](./adr/README.md)

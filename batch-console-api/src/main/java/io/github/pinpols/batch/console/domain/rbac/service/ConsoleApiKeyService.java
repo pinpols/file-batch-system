@@ -1,13 +1,11 @@
 package io.github.pinpols.batch.console.domain.rbac.service;
 
-import io.github.pinpols.batch.console.domain.rbac.param.ConsoleApiKeyInsertParam;
-
-
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.security.ApiKeyHasher;
 import io.github.pinpols.batch.console.domain.rbac.entity.ApiKeyEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleApiKeyMapper;
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleApiKeyInsertParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.security.SecureRandom;
 import java.time.Instant;
@@ -65,8 +63,7 @@ public class ConsoleApiKeyService {
         .expiresAt(expiresAt)
         .operator(operator)
         .build();
-    repository.insert(
-        consoleApiKeyInsertParam);
+    repository.insert(consoleApiKeyInsertParam);
 
     ApiKeyEntity entity = repository
         .findByTenantAndName(resolved, keyName)

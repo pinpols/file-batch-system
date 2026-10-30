@@ -7,6 +7,8 @@ import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.BatchDayCut
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Date;
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,19 +50,62 @@ class BatchDayCutoffMultiTenantIntegrationTest extends AbstractIntegrationTest {
           where tenant_id = ? and extra_json->>'toDayStatus' = 'CUTOFF'
           """;
       Integer tenantCutoffAuditCount =
-      jdbcTemplate.queryForObject(tenantCutoffAuditCountSql, Integer.class, tenantA);
+          jdbcTemplate.queryForObject(tenantCutoffAuditCountSql, Integer.class, tenantA);
       assertThat(tenantCutoffAuditCount).isEqualTo(1);
     } finally {
-      String deleteTenantCutoffAuditSql =
-          """
+      String deleteTenantCutoffAuditSql = """
           delete from batch.job_execution_log where tenant_id in (?, ?)
       """;
       jdbcTemplate.update(deleteTenantCutoffAuditSql, tenantA, tenantB);
-      String deleteTenantBatchDaysSql =
-          """
+      String deleteTenantBatchDaysSql = """
           delete from batch.batch_day_instance where tenant_id in (?, ?)
       """;
       jdbcTemplate.update(deleteTenantBatchDaysSql, tenantA, tenantB);
+    }
+  }
+
+  @Test
+  @DisplayName("到期记录推进一次并递增版本，未来和冻结记录保持原状")
+  void shouldAdvanceOnlyDueDaysAndPreserveFutureAndFrozenDays() {
+    String tenantId = "cutoff-policy-" + UUID.randomUUID().toString().replace("-", "");
+    String insertCutoffPolicyDaysSql = """
+        insert into batch.batch_day_instance (
+          tenant_id, calendar_code, biz_date, day_status, cutoff_at, frozen, version
+        ) values
+          (?, 'DUE', current_date - 1, 'OPEN', current_timestamp - interval '1 day', false, 7),
+          (?, 'FUTURE', current_date, 'OPEN', current_timestamp + interval '1 year', false, 7),
+          (?, 'FROZEN', current_date - 1, 'OPEN', null, true, 7)
+        """;
+    jdbcTemplate.update(insertCutoffPolicyDaysSql, tenantId, tenantId, tenantId);
+    try {
+      scheduler.advance();
+      scheduler.advance();
+
+      String cutoffPolicyDaysSql = """
+          select calendar_code, day_status, version from batch.batch_day_instance
+          where tenant_id = ? order by calendar_code
+          """;
+      List<Map<String, Object>> actualDays =
+          jdbcTemplate.queryForList(cutoffPolicyDaysSql, tenantId);
+      assertThat(actualDays)
+          .extracting(row -> row.get("day_status"))
+          .containsExactly("CUTOFF", "OPEN", "OPEN");
+      assertThat(actualDays).extracting(row -> row.get("version")).containsExactly(8L, 7L, 7L);
+      String cutoffPolicyAuditSql = """
+          select count(*) from batch.job_execution_log
+          where tenant_id = ? and extra_json->>'toDayStatus' = 'CUTOFF'
+          """;
+      Long auditCount = jdbcTemplate.queryForObject(cutoffPolicyAuditSql, Long.class, tenantId);
+      assertThat(auditCount).isEqualTo(1L);
+    } finally {
+      String deleteCutoffPolicyAuditSql = """
+          delete from batch.job_execution_log where tenant_id = ?
+          """;
+      jdbcTemplate.update(deleteCutoffPolicyAuditSql, tenantId);
+      String deleteCutoffPolicyDaysSql = """
+          delete from batch.batch_day_instance where tenant_id = ?
+          """;
+      jdbcTemplate.update(deleteCutoffPolicyDaysSql, tenantId);
     }
   }
 
@@ -81,11 +126,7 @@ class BatchDayCutoffMultiTenantIntegrationTest extends AbstractIntegrationTest {
         """;
     Date sqlBusinessDate = Date.valueOf(bizDate);
     return jdbcTemplate.queryForObject(
-        batchDayStatusSql,
-        String.class,
-        tenantId,
-        calendarCode,
-        sqlBusinessDate);
+        batchDayStatusSql, String.class, tenantId, calendarCode, sqlBusinessDate);
   }
 
   private int cutoffAuditCount(String tenantId, String calendarCode, LocalDate bizDate) {
@@ -96,10 +137,6 @@ class BatchDayCutoffMultiTenantIntegrationTest extends AbstractIntegrationTest {
           and extra_json->>'toDayStatus' = 'CUTOFF'
         """;
     return jdbcTemplate.queryForObject(
-        cutoffAuditCountSql,
-        Integer.class,
-        tenantId,
-        calendarCode,
-        bizDate.toString());
+        cutoffAuditCountSql, Integer.class, tenantId, calendarCode, bizDate.toString());
   }
 }

@@ -13,19 +13,29 @@ import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @DisplayName("Job 终态 Outbox:持久快照、独立实体身份与修正事实")
+@ExtendWith(MockitoExtension.class)
 class JobTerminalOutboxServiceTest {
-  private final JobInstanceMapper jobs = mock(JobInstanceMapper.class);
-  private final WorkflowRunMapper workflows = mock(WorkflowRunMapper.class);
-  private final DomainEventPublisher events = mock(DomainEventPublisher.class);
-  private final JobTerminalOutboxService writer =
-      new JobTerminalOutboxService(jobs, workflows, events);
+  @Mock
+  private JobInstanceMapper jobs;
+
+  @Mock
+  private WorkflowRunMapper workflows;
+
+  @Mock
+  private DomainEventPublisher events;
+
+  private JobTerminalOutboxService writer;
 
   @ParameterizedTest
   @ValueSource(
@@ -95,5 +105,10 @@ class JobTerminalOutboxServiceTest {
     job.setBizDate(LocalDate.of(2026, 10, 19));
     job.setFinishedAt(Instant.parse("2026-10-20T01:00:00Z"));
     return job;
+  }
+
+  @BeforeEach
+  void initializeSubject() {
+    writer = new JobTerminalOutboxService(jobs, workflows, events);
   }
 }

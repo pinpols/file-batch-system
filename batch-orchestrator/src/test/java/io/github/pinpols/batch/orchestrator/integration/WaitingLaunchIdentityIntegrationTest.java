@@ -16,13 +16,13 @@ import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowLaunchWaitService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowLaunchWaitFixtures;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowLaunchWaitService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowLaunchWaitSnapshot;
-import io.github.pinpols.batch.orchestrator.domain.query.WorkflowLaunchWaitClaim;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDependencyWaitingLaunchEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.WorkflowLaunchWaitInsertParam;
+import io.github.pinpols.batch.orchestrator.domain.query.WorkflowLaunchWaitClaim;
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.JobDependencyWaitingLaunchReconciler;
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.WorkflowLaunchWaitReconciler;
 import io.github.pinpols.batch.orchestrator.mapper.JobDependencyWaitingLaunchMapper;
@@ -34,8 +34,8 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Connection;
 import java.time.Duration;
 import java.time.LocalDate;
-import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -155,7 +155,8 @@ class WaitingLaunchIdentityIntegrationTest extends AbstractIntegrationTest {
     jdbc.update(insertJobDefinitionSql, tenant, tenant);
     jdbc.update(insertJobDependencySql, tenant);
     workflowId = jdbc.queryForObject(insertWorkflowDefinitionSql, Long.class, tenant);
-    parentRunId = jdbc.queryForObject(insertWorkflowRunSql, Long.class, tenant, workflowId, BIZ_DATE);
+    parentRunId =
+        jdbc.queryForObject(insertWorkflowRunSql, Long.class, tenant, workflowId, BIZ_DATE);
     jdbc.update(insertTriggerRequestSql, tenant, BIZ_DATE, parentRunId);
     jdbc.update(insertTriggerRequestSql2, tenant, workflowId, BIZ_DATE);
   }
@@ -194,8 +195,7 @@ class WaitingLaunchIdentityIntegrationTest extends AbstractIntegrationTest {
     """;
 
     for (String scopedTenant : List.of(tenant, otherTenant)) {
-      jdbc.update(
-          deleteJobDependencyWaitingLaunchSql, scopedTenant);
+      jdbc.update(deleteJobDependencyWaitingLaunchSql, scopedTenant);
       jdbc.update(deleteWorkflowLaunchWaitSql, scopedTenant);
       jdbc.update(deleteJobInstanceSql, scopedTenant);
       jdbc.update(deleteTriggerRequestSql, scopedTenant);
@@ -431,10 +431,7 @@ class WaitingLaunchIdentityIntegrationTest extends AbstractIntegrationTest {
     """;
 
     defer("workflow");
-    jdbc.update(
-        updateWorkflowLaunchWaitSql,
-        BIZ_DATE.plusDays(1),
-        tenant);
+    jdbc.update(updateWorkflowLaunchWaitSql, BIZ_DATE.plusDays(1), tenant);
 
     assertThatThrownBy(() -> defer("workflow")).isInstanceOf(BizException.class);
 
@@ -462,10 +459,7 @@ class WaitingLaunchIdentityIntegrationTest extends AbstractIntegrationTest {
       parent.setAutoCommit(false);
       JdbcTemplate parentJdbc = new JdbcTemplate(new SingleConnectionDataSource(parent, true));
       Integer parentPid = parentJdbc.queryForObject(selectPgBackendPidSql, Integer.class);
-      parentJdbc.update(
-          updateTriggerRequestSql,
-          tenant,
-          request.requestId());
+      parentJdbc.update(updateTriggerRequestSql, tenant, request.requestId());
       AtomicInteger childPid = new AtomicInteger();
       CountDownLatch childReady = new CountDownLatch(1);
       Future<?> admission =
@@ -477,17 +471,12 @@ class WaitingLaunchIdentityIntegrationTest extends AbstractIntegrationTest {
           }));
       try {
         assertThat(childReady.await(10, TimeUnit.SECONDS)).isTrue();
-        Awaitility.await()
-            .atMost(Duration.ofSeconds(5))
-            .untilAsserted(() -> {
-              Integer childBackendPid = childPid.get();
-              Boolean parentBlockedByChild = jdbc.queryForObject(
-                  selectCoalesceSql,
-                  Boolean.class,
-                  parentPid,
-                  childBackendPid);
-              assertThat(parentBlockedByChild).isTrue();
-            });
+        Awaitility.await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+          Integer childBackendPid = childPid.get();
+          Boolean parentBlockedByChild =
+              jdbc.queryForObject(selectCoalesceSql, Boolean.class, parentPid, childBackendPid);
+          assertThat(parentBlockedByChild).isTrue();
+        });
         parent.commit();
         assertThatThrownBy(() -> admission.get(10, TimeUnit.SECONDS))
             .hasRootCauseInstanceOf(BizException.class);
@@ -547,9 +536,7 @@ class WaitingLaunchIdentityIntegrationTest extends AbstractIntegrationTest {
     """;
 
     defer("workflow");
-    jdbc.update(
-        updateWorkflowRunSql,
-        parentRunId);
+    jdbc.update(updateWorkflowRunSql, parentRunId);
     LaunchRequest original = workflowRequest();
     LaunchRequest corrupted =
         switch (field) {
@@ -560,10 +547,7 @@ class WaitingLaunchIdentityIntegrationTest extends AbstractIntegrationTest {
           case "job" -> original.toBuilder().jobCode("DOWNSTREAM").build();
           default -> throw new IllegalArgumentException(field);
         };
-    jdbc.update(
-        updateWorkflowLaunchWaitSql,
-        protectedWorkflowPayload(corrupted),
-        tenant);
+    jdbc.update(updateWorkflowLaunchWaitSql, protectedWorkflowPayload(corrupted), tenant);
     doReturn(LaunchResponse.skipped("fixture")).when(runLaunchService).launch(any());
 
     reconciler.reconcileTenant(tenant);
@@ -628,10 +612,7 @@ class WaitingLaunchIdentityIntegrationTest extends AbstractIntegrationTest {
 
     defer("job");
     corruptJobWait("job");
-    jdbc.update(
-        updateTriggerRequestSql,
-        state,
-        tenant);
+    jdbc.update(updateTriggerRequestSql, state, tenant);
 
     jobReconciler.reconcileTenant(tenant);
 
@@ -695,7 +676,8 @@ class WaitingLaunchIdentityIntegrationTest extends AbstractIntegrationTest {
     Mockito.doAnswer(invocation -> {
           assertThat(TransactionSynchronizationManager.isActualTransactionActive())
               .isTrue();
-          String selectedCurrentSetting = jdbc.queryForObject(selectCurrentSettingSql, String.class);
+          String selectedCurrentSetting =
+              jdbc.queryForObject(selectCurrentSettingSql, String.class);
           assertThat(selectedCurrentSetting).isEqualTo(tenant);
           jdbc.execute(setLocalSql);
           Object original = invocation.callRealMethod();
@@ -730,21 +712,14 @@ class WaitingLaunchIdentityIntegrationTest extends AbstractIntegrationTest {
     if ("payload".equals(repaired)) {
       corruptJobWait("date");
     } else {
-      jdbc.update(
-          updateTriggerRequestSql,
-          tenant);
+      jdbc.update(updateTriggerRequestSql, tenant);
     }
     JobDependencyWaitingLaunchEntity observed = RlsTenantContextHolder.runWithTenant(
         tenant, () -> jobService.selectWaiting(tenant, 10).getFirst());
     if ("payload".equals(repaired)) {
-      jdbc.update(
-          updateJobDependencyWaitingLaunchSql,
-          JsonUtils.toJson(jobRequest()),
-          tenant);
+      jdbc.update(updateJobDependencyWaitingLaunchSql, JsonUtils.toJson(jobRequest()), tenant);
     } else {
-      jdbc.update(
-          updateTriggerRequestSql2,
-          tenant);
+      jdbc.update(updateTriggerRequestSql2, tenant);
     }
 
     RlsTenantContextHolder.runWithTenant(tenant, () -> jobService.rejectInvalidWait(observed));
@@ -854,17 +829,12 @@ class WaitingLaunchIdentityIntegrationTest extends AbstractIntegrationTest {
           })));
       try {
         assertThat(rejectionStarted.await(10, TimeUnit.SECONDS)).isTrue();
-        Awaitility.await()
-            .atMost(Duration.ofSeconds(5))
-            .untilAsserted(() -> {
-              Integer rejectionBackendPid = rejectionPid.get();
-              Boolean parentBlockedByRejection = jdbc.queryForObject(
-                  selectCoalesceSql,
-                  Boolean.class,
-                  parentPid,
-                  rejectionBackendPid);
-              assertThat(parentBlockedByRejection).isTrue();
-            });
+        Awaitility.await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+          Integer rejectionBackendPid = rejectionPid.get();
+          Boolean parentBlockedByRejection =
+              jdbc.queryForObject(selectCoalesceSql, Boolean.class, parentPid, rejectionBackendPid);
+          assertThat(parentBlockedByRejection).isTrue();
+        });
         prepared.commit();
         rejection.get(10, TimeUnit.SECONDS);
       } finally {
@@ -890,7 +860,8 @@ class WaitingLaunchIdentityIntegrationTest extends AbstractIntegrationTest {
         where job.tenant_id=? and job.job_code='DOWNSTREAM' and request.request_id='job-request'
         """;
 
-    target.update(insertJobInstanceSql, tenant, "prepared-" + tenant, BIZ_DATE, "prepared-" + tenant, tenant);
+    target.update(
+        insertJobInstanceSql, tenant, "prepared-" + tenant, BIZ_DATE, "prepared-" + tenant, tenant);
   }
 
   @Test
@@ -929,8 +900,7 @@ class WaitingLaunchIdentityIntegrationTest extends AbstractIntegrationTest {
     jdbc.execute(doStatementSql);
     jdbc.execute(grantUsageSql);
     jdbc.execute(grantSelectSql);
-    jdbc.execute(
-        grantUpdateSql);
+    jdbc.execute(grantUpdateSql);
 
     new TransactionTemplate(transactionManager).execute(tx -> {
       jdbc.execute(setLocalSql);
@@ -959,14 +929,9 @@ class WaitingLaunchIdentityIntegrationTest extends AbstractIntegrationTest {
 
     if ("rowJob".equals(field) || "rowDate".equals(field)) {
       if ("rowJob".equals(field)) {
-        jdbc.update(
-            updateJobDependencyWaitingLaunchSql,
-            tenant);
+        jdbc.update(updateJobDependencyWaitingLaunchSql, tenant);
       } else {
-        jdbc.update(
-            updateJobDependencyWaitingLaunchSql2,
-            BIZ_DATE.plusDays(1),
-            tenant);
+        jdbc.update(updateJobDependencyWaitingLaunchSql2, BIZ_DATE.plusDays(1), tenant);
       }
       return;
     }
@@ -988,10 +953,7 @@ class WaitingLaunchIdentityIntegrationTest extends AbstractIntegrationTest {
           case "null" -> "null";
           default -> throw new IllegalArgumentException(field);
         };
-    jdbc.update(
-        updateJobDependencyWaitingLaunchSql3,
-        corrupted,
-        tenant);
+    jdbc.update(updateJobDependencyWaitingLaunchSql3, corrupted, tenant);
   }
 
   private void assertJobWaitState(String waitStatus, String requestStatus) {
@@ -1037,21 +999,14 @@ class WaitingLaunchIdentityIntegrationTest extends AbstractIntegrationTest {
         update batch.trigger_request set request_status='REJECTED' where tenant_id=? and request_id=?
     """;
 
-    jdbc.update(
-        updateTriggerRequestSql,
-        tenant,
-        requestId);
+    jdbc.update(updateTriggerRequestSql, tenant, requestId);
   }
 
   private long waitCount(String target) {
     final String selectCountSql = """
         select count(*) from batch.%s where tenant_id in (?,?)\
         """.formatted(waitTable(target));
-    return jdbc.queryForObject(
-        selectCountSql,
-        Long.class,
-        tenant,
-        otherTenant);
+    return jdbc.queryForObject(selectCountSql, Long.class, tenant, otherTenant);
   }
 
   private static String waitTable(String target) {

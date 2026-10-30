@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews;
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.BatchDaySettleScheduler;
 import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
 import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowLaunchSeed;
@@ -62,13 +63,13 @@ class BundleArrivalLauncherConcurrencyIntegrationTest extends AbstractIntegratio
   @Test
   @DisplayName("两个扫描线程同时触发同一完整文件束时只落一个实例和一组分区")
   void shouldLaunchOnce_whenConcurrentArrivalScansRace() throws Exception {
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from batch.trigger_request where tenant_id = ? and request_id = ?
   """;
-  final String selectWorkflowDefinitionIdSql = """
+    final String selectWorkflowDefinitionIdSql = """
       select workflow_definition_id from batch.trigger_request where tenant_id = ? and request_id = ?\
       """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
           select count(*)
           from batch.workflow_node_run node_run
           join batch.workflow_run run
@@ -79,7 +80,7 @@ class BundleArrivalLauncherConcurrencyIntegrationTest extends AbstractIntegratio
             )
             and node_run.job_instance_id is not null
           """;
-  final String selectCountSql3 = """
+    final String selectCountSql3 = """
           select count(*)
           from batch.job_partition p
           join batch.job_instance i
@@ -93,7 +94,7 @@ class BundleArrivalLauncherConcurrencyIntegrationTest extends AbstractIntegratio
               select id from batch.trigger_request where tenant_id = ? and request_id = ?
             )
           """;
-  final String selectCountSql4 = """
+    final String selectCountSql4 = """
           select count(*)
           from batch.outbox_event e
           where e.tenant_id = ?
@@ -112,12 +113,12 @@ class BundleArrivalLauncherConcurrencyIntegrationTest extends AbstractIntegratio
                 )
             )
           """;
-  final String selectCountSql5 = """
+    final String selectCountSql5 = """
       select count(*) from batch.expected_work_occurrence where tenant_id = ? and calendar_code = 'IT_CALENDAR'\s\
       and workflow_definition_id = ? and source_type = 'FILE_GROUP' and source_key = ? and biz_date = ?\s\
       and occurrence_status = 'SATISFIED' and trigger_request_id = ?\
       """;
-  final String selectCountSql6 = """
+    final String selectCountSql6 = """
           select count(*) from batch.workflow_run run
           join batch.trigger_request request
             on request.tenant_id = run.tenant_id and request.id = run.trigger_request_id
@@ -161,20 +162,14 @@ class BundleArrivalLauncherConcurrencyIntegrationTest extends AbstractIntegratio
       assertThat(results.get(1).get(60, TimeUnit.SECONDS))
           .isEqualTo(BundleArrivalLauncher.LaunchOutcome.LAUNCHED);
 
-      Integer triggerRows = jdbcTemplate.queryForObject(
-          selectCountSql,
-          Integer.class,
-          TENANT,
-          requestId);
-      Long workflowDefinitionId = jdbcTemplate.queryForObject(
-          selectWorkflowDefinitionIdSql,
-          Long.class,
-          TENANT,
-          requestId);
+      Long workflowDefinitionId =
+          jdbcTemplate.queryForObject(selectWorkflowDefinitionIdSql, Long.class, TENANT, requestId);
+      Integer triggerRows =
+          jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, requestId);
       Integer instanceRows =
-      jdbcTemplate.queryForObject(selectCountSql2, Integer.class, TENANT, TENANT, requestId);
+          jdbcTemplate.queryForObject(selectCountSql2, Integer.class, TENANT, TENANT, requestId);
       Integer partitionRows =
-      jdbcTemplate.queryForObject(selectCountSql3, Integer.class, TENANT, TENANT, requestId);
+          jdbcTemplate.queryForObject(selectCountSql3, Integer.class, TENANT, TENANT, requestId);
       Integer dispatchEvents = jdbcTemplate.queryForObject(
           selectCountSql4, Integer.class, TENANT, TENANT, TENANT, TENANT, requestId);
       Integer expectedWorkRows = jdbcTemplate.queryForObject(
@@ -187,7 +182,8 @@ class BundleArrivalLauncherConcurrencyIntegrationTest extends AbstractIntegratio
           requestId);
 
       assertThat(triggerRows).isEqualTo(1);
-      Integer workflowRootRows = jdbcTemplate.queryForObject(selectCountSql6, Integer.class, TENANT, requestId);
+      Integer workflowRootRows =
+          jdbcTemplate.queryForObject(selectCountSql6, Integer.class, TENANT, requestId);
       assertThat(workflowRootRows).as("文件束请求由一个显式 Workflow 根运行接纳").isEqualTo(1);
       assertThat(instanceRows).as("同租户与确定性请求键只创建一个作业实例").isEqualTo(1);
       assertThat(partitionRows).as("唯一实例包含本束声明的两个文件分区").isEqualTo(2);
@@ -202,16 +198,16 @@ class BundleArrivalLauncherConcurrencyIntegrationTest extends AbstractIntegratio
   @Test
   @DisplayName("同一文件组编码在不同业务日形成独立请求和预期项")
   void shouldKeepSameFileGroupIndependent_whenReusedAcrossBusinessDates() {
-  final String selectBizDateSql = """
+    final String selectBizDateSql = """
       select biz_date from batch.trigger_request where tenant_id = ? and request_id in (?, ?) order by biz_date\
       """;
-  final String selectBizDateSql2 = """
+    final String selectBizDateSql2 = """
       select run.biz_date from batch.workflow_run run\s\
       join batch.trigger_request request on request.tenant_id = run.tenant_id\s\
       and request.id = run.trigger_request_id where run.tenant_id = ? and request.request_id in (?, ?)\s\
       order by run.biz_date\
       """;
-  final String selectBizDateSql3 = """
+    final String selectBizDateSql3 = """
       select biz_date from batch.expected_work_occurrence where tenant_id = ? and calendar_code = 'IT_CALENDAR'\s\
       and workflow_definition_id = ? and source_type = 'FILE_GROUP' and source_key = ?\s\
       and occurrence_status = 'SATISFIED' order by biz_date\
@@ -356,18 +352,18 @@ class BundleArrivalLauncherConcurrencyIntegrationTest extends AbstractIntegratio
   @Test
   @DisplayName("文件束启动暂时失败后保留可重试状态并由后续扫描恢复")
   void shouldRetryBundleAfterTargetWorkflowBecomesAvailable() {
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from batch.trigger_request where tenant_id = ? and request_id = ?
   """;
-  final String selectMetadataJsonSql = """
+    final String selectMetadataJsonSql = """
       select metadata_json->>'arrivalState' as arrival_state from batch.file_record where tenant_id = ?\s\
       and metadata_json->>'fileGroupCode' = ?\
       """;
-  final String updateFileRecordSql = """
+    final String updateFileRecordSql = """
       update batch.file_record set metadata_json = metadata_json || jsonb_build_object('bundleWorkflowCode', ?)\s\
       where tenant_id = ? and id in (?, ?)\
       """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.expected_work_occurrence where tenant_id = ? and calendar_code = 'IT_CALENDAR'\s\
       and biz_date = ? and source_type = 'FILE_GROUP' and source_key = ? and occurrence_status = 'SATISFIED'\
       """;
@@ -399,11 +395,7 @@ class BundleArrivalLauncherConcurrencyIntegrationTest extends AbstractIntegratio
 
     String availableWorkflowCode = "WF-" + seed.jobCode();
     jdbcTemplate.update(
-        updateFileRecordSql,
-        availableWorkflowCode,
-        TENANT,
-        firstFileId,
-        secondFileId);
+        updateFileRecordSql, availableWorkflowCode, TENANT, firstFileId, secondFileId);
 
     fileGovernanceScheduler.manageFileArrivalGroups();
 
@@ -423,13 +415,13 @@ class BundleArrivalLauncherConcurrencyIntegrationTest extends AbstractIntegratio
   @Test
   @DisplayName("业务日结算先完成时拒绝迟到文件束且不留下 occurrence")
   void shouldRejectBundleArrivalAfterBatchDaySettlement() {
-  final String updateTriggerRequestSql = """
+    final String updateTriggerRequestSql = """
       update batch.trigger_request set request_status = 'REJECTED' where tenant_id = ? and request_id = ?
   """;
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from batch.trigger_request where tenant_id = ? and request_id = ?
   """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.expected_work_occurrence where tenant_id = ? and calendar_code = 'IT_CALENDAR'\s\
       and biz_date = ? and source_key = ?\
       """;
@@ -454,10 +446,7 @@ class BundleArrivalLauncherConcurrencyIntegrationTest extends AbstractIntegratio
             BIZ_DATE));
 
     insertCutoffDay(tenantId, BIZ_DATE);
-    jdbcTemplate.update(
-        updateTriggerRequestSql,
-        tenantId,
-        seed.requestId());
+    jdbcTemplate.update(updateTriggerRequestSql, tenantId, seed.requestId());
     batchDaySettleScheduler.settle();
     assertThat(dayStatus(tenantId, BIZ_DATE)).isEqualTo("SETTLED");
 
@@ -475,17 +464,17 @@ class BundleArrivalLauncherConcurrencyIntegrationTest extends AbstractIntegratio
   @ValueSource(strings = {"ARRIVAL_FIRST", "SETTLEMENT_FIRST"})
   @DisplayName("文件束到达与空日结算按两种围栏顺序竞争")
   void shouldSerializeBundleArrivalWithSettlement(String firstWaiter) {
-  final String updateTriggerRequestSql = """
+    final String updateTriggerRequestSql = """
       update batch.trigger_request set request_status = 'REJECTED' where tenant_id = ? and request_id = ?
   """;
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from batch.workflow_run where tenant_id = ? and workflow_definition_id = ?\s\
       and biz_date = ? and run_status in ('CREATED', 'RUNNING')\
       """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.trigger_request where tenant_id = ? and request_id = ?
   """;
-  final String selectCountSql3 = """
+    final String selectCountSql3 = """
       select count(*) from batch.expected_work_occurrence where tenant_id = ? and calendar_code = 'IT_CALENDAR'\s\
       and biz_date = ? and source_type = 'FILE_GROUP' and source_key = ?\
       """;
@@ -499,10 +488,7 @@ class BundleArrivalLauncherConcurrencyIntegrationTest extends AbstractIntegratio
     String requestId =
         bundleRequestId(tenantId, seed.workflowDefinitionId(), fileGroupCode, bizDate);
     insertCutoffDay(tenantId, bizDate);
-    jdbcTemplate.update(
-        updateTriggerRequestSql,
-        tenantId,
-        seed.requestId());
+    jdbcTemplate.update(updateTriggerRequestSql, tenantId, seed.requestId());
     List<FileGovernanceArrivalViews.ArrivalCandidateView> candidates = List.of(
         candidate(
             830001L, "orders.csv", fileGroupCode, workflowCode, "TPL_ORDER", tenantId, bizDate),
@@ -574,10 +560,7 @@ class BundleArrivalLauncherConcurrencyIntegrationTest extends AbstractIntegratio
     """;
 
     String tenantId = "bundle-it-" + Long.toUnsignedString(System.nanoTime());
-    jdbcTemplate.update(
-        insertTenantSql,
-        tenantId,
-        tenantId);
+    jdbcTemplate.update(insertTenantSql, tenantId, tenantId);
     return tenantId;
   }
 
@@ -625,10 +608,7 @@ class BundleArrivalLauncherConcurrencyIntegrationTest extends AbstractIntegratio
         current_timestamp, false)\
         """;
 
-    jdbcTemplate.update(
-        insertBatchDayInstanceSql,
-        tenantId,
-        bizDate);
+    jdbcTemplate.update(insertBatchDayInstanceSql, tenantId, bizDate);
   }
 
   private String dayStatus(String tenantId, LocalDate bizDate) {
@@ -637,11 +617,7 @@ class BundleArrivalLauncherConcurrencyIntegrationTest extends AbstractIntegratio
         and biz_date = ?\
         """;
 
-    return jdbcTemplate.queryForObject(
-        selectDayStatusSql,
-        String.class,
-        tenantId,
-        bizDate);
+    return jdbcTemplate.queryForObject(selectDayStatusSql, String.class, tenantId, bizDate);
   }
 
   private void acquireSettlementFence(Connection connection, String tenantId, LocalDate bizDate)
@@ -650,8 +626,7 @@ class BundleArrivalLauncherConcurrencyIntegrationTest extends AbstractIntegratio
         select batch.acquire_batch_day_settlement_fence(?, 'IT_CALENDAR', ?)
     """;
 
-    try (var statement = connection.prepareStatement(
-        selectAcquireBatchDaySettlementFenceSql)) {
+    try (var statement = connection.prepareStatement(selectAcquireBatchDaySettlementFenceSql)) {
       statement.setString(1, tenantId);
       statement.setObject(2, bizDate);
       statement.executeQuery().close();
@@ -677,10 +652,7 @@ class BundleArrivalLauncherConcurrencyIntegrationTest extends AbstractIntegratio
 
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
     while (System.nanoTime() < deadline) {
-      Integer waiting = jdbcTemplate.queryForObject(
-          selectCountSql,
-          Integer.class,
-          blockerPid);
+      Integer waiting = jdbcTemplate.queryForObject(selectCountSql, Integer.class, blockerPid);
       if (waiting != null && waiting > 0) return;
       Thread.sleep(10);
     }
@@ -694,10 +666,7 @@ class BundleArrivalLauncherConcurrencyIntegrationTest extends AbstractIntegratio
 
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
     while (System.nanoTime() < deadline) {
-      Integer waiting = jdbcTemplate.queryForObject(
-          selectCountSql,
-          Integer.class,
-          blockerPid);
+      Integer waiting = jdbcTemplate.queryForObject(selectCountSql, Integer.class, blockerPid);
       if (waiting != null && waiting >= expectedCount) return;
       Thread.sleep(10);
     }
@@ -728,20 +697,24 @@ class BundleArrivalLauncherConcurrencyIntegrationTest extends AbstractIntegratio
     metadata.put("bundleWorkflowCode", workflowCode);
     metadata.put("bundleTemplateCode", templateCode);
     metadata.put("integrityState", "VERIFIED");
-    Map<String, Object> row = new LinkedHashMap<>();
-    row.put("id", fileId);
-    row.put("tenant_id", tenantId);
-    row.put("file_name", fileName);
-    row.put("biz_date", bizDate.toString());
-    row.put("file_group_code", groupCode);
-    row.put("wait_file_group_mode", "ALL_OF");
-    row.put("required_file_set", "orders.csv,customers.csv");
-    row.put("arrival_timeout_action", "MANUAL_CONFIRM");
-    row.put("arrival_state", "WAITING_ARRIVAL");
-    row.put("arrival_reason", "WAITING_REQUIRED_FILES");
-    row.put("trigger_on_complete", true);
-    row.put("checksum_type", "SHA-256");
-    row.put("metadata_json", JsonUtils.toJson(metadata));
-    return FileGovernanceArrivalViews.arrivalCandidate(row);
+    return FileGovernanceArrivalViews.arrivalCandidate(new FileGovernanceViews.ArrivalCandidateRow(
+        fileId,
+        tenantId,
+        "SHA-256",
+        fileName,
+        bizDate,
+        null,
+        null,
+        null,
+        JsonUtils.toJson(metadata),
+        groupCode,
+        "ALL_OF",
+        "orders.csv,customers.csv",
+        "MANUAL_CONFIRM",
+        "WAITING_ARRIVAL",
+        "WAITING_REQUIRED_FILES",
+        null,
+        null,
+        "true"));
   }
 }

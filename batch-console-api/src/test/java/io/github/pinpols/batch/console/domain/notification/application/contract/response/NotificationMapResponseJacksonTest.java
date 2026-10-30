@@ -4,9 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookDeliveryLogEntity;
+import io.github.pinpols.batch.console.domain.notification.view.AlertRoutingConfigRow;
+import io.github.pinpols.batch.console.domain.notification.view.NotificationChannelRow;
+import io.github.pinpols.batch.console.domain.notification.view.NotificationDeliveryLogRow;
+import io.github.pinpols.batch.console.domain.notification.view.SubscriptionRuleRow;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,21 +34,22 @@ class NotificationMapResponseJacksonTest {
   @Test
   @DisplayName("渠道行保留蛇形键和配置结构, 凭据及 Webhook 地址脱敏")
   void shouldKeepSnakeCaseKeysAndRedactConfig_whenChannelRowMapped() throws Exception {
-    // MyBatis resultType=map 省略 null 列：不放入 updated_by / config_json。
+    // 行投影 typed 后 jsonb 以文本承载；不放入 updated_by 等价于历史 null 列省略。
     Map<String, Object> config = new LinkedHashMap<>();
     config.put("url", "https://hooks.example/x?key=secret-key");
     config.put("auth", Map.of("apiToken", "secret-token"));
-    Map<String, Object> row = new LinkedHashMap<>();
-    row.put("id", 5L);
-    row.put("tenant_id", "acme");
-    row.put("channel_code", "WH1");
-    row.put("channel_name", "webhook-1");
-    row.put("channel_type", "WEBHOOK");
-    row.put("config_json", config);
-    row.put("enabled", true);
-    row.put("created_by", "op1");
-    row.put("created_at", Instant.parse("2026-07-11T00:00:00Z"));
-    row.put("updated_at", Instant.parse("2026-07-11T01:00:00Z"));
+    NotificationChannelRow row = new NotificationChannelRow(
+        5L,
+        "acme",
+        "WH1",
+        "webhook-1",
+        "WEBHOOK",
+        JsonUtils.toJson(config),
+        true,
+        "op1",
+        null,
+        Instant.parse("2026-07-11T00:00:00Z"),
+        Instant.parse("2026-07-11T01:00:00Z"));
 
     Map<String, Object> back = roundTrip(ConsoleNotificationChannelResponse.from(row));
 
@@ -71,15 +78,19 @@ class NotificationMapResponseJacksonTest {
   @Test
   @DisplayName("订阅规则行保留蛇形键, 未提供的审计列不出现")
   void shouldKeepSnakeCaseKeys_whenSubscriptionRuleRowMapped() throws Exception {
-    Map<String, Object> row = new LinkedHashMap<>();
-    row.put("id", 9L);
-    row.put("tenant_id", "acme");
-    row.put("rule_name", "r1");
-    row.put("channel_code", "WH1");
-    row.put("event_types", "JOB_FAILED,JOB_TIMEOUT");
-    row.put("severity_filter", "ERROR");
-    row.put("job_code_filter", "JOB_A");
-    row.put("enabled", true);
+    SubscriptionRuleRow row = new SubscriptionRuleRow(
+        9L,
+        "acme",
+        "r1",
+        "WH1",
+        "JOB_FAILED,JOB_TIMEOUT",
+        "ERROR",
+        "JOB_A",
+        true,
+        null,
+        null,
+        null,
+        null);
 
     Map<String, Object> back = roundTrip(ConsoleSubscriptionRuleResponse.from(row));
 
@@ -101,17 +112,20 @@ class NotificationMapResponseJacksonTest {
   @Test
   @DisplayName("投递日志保留蛇形键与消息载荷, 未提供的错误列被省略")
   void shouldKeepPayloadAndSnakeCaseKeys_whenDeliveryLogRowMapped() throws Exception {
-    Map<String, Object> row = new LinkedHashMap<>();
-    row.put("id", 3L);
-    row.put("tenant_id", "acme");
-    row.put("rule_id", 0L);
-    row.put("channel_code", "WH1");
-    row.put("event_type", "TEST");
-    row.put("payload_json", Map.of("message", "hi", "accessToken", "secret-token"));
-    row.put("error_args", Map.of("connection", Map.of("password", "secret-password")));
-    row.put("delivery_status", "SUCCESS");
-    row.put("attempt", 1);
-    row.put("created_at", Instant.parse("2026-07-11T00:00:00Z"));
+    NotificationDeliveryLogRow row = new NotificationDeliveryLogRow(
+        3L,
+        "acme",
+        0L,
+        "WH1",
+        "TEST",
+        null,
+        "{\"message\":\"hi\",\"accessToken\":\"secret-token\"}",
+        "SUCCESS",
+        null,
+        null,
+        "{\"connection\":{\"password\":\"secret-password\"}}",
+        1,
+        Instant.parse("2026-07-11T00:00:00Z"));
 
     Map<String, Object> back = roundTrip(ConsoleNotificationDeliveryLogResponse.from(row));
 
@@ -141,6 +155,87 @@ class NotificationMapResponseJacksonTest {
   }
 
   @Test
+  @DisplayName("JSON 数组载荷保留结构并遮罩嵌套凭据，空参数保持为空")
+  void shouldMaskNestedArrayAndPreserveNullErrorArgs() throws Exception {
+    NotificationDeliveryLogRow row = new NotificationDeliveryLogRow(
+        3L,
+        "acme",
+        0L,
+        "WH1",
+        "TEST",
+        null,
+        "[{\"name\":\"first\",\"password\":\"array-secret\"}]",
+        "SUCCESS",
+        null,
+        null,
+        null,
+        1,
+        Instant.parse("2026-07-11T00:00:00Z"));
+    Map<String, Object> back = roundTrip(ConsoleNotificationDeliveryLogResponse.from(row));
+    assertThat(back).doesNotContainKey("error_args");
+    assertThat(back.get("payload_json")).isInstanceOf(List.class);
+    String responseJson = mapper.writeValueAsString(back);
+    assertThat(responseJson).contains("first", "password", "****").doesNotContain("array-secret");
+  }
+
+  @Test
+  @DisplayName("通知投递日志的历史错误摘要从行投影读取时不回显凭据")
+  void shouldMaskCredentialsInStoredNotificationDeliveryErrors() throws Exception {
+    String storedError =
+        "{&quot;password&quot;:&quot;stored-secret&quot;} ｔｏｋｅｎ=unicode-secret; &lt;script&gt; retry later";
+    NotificationDeliveryLogRow typedRow = new NotificationDeliveryLogRow(
+        1L,
+        "tenant-a",
+        9L,
+        "ops",
+        "JOB_FAILED",
+        null,
+        null,
+        "FAILED",
+        storedError,
+        null,
+        null,
+        3,
+        Instant.parse("2026-07-11T00:00:00Z"));
+
+    String error = roundTrip(ConsoleNotificationDeliveryLogResponse.from(typedRow))
+        .get("error_message")
+        .toString();
+    assertThat(error)
+        .contains("password", "token=****", "retry later", "&lt;script&gt;")
+        .doesNotContain("stored-secret", "unicode-secret", "<script>");
+  }
+
+  @Test
+  @DisplayName("终态投递恢复响应保留成功记录的空错误和恢复元数据")
+  void shouldPreserveNullErrorAndRecoveryMetadataForTerminalDelivery() throws Exception {
+    Instant createdAt = Instant.parse("2026-07-11T00:00:00Z");
+    TerminalDeliveryRecoveryResponse response = new TerminalDeliveryRecoveryResponse(
+        "RULE",
+        42L,
+        "tenant-a:workflow:1:terminal",
+        "WORKFLOW_FAILED",
+        "SUCCESS",
+        1,
+        null,
+        null,
+        null,
+        createdAt);
+
+    Map<String, Object> serialized = roundTrip(response);
+
+    assertThat(serialized)
+        .containsEntry("source", "RULE")
+        .containsEntry("id", 42)
+        .containsEntry("terminalEventKey", "tenant-a:workflow:1:terminal")
+        .containsEntry("deliveryStatus", "SUCCESS")
+        .containsEntry("attempt", 1)
+        .containsEntry("errorMessage", null)
+        .containsEntry("nextRetryAt", null)
+        .containsEntry("claimUntil", null);
+  }
+
+  @Test
   @DisplayName("Webhook 投递日志查询响应遮罩载荷凭据但保留业务字段")
   void shouldMaskWebhookDeliveryPayloadCredentials() throws Exception {
     WebhookDeliveryLogEntity entity = new WebhookDeliveryLogEntity();
@@ -155,19 +250,39 @@ class NotificationMapResponseJacksonTest {
   }
 
   @Test
+  @DisplayName("Webhook 历史投递日志响应正文不回显凭据")
+  void shouldMaskCredentialsInStoredWebhookResponseBody() throws Exception {
+    WebhookDeliveryLogEntity entity = new WebhookDeliveryLogEntity();
+    entity.setResponseBody("password=stored-secret; ｔｏｋｅｎ=unicode-secret; retry later");
+
+    Map<String, Object> response = roundTrip(WebhookDeliveryLogResponse.from(entity));
+
+    assertThat(response.get("responseBody").toString())
+        .contains("password=****", "token=****", "retry later")
+        .doesNotContain("stored-secret", "unicode-secret");
+  }
+
+  @Test
+  @DisplayName("Webhook 历史 HTML 转义后的 JSON 错误正文也不回显凭据")
+  void shouldMaskCredentialsInEscapedStoredWebhookResponseBody() throws Exception {
+    WebhookDeliveryLogEntity entity = new WebhookDeliveryLogEntity();
+    entity.setResponseBody("{&quot;accessToken&quot;:&quot;stored-secret&quot;} &lt;script&gt;");
+
+    Map<String, Object> response = roundTrip(WebhookDeliveryLogResponse.from(entity));
+
+    assertThat(response.get("responseBody").toString())
+        .contains("&quot;accessToken&quot;")
+        .contains("&lt;script&gt;")
+        .contains("****")
+        .doesNotContain("stored-secret", "<script>");
+  }
+
+  @Test
   @DisplayName("测试结果中显式写入的空值键必须保留, 不允许被省略")
   void result_preservesExplicitNullKeys() throws Exception {
-    // service 用 LinkedHashMap 显式 put httpStatus/errorSummary（可为 null）→ 键必须保留（无 NON_NULL）。
-    Map<String, Object> row = new LinkedHashMap<>();
-    row.put("channelCode", "WH1");
-    row.put("channelType", "WEBHOOK");
-    row.put("success", true);
-    row.put("status", "OK");
-    row.put("message", "test notification delivered");
-    row.put("httpStatus", null);
-    row.put("errorSummary", null);
-
-    Map<String, Object> back = roundTrip(ConsoleNotificationTestResultResponse.from(row));
+    var response = new ConsoleNotificationTestResultResponse(
+        "WH1", "WEBHOOK", true, "OK", "test notification delivered", null, null);
+    Map<String, Object> back = roundTrip(response);
 
     assertThat(back)
         .containsOnlyKeys(
@@ -185,34 +300,36 @@ class NotificationMapResponseJacksonTest {
   @Test
   @DisplayName("告警路由列表行省略审计列, 全列行保留审计列与分组字段")
   void shouldKeepDifferentKeySets_whenAlertRoutingListRowVersusFullRow() throws Exception {
-    // list（selectByQuery 显式列，不含 created_by/updated_by/is_deleted）。
-    Map<String, Object> listRow = new LinkedHashMap<>();
-    listRow.put("id", 1L);
-    listRow.put("tenant_id", "acme");
-    listRow.put("route_code", "R1");
-    listRow.put("route_name", "route-1");
-    listRow.put("team", "sre");
-    listRow.put("alert_group", "grp");
-    listRow.put("severity", "ERROR");
-    listRow.put("receiver", "oncall");
-    listRow.put("group_wait_seconds", 30);
-    listRow.put("group_interval_seconds", 300);
-    listRow.put("repeat_interval_seconds", 3600);
-    listRow.put("enabled", true);
+    // list（selectByQuery 显式列，created_by/updated_by/is_deleted 以 null 补齐 → NON_NULL 省略）。
+    AlertRoutingConfigRow listRow = new AlertRoutingConfigRow(
+        1L, "acme", "R1", "route-1", "sre", "grp", "ERROR", "oncall", null, 30, 300, 3600, true,
+        null, null, null, null, null, null);
 
     Map<String, Object> listBack = roundTrip(ConsoleAlertRoutingResponse.from(listRow));
     assertThat(listBack).containsEntry("route_code", "R1").containsEntry("group_wait_seconds", 30);
     assertThat(listBack).doesNotContainKeys("created_by", "updated_by", "is_deleted", "group_by");
 
-    // create/update（select *，含全部列，含 is_deleted=false）。
-    Map<String, Object> fullRow = new LinkedHashMap<>(listRow);
-    fullRow.put("group_by", "team");
-    fullRow.put("description", "d");
-    fullRow.put("created_by", "op1");
-    fullRow.put("updated_by", "op1");
-    fullRow.put("created_at", Instant.parse("2026-07-11T00:00:00Z"));
-    fullRow.put("updated_at", Instant.parse("2026-07-11T01:00:00Z"));
-    fullRow.put("is_deleted", false);
+    // create/update（selectByUniqueKey/selectById 全列，含 is_deleted=false）。
+    AlertRoutingConfigRow fullRow = new AlertRoutingConfigRow(
+        1L,
+        "acme",
+        "R1",
+        "route-1",
+        "sre",
+        "grp",
+        "ERROR",
+        "oncall",
+        "team",
+        30,
+        300,
+        3600,
+        true,
+        "d",
+        "op1",
+        "op1",
+        Instant.parse("2026-07-11T00:00:00Z"),
+        Instant.parse("2026-07-11T01:00:00Z"),
+        false);
 
     Map<String, Object> fullBack = roundTrip(ConsoleAlertRoutingResponse.from(fullRow));
     assertThat(fullBack)

@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.console.domain.rbac.service;
 
-import io.github.pinpols.batch.console.domain.rbac.param.ConsoleUserBatchOperationInsertOperationParam;
-
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -14,7 +11,10 @@ import io.github.pinpols.batch.console.domain.rbac.infrastructure.ConsoleUserBat
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserBatchOperationMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleUserBatchOperationInsertOperationParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
+import io.github.pinpols.batch.console.domain.rbac.view.ConsoleUserAccountRow;
+import io.github.pinpols.batch.console.domain.rbac.view.TenantRow;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.UploadFileGuard;
 import java.io.ByteArrayInputStream;
@@ -30,7 +30,6 @@ import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -250,16 +249,16 @@ public class ConsoleUserBatchProvisioningService {
     UUID operationId = UUID.randomUUID();
     List<String> sortedTenantIds = tenantIds.stream().sorted().toList();
     String tenantIdsCsv = String.join(",", sortedTenantIds);
-    ConsoleUserBatchOperationInsertOperationParam consoleUserBatchOperationInsertOperationParam = ConsoleUserBatchOperationInsertOperationParam.builder()
-        .operationId(operationId)
-        .requestId(requestId)
-        .actor(session.actor())
-        .sourceDigest(session.sourceDigest())
-        .accountCount(credentials.size())
-        .tenantIds(tenantIdsCsv)
-        .build();
-    operationMapper.insertOperation(
-        consoleUserBatchOperationInsertOperationParam);
+    ConsoleUserBatchOperationInsertOperationParam consoleUserBatchOperationInsertOperationParam =
+        ConsoleUserBatchOperationInsertOperationParam.builder()
+            .operationId(operationId)
+            .requestId(requestId)
+            .actor(session.actor())
+            .sourceDigest(session.sourceDigest())
+            .accountCount(credentials.size())
+            .tenantIds(tenantIdsCsv)
+            .build();
+    operationMapper.insertOperation(consoleUserBatchOperationInsertOperationParam);
     return new ApplyResult(operationId, credentials.size(), credentials);
   }
 
@@ -331,21 +330,19 @@ public class ConsoleUserBatchProvisioningService {
     String normalizedUsernameForDuplicateCheck = row.username().toLowerCase(Locale.ROOT);
     boolean usernameIsUniqueInFile = usernames.add(normalizedUsernameForDuplicateCheck);
     if (!usernameIsUniqueInFile) return "DUPLICATE_IN_FILE";
-    boolean roleIsNotAllowedForPrincipal =
-        !ConsoleRoles.ALL.contains(row.role())
-            || (!principal.authorities().contains(ConsoleRoles.ADMIN)
-                && !Set.of(ConsoleRoles.TENANT_ADMIN, ConsoleRoles.TENANT_USER)
-                    .contains(row.role()));
+    boolean roleIsNotAllowedForPrincipal = !ConsoleRoles.ALL.contains(row.role())
+        || (!principal.authorities().contains(ConsoleRoles.ADMIN)
+            && !Set.of(ConsoleRoles.TENANT_ADMIN, ConsoleRoles.TENANT_USER).contains(row.role()));
     if (roleIsNotAllowedForPrincipal) return "INVALID_ROLE";
     if (Set.of(ConsoleRoles.ADMIN, ConsoleRoles.AUDITOR).contains(row.role())) {
       if (!"system".equals(row.tenantId())) return "INVALID_TENANT";
     } else {
-      Map<String, Object> tenant = tenantMapper.selectByTenantId(row.tenantId());
+      TenantRow tenant = tenantMapper.selectByTenantId(row.tenantId());
       boolean tenantIsMissingOrInactive =
-          EmptyChecks.isNull(tenant) || !"ACTIVE".equals(tenant.get("status"));
+          EmptyChecks.isNull(tenant) || !"ACTIVE".equals(tenant.status());
       if (tenantIsMissingOrInactive) return "TENANT_NOT_ACTIVE";
     }
-    Map<String, Object> existingAccount = accountMapper.selectByUsername(row.username());
+    ConsoleUserAccountRow existingAccount = accountMapper.selectByUsername(row.username());
     return EmptyChecks.isNull(existingAccount) ? null : "USERNAME_EXISTS";
   }
 

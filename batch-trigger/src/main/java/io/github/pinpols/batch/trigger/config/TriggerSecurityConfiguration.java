@@ -47,9 +47,9 @@ public class TriggerSecurityConfiguration {
   @Bean
   @SuppressWarnings("java:S4502")
   public SecurityFilterChain triggerSecurityFilterChain(HttpSecurity http) throws Exception {
-    // Internal-secret requests cannot be forged by a browser because the secret is not a cookie.
-    // Keep CSRF enabled for every other request so a future authentication path cannot silently
-    // inherit an unprotected state-changing endpoint.
+    // 内部密钥请求无法由浏览器伪造，因为该密钥不存储在 Cookie 中。
+    // 其他请求仍须启用 CSRF，避免未来新增认证路径时无意间
+    // 继承未受保护的状态变更接口。
     http.csrf(csrf -> csrf.ignoringRequestMatchers(
             new InternalSecretRequestMatcher(securityProperties), new EventApiKeyRequestMatcher()))
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

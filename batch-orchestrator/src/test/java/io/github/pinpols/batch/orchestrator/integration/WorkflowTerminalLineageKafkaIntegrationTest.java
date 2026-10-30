@@ -98,18 +98,18 @@ class WorkflowTerminalLineageKafkaIntegrationTest extends AbstractIntegrationTes
   @DisplayName("端点失败不确认 Kafka 位点,恢复和重复消息保留原业务日,终态及唯一外部运行身份")
   void shouldRetryTerminalDeliveryWithStableIdentity_afterEndpointFailureAndKafkaRedelivery()
       throws Exception {
-        final String insertWorkflowDefinitionSql = """
+    final String insertWorkflowDefinitionSql = """
         insert into batch.workflow_definition
           (tenant_id,workflow_code,workflow_name,workflow_type,version,enabled)
         values (?, 'r32-workflow', 'r32 workflow', 'DAG', 1, true) returning id
         """;
-        final String insertWorkflowRunSql = """
+    final String insertWorkflowRunSql = """
         insert into batch.workflow_run
           (tenant_id,workflow_definition_id,biz_date,run_status,workflow_version_snapshot,
            execution_snapshot,started_at,finished_at,trace_id)
         values (?, ?, '2026-10-19', 'FAILED', 1, '{}'::jsonb, ?, ?, 'r32-trace') returning id
         """;
-        final String selectCountSql = """
+    final String selectCountSql = """
         select count(*) from batch.outbox_event where tenant_id=? and event_key=?
         """;
     final String selectPayloadJsonSql = """

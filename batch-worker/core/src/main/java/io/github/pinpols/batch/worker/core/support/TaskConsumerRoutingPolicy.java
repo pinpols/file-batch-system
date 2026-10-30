@@ -115,9 +115,8 @@ final class TaskConsumerRoutingPolicy {
     if (dispatchMessageIdentityIsIncomplete) {
       return false;
     }
-    boolean configuredWorkerTypeDoesNotMatchMessage =
-        EmptyChecks.isNull(configuration.workerType())
-            || !configuration.workerType().equalsIgnoreCase(message.workerType());
+    boolean configuredWorkerTypeDoesNotMatchMessage = EmptyChecks.isNull(configuration.workerType())
+        || !configuration.workerType().equalsIgnoreCase(message.workerType());
     if (configuredWorkerTypeDoesNotMatchMessage) {
       return false;
     }

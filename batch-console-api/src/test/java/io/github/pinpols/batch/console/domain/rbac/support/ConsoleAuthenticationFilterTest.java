@@ -30,7 +30,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
-// SseTicketService used in mock() call below
+// 下方 mock() 调用会用到 SseTicketService。
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("控制台认证过滤器:开关与旁路模式放行, cookie 与工单票据鉴权, 非法凭据返回未授权或禁止")
@@ -94,7 +94,7 @@ class ConsoleAuthenticationFilterTest {
     filter.doFilterInternal(request, response, chain);
 
     verify(chain).doFilter(request, response);
-    // SecurityContext should be cleared in finally block
+    // 应在 finally 代码块中清除 SecurityContext。
     assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
   }
 

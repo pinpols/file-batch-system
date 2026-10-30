@@ -74,12 +74,12 @@ public class OrchestratorRedisSupport {
     return cacheRead(key, () -> redisTemplate.opsForValue().get(key));
   }
 
-  /** Best-effort cache write: Redis unavailable skips the write. */
+  /** 尽力写入缓存：Redis 不可用时跳过写入。 */
   public void setStringCache(String key, String value, Duration ttl) {
     cacheWrite(key, () -> redisTemplate.opsForValue().set(key, value, ttl));
   }
 
-  /** Best-effort cache eviction: Redis unavailable skips the delete. */
+  /** 尽力清除缓存：Redis 不可用时跳过删除。 */
   public void evictCache(String key) {
     cacheWrite(key, () -> redisTemplate.delete(key));
   }

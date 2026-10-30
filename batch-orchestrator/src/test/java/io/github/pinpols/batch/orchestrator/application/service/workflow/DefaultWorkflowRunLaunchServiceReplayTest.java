@@ -1,9 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
-import io.github.pinpols.batch.orchestrator.domain.param.WorkflowRunMarkRunningParam;
-import io.github.pinpols.batch.orchestrator.domain.query.WorkflowRunActiveByTenantWorkflowBizDateQuery;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -15,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.ReplayOperationStatus;
+import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -25,8 +22,8 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.ExternalEventExpectationService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RelatedFileReferenceValidator;
 import io.github.pinpols.batch.orchestrator.application.service.replay.WorkflowRunReplaySnapshotResolver;
-import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
@@ -44,6 +41,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -51,7 +49,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
+import org.mockito.InOrder;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -169,23 +170,34 @@ class DefaultWorkflowRunLaunchServiceReplayTest {
     when(triggerRequests.selectByTenantAndRequestIdForUpdate(TENANT, REQUEST_ID))
         .thenReturn(accepted);
     when(replayOperations.attachTargetWorkflowRun(
-            org.mockito.ArgumentMatchers.eq(TENANT),
-            org.mockito.ArgumentMatchers.eq(REQUEST_ID),
-            org.mockito.ArgumentMatchers.eq(990L),
-            org.mockito.ArgumentMatchers.any(Instant.class)))
+            ArgumentMatchers.eq(TENANT),
+            ArgumentMatchers.eq(REQUEST_ID),
+            ArgumentMatchers.eq(990L),
+            ArgumentMatchers.any(Instant.class)))
         .thenReturn(1);
-    when(workflowRuns.markRunning(
-            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), TENANT) && java.util.Objects.equals(parameters.id(), 990L) && java.util.Objects.equals(parameters.runStatus(), "RUNNING") && java.util.Objects.equals(parameters.currentNodeCode(), "FIRST") && parameters.startedAt() != null)))
+    when(workflowRuns.markRunning(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.tenantId(), TENANT)
+            && Objects.equals(parameters.id(), 990L)
+            && Objects.equals(parameters.runStatus(), "RUNNING")
+            && Objects.equals(parameters.currentNodeCode(), "FIRST")
+            && parameters.startedAt() != null)))
         .thenReturn(1);
     doAnswer(invocation -> {
-      WorkflowRunEntity created = invocation.getArgument(0);
-      created.setId(990L);
-      return 1;
-    }).when(workflowRuns).insertIfActiveSlotFree(org.mockito.ArgumentMatchers.any(WorkflowRunEntity.class));
-    when(nodeRuns.insert(org.mockito.ArgumentMatchers.any(WorkflowNodeRunEntity.class)))
-        .thenReturn(1);
-    when(secretPayloadProtector.protect(org.mockito.ArgumentMatchers.anyString()))
+          WorkflowRunEntity created = invocation.getArgument(0);
+          created.setId(990L);
+          return 1;
+        })
+        .when(workflowRuns)
+        .insertIfActiveSlotFree(ArgumentMatchers.any(WorkflowRunEntity.class));
+    when(nodeRuns.insert(ArgumentMatchers.any(WorkflowNodeRunEntity.class))).thenReturn(1);
+    when(secretPayloadProtector.protect(ArgumentMatchers.anyString()))
         .thenReturn("sealed-launch-params");
+    WorkflowNodeRunEntity savedStart = new WorkflowNodeRunEntity();
+    savedStart.setSourcePayloadProtected("sealed-launch-params");
+    when(nodeRuns.selectLatestByWorkflowRunIdAndNodeCode(990L, "START")).thenReturn(savedStart);
+    when(secretPayloadProtector.reveal("sealed-launch-params"))
+        .thenReturn(JsonUtils.toJson(
+            Map.of("password", "root-secret", "_rerunResultPolicy", "CREATE_NEW_VERSION")));
 
     service.launch(transportRequest());
 
@@ -193,10 +205,13 @@ class DefaultWorkflowRunLaunchServiceReplayTest {
         ArgumentCaptor.forClass(WorkflowRunEntity.class);
     verify(workflowRuns).insertIfActiveSlotFree(rootRunCaptor.capture());
     WorkflowRunEntity created = rootRunCaptor.getValue();
-    org.mockito.InOrder completionOrder = org.mockito.Mockito.inOrder(dagService, terminalFinalizer);
-    completionOrder.verify(dagService).cascadeSkipDownstreamForRun(
-        org.mockito.ArgumentMatchers.eq(created), org.mockito.ArgumentMatchers.eq("START"),
-        org.mockito.ArgumentMatchers.anyString());
+    InOrder completionOrder = Mockito.inOrder(dagService, terminalFinalizer);
+    completionOrder
+        .verify(dagService)
+        .cascadeSkipDownstreamForRun(
+            ArgumentMatchers.eq(created),
+            ArgumentMatchers.eq("START"),
+            ArgumentMatchers.anyString());
     completionOrder.verify(terminalFinalizer).finalizeIfAllNodesTerminal(created);
     assertThat(created.getWorkflowDefinitionId()).isEqualTo(81L);
     assertThat(created.getSingleJobDefinitionId()).isEqualTo(700L);
@@ -209,28 +224,75 @@ class DefaultWorkflowRunLaunchServiceReplayTest {
     ArgumentCaptor<WorkflowNodeRunEntity> startCaptor =
         ArgumentCaptor.forClass(WorkflowNodeRunEntity.class);
     verify(nodeRuns).insert(startCaptor.capture());
-    assertThat(startCaptor.getValue().getSourcePayloadProtected()).isEqualTo("sealed-launch-params");
+    assertThat(startCaptor.getValue().getSourcePayloadProtected())
+        .isEqualTo("sealed-launch-params");
     verify(workflowDefinitions, never()).selectByTenantAndIdAndEnabled(TENANT, 81L, true);
     verify(configCache, never()).findEnabledJobDefinition(TENANT, "COMPUTE_A");
-    verify(replayOperations).attachTargetWorkflowRun(
-        org.mockito.ArgumentMatchers.eq(TENANT),
-        org.mockito.ArgumentMatchers.eq(REQUEST_ID),
-        org.mockito.ArgumentMatchers.eq(990L),
-        org.mockito.ArgumentMatchers.any(Instant.class));
-    verify(nodeDispatch).dispatchNode(
-        org.mockito.ArgumentMatchers.isNull(),
-        org.mockito.ArgumentMatchers.any(WorkflowRunEntity.class),
-        org.mockito.ArgumentMatchers.argThat(node -> "FIRST".equals(node.nodeCode())),
-        org.mockito.ArgumentMatchers.contains("_rerunResultPolicy"),
-        org.mockito.ArgumentMatchers.eq("trace-replay-808"));
+    verify(replayOperations)
+        .attachTargetWorkflowRun(
+            ArgumentMatchers.eq(TENANT),
+            ArgumentMatchers.eq(REQUEST_ID),
+            ArgumentMatchers.eq(990L),
+            ArgumentMatchers.any(Instant.class));
+    verify(nodeDispatch)
+        .dispatchNode(
+            ArgumentMatchers.isNull(),
+            ArgumentMatchers.any(WorkflowRunEntity.class),
+            ArgumentMatchers.argThat(node -> "FIRST".equals(node.nodeCode())),
+            ArgumentMatchers.contains("_rerunResultPolicy"),
+            ArgumentMatchers.eq("trace-replay-808"));
+  }
+
+  @Test
+  @DisplayName("已建档运行缺少冻结载荷时不推进运行或派发节点")
+  void shouldNotDispatchWhenFrozenStartPayloadIsMissing() {
+    TriggerRequestEntity accepted = acceptedTriggerRequest();
+    WorkflowRunEntity run = new WorkflowRunEntity();
+    run.setId(990L);
+    run.setTenantId(TENANT);
+    run.setRunStatus("CREATED");
+    run.setExecutionSnapshot("{\"initialNodes\":[{\"nodeCode\":\"FIRST\",\"nodeType\":\"JOB\"}]}");
+    when(triggerRequests.selectByTenantAndRequestId(TENANT, REQUEST_ID)).thenReturn(accepted);
+    when(workflowRuns.selectByTenantAndTriggerRequestId(TENANT, TRIGGER_REQUEST_ID))
+        .thenReturn(run);
+
+    assertThatThrownBy(() -> service.launch(transportRequest()))
+        .isInstanceOf(BizException.class)
+        .hasMessage("error.workflow.execution_snapshot_invalid");
+    verify(workflowRuns, never()).markRunning(any());
+    Mockito.verifyNoInteractions(nodeDispatch);
+  }
+
+  @Test
+  @DisplayName("冻结载荷无法解密时不推进运行或派发节点")
+  void shouldNotDispatchWhenFrozenStartPayloadCannotBeDecrypted() {
+    WorkflowRunEntity run = new WorkflowRunEntity();
+    run.setId(990L);
+    run.setTenantId(TENANT);
+    run.setRunStatus("CREATED");
+    run.setExecutionSnapshot("{\"initialNodes\":[{\"nodeCode\":\"FIRST\",\"nodeType\":\"JOB\"}]}");
+    when(triggerRequests.selectByTenantAndRequestId(TENANT, REQUEST_ID))
+        .thenReturn(acceptedTriggerRequest());
+    when(workflowRuns.selectByTenantAndTriggerRequestId(TENANT, TRIGGER_REQUEST_ID))
+        .thenReturn(run);
+    WorkflowNodeRunEntity start = new WorkflowNodeRunEntity();
+    start.setSourcePayloadProtected("invalid-ciphertext");
+    when(nodeRuns.selectLatestByWorkflowRunIdAndNodeCode(990L, "START")).thenReturn(start);
+    when(secretPayloadProtector.reveal("invalid-ciphertext"))
+        .thenThrow(new IllegalArgumentException("invalid ciphertext"));
+
+    assertThatThrownBy(() -> service.launch(transportRequest()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("invalid ciphertext");
+    verify(workflowRuns, never()).markRunning(any());
+    Mockito.verifyNoInteractions(nodeDispatch);
   }
 
   @Test
   @DisplayName("运行中的 operation 不匹配 target request 时拒绝启动")
   void shouldRejectWrongTargetRequest_whenReplayOperationIsAlreadyBoundElsewhere() {
-    ReplayOperationEntity operation = approvedOperation().toBuilder()
-        .targetRequestId("different-request")
-        .build();
+    ReplayOperationEntity operation =
+        approvedOperation().toBuilder().targetRequestId("different-request").build();
     TriggerRequestEntity accepted = acceptedTriggerRequest();
     when(triggerRequests.selectByTenantAndRequestId(TENANT, REQUEST_ID)).thenReturn(accepted);
     when(workflowRuns.selectByTenantAndTriggerRequestId(TENANT, TRIGGER_REQUEST_ID))
@@ -241,7 +303,48 @@ class DefaultWorkflowRunLaunchServiceReplayTest {
         .isInstanceOf(BizException.class)
         .hasMessage("error.workflow.workflow_run_replay_approval_state_invalid");
     verify(replaySnapshotResolver, never()).resolve(operation, REQUEST_ID);
-    verify(workflowRuns, never()).insertIfActiveSlotFree(org.mockito.ArgumentMatchers.any(WorkflowRunEntity.class));
+    verify(workflowRuns, never())
+        .insertIfActiveSlotFree(ArgumentMatchers.any(WorkflowRunEntity.class));
+  }
+
+  @Test
+  @DisplayName("无运行时拒绝不可读取的重放快照")
+  void shouldRejectInvalidSnapshotWhenNoRunExists() {
+    ReplayOperationEntity operation = approvedOperation();
+    TriggerRequestEntity accepted = acceptedTriggerRequest();
+    when(triggerRequests.selectByTenantAndRequestId(TENANT, REQUEST_ID)).thenReturn(accepted);
+    when(triggerRequests.selectByTenantAndRequestIdForUpdate(TENANT, REQUEST_ID))
+        .thenReturn(accepted);
+    when(replayOperations.selectByTargetRequest(TENANT, REQUEST_ID)).thenReturn(operation);
+    when(replaySnapshotResolver.resolve(operation, REQUEST_ID))
+        .thenThrow(BizException.of(ResultCode.STATE_CONFLICT, "invalid snapshot"));
+
+    assertThatThrownBy(() -> service.launch(transportRequest()))
+        .isInstanceOf(BizException.class)
+        .hasMessage("invalid snapshot");
+    verify(triggerRequests).updateAcceptance(TENANT, REQUEST_ID, "REJECTED", null);
+    verify(workflowRuns, never()).insertIfActiveSlotFree(any(WorkflowRunEntity.class));
+  }
+
+  @Test
+  @DisplayName("无运行时拒绝不匹配的重放时间范围")
+  void shouldRejectSnapshotIdentityMismatchWhenNoRunExists() {
+    ReplayOperationEntity operation = approvedOperation();
+    TriggerRequestEntity accepted = acceptedTriggerRequest();
+    when(triggerRequests.selectByTenantAndRequestId(TENANT, REQUEST_ID)).thenReturn(accepted);
+    when(triggerRequests.selectByTenantAndRequestIdForUpdate(TENANT, REQUEST_ID))
+        .thenReturn(accepted);
+    when(replayOperations.selectByTargetRequest(TENANT, REQUEST_ID)).thenReturn(operation);
+    when(replaySnapshotResolver.resolve(operation, REQUEST_ID)).thenReturn(approvedSnapshot());
+    LaunchRequest mismatched = transportRequest().toBuilder()
+        .dataIntervalEnd(Instant.parse("2026-10-22T00:00:00Z"))
+        .build();
+
+    assertThatThrownBy(() -> service.launch(mismatched))
+        .isInstanceOf(BizException.class)
+        .hasMessage("error.workflow.trigger_target_mismatch");
+    verify(triggerRequests).updateAcceptance(TENANT, REQUEST_ID, "REJECTED", null);
+    verify(workflowRuns, never()).insertIfActiveSlotFree(any(WorkflowRunEntity.class));
   }
 
   @Test
@@ -257,7 +360,7 @@ class DefaultWorkflowRunLaunchServiceReplayTest {
     when(replaySnapshotResolver.resolve(operation, REQUEST_ID)).thenReturn(snapshot);
     when(triggerRequests.selectByTenantAndRequestIdForUpdate(TENANT, REQUEST_ID))
         .thenReturn(accepted);
-    when(workflowRuns.insertIfActiveSlotFree(org.mockito.ArgumentMatchers.any(WorkflowRunEntity.class)))
+    when(workflowRuns.insertIfActiveSlotFree(ArgumentMatchers.any(WorkflowRunEntity.class)))
         .thenReturn(0);
 
     service.launch(transportRequest());
@@ -275,12 +378,13 @@ class DefaultWorkflowRunLaunchServiceReplayTest {
     assertThat(frozen.effectiveRequest().params()).isEqualTo(snapshot.launchParams());
     assertThat(frozen.workflowVersion()).isEqualTo(snapshot.workflowVersion());
     assertThat(frozen.executionSnapshotJson()).isEqualTo(snapshot.executionSnapshotJson());
-    verify(nodeDispatch, never()).dispatchNode(
-        org.mockito.ArgumentMatchers.any(),
-        org.mockito.ArgumentMatchers.any(),
-        org.mockito.ArgumentMatchers.any(),
-        org.mockito.ArgumentMatchers.any(),
-        org.mockito.ArgumentMatchers.anyString());
+    verify(nodeDispatch, never())
+        .dispatchNode(
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.anyString());
   }
 
   @ParameterizedTest
@@ -302,8 +406,8 @@ class DefaultWorkflowRunLaunchServiceReplayTest {
     node.setRelatedJobCode("BUNDLE_A");
     node.setEnabled(true);
     node.setNodeParams(nodeParams);
-    Map<String, Object> defaultParams = Map.of(
-        "bundleFiles", List.of(Map.of("sourceFileId", 11L, "templateCode", "TEMPLATE")));
+    Map<String, Object> defaultParams =
+        Map.of("bundleFiles", List.of(Map.of("sourceFileId", 11L, "templateCode", "TEMPLATE")));
     JobDefinitionEntity job = JobDefinitionEntity.builder()
         .id(700L)
         .tenantId(TENANT)
@@ -328,7 +432,9 @@ class DefaultWorkflowRunLaunchServiceReplayTest {
     when(configCache.findEnabledJobDefinition(TENANT, "BUNDLE_A")).thenReturn(job);
     when(rerunDefinitions.resolve(request, "BUNDLE_A", job)).thenReturn(job);
     String failure = "stop after selected file reference validation";
-    doThrow(new IllegalStateException(failure)).when(fileReferences).validate(TENANT, expectedFileId);
+    doThrow(new IllegalStateException(failure))
+        .when(fileReferences)
+        .validate(TENANT, expectedFileId);
 
     assertThatThrownBy(() -> service.launch(request))
         .isInstanceOf(IllegalStateException.class)

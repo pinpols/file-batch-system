@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>{@link TriggerGracefulShutdown} 在 startDraining/stopDraining 时更新本状态，然后调用 Quartz
  *       standby/start。
- *   <li>{@code TriggerController} / {@code BatchDayCutoffScheduler} / {@code TriggerReconciler}
+ *   <li>{@code TriggerController} / {@code TriggerReconciler}
  *       等只关心"是否在排水"的调用方,可直接注入本 bean,无需依赖 Quartz {@code Scheduler}。
  * </ul>
  */

@@ -14,10 +14,11 @@ import io.github.pinpols.batch.console.application.ops.ConsoleClusterDiagnosticS
 import io.github.pinpols.batch.console.domain.ops.mapper.ConsoleClusterDiagnosticMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.WorkerRegistryMapper;
 import io.github.pinpols.batch.console.domain.ops.view.cluster.ActiveTaskWorkerIssueView;
+import io.github.pinpols.batch.console.domain.ops.view.cluster.ClusterStatusCountView;
 import io.github.pinpols.batch.console.domain.ops.view.cluster.DeliveryStatusCountView;
 import io.github.pinpols.batch.console.domain.ops.view.cluster.JobInstanceDiagnosticView;
 import io.github.pinpols.batch.console.domain.ops.view.cluster.OutboxStatusCountView;
-import io.github.pinpols.batch.console.domain.ops.view.cluster.StatusCountView;
+import io.github.pinpols.batch.console.domain.ops.view.cluster.ShedLockView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import java.time.Instant;
@@ -53,6 +54,27 @@ class ConsoleClusterDiagnosticServiceTest {
             anyString(), any(), ArgumentMatchers.<TypeReference<Object>>any(), any()))
         .thenAnswer(inv -> ((Supplier<?>) inv.getArgument(3)).get());
     return cache;
+  }
+
+  @Test
+  @DisplayName("调度锁诊断保留锁记录和可空字段")
+  void shouldPreserveLockRowsAndNullableFields() {
+    Instant time = Instant.now().plusSeconds(3600);
+    Instant expired = Instant.now().minusSeconds(3600);
+    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+    when(diagnosticMapper.shedlockAll())
+        .thenReturn(List.of(
+            new ShedLockView("one", time, null, "worker", true),
+            new ShedLockView("two", null, time, null, false),
+            new ShedLockView("expired", expired, time, "worker", false)));
+
+    var result = service.shedLockStatus("tenant-a");
+
+    assertThat(result.totalLocks()).isEqualTo(3);
+    assertThat(result.activeLocks()).isEqualTo(1L);
+    assertThat(result.locks()).extracting("name").containsExactly("one", "two", "expired");
+    assertThat(result.locks().get(1).lockUntil()).isNull();
+    assertThat(result.locks().get(1).lockedBy()).isNull();
   }
 
   @Test
@@ -122,6 +144,10 @@ class ConsoleClusterDiagnosticServiceTest {
     var result = service.outboxHealth("tenant-a");
 
     assertThat(result.pendingEvents()).isEqualTo(50L);
+    assertThat(result.deliveryStats()).singleElement().satisfies(item -> {
+      assertThat(item.deliveryStatus()).isEqualTo("SUCCESS");
+      assertThat(item.cnt()).isEqualTo(100L);
+    });
     assertThat(result.healthy()).isTrue();
   }
 
@@ -193,7 +219,7 @@ class ConsoleClusterDiagnosticServiceTest {
     JobInstanceDiagnosticView instance = instance(9L, JobInstanceStatus.PARTIAL_FAILED.code());
     when(diagnosticMapper.selectJobInstanceSummary("tenant-a", 9L)).thenReturn(instance);
     when(diagnosticMapper.partitionStatusCounts("tenant-a", 9L))
-        .thenReturn(List.of(new StatusCountView("RUNNING", 1L)));
+        .thenReturn(List.of(new ClusterStatusCountView("RUNNING", 1L)));
     when(diagnosticMapper.taskStatusCounts("tenant-a", 9L)).thenReturn(List.of());
     when(diagnosticMapper.outboxStatusCountsForInstance("tenant-a", 9L)).thenReturn(List.of());
     when(diagnosticMapper.activeTaskWorkerIssues("tenant-a", 9L, 120L)).thenReturn(List.of());
@@ -214,12 +240,11 @@ class ConsoleClusterDiagnosticServiceTest {
     JobInstanceDiagnosticView instance = instance(8L, JobInstanceStatus.RUNNING.code());
     when(diagnosticMapper.selectJobInstanceSummary("tenant-a", 8L)).thenReturn(instance);
     when(diagnosticMapper.partitionStatusCounts("tenant-a", 8L))
-        .thenReturn(List.of(new StatusCountView("RUNNING", 1L)));
+        .thenReturn(List.of(new ClusterStatusCountView("RUNNING", 1L)));
     when(diagnosticMapper.taskStatusCounts("tenant-a", 8L))
-        .thenReturn(List.of(new StatusCountView("RUNNING", 1L)));
+        .thenReturn(List.of(new ClusterStatusCountView("RUNNING", 1L)));
     when(diagnosticMapper.outboxStatusCountsForInstance("tenant-a", 8L))
-        .thenReturn(
-            List.of(new OutboxStatusCountView("FAILED", 2L, Instant.EPOCH, Instant.EPOCH)));
+        .thenReturn(List.of(new OutboxStatusCountView("FAILED", 2L, Instant.EPOCH, Instant.EPOCH)));
     when(diagnosticMapper.activeTaskWorkerIssues("tenant-a", 8L, 120L))
         .thenReturn(List.of(new ActiveTaskWorkerIssueView(
             99L, null, "RUNNING", "w1", null, null, null, "RUNNING_TASK_HEARTBEAT_STALE")));
@@ -231,22 +256,30 @@ class ConsoleClusterDiagnosticServiceTest {
         .contains("OUTBOX_EVENTS_NOT_TERMINAL", "RUNNING_TASK_HEARTBEAT_STALE");
   }
 
+  @Test
+  @DisplayName("实例未指定工作组时，不将未知在线数误报为零")
+  void shouldNotReportMissingWorkersWhenGroupUnspecified() {
+    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+    for (String group : new String[] {null, "  "}) {
+      JobInstanceDiagnosticView instance = new JobInstanceDiagnosticView(
+          10L, "tenant-a", "JI-10", "import_daily", null, "RUNNING", null, group, null, null, null);
+      when(diagnosticMapper.selectJobInstanceSummary("tenant-a", 10L)).thenReturn(instance);
+
+      var result = service.instanceDiagnosis("tenant-a", 10L);
+
+      assertThat(result.summary().onlineWorkersForGroup()).isNull();
+      assertThat(result.findings())
+          .extracting(finding -> finding.reasonCode())
+          .doesNotContain("NO_ONLINE_WORKER_FOR_GROUP");
+    }
+  }
+
   private static DeliveryStatusCountView deliveryView(String status, long cnt) {
     return new DeliveryStatusCountView(status, cnt);
   }
 
   private static JobInstanceDiagnosticView instance(long id, String status) {
     return new JobInstanceDiagnosticView(
-        id,
-        "tenant-a",
-        "JI-" + id,
-        "import_daily",
-        null,
-        status,
-        null,
-        "IMPORT",
-        null,
-        null,
-        null);
+        id, "tenant-a", "JI-" + id, "import_daily", null, status, null, "IMPORT", null, null, null);
   }
 }

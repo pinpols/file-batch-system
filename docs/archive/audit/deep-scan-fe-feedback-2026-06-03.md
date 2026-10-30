@@ -1,3 +1,5 @@
+> 历史原始记录：本轮恢复保留，正文中的结论、参数、状态和操作步骤仅适用于原日期/基线。提炼方法不替代原始证据；当前事实须按[文档治理](../../standards/document-governance.md)重新核实。本轮未执行原测试或扫描。
+
 # 深度扫描:前端反馈系统(Loading / Error / Toast / 通知 / Confirm / 进度)
 
 - **范围**:`../batch-console`(Vue 3 + Element Plus + TanStack Query)

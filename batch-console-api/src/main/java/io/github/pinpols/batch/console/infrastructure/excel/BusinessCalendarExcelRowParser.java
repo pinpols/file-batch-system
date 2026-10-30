@@ -16,21 +16,22 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_DESCRIPTION;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_ENABLED;
 
-import lombok.Builder;
-
 import io.github.pinpols.batch.common.enums.CatchUpPolicyType;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.HolidayRollRule;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.job.param.BusinessCalendarUpsertParam;
+import io.github.pinpols.batch.console.domain.job.support.BusinessCalendarTimezone;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-/** Shared parser/upsert helper for business_calendar Excel rows. */
+import lombok.Builder;
+
+/** business_calendar Excel 行共用的解析与新增或更新辅助逻辑。 */
 public final class BusinessCalendarExcelRowParser {
 
   public static final String SHEET_NAME = ConfigPackageExcelSchema.BusinessCalendar.SHEET_NAME;
@@ -43,13 +44,17 @@ public final class BusinessCalendarExcelRowParser {
   public static CalendarRow parseRow(
       String tenantId, int rowNo, Map<String, String> values, List<String> issues) {
     String effectiveTenant = resolveTenantField(values, tenantId, issues);
-    CalendarRow.CalendarRowBuilder rowBuilder = CalendarRow.builder().rowNo(rowNo).tenantId(effectiveTenant);
+    CalendarRow.CalendarRowBuilder rowBuilder =
+        CalendarRow.builder().rowNo(rowNo).tenantId(effectiveTenant);
     String calendarCodeText = requireText(values, COL_CALENDAR_CODE, 128, issues);
     String calendarCode = CodeNormalizer.toConfigFormOrNull(calendarCodeText);
     rowBuilder.calendarCode(calendarCode);
     String calendarName = requireText(values, COL_CALENDAR_NAME, 256, issues);
     rowBuilder.calendarName(calendarName);
     String timezone = requireText(values, COL_TIMEZONE, 64, issues);
+    if (Texts.hasText(timezone) && !BusinessCalendarTimezone.isValid(timezone)) {
+      issues.add("timezone is invalid");
+    }
     rowBuilder.timezone(timezone);
     String holidayRollRule =
         optionalEnum(values, COL_HOLIDAY_ROLL_RULE, HOLIDAY_ROLL_RULES, 32, "SKIP", issues);

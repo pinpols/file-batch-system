@@ -7,6 +7,10 @@
 
 | 文档 | 范围 |
 |---|---|
+| [前后端Bug审查与验证汇总](../review/frontend-backend-bug-review-2026-10-27.md#backend-validation-record) | 配置身份140项/真实PG61项，Worker Core402项、上游783通过/5跳过、配额真实PG12/Redis6项；前轮迁移4项独立保留；配对前端证据与首红范围保留 |
+| [wdi-local-security-validation-2026-10-25.md](wdi-local-security-validation-2026-10-25.md) | 本地秘密/SAST/依赖、B199/B200各8镜像与认证DAST；保留NVD失败及告警边界 |
+| [wdi-local-closure-2026-10-25.md](wdi-local-closure-2026-10-25.md) | 双仓测试/模型/脚本、批量接线、真实SIM/浏览器和开关证据；原始WARN与新增维护候选分列 |
+| [wdi-functional-closure-2026-10-25.md](wdi-functional-closure-2026-10-25.md) | readiness、Kafka 耗尽恢复、WR-04、独立 SDK 故障边界及配置导入定向验证；与正式发布验收分开 |
 | [local-log-retention-2026-10-24.md](./local-log-retention-2026-10-24.md) | 本地日志默认留存、内容校验归档、保护边界、CLI与预览证据；真实日志未清理，全仓高风险操作基线仍有既有差异 |
 | [worker-five-load-validation-2026-10-04.md](./worker-five-load-validation-2026-10-04.md) | 五类 Worker 1w / 10w 压测验收记录模板与当前证据入口 |
 | [worker-local-runtime-performance-2026-09-14.md](worker-stress-and-recovery-validation-2026-09-14.md) | 本地 JVM Worker 严格阶梯、混合压力与故障恢复复测 |
@@ -85,3 +89,5 @@
 - [2026-09-20 本地验收与混合压测](worker-local-acceptance-and-mixed-load-2026-09-20.md)：重新构建、完整本地验收、SIM全场景与30秒混合流量。
 
 两轮基线和验证范围不同，后者不等同于覆盖前者全部场景；日期报告保留原结论，不推导为本轮改造已验收。
+
+- [后端 Bug 运行复现与整改验证（2026-10-26）](backend-bug-remediation-2026-10-26.md): 9 项修复、真实 PostgreSQL/SQLite/Kafka 与定向回归证据。

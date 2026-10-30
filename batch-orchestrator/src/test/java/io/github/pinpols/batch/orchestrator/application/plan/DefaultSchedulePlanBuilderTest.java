@@ -162,7 +162,7 @@ class DefaultSchedulePlanBuilderTest {
         .thenReturn(jobDef("STATIC", 5, null));
     when(configCacheService.findEnabledWorkflowDefinition(any(), any())).thenReturn(null);
 
-    // requested 300 but max is 256
+    // 请求值为 300，但最大值为 256。
     Map<String, Object> params = Map.of("partitionCount", 300);
     SchedulePlan plan = builder.build(command(params));
 

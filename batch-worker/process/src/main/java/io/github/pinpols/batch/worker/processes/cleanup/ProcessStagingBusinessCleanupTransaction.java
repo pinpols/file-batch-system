@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.processes.cleanup;
 import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.processes.mapper.business.ProcessStagingMapper;
+import io.github.pinpols.batch.worker.processes.query.ProcessStagingExpiredScanQuery;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -11,7 +12,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 启动明确的顶层 Workflow 目标，不创建虚构的 Job Instance。 */
+/** 在 PROCESS 业务库事务中查询、封存和分批回收 staging 代际，并设置租户及代际 RLS 上下文。 */
 @Service
 public class ProcessStagingBusinessCleanupTransaction {
 
@@ -29,6 +30,14 @@ public class ProcessStagingBusinessCleanupTransaction {
       String tenantId, int retentionHours, int batchSize, int offset) {
     RlsTenantSessionSupport.applyIfPresent(dataSource);
     return mapper.listExpiredGenerations(tenantId, retentionHours, batchSize, offset);
+  }
+
+  @Transactional(transactionManager = "processBusinessTransactionManager", readOnly = true)
+  public List<ProcessStagingGenerationCandidate> listExpiredAfter(
+      String tenantId, int retentionHours, int batchSize, Instant createdAt, String generationId) {
+    RlsTenantSessionSupport.applyIfPresent(dataSource);
+    return mapper.listExpiredGenerationsAfter(new ProcessStagingExpiredScanQuery(
+        tenantId, retentionHours, batchSize, createdAt, generationId));
   }
 
   @Transactional(transactionManager = "processBusinessTransactionManager")
@@ -51,8 +60,8 @@ public class ProcessStagingBusinessCleanupTransaction {
       for (ProcessStagingGenerationCandidate generation : generations) {
         mapper.setGenerationRlsContext(generation.getGenerationId());
         Instant generationOldest = mapper.selectOldestGenerationRow(generation);
-        boolean generationHasEarlierStagedRow =
-            EmptyChecks.isNotNull(generationOldest) && (EmptyChecks.isNull(oldest) || generationOldest.isBefore(oldest));
+        boolean generationHasEarlierStagedRow = EmptyChecks.isNotNull(generationOldest)
+            && (EmptyChecks.isNull(oldest) || generationOldest.isBefore(oldest));
         if (generationHasEarlierStagedRow) {
           oldest = generationOldest;
         }

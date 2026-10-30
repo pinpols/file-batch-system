@@ -289,6 +289,28 @@ class FileGovernanceOrphanUploadSessionCleanupTest {
     assertThat(RlsTenantContextHolder.get()).isNull();
   }
 
+  @Test
+  @DisplayName("平台托管上传目录不参与默认租户孤儿对账，未确认对象也不提前登记")
+  void shouldExcludeManagedUploadObjectsFromDefaultTenantReconciliation() {
+    when(properties.getReconcile().isEnabled()).thenReturn(true);
+    when(properties.getReconcile().getDefaultTenantId()).thenReturn("tenant-configured");
+    when(storage.listObjects(any(), anyInt(), anyBoolean()))
+        .thenReturn(List.of(new S3GovernanceStorage.StorageObjectView(
+            "batch-files",
+            "uploads/tenant-other/20261026Z/session-upload.csv",
+            12L,
+            "etag",
+            Instant.parse("2026-10-26T00:00:00Z"))));
+
+    scheduler.reconcileObjectStorage();
+
+    verify(repository, never())
+        .existsFileRecordByStoragePath(anyString(), anyString(), anyString());
+    verify(repository, never()).createReconciledFileRecord(any());
+    verify(repository, never()).appendAudit(any());
+    assertThat(RlsTenantContextHolder.get()).isNull();
+  }
+
   // ── helpers ───────────────────────────────────────────────────────────────
 
   private static FileGovernanceMaintenanceViews.OrphanUploadSessionView orphanSession(long id) {

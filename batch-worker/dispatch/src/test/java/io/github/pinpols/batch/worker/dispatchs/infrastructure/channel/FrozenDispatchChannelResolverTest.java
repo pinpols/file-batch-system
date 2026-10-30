@@ -27,7 +27,8 @@ class FrozenDispatchChannelResolverTest {
        "enabled":true,"is_deleted":false}}
       """;
 
-  @Mock private SecretPayloadProtector protector;
+  @Mock
+  private SecretPayloadProtector protector;
 
   private FrozenDispatchChannelResolver resolver;
 
@@ -61,6 +62,17 @@ class FrozenDispatchChannelResolverTest {
         """;
 
     assertThatThrownBy(() -> resolver.resolve("t1", "CH1", payload))
+        .isInstanceOf(BizException.class);
+  }
+
+  @Test
+  @DisplayName("有部分冻结渠道时，未捕获的目标拒绝回退当前配置")
+  void shouldRejectMissingChannel_whenOtherSnapshotExists() {
+    String payload = """
+        {"channelCode":"CH2","_frozenDispatchChannelsProtected":{"CH1":"ciphertext"}}
+        """;
+
+    assertThatThrownBy(() -> resolver.resolve("t1", "CH2", payload))
         .isInstanceOf(BizException.class);
   }
 

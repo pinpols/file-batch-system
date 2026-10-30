@@ -267,6 +267,8 @@ class TaskDispatcherNonIdempotentStartTest {
           }
           sendJson(exchange, 200, claim);
         }
+        case "/internal/tasks/42/renew" ->
+          sendJson(exchange, 200, Map.of("cancelRequested", false));
         case "/internal/tasks/42/non-idempotent-started" -> {
           events.add("START");
           JsonNode marker = SdkJsonMapperFactory.create().readTree(requestBody);
@@ -274,7 +276,9 @@ class TaskDispatcherNonIdempotentStartTest {
           startMethod.set(exchange.getRequestMethod());
           boolean ownerMatches = "tx".equals(marker.path("tenantId").asText())
               && currentWorker.get().equals(marker.path("workerId").asText())
-              && currentInvocation.get().equals(marker.path("partitionInvocationId").asText());
+              && currentInvocation
+                  .get()
+                  .equals(marker.path("partitionInvocationId").asText());
           int status = ownerMatches ? 200 : 409;
           observedStartStatus.set(status);
           exchange.sendResponseHeaders(status, -1);

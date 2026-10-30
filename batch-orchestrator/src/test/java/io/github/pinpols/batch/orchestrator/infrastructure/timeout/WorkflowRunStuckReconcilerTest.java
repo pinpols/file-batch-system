@@ -3,7 +3,6 @@ package io.github.pinpols.batch.orchestrator.infrastructure.timeout;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -20,21 +19,35 @@ import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @DisplayName("卡滞运行核对的租户上下文边界")
+@ExtendWith(MockitoExtension.class)
 class WorkflowRunStuckReconcilerTest {
 
-  private final WorkflowRunMapper workflowRunMapper = mock(WorkflowRunMapper.class);
-  private final WorkflowNodeRunMapper workflowNodeRunMapper = mock(WorkflowNodeRunMapper.class);
-  private final WorkflowRunResumeProgressor resumeProgressor =
-      mock(WorkflowRunResumeProgressor.class);
-  private final BatchOrchestratorGovernanceProperties governance =
-      mock(BatchOrchestratorGovernanceProperties.class);
-  private final TimeoutEnforcerProperties timeoutProperties = mock(TimeoutEnforcerProperties.class);
-  private final OrchestratorGracefulShutdown gracefulShutdown =
-      mock(OrchestratorGracefulShutdown.class);
-  private final MeterRegistry meterRegistry = mock(MeterRegistry.class);
+  @Mock
+  private WorkflowRunMapper workflowRunMapper;
+
+  @Mock
+  private WorkflowNodeRunMapper workflowNodeRunMapper;
+
+  @Mock
+  private WorkflowRunResumeProgressor resumeProgressor;
+
+  @Mock
+  private BatchOrchestratorGovernanceProperties governance;
+
+  @Mock
+  private TimeoutEnforcerProperties timeoutProperties;
+
+  @Mock
+  private OrchestratorGracefulShutdown gracefulShutdown;
+
+  @Mock
+  private MeterRegistry meterRegistry;
 
   @AfterEach
   void clearTenantContext() {

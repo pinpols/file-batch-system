@@ -1,11 +1,11 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
-import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
@@ -71,9 +71,7 @@ public class DingTalkNotificationSender implements NotificationSender {
       String channelCodeForLog = LogSanitizer.value(message.channelCode());
       String reasonForLog = ex.getClass().getSimpleName();
       log.warn(
-          "dingtalk config parse failed channel={} reason={}",
-          channelCodeForLog,
-          reasonForLog);
+          "dingtalk config parse failed channel={} reason={}", channelCodeForLog, reasonForLog);
       return WebhookDeliveryResult.failure(null, "invalid dingtalk config");
     }
 
@@ -87,10 +85,7 @@ public class DingTalkNotificationSender implements NotificationSender {
     } catch (Exception ex) {
       String channelCodeForLog = LogSanitizer.value(message.channelCode());
       String reasonForLog = ex.getClass().getSimpleName();
-      log.warn(
-          "dingtalk sign failed channel={} reason={}",
-          channelCodeForLog,
-          reasonForLog);
+      log.warn("dingtalk sign failed channel={} reason={}", channelCodeForLog, reasonForLog);
       return WebhookDeliveryResult.failure(null, "dingtalk sign failed");
     }
 
@@ -100,10 +95,7 @@ public class DingTalkNotificationSender implements NotificationSender {
     } catch (Exception ex) {
       String channelCodeForLog = LogSanitizer.value(message.channelCode());
       String reasonForLog = ex.getClass().getSimpleName();
-      log.warn(
-          "dingtalk body build failed channel={} reason={}",
-          channelCodeForLog,
-          reasonForLog);
+      log.warn("dingtalk body build failed channel={} reason={}", channelCodeForLog, reasonForLog);
       return WebhookDeliveryResult.failure(null, "dingtalk body build failed");
     }
 
@@ -120,10 +112,7 @@ public class DingTalkNotificationSender implements NotificationSender {
       if (!response.isSuccessful()) {
         String channelCodeForLog = LogSanitizer.value(message.channelCode());
         int statusForLog = response.statusCode();
-        log.warn(
-            "dingtalk http failed channel={} status={}",
-            channelCodeForLog,
-            statusForLog);
+        log.warn("dingtalk http failed channel={} status={}", channelCodeForLog, statusForLog);
         return WebhookDeliveryResult.failure(
             response.statusCode(), "dingtalk http status=" + response.statusCode());
       }
@@ -133,18 +122,12 @@ public class DingTalkNotificationSender implements NotificationSender {
         return WebhookDeliveryResult.ok();
       }
       String channelCodeForLog = LogSanitizer.value(message.channelCode());
-      log.warn(
-          "dingtalk rejected channel={} errcode={}",
-          channelCodeForLog,
-          errcode);
+      log.warn("dingtalk rejected channel={} errcode={}", channelCodeForLog, errcode);
       return WebhookDeliveryResult.failure(200, "dingtalk errcode=" + errcode);
     } catch (Exception ex) {
       String channelCodeForLog = LogSanitizer.value(message.channelCode());
       String reasonForLog = ex.getClass().getSimpleName();
-      log.warn(
-          "dingtalk delivery failed channel={} reason={}",
-          channelCodeForLog,
-          reasonForLog);
+      log.warn("dingtalk delivery failed channel={} reason={}", channelCodeForLog, reasonForLog);
       return WebhookDeliveryResult.failure(null, ex.getClass().getSimpleName());
     }
   }

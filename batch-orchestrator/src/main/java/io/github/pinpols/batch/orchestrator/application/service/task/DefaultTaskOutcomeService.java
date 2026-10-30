@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
-import io.github.pinpols.batch.orchestrator.domain.param.JobPartitionMarkRetryingParam;
-
-
 import io.github.pinpols.batch.common.enums.FailureClass;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -17,8 +14,8 @@ import io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOu
 import io.github.pinpols.batch.orchestrator.application.engine.VerifierFailureOutboxService;
 import io.github.pinpols.batch.orchestrator.application.scheduler.WaitingCapacityReleasedEvent;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
-import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunReportLock;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunReportLock;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskExecutionResult;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.context.TaskOutcomePersistenceContext;
@@ -28,6 +25,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.FinishTaskParam;
+import io.github.pinpols.batch.orchestrator.domain.param.JobPartitionMarkRetryingParam;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkPartitionStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateStepProgressParam;
 import io.github.pinpols.batch.orchestrator.service.failure.FailureClassifier;
@@ -217,9 +215,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     String resolvedFailureClass = EmptyChecks.isNull(failure) || cancellationOutcome
         ? null
         : failureClassifier.classify(failure.failureClass(), null).code();
-    FinishTaskParam.FinishTaskParamBuilder finishTaskParamBuilder = FinishTaskParam.builder()
-        .tenantId(command.tenantId())
-        .id(command.taskId());
+    FinishTaskParam.FinishTaskParamBuilder finishTaskParamBuilder =
+        FinishTaskParam.builder().tenantId(command.tenantId()).id(command.taskId());
     String resolvedTaskStatus = resolveTaskStatus(outcomeCommand, cancellationOutcome);
     JobTaskEntity finishedTask = jobMappers.jobTaskMapper.finishTask(finishTaskParamBuilder
         .taskStatus(resolvedTaskStatus)
@@ -285,11 +282,10 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   /** 只在成功回报内推进水位，保持原 CAS 和迟到分区保护。 */
   private void requireCurrentInvocation(
       TaskOutcomeCommand command, JobTaskEntity task, JobPartitionEntity partition) {
-    boolean reportInvocationDoesNotMatchPartition =
-        EmptyChecks.isNotNull(task.getJobPartitionId())
-            && EmptyChecks.isNotNull(partition)
-            && EmptyChecks.isNotNull(partition.getCurrentInvocationId())
-            && !partition.getCurrentInvocationId().equals(command.partitionInvocationId());
+    boolean reportInvocationDoesNotMatchPartition = EmptyChecks.isNotNull(task.getJobPartitionId())
+        && EmptyChecks.isNotNull(partition)
+        && EmptyChecks.isNotNull(partition.getCurrentInvocationId())
+        && !partition.getCurrentInvocationId().equals(command.partitionInvocationId());
     if (reportInvocationDoesNotMatchPartition) {
       throw BizException.of(ResultCode.CONFLICT, "error.task.invocation_mismatch");
     }
@@ -390,15 +386,15 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       Long partitionId = partition.getId();
       Integer currentRetryCount = Optional.ofNullable(partition.getRetryCount()).orElse(0);
       Integer nextRetryCount = currentRetryCount + 1;
-      JobPartitionMarkRetryingParam jobPartitionMarkRetryingParam = JobPartitionMarkRetryingParam.builder()
-          .tenantId(tenantId)
-          .id(partitionId)
-          .retryCount(nextRetryCount)
-          .retryingStatus(PartitionStatus.RETRYING.code())
-          .expectedVersion(partition.getVersion())
-          .build();
-      int retryUpdated = jobMappers.jobPartitionMapper.markRetrying(
-          jobPartitionMarkRetryingParam);
+      JobPartitionMarkRetryingParam jobPartitionMarkRetryingParam =
+          JobPartitionMarkRetryingParam.builder()
+              .tenantId(tenantId)
+              .id(partitionId)
+              .retryCount(nextRetryCount)
+              .retryingStatus(PartitionStatus.RETRYING.code())
+              .expectedVersion(partition.getVersion())
+              .build();
+      int retryUpdated = jobMappers.jobPartitionMapper.markRetrying(jobPartitionMarkRetryingParam);
       warnIfCasMiss(retryUpdated, "partition markRetrying", partition.getId());
       return null;
     } else {
@@ -447,10 +443,10 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     int nextRetryCount = retryScheduled ? currentRetryCount + 1 : currentRetryCount;
     UpdateStepProgressParam.UpdateStepProgressParamBuilder progressBuilder =
         UpdateStepProgressParam.builder()
-        .tenantId(command.tenantId())
-        .id(stepInstance.getId())
-        .stepStatus(nextStatus)
-        .retryCount(nextRetryCount);
+            .tenantId(command.tenantId())
+            .id(stepInstance.getId())
+            .stepStatus(nextStatus)
+            .retryCount(nextRetryCount);
     Long relatedFileId = TaskOutcomePayloadSupport.resolveRelatedFileId(task, command);
     UpdateStepProgressParam progressParam = progressBuilder
         .relatedFileId(relatedFileId)

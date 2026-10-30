@@ -13,15 +13,15 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.scheduler.TenantSchedulerSnapshotService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
-import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowGraphValidator;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
-import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
-import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowLaunchSeed;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.WaitingPartitionDispatchScheduler;
+import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
+import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowLaunchSeed;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
@@ -90,14 +90,18 @@ class WorkflowFrozenPartitionPlanIntegrationTest extends AbstractIntegrationTest
         .anySatisfy(error -> assertThat(error.code()).isEqualTo("JOB_REF_NOT_FOUND"));
 
     assertThatThrownBy(() -> launchService.launch(request(scenario.tenant(), next)))
-        .isInstanceOfSatisfying(BizException.class,
-            error -> assertThat(error.getMessageKey()).isEqualTo("error.workflow.definition_invalid"));
+        .isInstanceOfSatisfying(
+            BizException.class,
+            error ->
+                assertThat(error.getMessageKey()).isEqualTo("error.workflow.definition_invalid"));
 
-    String runCountSql = "select count(*) from batch.workflow_run where tenant_id = ? and workflow_definition_id = ?";
+    String runCountSql =
+        "select count(*) from batch.workflow_run where tenant_id = ? and workflow_definition_id = ?";
     Integer selectedWorkflowRunCount = jdbc.queryForObject(
         runCountSql, Integer.class, scenario.tenant(), next.workflowDefinitionId());
     assertThat(selectedWorkflowRunCount).isZero();
-    String requestStatusSql = "select request_status from batch.trigger_request where tenant_id = ? and request_id = ?";
+    String requestStatusSql =
+        "select request_status from batch.trigger_request where tenant_id = ? and request_id = ?";
     String selectedRequestStatus =
         jdbc.queryForObject(requestStatusSql, String.class, scenario.tenant(), next.requestId());
     assertThat(selectedRequestStatus).isEqualTo("REJECTED");
@@ -109,8 +113,10 @@ class WorkflowFrozenPartitionPlanIntegrationTest extends AbstractIntegrationTest
     FrozenRunCase scenario = runFrozenPlanScenario("GENERAL", "STATIC", false);
     WorkflowLaunchSeed next = seedAnotherWorkflow(scenario);
     launchService.launch(request(scenario.tenant(), next));
-    String runSql = "select id from batch.workflow_run where tenant_id = ? and workflow_definition_id = ?";
-    Long runId = jdbc.queryForObject(runSql, Long.class, scenario.tenant(), next.workflowDefinitionId());
+    String runSql =
+        "select id from batch.workflow_run where tenant_id = ? and workflow_definition_id = ?";
+    Long runId =
+        jdbc.queryForObject(runSql, Long.class, scenario.tenant(), next.workflowDefinitionId());
     Long jobId = nodeJob(runId, "SHARED_JOB");
     JobInstanceEntity instance = jobInstanceMapper.selectById(scenario.tenant(), jobId);
     assertThat(instance.getJobDefinitionVersion()).isEqualTo(2);
@@ -119,16 +125,24 @@ class WorkflowFrozenPartitionPlanIntegrationTest extends AbstractIntegrationTest
     assertCapacity(scenario.tenant(), 1, 1);
     String taskSql = "select id from batch.job_task where tenant_id = ? and job_instance_id = ?";
     Long taskId = jdbc.queryForObject(taskSql, Long.class, scenario.tenant(), jobId);
-    JobTaskEntity claimed = taskExecutionService.assignWorker(scenario.tenant(), taskId, next.workerCode());
+    JobTaskEntity claimed =
+        taskExecutionService.assignWorker(scenario.tenant(), taskId, next.workerCode());
     assertThat(claimed).isNotNull();
-    EffectiveTaskConfig config = taskExecutionService.loadEffectiveConfig(scenario.tenant(), claimed);
+    EffectiveTaskConfig config =
+        taskExecutionService.loadEffectiveConfig(scenario.tenant(), claimed);
     assertThat(config.timeoutSeconds()).isEqualTo(900);
     assertThat(config.partitionCount()).isEqualTo(1);
-    String invocationSql = "select current_invocation_id from batch.job_partition where tenant_id = ? and id = ?";
-    String invocation = jdbc.queryForObject(invocationSql, String.class, scenario.tenant(), claimed.getJobPartitionId());
+    String invocationSql =
+        "select current_invocation_id from batch.job_partition where tenant_id = ? and id = ?";
+    String invocation = jdbc.queryForObject(
+        invocationSql, String.class, scenario.tenant(), claimed.getJobPartitionId());
     TaskOutcomeCommand nextRunOutcome = TaskOutcomeCommand.builder()
-        .tenantId(scenario.tenant()).taskId(taskId).success(true).resultSummary("{}")
-        .partitionInvocationId(invocation).build();
+        .tenantId(scenario.tenant())
+        .taskId(taskId)
+        .success(true)
+        .resultSummary("{}")
+        .partitionInvocationId(invocation)
+        .build();
     taskExecutionService.applyTaskOutcome(nextRunOutcome);
     assertCapacity(scenario.tenant(), 0, 0);
     String versionsSql = """
@@ -138,7 +152,8 @@ class WorkflowFrozenPartitionPlanIntegrationTest extends AbstractIntegrationTest
     List<Integer> selectedJobDefinitionVersionValues =
         jdbc.queryForList(versionsSql, Integer.class, scenario.tenant(), next.jobCode());
     assertThat(selectedJobDefinitionVersionValues).containsExactly(1, 1, 2);
-    String statusesSql = "select run_status from batch.workflow_run where tenant_id = ? order by id";
+    String statusesSql =
+        "select run_status from batch.workflow_run where tenant_id = ? order by id";
     List<String> selectedRunStatusValues =
         jdbc.queryForList(statusesSql, String.class, scenario.tenant());
     assertThat(selectedRunStatusValues).containsExactly("SUCCESS", "SUCCESS");
@@ -146,7 +161,8 @@ class WorkflowFrozenPartitionPlanIntegrationTest extends AbstractIntegrationTest
 
   private record FrozenRunCase(String tenant, WorkflowLaunchSeed seed) {}
 
-  private FrozenRunCase runFrozenPlanScenario(String jobType, String strategy, boolean disableForNewRuns) {
+  private FrozenRunCase runFrozenPlanScenario(
+      String jobType, String strategy, boolean disableForNewRuns) {
     String suffix = Long.toUnsignedString(System.nanoTime());
     long fileBase = System.nanoTime();
     String tenant = "t-r28-" + suffix;
@@ -161,8 +177,15 @@ class WorkflowFrozenPartitionPlanIntegrationTest extends AbstractIntegrationTest
     default_params = ?::jsonb, timeout_seconds = ?, version = ?
     where tenant_id = ? and job_code = ?
     """;
-    jdbc.update(updateJobSql, strategy, queue, JsonUtils.toJson(params(1, fileBase)), 600, 1,
-        tenant, seed.jobCode());
+    jdbc.update(
+        updateJobSql,
+        strategy,
+        queue,
+        JsonUtils.toJson(params(1, fileBase)),
+        600,
+        1,
+        tenant,
+        seed.jobCode());
 
     Instant firstAdmissionBefore = BatchDateTimeSupport.utcNow();
     LaunchRequest firstAdmission = LaunchRequest.builder()
@@ -186,17 +209,26 @@ class WorkflowFrozenPartitionPlanIntegrationTest extends AbstractIntegrationTest
     assertCapacity(tenant, 1, 2);
 
     String editedStrategy = "BUNDLE_IMPORT".equals(jobType) ? "DYNAMIC" : "NONE";
-    jdbc.update(updateJobSql, editedStrategy, queue, JsonUtils.toJson(params(2, fileBase)), 900, 2,
-        tenant, seed.jobCode());
+    jdbc.update(
+        updateJobSql,
+        editedStrategy,
+        queue,
+        JsonUtils.toJson(params(2, fileBase)),
+        900,
+        2,
+        tenant,
+        seed.jobCode());
     if (disableForNewRuns) {
-      String disableJobSql = "update batch.job_definition set enabled = false where tenant_id = ? and job_code = ?";
+      String disableJobSql =
+          "update batch.job_definition set enabled = false where tenant_id = ? and job_code = ?";
       jdbc.update(disableJobSql, tenant, seed.jobCode());
     }
     configCache.evictJobDefinition(tenant, seed.jobCode());
     if (disableForNewRuns) {
       assertThat(configCache.findEnabledJobDefinition(tenant, seed.jobCode())).isNull();
     } else {
-      assertThat(configCache.findEnabledJobDefinition(tenant, seed.jobCode()).version()).isEqualTo(2);
+      assertThat(configCache.findEnabledJobDefinition(tenant, seed.jobCode()).version())
+          .isEqualTo(2);
     }
     final String disableCurrentEdgesSql = """
     update batch.workflow_edge set enabled = false
@@ -229,7 +261,8 @@ class WorkflowFrozenPartitionPlanIntegrationTest extends AbstractIntegrationTest
 
     finishJobWithFrozenConfig(tenant, lateId, seed.workerCode());
     assertCapacity(tenant, 0, 0);
-    final String runStatusSql = "select run_status from batch.workflow_run where tenant_id = ? and id = ?";
+    final String runStatusSql =
+        "select run_status from batch.workflow_run where tenant_id = ? and id = ?";
     String selectedRunStatus = jdbc.queryForObject(runStatusSql, String.class, tenant, runId);
     assertThat(selectedRunStatus).isEqualTo("SUCCESS");
     final String countJobsSql = """
@@ -250,9 +283,14 @@ class WorkflowFrozenPartitionPlanIntegrationTest extends AbstractIntegrationTest
   }
 
   private LaunchRequest request(String tenant, WorkflowLaunchSeed seed) {
-    return LaunchRequest.builder().tenantId(tenant).workflowDefinitionId(seed.workflowDefinitionId())
-        .bizDate(LocalDate.of(2026, 1, 15)).triggerType(TriggerType.EVENT)
-        .requestId(seed.requestId()).params(Map.of()).build();
+    return LaunchRequest.builder()
+        .tenantId(tenant)
+        .workflowDefinitionId(seed.workflowDefinitionId())
+        .bizDate(LocalDate.of(2026, 1, 15))
+        .triggerType(TriggerType.EVENT)
+        .requestId(seed.requestId())
+        .params(Map.of())
+        .build();
   }
 
   private WorkflowLaunchSeed seedAnotherWorkflow(FrozenRunCase scenario) {
@@ -270,7 +308,15 @@ class WorkflowFrozenPartitionPlanIntegrationTest extends AbstractIntegrationTest
           (?, ?, 'SHARED_JOB', 'Shared Job', 'JOB', ?, 1, 'NONE', 0, 0, true),
           (?, ?, 'END', 'End', 'END', null, 2, 'NONE', 0, 0, true)
         """;
-    jdbc.update(nodeSql, scenario.tenant(), id, scenario.tenant(), id, scenario.seed().jobCode(), scenario.tenant(), id);
+    jdbc.update(
+        nodeSql,
+        scenario.tenant(),
+        id,
+        scenario.tenant(),
+        id,
+        scenario.seed().jobCode(),
+        scenario.tenant(),
+        id);
     String edgeSql = """
         insert into batch.workflow_edge (tenant_id, workflow_definition_id, from_node_code,
           to_node_code, edge_type, enabled) values (?, ?, 'START', 'SHARED_JOB', 'ALWAYS', true),
@@ -283,17 +329,25 @@ class WorkflowFrozenPartitionPlanIntegrationTest extends AbstractIntegrationTest
           biz_date, dedup_key, request_status) values (?, ?, 'EVENT', ?, date '2026-01-15', ?, 'ACCEPTED')
         """;
     jdbc.update(requestSql, scenario.tenant(), requestId, id, requestId);
-    return new WorkflowLaunchSeed(scenario.seed().jobCode(), id, requestId, requestId, scenario.seed().workerCode());
+    return new WorkflowLaunchSeed(
+        scenario.seed().jobCode(), id, requestId, requestId, scenario.seed().workerCode());
   }
 
   private Map<String, Object> params(int version, long fileBase) {
     List<Map<String, Object>> files = version == 1
-        ? List.of(Map.of("sourceFileId", fileBase + 1, "templateCode", "TPL_OLD_A"),
+        ? List.of(
+            Map.of("sourceFileId", fileBase + 1, "templateCode", "TPL_OLD_A"),
             Map.of("sourceFileId", fileBase + 2, "templateCode", "TPL_OLD_B"))
         : List.of(Map.of("sourceFileId", fileBase + 3, "templateCode", "TPL_NEW"));
-    return Map.of("partitionCount", version == 1 ? 2 : 3,
-        "expectedDurationSeconds", version == 1 ? 120 : 300,
-        "marker", version == 1 ? "original" : "edited", "bundleFiles", files);
+    return Map.of(
+        "partitionCount",
+        version == 1 ? 2 : 3,
+        "expectedDurationSeconds",
+        version == 1 ? 120 : 300,
+        "marker",
+        version == 1 ? "original" : "edited",
+        "bundleFiles",
+        files);
   }
 
   private void assertInstanceSnapshot(
@@ -304,7 +358,8 @@ class WorkflowFrozenPartitionPlanIntegrationTest extends AbstractIntegrationTest
     assertThat(instance.getExpectedDurationSeconds()).isEqualTo(120);
     assertThat(instance.getDeadlineAt())
         .isBetween(admissionBefore.plusSeconds(600), admissionAfter.plusSeconds(600));
-    Map<String, Object> snapshot = JsonUtils.fromJson(instance.getParamsSnapshot(), new TypeReference<>() {});
+    Map<String, Object> snapshot =
+        JsonUtils.fromJson(instance.getParamsSnapshot(), new TypeReference<>() {});
     assertThat(((Map<?, ?>) snapshot.get("effectiveParams")).get("marker")).isEqualTo("original");
   }
 
@@ -335,11 +390,17 @@ class WorkflowFrozenPartitionPlanIntegrationTest extends AbstractIntegrationTest
       assertThat(config.partitionCount()).isEqualTo(2);
       assertThat(config.partitionPlanVersion()).isEqualTo(1);
       assertThat(config.shardTotal()).isEqualTo(2);
-      String invocationSql = "select current_invocation_id from batch.job_partition where tenant_id = ? and id = ?";
-      String invocation = jdbc.queryForObject(invocationSql, String.class, tenant, claimed.getJobPartitionId());
+      String invocationSql =
+          "select current_invocation_id from batch.job_partition where tenant_id = ? and id = ?";
+      String invocation =
+          jdbc.queryForObject(invocationSql, String.class, tenant, claimed.getJobPartitionId());
       TaskOutcomeCommand frozenPartitionOutcome = TaskOutcomeCommand.builder()
-          .tenantId(tenant).taskId(taskId).success(true).resultSummary("{}")
-          .partitionInvocationId(invocation).build();
+          .tenantId(tenant)
+          .taskId(taskId)
+          .success(true)
+          .resultSummary("{}")
+          .partitionInvocationId(invocation)
+          .build();
       taskExecutionService.applyTaskOutcome(frozenPartitionOutcome);
     }
   }

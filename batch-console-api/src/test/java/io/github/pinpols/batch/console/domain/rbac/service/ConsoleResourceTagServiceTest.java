@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.console.domain.rbac.service;
 
-import io.github.pinpols.batch.console.domain.rbac.param.ConsoleResourceTagUpsertParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
@@ -13,11 +10,13 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.rbac.entity.ResourceTagEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleResourceTagMapper;
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleResourceTagUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.mockito.Mockito;
 
 @DisplayName("资源标签服务: 标签查询、写入、删除与资源类型规范化")
@@ -93,17 +92,17 @@ class ConsoleResourceTagServiceTest {
         .tagValue("prod")
         .operator("admin")
         .build();
-    assertThatThrownBy(() -> service.upsert(tagInput))
-        .isInstanceOf(BizException.class);
+    assertThatThrownBy(() -> service.upsert(tagInput)).isInstanceOf(BizException.class);
     verify(repository).lockResourceTagIdentity("t1", "JOB", "missing-job");
-    verify(repository, Mockito.never()).upsert(ConsoleResourceTagUpsertParam.builder()
-        .tenantId("t1")
-        .resourceType("JOB")
-        .resourceCode("missing-job")
-        .tagKey("env")
-        .tagValue("prod")
-        .operator("admin")
-        .build());
+    verify(repository, Mockito.never())
+        .upsert(ConsoleResourceTagUpsertParam.builder()
+            .tenantId("t1")
+            .resourceType("JOB")
+            .resourceCode("missing-job")
+            .tagKey("env")
+            .tagValue("prod")
+            .operator("admin")
+            .build());
   }
 
   @Test
@@ -124,14 +123,15 @@ class ConsoleResourceTagServiceTest {
 
     verify(repository).lockResourceTagIdentity("t1", "JOB", "job-001");
     verify(repository).selectResourceTagTarget("t1", "JOB", "job-001");
-    verify(repository).upsert(ConsoleResourceTagUpsertParam.builder()
-        .tenantId("t1")
-        .resourceType("JOB")
-        .resourceCode("job-001")
-        .tagKey("env")
-        .tagValue("prod")
-        .operator("admin")
-        .build());
+    verify(repository)
+        .upsert(ConsoleResourceTagUpsertParam.builder()
+            .tenantId("t1")
+            .resourceType("JOB")
+            .resourceCode("job-001")
+            .tagKey("env")
+            .tagValue("prod")
+            .operator("admin")
+            .build());
   }
 
   @Test
@@ -182,14 +182,15 @@ class ConsoleResourceTagServiceTest {
         .build();
     service.upsert(tagInput4);
 
-    verify(repository).upsert(ConsoleResourceTagUpsertParam.builder()
-        .tenantId("t1")
-        .resourceType("JOB")
-        .resourceCode("job-001")
-        .tagKey("env")
-        .tagValue("prod")
-        .operator("admin")
-        .build());
+    verify(repository)
+        .upsert(ConsoleResourceTagUpsertParam.builder()
+            .tenantId("t1")
+            .resourceType("JOB")
+            .resourceCode("job-001")
+            .tagKey("env")
+            .tagValue("prod")
+            .operator("admin")
+            .build());
   }
 
   @Test
@@ -230,7 +231,7 @@ class ConsoleResourceTagServiceTest {
         .tagValue("")
         .operator(null)
         .build();
-    org.mockito.InOrder order = Mockito.inOrder(tenantGuard, repository);
+    InOrder order = Mockito.inOrder(tenantGuard, repository);
     order.verify(tenantGuard).resolveTenant(null);
     order.verify(repository).lockResourceTagIdentity("t1", "JOB", "job-001");
     order.verify(repository).selectResourceTagTarget("t1", "JOB", "job-001");
@@ -240,7 +241,8 @@ class ConsoleResourceTagServiceTest {
   @Test
   @DisplayName("原始输入不提前校验，租户授权失败仍优先于资源字段错误")
   void shouldPreserveTenantGuardFailureBeforeResourceValidation() {
-    BizException tenantFailure = BizException.of(ResultCode.FORBIDDEN, "error.tenant.context_missing");
+    BizException tenantFailure =
+        BizException.of(ResultCode.FORBIDDEN, "error.tenant.context_missing");
     when(tenantGuard.resolveTenant(null)).thenThrow(tenantFailure);
     ResourceTagUpsertInput tagInput = ResourceTagUpsertInput.builder()
         .resourceType("  ")

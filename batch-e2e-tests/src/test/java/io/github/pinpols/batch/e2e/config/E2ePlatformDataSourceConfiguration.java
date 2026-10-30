@@ -16,7 +16,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 /**
  * When worker modules register extra {@link DataSource} beans, JDBC auto-config may not register
  * the usual primary {@code dataSource} for {@code spring.datasource}. Orchestrator and platform
- * MyBatis need that bean.
+ * MyBatis 需要该 Bean。
  */
 @Configuration
 public class E2ePlatformDataSourceConfiguration {

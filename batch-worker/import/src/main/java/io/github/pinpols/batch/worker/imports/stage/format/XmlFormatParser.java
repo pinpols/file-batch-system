@@ -17,7 +17,7 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 
-/** Parses XML payloads into NDJSON records. */
+/** 将 XML 载荷解析为 NDJSON 记录。 */
 public class XmlFormatParser implements FormatParser {
 
   private static final String ERROR_CODE_XML_INVALID = "IMPORT_PARSE_XML_INVALID";

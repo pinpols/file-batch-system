@@ -64,8 +64,7 @@ public class WorkflowValidatorReconciler {
         // RLS Phase B：validator.validate 走 workflow_node / job_definition / calendar mapper，
         // emitInvalid 写 alert_event；都依赖 holder。try/catch 包在 runWithTenant 外保证 finally 清。
         boolean hasErrors =
-            RlsTenantContextHolder.runWithTenant(
-                tenantId, () -> validateAndEmitInTenant(wf));
+            RlsTenantContextHolder.runWithTenant(tenantId, () -> validateAndEmitInTenant(wf));
         if (hasErrors) {
           invalidCount++;
         }

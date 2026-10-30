@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.application.contract.response.config;
 
+import java.util.List;
 import lombok.Builder;
 
-import java.util.List;
 /** Same-job comparison matrix across tenants. */
 public record TenantConfigMatrixResponse(
     String baselineTenantId,

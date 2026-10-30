@@ -2,8 +2,11 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigSyncApplicationService;
+import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncImportRequest;
@@ -17,20 +20,26 @@ import io.github.pinpols.batch.console.application.contract.request.config.Tenan
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.JobDefinitionSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.ResourceQueueSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.TenantQuotaPolicySpec;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigCopyRequest.ConfigType;
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncImportResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDependencyRuleRequest;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -51,7 +60,545 @@ class TenantConfigBatchInitStrictAtomicityIntegrationTest extends AbstractIntegr
   private ConsoleConfigSyncApplicationService configSyncService;
 
   @Autowired
+  private ConsoleTenantConfigCopyService copyService;
+
+  @Autowired
   private JdbcTemplate jdbcTemplate;
+
+  @Autowired
+  private StringRedisTemplate redis;
+
+  @ParameterizedTest
+  @ValueSource(strings = {"commit", "rollback", "dry-run"})
+  @DisplayName("真实 PG/Redis：仅成功提交失效 Job 与托管 Workflow 缓存，回滚及 dry-run 保持原值")
+  void shouldInvalidateImportedConfigOnlyAfterCommit(String mode) {
+    String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+    String jobCode = "CACHE_" + suffix;
+    String jobKey = "config:" + TENANT_ID + ":job-definition:" + jobCode;
+    String workflowKey = "config:" + TENANT_ID + ":workflow-definition:CACHE_" + suffix;
+    String otherTenantKey = "config:other-" + suffix + ":job-definition:" + jobCode;
+    List<String> keys = List.of(jobKey, workflowKey, otherTenantKey);
+    keys.forEach(key -> redis.opsForValue().set(key, "original"));
+    TenantConfigBatchInitRequest request = new TenantConfigBatchInitRequest();
+    request.setTargetTenantIds(List.of(TENANT_ID));
+    request.setStrict(true);
+    request.setDryRun("dry-run".equals(mode));
+    request.setJobDefinitions(
+        "rollback".equals(mode)
+            ? List.of(job(jobCode, 0), job("BAD_" + suffix, -1))
+            : List.of(job(jobCode, 0)));
+    try {
+      TenantConfigBatchInitResponse response =
+          initService.batchInit(request, "integration-test", "config-cache-" + suffix);
+      boolean committed = "commit".equals(mode);
+      assertThat(countJob(jobCode)).isEqualTo(committed ? 1 : 0);
+      assertThat(response.failureTenants()).isEqualTo("rollback".equals(mode) ? 1 : 0);
+      String cachedJob = redis.opsForValue().get(jobKey);
+      String cachedWorkflow = redis.opsForValue().get(workflowKey);
+      String otherTenant = redis.opsForValue().get(otherTenantKey);
+      assertThat(cachedJob).isEqualTo(committed ? null : "original");
+      assertThat(cachedWorkflow).isEqualTo(committed ? null : "original");
+      assertThat(otherTenant).isEqualTo("original");
+      if ("dry-run".equals(mode)) {
+        String countWorkflowSql = """
+            select count(*) from batch.workflow_definition workflow
+            join batch.job_definition job on workflow.single_job_definition_id = job.id
+                and workflow.tenant_id = job.tenant_id
+            where job.tenant_id = ? and job.job_code = ?
+            """;
+        Integer workflows =
+            jdbcTemplate.queryForObject(countWorkflowSql, Integer.class, TENANT_ID, jobCode);
+        assertThat(workflows).isZero();
+      }
+    } finally {
+      redis.delete(keys);
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  @DisplayName("真实 PG：掩码默认参数保留原值，缺失原值的条目遵守严格回滚和部分成功边界")
+  void shouldPreserveMaskedDefaultsWithCorrectAtomicity_whenInitContainsUnresolvedMask(
+      boolean strict) {
+    final String selectPasswordSql = """
+        select default_params->'connection'->>'password' from batch.job_definition
+        where tenant_id = ? and job_code = ?
+        """;
+    final String selectLimitSql = """
+        select (default_params->>'limit')::int from batch.job_definition
+        where tenant_id = ? and job_code = ?
+        """;
+    String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+    String existingCode = "MASK_EXISTING_" + suffix;
+    String unresolvedCode = "MASK_UNRESOLVED_" + suffix;
+    String siblingCode = "MASK_SIBLING_" + suffix;
+    JobDefinitionSpec original = job(existingCode, 0);
+    original.setDefaultParams("""
+        {"connection":{"password":"stored-credential"},"limit":1}
+        """);
+    TenantConfigBatchInitRequest seed = new TenantConfigBatchInitRequest();
+    seed.setTargetTenantIds(List.of(TENANT_ID));
+    seed.setStrict(true);
+    seed.setJobDefinitions(List.of(original));
+    TenantConfigBatchInitResponse seeded =
+        initService.batchInit(seed, "integration-test", "mask-seed-" + suffix);
+    assertThat(seeded.failureTenants()).isZero();
+    assertThat(countJob(existingCode)).isOne();
+
+    JobDefinitionSpec update = job(existingCode, 0);
+    update.setDefaultParams("""
+        {"connection":{"password":"****"},"limit":2}
+        """);
+    JobDefinitionSpec unresolved = job(unresolvedCode, 0);
+    unresolved.setDefaultParams("""
+        {"connection":{"password":"****"}}
+        """);
+    TenantConfigBatchInitRequest request = new TenantConfigBatchInitRequest();
+    request.setTargetTenantIds(List.of(TENANT_ID));
+    request.setMode(InitMode.UPSERT);
+    request.setStrict(strict);
+    request.setJobDefinitions(List.of(update, unresolved, job(siblingCode, 0)));
+
+    TenantConfigBatchInitResponse response =
+        initService.batchInit(request, "integration-test", "mask-apply-" + suffix);
+
+    assertThat(response.failureTenants()).isEqualTo(strict ? 1 : 0);
+    String password =
+        jdbcTemplate.queryForObject(selectPasswordSql, String.class, TENANT_ID, existingCode);
+    Integer limit =
+        jdbcTemplate.queryForObject(selectLimitSql, Integer.class, TENANT_ID, existingCode);
+    assertThat(password).isEqualTo("stored-credential");
+    assertThat(limit).isEqualTo(strict ? 1 : 2);
+    assertThat(countJob(unresolvedCode)).isZero();
+    assertThat(countJob(siblingCode)).isEqualTo(strict ? 0 : 1);
+    if (!strict) {
+      TenantConfigBatchInitResponse.ItemStats stats =
+          response.results().getFirst().jobDefinitions();
+      assertThat(stats.updated()).isOne();
+      assertThat(stats.created()).isOne();
+      assertThat(stats.failed()).isOne();
+      assertThat(stats.details())
+          .filteredOn(detail -> "FAILED".equals(detail.action()))
+          .singleElement()
+          .satisfies(detail -> assertThat(detail.errorMessage())
+              .isEqualTo("error.config.masked_secret_requires_value"));
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  @DisplayName("真实 PG：Workflow图替换恢复同节点掩码，未解析的新图遵守严格回滚及部分成功")
+  void shouldPreserveWorkflowNodeMasksAndSnapshots_whenInitReplacesGraph(boolean strict)
+      throws Exception {
+    final String selectNodePasswordSql = """
+        select node.node_params->'connection'->>'password' from batch.workflow_node node
+        join batch.workflow_definition definition on definition.tenant_id = node.tenant_id
+            and definition.id = node.workflow_definition_id
+        where node.tenant_id = ? and definition.workflow_code = ? and node.node_code = 'JOB'
+        """;
+    final String selectNodeLimitSql = """
+        select (node.node_params->>'limit')::int from batch.workflow_node node
+        join batch.workflow_definition definition on definition.tenant_id = node.tenant_id
+            and definition.id = node.workflow_definition_id
+        where node.tenant_id = ? and definition.workflow_code = ? and node.node_code = 'JOB'
+        """;
+    final String selectDefinitionVersionSql = """
+        select version from batch.workflow_definition where tenant_id = ? and workflow_code = ?
+        """;
+    final String selectSnapshotPasswordSql = """
+        select node->>'nodeParams' from batch.workflow_definition_version snapshot
+        cross join lateral jsonb_array_elements(snapshot.nodes_json) node
+        where snapshot.tenant_id = ? and snapshot.workflow_code = ? and snapshot.version = ?
+            and node->>'nodeCode' = 'JOB'
+        """;
+    final String countDefinitionSql = """
+        select count(*) from batch.workflow_definition where tenant_id = ? and workflow_code = ?
+        """;
+    final String countVersionsSql = """
+        select count(*) from batch.workflow_definition_version where tenant_id = ? and workflow_code = ?
+        """;
+    String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+    String jobCode = "WF_MASK_JOB_" + suffix;
+    String existingCode = "WF_MASK_EXISTING_" + suffix;
+    String unresolvedCode = "WF_MASK_UNRESOLVED_" + suffix;
+    String siblingCode = "WF_MASK_SIBLING_" + suffix;
+    WorkflowDefinitionSpec original = workflowWithJobNode(existingCode, jobCode, """
+        {"connection":{"password":"stored-node-credential"},"limit":1}
+        """);
+    TenantConfigBatchInitRequest seed = new TenantConfigBatchInitRequest();
+    seed.setTargetTenantIds(List.of(TENANT_ID));
+    seed.setStrict(true);
+    seed.setJobDefinitions(List.of(job(jobCode, 0)));
+    seed.setWorkflowDefinitions(List.of(original));
+    TenantConfigBatchInitResponse seeded =
+        initService.batchInit(seed, "integration-test", "wf-mask-seed-" + suffix);
+    assertThat(seeded.failureTenants()).isZero();
+    Integer originalVersion = jdbcTemplate.queryForObject(
+        selectDefinitionVersionSql, Integer.class, TENANT_ID, existingCode);
+    assertThat(originalVersion).isOne();
+
+    String maskedParams = """
+        {"connection":{"password":"****"},"limit":2}
+        """;
+    WorkflowDefinitionSpec update = workflowWithJobNode(existingCode, jobCode, maskedParams);
+    WorkflowDefinitionSpec unresolved = workflowWithJobNode(unresolvedCode, jobCode, maskedParams);
+    WorkflowDefinitionSpec sibling = workflowWithJobNode(siblingCode, jobCode, "{\"limit\":3}");
+    TenantConfigBatchInitRequest request = new TenantConfigBatchInitRequest();
+    request.setTargetTenantIds(List.of(TENANT_ID));
+    request.setMode(InitMode.UPSERT);
+    request.setStrict(strict);
+    request.setWorkflowDefinitions(List.of(update, unresolved, sibling));
+
+    TenantConfigBatchInitResponse response =
+        initService.batchInit(request, "integration-test", "wf-mask-apply-" + suffix);
+
+    assertThat(response.failureTenants()).isEqualTo(strict ? 1 : 0);
+    String password =
+        jdbcTemplate.queryForObject(selectNodePasswordSql, String.class, TENANT_ID, existingCode);
+    Integer limit =
+        jdbcTemplate.queryForObject(selectNodeLimitSql, Integer.class, TENANT_ID, existingCode);
+    Integer version = jdbcTemplate.queryForObject(
+        selectDefinitionVersionSql, Integer.class, TENANT_ID, existingCode);
+    assertThat(password).isEqualTo("stored-node-credential");
+    assertThat(limit).isEqualTo(strict ? 1 : 2);
+    assertThat(version).isEqualTo(strict ? 1 : 2);
+    String snapshotParams = jdbcTemplate.queryForObject(
+        selectSnapshotPasswordSql, String.class, TENANT_ID, existingCode, version);
+    JsonNode snapshot = new ObjectMapper().readTree(snapshotParams);
+    assertThat(snapshot.path("limit").asInt()).isEqualTo(strict ? 1 : 2);
+    assertThat(snapshot.path("connection").path("password").asText())
+        .isEqualTo("stored-node-credential");
+    Integer unresolvedDefinitions =
+        jdbcTemplate.queryForObject(countDefinitionSql, Integer.class, TENANT_ID, unresolvedCode);
+    Integer unresolvedVersions =
+        jdbcTemplate.queryForObject(countVersionsSql, Integer.class, TENANT_ID, unresolvedCode);
+    Integer siblingDefinitions =
+        jdbcTemplate.queryForObject(countDefinitionSql, Integer.class, TENANT_ID, siblingCode);
+    assertThat(unresolvedDefinitions).isZero();
+    assertThat(unresolvedVersions).isZero();
+    assertThat(siblingDefinitions).isEqualTo(strict ? 0 : 1);
+    assertThat(update.getNodes().get(1).getNodeParams()).isEqualTo(maskedParams);
+    if (!strict) {
+      TenantConfigBatchInitResponse.ItemStats stats =
+          response.results().getFirst().workflowDefinitions();
+      assertThat(stats.created()).isOne();
+      assertThat(stats.updated()).isOne();
+      assertThat(stats.failed()).isOne();
+      assertThat(stats.details())
+          .filteredOn(detail -> "FAILED".equals(detail.action()))
+          .singleElement()
+          .satisfies(detail -> assertThat(detail.errorMessage())
+              .isEqualTo("error.config.masked_secret_requires_value"));
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"omit-graph", "clear-params", "explicit-value", "ordinary-mask"})
+  @DisplayName("真实 PG：参数掩码修复保留图省略、参数清空、显式新值及普通字段星号语义")
+  void shouldKeepWorkflowReplacementSemantics_whenMaskResolutionIsNotNeeded(String scenario)
+      throws Exception {
+    final String selectNodeParamsSql = """
+        select node.node_params::text from batch.workflow_node node
+        join batch.workflow_definition definition on definition.tenant_id = node.tenant_id
+            and definition.id = node.workflow_definition_id
+        where node.tenant_id = ? and definition.workflow_code = ? and node.node_code = 'JOB'
+        """;
+    final String selectSnapshotParamsSql = """
+        select node->>'nodeParams' from batch.workflow_definition_version snapshot
+        cross join lateral jsonb_array_elements(snapshot.nodes_json) node
+        where snapshot.tenant_id = ? and snapshot.workflow_code = ? and snapshot.version = ?
+            and node->>'nodeCode' = 'JOB'
+        """;
+    String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+    String jobCode = "WF_PARAM_JOB_" + suffix;
+    String workflowCode = "WF_PARAM_" + suffix;
+    WorkflowDefinitionSpec original = workflowWithJobNode(workflowCode, jobCode, """
+        {"connection":{"password":"original-node-credential"},"limit":1}
+        """);
+    TenantConfigBatchInitRequest seed = new TenantConfigBatchInitRequest();
+    seed.setTargetTenantIds(List.of(TENANT_ID));
+    seed.setStrict(true);
+    seed.setJobDefinitions(List.of(job(jobCode, 0)));
+    seed.setWorkflowDefinitions(List.of(original));
+    TenantConfigBatchInitResponse seeded =
+        initService.batchInit(seed, "integration-test", "wf-param-seed-" + suffix);
+    assertThat(seeded.failureTenants()).isZero();
+
+    String submittedParams =
+        switch (scenario) {
+          case "explicit-value" -> """
+          {"connection":{"password":"replacement-node-credential"},"limit":2}
+          """;
+          case "ordinary-mask" -> """
+          {"label":"****","limit":2}
+          """;
+          default -> null;
+        };
+    WorkflowDefinitionSpec update = workflowWithJobNode(workflowCode, jobCode, submittedParams);
+    if ("omit-graph".equals(scenario)) {
+      update.setNodes(null);
+      update.setEdges(null);
+    }
+    TenantConfigBatchInitRequest request = new TenantConfigBatchInitRequest();
+    request.setTargetTenantIds(List.of(TENANT_ID));
+    request.setMode(InitMode.UPSERT);
+    request.setStrict(true);
+    request.setWorkflowDefinitions(List.of(update));
+
+    TenantConfigBatchInitResponse response =
+        initService.batchInit(request, "integration-test", "wf-param-apply-" + suffix);
+
+    assertThat(response.failureTenants()).isZero();
+    assertThat(response.results().getFirst().workflowDefinitions().updated()).isOne();
+    String persistedParams =
+        jdbcTemplate.queryForObject(selectNodeParamsSql, String.class, TENANT_ID, workflowCode);
+    String snapshotParams = jdbcTemplate.queryForObject(
+        selectSnapshotParamsSql, String.class, TENANT_ID, workflowCode, 2);
+    String originalSnapshotParams = jdbcTemplate.queryForObject(
+        selectSnapshotParamsSql, String.class, TENANT_ID, workflowCode, 1);
+    JsonNode originalSnapshot = new ObjectMapper().readTree(originalSnapshotParams);
+    assertThat(originalSnapshot.path("connection").path("password").asText())
+        .isEqualTo("original-node-credential");
+    if ("clear-params".equals(scenario)) {
+      assertThat(persistedParams).isNull();
+      assertThat(snapshotParams).isNull();
+      return;
+    }
+    JsonNode persisted = new ObjectMapper().readTree(persistedParams);
+    JsonNode snapshot = new ObjectMapper().readTree(snapshotParams);
+    assertThat(snapshot).isEqualTo(persisted);
+    switch (scenario) {
+      case "omit-graph" -> {
+        assertThat(persisted.path("connection").path("password").asText())
+            .isEqualTo("original-node-credential");
+        assertThat(persisted.path("limit").asInt()).isOne();
+      }
+      case "explicit-value" -> {
+        assertThat(persisted.path("connection").path("password").asText())
+            .isEqualTo("replacement-node-credential");
+        assertThat(persisted.path("limit").asInt()).isEqualTo(2);
+      }
+      case "ordinary-mask" -> {
+        assertThat(persisted.path("label").asText()).isEqualTo("****");
+        assertThat(persisted.has("connection")).isFalse();
+      }
+      default -> throw new AssertionError("Unexpected parameter scenario: " + scenario);
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  @DisplayName("真实 PG：配置包经JSON导出导入保留Workflow跨日依赖及超时，空目标与覆盖均完整落库")
+  void shouldRoundTripWorkflowCrossDayDependencies_whenBundleTargetsNewOrExistingGraph(
+      boolean replace) throws Exception {
+    final String insertTenantSql = """
+        insert into batch.tenant (tenant_id, tenant_name, status) values (?, ?, 'ACTIVE')
+        """;
+    final String updateCrossDaySql = """
+        update batch.workflow_node node set cross_day_dependencies = ?::jsonb,
+            cross_day_dependency_timeout_seconds = ?
+        from batch.workflow_definition definition
+        where node.tenant_id = ? and definition.tenant_id = node.tenant_id
+            and definition.id = node.workflow_definition_id and definition.workflow_code = ?
+            and node.node_code = 'JOB'
+        """;
+    final String selectCrossDaySql = """
+        select node.cross_day_dependencies::text from batch.workflow_node node
+        join batch.workflow_definition definition on definition.tenant_id = node.tenant_id
+            and definition.id = node.workflow_definition_id
+        where node.tenant_id = ? and definition.workflow_code = ? and node.node_code = 'JOB'
+        """;
+    final String selectTimeoutSql = """
+        select node.cross_day_dependency_timeout_seconds from batch.workflow_node node
+        join batch.workflow_definition definition on definition.tenant_id = node.tenant_id
+            and definition.id = node.workflow_definition_id
+        where node.tenant_id = ? and definition.workflow_code = ? and node.node_code = 'JOB'
+        """;
+    final String selectSnapshotDependenciesSql = """
+        select node->>'crossDayDependencies' from batch.workflow_definition_version snapshot
+        cross join lateral jsonb_array_elements(snapshot.nodes_json) node
+        where snapshot.tenant_id = ? and snapshot.workflow_code = ? and snapshot.version = ?
+            and node->>'nodeCode' = 'JOB'
+        """;
+    final String selectSnapshotTimeoutSql = """
+        select (node->>'crossDayDependencyTimeoutSeconds')::int from batch.workflow_definition_version snapshot
+        cross join lateral jsonb_array_elements(snapshot.nodes_json) node
+        where snapshot.tenant_id = ? and snapshot.workflow_code = ? and snapshot.version = ?
+            and node->>'nodeCode' = 'JOB'
+        """;
+    String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+    String sourceTenant = "cross-day-source-" + suffix;
+    String targetTenant = "cross-day-target-" + suffix;
+    jdbcTemplate.update(insertTenantSql, sourceTenant, sourceTenant);
+    jdbcTemplate.update(insertTenantSql, targetTenant, targetTenant);
+    TestTenantCalendarFixtures.ensureDefaultCalendar(jdbcTemplate, sourceTenant, targetTenant);
+    String jobCode = "CROSS_DAY_JOB_" + suffix;
+    String upstreamCode = "CROSS_DAY_UPSTREAM_" + suffix;
+    String workflowCode = "CROSS_DAY_WORKFLOW_" + suffix;
+    for (String tenant : replace ? List.of(sourceTenant, targetTenant) : List.of(sourceTenant)) {
+      TenantConfigBatchInitRequest seed = new TenantConfigBatchInitRequest();
+      seed.setTargetTenantIds(List.of(tenant));
+      seed.setStrict(true);
+      seed.setJobDefinitions(List.of(job(upstreamCode, 0), job(jobCode, 0)));
+      seed.setWorkflowDefinitions(List.of(workflowWithJobNode(workflowCode, jobCode, "{}")));
+      TenantConfigBatchInitResponse seeded =
+          initService.batchInit(seed, "integration-test", "cross-day-seed-" + tenant);
+      assertThat(seeded.failureTenants()).isZero();
+    }
+    String dependencies = """
+        [{"alias":"previous_day","jobCode":"%s","bizDateOffset":-1,
+          "scope":"REQUIRED","consumeVersionStrategy":"EFFECTIVE_ONLY"}]
+        """.formatted(upstreamCode);
+    int sourceRows =
+        jdbcTemplate.update(updateCrossDaySql, dependencies, 5400, sourceTenant, workflowCode);
+    assertThat(sourceRows).isOne();
+    if (replace) {
+      int targetRows = jdbcTemplate.update(updateCrossDaySql, "[]", 99, targetTenant, workflowCode);
+      assertThat(targetRows).isOne();
+    }
+    ConfigSyncBundlePayload exported = copyService.buildBundle(
+        sourceTenant, Set.of(ConfigType.JOB_DEFINITION, ConfigType.WORKFLOW_DEFINITION));
+    ObjectMapper mapper = new ObjectMapper();
+    String wire = mapper.writeValueAsString(exported);
+    ConfigSyncBundlePayload imported = mapper.readValue(wire, ConfigSyncBundlePayload.class);
+    TenantConfigBatchInitRequest request = new TenantConfigBatchInitRequest();
+    request.setTargetTenantIds(List.of(targetTenant));
+    request.setMode(InitMode.UPSERT);
+    request.setStrict(true);
+    request.setJobDefinitions(imported.getJobDefinitions());
+    request.setWorkflowDefinitions(imported.getWorkflowDefinitions());
+
+    TenantConfigBatchInitResponse response =
+        initService.batchInit(request, "integration-test", "cross-day-roundtrip-" + suffix);
+
+    assertThat(response.failureTenants()).isZero();
+    String saved =
+        jdbcTemplate.queryForObject(selectCrossDaySql, String.class, targetTenant, workflowCode);
+    Integer timeout =
+        jdbcTemplate.queryForObject(selectTimeoutSql, Integer.class, targetTenant, workflowCode);
+    assertThat(saved).isNotNull();
+    JsonNode expected = mapper.readTree(dependencies);
+    assertThat(mapper.readTree(saved)).isEqualTo(expected);
+    assertThat(timeout).isEqualTo(5400);
+    int version = replace ? 2 : 1;
+    String snapshot = jdbcTemplate.queryForObject(
+        selectSnapshotDependenciesSql, String.class, targetTenant, workflowCode, version);
+    Integer snapshotTimeout = jdbcTemplate.queryForObject(
+        selectSnapshotTimeoutSql, Integer.class, targetTenant, workflowCode, version);
+    assertThat(mapper.readTree(snapshot)).isEqualTo(expected);
+    assertThat(snapshotTimeout).isEqualTo(5400);
+    String sourceAfter =
+        jdbcTemplate.queryForObject(selectCrossDaySql, String.class, sourceTenant, workflowCode);
+    assertThat(mapper.readTree(sourceAfter)).isEqualTo(expected);
+  }
+
+  @ParameterizedTest
+  @NullSource
+  @ValueSource(ints = {0})
+  @DisplayName("真实 PG：完整图替换可清空跨日依赖，省略超时取默认值且显式零保留永久等待")
+  void shouldKeepCrossDayTimeoutDefaults_whenGraphClearsDependencies(Integer timeoutSeconds)
+      throws Exception {
+    final String selectNodeDependenciesSql = """
+        select node.cross_day_dependencies::text from batch.workflow_node node
+        join batch.workflow_definition definition on definition.tenant_id = node.tenant_id
+            and definition.id = node.workflow_definition_id
+        where node.tenant_id = ? and definition.workflow_code = ? and node.node_code = 'JOB'
+        """;
+    final String selectNodeTimeoutSql = """
+        select node.cross_day_dependency_timeout_seconds from batch.workflow_node node
+        join batch.workflow_definition definition on definition.tenant_id = node.tenant_id
+            and definition.id = node.workflow_definition_id
+        where node.tenant_id = ? and definition.workflow_code = ? and node.node_code = 'JOB'
+        """;
+    final String selectSnapshotTimeoutSql = """
+        select (node->>'crossDayDependencyTimeoutSeconds')::int from batch.workflow_definition_version snapshot
+        cross join lateral jsonb_array_elements(snapshot.nodes_json) node
+        where snapshot.tenant_id = ? and snapshot.workflow_code = ? and snapshot.version = ?
+            and node->>'nodeCode' = 'JOB'
+        """;
+    String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+    String jobCode = "CROSS_DAY_DEFAULT_JOB_" + suffix;
+    String workflowCode = "CROSS_DAY_DEFAULT_WF_" + suffix;
+    WorkflowDefinitionSpec original = workflowWithJobNode(workflowCode, jobCode, "{}");
+    original.getNodes().get(1).setCrossDayDependencies("""
+        [{"alias":"previous_day","jobCode":"%s","bizDateOffset":-1,"scope":"REQUIRED"}]
+        """.formatted(jobCode));
+    original.getNodes().get(1).setCrossDayDependencyTimeoutSeconds(5400);
+    TenantConfigBatchInitRequest seed = new TenantConfigBatchInitRequest();
+    seed.setTargetTenantIds(List.of(TENANT_ID));
+    seed.setStrict(true);
+    seed.setJobDefinitions(List.of(job(jobCode, 0)));
+    seed.setWorkflowDefinitions(List.of(original));
+    TenantConfigBatchInitResponse seeded =
+        initService.batchInit(seed, "integration-test", "cross-day-default-seed-" + suffix);
+    assertThat(seeded.failureTenants()).isZero();
+    Integer seededTimeout =
+        jdbcTemplate.queryForObject(selectNodeTimeoutSql, Integer.class, TENANT_ID, workflowCode);
+    assertThat(seededTimeout).isEqualTo(5400);
+
+    WorkflowDefinitionSpec update = workflowWithJobNode(workflowCode, jobCode, "{}");
+    update.getNodes().get(1).setCrossDayDependencyTimeoutSeconds(timeoutSeconds);
+    TenantConfigBatchInitRequest request = new TenantConfigBatchInitRequest();
+    request.setTargetTenantIds(List.of(TENANT_ID));
+    request.setMode(InitMode.UPSERT);
+    request.setStrict(true);
+    request.setWorkflowDefinitions(List.of(update));
+
+    TenantConfigBatchInitResponse response =
+        initService.batchInit(request, "integration-test", "cross-day-default-update-" + suffix);
+
+    assertThat(response.failureTenants()).isZero();
+    String dependencies = jdbcTemplate.queryForObject(
+        selectNodeDependenciesSql, String.class, TENANT_ID, workflowCode);
+    Integer actualTimeout =
+        jdbcTemplate.queryForObject(selectNodeTimeoutSql, Integer.class, TENANT_ID, workflowCode);
+    Integer snapshotTimeout = jdbcTemplate.queryForObject(
+        selectSnapshotTimeoutSql, Integer.class, TENANT_ID, workflowCode, 2);
+    Integer priorTimeout = jdbcTemplate.queryForObject(
+        selectSnapshotTimeoutSql, Integer.class, TENANT_ID, workflowCode, 1);
+    int expectedTimeout = timeoutSeconds == null ? 86400 : 0;
+    assertThat(dependencies).isNull();
+    assertThat(actualTimeout).isEqualTo(expectedTimeout);
+    assertThat(snapshotTimeout).isEqualTo(expectedTimeout);
+    assertThat(priorTimeout).isEqualTo(5400);
+  }
+
+  private WorkflowDefinitionSpec workflowWithJobNode(
+      String code, String jobCode, String nodeParams) {
+    WorkflowDefinitionSpec workflow = new WorkflowDefinitionSpec();
+    workflow.setWorkflowCode(code);
+    workflow.setWorkflowName(code);
+    workflow.setWorkflowType("DAG");
+    workflow.setEnabled(true);
+    WorkflowDefinitionSpec.NodeSpec start = new WorkflowDefinitionSpec.NodeSpec();
+    start.setNodeCode("START");
+    start.setNodeName("START");
+    start.setNodeType("START");
+    start.setNodeOrder(0);
+    WorkflowDefinitionSpec.NodeSpec jobNode = new WorkflowDefinitionSpec.NodeSpec();
+    jobNode.setNodeCode("JOB");
+    jobNode.setNodeName("JOB");
+    jobNode.setNodeType("JOB");
+    jobNode.setRelatedJobCode(jobCode);
+    jobNode.setNodeOrder(1);
+    jobNode.setNodeParams(nodeParams);
+    WorkflowDefinitionSpec.NodeSpec end = new WorkflowDefinitionSpec.NodeSpec();
+    end.setNodeCode("END");
+    end.setNodeName("END");
+    end.setNodeType("END");
+    end.setNodeOrder(2);
+    WorkflowDefinitionSpec.EdgeSpec firstEdge = new WorkflowDefinitionSpec.EdgeSpec();
+    firstEdge.setFromNodeCode("START");
+    firstEdge.setToNodeCode("JOB");
+    firstEdge.setEdgeType("ALWAYS");
+    WorkflowDefinitionSpec.EdgeSpec lastEdge = new WorkflowDefinitionSpec.EdgeSpec();
+    lastEdge.setFromNodeCode("JOB");
+    lastEdge.setToNodeCode("END");
+    lastEdge.setEdgeType("SUCCESS");
+    workflow.setNodes(List.of(start, jobNode, end));
+    workflow.setEdges(List.of(firstEdge, lastEdge));
+    return workflow;
+  }
 
   @BeforeEach
   void ensureTenantCalendar() {
@@ -67,7 +614,7 @@ class TenantConfigBatchInitStrictAtomicityIntegrationTest extends AbstractIntegr
     TenantConfigBatchInitRequest request = new TenantConfigBatchInitRequest();
     request.setTargetTenantIds(List.of(TENANT_ID));
     request.setStrict(true);
-    request.setJobDefinitions(List.of(job(invalidJobCode, 300), job(validJobCode, 0)));
+    request.setJobDefinitions(List.of(job(invalidJobCode, -1), job(validJobCode, 0)));
 
     TenantConfigBatchInitResponse response =
         initService.batchInit(request, "integration-test", "strict-atomicity");
@@ -731,6 +1278,67 @@ class TenantConfigBatchInitStrictAtomicityIntegrationTest extends AbstractIntegr
     return request;
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"apply", "dry-run"})
+  @DisplayName("配置初始化实际应用及预演均拒绝无效业务日历时区")
+  void shouldRejectInvalidCalendarTimezoneInApplyAndDryRun(String mode) {
+    String code = "bad_tz_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+    TenantConfigBatchInitRequest request =
+        requestWithCalendar(code, "Invalid timezone", "Mars/Phobos", "SKIP", "NONE", 0, List.of());
+    request.setDryRun("dry-run".equals(mode));
+    TenantConfigBatchInitResponse result = initService.batchInit(request, "test", "tz-" + code);
+    assertThat(result.results())
+        .singleElement()
+        .satisfies(row -> assertThat(row.businessCalendars().failed()).isEqualTo(1));
+    assertThat(countCalendar(code)).isZero();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"skip", "upsert", "dry-run-upsert"})
+  @DisplayName("省略时区使用默认值，跳过已有项不校验，更新与预演拒绝无效时区")
+  void shouldPreserveCalendarTimezoneDefaultsAndSkipSemantics(String mode) {
+    String code = "tz_default_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+    TenantConfigBatchInitRequest initial =
+        requestWithCalendar(code, "原日历", null, "SKIP", "NONE", 0, List.of());
+    var initialResult = initService.batchInit(initial, "test", "initial-" + code);
+    assertThat(initialResult.results())
+        .singleElement()
+        .satisfies(row -> assertThat(row.businessCalendars().created()).isEqualTo(1));
+    String timezoneSql =
+        "select timezone from batch.business_calendar where tenant_id=? and calendar_code=?";
+    assertThat(jdbcTemplate.queryForObject(timezoneSql, String.class, TENANT_ID, code))
+        .isEqualTo("Asia/Shanghai");
+    TenantConfigBatchInitRequest invalid =
+        requestWithCalendar(code, "无效变更", "Mars/Phobos", "SKIP", "NONE", 0, List.of());
+    if (!"skip".equals(mode)) invalid.setMode(InitMode.UPSERT);
+    invalid.setDryRun("dry-run-upsert".equals(mode));
+    var result = initService.batchInit(invalid, "test", "existing-" + code);
+    assertThat(result.results()).singleElement().satisfies(row -> {
+      if ("skip".equals(mode)) {
+        assertThat(row.businessCalendars().skipped()).isEqualTo(1);
+        assertThat(row.businessCalendars().failed()).isZero();
+      } else {
+        assertThat(row.businessCalendars().failed()).isEqualTo(1);
+        assertThat(row.businessCalendars().updated()).isZero();
+      }
+    });
+    assertThat(jdbcTemplate.queryForObject(timezoneSql, String.class, TENANT_ID, code))
+        .isEqualTo("Asia/Shanghai");
+  }
+
+  @Test
+  @DisplayName("严格初始化遇到无效日历时区应回滚并报告租户失败")
+  void shouldRollbackStrictInitialization_whenCalendarTimezoneInvalid() {
+    String code = "strict_tz_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+    TenantConfigBatchInitRequest request =
+        requestWithCalendar(code, "Invalid timezone", "Mars/Phobos", "SKIP", "NONE", 0, List.of());
+    request.setStrict(true);
+    var result = initService.batchInit(request, "test", "strict-" + code);
+    assertThat(result.failureTenants()).isEqualTo(1);
+    assertThat(result.successTenants()).isZero();
+    assertThat(countCalendar(code)).isZero();
+  }
+
   private TenantConfigBatchInitRequest requestWithCalendar(
       String calendarCode,
       String calendarName,
@@ -863,6 +1471,82 @@ class TenantConfigBatchInitStrictAtomicityIntegrationTest extends AbstractIntegr
       select count(*) from %s where tenant_id = ? and %s = ?\
       """.formatted(tableName, codeColumn);
     return jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT_ID, code);
+  }
+
+  @ParameterizedTest
+  @EnumSource(InitMode.class)
+  @DisplayName("Workflow导入只匹配精确编码，不覆盖或跳过名称相似的其他Workflow")
+  void shouldImportWorkflowByExactCodeWithoutTouchingSimilarDefinition(InitMode mode) {
+    String suffix = UUID.randomUUID().toString().replace("-", "");
+    String requestedCode = "WF_" + suffix;
+    String similarCode = requestedCode + "_LONG";
+    String insertWorkflowSql = """
+        insert into batch.workflow_definition
+            (tenant_id, workflow_code, workflow_name, workflow_type, enabled)
+        values (?, ?, 'Original workflow', 'DAG', true) returning id
+        """;
+    Long unrelatedId =
+        jdbcTemplate.queryForObject(insertWorkflowSql, Long.class, TENANT_ID, similarCode);
+    String insertNodesSql = """
+        insert into batch.workflow_node
+            (tenant_id, workflow_definition_id, node_code, node_name, node_type)
+        select ?, ?, item.code, item.code, item.kind
+        from (values ('original-start', 'START'), ('original-end', 'END')) item(code, kind)
+        """;
+    String insertEdgeSql = """
+        insert into batch.workflow_edge
+            (tenant_id, workflow_definition_id, from_node_code, to_node_code)
+        values (?, ?, 'original-start', 'original-end')
+        """;
+    jdbcTemplate.update(insertNodesSql, TENANT_ID, unrelatedId);
+    jdbcTemplate.update(insertEdgeSql, TENANT_ID, unrelatedId);
+    WorkflowDefinitionSpec workflow = new WorkflowDefinitionSpec();
+    workflow.setWorkflowCode(requestedCode);
+    workflow.setWorkflowName("Imported workflow");
+    workflow.setWorkflowType("DAG");
+    workflow.setEnabled(true);
+    WorkflowDefinitionSpec.NodeSpec start = new WorkflowDefinitionSpec.NodeSpec();
+    start.setNodeCode("start");
+    start.setNodeName("Start");
+    start.setNodeType("START");
+    WorkflowDefinitionSpec.NodeSpec end = new WorkflowDefinitionSpec.NodeSpec();
+    end.setNodeCode("end");
+    end.setNodeName("End");
+    end.setNodeType("END");
+    WorkflowDefinitionSpec.EdgeSpec edge = new WorkflowDefinitionSpec.EdgeSpec();
+    edge.setFromNodeCode("start");
+    edge.setToNodeCode("end");
+    edge.setEdgeType("SUCCESS");
+    workflow.setNodes(List.of(start, end));
+    workflow.setEdges(List.of(edge));
+    TenantConfigBatchInitRequest request = new TenantConfigBatchInitRequest();
+    request.setTargetTenantIds(List.of(TENANT_ID));
+    request.setMode(mode);
+    request.setStrict(true);
+    request.setWorkflowDefinitions(List.of(workflow));
+
+    TenantConfigBatchInitResponse response =
+        initService.batchInit(request, "integration-test", "exact-workflow-" + suffix);
+
+    String selectDefinitionsSql = """
+        select workflow_code, workflow_name from batch.workflow_definition
+        where tenant_id = ? and workflow_code in (?, ?)
+        """;
+    List<Map<String, Object>> definitions =
+        jdbcTemplate.queryForList(selectDefinitionsSql, TENANT_ID, requestedCode, similarCode);
+    assertThat(definitions)
+        .containsExactlyInAnyOrder(
+            Map.of("workflow_code", requestedCode, "workflow_name", "Imported workflow"),
+            Map.of("workflow_code", similarCode, "workflow_name", "Original workflow"));
+    String selectOriginalNodesSql = """
+        select node_code from batch.workflow_node
+        where tenant_id = ? and workflow_definition_id = ? order by node_code
+        """;
+    List<String> originalNodes =
+        jdbcTemplate.queryForList(selectOriginalNodesSql, String.class, TENANT_ID, unrelatedId);
+    assertThat(originalNodes).containsExactly("original-end", "original-start");
+    assertThat(response.failureTenants()).isZero();
+    assertThat(response.results().getFirst().workflowDefinitions().created()).isOne();
   }
 
   private List<String> holidayDates(String calendarCode) {

@@ -27,36 +27,46 @@ class BatchDayMapperXmlTest {
   void shouldMapFixedColumnsToTypedViewsInConstructorOrder() {
     Configuration configuration = loadMapper("mapper/BatchDayMapper.xml");
 
-    assertConstructorColumns(configuration, "batchDayViewResultMap", List.of(
-        "bizDate",
-        "dayStatus",
-        "openAt",
-        "cutoffAt",
-        "settledAt",
-        "slaDeadlineAt",
-        "lateCount",
-        "catchupCount",
-        "totalJobCount",
-        "successJobCount",
-        "failedJobCount",
-        "inFlightJobCount"));
-    assertConstructorColumns(configuration, "scheduledOccurrenceViewResultMap", List.of(
-        "workflowDefinitionId",
-        "workflowCode",
-        "catchUpPolicy",
-        "scheduleVersion",
-        "scheduledFireTime",
-        "bizDate",
-        "occurrenceStatus",
-        "requestId",
-        "lastRejectionReason"));
-    assertConstructorColumns(configuration, "batchDayJobSummaryViewResultMap", List.of(
-        "jobCode",
-        "totalJobCount",
-        "successJobCount",
-        "failedJobCount",
-        "inFlightJobCount",
-        "catchupCount"));
+    assertConstructorColumns(
+        configuration,
+        "batchDayViewResultMap",
+        List.of(
+            "bizDate",
+            "dayStatus",
+            "openAt",
+            "cutoffAt",
+            "settledAt",
+            "slaDeadlineAt",
+            "lateCount",
+            "catchupCount",
+            "totalJobCount",
+            "successJobCount",
+            "failedJobCount",
+            "inFlightJobCount",
+            "frozen"));
+    assertConstructorColumns(
+        configuration,
+        "scheduledOccurrenceViewResultMap",
+        List.of(
+            "workflowDefinitionId",
+            "workflowCode",
+            "catchUpPolicy",
+            "scheduleVersion",
+            "scheduledFireTime",
+            "bizDate",
+            "occurrenceStatus",
+            "requestId",
+            "lastRejectionReason"));
+    assertConstructorColumns(
+        configuration,
+        "batchDayJobSummaryViewResultMap",
+        List.of(
+            "jobCode",
+            "totalJobCount",
+            "successJobCount",
+            "failedJobCount",
+            "inFlightJobCount",
+            "catchupCount"));
   }
 
   private static void assertConstructorColumns(
@@ -90,6 +100,31 @@ class BatchDayMapperXmlTest {
       assertThat(statusForCountAlias(sql, successAlias))
           .isEqualTo(formalCodes(JobInstanceStatus.successCodes()));
     }
+  }
+
+  @Test
+  @DisplayName("批日统计与补跑按实例冻结日历筛选")
+  void shouldUseFrozenCalendarForBatchDayQueries() {
+    Configuration configuration = loadMapper("mapper/BatchDayMapper.xml");
+    for (String statement :
+        List.of("selectByQuery", "selectWindow", "selectJobSummaries", "selectFailedJobCodes")) {
+      String sql = batchDaySql(configuration, statement);
+      assertThat(sql).as(statement).contains("ji.calendar_code = ?");
+      assertThat(sql).as(statement).doesNotContain("jd.calendar_code");
+    }
+  }
+
+  @Test
+  @DisplayName("补跑候选只包含正式失败和部分失败，不等同全部非成功终态")
+  void shouldUseFormalFailedJobPolicyForCatchUp() {
+    String sql = batchDaySql(loadMapper("mapper/BatchDayMapper.xml"), "selectFailedJobCodes");
+    Matcher clause =
+        Pattern.compile("(?is)ji\\.instance_status\\s+in\\s*\\(([^)]*)\\)").matcher(sql);
+    assertThat(sql).contains("ji.dry_run = false");
+    assertThat(clause.find()).isTrue();
+    assertThat(parseStatusCodes(clause.group(1)))
+        .containsExactlyInAnyOrder("FAILED", "PARTIAL_FAILED");
+    assertThat(clause.find()).isFalse();
   }
 
   private static String countAlias(String statement, String category) {

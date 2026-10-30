@@ -11,8 +11,8 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
 import io.github.pinpols.batch.orchestrator.config.JobDependencyWaitProperties;
+import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDependencyWaitingLaunchEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.TenantDirectoryMapper;
@@ -171,9 +171,10 @@ public class JobDependencyWaitingLaunchReconciler {
       JobDependencyWaitingLaunchEntity entry,
       TriggerRequestEntity triggerRequest,
       String notReadyReason) {
-    boolean dependencyWaitNeedsNoTimeoutAlert = dependencyWaitProperties.getTimeoutAlertSeconds() <= 0
-        || EmptyChecks.isNull(entry.createdAt())
-        || EmptyChecks.isNotNull(entry.timeoutAlertedAt());
+    boolean dependencyWaitNeedsNoTimeoutAlert =
+        dependencyWaitProperties.getTimeoutAlertSeconds() <= 0
+            || EmptyChecks.isNull(entry.createdAt())
+            || EmptyChecks.isNotNull(entry.timeoutAlertedAt());
     if (dependencyWaitNeedsNoTimeoutAlert) {
       return;
     }

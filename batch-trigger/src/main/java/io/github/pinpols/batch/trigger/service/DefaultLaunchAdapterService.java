@@ -79,12 +79,14 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
   }
 
   @Override
-  public LaunchRequest fromObservedScheduledTrigger(ScheduledTriggerCommand command, LocalDate bizDate) {
+  public LaunchRequest fromObservedScheduledTrigger(
+      ScheduledTriggerCommand command, LocalDate bizDate) {
     ZoneId zoneId = timezoneProvider.resolveOrDefault(command.descriptor().getTimezone());
     return buildScheduledRequest(command, bizDate, zoneId);
   }
 
-  private LaunchRequest buildScheduledRequest(ScheduledTriggerCommand command, LocalDate bizDate, ZoneId zoneId) {
+  private LaunchRequest buildScheduledRequest(
+      ScheduledTriggerCommand command, LocalDate bizDate, ZoneId zoneId) {
     TriggerDescriptor descriptor = command.descriptor();
     // triggerType 为 null 时说明来自普通 Quartz 触发，catchUp 触发会被显式设置为 CATCH_UP
     TriggerType triggerType =

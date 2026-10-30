@@ -16,6 +16,7 @@ import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRep
 import io.github.pinpols.batch.worker.core.support.FrozenFileTemplateResolver;
 import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
+import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -41,6 +42,41 @@ class ReceiveStepFrozenTemplateTest {
   private SecretPayloadProtector protector;
 
   private ReceiveStep step;
+
+  @Test
+  @DisplayName("演练接收内联载荷时不创建正式文件记录")
+  void shouldNotCreateFileRecord_whenDryRunHasNoFileId() {
+    ImportJobContext context = new ImportJobContext();
+    context.setTenantId("tenant-a");
+    context.setRawPayload("{\"content\":\"name\\nAlice\"}");
+    context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
+
+    var result = step.execute(context);
+
+    assertThat(result.success()).isTrue();
+    verifyNoInteractions(files, pipelines);
+  }
+
+  @Test
+  @DisplayName("演练复用已有文件并保留存储坐标，不登记新文件")
+  void shouldRetainExistingFileCoordinates_whenDryRun() {
+    ImportJobContext context = new ImportJobContext();
+    context.setTenantId("tenant-a");
+    context.setRawPayload("{\"content\":\"name\\nAlice\"}");
+    context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
+    context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, 12L);
+    context
+        .getAttributes()
+        .put(PipelineRuntimeKeys.FILE_RECORD, Map.of("storage_path", "input/a.csv"));
+
+    var result = step.execute(context);
+
+    assertThat(result.success()).isTrue();
+    ImportPayload payload =
+        (ImportPayload) context.getAttributes().get(PipelineRuntimeKeys.IMPORT_PAYLOAD);
+    assertThat(payload.storagePath()).isEqualTo("input/a.csv");
+    verifyNoInteractions(files, pipelines);
+  }
 
   @BeforeEach
   void setUp() {

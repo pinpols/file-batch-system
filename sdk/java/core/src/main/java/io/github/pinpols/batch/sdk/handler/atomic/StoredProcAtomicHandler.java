@@ -109,7 +109,8 @@ public class StoredProcAtomicHandler extends SdkAbstractAtomicHandler<Map<String
     boolean originalAutoCommit = conn.getAutoCommit();
     try {
       conn.setAutoCommit(autoCommit);
-      try (CallableStatement cs = conn.prepareCall(buildCall(procName, total))) {
+      String callSql = buildCall(procName, total);
+      try (CallableStatement cs = conn.prepareCall(callSql)) {
         cs.setQueryTimeout(config.statementTimeoutSeconds());
         for (int i = 0; i < inParams.size(); i++) {
           cs.setObject(i + 1, inParams.get(i));

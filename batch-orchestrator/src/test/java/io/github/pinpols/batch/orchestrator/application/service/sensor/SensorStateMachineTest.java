@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service.sensor;
 
-import io.github.pinpols.batch.orchestrator.domain.param.WorkflowNodeRunUpdateSensorProbeStateParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -24,9 +21,11 @@ import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcome
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService.DagNodeResolution;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeTerminalFinalizer;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.WorkflowNodeRunUpdateSensorProbeStateParam;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
@@ -34,11 +33,13 @@ import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -85,9 +86,7 @@ class SensorStateMachineTest {
   private WorkflowNodeDispatchService dispatchService;
 
   @Mock
-  private io.github.pinpols.batch.orchestrator.application.service.workflow
-          .WorkflowNodeTerminalFinalizer
-      workflowNodeTerminalFinalizer;
+  private WorkflowNodeTerminalFinalizer workflowNodeTerminalFinalizer;
 
   private SensorStateMachine sm;
   private static final Instant NOW = Instant.parse("2026-05-13T12:00:00Z");
@@ -140,13 +139,14 @@ class SensorStateMachineTest {
 
     verify(taskOutcomeService, never()).recordNodeRunFinish(any());
     Instant expectedNext = NOW.plusSeconds(30); // pollInterval=30
-    verify(nodeRunMapper).updateSensorProbeState(WorkflowNodeRunUpdateSensorProbeStateParam.builder()
-        .id(99L)
-        .nextProbeAt(expectedNext)
-        .lastProbeAt(NOW)
-        .probeCount(6)
-        .errorCount(0)
-        .build());
+    verify(nodeRunMapper)
+        .updateSensorProbeState(WorkflowNodeRunUpdateSensorProbeStateParam.builder()
+            .id(99L)
+            .nextProbeAt(expectedNext)
+            .lastProbeAt(NOW)
+            .probeCount(6)
+            .errorCount(0)
+            .build());
   }
 
   @Test
@@ -159,7 +159,12 @@ class SensorStateMachineTest {
 
     verify(taskOutcomeService, never()).recordNodeRunFinish(any());
     // exponential backoff: errors=2 → 2x poll
-    verify(nodeRunMapper).updateSensorProbeState(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.id(), 99L) && java.util.Objects.equals(parameters.lastProbeAt(), NOW) && java.util.Objects.equals(parameters.probeCount(), 3) && java.util.Objects.equals(parameters.errorCount(), 2)));
+    verify(nodeRunMapper)
+        .updateSensorProbeState(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.id(), 99L)
+            && Objects.equals(parameters.lastProbeAt(), NOW)
+            && Objects.equals(parameters.probeCount(), 3)
+            && Objects.equals(parameters.errorCount(), 2)));
   }
 
   @Test
@@ -174,7 +179,12 @@ class SensorStateMachineTest {
     sm.probeAndAdvance(nodeRun(0, 0), NOW); // 1st error, below threshold → 仅记探针状态,不 finish
 
     verify(taskOutcomeService, never()).recordNodeRunFinish(any());
-    verify(nodeRunMapper).updateSensorProbeState(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.id(), 99L) && java.util.Objects.equals(parameters.lastProbeAt(), NOW) && java.util.Objects.equals(parameters.probeCount(), 1) && java.util.Objects.equals(parameters.errorCount(), 1)));
+    verify(nodeRunMapper)
+        .updateSensorProbeState(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.id(), 99L)
+            && Objects.equals(parameters.lastProbeAt(), NOW)
+            && Objects.equals(parameters.probeCount(), 1)
+            && Objects.equals(parameters.errorCount(), 1)));
   }
 
   @Test
@@ -185,13 +195,45 @@ class SensorStateMachineTest {
         .thenReturn(SensorProbeResult.error(
             "error.workflow.sensor_probe_failed", List.of("FILE_ARRIVAL", "boom")));
 
-    // already 2 consecutive errors; this would be 3rd → fail
+    // 已有连续 2 次错误；本次将是第 3 次，因此应判定失败。
     sm.probeAndAdvance(nodeRun(2, 2), NOW);
 
     ArgumentCaptor<NodeRunFinishCommand> cap = ArgumentCaptor.forClass(NodeRunFinishCommand.class);
     verify(taskOutcomeService).recordNodeRunFinish(cap.capture());
     assertThat(cap.getValue().success()).isFalse();
     assertThat(cap.getValue().errorKey()).isEqualTo("error.workflow.sensor_probe_failed");
+  }
+
+  @Test
+  @DisplayName("探针抛出异常后写入节点失败参数前屏蔽凭据")
+  void shouldNotPersistCredentialsWhenProbeThrows() {
+    seedHappyPath();
+    when(filePolicy.probe(any()))
+        .thenThrow(new RuntimeException("db failed password=sample-secret token=sample-token"));
+    sm.probeAndAdvance(nodeRun(2, 2), NOW);
+    ArgumentCaptor<NodeRunFinishCommand> captor =
+        ArgumentCaptor.forClass(NodeRunFinishCommand.class);
+    verify(taskOutcomeService).recordNodeRunFinish(captor.capture());
+    assertThat(captor.getValue().errorArgs())
+        .contains("db failed")
+        .doesNotContain("sample-secret", "sample-token");
+  }
+
+  @Test
+  @DisplayName("自定义探针直接构造错误结果时写入前屏蔽凭据")
+  void shouldNotPersistCredentialsWhenProbeReturnsError() {
+    seedHappyPath();
+    when(filePolicy.probe(any()))
+        .thenReturn(new SensorProbeResult(
+            SensorProbeStatus.ERROR,
+            Map.of(),
+            "error.workflow.sensor_probe_failed",
+            List.of("FILE_ARRIVAL", "db failed password=sample-secret")));
+    sm.probeAndAdvance(nodeRun(2, 2), NOW);
+    ArgumentCaptor<NodeRunFinishCommand> captor =
+        ArgumentCaptor.forClass(NodeRunFinishCommand.class);
+    verify(taskOutcomeService).recordNodeRunFinish(captor.capture());
+    assertThat(captor.getValue().errorArgs()).contains("db failed").doesNotContain("sample-secret");
   }
 
   @Test
@@ -424,6 +466,150 @@ class SensorStateMachineTest {
     wfRun.setWorkflowDefinitionId(7L);
     wfRun.setRelatedJobInstanceId(500L);
     when(workflowRunMapper.selectByIdAnyTenant(1L)).thenReturn(wfRun);
+  }
+
+  @Test
+  @DisplayName("运行时传感器配置拒绝小数秒与超出 long 范围的秒数")
+  void shouldRejectNonIntegralAndOverflowSensorDurations() throws Exception {
+    for (String durations : List.of(
+        "\"timeout_seconds\":120.5,\"poll_interval_seconds\":30",
+        "\"timeout_seconds\":120,\"poll_interval_seconds\":30.5",
+        "\"timeout_seconds\":18446744073709551736,\"poll_interval_seconds\":30")) {
+      String params = "{\"sensor_type\":\"FILE_ARRIVAL\",\"sensor_spec\":{}," + durations
+          + ",\"on_timeout\":\"FAIL\"}";
+      @SuppressWarnings("unchecked")
+      Map<String, Object> parsed = objectMapper.readValue(params, Map.class);
+      assertThat(SensorStateMachine.SensorConfig.from(parsed)).as(durations).isNull();
+    }
+  }
+
+  @Test
+  @DisplayName("探针已匹配时不计算无用的下次探测时间")
+  void shouldFinishMatchedProbe_whenUnusedIntervalCannotBeAdded() {
+    seedHappyPath();
+    seedExtremeInterval();
+    when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of("fileId", 7L)));
+
+    sm.probeAndAdvance(nodeRun(0, 0), NOW);
+
+    ArgumentCaptor<NodeRunFinishCommand> command =
+        ArgumentCaptor.forClass(NodeRunFinishCommand.class);
+    verify(taskOutcomeService).recordNodeRunFinish(command.capture());
+    assertThat(command.getValue().success()).isTrue();
+    verify(nodeRunMapper)
+        .updateSensorProbeState(ArgumentMatchers.argThat(value -> value.nextProbeAt() == null));
+  }
+
+  @Test
+  @DisplayName("探针达到失败阈值时不计算无用的下次探测时间")
+  void shouldFinishFailedProbe_whenUnusedIntervalCannotBeAdded() {
+    seedHappyPath();
+    seedExtremeInterval();
+    when(filePolicy.probe(any()))
+        .thenReturn(
+            SensorProbeResult.error("error.workflow.sensor_probe_failed", List.of("failed")));
+
+    sm.probeAndAdvance(nodeRun(0, 2), NOW);
+
+    ArgumentCaptor<NodeRunFinishCommand> command =
+        ArgumentCaptor.forClass(NodeRunFinishCommand.class);
+    verify(taskOutcomeService).recordNodeRunFinish(command.capture());
+    assertThat(command.getValue().errorKey()).isEqualTo("error.workflow.sensor_probe_failed");
+    verify(nodeRunMapper)
+        .updateSensorProbeState(ArgumentMatchers.argThat(value -> value.nextProbeAt() == null));
+  }
+
+  @Test
+  @DisplayName("未就绪时不可表示的下次探测时间应明确失败")
+  void shouldFailInvalidSpec_whenNextProbeTimeOverflows() {
+    seedHappyPath();
+    seedExtremeInterval();
+    when(filePolicy.probe(any())).thenReturn(SensorProbeResult.notYet());
+
+    sm.probeAndAdvance(nodeRun(0, 0), NOW);
+
+    ArgumentCaptor<NodeRunFinishCommand> command =
+        ArgumentCaptor.forClass(NodeRunFinishCommand.class);
+    verify(taskOutcomeService).recordNodeRunFinish(command.capture());
+    assertThat(command.getValue().errorKey()).isEqualTo("error.workflow.sensor_spec_invalid");
+  }
+
+  @Test
+  @DisplayName("探针出错时超大退避不得回绕为过去时间")
+  void shouldFailInvalidSpec_whenRetryBackoffOverflows() {
+    seedHappyPath();
+    seedExtremeInterval();
+    when(filePolicy.probe(any()))
+        .thenReturn(
+            SensorProbeResult.error("error.workflow.sensor_probe_failed", List.of("failed")));
+
+    sm.probeAndAdvance(nodeRun(0, 0), NOW);
+
+    ArgumentCaptor<NodeRunFinishCommand> command =
+        ArgumentCaptor.forClass(NodeRunFinishCommand.class);
+    verify(taskOutcomeService).recordNodeRunFinish(command.capture());
+    assertThat(command.getValue().errorKey()).isEqualTo("error.workflow.sensor_spec_invalid");
+  }
+
+  @Test
+  @DisplayName("下次探测时间超出 PostgreSQL 时间范围时应明确失败")
+  void shouldFailInvalidSpec_whenNextProbeExceedsPostgresRange() {
+    seedHappyPath();
+    seedInterval(10_000_000_000_000L, 10_000_000_000_001L);
+    when(filePolicy.probe(any())).thenReturn(SensorProbeResult.notYet());
+
+    sm.probeAndAdvance(nodeRun(0, 0), NOW);
+
+    ArgumentCaptor<NodeRunFinishCommand> command =
+        ArgumentCaptor.forClass(NodeRunFinishCommand.class);
+    verify(taskOutcomeService).recordNodeRunFinish(command.capture());
+    assertThat(command.getValue().errorKey()).isEqualTo("error.workflow.sensor_spec_invalid");
+  }
+
+  @Test
+  @DisplayName("未就绪的下次探测不得晚于 WAIT 超时")
+  void shouldScheduleAtDeadline_whenNextProbeWouldBeAfterTimeout() {
+    seedHappyPath();
+    when(filePolicy.probe(any())).thenReturn(SensorProbeResult.notYet());
+    WorkflowNodeRunEntity run = nodeRun(0, 0);
+    run.setStartedAt(NOW.minusSeconds(115));
+
+    sm.probeAndAdvance(run, NOW);
+
+    verify(nodeRunMapper)
+        .updateSensorProbeState(
+            ArgumentMatchers.argThat(value -> NOW.plusSeconds(5).equals(value.nextProbeAt())));
+  }
+
+  @Test
+  @DisplayName("错误退避不得推迟 WAIT 超时处理")
+  void shouldScheduleAtDeadline_whenErrorBackoffWouldBeAfterTimeout() {
+    seedHappyPath();
+    when(filePolicy.probe(any()))
+        .thenReturn(
+            SensorProbeResult.error("error.workflow.sensor_probe_failed", List.of("failed")));
+    WorkflowNodeRunEntity run = nodeRun(0, 0);
+    run.setStartedAt(NOW.minusSeconds(115));
+
+    sm.probeAndAdvance(run, NOW);
+
+    verify(nodeRunMapper)
+        .updateSensorProbeState(
+            ArgumentMatchers.argThat(value -> NOW.plusSeconds(5).equals(value.nextProbeAt())));
+  }
+
+  private void seedExtremeInterval() {
+    seedInterval(Long.MAX_VALUE - 1, Long.MAX_VALUE);
+  }
+
+  private void seedInterval(long interval, long timeout) {
+    WorkflowNodeEntity node = new WorkflowNodeEntity();
+    node.setNodeType("WAIT");
+    node.setNodeParams("""
+        {"sensor_type":"FILE_ARRIVAL","sensor_spec":{},
+         "timeout_seconds":%d,"poll_interval_seconds":%d,"on_timeout":"FAIL"}
+        """.formatted(timeout, interval));
+    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(7L, "wait-1")).thenReturn(node);
   }
 
   private void seedHappyPath() {

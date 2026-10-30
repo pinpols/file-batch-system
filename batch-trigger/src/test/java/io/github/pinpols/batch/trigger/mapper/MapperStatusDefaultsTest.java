@@ -1,10 +1,5 @@
 package io.github.pinpols.batch.trigger.mapper;
 
-import io.github.pinpols.batch.trigger.domain.param.BatchDayInstanceMarkCutoffParam;
-import io.github.pinpols.batch.trigger.domain.param.BatchDayInstanceTransitionToCutoffParam;
-import io.github.pinpols.batch.trigger.domain.param.TriggerMisfirePendingUpdateApprovalStatusParam;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.doReturn;
@@ -12,46 +7,14 @@ import static org.mockito.Mockito.mock;
 
 import io.github.pinpols.batch.common.persistence.entity.TriggerMisfirePendingEntity;
 import io.github.pinpols.batch.common.persistence.entity.TriggerOutboxEventEntity;
-import io.github.pinpols.batch.trigger.support.BatchDayCutoffCandidate;
+import io.github.pinpols.batch.trigger.domain.param.TriggerMisfirePendingUpdateApprovalStatusParam;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 @DisplayName("Trigger Mapper 状态默认方法:固定状态与调用方参数保持一致")
 class MapperStatusDefaultsTest {
-
-  @Test
-  @DisplayName("批次日截止查询与状态转换使用 OPEN 到 CUTOFF")
-  void shouldDelegateBatchDayStatuses() {
-    BatchDayInstanceMapper mapper = mock(BatchDayInstanceMapper.class, CALLS_REAL_METHODS);
-    Instant cutoffAt = Instant.parse("2026-10-13T00:00:00Z");
-    LocalDate bizDate = LocalDate.of(2026, 10, 13);
-    List<BatchDayCutoffCandidate> candidates = List.of();
-    doReturn(candidates).when(mapper).selectCutoffCandidatesByStatus("OPEN");
-    doReturn(1)
-        .when(mapper)
-        .transitionToCutoff(BatchDayInstanceTransitionToCutoffParam.builder()
-            .id(7L)
-            .tenantId("tenant-a")
-            .calendarCode("calendar-a")
-            .bizDate(bizDate)
-            .cutoffAt(cutoffAt)
-            .expectedStatus("OPEN")
-            .targetStatus("CUTOFF")
-            .build());
-
-    assertThat(mapper.selectOpenCutoffCandidates()).isSameAs(candidates);
-    assertThat(mapper.markCutoff(BatchDayInstanceMarkCutoffParam.builder()
-        .id(7L)
-        .tenantId("tenant-a")
-        .calendarCode("calendar-a")
-        .bizDate(bizDate)
-        .cutoffAt(cutoffAt)
-        .build()))
-        .isEqualTo(1);
-  }
 
   @Test
   @DisplayName("误触发待审流程装配所有状态转换参数")

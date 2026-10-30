@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.ops.mapper;
 
+import io.github.pinpols.batch.console.domain.ops.view.OutboxEventStatusStat;
 import java.util.List;
-import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 /**
@@ -16,5 +16,5 @@ public interface ConsoleOutboxEventReadMapper {
   long countByStatus(
       @Param("tenantId") String tenantId, @Param("publishStatus") String publishStatus);
 
-  List<Map<String, Object>> statsByStatus(@Param("tenantId") String tenantId);
+  List<OutboxEventStatusStat> statsByStatus(@Param("tenantId") String tenantId);
 }

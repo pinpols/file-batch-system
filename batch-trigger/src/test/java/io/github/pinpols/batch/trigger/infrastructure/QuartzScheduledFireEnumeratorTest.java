@@ -3,9 +3,11 @@ package io.github.pinpols.batch.trigger.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.pinpols.batch.trigger.support.ScheduledFireTimeSource;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Date;
+import java.util.List;
 import java.util.TimeZone;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -74,5 +76,28 @@ class QuartzScheduledFireEnumeratorTest {
             2))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("occurrence limit");
+  }
+
+  @Test
+  @DisplayName("项目时间源保持起点排除和终点包含,不要求规划器认识Quartz类型")
+  void shouldEnumerateProjectSource_whenScheduleEngineIsAbstracted() {
+    Instant first = Instant.parse("2026-01-01T00:01:00Z");
+    Instant last = first.plusSeconds(60);
+    List<Instant> times = List.of(first, last);
+    ScheduledFireTimeSource source =
+        after -> times.stream().filter(time -> time.isAfter(after)).findFirst().orElse(null);
+    assertThat(enumerator.enumerateFromSource(source, first.minusSeconds(60), last, 2))
+        .containsExactly(first, last);
+    assertThat(source.nextAfter(last)).isNull();
+  }
+
+  @Test
+  @DisplayName("时间源未推进时失败,避免物化循环或错误覆盖声明")
+  void shouldFail_whenProjectSourceDoesNotAdvance() {
+    Instant now = Instant.parse("2026-01-01T00:00:00Z");
+    ScheduledFireTimeSource source = after -> after;
+    assertThatThrownBy(() -> enumerator.enumerateFromSource(source, now, now.plusSeconds(60), 2))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("non-advancing");
   }
 }

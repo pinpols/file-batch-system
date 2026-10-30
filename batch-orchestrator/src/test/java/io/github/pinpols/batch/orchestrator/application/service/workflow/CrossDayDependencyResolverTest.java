@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionQueryService;
@@ -19,6 +20,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 @DisplayName("跨天依赖解析器: 生效版本注入, 依赖缺失等待与失败态口径")
 class CrossDayDependencyResolverTest {
@@ -38,6 +41,33 @@ class CrossDayDependencyResolverTest {
     var result = resolver.resolve("t1", LocalDate.of(2026, Month.MAY, 4), null, false);
     assertThat(result.isResolved()).isTrue();
     assertThat(result.getResolved()).isEmpty();
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  @DisplayName("有跨日依赖时缺少租户或业务日，普通和冻结解析均失败关闭")
+  void shouldFailMissingContext_whenDependencyConfigured(boolean missingTenant) {
+    String tenant = missingTenant ? " " : "t1";
+    LocalDate bizDate = missingTenant ? LocalDate.of(2026, 5, 4) : null;
+    String json = "[{\"alias\":\"previous\",\"jobCode\":\"DAILY\",\"bizDateOffset\":-1}]";
+
+    ResolutionResult normal = resolver.resolve(tenant, bizDate, json, false);
+    ResolutionResult pinned = resolver.resolvePinned(tenant, bizDate, json, false, Map.of());
+
+    assertThat(normal.isFailed()).isTrue();
+    assertThat(normal.getFailureCode()).isEqualTo("CROSS_DAY_DEP_INVALID_CONTEXT");
+    assertThat(pinned.isFailed()).isTrue();
+    assertThat(pinned.getFailureCode()).isEqualTo("CROSS_DAY_DEP_INVALID_CONTEXT");
+    verifyNoInteractions(queryService);
+  }
+
+  @Test
+  @DisplayName("空跨日依赖数组不需要租户和业务日")
+  void shouldResolveEmptyArrayWithoutContext() {
+    ResolutionResult result = resolver.resolve(null, null, "[]", false);
+    assertThat(result.isResolved()).isTrue();
+    assertThat(result.getResolved()).isEmpty();
+    verifyNoInteractions(queryService);
   }
 
   @Test
@@ -125,11 +155,7 @@ class CrossDayDependencyResolverTest {
     when(queryService.findById("t1", 77L)).thenReturn(Optional.of(pinned));
 
     ResolutionResult result = resolver.resolvePinned(
-        "t1",
-        LocalDate.of(2026, Month.MAY, 4),
-        json,
-        false,
-        Map.of("t_minus_1", List.of(77L)));
+        "t1", LocalDate.of(2026, Month.MAY, 4), json, false, Map.of("t_minus_1", List.of(77L)));
 
     assertThat(result.isResolved()).isTrue();
     assertThat(result.getResultVersionIdsByAlias()).containsEntry("t_minus_1", List.of(77L));
@@ -137,8 +163,8 @@ class CrossDayDependencyResolverTest {
     Map<String, Object> entry = (Map<String, Object>) result.getResolved().get("t_minus_1");
     assertThat(entry).containsEntry("resultVersionId", 77L);
     assertThat(entry.get("output")).isEqualTo(Map.of("recordCount", 42));
-    org.mockito.Mockito.verify(queryService, org.mockito.Mockito.never())
-        .findLatestCrossDayDependencyVersion(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+    Mockito.verify(queryService, Mockito.never())
+        .findLatestCrossDayDependencyVersion(any(), any(), any(), ArgumentMatchers.anyBoolean());
   }
 
   @Test
@@ -158,11 +184,7 @@ class CrossDayDependencyResolverTest {
     when(queryService.findById("t1", 77L)).thenReturn(Optional.of(wrongBusinessDate));
 
     ResolutionResult result = resolver.resolvePinned(
-        "t1",
-        LocalDate.of(2026, Month.MAY, 4),
-        json,
-        false,
-        Map.of("t_minus_1", List.of(77L)));
+        "t1", LocalDate.of(2026, Month.MAY, 4), json, false, Map.of("t_minus_1", List.of(77L)));
 
     assertThat(result.isFailed()).isTrue();
     assertThat(result.getFailureCode()).isEqualTo("CROSS_DAY_DEP_SNAPSHOT_INVALID");

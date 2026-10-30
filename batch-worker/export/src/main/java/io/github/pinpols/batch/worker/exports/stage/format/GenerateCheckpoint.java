@@ -82,11 +82,10 @@ public final class GenerateCheckpoint {
       try {
         GenerateCursorCodec.Marker m = codec.decodeMarker(marker);
         Object decodedCursor = codec.decodeCursor(m.encodedCursor());
-        boolean checkpointFileCanResume =
-            m.byteOffset() > 0
-                && EmptyChecks.isNotNull(decodedCursor)
-                && Files.exists(generatedFile)
-                && Files.size(generatedFile) >= m.byteOffset();
+        boolean checkpointFileCanResume = m.byteOffset() > 0
+            && EmptyChecks.isNotNull(decodedCursor)
+            && Files.exists(generatedFile)
+            && Files.size(generatedFile) >= m.byteOffset();
         if (checkpointFileCanResume) {
           resuming = true;
           offset = m.byteOffset();
@@ -144,12 +143,7 @@ public final class GenerateCheckpoint {
     }
     long increment = recordCountSoFar - lastReportedCount;
     String marker = codec.encodeMarker(byteOffset, encoded.get());
-    store.advance(
-        tenantId,
-        pipelineInstanceId,
-        ProcessingStage.GENERATE,
-        marker,
-        increment);
+    store.advance(tenantId, pipelineInstanceId, ProcessingStage.GENERATE, marker, increment);
     lastReportedCount = recordCountSoFar;
   }
 

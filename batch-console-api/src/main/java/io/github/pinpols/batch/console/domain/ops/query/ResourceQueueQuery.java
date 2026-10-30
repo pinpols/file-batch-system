@@ -20,5 +20,4 @@ public record ResourceQueueQuery(
   public static ResourceQueueQuery allForTenant(String tenantId) {
     return new ResourceQueueQuery(tenantId, null, null, null, null);
   }
-
 }

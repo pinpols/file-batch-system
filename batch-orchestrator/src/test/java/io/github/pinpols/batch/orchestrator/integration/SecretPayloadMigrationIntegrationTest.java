@@ -68,7 +68,12 @@ class SecretPayloadMigrationIntegrationTest {
     jdbc.update(insertSecretVersionSql, "tenant-a", "legacy-ref", "Legacy Secret", LEGACY_PAYLOAD);
 
     flyway(callback).target("210").load().migrate();
-    jdbc.update(insertSecretVersionSql, "tenant-a", "v210-ref", "V210 Legacy Secret", V210_NULL_CHECK_PAYLOAD);
+    jdbc.update(
+        insertSecretVersionSql,
+        "tenant-a",
+        "v210-ref",
+        "V210 Legacy Secret",
+        V210_NULL_CHECK_PAYLOAD);
 
     flyway(callback).load().migrate();
 
@@ -121,10 +126,7 @@ class SecretPayloadMigrationIntegrationTest {
         select secret_payload::text from batch.secret_version where secret_ref = ?
     """;
 
-    return jdbc.queryForObject(
-        selectSecretPayloadSql,
-        String.class,
-        secretRef);
+    return jdbc.queryForObject(selectSecretPayloadSql, String.class, secretRef);
   }
 
   private static boolean constraintValidated(JdbcTemplate jdbc) {

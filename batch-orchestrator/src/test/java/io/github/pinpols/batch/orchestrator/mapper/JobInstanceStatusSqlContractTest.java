@@ -9,6 +9,7 @@ import java.io.InputStream;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -31,6 +32,71 @@ class JobInstanceStatusSqlContractTest {
 
     assertContainsEveryTerminalStatus(configuration, "countNonTerminalByJobCodeAndBizDate");
     assertContainsEveryTerminalStatus(configuration, "countNonTerminalByJobGroupAndBizDate");
+  }
+
+  @Test
+  @DisplayName("防终态复活片段与活跃子项诊断均覆盖完整终态集合")
+  void shouldMatchTerminalLifecycle_whenGuardingWritesAndDiagnosingChildren() {
+    Configuration configuration = loadJobInstanceMapper();
+    for (String fragment : List.of(
+        "NotFromTerminal", "NotFromTerminalAllowSelf", "NotFromTerminalAllowSelfForProgress")) {
+      String sql = configuration
+          .getSqlFragments()
+          .get(JobInstanceMapper.class.getName() + "." + fragment)
+          .getStringBody();
+      assertThat(statusesInNotInClause(sql))
+          .as(fragment)
+          .containsExactlyInAnyOrderElementsOf(JobInstanceStatus.terminalCodes());
+    }
+
+    String diagnosticSql = configuration
+        .getMappedStatement(
+            JobInstanceMapper.class.getName() + ".countTerminalInstancesWithActiveChildren")
+        .getBoundSql(Map.of())
+        .getSql();
+    assertThat(statusesForSqlClause(diagnosticSql, "ji\\.instance_status\\s+in\\s*\\(([^)]*)\\)"))
+        .containsExactlyInAnyOrderElementsOf(JobInstanceStatus.terminalCodes());
+  }
+
+  @Test
+  @DisplayName("批日重放和自动补跑候选排除演练并使用冻结日历")
+  void shouldSelectFormalSourcesUsingFrozenCalendar() {
+    Configuration configuration = loadJobInstanceMapper();
+    for (String statement :
+        List.of("selectBatchDayCatchUpCandidates", "selectBatchDayCandidates")) {
+      String sql = configuration
+          .getMappedStatement(JobInstanceMapper.class.getName() + "." + statement)
+          .getBoundSql(
+              Map.of("tenantId", "tenant", "calendarCode", "cal", "bizDate", LocalDate.now()))
+          .getSql();
+      assertThat(sql).as(statement).contains("ji.dry_run = false", "ji.calendar_code = ?");
+      if (statement.equals("selectBatchDayCatchUpCandidates")) {
+        assertThat(statusesForSqlClause(sql, "ji\\.instance_status\\s+in\\s*\\(([^)]*)\\)"))
+            .as("automatic catch-up failure policy")
+            .containsExactlyInAnyOrder("FAILED", "PARTIAL_FAILED");
+      }
+    }
+    String resource = "mapper/BatchDayInstanceMapper.xml";
+    Configuration dayConfiguration = new Configuration();
+    try (InputStream stream =
+        Thread.currentThread().getContextClassLoader().getResourceAsStream(resource)) {
+      assertThat(stream).as(resource).isNotNull();
+      new XMLMapperBuilder(stream, dayConfiguration, resource, dayConfiguration.getSqlFragments())
+          .parse();
+    } catch (Exception exception) {
+      throw new AssertionError("failed to validate " + resource, exception);
+    }
+    String sql = dayConfiguration
+        .getMappedStatement(
+            BatchDayInstanceMapper.class.getName() + ".selectFailedDaysNeedingCatchUp")
+        .getBoundSql(Map.of("limit", 10))
+        .getSql();
+    assertThat(sql)
+        .contains("failed.dry_run = false", "failed.calendar_code = day.calendar_code")
+        .doesNotContain("definition.calendar_code");
+    assertThat(statusesForSqlClause(sql, "failed\\.instance_status\\s+in\\s*\\(([^)]*)\\)"))
+        .as("failed batch-day catch-up policy")
+        .containsExactlyInAnyOrder("FAILED", "PARTIAL_FAILED");
   }
 
   @Test

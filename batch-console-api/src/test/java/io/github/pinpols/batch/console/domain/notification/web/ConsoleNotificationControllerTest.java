@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.domain.notification.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -21,27 +20,32 @@ import io.github.pinpols.batch.console.domain.notification.application.contract.
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.NotificationChannelUpsertRequest;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.SubscriptionRuleUpsertRequest;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleNotificationChannelResponse;
+import io.github.pinpols.batch.console.domain.notification.view.NotificationChannelRow;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 @DisplayName("通知配置接口: 渠道与订阅规则的字段绑定和必填校验")
+@ExtendWith(MockitoExtension.class)
 class ConsoleNotificationControllerTest {
 
-  private final ConsoleNotificationApplicationService applicationService =
-      mock(ConsoleNotificationApplicationService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleNotificationApplicationService applicationService;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -52,9 +56,6 @@ class ConsoleNotificationControllerTest {
 
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
@@ -72,8 +73,8 @@ class ConsoleNotificationControllerTest {
     // 生产 NotificationChannelMapper 以 resultType=map 返回 snake_case 列键（channel_code），
     // 类型化响应经 @JsonProperty 保持 snake_case wire 一字不差。
     when(applicationService.listChannels("t1"))
-        .thenReturn(List.of(ConsoleNotificationChannelResponse.from(
-            Map.of("channel_code", "mail-1", "channel_type", "EMAIL"))));
+        .thenReturn(List.of(ConsoleNotificationChannelResponse.from(new NotificationChannelRow(
+            1L, "t1", "mail-1", "mail-1", "EMAIL", null, true, null, null, null, null))));
 
     mockMvc
         .perform(get("/api/console/notifications/channels").param("tenantId", "t1"))

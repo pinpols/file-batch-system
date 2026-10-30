@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -44,18 +45,23 @@ import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.CalendarHolidayMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.query.JobDefinitionQuery;
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.BatchWindowRow;
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarHolidayRow;
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarQueryRow;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertRoutingConfigMapper;
 import io.github.pinpols.batch.console.domain.notification.query.AlertRoutingConfigQuery;
+import io.github.pinpols.batch.console.domain.notification.view.AlertRoutingConfigRow;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.ops.query.ResourceQueueQuery;
+import io.github.pinpols.batch.console.domain.ops.view.ResourceQueueRow;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantQuotaPolicyMapper;
+import io.github.pinpols.batch.console.domain.rbac.view.TenantQuotaPolicyRow;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
-import io.github.pinpols.batch.console.domain.workflow.query.WorkflowDefinitionQuery;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowEdgeQuery;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowNodeQuery;
 import java.util.ArrayList;
@@ -82,6 +88,7 @@ import org.springframework.util.StringUtils;
  * <p>从源租户读取配置，转换为 Spec 列表，然后委托给 batch-init 逻辑执行。
  * 源配置的多次查询必须观察同一快照；独立事务避免继承调用方的 READ COMMITTED。
  * 同类内部构建完整包、单Job包及预览也共享该快照，各目标写入继续使用独立租户事务。
+ * 配置包读取复用 Mapper 的空分页全量契约，避免交互列表的 200 条上限截断配置或 Workflow 图。
  */
 @Slf4j
 @Service
@@ -96,8 +103,6 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
   private static final String KEY_TIMEZONE = "timezone";
   private static final String KEY_ENABLED = "enabled";
   private static final String KEY_DESCRIPTION = "description";
-
-  private static final int MAX_PAGE_SIZE = 5000;
 
   /**
    * 单条配置类型的传输描述符。
@@ -138,6 +143,11 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
   @Override
   public TenantConfigBatchInitResponse copy(
       TenantConfigCopyRequest request, String operator, String batchOperationId) {
+    // 复制会剥离环境端点与凭据，禁止把处理后的包回写源租户。
+    if (EmptyChecks.isNotEmpty(request.getTargetTenantIds())
+        && request.getTargetTenantIds().contains(request.getSourceTenantId())) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.config_copy.source_target_overlap");
+    }
     TenantConfigBatchInitRequest initRequest = new TenantConfigBatchInitRequest();
     initRequest.setTargetTenantIds(request.getTargetTenantIds());
     initRequest.setMode(request.getMode());
@@ -497,8 +507,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
   }
 
   private List<JobDefinitionSpec> readJobDefinitions(String tenantId) {
-    JobDefinitionQuery query =
-        JobDefinitionQuery.ofTenant(tenantId, new PageRequest(1, MAX_PAGE_SIZE));
+    JobDefinitionQuery query = JobDefinitionQuery.ofTenant(tenantId, null);
     List<JobDefinitionEntity> entities = jobDefinitionMapper.selectByQuery(query);
     List<JobDefinitionSpec> specs = new ArrayList<>(entities.size());
     for (JobDefinitionEntity e : entities) {
@@ -557,9 +566,8 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
   }
 
   private List<WorkflowDefinitionSpec> readWorkflowDefinitions(String tenantId) {
-    WorkflowDefinitionQuery query =
-        WorkflowDefinitionQuery.ofTenant(tenantId, new PageRequest(1, MAX_PAGE_SIZE));
-    List<WorkflowDefinitionEntity> entities = workflowDefinitionMapper.selectByQuery(query);
+    List<WorkflowDefinitionEntity> entities =
+        workflowDefinitionMapper.selectLatestByTenant(tenantId);
     List<WorkflowDefinitionSpec> specs = new ArrayList<>(entities.size());
     for (WorkflowDefinitionEntity e : entities) {
       WorkflowDefinitionSpec s = new WorkflowDefinitionSpec();
@@ -586,8 +594,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
 
       // nodes —— definition-id 作用域:tenantId 故意为 null,靠已经过 ofTenant 过滤的
       // workflowDefinitionId(FK)收敛,非跨租扫描。此处**不**走 TenantScope.requireTenant。
-      WorkflowNodeQuery nodeQuery =
-          WorkflowNodeQuery.ofDefinition(e.getId(), new PageRequest(1, MAX_PAGE_SIZE));
+      WorkflowNodeQuery nodeQuery = WorkflowNodeQuery.ofDefinition(e.getId(), null);
       List<WorkflowNodeEntity> nodes = workflowNodeMapper.selectByQuery(nodeQuery);
       List<WorkflowDefinitionSpec.NodeSpec> nodeSpecs = new ArrayList<>(nodes.size());
       for (WorkflowNodeEntity n : nodes) {
@@ -604,14 +611,15 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
         ns.setTimeoutSeconds(n.getTimeoutSeconds());
         String sanitizedNodeParams = SecretMasking.removeSensitiveJsonFields(n.getNodeParams());
         ns.setNodeParams(sanitizedNodeParams);
+        ns.setCrossDayDependencies(n.getCrossDayDependencies());
+        ns.setCrossDayDependencyTimeoutSeconds(n.getCrossDayDependencyTimeoutSeconds());
         ns.setEnabled(n.getEnabled());
         nodeSpecs.add(ns);
       }
       s.setNodes(nodeSpecs);
 
       // edges
-      WorkflowEdgeQuery edgeQuery =
-          WorkflowEdgeQuery.ofDefinition(e.getId(), new PageRequest(1, MAX_PAGE_SIZE));
+      WorkflowEdgeQuery edgeQuery = WorkflowEdgeQuery.ofDefinition(e.getId(), null);
       List<WorkflowEdgeEntity> edges = workflowEdgeMapper.selectByQuery(edgeQuery);
       List<WorkflowDefinitionSpec.EdgeSpec> edgeSpecs = new ArrayList<>(edges.size());
       for (WorkflowEdgeEntity edge : edges) {
@@ -636,7 +644,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
         .channelCode(null)
         .channelType(null)
         .enabled(null)
-        .pageRequest(new PageRequest(1, MAX_PAGE_SIZE))
+        .pageRequest(null)
         .build();
     List<FileChannelConfigQueryView> entities =
         fileChannelConfigMapper.selectByQuery(fileChannelConfigQuery);
@@ -658,8 +666,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
   }
 
   private List<FileTemplateSpec> readFileTemplates(String tenantId) {
-    FileTemplateConfigQuery query =
-        FileTemplateConfigQuery.ofTenant(tenantId, new PageRequest(1, MAX_PAGE_SIZE));
+    FileTemplateConfigQuery query = FileTemplateConfigQuery.ofTenant(tenantId, null);
     List<FileTemplateConfigQueryView> entities = fileTemplateConfigMapper.selectByQuery(query);
     List<FileTemplateSpec> specs = new ArrayList<>(entities.size());
     for (FileTemplateConfigQueryView e : entities) {
@@ -710,72 +717,68 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
   }
 
   private List<ResourceQueueSpec> readResourceQueues(String tenantId) {
-    PageRequest pageRequest = new PageRequest(1, MAX_PAGE_SIZE);
-    ResourceQueueQuery query = ResourceQueueQuery.forTenant(tenantId, pageRequest);
-    List<Map<String, Object>> rows = resourceQueueMapper.selectByQuery(query);
+    ResourceQueueQuery query = ResourceQueueQuery.allForTenant(tenantId);
+    List<ResourceQueueRow> rows = resourceQueueMapper.selectByQuery(query);
     List<ResourceQueueSpec> specs = new ArrayList<>(rows.size());
-    for (Map<String, Object> r : rows) {
+    for (ResourceQueueRow r : rows) {
       ResourceQueueSpec s = new ResourceQueueSpec();
-      s.setQueueCode(str(r, "queue_code"));
-      s.setQueueName(str(r, "queue_name"));
-      s.setQueueType(str(r, "queue_type"));
-      s.setMaxRunningJobs(intVal(r, "max_running_jobs"));
-      s.setMaxRunningPartitions(intVal(r, "max_running_partitions"));
-      s.setMaxQps(intVal(r, "max_qps"));
-      s.setWorkerGroup(str(r, "worker_group"));
-      s.setResourceTag(str(r, "resource_tag"));
-      s.setPriorityPolicy(str(r, "priority_policy"));
-      s.setFairShareWeight(intVal(r, "fair_share_weight"));
-      s.setEnabled(bool(r, KEY_ENABLED));
-      s.setDescription(str(r, KEY_DESCRIPTION));
+      s.setQueueCode(r.queueCode());
+      s.setQueueName(r.queueName());
+      s.setQueueType(r.queueType());
+      s.setMaxRunningJobs(r.maxRunningJobs());
+      s.setMaxRunningPartitions(r.maxRunningPartitions());
+      s.setMaxQps(r.maxQps());
+      s.setWorkerGroup(r.workerGroup());
+      s.setResourceTag(r.resourceTag());
+      s.setPriorityPolicy(r.priorityPolicy());
+      s.setFairShareWeight(r.fairShareWeight());
+      s.setEnabled(r.enabled());
+      s.setDescription(r.description());
       specs.add(s);
     }
     return specs;
   }
 
   private List<BatchWindowSpec> readBatchWindows(String tenantId) {
-    List<Map<String, Object>> rows =
-        batchWindowMapper.selectByQuery(tenantId, null, null, new PageRequest(1, MAX_PAGE_SIZE));
+    List<BatchWindowRow> rows = batchWindowMapper.selectByQuery(tenantId, null, null, null);
     List<BatchWindowSpec> specs = new ArrayList<>(rows.size());
-    for (Map<String, Object> r : rows) {
+    for (BatchWindowRow r : rows) {
       BatchWindowSpec s = new BatchWindowSpec();
-      s.setWindowCode(str(r, "window_code"));
-      s.setWindowName(str(r, "window_name"));
-      s.setTimezone(str(r, KEY_TIMEZONE));
-      s.setStartTime(str(r, "start_time"));
-      s.setEndTime(str(r, "end_time"));
-      s.setEndStrategy(str(r, "end_strategy"));
-      s.setOutOfWindowAction(str(r, "out_of_window_action"));
-      s.setAllowCrossDay(bool(r, "allow_cross_day"));
-      s.setEnabled(bool(r, KEY_ENABLED));
-      s.setDescription(str(r, KEY_DESCRIPTION));
+      s.setWindowCode(r.windowCode());
+      s.setWindowName(r.windowName());
+      s.setTimezone(r.timezone());
+      s.setStartTime(r.startTime());
+      s.setEndTime(r.endTime());
+      s.setEndStrategy(r.endStrategy());
+      s.setOutOfWindowAction(r.outOfWindowAction());
+      s.setAllowCrossDay(r.allowCrossDay());
+      s.setEnabled(r.enabled());
+      s.setDescription(r.description());
       specs.add(s);
     }
     return specs;
   }
 
   private List<BusinessCalendarSpec> readBusinessCalendars(String tenantId) {
-    List<Map<String, Object>> rows = businessCalendarMapper.selectByQuery(
-        tenantId, null, null, new PageRequest(1, MAX_PAGE_SIZE));
+    List<CalendarQueryRow> rows = businessCalendarMapper.selectByQuery(tenantId, null, null, null);
     List<BusinessCalendarSpec> specs = new ArrayList<>(rows.size());
-    for (Map<String, Object> r : rows) {
+    for (CalendarQueryRow r : rows) {
       BusinessCalendarSpec s = new BusinessCalendarSpec();
-      s.setCalendarCode(str(r, "calendarCode"));
-      s.setCalendarName(str(r, "calendarName"));
-      s.setTimezone(str(r, KEY_TIMEZONE));
-      s.setHolidayRollRule(str(r, "holidayRollRule"));
-      s.setCatchUpPolicy(str(r, "catchUpPolicy"));
-      s.setCatchUpMaxDays(intVal(r, "catchUpMaxDays"));
-      s.setEnabled(bool(r, KEY_ENABLED));
-      Long calendarId = num(r, "id");
+      s.setCalendarCode(r.calendarCode());
+      s.setCalendarName(r.calendarName());
+      s.setTimezone(r.timezone());
+      s.setHolidayRollRule(r.holidayRollRule());
+      s.setCatchUpPolicy(r.catchUpPolicy());
+      s.setCatchUpMaxDays(r.catchUpMaxDays());
+      s.setEnabled(r.enabled());
+      Long calendarId = r.id();
       if (calendarId != null) {
-        List<Map<String, Object>> holidays = calendarHolidayMapper.selectByCalendarId(calendarId);
+        List<CalendarHolidayRow> holidays = calendarHolidayMapper.selectByCalendarId(calendarId);
         if (holidays != null && !holidays.isEmpty()) {
           List<String> dates = new ArrayList<>(holidays.size());
-          for (Map<String, Object> h : holidays) {
-            String d = str(h, "bizDate");
-            if (d != null) {
-              dates.add(d);
+          for (CalendarHolidayRow h : holidays) {
+            if (EmptyChecks.isNotNull(h.bizDate())) {
+              dates.add(h.bizDate().toString());
             }
           }
           s.setHolidays(dates);
@@ -787,18 +790,18 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
   }
 
   private List<TenantQuotaPolicySpec> readQuotaPolicies(String tenantId) {
-    List<Map<String, Object>> rows = tenantQuotaPolicyMapper.selectByQuery(
-        tenantId, null, null, new PageRequest(1, MAX_PAGE_SIZE));
+    List<TenantQuotaPolicyRow> rows =
+        tenantQuotaPolicyMapper.selectByQuery(tenantId, null, null, null);
     List<TenantQuotaPolicySpec> specs = new ArrayList<>(rows.size());
-    for (Map<String, Object> r : rows) {
+    for (TenantQuotaPolicyRow r : rows) {
       TenantQuotaPolicySpec s = new TenantQuotaPolicySpec();
-      s.setPolicyCode(str(r, "policy_code"));
-      s.setMaxRunningJobsPerTenant(intVal(r, "max_running_jobs_per_tenant"));
-      s.setMaxPartitionsPerTenant(intVal(r, "max_partitions_per_tenant"));
-      s.setMaxQpsPerTenant(intVal(r, "max_qps_per_tenant"));
-      s.setFairShareWeight(intVal(r, "fair_share_weight"));
-      s.setEnabled(bool(r, KEY_ENABLED));
-      s.setDescription(str(r, KEY_DESCRIPTION));
+      s.setPolicyCode(r.policyCode());
+      s.setMaxRunningJobsPerTenant(r.maxRunningJobsPerTenant());
+      s.setMaxPartitionsPerTenant(r.maxPartitionsPerTenant());
+      s.setMaxQpsPerTenant(r.maxQpsPerTenant());
+      s.setFairShareWeight(r.fairShareWeight());
+      s.setEnabled(r.enabled());
+      s.setDescription(r.description());
       specs.add(s);
     }
     return specs;
@@ -812,25 +815,25 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
         .team(null)
         .severity(null)
         .enabled(null)
-        .pageRequest(new PageRequest(1, MAX_PAGE_SIZE))
+        .pageRequest(null)
         .build();
-    List<Map<String, Object>> rows =
+    List<AlertRoutingConfigRow> rows =
         alertRoutingConfigMapper.selectByQuery(alertRoutingConfigQuery);
     List<AlertRoutingSpec> specs = new ArrayList<>(rows.size());
-    for (Map<String, Object> r : rows) {
+    for (AlertRoutingConfigRow r : rows) {
       AlertRoutingSpec s = new AlertRoutingSpec();
-      s.setRouteCode(str(r, "route_code"));
-      s.setRouteName(str(r, "route_name"));
-      s.setTeam(str(r, "team"));
-      s.setAlertGroup(str(r, "alert_group"));
-      s.setSeverity(str(r, "severity"));
-      s.setReceiver(str(r, "receiver"));
-      s.setGroupBy(str(r, "group_by"));
-      s.setGroupWaitSeconds(intVal(r, "group_wait_seconds"));
-      s.setGroupIntervalSeconds(intVal(r, "group_interval_seconds"));
-      s.setRepeatIntervalSeconds(intVal(r, "repeat_interval_seconds"));
-      s.setEnabled(bool(r, KEY_ENABLED));
-      s.setDescription(str(r, KEY_DESCRIPTION));
+      s.setRouteCode(r.routeCode());
+      s.setRouteName(r.routeName());
+      s.setTeam(r.team());
+      s.setAlertGroup(r.alertGroup());
+      s.setSeverity(r.severity());
+      s.setReceiver(r.receiver());
+      s.setGroupBy(r.groupBy());
+      s.setGroupWaitSeconds(r.groupWaitSeconds());
+      s.setGroupIntervalSeconds(r.groupIntervalSeconds());
+      s.setRepeatIntervalSeconds(r.repeatIntervalSeconds());
+      s.setEnabled(r.enabled());
+      s.setDescription(r.description());
       specs.add(s);
     }
     return specs;

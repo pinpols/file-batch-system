@@ -43,8 +43,7 @@ public class ShardingConfiguration {
           memberId,
           membersKey,
           memberTtlSeconds);
-      return new RedisShardAssignmentProvider(
-          stringRedisTemplate, memberId, membersKey, memberTtl);
+      return new RedisShardAssignmentProvider(stringRedisTemplate, memberId, membersKey, memberTtl);
     }
     log.info(
         "Outbox sharding mode=STATIC, shardTotal={}, shardIndex={}",

@@ -11,9 +11,13 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 /** {@link AbstractBatchTaskExecutor} 模板方法执行序 + 异常路径 + cleanup 必跑测试。 */
 @DisplayName("原子任务执行器模板方法: 钩子执行顺序与异常路径")
+@ExtendWith(OutputCaptureExtension.class)
 class AbstractBatchTaskExecutorTest {
 
   private static TaskContext ctx() {
@@ -244,5 +248,37 @@ class AbstractBatchTaskExecutorTest {
     TaskResult r = exec.execute(ctx());
     assertThat(r.success()).isTrue(); // 原 success 不被 cleanup 异常覆盖
     assertThat(r.message()).isEqualTo("ok");
+  }
+
+  @Test
+  @DisplayName("执行与清理异常日志不得输出原始凭据")
+  void shouldMaskExecutionAndCleanupExceptionsInLogs(CapturedOutput output) {
+    AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
+
+      @Override
+      public TaskCapability capability() {
+        return TaskCapability.of();
+      }
+
+      @Override
+      protected TaskResult doExecute(TaskContext c) {
+        throw new RuntimeException("execute token=probe-secret");
+      }
+
+      @Override
+      protected void cleanup(TaskContext c) {
+        throw new RuntimeException("cleanup token=probe-secret");
+      }
+    };
+
+    TaskResult result = exec.execute(ctx());
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.error()).hasMessageContaining("probe-secret");
+    assertThat(output.getOut()).doesNotContain("probe-secret");
   }
 }

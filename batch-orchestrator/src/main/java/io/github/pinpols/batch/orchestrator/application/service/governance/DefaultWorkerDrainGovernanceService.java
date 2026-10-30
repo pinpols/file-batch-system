@@ -140,17 +140,11 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
         Long reclaimTaskId = task.getId();
         String reclaimEventKey =
             OutboxEventKeyGenerator.forReclaim(tenantId, task.getId(), workerCode);
-        retryGovernanceService.reclaimTask(
-            tenantId,
-            reclaimTaskId,
-            reclaimEventKey);
+        retryGovernanceService.reclaimTask(tenantId, reclaimTaskId, reclaimEventKey);
       } catch (RuntimeException ex) {
         Long taskId = task.getId();
         String causeSummary = SwallowedExceptionLogger.summary(ex);
-        log.warn(
-            "drain takeover failed for taskId={}: {}",
-            taskId,
-            causeSummary);
+        log.warn("drain takeover failed for taskId={}: {}", taskId, causeSummary);
       }
     }
   }

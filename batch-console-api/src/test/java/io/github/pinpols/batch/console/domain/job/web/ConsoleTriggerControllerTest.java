@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.domain.job.web;
 
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -20,6 +19,9 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -27,11 +29,15 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  * P2: ConsoleTriggerController register/unregister/pause/resume 4 个动作正确透传 workflowCode+tenantId 到 proxy。
  */
 @DisplayName("触发器控制器: 列表查询与注册、暂停、恢复动作的转发")
+@ExtendWith(MockitoExtension.class)
 class ConsoleTriggerControllerTest {
 
-  private final ConsoleTriggerProxyService proxy = mock(ConsoleTriggerProxyService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleTriggerProxyService proxy;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach

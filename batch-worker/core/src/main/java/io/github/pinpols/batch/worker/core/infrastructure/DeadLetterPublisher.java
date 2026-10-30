@@ -104,7 +104,7 @@ public class DeadLetterPublisher {
     envelope.put("originalPayload", originalPayload);
     envelope.put("sourceTopic", sourceTopic);
     envelope.put("workerType", workerType);
-    envelope.put("errorMessage", truncate(errorMessage, 2000));
+    envelope.put("errorMessage", SwallowedExceptionLogger.safeMessage(errorMessage, 2000));
     Instant failedAt = BatchDateTimeSupport.utcNow();
     String failedAtText = failedAt.toString();
     envelope.put("failedAt", failedAtText);
@@ -157,12 +157,5 @@ public class DeadLetterPublisher {
         publishTimer.record(System.nanoTime() - startNanos, TimeUnit.NANOSECONDS);
       }
     }
-  }
-
-  private static String truncate(String value, int maxLength) {
-    if (value == null) {
-      return null;
-    }
-    return value.length() <= maxLength ? value : value.substring(0, maxLength) + "…";
   }
 }

@@ -60,7 +60,7 @@ class OtelTraceContextTest {
     Span invalidSpan = Span.wrap(invalid);
     try (Scope ignored = Context.current().with(invalidSpan).makeCurrent()) {
       assertThat(OtelTraceContext.currentTraceIdOrNull()).isNull();
-      // fallback to UUID
+      // 回退使用 UUID。
       assertThat(IdGenerator.newTraceId()).hasSize(32).matches("[0-9a-f]+");
     }
   }

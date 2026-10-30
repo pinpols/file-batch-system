@@ -10,15 +10,15 @@ import io.github.pinpols.batch.console.config.ConsolePushProperties;
 import io.github.pinpols.batch.console.domain.audit.application.OperationAuditQueryService;
 import io.github.pinpols.batch.console.domain.audit.application.contract.query.OperationAuditQueryRequest;
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleNotificationApplicationService;
-import io.github.pinpols.batch.console.domain.notification.service.ConsoleWebhookService;
-import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.TerminalDeliveryRetryRequest;
 import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsolePushSubscriptionMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationDeliveryLogMapper;
+import io.github.pinpols.batch.console.domain.notification.service.ConsoleWebhookService;
 import io.github.pinpols.batch.console.domain.notification.service.TerminalNotificationArchiveService;
 import io.github.pinpols.batch.console.domain.notification.service.WorkflowTerminalNotificationService;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -26,15 +26,13 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.apache.ibatis.session.SqlSessionFactory;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.ibatis.session.SqlSessionFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -44,6 +42,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -59,22 +59,52 @@ import org.springframework.transaction.support.TransactionTemplate;
 @DisplayName("通知热冷生命周期：真实 PostgreSQL 事务、重放与查询证据")
 class TerminalNotificationArchiveIntegrationTest extends AbstractIntegrationTest {
   private static final List<String> FAMILY_TABLES = List.of(
-      "console_operation_audit", "console_push_job_delivery", "notification_delivery_log",
-      "webhook_delivery_log", "workflow_terminal_notification_receipt");
+      "console_operation_audit",
+      "console_push_job_delivery",
+      "notification_delivery_log",
+      "webhook_delivery_log",
+      "workflow_terminal_notification_receipt");
 
-  @Autowired private JdbcTemplate jdbc;
-  @Autowired private WorkflowTerminalNotificationService notifications;
-  @Autowired private TerminalNotificationArchiveService archive;
-  @Autowired private ConsoleWebhookDeliveryLogMapper webhookHistory;
-  @Autowired private NotificationDeliveryLogMapper ruleHistory;
-  @Autowired private ConsolePushSubscriptionMapper subscriptions;
-  @Autowired private ConsolePushProperties push;
-  @Autowired private ConsoleWebhookService webhookService;
-  @Autowired private ConsoleNotificationApplicationService notificationService;
-  @Autowired private OperationAuditQueryService auditService;
-  @Autowired private SqlSessionFactory sqlSessions;
-  @Autowired @Qualifier("transactionManager") private PlatformTransactionManager transactions;
-  @LocalServerPort private int port;
+  @Autowired
+  private JdbcTemplate jdbc;
+
+  @Autowired
+  private WorkflowTerminalNotificationService notifications;
+
+  @Autowired
+  private TerminalNotificationArchiveService archive;
+
+  @Autowired
+  private ConsoleWebhookDeliveryLogMapper webhookHistory;
+
+  @Autowired
+  private NotificationDeliveryLogMapper ruleHistory;
+
+  @Autowired
+  private ConsolePushSubscriptionMapper subscriptions;
+
+  @Autowired
+  private ConsolePushProperties push;
+
+  @Autowired
+  private ConsoleWebhookService webhookService;
+
+  @Autowired
+  private ConsoleNotificationApplicationService notificationService;
+
+  @Autowired
+  private OperationAuditQueryService auditService;
+
+  @Autowired
+  private SqlSessionFactory sqlSessions;
+
+  @Autowired
+  @Qualifier("transactionManager")
+  private PlatformTransactionManager transactions;
+
+  @LocalServerPort
+  private int port;
+
   private String tenant;
   private String eventKey;
   private String payload;
@@ -85,11 +115,16 @@ class TerminalNotificationArchiveIntegrationTest extends AbstractIntegrationTest
     tenant = "cold_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
     eventKey = tenant + ":job:901:terminal:SUCCESS";
     payload = JsonUtils.toJson(Map.ofEntries(
-        Map.entry("schemaVersion", "v1"), Map.entry("entityType", "JOB_INSTANCE"),
-        Map.entry("tenantId", tenant), Map.entry("jobInstanceId", 901L),
-        Map.entry("terminalVersion", 1L), Map.entry("jobCode", "archive-fixture"),
-        Map.entry("operatorId", "archive-admin"), Map.entry("instanceStatus", "SUCCESS"),
-        Map.entry("dryRun", false), Map.entry("bizDate", "2026-10-01"),
+        Map.entry("schemaVersion", "v1"),
+        Map.entry("entityType", "JOB_INSTANCE"),
+        Map.entry("tenantId", tenant),
+        Map.entry("jobInstanceId", 901L),
+        Map.entry("terminalVersion", 1L),
+        Map.entry("jobCode", "archive-fixture"),
+        Map.entry("operatorId", "archive-admin"),
+        Map.entry("instanceStatus", "SUCCESS"),
+        Map.entry("dryRun", false),
+        Map.entry("bizDate", "2026-10-01"),
         Map.entry("finishedAt", "2026-10-01T00:00:00Z")));
     client = WebTestClient.bindToServer()
         .baseUrl("http://127.0.0.1:" + port)
@@ -110,10 +145,80 @@ class TerminalNotificationArchiveIntegrationTest extends AbstractIntegrationTest
       jdbc.update(deleteHotSql, tenant);
       jdbc.update(deleteColdSql, tenant);
     }
-    for (String table : List.of("webhook_subscription", "subscription_rule", "notification_channel",
-        "console_push_subscription", "archive_policy")) {
+    for (String table : List.of(
+        "webhook_subscription",
+        "subscription_rule",
+        "notification_channel",
+        "console_push_subscription",
+        "archive_policy")) {
       String deleteFixtureSql = "delete from batch." + table + " where tenant_id=?";
       jdbc.update(deleteFixtureSql, tenant);
+    }
+  }
+
+  @Test
+  @DisplayName("真实 JSONB 投递载荷和错误参数在查询响应中遮罩凭据")
+  void shouldMaskJsonbCredentials_whenReadingDeliveryLogs() {
+    String insertSql = """
+        insert into batch.notification_delivery_log
+          (tenant_id, rule_id, channel_code, event_type, payload_json, delivery_status, error_args)
+        values (?, 0, 'test', 'TEST', ?::jsonb, 'FAILED', ?::jsonb)
+        """;
+    String payloadJson = "{\"message\":\"ok\",\"accessToken\":\"payload-secret\"}";
+    String argsJson = "{\"nested\":{\"password\":\"args-secret\"}}";
+    jdbc.update(insertSql, tenant, payloadJson, argsJson);
+    var principal = new ConsolePrincipal("archive-admin", tenant, Set.of("ROLE_ADMIN"));
+    var authentication = new UsernamePasswordAuthenticationToken(principal, "unused");
+    SecurityContextHolder.getContext().setAuthentication(authentication);
+
+    var rows = notificationService.deliveryLogs(tenant, 20);
+    assertThat(rows).hasSize(1);
+    String responseJson = JsonUtils.toJson(rows.getFirst());
+    assertThat(responseJson)
+        .contains("message", "ok", "accessToken", "password", "****")
+        .doesNotContain("payload-secret", "args-secret");
+    String originalSql =
+        "select payload_json::text from batch.notification_delivery_log where tenant_id = ?";
+    String original = jdbc.queryForObject(originalSql, String.class, tenant);
+    assertThat(original).contains("payload-secret");
+  }
+
+  @Test
+  @DisplayName("投递日志 HTTP 返回当前租户的遮罩 JSON 对象")
+  void shouldReturnMaskedJsonbForRequestedTenant_whenDeliveryLogsHttp() {
+    String otherTenant = tenant + "_other";
+    String insertSql = """
+        insert into batch.notification_delivery_log
+          (tenant_id, rule_id, channel_code, event_type, payload_json, delivery_status, error_args)
+        values (?, 0, 'mail', 'TEST', ?::jsonb, 'FAILED', ?::jsonb)
+        """;
+    String payloadJson = "{\"message\":\"ok\",\"accessToken\":\"payload-secret\"}";
+    String argsJson = "{\"nested\":{\"password\":\"args-secret\"}}";
+    jdbc.update(insertSql, tenant, payloadJson, argsJson);
+    jdbc.update(insertSql, otherTenant, "{\"message\":\"other-tenant\"}", "{}");
+    try {
+      client
+          .get()
+          .uri(uri -> uri.path("/api/console/notifications/delivery-logs")
+              .queryParam("tenantId", tenant)
+              .build())
+          .exchange()
+          .expectStatus()
+          .isOk()
+          .expectBody()
+          .jsonPath("$.data.length()")
+          .isEqualTo(1)
+          .jsonPath("$.data[0].channel_code")
+          .isEqualTo("mail")
+          .jsonPath("$.data[0].payload_json.message")
+          .isEqualTo("ok")
+          .jsonPath("$.data[0].payload_json.accessToken")
+          .isEqualTo("****")
+          .jsonPath("$.data[0].error_args.nested.password")
+          .isEqualTo("****");
+    } finally {
+      String deleteOtherSql = "delete from batch.notification_delivery_log where tenant_id = ?";
+      jdbc.update(deleteOtherSql, otherTenant);
     }
   }
 
@@ -165,7 +270,8 @@ class TerminalNotificationArchiveIntegrationTest extends AbstractIntegrationTest
   void shouldKeepUnsettledFamiliesHot_whenDeliveryOrAuditIsStillActive() {
     seedFamily();
     policy(true, true, 180);
-    String exhaustedSql = "update batch.notification_delivery_log set delivery_status='EXHAUSTED' where tenant_id=?";
+    String exhaustedSql =
+        "update batch.notification_delivery_log set delivery_status='EXHAUSTED' where tenant_id=?";
     jdbc.update(exhaustedSql, tenant);
     int exhausted = archive.poll(() -> false);
     assertThat(exhausted).isZero();
@@ -232,8 +338,9 @@ class TerminalNotificationArchiveIntegrationTest extends AbstractIntegrationTest
     assertThat(hotWebhook).isZero();
     String changedPayload = payload.replace("archive-fixture", "changed-fixture");
     assertThatThrownBy(() -> RlsTenantContextHolder.runWithTenant(
-        tenant, () -> notifications.acceptJob(eventKey, changedPayload)))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("conflicting snapshot");
+            tenant, () -> notifications.acceptJob(eventKey, changedPayload)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("conflicting snapshot");
   }
 
   @Test
@@ -241,7 +348,8 @@ class TerminalNotificationArchiveIntegrationTest extends AbstractIntegrationTest
   void shouldPreserveManualReplayIdentityAndAuditQuery_whenEvidenceMovedToColdStorage() {
     seedFamily();
     long id = ruleId();
-    String exhaustSql = "update batch.notification_delivery_log set delivery_status='EXHAUSTED',attempt=1 where tenant_id=?";
+    String exhaustSql =
+        "update batch.notification_delivery_log set delivery_status='EXHAUSTED',attempt=1 where tenant_id=?";
     jdbc.update(exhaustSql, tenant);
     String requestId = UUID.randomUUID().toString();
     TerminalDeliveryRetryRequest request = retryRequest(requestId);
@@ -252,11 +360,18 @@ class TerminalNotificationArchiveIntegrationTest extends AbstractIntegrationTest
     assertThat(moved).isEqualTo(1);
     replay(id, request).expectStatus().isOk();
     replay(id, retryRequest(UUID.randomUUID().toString())).expectStatus().isEqualTo(409);
-    client.get().uri("/api/console/queries/operation-audits?tenantId=" + tenant
+    client
+        .get()
+        .uri("/api/console/queries/operation-audits?tenantId=" + tenant
             + "&aggregateType=NOTIFICATION_DELIVERY&aggregateId=RULE:" + id)
-        .exchange().expectStatus().isOk().expectBody()
-        .jsonPath("$.data.items.length()").isEqualTo(1)
-        .jsonPath("$.data.items[0].requestId").isEqualTo(requestId);
+        .exchange()
+        .expectStatus()
+        .isOk()
+        .expectBody()
+        .jsonPath("$.data.items.length()")
+        .isEqualTo(1)
+        .jsonPath("$.data.items[0].requestId")
+        .isEqualTo(requestId);
     int hotAudit = count(false, "console_operation_audit");
     int coldAudit = count(true, "console_operation_audit");
     assertThat(hotAudit).isZero();
@@ -277,7 +392,8 @@ class TerminalNotificationArchiveIntegrationTest extends AbstractIntegrationTest
     jdbc.update(corruptSql, tenant);
     policy(true, true, 180);
     assertThatThrownBy(() -> archive.poll(() -> false))
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("RULE");
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("RULE");
     int hotReceipts = count(false, "workflow_terminal_notification_receipt");
     int hotWebhook = count(false, "webhook_delivery_log");
     int hotRule = count(false, "notification_delivery_log");
@@ -341,10 +457,11 @@ class TerminalNotificationArchiveIntegrationTest extends AbstractIntegrationTest
         String grantSelectSql = "grant select on archive." + table + "_archive to " + role;
         jdbc.execute(grantSelectSql);
       }
-      String grantInsertSql = "grant insert on archive.workflow_terminal_notification_receipt_archive to " + role;
+      String grantInsertSql =
+          "grant insert on archive.workflow_terminal_notification_receipt_archive to " + role;
       jdbc.execute(grantInsertSql);
       try (var connection = DriverManager.getConnection(
-          platformJdbcUrl(), platformJdbcUsername(), platformJdbcPassword());
+              platformJdbcUrl(), platformJdbcUsername(), platformJdbcPassword());
           var statement = connection.createStatement()) {
         String setRoleSql = "set role " + role;
         statement.execute(setRoleSql);
@@ -352,7 +469,8 @@ class TerminalNotificationArchiveIntegrationTest extends AbstractIntegrationTest
         try (var bindTenant = connection.prepareStatement(setTenantSql)) {
           bindTenant.setString(1, tenant);
           bindTenant.execute();
-          String receiptCountSql = "select count(*) from archive.workflow_terminal_notification_receipt_archive";
+          String receiptCountSql =
+              "select count(*) from archive.workflow_terminal_notification_receipt_archive";
           try (var rows = statement.executeQuery(receiptCountSql)) {
             boolean hasRow = rows.next();
             assertThat(hasRow).isTrue();
@@ -378,7 +496,8 @@ class TerminalNotificationArchiveIntegrationTest extends AbstractIntegrationTest
         try (var foreignInsert = connection.prepareStatement(foreignInsertSql)) {
           foreignInsert.setString(1, tenant);
           foreignInsert.setString(2, "forbidden");
-          assertThatThrownBy(foreignInsert::executeUpdate).isInstanceOf(SQLException.class)
+          assertThatThrownBy(foreignInsert::executeUpdate)
+              .isInstanceOf(SQLException.class)
               .hasMessageContaining("row-level security");
         }
       }
@@ -464,7 +583,8 @@ class TerminalNotificationArchiveIntegrationTest extends AbstractIntegrationTest
     Map<String, Object> parameters = Map.of("tenantId", tenant, "limit", 10);
     var boundSql = statement.getBoundSql(parameters);
     Object[] arguments = boundSql.getParameterMappings().stream()
-        .map(mapping -> parameters.get(mapping.getProperty())).toArray();
+        .map(mapping -> parameters.get(mapping.getProperty()))
+        .toArray();
     String explainSql = "explain (analyze,buffers) " + boundSql.getSql();
     List<String> plan = jdbc.queryForList(explainSql, String.class, arguments);
     plan.forEach(line -> log.info("R32 candidate EXPLAIN: {}", line));
@@ -519,7 +639,8 @@ class TerminalNotificationArchiveIntegrationTest extends AbstractIntegrationTest
         """;
     jdbc.update(finishPushSql, tenant);
     for (String table : FAMILY_TABLES) {
-      String ageSql = "update batch." + table + " set created_at=current_timestamp-interval '200 days' where tenant_id=?";
+      String ageSql = "update batch." + table
+          + " set created_at=current_timestamp-interval '200 days' where tenant_id=?";
       jdbc.update(ageSql, tenant);
     }
   }
@@ -540,8 +661,15 @@ class TerminalNotificationArchiveIntegrationTest extends AbstractIntegrationTest
     var rules = ruleHistory.selectByTenant(tenant, 10);
     assertThat(webhooks).hasSize(1);
     assertThat(rules).hasSize(1);
-    client.get().uri("/api/console/notifications/terminal-deliveries?tenantId=" + tenant)
-        .exchange().expectStatus().isOk().expectBody().jsonPath("$.data.length()").isEqualTo(4);
+    client
+        .get()
+        .uri("/api/console/notifications/terminal-deliveries?tenantId=" + tenant)
+        .exchange()
+        .expectStatus()
+        .isOk()
+        .expectBody()
+        .jsonPath("$.data.length()")
+        .isEqualTo(4);
   }
 
   private void accept() {
@@ -565,8 +693,12 @@ class TerminalNotificationArchiveIntegrationTest extends AbstractIntegrationTest
   }
 
   private WebTestClient.ResponseSpec replay(long id, TerminalDeliveryRetryRequest request) {
-    return client.post().uri("/api/console/notifications/terminal-deliveries/RULE/" + id
-            + "/retry?tenantId=" + tenant).bodyValue(request).exchange();
+    return client
+        .post()
+        .uri("/api/console/notifications/terminal-deliveries/RULE/" + id + "/retry?tenantId="
+            + tenant)
+        .bodyValue(request)
+        .exchange();
   }
 
   private static void awaitRelease(CountDownLatch release) {

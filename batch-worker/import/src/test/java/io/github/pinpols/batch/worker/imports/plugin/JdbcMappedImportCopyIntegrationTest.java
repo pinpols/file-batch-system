@@ -277,6 +277,49 @@ class JdbcMappedImportCopyIntegrationTest {
   }
 
   @Test
+  @DisplayName("冲突去重重放仍确认整个逻辑分块")
+  void shouldConfirmEveryLogicalRow_whenReplayingConflictDoNothing() throws Exception {
+    final String createReplayKeySql = """
+        CREATE TABLE biz.import_replay_key (
+          tenant_id text NOT NULL,
+          customer_no text NOT NULL,
+          PRIMARY KEY (tenant_id, customer_no)
+        )
+        """;
+    jdbcTemplate.execute(createReplayKeySql);
+    Map<String, Object> config = Map.of(
+        "field_mappings",
+            List.of(Map.of("name", "customerNo", "targetColumn", "customer_no", "type", "STRING")),
+        "jdbc_mapped_import",
+            Map.of(
+                "schema", "biz",
+                "table", "import_replay_key",
+                "tenantColumn", "tenant_id",
+                "columnMappings", List.of(Map.of("from", "customerNo", "to", "customer_no")),
+                "conflictColumns", List.of("tenant_id", "customer_no")));
+    ImportLoadContext context = new ImportLoadContext(
+        "t1",
+        "IMPORT_CUSTOMER",
+        "trace-replay",
+        "worker-1",
+        "customers.csv",
+        "BATCH-1",
+        "2026-06-07",
+        "CUSTOMER",
+        null,
+        "TPL-REPLAY",
+        config);
+    List<Map<String, Object>> rows =
+        List.of(Map.of("customerNo", "C001"), Map.of("customerNo", "C002"));
+
+    assertThat(plugin.loadChunk(context, rows)).isEqualTo(2);
+    assertThat(plugin.loadChunk(context, rows)).isEqualTo(2);
+    final String countReplayKeysSql =
+        "SELECT count(*) FROM biz.import_replay_key WHERE tenant_id = 't1'";
+    assertThat(jdbcTemplate.queryForObject(countReplayKeysSql, Integer.class)).isEqualTo(2);
+  }
+
+  @Test
   @DisplayName("批量更新按模板声明转换数值与日期类型,同主键二次写入转为更新")
   void shouldCoerceTypedValues_whenBatchUpserting() throws Exception {
     ImportLoadContext context = new ImportLoadContext(
@@ -365,13 +408,11 @@ class JdbcMappedImportCopyIntegrationTest {
         GRANT USAGE ON SCHEMA biz TO %s
     """.formatted(role);
     jdbcTemplate.execute(grantUsageSql);
-    final String grantSelectInsertSql =
-        """
+    final String grantSelectInsertSql = """
         GRANT SELECT, INSERT ON biz.copy_import_customer TO %s
     """.formatted(role);
     jdbcTemplate.execute(grantSelectInsertSql);
-    final String grantSequenceUsageSql =
-        """
+    final String grantSequenceUsageSql = """
         GRANT USAGE, SELECT ON SEQUENCE biz.copy_import_customer_id_seq TO %s
     """.formatted(role);
     jdbcTemplate.execute(grantSequenceUsageSql);
@@ -452,10 +493,7 @@ class JdbcMappedImportCopyIntegrationTest {
           SELECT count(*) FROM biz.copy_import_customer WHERE customer_no=?
       """;
       return new JdbcTemplate(source)
-          .queryForObject(
-              selectBizCopyImportCustomerSqlValue10,
-              Integer.class,
-              customerNo);
+          .queryForObject(selectBizCopyImportCustomerSqlValue10, Integer.class, customerNo);
     });
   }
 
@@ -474,7 +512,11 @@ class JdbcMappedImportCopyIntegrationTest {
             WHERE tenant_id=? AND biz_date=? AND customer_no=?
             """;
     Integer count = jdbcTemplate.queryForObject(
-        selectBizCopyImportCustomerSqlValue11, Integer.class, tenantId, Date.valueOf(bizDate), customerNo);
+        selectBizCopyImportCustomerSqlValue11,
+        Integer.class,
+        tenantId,
+        Date.valueOf(bizDate),
+        customerNo);
     return count != null && count > 0;
   }
 

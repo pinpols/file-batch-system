@@ -305,23 +305,24 @@ public class TaskController {
     if (EmptyChecks.isNull(request)) {
       return null;
     }
-    return new TaskExecutionReportCommand(
-        request.getTaskId(),
-        request.getTenantId(),
-        request.getWorkerId(),
-        request.isSuccess(),
-        request.getCode(),
-        request.getMessage(),
-        request.getResultSummary(),
-        request.getErrorCode(),
-        request.getErrorMessage(),
-        request.getErrorKey(),
-        request.getErrorArgs(),
-        request.getHighWaterMarkOut(),
-        request.getOutputs(),
-        request.getPartitionInvocationId(),
-        request.getFailureClass(),
-        request.getVerifierFailures());
+    return TaskExecutionReportCommand.builder()
+        .taskId(request.getTaskId())
+        .tenantId(request.getTenantId())
+        .workerId(request.getWorkerId())
+        .success(request.isSuccess())
+        .code(request.getCode())
+        .message(request.getMessage())
+        .resultSummary(request.getResultSummary())
+        .errorCode(request.getErrorCode())
+        .errorMessage(request.getErrorMessage())
+        .errorKey(request.getErrorKey())
+        .errorArgs(request.getErrorArgs())
+        .highWaterMarkOut(request.getHighWaterMarkOut())
+        .outputs(request.getOutputs())
+        .partitionInvocationId(request.getPartitionInvocationId())
+        .failureClass(request.getFailureClass())
+        .verifierFailures(request.getVerifierFailures())
+        .build();
   }
 
   private static TaskReportBatchCommand toCommand(TaskReportBatchRequest request) {

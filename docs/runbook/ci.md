@@ -12,7 +12,7 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 前后端 schedule 的保留依据、代码变更检测要求和季度复核清单见[CI 定时治理](./ci-schedule-governance.md)。
 全部 CI 守卫的分类目录、判定正反例以及快速失败/失败汇总边界见[CI 脚本说明](../../scripts/ci/README.md#完整守护清单)。守卫、执行入口和配套 SQL 均在职责 README 登记；[工作流总索引](../../.github/workflows/README.md)覆盖全部 workflow，[共享 Actions 索引](../../.github/actions/README.md)覆盖复用步骤。新增、改名和删除均由 `check-script-governance.py` 核对真实跳转、用途与路径，不能只写文件名。
 
-门禁统一通过 `scripts/lib/gate-result.sh` / `scripts/ci/run-gate.sh` 执行。`group` 表示稳定职责分组，`mode` 只有 `enforce`、`report`、`ignore`：阻断模式执行并传播失败，报告模式执行但只记录真实退出码，忽略模式明确不执行；范围路由未命中则是 `SKIP / mode=conditional`。统一执行器会过滤子检查器缺少 `group` / `mode` 的旧式状态行，只保留诊断内容及合规的嵌套门禁行，最终状态统一由执行器输出。模式控制使用 `BATCH_GATE_MODE`、`BATCH_GATE_GROUP_MODES`、`BATCH_GATE_MODES` 或单次调用的 `--mode`，优先级和命令示例见[CI 脚本说明](../../scripts/ci/README.md#分组开关和模式)。required checks 必须保持 `enforce`；仓库 workflow 中任何报告/忽略项都要以 `soft-gate-id` 登记到 `docs/governance/soft-gates.json`，不得用散落的 `BATCH_CI_SKIP_*`、`|| true` 或裸 `exit 0` 吞掉结果。
+门禁统一通过 `scripts/lib/gate-result.sh` / `scripts/ci/run-gate.sh` 执行。`group` 表示稳定职责分组，`mode` 只有 `enforce`、`report`、`ignore`：阻断模式执行并传播失败，报告模式执行但只记录真实退出码，忽略模式明确不执行；范围路由未命中则是 `SKIP / mode=conditional`。统一执行器去重旧成功状态，旧失败/报告/忽略/跳过以`诊断 |`保留其原因；合规嵌套结果不丢弃，最终状态由执行器输出。结果字段单行编码、日志/摘要及失败汇总遵循[共用输出契约](../../scripts/ci/README.md#门禁结果格式)。模式控制使用 `BATCH_GATE_MODE`、`BATCH_GATE_GROUP_MODES`、`BATCH_GATE_MODES` 或单次调用的 `--mode`，优先级和命令示例见[CI 脚本说明](../../scripts/ci/README.md#分组开关和模式)。required checks 必须保持 `enforce`；仓库 workflow 中任何报告/忽略项都要以 `soft-gate-id` 登记到 `docs/governance/soft-gates.json`，不得用散落的 `BATCH_CI_SKIP_*`、`|| true` 或裸 `exit 0` 吞掉结果。
 
 项目有两条主要代码门禁流程（PR Gate、main Full CI Gate），另有补充验证与失败处理自动化。补充流程不替代代码合并门禁：
 
@@ -21,7 +21,7 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 | `pr-gate` | PR 合入门禁 | PR → main（opened / synchronize / reopened / ready_for_review，非草稿）、`merge_group`、手动 | 按变更范围执行静态检查和测试分片 | 各 job 单独设置，不设统一 workflow 超时 |
 | `sdk-contract-parity` | SDK 契约门禁 | 所有 PR（按 SDK 变更范围执行）、`merge_group`、手动 | 五语言共享契约验证；`sdk-contract-required` 聚合结果是稳定门禁，live transport 在 SDK 相关 PR 上运行但不属于 required 聚合 | 各 job 单独设置 |
 | `full-ci-gate` | main 全量回归 | main push、每周日 02:00 UTC、手动 | 主干静态检查、单元/集成测试、E2E 和安全检查；定时/手动还运行测试质量分析 | 各 job 单独设置，不设统一 workflow 超时 |
-| `staging-gate` | 手动后端 E2E 复验 | 手动 | GitHub-hosted runner 上的 Java 治理与六片后端 E2E，依赖由 Testcontainers 管理；不连接外部 staging，不执行部署 | 各 job 单独设置 |
+| `staging-gate` | 手动后端 E2E 复验 | 手动 | GitHub-hosted runner 上的 Java 治理与并行后端 E2E，依赖由 Testcontainers 管理；不连接外部 staging，不执行部署 | 各 job 单独设置 |
 | `daily-sim-strict-validation` | 变更感知的定时真实数据验证 | 每天 13:31 UTC（北京 21:31）、手动（`force=true` 可强制执行） | 检测当日代码/配置变化后运行 `sim-harness all` 和 BE-ACC strict；纯 Markdown/RST、`LICENSE`、`NOTICE` 不触发当天验证。手动运行按当前北京时间日期判断；定时运行使用计划触发时间所属日期。SIM 失败不跳过 strict，但启动失败/取消/runner 丢失不算通过。只有两项成功才构建 nightly 镜像 | 验证 job 240 min；内部步骤分别设限 |
 | `daily-backend-reliability` | 每日隔离故障回归 | 每天 20:17 UTC（北京次日 04:17）、手动 | 在独立 GitHub-hosted runner 调用 `scripts/local/backend-reliability-tests.sh`，用 Testcontainers 验证文件完整性、并发、checkpoint 续跑、NAS 发布、Kafka 故障恢复、Outbox exactly-once 与消费者背压；上传 Surefire 报告。不会连接 Compose Sim 或 staging，也不执行 PITR/HA 切换 | 120 min |
 | `docker-image-build` | 变更感知的镜像构建 | 由 `daily-sim-strict-validation` 在当天有代码/配置变更且 sim + strict 成功后调用；也支持手动和复用调用 | 默认只用 Docker Bake 构建全部应用镜像和运维工具箱镜像；显式 `publish=true` 时登录 GHCR、推送 SHA 镜像并上传含 immutable digest 的 backend image set。CI 使用 Maven Central 配置并带依赖下载重试 | 30 min |
@@ -35,7 +35,7 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 >
 > `staging-gate` 仍存在，但当前仅由手动事件触发；名称不代表它会部署到 staging 集群。其职责是 GitHub-hosted runner 上的独立全量 E2E 与 Java 治理复验。
 
-其他独立工作流：`codeql.yml` 在 PR、main push 和每周定时运行（当前未配置手动触发）；`sdk-orchestrator-e2e.yml` 在相关 main 变更后/手动执行五语言真实 Orchestrator E2E（非 required），先构建一次 Orchestrator/Trigger 镜像并预热 BuildKit GHA 缓存，五个语言 job 仍各自启动隔离服务栈；`workflow-lint.yml` 检查 workflow/action 文件变更；`license-review.yml` 检查依赖许可变更；`strict-verify.yml` 提供手动严格校验及 PR dry-run；`sonar-gate.yml` 独立于 Full Gate，在 main Java/构建相关变更、夜间和手动场景运行，不延迟 Full Gate；`fuzzing.yml` 按其 workflow 配置单独运行。以上工作流是否 required 以仓库 Ruleset 当前配置为准，不由 workflow 文件名推断。
+其他独立工作流：`codeql.yml` 在 PR、main push 和每周定时运行（当前未配置手动触发）；`sdk-orchestrator-e2e.yml` 在相关 main 变更后/手动执行五语言真实 Orchestrator E2E（非 required），先构建一次 Orchestrator/Trigger 镜像并预热 BuildKit GHA 缓存，五个语言 job 仍各自启动隔离服务栈；`workflow-lint.yml` 检查 workflow/action、Zizmor 配置及其 Python 工具依赖变更；`license-review.yml` 检查依赖许可变更；`strict-verify.yml` 提供手动严格校验及 PR dry-run；`sonar-gate.yml` 独立于 Full Gate，在 main Java/构建相关变更、夜间和手动场景运行，不延迟 Full Gate；`fuzzing.yml` 按其 workflow 配置单独运行。以上工作流是否 required 以仓库 Ruleset 当前配置为准，不由 workflow 文件名推断。
 
 ## CI 依赖与安全扫描版本基线
 
@@ -94,7 +94,7 @@ CodeQL 的 `Analyze (java)` 只有在 `codeql.yml` 已于 main 生效、并确�
 - **main 红线独立于 PR 绿灯**:PR gate 通过只代表候选变更可合入；合入后的 main 只有最新 `full-ci-gate` 通过才可作为发布基线。
 - **CodeQL 分层执行**：PR 使用 Java `build-mode: none` 和默认高精度查询缩短 required check；main push 和每周定时运行保留手工全量编译与 `security-extended`，继续覆盖构建生成代码、精确依赖和扩展热点。仓库若引入 Kotlin，必须先恢复构建模式再合入。
 - **非测试 job 不准备 Testcontainers**：静态检查、安全扫描和 CodeQL 通过 `cache-testcontainers: false` 跳过容器镜像恢复；单元/集成/E2E 仍保留镜像缓存。
-- **门禁结果行统一**:本地 hook 与 CI 统一输出 `状态 | code | gate | exit_code | action`；跳过时再输出 `reason`。单步中串行运行多个阻断检查时，每项都必须通过共享 `gate_run` 输出独立结果；具体诊断信息可保留各检查器原有内容。
+- **门禁结果行统一**:本地 hook 与 CI 统一输出 `状态 | code | gate | group | mode | exit_code | action`；跳过时再输出 `reason`。单步中串行运行多个阻断检查时，每项都必须通过共享 `gate_run` 输出独立结果；具体诊断信息可保留各检查器原有内容。
 - **静态门禁失败统一汇总**：PR 将 policy、supply-chain、Java quality 三路并行执行，各路在末尾汇总自身失败，再由稳定的 `static-checks` required context 聚合；Full Gate 仍在单个 `static-checks` 中汇总。checkout、构建环境安装等缺失后无法继续的基础前置仍立即失败。本地 pre-commit/pre-push 执行完所有独立检查后汇总失败；依赖前置产物的步骤在其生成失败时停止该步骤，其他门禁继续执行。
 - **SBOM 快照必须同步**：POM 或 CI 门禁变更时，PR Gate 重生成 CycloneDX SBOM 并与 `docs/compliance/sbom.json` 比较；Full Gate 的许可证检查再次复核。动态 artifact 生成成功不等于入库快照已同步。
 - **核心术语枚举必须同步**：修改实例、工作流、节点、分片、步骤、任务状态，或调度类型、触发来源、节点类型、运行模式 enum 时，运行 `python3 scripts/ci/check-terminology-doc-sync.py --write`；PR / Full Gate 的只读检查会阻断旧值表。
@@ -131,8 +131,8 @@ gh pr create --base main --head revert/main-broken-<short-sha> --title "revert: 
 |---|---|---|
 | **范围探测** | ✅ 有 — `scripts/ci/detect-change-scope.py` 按 changed files 决定 | ❌ 永远 full reactor |
 | **单元测试路由** | 四个保守分片信号；公共边界全跑，叶子模块只跑所属分片 | 永远全跑 |
-| **Maven 范围** | 每个被选分片先用 `install -DskipTests -am` 构建依赖，再只测试本分片模块；PR unit 分片排除 `*IntegrationTest` | 全部固定分片并发执行；依赖只构建一次/分片，目标模块执行完整 unit + IT |
-| **E2E suite** | 不运行，由合入后门禁回退 | 28 个测试按实测 LPT 拆为 6 个并发 shard |
+| **Maven 范围** | 每个被选分片先用 `install -DskipTests -am` 构建依赖，再只测试本分片模块；PR unit 分片按编译后的类名排除 `*IntegrationTest`，但不排除 `*IT` | 全部固定分片并发执行；依赖只构建一次/分片，目标模块执行 unit + IT |
+| **E2E suite** | 不运行，由合入后门禁回退 | 当前 49 个测试类拆为 18 个并发 shard；恢复长类按方法分成四片，新增分片耗时待 CI 验证 |
 | **Hadolint / Trivy SBOM 与配置扫描** | ❌ 不跑 | ✅ 跑 |
 | **文本 UTF-8 编码** | PR 相对目标分支扫描变更文本 | 全仓扫描 |
 | **测试约定（`@DisplayName` + 方法命名）** | 相对 `docs/governance/test-conventions-baseline.txt` 只拦**新增**缺口（中文 `@DisplayName` 类级/方法级；方法名只接受 `shouldXxx_whenYyy` / `方法名_条件_预期`，禁用形状直接失败） | 同一份基线全量复核 |
@@ -198,8 +198,8 @@ SDK 五语言契约矩阵。
 |---|---|---|
 | 应用与基础设施版本对齐 | `check-version-alignment.sh`：应用发布版本、基础服务镜像环境值、Testcontainers 镜像和 Compose/Sim 运行入口对齐 | PR Gate；Full CI Gate |
 | OpenAPI 路径对齐 | `check-console-openapi-paths.py` | PR 静态策略、Full Gate 静态检查、手动 Staging Gate；每个流程执行一次 |
-| Flyway 文件结构与 checksum 漂移 | `validate-flyway-schema.sh` | PR：database / CI 文件域；已有迁移 checksum 变化阻断 |
-| Flyway 危险 DDL | `check-migration-safety.sh`（Squawk，diff-only） | PR：database / CI 文件域；扫描新增或修改的迁移文件，危险 DDL 阻断 |
+| Flyway 文件结构与迁移漂移 | `validate-flyway-schema.sh` | PR：database / CI 文件域；缺号、重复版本阻断。已有迁移有效 SQL 改动默认阻断，本仓 `fix/wdi-current` 的 PR 临时例外只允许新建空库，合并后删除；其他分支与 merge queue 保持严格检查 |
+| Flyway 危险 DDL | `check-migration-safety.sh`（Squawk，diff-only） | PR：database / CI 文件域；扫描新增迁移和已有迁移的有效 SQL 改动，纯注释改动不触发历史 DDL 误报 |
 | 新增数据库对象注释覆盖 | `check-db-comment-coverage.sh`（diff-only） | PR 与 Full CI：database 变更 |
 | 新增平台表文档登记 | `check-new-table-doc-coverage.py`（增量） | PR 与 Full CI：database、docs 变更；新增 `batch` / `archive` 表须登记，已有表目录条目不得删除 |
 | 注释语言 | `check-comment-language.py --staged` | 本地 pre-commit 增量预检；暂不阻断 PR / Full CI |
@@ -209,13 +209,14 @@ SDK 五语言契约矩阵。
 | 编译 + 单元测试 | Maven `test` | 全部 |
 
 `orchestrator-internal-openapi-drift.yml` 另对精选的 Orchestrator 内部 API 做 spec → Controller 路径存在性检查，当前仍为 log-only，不是 required check；解析支持方法级 mapping 显式路径及无参根路径。字段级 request/response schema 仍由 OpenAPI、序列化契约测试和人工复核共同维护。
-| 集成测试 (`*IntegrationTest` / 非 E2E `*IT`) | Maven `verify -DskipITs=false` | full-ci-gate；`check-integration-test-coverage.py` 守护含集成测试的主 reactor 模块必须进入 full-ci verify shard |
+| 集成测试 (`*IntegrationTest` / 非 E2E `*IT`) | Maven `verify -DskipITs=false` | full-ci-gate 的 Surefire 选测包含这两类；PR unit 分片也可能运行类名为 `*IT` 的测试。归档诊断成本探针 `ArchiveDiagnosticCadenceProbeIT` 按用户要求延后性能评估，需显式选择运行；归档功能集成测试仍保留。`check-integration-test-coverage.py` 只守护含集成测试的主 reactor 模块进入 full-ci verify shard，不核验每个测试实际执行 |
 | E2E 套件 (`*E2eIT`) | Maven `test` `-pl batch-e2e-tests` | full-ci-gate |
-| Sim 配置包 Excel schema | `python3 scripts/fix-fixture-xlsx.py --check` | 本地：权威 Java schema、四份工作簿或生成/修复脚本变更；PR：Java/test/script/CI 域；Full Gate：全量 |
+| Sim 配置包 Excel schema | `python3 scripts/sim/fix-fixture-xlsx.py --check` | 本地：权威 Java schema、四份工作簿或生成/修复脚本变更；PR：Java/test/script/CI 域；Full Gate：全量 |
 
 > 约定/架构守护（`*ArchTest`、`*ConventionTest`，如 `RepositoryMapReturnConventionTest`、`PositionalArgsConventionTest`）
 > 由 PR / Full / Staging 的 `java-governance` job 独立执行，业务 unit/IT 显式排除这两类后缀。
 > `check-java-governance-test-coverage.py --verify-reports` 要求每个源码类都产生 Surefire XML，零用例或漏跑会阻断。
+> E2E 静态与运行完整性守卫的正反例由 `PR_E2E_SHARD_COVERAGE_TEST` 在 Java/CI 域触发，`FULL_E2E_SHARD_COVERAGE_TEST` 在 Full Gate 执行；方法分片还核对每个指定方法的报告与跳过状态。
 > `MapperStatusWriteConventionTest` 扫描各应用模块的 Mapper XML，禁止普通 `UPDATE SET` 与 `ON CONFLICT ... DO UPDATE SET` 固定写入状态字面量；使用 `bash scripts/ci/run-java-governance-tests.sh` 执行。它不审查 `WHERE` / `SELECT` 的业务状态集合，共享生命周期还需 Mapper 契约测试，专项业务筛选由专项测试维护。
 > `ServiceEntryGuardArchTest` 按入口语义验证核心服务入口 fail-safe 行为；Orchestrator `ControllerPersistenceBoundaryArchTest` 与 Console `LayerBoundaryArchTest` 分别禁止 Controller/Web 直连 Mapper/Repository；Orchestrator 与 Console 的 `EntityModelNamingArchTest` 强制领域 `entity` 包只含 `XxxEntity`；`EntityApiBoundaryArchTest` 强制 Orchestrator 与 Console HTTP 方法签名不暴露 Entity，零豁免。Controller/Service/Entity 分层规范见 `docs/coding-conventions.md` §4.1.1、§6.3、§8.2.10。执行入口：`bash scripts/ci/run-java-governance-tests.sh`。
 > `PositionalArgsConventionTest` 还守护已治理 Query 不回退为多 `null` 位置构造，并确保状态型参数对象不重新暴露通用 Builder 或公共全参构造器；语义上是否应纳入受控工厂集合仍由代码审查决定。
@@ -234,7 +235,7 @@ SDK 五语言契约矩阵。
 | PMD 代码规约 | `maven-pmd-plugin` | 全部（run-full-regression） | 对齐编码规约：Mapper公共方法≥5、Service公共接口≥6、其它方法≥7；构造器按既有规则豁免，边界由真实PMD夹具守护 |
 | Spotless 代码格式 | `spotless-maven-plugin` | 全部（run-full-regression） | Palantir Java Format 2.92.0（Google 风格兼容、120 列） |
 | 覆盖率门禁 | JaCoCo `jacoco:check` | 全部（run-full-regression） | 行覆盖率 ≥ 60%，初始阈值，后续提升 |
-| Secret 扫描 | `security-scan.sh --mode=secret` | pr-gate、full-ci-gate | 扫描密钥泄漏 |
+| Secret 扫描 | `security-scan.sh --mode=secret` | pr-gate、full-ci-gate | 打包独立扫描模块时运行其单测，再扫描密钥泄漏；不等于 SAST 扫描 |
 | 依赖漏洞扫描 | Trivy `sbom`（CRITICAL/HIGH） | PR 供应链门禁（依赖/镜像/部署输入及安全工作流变更）；Full Gate | 扫描当前提交生成的 CycloneDX 依赖清单；不需要为 Trivy 单独编译安装整个 Maven reactor。容器/Helm 配置改由专用 `trivy config` 扫描器检查，避免文件系统扫描器解析 Maven POM 并访问远端依赖仓库。OWASP dependency-check 的 NVD 全量下载在 CI 上过慢且不拦门禁，2026-08 起由 Trivy 覆盖；`--mode=deps` 保留本地按需使用 |
 | Dockerfile lint | Hadolint | full-ci-gate | `deploy/docker/Dockerfile.app`、`deploy/docker/Dockerfile.ops-toolbox` |
 | 文件系统安全扫描 | Trivy `sbom` + `config` | PR Gate（供应链或 PR/Full Gate 安全工作流变更）；Full Gate | 漏洞扫描读取当前提交的 CycloneDX BOM 并阻断 CRITICAL/HIGH；IaC 配置扫描使用 `trivy config`，同样阻断 CRITICAL/HIGH。漏洞豁免读取带治理元数据的 `.trivyignore`，配置误报仅允许在 `.trivyignore.yaml` 中按规则和路径精确豁免 |
@@ -489,7 +490,7 @@ bash scripts/ci/run-flaky-quarantine.sh
 
 - PR / Full Gate 的 Java shard 使用 `check-diff-coverage.py` 校验本次变更的可执行行覆盖率，最低 80%；存量 Bundle 25% 和核心类 80% 棘轮继续保留。
 - 每周及手动 Full Gate 使用 `run-critical-mutation.sh` 对 `FileStateMachine` 和 `DefaultLifecycleEventMapper` 运行 PIT，阈值为变异杀死率 70%、覆盖率 80%。范围保持小而稳定，不做全仓变异测试。
-- `quality-trend` job 汇总当前 Surefire/Failsafe XML，并读取最近 30 次 `full-ci-gate` 的成功率和耗时；JSON/Markdown 产物保留 90 天。报告包含测试总量、失败/跳过、首次失败重跑、E2E 成功、失败类型、禁用测试和软门禁数量。
+- `quality-trend` job 汇总当前 Surefire/Failsafe XML，并读取最近 30 次 `full-ci-gate` 的成功率和已完成运行的平均耗时；JSON/Markdown 产物保留 90 天。工作流耗时按创建到最后更新时间计算，不纳入正在运行的样本。报告区分 E2E 套件成功、失败及全部跳过，并按分片列出报告中的测试累计耗时；累计时间不是作业墙钟时间或 runner 排队时间。报告还包含测试总量、失败/跳过、首次失败重跑、失败类型、禁用测试和软门禁数量。
 - 报告/忽略模式统一登记在 `docs/governance/soft-gates.json`；每项必须有分组、模式、控制方式、owner、当前基线、升级期限和目标。CodeQL 上传的有限重试属于传输容错，不计为软门禁。
 
 ---

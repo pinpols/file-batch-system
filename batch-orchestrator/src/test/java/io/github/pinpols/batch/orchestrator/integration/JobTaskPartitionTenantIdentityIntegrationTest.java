@@ -99,8 +99,7 @@ class JobTaskPartitionTenantIdentityIntegrationTest {
         delete from batch.job_definition where tenant_id in (?, ?)
     """;
 
-    jdbc.update(
-        deleteJobExecutionLogSql, tenant, otherTenant);
+    jdbc.update(deleteJobExecutionLogSql, tenant, otherTenant);
     jdbc.update(deleteJobTaskSql, tenant, otherTenant);
     jdbc.update(deleteJobPartitionSql, tenant, otherTenant);
     jdbc.update(deleteFileRecordSql, tenant, otherTenant);
@@ -223,14 +222,10 @@ class JobTaskPartitionTenantIdentityIntegrationTest {
 
     long unpartitionedInstance = insertInstance(tenant);
     long taskId = insertTask(tenant, unpartitionedInstance, null);
-    assertForeignKeyViolation(() -> jdbc.update(
-        deleteJobInstanceSql,
-        tenant,
-        unpartitionedInstance));
-    assertForeignKeyViolation(() -> jdbc.update(
-        updateJobTaskSql,
-        LocalDate.of(2000, 1, 1),
-        taskId));
+    assertForeignKeyViolation(
+        () -> jdbc.update(deleteJobInstanceSql, tenant, unpartitionedInstance));
+    assertForeignKeyViolation(
+        () -> jdbc.update(updateJobTaskSql, LocalDate.of(2000, 1, 1), taskId));
     int affectedJobTaskRows = jdbc.update(deleteJobTaskSql, tenant, taskId);
     assertThat(affectedJobTaskRows).isEqualTo(1);
     int affectedJobInstanceRows = jdbc.update(deleteJobInstanceSql, tenant, unpartitionedInstance);
@@ -315,12 +310,8 @@ class JobTaskPartitionTenantIdentityIntegrationTest {
     """;
 
     assertForeignKeyViolation(() -> insertPartition(otherTenant, instanceId));
-    assertForeignKeyViolation(() -> jdbc.update(
-        updateJobInstanceSql,
-        tenant,
-        instanceId));
-    assertForeignKeyViolation(() -> jdbc.update(
-        deleteJobInstanceSql, tenant, instanceId));
+    assertForeignKeyViolation(() -> jdbc.update(updateJobInstanceSql, tenant, instanceId));
+    assertForeignKeyViolation(() -> jdbc.update(deleteJobInstanceSql, tenant, instanceId));
 
     int affectedJobPartitionRows = jdbc.update(deleteJobPartitionSql, tenant, partitionId);
     assertThat(affectedJobPartitionRows).isEqualTo(1);
@@ -355,8 +346,7 @@ class JobTaskPartitionTenantIdentityIntegrationTest {
 
     assertForeignKeyViolation(() -> insertPartition(otherTenant, otherInstanceId, sourceFileId));
     assertForeignKeyViolation(() -> insertPartition(tenant, instanceId, Long.MAX_VALUE));
-    assertForeignKeyViolation(() -> jdbc.update(
-        deleteFileRecordSql, tenant, sourceFileId));
+    assertForeignKeyViolation(() -> jdbc.update(deleteFileRecordSql, tenant, sourceFileId));
 
     Map<String, Object> constraint = jdbc.queryForMap(selectConvalidatedSql);
     assertThat(constraint).containsEntry("convalidated", true).containsEntry("delete_action", "a");
@@ -409,8 +399,7 @@ class JobTaskPartitionTenantIdentityIntegrationTest {
           POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
         parentDelete.setTransactionIsolation(isolation);
         parentDelete.setAutoCommit(false);
-        try (PreparedStatement statement = parentDelete.prepareStatement(
-            deleteFileRecordSql2)) {
+        try (PreparedStatement statement = parentDelete.prepareStatement(deleteFileRecordSql2)) {
           statement.setString(1, tenant);
           statement.setLong(2, deleteFirstFile);
           assertThat(statement.executeUpdate()).isEqualTo(1);
@@ -470,8 +459,8 @@ class JobTaskPartitionTenantIdentityIntegrationTest {
         assertThat(blockedDelete.get(5, TimeUnit.SECONDS)).isEqualTo("23503");
       }
 
-      long sourcePartitionId =
-          jdbc.queryForObject(selectIdSql, Long.class, tenant, instanceId, insertFirstFile, partitionNo);
+      long sourcePartitionId = jdbc.queryForObject(
+          selectIdSql, Long.class, tenant, instanceId, insertFirstFile, partitionNo);
       int affectedJobPartitionRows = jdbc.update(deleteJobPartitionSql, tenant, sourcePartitionId);
       assertThat(affectedJobPartitionRows).isEqualTo(1);
       int affectedFileRecordRows = jdbc.update(deleteFileRecordSql, tenant, insertFirstFile);
@@ -512,8 +501,7 @@ class JobTaskPartitionTenantIdentityIntegrationTest {
       Connection parentDelete = DriverManager.getConnection(
           POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
       parentDelete.setAutoCommit(false);
-      try (PreparedStatement statement = parentDelete.prepareStatement(
-          deleteJobInstanceSql2)) {
+      try (PreparedStatement statement = parentDelete.prepareStatement(deleteJobInstanceSql2)) {
         statement.setString(1, tenant);
         statement.setLong(2, deleteFirstInstance);
         assertThat(statement.executeUpdate()).isEqualTo(1);
@@ -529,11 +517,8 @@ class JobTaskPartitionTenantIdentityIntegrationTest {
       assertThat(blockedInsert.get(5, TimeUnit.SECONDS)).isEqualTo("23503");
 
       long insertFirstInstance = insertInstance(tenant);
-      LocalDate bizDate = jdbc.queryForObject(
-          selectBizDateSql,
-          LocalDate.class,
-          tenant,
-          insertFirstInstance);
+      LocalDate bizDate =
+          jdbc.queryForObject(selectBizDateSql, LocalDate.class, tenant, insertFirstInstance);
       Connection childInsert = DriverManager.getConnection(
           POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
       childInsert.setAutoCommit(false);
@@ -595,8 +580,7 @@ class JobTaskPartitionTenantIdentityIntegrationTest {
     long partitionlessTask = insertTask(tenant, instanceId, null);
     assertForeignKeyViolation(() -> insertStep(tenant, instanceId, partitionId, partitionlessTask));
     assertForeignKeyViolation(() -> insertStep(tenant, instanceId, null, Long.MAX_VALUE));
-    assertForeignKeyViolation(() -> jdbc.update(
-        updateJobStepInstanceSql, validStep));
+    assertForeignKeyViolation(() -> jdbc.update(updateJobStepInstanceSql, validStep));
   }
 
   @Test
@@ -644,16 +628,12 @@ class JobTaskPartitionTenantIdentityIntegrationTest {
 
     long task = insertTask(tenant, instanceId, partitionId);
     long step = insertStep(tenant, instanceId, partitionId, task);
-    assertForeignKeyViolation(
-        () -> jdbc.update(updateJobTaskSql, task));
+    assertForeignKeyViolation(() -> jdbc.update(updateJobTaskSql, task));
     long partitionlessTask = insertTask(tenant, instanceId, null);
     long partitionlessStep = insertStep(tenant, instanceId, null, partitionlessTask);
-    assertForeignKeyViolation(() -> jdbc.update(
-        updateJobTaskSql2, otherTenant, partitionlessTask));
-    assertForeignKeyViolation(() -> jdbc.update(
-        updateJobTaskSql3,
-        otherInstanceId,
-        partitionlessTask));
+    assertForeignKeyViolation(() -> jdbc.update(updateJobTaskSql2, otherTenant, partitionlessTask));
+    assertForeignKeyViolation(
+        () -> jdbc.update(updateJobTaskSql3, otherInstanceId, partitionlessTask));
     assertCheckViolation(() -> insertTask(tenant, instanceId, 0L));
     assertCheckViolation(() -> insertStep(tenant, instanceId, 0L, partitionlessTask));
 
@@ -700,8 +680,14 @@ class JobTaskPartitionTenantIdentityIntegrationTest {
 
     long firstTask = insertTask(tenant, instanceId, null);
     long secondTask = insertTask(tenant, instanceId, null);
-    assertForeignKeyViolation(
-        () -> jdbc.update(insertJobStepInstanceSql, tenant, instanceId, firstTask, tenant, otherInstanceId, secondTask));
+    assertForeignKeyViolation(() -> jdbc.update(
+        insertJobStepInstanceSql,
+        tenant,
+        instanceId,
+        firstTask,
+        tenant,
+        otherInstanceId,
+        secondTask));
     Long selectedJobStepInstanceCount = jdbc.queryForObject(selectCountSql, Long.class, tenant);
     assertThat(selectedJobStepInstanceCount).isZero();
   }
@@ -712,7 +698,7 @@ class JobTaskPartitionTenantIdentityIntegrationTest {
   @DisplayName("两种事务隔离下步骤插入与任务分区改键按先后顺序串行化, 无空值旁路")
   void shouldSerializeStepAndTaskIdentity_whenPartitionChangesConcurrently(int isolation)
       throws Exception {
-        final String updateJobTaskSql = """
+    final String updateJobTaskSql = """
             update batch.job_task set job_partition_id=null where id=?
         """;
     final String insertJobStepInstanceSql = """
@@ -735,8 +721,7 @@ class JobTaskPartitionTenantIdentityIntegrationTest {
           POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
         updater.setTransactionIsolation(isolation);
         updater.setAutoCommit(false);
-        try (PreparedStatement statement = updater.prepareStatement(
-            updateJobTaskSql)) {
+        try (PreparedStatement statement = updater.prepareStatement(updateJobTaskSql)) {
           statement.setLong(1, updateFirstTask);
           assertThat(statement.executeUpdate()).isEqualTo(1);
         }
@@ -815,8 +800,7 @@ class JobTaskPartitionTenantIdentityIntegrationTest {
           POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
         parentDelete.setTransactionIsolation(isolation);
         parentDelete.setAutoCommit(false);
-        try (PreparedStatement statement = parentDelete.prepareStatement(
-            deleteJobInstanceSql)) {
+        try (PreparedStatement statement = parentDelete.prepareStatement(deleteJobInstanceSql)) {
           statement.setString(1, tenant);
           statement.setLong(2, deleteFirstInstance);
           assertThat(statement.executeUpdate()).isEqualTo(1);
@@ -940,8 +924,7 @@ class JobTaskPartitionTenantIdentityIntegrationTest {
       connection.setAutoCommit(false);
       pid.set(readBackendPid(connection));
       started.countDown();
-      try (PreparedStatement statement = connection.prepareStatement(
-          deleteJobInstanceSql)) {
+      try (PreparedStatement statement = connection.prepareStatement(deleteJobInstanceSql)) {
         statement.setString(1, ownerTenant);
         statement.setLong(2, ownerInstanceId);
         statement.executeUpdate();
@@ -1004,7 +987,10 @@ class JobTaskPartitionTenantIdentityIntegrationTest {
         """;
 
     long definitionId = jdbc.queryForObject(
-        insertJobDefinitionSql, Long.class, ownerTenant, "JOB_" + UUID.randomUUID().toString().replace("-", ""));
+        insertJobDefinitionSql,
+        Long.class,
+        ownerTenant,
+        "JOB_" + UUID.randomUUID().toString().replace("-", ""));
     return jdbc.queryForObject(
         insertJobInstanceSql,
         Long.class,
@@ -1022,7 +1008,12 @@ class JobTaskPartitionTenantIdentityIntegrationTest {
         """;
 
     return jdbc.queryForObject(
-        insertJobPartitionSql, Long.class, ownerTenant, ownerInstanceId, ownerInstanceId, ++nextPartitionNumber);
+        insertJobPartitionSql,
+        Long.class,
+        ownerTenant,
+        ownerInstanceId,
+        ownerInstanceId,
+        ++nextPartitionNumber);
   }
 
   private long insertFileRecord(String ownerTenant) {
@@ -1067,7 +1058,8 @@ class JobTaskPartitionTenantIdentityIntegrationTest {
         ) values (?, ?, ?, 'INFO', 'AUDIT', 'partition ownership test') returning id
         """;
 
-    return jdbc.queryForObject(insertJobExecutionLogSql, Long.class, ownerTenant, ownerInstanceId, ownerPartitionId);
+    return jdbc.queryForObject(
+        insertJobExecutionLogSql, Long.class, ownerTenant, ownerInstanceId, ownerPartitionId);
   }
 
   private long insertPartitionWithoutBusinessDate(String ownerTenant, Long ownerInstanceId) {
@@ -1090,7 +1082,12 @@ class JobTaskPartitionTenantIdentityIntegrationTest {
         """;
 
     return jdbc.queryForObject(
-        insertJobPartitionSql, Long.class, ownerTenant, ownerInstanceId, businessDate, ++nextPartitionNumber);
+        insertJobPartitionSql,
+        Long.class,
+        ownerTenant,
+        ownerInstanceId,
+        businessDate,
+        ++nextPartitionNumber);
   }
 
   private long insertTask(String ownerTenant, Long ownerInstanceId, Long ownerPartitionId) {
@@ -1122,8 +1119,7 @@ class JobTaskPartitionTenantIdentityIntegrationTest {
         select biz_date from batch.job_instance where id=?
     """;
 
-    return jdbc.queryForObject(
-        selectBizDateSql, LocalDate.class, ownerInstanceId);
+    return jdbc.queryForObject(selectBizDateSql, LocalDate.class, ownerInstanceId);
   }
 
   private long insertStep(
@@ -1135,7 +1131,12 @@ class JobTaskPartitionTenantIdentityIntegrationTest {
         """;
 
     return jdbc.queryForObject(
-        insertJobStepInstanceSql, Long.class, ownerTenant, ownerInstanceId, ownerPartitionId, ownerTaskId);
+        insertJobStepInstanceSql,
+        Long.class,
+        ownerTenant,
+        ownerInstanceId,
+        ownerPartitionId,
+        ownerTaskId);
   }
 
   private void assertForeignKeyViolation(Runnable insert) {

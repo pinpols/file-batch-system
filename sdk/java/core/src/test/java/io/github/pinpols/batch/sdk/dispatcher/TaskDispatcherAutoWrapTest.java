@@ -65,7 +65,8 @@ class TaskDispatcherAutoWrapTest {
 
   private void stubClaimPayload(PlatformHttpClient http) throws IOException {
     when(http.claim(eq(42L), anyString(), any()))
-        .thenReturn(new PlatformHttpClient.TaskClaimResponse("inv-42", "{\"orderId\":\"o1\"}", null));
+        .thenReturn(
+            new PlatformHttpClient.TaskClaimResponse("inv-42", "{\"orderId\":\"o1\"}", null));
   }
 
   // ─── handlers ────────────────────────────────────────────────────────────────

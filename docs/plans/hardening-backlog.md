@@ -1,7 +1,7 @@
 # 硬化与遗留问题 Backlog
 
-> 滚动版本：**v7**（2026-10-07 校准）。v6 及更早完整清账见归档快照
-> [`docs/archive/plans/hardening-backlog-v6-2026-06-15.md`](../archive/plans/hardening-backlog-v6-2026-06-15.md)（v3/v4 同目录）。
+> 滚动版本：**v7**（2026-10-07 校准）。本文维护现行事项。
+> 旧版本重复清账已收敛；当前有效事项与证据直接在本文维护。
 > 维护规则：见底部。
 
 ---
@@ -25,7 +25,7 @@ v6 周期（57 项硬化条目）**已实质收敛**。2026-06-15 重新核实�
 
 | 编号 | 主题 | 性质 | 触发 / 完成条件 |
 |---|---|---|---|
-| **V6-DBA-P1-1/P1-2** | `job_instance` / `workflow_run` 冗余索引 DROP | 🟡 加新已完成，DROP 待取证 | 需生产 `pg_stat_user_indexes.idx_scan` 数据证明旧索引零命中后，发 V14x `DROP INDEX`。流程见 [`index-consolidation-2026-05-21.md`](../archive/runbook/index-consolidation-2026-05-21.md)（V142/V143 已加新索引 + 回退 UNIQUE，无功能缺口，纯瘦身）|
+| **V6-DBA-P1-1/P1-2** | 索引治理 | 按当前专项维护 | 旧 V142/V143 候选不直接作为新 DDL 依据；观察窗口、查询计划、约束及回退定义见[索引整改方案](database-index-review-remediation-2026-10-18.md)与[数据库治理](../design/database-schema-governance.md)。 |
 | **V6-DBA-P1-4** | `ArchiveSchemaDriftCheck` 列**类型/nullability**比对 | ✅ 完成 | `ArchiveSchemaDriftCheck.checkColumnTypesOnStartup()` 已比对 `data_type`、字符长度、数值精度/scale 和限制性 `is_nullable`；`ArchiveSchemaDriftCheckIntegrationTest` 覆盖类型漂移。|
 | **V6-D-5** | Worker 4 模块单测密度补齐 | ✅ 完成 | 4 个 `Default*StageExecutor` 与 Import / Export / Process / Dispatch 的 `*StepExecutionAdapterTest` 已覆盖核心契约；与 `todo-master.md` 状态对齐。|
 | **V7-TEST-1** | `batch.datasource.business.routing.*` boot 级集成测试 | ✅ 本地完成 | `BatchWorkerProcessConfigRoutingIntegrationTest`、`BatchWorkerProcessTableRoutingIntegrationTest` 和既有默认关闭场景以真实 PostgreSQL 启动完整 Process Worker，覆盖 CONFIG / TABLE / disabled。|

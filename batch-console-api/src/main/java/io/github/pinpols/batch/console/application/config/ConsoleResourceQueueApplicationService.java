@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.application.config;
 
-import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueListRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueCreateRequest;
+import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueListRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueUpdateRequest;
 import io.github.pinpols.batch.console.application.contract.response.config.ResourceQueueResponse;
 

@@ -66,10 +66,9 @@ public class MaintenanceModeFilter extends OncePerRequestFilter {
       throws ServletException, IOException {
     MaintenanceState state = stateHolder.current();
     String path = request.getRequestURI();
-    boolean writeBlockedByUnavailableState =
-        !state.sharedStateAvailable()
-            && WRITE_METHODS.contains(request.getMethod())
-            && !isAllowedPath(path);
+    boolean writeBlockedByUnavailableState = !state.sharedStateAvailable()
+        && WRITE_METHODS.contains(request.getMethod())
+        && !isAllowedPath(path);
     if (writeBlockedByUnavailableState) {
       metrics.recordRequest("shared_state_unavailable");
       writeMaintenanceResponse(response, state, "maintenance state unavailable; writes blocked");
@@ -99,6 +98,8 @@ public class MaintenanceModeFilter extends OncePerRequestFilter {
       chain.doFilter(request, response);
       return;
     }
+    // 只标记已确认维护产生的拒绝；共享状态失联分支仍计入真实 HTTP 错误。
+    request.setAttribute(MaintenanceHttpObservationConvention.PLANNED_ATTRIBUTE, Boolean.TRUE);
     writeMaintenanceResponse(response, state, null);
   }
 

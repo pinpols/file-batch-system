@@ -5,20 +5,24 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.contract.response.file.ConsolePresignDownloadResponse;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileApplicationService;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.ArchiveFileRequest;
+import io.github.pinpols.batch.console.domain.file.application.contract.request.ConsoleFileUploadBindingRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.DeleteFileRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.FileArrivalGroupActionRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.PresignDownloadFileRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.RedispatchFileRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileOperationResponse;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFilePresignUploadResponse;
+import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileUploadTargetResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -98,9 +102,17 @@ public class ConsoleFileController {
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @RequestParam("tenantId") String tenantId,
       @RequestParam("channelCode") String channelCode,
-      @RequestParam("fileName") String fileName) {
+      @RequestParam("fileName") String fileName,
+      @Valid @RequestBody(required = false) ConsoleFileUploadBindingRequest binding) {
     return responseFactory.success(
-        applicationService.presignUpload(tenantId, channelCode, fileName, idempotencyKey));
+        applicationService.presignUpload(tenantId, channelCode, fileName, binding, idempotencyKey));
+  }
+
+  /** 返回当前租户已经配置并启用的人工上传目标。 */
+  @GetMapping("/manual-upload-targets")
+  public CommonResponse<List<ConsoleFileUploadTargetResponse>> listManualUploadTargets(
+      @RequestParam("tenantId") String tenantId) {
+    return responseFactory.success(applicationService.listManualUploadTargets(tenantId));
   }
 
   /** 上传文件内容。S3 与本地文件系统都经 BatchObjectStore 写入，不暴露真实存储路径。 */

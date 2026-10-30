@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
@@ -17,6 +18,8 @@ import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
+import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionQueryService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.BizDateArithmetic;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.CrossDayDependencyResolver;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.CrossDayDependencyResolver.ResolutionResult;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
@@ -63,6 +66,7 @@ class CrossDayDependencyReconcilerTest {
     runMapper = mock(WorkflowRunMapper.class);
     nodeMapper = mock(WorkflowNodeMapper.class);
     workflowMappers = new OrchestratorWorkflowMappers(nodeMapper, runMapper, nodeRunMapper);
+    when(nodeRunMapper.updateStatus(any(UpdateNodeRunStatusParam.class))).thenReturn(1);
     resolver = mock(CrossDayDependencyResolver.class);
     dispatchService = mock(WorkflowNodeDispatchService.class);
     @SuppressWarnings("unchecked")
@@ -202,6 +206,31 @@ class CrossDayDependencyReconcilerTest {
   }
 
   @Test
+  @DisplayName("等待状态已经变化时不发送过期超时告警")
+  void shouldNotAlertWhenStaleTimeoutCannotUpdateNode() {
+    WorkflowNodeRunEntity waiting =
+        waitingNodeRun(102L, "AGG", "TASK", Instant.now().minusSeconds(100_000), 8L);
+    WorkflowRunEntity workflowRun = workflowRun("t1", 8L, 200L, 334L);
+    WorkflowNodeEntity node = workflowNode(200L, "AGG", "TASK", "[{\"jobCode\":\"X\"}]");
+    node.setCrossDayDependencyTimeoutSeconds(60);
+    when(nodeRunMapper.selectLatestByNodeStatus(eq("WAITING_DEPENDENCY"), anyInt()))
+        .thenReturn(List.of(waiting));
+    when(runMapper.selectByIdAnyTenant(8L)).thenReturn(workflowRun);
+    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(200L, "AGG")).thenReturn(node);
+    when(resolver.resolve(eq("t1"), any(LocalDate.class), anyString(), anyBoolean()))
+        .thenReturn(ResolutionResult.builder()
+            .status(CrossDayDependencyResolver.ResolutionStatus.WAITING)
+            .build());
+    when(nodeRunMapper.updateStatus(any(UpdateNodeRunStatusParam.class))).thenReturn(0);
+
+    reconciler.scheduledReconcile();
+
+    verify(nodeRunMapper)
+        .updateStatus(argThat(param -> "WAITING_DEPENDENCY".equals(param.getExpectedStatus())));
+    verify(alertEventService, never()).emit(any(AlertEmitRequest.class));
+  }
+
+  @Test
   @DisplayName("节点依赖定义已被移除时直接置失败,不再尝试解析跨天依赖")
   void shouldMarkNodeFailed_whenDependencySpecRemoved() {
     WorkflowNodeRunEntity waiting =
@@ -244,6 +273,32 @@ class CrossDayDependencyReconcilerTest {
 
     verify(nodeRunMapper, never()).updateStatus(any(UpdateNodeRunStatusParam.class));
     verify(alertEventService, never()).emit(any(AlertEmitRequest.class));
+  }
+
+  @Test
+  @DisplayName("等待节点缺少业务日时解析器失败，停止派发并登记节点失败")
+  void shouldFailWaitingNode_whenBusinessDateMissing() {
+    WorkflowNodeRunEntity waiting =
+        waitingNodeRun(110L, "AGG", "JOB", Instant.now().minusSeconds(30), 15L);
+    WorkflowRunEntity run = workflowRun("t1", 15L, 200L, null);
+    run.setBizDate(null);
+    WorkflowNodeEntity node = workflowNode(200L, "AGG", "JOB", "[{\"jobCode\":\"X\"}]");
+    CrossDayDependencyResolver actual = new CrossDayDependencyResolver(
+        new BizDateArithmetic(), mock(ResultVersionQueryService.class));
+    when(nodeRunMapper.selectLatestByNodeStatus(eq("WAITING_DEPENDENCY"), anyInt()))
+        .thenReturn(List.of(waiting));
+    when(runMapper.selectByIdAnyTenant(15L)).thenReturn(run);
+    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(200L, "AGG")).thenReturn(node);
+    when(resolver.resolve(eq("t1"), eq(null), anyString(), anyBoolean()))
+        .thenAnswer(call -> actual.resolve(
+            call.getArgument(0), call.getArgument(1), call.getArgument(2), call.getArgument(3)));
+
+    reconciler.scheduledReconcile();
+
+    verify(nodeRunMapper)
+        .updateStatus(argThat(update -> "FAILED".equals(update.getNodeStatus())
+            && "CROSS_DAY_DEP_INVALID_CONTEXT".equals(update.getErrorCode())));
+    verify(dispatchService, never()).dispatchNode(any(), any(), any(), any(), any());
   }
 
   @Test

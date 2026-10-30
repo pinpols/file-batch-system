@@ -227,7 +227,7 @@ class ConsoleIdempotencyInterceptorTest {
   static class SampleController {
     @Idempotent
     void mutate() {
-      // no-op: the interceptor test only needs the method annotation.
+      // 无需执行实际操作：拦截器测试只需提供方法注解。
     }
   }
 }

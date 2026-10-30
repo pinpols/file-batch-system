@@ -85,8 +85,14 @@ class BatchDayGateServiceTest {
         service.evaluateAndApply(null, loaded, Map.of(), "trace-null-request");
 
     assertThat(decision.type()).isEqualTo(BatchDayGateService.GateDecisionType.ALLOW);
-    verifyNoInteractions(configCacheService, batchDayInstanceMapper, waitingLaunchMapper,
-        triggerRequestMapper, jobExecutionLogMapper, jobInstanceMapper, alertEventService);
+    verifyNoInteractions(
+        configCacheService,
+        batchDayInstanceMapper,
+        waitingLaunchMapper,
+        triggerRequestMapper,
+        jobExecutionLogMapper,
+        jobInstanceMapper,
+        alertEventService);
   }
 
   @Test
@@ -97,8 +103,14 @@ class BatchDayGateServiceTest {
         service.evaluateAndApply(request, null, Map.of(), "trace-null-loaded");
 
     assertThat(decision.type()).isEqualTo(BatchDayGateService.GateDecisionType.ALLOW);
-    verifyNoInteractions(configCacheService, batchDayInstanceMapper, waitingLaunchMapper,
-        triggerRequestMapper, jobExecutionLogMapper, jobInstanceMapper, alertEventService);
+    verifyNoInteractions(
+        configCacheService,
+        batchDayInstanceMapper,
+        waitingLaunchMapper,
+        triggerRequestMapper,
+        jobExecutionLogMapper,
+        jobInstanceMapper,
+        alertEventService);
   }
 
   @Test
@@ -207,8 +219,8 @@ class BatchDayGateServiceTest {
     TriggerRequestEntity triggerRequest = loaded("INHERIT").triggerRequest();
     triggerRequest.setParentWorkflowRunId(84L);
     triggerRequest.setParentNodeCode("IMPORT_NODE");
-    LaunchValidationService.LaunchLoadResult loaded = new LaunchValidationService.LaunchLoadResult(
-        triggerRequest, job("INHERIT"), null, null);
+    LaunchValidationService.LaunchLoadResult loaded =
+        new LaunchValidationService.LaunchLoadResult(triggerRequest, job("INHERIT"), null, null);
     when(configCacheService.findEnabledBusinessCalendar("t1", "CAL"))
         .thenReturn(calendar("REJECT_IF_PREVIOUS_OPEN"));
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(

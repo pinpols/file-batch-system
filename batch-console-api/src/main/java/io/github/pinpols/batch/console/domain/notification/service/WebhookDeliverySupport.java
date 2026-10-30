@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import java.util.Map;
 
-/** Shared channel delivery and synthetic webhook mapping used by notification entry points. */
+/** 通知入口共用的渠道投递和模拟 Webhook 映射逻辑。 */
 @SuppressWarnings("java:S2583")
 public final class WebhookDeliverySupport {
 

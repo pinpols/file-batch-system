@@ -107,10 +107,7 @@ final class ValidationCoercions {
       return List.of();
     }
     String[] values = text.split(",");
-    return Arrays.stream(values)
-        .filter(Texts::hasText)
-        .map(String::trim)
-        .toList();
+    return Arrays.stream(values).filter(Texts::hasText).map(String::trim).toList();
   }
 
   static boolean containsIgnoreCase(List<String> candidates, String value) {

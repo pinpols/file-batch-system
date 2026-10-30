@@ -1,12 +1,9 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
 import io.github.pinpols.batch.orchestrator.domain.query.SensorFileArrivalLatestArrivalQuery;
-
-
-import java.time.LocalDate;
-import java.time.OffsetDateTime;
+import io.github.pinpols.batch.orchestrator.domain.view.SensorFileArrivalMatchView;
+import io.github.pinpols.batch.orchestrator.domain.view.SensorFileArrivalView;
 import java.util.List;
-import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 /**
@@ -20,17 +17,13 @@ public interface SensorFileArrivalMapper {
   /**
    * 查最新到达的 file_record。
    *
-   * @param tenantId 租户
-   * @param namePattern SQL LIKE 模式（调用方将 {@code *} 转 {@code %}）
-   * @param sourceType 可选 source_type 过滤（SFTP / UPLOAD / API），传 null 不过滤
-   * @param since created_at &gt;= since（按 maxAgeSeconds 计算）
-   * @return 命中行 {@code {fileId, fileName, arrivalTime}}，未命中返 null
+   * @param parameters 租户、SQL LIKE 模式（使用 {@code !} 转义）、可选来源及到达时间等筛选条件
+   * @return 最新命中投影，未命中返 null
    */
-  Map<String, Object> selectLatestArrival(
-      SensorFileArrivalLatestArrivalQuery parameters);
+  SensorFileArrivalView selectLatestArrival(SensorFileArrivalLatestArrivalQuery parameters);
 
   /** 调试用：返回最近 N 条匹配，方便排查 sensor 误判。 */
-  List<Map<String, Object>> recentMatches(
+  List<SensorFileArrivalMatchView> recentMatches(
       @Param("tenantId") String tenantId,
       @Param("namePattern") String namePattern,
       @Param("limit") int limit);

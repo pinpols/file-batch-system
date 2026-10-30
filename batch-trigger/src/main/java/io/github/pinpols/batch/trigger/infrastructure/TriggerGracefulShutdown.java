@@ -143,10 +143,7 @@ public class TriggerGracefulShutdown
     } catch (RuntimeException ex) {
       ReadinessState failedState = state;
       String causeSummary = SwallowedExceptionLogger.summary(ex);
-      log.warn(
-          "failed to publish trigger readiness state {}: {}",
-          failedState,
-          causeSummary);
+      log.warn("failed to publish trigger readiness state {}: {}", failedState, causeSummary);
     }
   }
 

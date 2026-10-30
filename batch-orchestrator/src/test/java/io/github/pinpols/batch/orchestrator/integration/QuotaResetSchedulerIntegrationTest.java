@@ -105,13 +105,13 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
         null);
     quotaRuntimeStateMapper.insert(active);
 
-    // reconcile() should not touch non-expired states
+    // reconcile() 不应处理尚未过期的状态。
     quotaRuntimeResetScheduler.reconcile();
 
     QuotaRuntimeStateEntity afterReconcile =
         quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", ownerCode);
     assertThat(afterReconcile).isNotNull();
-    // peakBorrowedCount should remain unchanged since the window hasn't expired
+    // 时间窗口尚未过期，因此 peakBorrowedCount 应保持不变。
     assertThat(afterReconcile.peakBorrowedCount()).isEqualTo(3);
   }
 

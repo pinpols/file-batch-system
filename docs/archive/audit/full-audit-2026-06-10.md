@@ -1,3 +1,5 @@
+> 历史证据（2026-10-25 存量核对）：保留 RLS 重建和恢复风险的原始问题、修复及复核基线。正文仅表示原日期/基线；当前规则与状态见[现行入口](../../runbook/backup-and-pitr.md)及 TODO，本轮没有重新执行原测试或扫描。
+
 # 全方位深度审计报告 · 2026-06-10
 
 > 基线:工作区 `fix/review-2026-06-09-findings`(HEAD `7e7ada8e7` #441 + 32 个未提交修复文件,审计对象为**工作区最新状态**)。
@@ -106,7 +108,7 @@
 
 ### P1-8(流程债,非代码)GitHub ruleset 未生效,full-ci 非 required check
 
-- `docs/archive/plans/ci-cd-followup-2026-05-22.md:47` 自证私有仓库 ruleset 不强制(需升 Team org);pr-gate 仍 skipITs,主干质量靠"full-ci 事后拦 + 作者 revert"约定。06-08 评审 P1-2 至今未动,仓库内无法闭环,需组织账号层面决策。
+- `docs/runbook/compose-cd-roadmap.md:47` 自证私有仓库 ruleset 不强制(需升 Team org);pr-gate 仍 skipITs,主干质量靠"full-ci 事后拦 + 作者 revert"约定。06-08 评审 P1-2 至今未动,仓库内无法闭环,需组织账号层面决策。
 
 ## P2 / 计划内修复
 

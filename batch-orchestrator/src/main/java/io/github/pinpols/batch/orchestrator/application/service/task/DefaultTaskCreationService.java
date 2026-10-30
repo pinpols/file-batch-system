@@ -102,10 +102,9 @@ public class DefaultTaskCreationService implements TaskCreationService {
         current = current.getCause()) {
       if (current instanceof PSQLException sql && "23503".equals(sql.getSQLState())) {
         ServerErrorMessage error = sql.getServerErrorMessage();
-        boolean isTaskOwnershipConstraintViolation =
-            EmptyChecks.isNotNull(error)
-                && EmptyChecks.isNotBlank(error.getConstraint())
-                && OWNERSHIP_CONSTRAINTS.contains(error.getConstraint());
+        boolean isTaskOwnershipConstraintViolation = EmptyChecks.isNotNull(error)
+            && EmptyChecks.isNotBlank(error.getConstraint())
+            && OWNERSHIP_CONSTRAINTS.contains(error.getConstraint());
         if (isTaskOwnershipConstraintViolation) {
           return BizException.of(ResultCode.CONFLICT, "error.job_task.reference_changed", failure);
         }
@@ -199,6 +198,15 @@ public class DefaultTaskCreationService implements TaskCreationService {
   }
 
   private Long resolveRelatedFileId(JobTaskEntity task) {
+    if (EmptyChecks.isNotNull(task) && "DISPATCH".equalsIgnoreCase(task.getTaskType())) {
+      String payload = task.getTaskPayload();
+      if (EmptyChecks.isNotNull(payloadStringValue(payload, "bundleSourceFileId"))) {
+        return payloadLongValue(payload, "bundleSourceFileId");
+      }
+      if (EmptyChecks.isNotNull(payloadStringValue(payload, "fileId"))) {
+        return payloadLongValue(payload, "fileId");
+      }
+    }
     String relatedFilePayload = EmptyChecks.isNull(task) ? null : task.getTaskPayload();
     Long relatedFileId = payloadLongValue(relatedFilePayload, "relatedFileId");
     String filePayload = EmptyChecks.isNull(task) ? null : task.getTaskPayload();
@@ -249,10 +257,6 @@ public class DefaultTaskCreationService implements TaskCreationService {
   }
 
   private Long toPositiveLong(Object candidate) {
-    if (candidate instanceof Number number) {
-      long value = number.longValue();
-      return value > 0 ? value : null;
-    }
     if (EmptyChecks.isNull(candidate)) {
       return null;
     }

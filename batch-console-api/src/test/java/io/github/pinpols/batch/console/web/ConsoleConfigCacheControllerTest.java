@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.web;
 
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -16,17 +15,23 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /** P2: ConsoleConfigCacheController 6 个 evict 动作正确按 (tenantId, code) 委托到 invalidation service。 */
 @DisplayName("配置缓存失效控制器: 各类缓存清理动作按租户与编码委托到失效服务")
+@ExtendWith(MockitoExtension.class)
 class ConsoleConfigCacheControllerTest {
 
-  private final ConsoleConfigCacheInvalidationService service =
-      mock(ConsoleConfigCacheInvalidationService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleConfigCacheInvalidationService service;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach

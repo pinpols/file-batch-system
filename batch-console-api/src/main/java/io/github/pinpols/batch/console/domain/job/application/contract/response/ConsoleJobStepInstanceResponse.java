@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.response;
 
+import java.time.Instant;
 import lombok.Builder;
 
-import java.time.Instant;
 @Builder
 public record ConsoleJobStepInstanceResponse(
     Long id,

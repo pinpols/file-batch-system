@@ -10,14 +10,21 @@ import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowDefinitionMapper;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InOrder;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @DisplayName("运行回报锁的业务日栅栏顺序")
+@ExtendWith(MockitoExtension.class)
 class WorkflowRunReportLockTest {
 
   private static final String TENANT_ID = "tenant-a";
@@ -27,19 +34,21 @@ class WorkflowRunReportLockTest {
   private static final String CALENDAR_CODE = "BUSINESS";
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 10, 22);
 
-  private final WorkflowRunMapper workflowRunMapper = mock(WorkflowRunMapper.class);
-  private final WorkflowDefinitionMapper workflowDefinitionMapper =
-      mock(WorkflowDefinitionMapper.class);
-  private final BatchDayInstanceMapper batchDayInstanceMapper =
-      mock(BatchDayInstanceMapper.class);
+  @Mock
+  private WorkflowRunMapper workflowRunMapper;
+
+  @Mock
+  private WorkflowDefinitionMapper workflowDefinitionMapper;
+
+  @Mock
+  private BatchDayInstanceMapper batchDayInstanceMapper;
+
   private WorkflowRunReportLock reportLock;
 
   @BeforeEach
   void setUp() {
     OrchestratorWorkflowMappers workflowMappers = new OrchestratorWorkflowMappers(
-        mock(io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper.class),
-        workflowRunMapper,
-        mock(io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper.class));
+        mock(WorkflowNodeMapper.class), workflowRunMapper, mock(WorkflowNodeRunMapper.class));
     reportLock = new WorkflowRunReportLock(
         workflowMappers, workflowDefinitionMapper, batchDayInstanceMapper);
   }
@@ -59,10 +68,10 @@ class WorkflowRunReportLockTest {
     reportLock.acquireForJobInstance(TENANT_ID, JOB_INSTANCE_ID);
 
     InOrder lockOrder = inOrder(batchDayInstanceMapper, workflowRunMapper);
-    lockOrder.verify(batchDayInstanceMapper)
+    lockOrder
+        .verify(batchDayInstanceMapper)
         .acquireSettlementFence(TENANT_ID, CALENDAR_CODE, BIZ_DATE);
-    lockOrder.verify(workflowRunMapper)
-        .selectByTenantAndIdForUpdate(TENANT_ID, WORKFLOW_RUN_ID);
+    lockOrder.verify(workflowRunMapper).selectByTenantAndIdForUpdate(TENANT_ID, WORKFLOW_RUN_ID);
   }
 
   @DisplayName("非 Workflow 作业实例不取得 Workflow 锁")
@@ -73,12 +82,13 @@ class WorkflowRunReportLockTest {
 
     reportLock.acquireForJobInstance(TENANT_ID, JOB_INSTANCE_ID);
 
-    verify(batchDayInstanceMapper, never()).acquireSettlementFence(
-        org.mockito.ArgumentMatchers.anyString(),
-        org.mockito.ArgumentMatchers.anyString(),
-        org.mockito.ArgumentMatchers.any(LocalDate.class));
-    verify(workflowRunMapper, never()).selectByTenantAndIdForUpdate(
-        org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+    verify(batchDayInstanceMapper, never())
+        .acquireSettlementFence(
+            ArgumentMatchers.anyString(),
+            ArgumentMatchers.anyString(),
+            ArgumentMatchers.any(LocalDate.class));
+    verify(workflowRunMapper, never())
+        .selectByTenantAndIdForUpdate(ArgumentMatchers.anyString(), ArgumentMatchers.any());
   }
 
   private WorkflowRunEntity workflowRun() {

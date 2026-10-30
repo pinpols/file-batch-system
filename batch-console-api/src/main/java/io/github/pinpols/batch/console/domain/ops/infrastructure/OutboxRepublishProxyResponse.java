@@ -1,4 +1,4 @@
 package io.github.pinpols.batch.console.domain.ops.infrastructure;
 
-/** Internal orchestrator response for republish counts. */
+/** Orchestrator 内部重新发布数量响应。 */
 public record OutboxRepublishProxyResponse(int requested, int reset, int dryRun) {}

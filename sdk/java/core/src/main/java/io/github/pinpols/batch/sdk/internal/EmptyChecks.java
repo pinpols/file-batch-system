@@ -16,6 +16,14 @@ public final class EmptyChecks {
     return value != null;
   }
 
+  public static boolean isEmpty(CharSequence value) {
+    return value == null || value.length() == 0;
+  }
+
+  public static boolean isNotBlank(String value) {
+    return !isBlank(value);
+  }
+
   public static boolean isEmpty(Map<?, ?> value) {
     return value == null || value.isEmpty();
   }

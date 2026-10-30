@@ -141,7 +141,8 @@ public class StaleCreatedLaunchRecoveryScheduler {
         .dryRun(Boolean.TRUE.equals(jobInstance.getDryRun()))
         .build();
 
-    LaunchValidationService.LaunchLoadResult validatedLaunch = launchValidationService.load(request);
+    LaunchValidationService.LaunchLoadResult validatedLaunch =
+        launchValidationService.load(request);
     JobDefinitionEntity executionDefinition = validatedLaunch.jobDefinition();
     boolean recoveredDefinitionIdentityDoesNotMatch = EmptyChecks.isNull(executionDefinition)
         || !Objects.equals(jobInstance.getJobDefinitionId(), executionDefinition.id())

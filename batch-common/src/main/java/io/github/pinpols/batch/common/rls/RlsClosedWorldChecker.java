@@ -177,7 +177,8 @@ public class RlsClosedWorldChecker {
       List<String> missingForce,
       List<String> missingPolicy)
       throws SQLException {
-    InspectionFindings findings = new InspectionFindings(missingEnable, missingForce, missingPolicy);
+    InspectionFindings findings =
+        new InspectionFindings(missingEnable, missingForce, missingPolicy);
     // 1. 闭世界扫真实 biz 租户表,包括分区父表和所有租户分区子表。
     Set<String> bizTables = new TreeSet<>();
     try (PreparedStatement ps = conn.prepareStatement(LIST_BIZ_TABLES_SQL)) {
@@ -197,21 +198,9 @@ public class RlsClosedWorldChecker {
 
     // 2. batch.process_staging 的父表与分区子表一并检查;该表位于 batch schema,单独限定范围。
     if (tableExists(conn, PROCESS_STAGING_SCHEMA, PROCESS_STAGING_TABLE)) {
-      inspectTable(
-          conn,
-          shardLabel,
-          PROCESS_STAGING_SCHEMA,
-          PROCESS_STAGING_TABLE,
-          findings,
-          true);
+      inspectTable(conn, shardLabel, PROCESS_STAGING_SCHEMA, PROCESS_STAGING_TABLE, findings, true);
       for (String partition : listProcessStagingPartitions(conn)) {
-        inspectTable(
-            conn,
-            shardLabel,
-            PROCESS_STAGING_SCHEMA,
-            partition,
-            findings,
-            true);
+        inspectTable(conn, shardLabel, PROCESS_STAGING_SCHEMA, partition, findings, true);
       }
     }
   }
@@ -242,14 +231,9 @@ public class RlsClosedWorldChecker {
   }
 
   private void inspectTable(
-      Connection conn,
-      String shardLabel,
-      String schema,
-      String table,
-      InspectionFindings findings)
+      Connection conn, String shardLabel, String schema, String table, InspectionFindings findings)
       throws SQLException {
-    inspectTable(
-        conn, shardLabel, schema, table, findings, false);
+    inspectTable(conn, shardLabel, schema, table, findings, false);
   }
 
   private void inspectTable(
@@ -299,8 +283,9 @@ public class RlsClosedWorldChecker {
       List<String> missingEnable, List<String> missingForce, List<String> missingPolicy) {}
 
   private boolean tableExists(Connection conn, String schema, String table) throws SQLException {
-    try (PreparedStatement ps = conn.prepareStatement(
-        "SELECT 1 FROM information_schema.tables WHERE table_schema = ? AND table_name = ?")) {
+    String tableExistsSql =
+        "SELECT 1 FROM information_schema.tables WHERE table_schema = ? AND table_name = ?";
+    try (PreparedStatement ps = conn.prepareStatement(tableExistsSql)) {
       ps.setString(1, schema);
       ps.setString(2, table);
       try (ResultSet rs = ps.executeQuery()) {

@@ -69,7 +69,7 @@
 | **Audit Log** | 配置变更 / 人工操作 / 状态流转 | batch-orchestrator audit-log + approval-audit |
 | **Execution Log** | Job / Step / Partition 执行记录 + Worker 日志定位 | batch-orchestrator execution-log |
 | **静态校验（ADR-025）** | DAG 有效性 / 配置完整性 / 依赖解析 | batch-console-api workflow-validator |
-| **Dry-run 模式（ADR-026）** | 配置校验 / 调度计划 / SQL explain | batch-orchestrator dry-run-engine |
+| **Dry-run 模式（ADR-026）** | 配置校验 / 调度计划 / SQL 静态检查（数据库计划停用） | batch-orchestrator dry-run-engine |
 
 ### 2.6 Console 运维入口
 

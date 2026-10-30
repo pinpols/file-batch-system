@@ -223,14 +223,10 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     List<ColumnLayout> configuredColumns = templateFixedWidthColumns(dataCtx.templateConfig());
     List<ExportDataPlugin.DelimitedColumn> describedColumns =
         dataPlugin.describeFixedWidthColumns(dataCtx, batch);
-    ColumnResolutionSpec spec = new ColumnResolutionSpec(
-        "fixed-width",
-        configuredColumns,
-        describedColumns,
-        key -> {
+    ColumnResolutionSpec spec =
+        new ColumnResolutionSpec("fixed-width", configuredColumns, describedColumns, key -> {
           int minimumColumnWidth = Math.max(key.length(), 16);
-          return new ColumnLayout(
-              key, KEY_DETAIL_PREFIX + key, minimumColumnWidth, false, ' ');
+          return new ColumnLayout(key, KEY_DETAIL_PREFIX + key, minimumColumnWidth, false, ' ');
         });
     return resolveColumns(dataCtx, firstPage, spec);
   }
@@ -487,8 +483,8 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     return switch (formatConfig.escapePolicy()) {
       case BACKSLASH -> {
         String escapedBackslashes = value.replace("\\", "\\\\");
-        String escapedQuotes = escapedBackslashes.replace(
-            formatConfig.quoteChar(), "\\" + formatConfig.quoteChar());
+        String escapedQuotes =
+            escapedBackslashes.replace(formatConfig.quoteChar(), "\\" + formatConfig.quoteChar());
         String escapedCarriageReturns = escapedQuotes.replace("\r", "\\r");
         yield escapedCarriageReturns.replace("\n", "\\n");
       }

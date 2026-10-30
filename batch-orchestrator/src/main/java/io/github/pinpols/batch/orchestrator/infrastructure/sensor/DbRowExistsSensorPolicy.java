@@ -124,8 +124,8 @@ public class DbRowExistsSensorPolicy implements SensorPolicy {
   }
 
   private static SensorProbeResult sensorFailure(String errorCode, Exception error) {
-    String errorDetail = Objects.requireNonNullElse(
-        error.getMessage(), error.getClass().getSimpleName());
+    String errorDetail =
+        Objects.requireNonNullElse(error.getMessage(), error.getClass().getSimpleName());
     List<String> messageArguments = List.of(SENSOR_TYPE, errorDetail);
     return SensorProbeResult.error(errorCode, messageArguments);
   }

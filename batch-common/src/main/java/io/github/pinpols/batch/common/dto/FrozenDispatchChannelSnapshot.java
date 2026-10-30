@@ -81,8 +81,8 @@ public record FrozenDispatchChannelSnapshot(
 
   @Override
   public String toString() {
-    return "FrozenDispatchChannelSnapshot[channelId=" + channelId + ", channelCode="
-        + channelCode + ", configuration=<redacted>]";
+    return "FrozenDispatchChannelSnapshot[channelId=" + channelId + ", channelCode=" + channelCode
+        + ", configuration=<redacted>]";
   }
 
   private static String text(Object value) {

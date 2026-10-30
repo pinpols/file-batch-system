@@ -1,18 +1,12 @@
 package io.github.pinpols.batch.console.application.ops;
 
-import io.github.pinpols.batch.console.domain.job.query.BatchDayQuery;
-import io.github.pinpols.batch.console.domain.job.view.BatchDayJobSummaryView;
-import io.github.pinpols.batch.console.domain.job.view.BatchDayScheduledOccurrenceView;
-import io.github.pinpols.batch.console.domain.job.view.BatchDayView;
-import io.github.pinpols.batch.console.domain.ops.query.OutboxDeliveryLogCountQuery;
-
-
 import static io.github.pinpols.batch.console.shared.query.ConsoleQuerySupport.*;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
 import io.github.pinpols.batch.common.i18n.LocalizedErrorRenderer;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
@@ -31,6 +25,7 @@ import io.github.pinpols.batch.console.domain.audit.application.contract.query.C
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiAuditLogResponse;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAuditLogEntity;
 import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiAuditLogQuery;
+import io.github.pinpols.batch.console.domain.audit.view.FileAuditLogRow;
 import io.github.pinpols.batch.console.domain.governance.application.contract.query.DeadLetterQueryRequest;
 import io.github.pinpols.batch.console.domain.governance.application.contract.response.ConsoleDeadLetterTaskResponse;
 import io.github.pinpols.batch.console.domain.governance.entity.DeadLetterTaskEntity;
@@ -44,7 +39,12 @@ import io.github.pinpols.batch.console.domain.job.application.contract.response.
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleRetryScheduleResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleScheduledOccurrenceResponse;
 import io.github.pinpols.batch.console.domain.job.entity.PendingCatchUpEntity;
+import io.github.pinpols.batch.console.domain.job.query.BatchDayQuery;
 import io.github.pinpols.batch.console.domain.job.query.PendingCatchUpQuery;
+import io.github.pinpols.batch.console.domain.job.view.BatchDayJobSummaryView;
+import io.github.pinpols.batch.console.domain.job.view.BatchDayScheduledOccurrenceView;
+import io.github.pinpols.batch.console.domain.job.view.BatchDayView;
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.ActiveCalendarRow;
 import io.github.pinpols.batch.console.domain.notification.application.contract.query.AlertEventQueryRequest;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertEventResponse;
 import io.github.pinpols.batch.console.domain.notification.query.AlertEventQuery;
@@ -52,10 +52,13 @@ import io.github.pinpols.batch.console.domain.ops.entity.ApprovalCommandEntity;
 import io.github.pinpols.batch.console.domain.ops.entity.RetryScheduleEntity;
 import io.github.pinpols.batch.console.domain.ops.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.console.domain.ops.query.ApprovalCommandQuery;
+import io.github.pinpols.batch.console.domain.ops.query.OutboxDeliveryLogCountQuery;
 import io.github.pinpols.batch.console.domain.ops.query.OutboxDeliveryLogQuery;
 import io.github.pinpols.batch.console.domain.ops.query.OutboxRetryLogQuery;
 import io.github.pinpols.batch.console.domain.ops.query.RetryScheduleQuery;
 import io.github.pinpols.batch.console.domain.ops.query.WorkerRegistryQuery;
+import io.github.pinpols.batch.console.domain.ops.view.OutboxDeliveryLogRow;
+import io.github.pinpols.batch.console.domain.ops.view.OutboxRetryLogRow;
 import io.github.pinpols.batch.console.domain.query.AuditLogQuery;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.shared.view.ConsoleApprovalCommandResponse;
@@ -70,10 +73,10 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.util.HtmlUtils;
 
 /** 控制台运维查询应用服务，聚合各领域的只读投影。 */
 @Service
@@ -114,9 +117,9 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     String cursor = request.getCursor();
     Long cursorId = decodeCursorId(cursor);
     query.setCursorId(cursorId);
-    List<Map<String, Object>> rows = opsMappers.auditLogMapper.selectByQuery(query);
+    List<FileAuditLogRow> rows = opsMappers.auditLogMapper.selectByQuery(query);
     if (cursorMode) {
-      return cursorPage(pageRequest, rows, this::toAuditLogResponse, row -> longValue(row, "id"));
+      return cursorPage(pageRequest, rows, this::toAuditLogResponse, FileAuditLogRow::id);
     }
     long total = opsMappers.auditLogMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toAuditLogResponse);
@@ -139,15 +142,19 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     String eventKey = request.getEventKey();
     String cursor = request.getCursor();
     Long cursorId = decodeCursorId(cursor);
-    OutboxRetryLogQuery query =
-        new OutboxRetryLogQuery(tenantId, retryStatus, eventKey, pageRequest, cursorId);
-    List<Map<String, Object>> rows = opsMappers.outboxRetryLogMapper.selectByQuery(query);
+    OutboxRetryLogQuery query = OutboxRetryLogQuery.builder()
+        .tenantId(tenantId)
+        .retryStatus(retryStatus)
+        .eventKey(eventKey)
+        .eventType(request.getEventType())
+        .pageRequest(pageRequest)
+        .cursorId(cursorId)
+        .build();
+    List<OutboxRetryLogRow> rows = opsMappers.outboxRetryLogMapper.selectByQuery(query);
     if (cursorMode) {
-      return cursorPage(
-          pageRequest, rows, this::toOutboxRetryResponse, row -> longValue(row, "id"));
+      return cursorPage(pageRequest, rows, this::toOutboxRetryResponse, OutboxRetryLogRow::id);
     }
-    long total = opsMappers.outboxRetryLogMapper.countByQuery(
-        query.tenantId(), query.retryStatus(), query.eventKey(), query.pageRequest());
+    long total = opsMappers.outboxRetryLogMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toOutboxRetryResponse);
   }
 
@@ -165,23 +172,31 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     String traceId = request.getTraceId();
     String cursor = request.getCursor();
     Long cursorId = decodeCursorId(cursor);
-    OutboxDeliveryLogQuery query = new OutboxDeliveryLogQuery(
-        tenantId, deliveryStatus, eventType, eventKey, traceId, pageRequest, cursorId);
-    List<Map<String, Object>> rows = opsMappers.outboxDeliveryLogMapper.selectByQuery(query);
+    OutboxDeliveryLogQuery query = OutboxDeliveryLogQuery.builder()
+        .tenantId(tenantId)
+        .deliveryStatus(deliveryStatus)
+        .eventType(eventType)
+        .eventKey(eventKey)
+        .targetTopic(request.getTargetTopic())
+        .traceId(traceId)
+        .pageRequest(pageRequest)
+        .cursorId(cursorId)
+        .build();
+    List<OutboxDeliveryLogRow> rows = opsMappers.outboxDeliveryLogMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(
-          pageRequest, rows, this::toOutboxDeliveryResponse, row -> longValue(row, "id"));
+          pageRequest, rows, this::toOutboxDeliveryResponse, OutboxDeliveryLogRow::id);
     }
     OutboxDeliveryLogCountQuery outboxDeliveryLogCountQuery = OutboxDeliveryLogCountQuery.builder()
         .tenantId(query.tenantId())
         .deliveryStatus(query.deliveryStatus())
         .eventType(query.eventType())
         .eventKey(query.eventKey())
+        .targetTopic(query.targetTopic())
         .traceId(query.traceId())
         .pageRequest(query.pageRequest())
         .build();
-    long total = opsMappers.outboxDeliveryLogMapper.countByQuery(
-        outboxDeliveryLogCountQuery);
+    long total = opsMappers.outboxDeliveryLogMapper.countByQuery(outboxDeliveryLogCountQuery);
     return page(pageRequest, total, rows, this::toOutboxDeliveryResponse);
   }
 
@@ -257,7 +272,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     String retryStatus = request.getRetryStatus();
     Long cursorId = decodeCursorId(request.getCursor());
     RetryScheduleQuery query = new RetryScheduleQuery(
-        tenantId, relatedType, retryPolicy, retryStatus, pageRequest, cursorId);
+        tenantId, relatedType, retryPolicy, retryStatus, pageRequest, cursorId, cursorMode);
     List<RetryScheduleEntity> rows = opsMappers.retryScheduleMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(
@@ -325,7 +340,16 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     String cursor = request.getCursor();
     Long cursorId = decodeCursorId(cursor);
     AlertEventQuery query = new AlertEventQuery(
-        tenantId, severity, status, alertType, traceId, startDate, endDate, pageRequest, cursorId);
+        tenantId,
+        severity,
+        status,
+        alertType,
+        traceId,
+        startDate,
+        endDate,
+        pageRequest,
+        cursorId,
+        cursorMode);
     List<AlertEventEntity> rows = opsMappers.alertEventMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(pageRequest, rows, this::toAlertEventResponse, AlertEventEntity::getId);
@@ -386,58 +410,70 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     return page(pageRequest, total, rows, this::toApprovalResponse);
   }
 
-  private ConsoleAuditLogResponse toAuditLogResponse(Map<String, Object> row) {
+  private ConsoleAuditLogResponse toAuditLogResponse(FileAuditLogRow row) {
     return ConsoleAuditLogResponse.builder()
-        .id(longValue(row, "id"))
-        .tenantId(stringValue(row, "tenant_id"))
-        .fileId(longValue(row, "file_id"))
-        .operationType(stringValue(row, "operation_type"))
-        .operationResult(stringValue(row, "operation_result"))
-        .operatorType(stringValue(row, "operator_type"))
-        .operatorId(stringValue(row, "operator_id"))
-        .traceId(stringValue(row, "trace_id"))
-        .evidenceRef(stringValue(row, "evidence_ref"))
-        .detailSummary(stringValue(row, "detail_summary"))
-        .createdAt(instantValue(row, "created_at"))
+        .id(row.id())
+        .tenantId(row.tenantId())
+        .fileId(row.fileId())
+        .operationType(row.operationType())
+        .operationResult(row.operationResult())
+        .operatorType(row.operatorType())
+        .operatorId(row.operatorId())
+        .traceId(row.traceId())
+        .evidenceRef(row.evidenceRef())
+        .detailSummary(row.detailSummary())
+        .createdAt(row.createdAt())
         .build();
   }
 
-  private ConsoleOutboxRetryLogResponse toOutboxRetryResponse(Map<String, Object> row) {
+  private ConsoleOutboxRetryLogResponse toOutboxRetryResponse(OutboxRetryLogRow row) {
     return ConsoleOutboxRetryLogResponse.builder()
-        .id(longValue(row, "id"))
-        .outboxEventId(longValue(row, "outbox_event_id"))
-        .tenantId(stringValue(row, "tenant_id"))
-        .eventType(stringValue(row, "event_type"))
-        .eventKey(stringValue(row, "event_key"))
-        .retryStatus(stringValue(row, "retry_status"))
-        .retryCount(intValue(row, "retry_count"))
-        .retryPolicy(stringValue(row, "retry_policy"))
-        .nextRetryAt(instantValue(row, "next_retry_at"))
-        .createdAt(instantValue(row, "created_at"))
-        .updatedAt(instantValue(row, "updated_at"))
+        .id(row.id())
+        .outboxEventId(row.outboxEventId())
+        .tenantId(row.tenantId())
+        .eventType(row.eventType())
+        .eventKey(row.eventKey())
+        .retryStatus(row.retryStatus())
+        .retryCount(row.retryCount())
+        .retryPolicy(row.retryPolicy())
+        .nextRetryAt(row.nextRetryAt())
+        .createdAt(row.createdAt())
+        .updatedAt(row.updatedAt())
         .build();
   }
 
-  private ConsoleOutboxDeliveryLogResponse toOutboxDeliveryResponse(Map<String, Object> row) {
-    String errorKey = stringValue(row, "error_key");
-    String rawErrorArgs = rawStringValue(row, "error_args");
-    String displayableErrorArgs = SecretMasking.maskSensitiveJson(rawErrorArgs);
-    String fallbackErrorMessage = stringValue(row, "error_message");
-    String errorMessage =
+  private ConsoleOutboxDeliveryLogResponse toOutboxDeliveryResponse(OutboxDeliveryLogRow row) {
+    String errorKey = row.errorKey();
+    String displayableErrorArgs = SecretMasking.maskSensitiveJson(row.errorArgs());
+    String fallbackErrorMessage = row.errorMessage();
+    String renderedError =
         localizedErrorRenderer.render(errorKey, displayableErrorArgs, fallbackErrorMessage);
+    String errorMessage = safeOutboxDeliveryError(renderedError);
     return ConsoleOutboxDeliveryLogResponse.builder()
-        .id(longValue(row, "id"))
-        .tenantId(stringValue(row, "tenant_id"))
-        .eventType(stringValue(row, "event_type"))
-        .eventKey(stringValue(row, "event_key"))
-        .traceId(stringValue(row, "trace_id"))
-        .deliveryStatus(stringValue(row, "delivery_status"))
-        .targetTopic(stringValue(row, "target_topic"))
-        .deliveryAttempt(intValue(row, "delivery_attempt"))
+        .id(row.id())
+        .tenantId(row.tenantId())
+        .eventType(row.eventType())
+        .eventKey(row.eventKey())
+        .traceId(row.traceId())
+        .deliveryStatus(row.deliveryStatus())
+        .targetTopic(row.targetTopic())
+        .deliveryAttempt(row.deliveryAttempt())
         .errorMessage(errorMessage)
-        .createdAt(instantValue(row, "created_at"))
-        .updatedAt(instantValue(row, "updated_at"))
+        .createdAt(row.createdAt())
+        .updatedAt(row.updatedAt())
         .build();
+  }
+
+  private static String safeOutboxDeliveryError(String value) {
+    if (EmptyChecks.isNull(value)) {
+      return null;
+    }
+    String normalized = ConsoleTextSanitizer.normalize(HtmlUtils.htmlUnescape(value));
+    if (!SwallowedExceptionLogger.containsCredentialSyntax(normalized)) {
+      return value;
+    }
+    int maxLength = Math.max(4, normalized.length());
+    return SwallowedExceptionLogger.safeMessage(normalized, maxLength);
   }
 
   private AiAuditLogResponse toAiAuditLogResponse(ConsoleAiAuditLogEntity entity) {
@@ -572,7 +608,8 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         timeUntilCutoffSeconds,
         lateArrivalWindowClosesAt,
         jobs,
-        scheduledOccurrences);
+        scheduledOccurrences,
+        EmptyChecks.isNull(row) ? null : row.frozen());
   }
 
   private List<ConsoleBatchDaySummaryResponse> loadBatchDaySummaries(
@@ -589,13 +626,18 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
   }
 
   private ConsoleBatchDaySummaryResponse toBatchDaySummaryResponse(BatchDayJobSummaryView row) {
+    int totalJobCount = intValue(row.totalJobCount());
+    int successJobCount = intValue(row.successJobCount());
+    int failedJobCount = intValue(row.failedJobCount());
+    int inFlightJobCount = intValue(row.inFlightJobCount());
+    int catchupCount = intValue(row.catchupCount());
     return new ConsoleBatchDaySummaryResponse(
         row.jobCode(),
-        intValue(row.totalJobCount()),
-        intValue(row.successJobCount()),
-        intValue(row.failedJobCount()),
-        intValue(row.inFlightJobCount()),
-        intValue(row.catchupCount()));
+        totalJobCount,
+        successJobCount,
+        failedJobCount,
+        inFlightJobCount,
+        catchupCount);
   }
 
   private ConsoleScheduledOccurrenceResponse toScheduledOccurrenceResponse(
@@ -625,10 +667,10 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     if (cutoffAt == null) {
       return null;
     }
-    Map<String, Object> calendar =
+    ActiveCalendarRow calendar =
         opsMappers.businessCalendarMapper.selectActiveByTenantAndCalendarCode(
             tenantId, calendarCode);
-    Integer tolerance = intValue(calendar, "lateArrivalToleranceMin");
+    Integer tolerance = EmptyChecks.isNull(calendar) ? null : calendar.lateArrivalToleranceMin();
     if (tolerance == null || tolerance <= 0) {
       return cutoffAt;
     }
@@ -644,11 +686,6 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
       return settledAt.isAfter(slaDeadlineAt) ? "SLA_BREACH" : "ON_TIME";
     }
     return now.isAfter(slaDeadlineAt) ? "SLA_TIMEOUT" : "ON_TIME";
-  }
-
-  private String rawStringValue(Map<String, Object> row, String key) {
-    Object value = EmptyChecks.isNull(row) ? null : row.get(key);
-    return EmptyChecks.isNull(value) ? null : String.valueOf(value);
   }
 
   private ConsoleAlertEventResponse toAlertEventResponse(AlertEventEntity entity) {

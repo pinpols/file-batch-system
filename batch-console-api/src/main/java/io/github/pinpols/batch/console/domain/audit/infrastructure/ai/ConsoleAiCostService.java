@@ -1,14 +1,12 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
-import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiMonthlyUsageSettleParam;
-
-
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiMonthlyUsageEntity;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiMonthlyUsageMapper;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiMonthlyUsageSettleParam;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
@@ -116,16 +114,16 @@ public class ConsoleAiCostService {
       String status) {
     if (reservation.budgetReserved()) {
       mapper.setTenantContext(reservation.tenantId());
-      ConsoleAiMonthlyUsageSettleParam consoleAiMonthlyUsageSettleParam = ConsoleAiMonthlyUsageSettleParam.builder()
-          .tenantId(reservation.tenantId())
-          .billingMonth(reservation.billingMonth())
-          .reservedAmount(reservation.reservedAmount())
-          .actualAmount(amount)
-          .promptTokens(promptTokens)
-          .completionTokens(completionTokens)
-          .build();
-      mapper.settle(
-          consoleAiMonthlyUsageSettleParam);
+      ConsoleAiMonthlyUsageSettleParam consoleAiMonthlyUsageSettleParam =
+          ConsoleAiMonthlyUsageSettleParam.builder()
+              .tenantId(reservation.tenantId())
+              .billingMonth(reservation.billingMonth())
+              .reservedAmount(reservation.reservedAmount())
+              .actualAmount(amount)
+              .promptTokens(promptTokens)
+              .completionTokens(completionTokens)
+              .build();
+      mapper.settle(consoleAiMonthlyUsageSettleParam);
     }
     return new CostResult(amount, status);
   }

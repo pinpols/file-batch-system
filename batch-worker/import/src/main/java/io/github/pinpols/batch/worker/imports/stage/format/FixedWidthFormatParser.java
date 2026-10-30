@@ -6,13 +6,13 @@ import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
-/** Parses fixed-width text files into NDJSON records. */
+/** 将定长文本文件解析为 NDJSON 记录。 */
 public class FixedWidthFormatParser implements FormatParser {
 
   private static final String ERROR_CODE_FIXED_WIDTH_INVALID = "IMPORT_PARSE_FIXED_INVALID";
@@ -82,7 +82,7 @@ public class FixedWidthFormatParser implements FormatParser {
         try {
           Map<String, String> row = new LinkedHashMap<>();
           for (FixedWidthField field : fields) {
-            if (field.start() + field.length() > line.length()) {
+            if ((long) field.start() + field.length() > line.length()) {
               throw new IllegalStateException("field overflow: " + field.target());
             }
             String fieldText = line.substring(field.start(), field.start() + field.length());
@@ -116,29 +116,39 @@ public class FixedWidthFormatParser implements FormatParser {
     if (!(fieldMappings instanceof List<?> list)) {
       return List.of();
     }
-    return list.stream()
-        .map(FixedWidthFormatParser::fixedWidthField)
-        .flatMap(Optional::stream)
-        .toList();
+    return list.stream().map(FixedWidthFormatParser::fixedWidthField).toList();
   }
 
-  private static Optional<FixedWidthField> fixedWidthField(Object item) {
-    if (!(item instanceof Map<?, ?> map)) {
-      return Optional.empty();
+  private static FixedWidthField fixedWidthField(Object item) {
+    if (!(item instanceof Map<?, ?> map)
+        || !(map.get("target") instanceof String target)
+        || !Texts.hasText(target)) {
+      throw new IllegalArgumentException("invalid FIXED_WIDTH field mapping target");
     }
-    Object target = map.get("target");
-    Object start = map.get("start");
-    Object length = map.get("length");
-    if (target == null
-        || !(start instanceof Number startNumber)
-        || !(length instanceof Number lengthNumber)) {
-      return Optional.empty();
+    int start = fixedWidthInteger(map.get("start"));
+    int length = fixedWidthInteger(map.get("length"));
+    if (start < 0 || length <= 0) {
+      throw new IllegalArgumentException("invalid FIXED_WIDTH field mapping range");
     }
-    String targetField = String.valueOf(target);
-    int startOffset = startNumber.intValue();
-    int fieldLength = lengthNumber.intValue();
-    FixedWidthField fixedWidthField = new FixedWidthField(targetField, startOffset, fieldLength);
-    return Optional.of(fixedWidthField);
+    return new FixedWidthField(target, start, length);
+  }
+
+  private static int fixedWidthInteger(Object value) {
+    if (value instanceof BigInteger integer) {
+      try {
+        return integer.intValueExact();
+      } catch (ArithmeticException invalid) {
+        throw new IllegalArgumentException("FIXED_WIDTH value exceeds integer range", invalid);
+      }
+    }
+    if (value instanceof Byte
+        || value instanceof Short
+        || value instanceof Integer
+        || value instanceof Long) {
+      long number = ((Number) value).longValue();
+      if (number >= Integer.MIN_VALUE && number <= Integer.MAX_VALUE) return (int) number;
+    }
+    throw new IllegalArgumentException("FIXED_WIDTH value must be a 32-bit integer");
   }
 
   private record FixedWidthField(String target, int start, int length) {}

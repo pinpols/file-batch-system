@@ -190,6 +190,27 @@ class TriggerSecurityFilterTest {
   }
 
   @Test
+  @DisplayName("补跑核验内部入口只接受内部密钥，不接受租户 API Key")
+  void catchUpVerification_requiresInternalSecret() throws Exception {
+    MockHttpServletRequest external =
+        new MockHttpServletRequest("POST", "/internal/trigger/catch-up/verify");
+    external.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "source-key");
+    external.addHeader(CommonConstants.BATCH_TENANT_ID_HEADER, "tenant-a");
+    MockHttpServletResponse denied = new MockHttpServletResponse();
+    FilterChain externalChain = mock(FilterChain.class);
+    filter.doFilter(external, denied, externalChain);
+    assertThat(denied.getStatus()).isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
+    verify(externalChain, never()).doFilter(any(), any());
+    MockHttpServletRequest internal =
+        new MockHttpServletRequest("POST", "/internal/trigger/catch-up/verify");
+    internal.addHeader(HEADER, SECRET);
+    MockHttpServletResponse allowed = new MockHttpServletResponse();
+    FilterChain internalChain = mock(FilterChain.class);
+    filter.doFilter(internal, allowed, internalChain);
+    verify(internalChain).doFilter(internal, allowed);
+  }
+
+  @Test
   @DisplayName("CSRF 仅忽略带正确内部密钥的请求,缺失或错误密钥仍受保护")
   void csrfMatcher_ignoresOnlyAuthenticatedInternalRequests() {
     TriggerSecurityConfiguration.InternalSecretRequestMatcher matcher =

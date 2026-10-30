@@ -20,17 +20,21 @@
 #### 文件链路统一视图
 
 ```mermaid
-flowchart LR
-    A[文件来源/业务数据] --> B{链路类型}
-    B -->|IMPORT| C[导入链路]
-    B -->|EXPORT| D[导出链路]
-    B -->|DISPATCH| E[分发链路]
-
-    C --> F[file_record / pipeline_step_run / pipeline_instance / task_instance]
-    D --> F
-    E --> F
-
-    F --> G[监控/审计/补偿/回执/归档]
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  J[JOB 执行配置] --> T{系统 Pipeline 类型}
+  T --> I[IMPORT：接收与入库]
+  T --> E[EXPORT：生成与登记]
+  T --> P[PROCESS：内部数据加工]
+  T --> D[DISPATCH：投递与回执]
+  I --> R[pipeline_instance / pipeline_step_run]
+  E --> R
+  P --> R
+  D --> R
+  I -. 文件资产 .-> F[file_record]
+  E -. 文件资产 .-> F
+  D -. 文件资产 .-> F
+  R --> O[Worker REPORT → Orchestrator 推进运行状态]
 ```
 
 ---
@@ -92,6 +96,10 @@ flowchart LR
 - 重新分发默认引用指定版本，不隐式切换到最新版本
 - 审计与下载界面必须能区分“最新版本”和“历史版本”
 
+当前文件登记实现（2026-10-27）：非空 `file_code` 的登记先取得 `tenant_id + file_code` 身份的 PostgreSQL 事务咨询锁，再单独查询最大代号。Worker 当前默认的 READ COMMITTED 隔离级别下，锁等待后的独立查询能看到前一事务提交的版本；首代登记也使用同一身份锁，不依赖已有文件行。不同新路径按该身份串行递增版本并替换最新代，同一路径等待后直接去重复用已有 ID。无校验和去重返回不修改任何一代的版本号或 `is_latest`，复用历史路径也不取消当前最新代。真正插入新记录时才清除旧代的最新标记，更新与插入沿用原事务共同提交或回滚。未提供 `file_code` 的路径登记保留 V124 唯一索引围栏，竞争方回滚后由外层重试复用。
+
+版本锁的身份使用命名空间、租户、文件编码的 JSON 数组编码，避免分隔符组合歧义，事务结束自动释放。本地真实 PostgreSQL 已验证不同路径、同路径、首代、租户/文件身份隔离、路径唯一竞争及失败回滚；这属于 Worker 登记路径的定向证据，不替代多协调节点、目标环境锁等待容量或完整迁移验收。
+
 #### 链路实例模型建议
 
 `pipeline_instance` 用于统一表达一次文件链路运行，建议具备以下字段：
@@ -101,7 +109,7 @@ flowchart LR
 | pipeline_instance_id | 链路实例主键 |
 | tenant_id | 租户 |
 | job_code | 链路模板编码 |
-| pipeline_type | IMPORT / EXPORT / DISPATCH |
+| pipeline_type | IMPORT / EXPORT / PROCESS / DISPATCH |
 | file_id | 关联文件资产 |
 | related_job_instance_id | 关联任务实例 |
 | current_stage | 当前阶段 |
@@ -139,16 +147,15 @@ flowchart LR
 #### 文件导入标准链路图
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-    A[上传 / SFTP 拉取 / 外部推送] --> B[RECEIVE 接收登记]
-    B --> C[PREPROCESS 预处理]
-    C --> D[PARSE 解析]
-    D --> E[VALIDATE 校验]
-    E --> F{是否通过}
-    F -- 否 --> G[生成错误报告 / 标记失败 / 告警]
-    F -- 是 --> H[LOAD 入库]
-    H --> I[FEEDBACK 结果反馈]
-    I --> J[更新 file_record / pipeline_instance / task_instance / 审计日志]
+  R[RECEIVE] --> P[PREPROCESS]
+  P --> A[PARSE]
+  A --> V[VALIDATE]
+  V --> C{校验通过？}
+  C -->|是| L[LOAD]
+  L --> F[FEEDBACK]
+  C -->|否| X[错误报告与失败回报]
 ```
 
 #### 导入扩展点
@@ -366,6 +373,9 @@ VALIDATE 阶段跨 chunk 累加金额列,全量记录处理完后与声明总额
 除现有样例外，建议模板层面支持以下参数：
 
 - `fileFormatType`：DELIMITED / FIXED_WIDTH / EXCEL / XML / JSON / BINARY
+  - IMPORT `FIXED_WIDTH` 在解析非空文本前核对全部字段映射：`target` 为非空字符串，`start` 为非负 32 位整数，`length` 为正的 32 位整数；任一无效项使解析失败，不截断数字或忽略部分字段。
+  - Console 直接创建、修改或启用模板，以及租户批量初始化（含演练）时，对已启用模板的非空定长映射执行相同字段校验；空骨架及禁用草稿仍可保存。租户配置复制通过批量初始化应用；其他配置入口另行校验，不能以此替代就绪自检。
+  - 单条模板启用时核对校验过的模板类型、格式和映射是否仍一致；若配置已变化，返回状态冲突，需重新读取后再操作。
 - `delimiter`
 - `quoteChar`
 - `escapeChar`
@@ -473,12 +483,12 @@ VALIDATE 阶段跨 chunk 累加金额列,全量记录处理完后与声明总额
 #### 文件导出标准链路图
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-    A[创建导出任务] --> B[PREPARE 参数/模板准备]
-    B --> C[GENERATE 查询与生成文件]
-    C --> D[STORE 上传对象存储/安全目录]
-    D --> E[REGISTER 登记 export_record / file_record]
-    E --> F[COMPLETE 导出完成]
+  P[PREPARE] --> G[GENERATE]
+  G --> S[STORE]
+  S --> R[REGISTER]
+  R --> C[COMPLETE]
 ```
 
 #### 导出扩展点
@@ -713,6 +723,8 @@ outbound/{bizType}/{bizDate}/{batchNo}/{fileNo}/v{version}/{storedName}
 - 补登记时要求能从对象 Key、文件名、模板版本、业务日期、批次号恢复上下文
 - 补登记结果必须写审计日志，并区分“系统自动补登记”和“人工确认补登记”
 
+平台托管上传使用保留目录 `uploads/<tenant>/<date>/...`，由上传会话创建文件记录、确认到达后才参与触发。对象存储孤儿对账排除此目录，不将其他租户的上传对象补录到配置的默认租户，也不凭对象存在跳过到达确认。未确认会话由专属会话清理流程处理；普通入站目录仍按配置前缀进行对账。
+
 ---
 
 ### 9.5 文件分发链路设计
@@ -735,13 +747,17 @@ outbound/{bizType}/{bizDate}/{batchNo}/{fileNo}/v{version}/{storedName}
 #### 文件分发标准链路图
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-    A[导出完成或待分发文件] --> B[PREPARE 读取分发策略]
-    B --> C[DISPATCH SFTP/API/邮件/下载发布]
-    C --> D{ACK/响应是否成功}
-    D -- 否 --> E[RETRY / 死信 / 人工补发]
-    D -- 是 --> F[COMPLETE 更新 dispatch_record / 回执]
-    F --> G[审计/对账/闭环]
+  P[PREPARE] --> D[DISPATCH]
+  D --> A[ACK]
+  A -->|成功| C[COMPLETE]
+  A -->|失败且允许重试| R[RETRY]
+  D -->|已知失败且允许重试| R
+  R -->|重试恢复| A
+  A -->|不重试| X[COMPENSATE]
+  R -->|已知失败| X
+  D -. 外部结果不明 .-> U[保留证据，先核对外部结果]
 ```
 
 #### 分发扩展点
@@ -787,15 +803,17 @@ filePipelines:
 #### 链路执行架构图
 
 ```mermaid
-flowchart TD
-    A[Job 业务参数 + SystemPipelineCatalog] --> B[Orchestrator Task/Outbox]
-    B --> C[Worker AbstractPipelineStepExecutionAdapter]
-    C --> D[AbstractStageExecutor]
-    D --> E[Import/Export/Process/Dispatch Stage Beans]
-    C --> H[ExecutionContext]
-    H --> I[file_record]
-    H --> J[pipeline_instance / pipeline_step_run]
-    C --> K[Task Result / 审计 / 指标]
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  J[Job 冻结参数 + SystemPipelineCatalog] --> O[Orchestrator：Task / Outbox]
+  O --> K[Kafka 任务提示]
+  K --> W[文件 Worker：CLAIM 后执行]
+  W --> A[AbstractPipelineStepExecutionAdapter]
+  A --> S[AbstractStageExecutor]
+  S --> B[Import / Export / Process / Dispatch Stage]
+  A --> R[文件与 Pipeline 运行记录]
+  A --> F[REPORT：结果、审计与指标]
+  F --> O
 ```
 
 #### 核心抽象建议
@@ -875,20 +893,22 @@ public interface ImportStageStep {
 #### 执行时序建议
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 sequenceDiagram
-    participant O as Orchestrator
-    participant K as Kafka/Outbox
-    participant W as Worker
-    participant DB as PostgreSQL
-
-    O->>K: 事务 Outbox 投递任务
-    K->>W: Worker 领取任务
-    W->>W: 校验系统模板并合并冻结参数
-    W->>DB: 创建 pipeline_instance
-    W->>W: 按 impl_code 解析并执行 Stage Bean
-    W->>DB: 回写 pipeline_step_run/current_stage
-    W-->>O: 上报 Task Result
-    O->>DB: CAS 推进 Job/Workflow 状态
+  participant O as Orchestrator
+  participant DB as PostgreSQL
+  participant K as Kafka
+  participant W as 文件 Worker
+  O->>DB: 同事务写任务与 Outbox
+  O->>K: Outbox 发布器异步投递任务提示
+  K-->>W: 至少一次投递
+  W->>O: CLAIM
+  O->>DB: CAS 领取并授予租约
+  O-->>W: 任务身份与冻结参数
+  W->>W: 校验系统模板，执行 Stage
+  W->>DB: 文件与 Pipeline 阶段记录
+  W->>O: REPORT
+  O->>DB: CAS 推进 Task / Job / Workflow
 ```
 
 #### 恢复点建议
@@ -917,7 +937,9 @@ sequenceDiagram
 | `batch-worker-core` | 执行基座 | 统一消费、认领、心跳、租约续约、执行上下文、指标与异常包装 |
 | `batch-worker-import` | 导入链路 | RECEIVE / PREPROCESS / PARSE / VALIDATE / LOAD / FEEDBACK |
 | `batch-worker-export` | 导出链路 | PREPARE / GENERATE / STORE / REGISTER / COMPLETE |
+| `batch-worker-process` | 内部数据加工 | PREPARE / COMPUTE / VALIDATE / COMMIT / FEEDBACK |
 | `batch-worker-dispatch` | 分发链路 | PREPARE / DISPATCH / ACK / RETRY / COMPENSATE / COMPLETE |
+| `batch-worker-atomic` | 原子任务 | 不走文件 Pipeline；通过 BatchTaskExecutor 执行 |
 
 #### Step 级 Worker 路由配置建议
 
@@ -973,15 +995,14 @@ filePipelines:
 #### Worker 与链路关系图
 
 ```mermaid
-flowchart LR
-    A[Orchestrator] --> B[batch-worker-core]
-    B --> C[batch-worker-import]
-    B --> D[batch-worker-export]
-    B --> E[batch-worker-dispatch]
-
-    C --> F[导入步骤插件]
-    D --> G[导出步骤插件]
-    E --> H[分发步骤插件]
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  K[Kafka 任务提示 + CLAIM] --> F[IMPORT / EXPORT / PROCESS / DISPATCH]
+  K --> A[ATOMIC]
+  F --> S[文件 Stage SPI]
+  A --> T[BatchTaskExecutor SPI]
+  F -. 依赖共享库 .-> C[batch-worker-core]
+  A -. 依赖共享库 .-> C
 ```
 
 ---
@@ -1036,14 +1057,17 @@ flowchart LR
 #### 运行闭环建议
 
 ```mermaid
-flowchart LR
-    A[步骤失败] --> B{自动恢复是否可行}
-    B -- 是 --> C[按恢复点重试]
-    B -- 否 --> D[转人工干预队列]
-    D --> E[控制台审批/补发/跳过]
-    C --> F[成功继续执行]
-    E --> F
-    F --> G[审计/告警/归档闭环]
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  F[步骤失败] --> K{外部执行结果已知？}
+  K -->|否| U[保留证据并核对外部结果]
+  U --> K
+  K -->|是| R{满足该步骤恢复契约？}
+  R -->|是| E[按幂等键与恢复点受控重试]
+  R -->|否| M[按声明策略审批、补偿或重新发起]
+  E --> V[核验持久化结果]
+  M --> V
+  V --> A[审计与告警闭环]
 ```
 
 
@@ -1115,3 +1139,9 @@ flowchart LR
 - 大文件任务必须绑定资源画像：`IO_HEAVY / CPU_HEAVY / DB_HEAVY`
 - 模板配置应包含 `streamingEnabled / pageSize / fetchSize / chunkSize`
 - 控制台和运行手册中应明确：违反上述约束的实现不允许上线
+
+### 大文件分区读取与产物完整性
+
+导入按字节 Range 读取必须先证明格式、编码和记录边界允许独立切片；压缩、加密、XML、Excel、带跨行字段的文本等不能仅凭文件大小套用任意字节切片。无法证明安全时沿用执行器既有兼容路径，不把旧 line-mod 的吞吐估算当作正确性结论。
+
+导出分区必须证明各分区结果互斥且并集完整；每个分区拥有独立产物和恢复位点。[既有 keyset-range 区间方案](../plans/export-partition-keyset-range-2026-06-06.md)的独立探测与回退已复现分片重叠；当前两种内置导出数据插件的多分片统一使用哈希，旧区间开关不再激活范围划分。自定义插件按其自身实现验证分片契约。共享范围计划及性能容量后续评估；哈希分片也不提供跨分片的数据库一致性快照。其他分片约束见[分片方案](../plans/export-partition-slice-2026-06-06.md)。验证应对账总行数、主键集合、文件校验和及重复/缺失，不能只检查文件生成或任务 SUCCESS。

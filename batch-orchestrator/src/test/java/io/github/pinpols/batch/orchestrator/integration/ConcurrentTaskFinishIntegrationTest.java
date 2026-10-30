@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -52,7 +53,7 @@ class ConcurrentTaskFinishIntegrationTest extends AbstractIntegrationTest {
   private JdbcTemplate jdbcTemplate;
 
   @Autowired
-  private TransactionTemplate transactionTemplate;
+  private PlatformTransactionManager transactionManager;
 
   @Test
   @DisplayName("两个线程并发完成同一运行中任务时只有一个成功,另一个因状态校验未命中而失败")
@@ -91,8 +92,8 @@ class ConcurrentTaskFinishIntegrationTest extends AbstractIntegrationTest {
     for (int i = 0; i < 2; i++) {
       futures.add(pool.submit(() -> {
         startGate.await();
-        return transactionTemplate.execute(
-            status -> jobTaskMapper.finishTask(FinishTaskParam.builder()
+        return new TransactionTemplate(transactionManager)
+            .execute(status -> jobTaskMapper.finishTask(FinishTaskParam.builder()
                 .tenantId(TENANT)
                 .id(taskId)
                 .taskStatus(TaskStatus.SUCCESS.code())

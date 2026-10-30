@@ -112,17 +112,10 @@ class ExternalEventApiKeyHttpIntegrationTest {
     String dualRequestId = "legacy-launch-dual-" + suffix;
     String forgedParentRequestId = "legacy-launch-parent-" + suffix;
     Long workflowId = null;
-    jdbcTemplate.update(
-        insertTenantSql,
-        tenantId,
-        tenantId);
+    jdbcTemplate.update(insertTenantSql, tenantId, tenantId);
     try {
       workflowId = jdbcTemplate.queryForObject(
-          insertWorkflowDefinitionSql,
-          Long.class,
-          tenantId,
-          workflowCode,
-          workflowCode);
+          insertWorkflowDefinitionSql, Long.class, tenantId, workflowCode, workflowCode);
 
       String oldJobOnlyRequest = """
           {
@@ -191,18 +184,83 @@ class ExternalEventApiKeyHttpIntegrationTest {
           dualRequestId,
           forgedParentRequestId);
       jdbcTemplate.update(
-          deleteTriggerRequestSql,
-          tenantId,
-          legacyRequestId,
-          dualRequestId,
-          forgedParentRequestId);
+          deleteTriggerRequestSql, tenantId, legacyRequestId, dualRequestId, forgedParentRequestId);
       if (workflowId != null) {
-        jdbcTemplate.update(
-            deleteWorkflowDefinitionSql,
-            tenantId,
-            workflowId);
+        jdbcTemplate.update(deleteWorkflowDefinitionSql, tenantId, workflowId);
       }
       jdbcTemplate.update(deleteTenantSql, tenantId);
+    }
+  }
+
+  @Test
+  @DisplayName("补跑原请求核验仅内部密钥可用且不接纳不同载荷")
+  void shouldVerifyCatchUpIdentityThroughInternalHttp() throws Exception {
+    String suffix = UUID.randomUUID().toString().replace("-", "");
+    String tenant = "verify-" + suffix.substring(0, 12);
+    String requestId = "req-" + suffix;
+    String key = "catchup-" + suffix;
+    String insertTenantSql =
+        "insert into batch.tenant (tenant_id, tenant_name, status) values (?, ?, 'ACTIVE')";
+    String insertWorkflowSql = """
+        insert into batch.workflow_definition (tenant_id, workflow_code, workflow_name, workflow_type, version, enabled, calendar_code)
+        values (?, ?, ?, 'DAG', 1, true, 'HTTP_EVENT_CAL') returning id
+        """;
+    String deleteOutboxSql =
+        "delete from batch.trigger_outbox_event where tenant_id = ? and request_id = ?";
+    String deleteRequestSql =
+        "delete from batch.trigger_request where tenant_id = ? and request_id = ?";
+    String deleteWorkflowSql =
+        "delete from batch.workflow_definition where tenant_id = ? and id = ?";
+    String deleteTenantSql = "delete from batch.tenant where tenant_id = ?";
+    jdbcTemplate.update(insertTenantSql, tenant, tenant);
+    Long workflowId = null;
+    try {
+      workflowId =
+          jdbcTemplate.queryForObject(insertWorkflowSql, Long.class, tenant, suffix, suffix);
+      String body = """
+          {"tenantId":"%s","workflowDefinitionId":%d,"bizDate":"2032-05-11",
+           "triggerType":"CATCH_UP","params":{"jobCode":"JOB_A","reason":"original"}}
+          """.formatted(tenant, workflowId);
+      mockMvc
+          .perform(post("/api/triggers/launch")
+              .header(CommonConstants.INTERNAL_SECRET_HEADER, "integration-secret-for-trigger-http")
+              .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, key)
+              .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId)
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(body))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.data.instanceNo").value(requestId));
+      mockMvc
+          .perform(post("/internal/trigger/catch-up/verify")
+              .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, key)
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(body))
+          .andExpect(status().isForbidden());
+      mockMvc
+          .perform(post("/internal/trigger/catch-up/verify")
+              .header(CommonConstants.INTERNAL_SECRET_HEADER, "integration-secret-for-trigger-http")
+              .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, key)
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(body))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.data.instanceNo").value(requestId))
+          .andExpect(jsonPath("$.data.params").doesNotExist());
+      mockMvc
+          .perform(post("/internal/trigger/catch-up/verify")
+              .header(CommonConstants.INTERNAL_SECRET_HEADER, "integration-secret-for-trigger-http")
+              .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, key)
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(body.replace("original", "different")))
+          .andExpect(status().isConflict());
+      String countSql =
+          "select count(*) from batch.trigger_outbox_event where tenant_id = ? and request_id = ?";
+      assertThat(jdbcTemplate.queryForObject(countSql, Integer.class, tenant, requestId))
+          .isEqualTo(1);
+    } finally {
+      jdbcTemplate.update(deleteOutboxSql, tenant, requestId);
+      jdbcTemplate.update(deleteRequestSql, tenant, requestId);
+      if (workflowId != null) jdbcTemplate.update(deleteWorkflowSql, tenant, workflowId);
+      jdbcTemplate.update(deleteTenantSql, tenant);
     }
   }
 
@@ -243,10 +301,7 @@ class ExternalEventApiKeyHttpIntegrationTest {
         "workflow-" + suffix,
         "workflow-" + suffix);
     jdbcTemplate.update(
-        insertExternalEventExpectationDefinitionSql,
-        tenantId,
-        workflowId,
-        eventCode);
+        insertExternalEventExpectationDefinitionSql, tenantId, workflowId, eventCode);
     ApiKeyHasher.SaltedHash hash = ApiKeyHasher.hashWithSaltKdf(rawKey);
     jdbcTemplate.update(
         insertApiKeySql,
@@ -294,6 +349,55 @@ class ExternalEventApiKeyHttpIntegrationTest {
         jdbcTemplate.queryForObject(selectBizDateSql, LocalDate.class, tenantId, "payment-close-1");
     assertThat(selectedBizDate).isEqualTo(sourceBizDate);
 
+    String selectOriginalRequestSql = """
+        select request_id from batch.trigger_request
+        where tenant_id = ? and external_event_id = ? and workflow_definition_id = ?
+        """;
+    String originalRequestId = jdbcTemplate.queryForObject(
+        selectOriginalRequestSql, String.class, tenantId, "payment-close-1", workflowId);
+    String workflowRetry = """
+        {
+          "tenantId": "%s", "workflowDefinitionId": %d,
+          "bizDate": "%s", "triggerType": "EVENT",
+          "externalEventCode": "%s", "externalEventSource": "%s",
+          "externalEventId": "payment-close-1", "params": {"paymentId": "pay-1"}
+        }
+        """.formatted(tenantId, workflowId, sourceBizDate, eventCode, source);
+    mockMvc
+        .perform(post("/api/triggers/launch")
+            .header(CommonConstants.BATCH_API_KEY_HEADER, rawKey)
+            .header(CommonConstants.BATCH_TENANT_ID_HEADER, tenantId)
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "workflow-retry-" + suffix)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(workflowRetry))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.instanceNo").value(originalRequestId));
+    assertThat(countLaunchWrites(tenantId, originalRequestId)).isEqualTo(2);
+
+    Long outsideWorkflow = jdbcTemplate.queryForObject(
+        insertWorkflowDefinitionSql,
+        Long.class,
+        tenantId,
+        "outside-" + suffix,
+        "outside-" + suffix);
+    String outsideRetry =
+        """
+        {
+          "tenantId": "%s", "workflowDefinitionId": %d,
+          "bizDate": "%s", "triggerType": "EVENT",
+          "externalEventCode": "%s", "externalEventSource": "%s",
+          "externalEventId": "payment-close-1"
+        }
+        """.formatted(tenantId, outsideWorkflow, sourceBizDate, eventCode, source);
+    mockMvc
+        .perform(post("/api/triggers/launch")
+            .header(CommonConstants.BATCH_API_KEY_HEADER, rawKey)
+            .header(CommonConstants.BATCH_TENANT_ID_HEADER, tenantId)
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "outside-retry-" + suffix)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(outsideRetry))
+        .andExpect(status().isConflict());
+
     mockMvc
         .perform(get("/api/triggers/events/status")
             .queryParam("tenantId", tenantId)
@@ -306,23 +410,17 @@ class ExternalEventApiKeyHttpIntegrationTest {
   }
 
   private int countLaunchWrites(String tenantId, String requestId) {
-  final String selectCountSql = """
+    final String selectCountSql = """
       select count(*) from batch.trigger_request where tenant_id = ? and request_id = ?
   """;
-  final String selectCountSql2 = """
+    final String selectCountSql2 = """
       select count(*) from batch.trigger_outbox_event where tenant_id = ? and request_id = ?
   """;
 
-    Integer requestCount = jdbcTemplate.queryForObject(
-        selectCountSql,
-        Integer.class,
-        tenantId,
-        requestId);
-    Integer outboxCount = jdbcTemplate.queryForObject(
-        selectCountSql2,
-        Integer.class,
-        tenantId,
-        requestId);
+    Integer requestCount =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId, requestId);
+    Integer outboxCount =
+        jdbcTemplate.queryForObject(selectCountSql2, Integer.class, tenantId, requestId);
     return requestCount + outboxCount;
   }
 }

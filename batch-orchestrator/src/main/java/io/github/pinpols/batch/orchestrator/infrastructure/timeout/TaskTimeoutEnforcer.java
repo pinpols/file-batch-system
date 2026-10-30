@@ -61,7 +61,8 @@ public class TaskTimeoutEnforcer {
       for (JobTaskEntity task : candidates) {
         int rows = RlsTenantContextHolder.runWithTenant(
             task.getTenantId(),
-            () -> jobTaskMapper.requestCancel(task.getTenantId(), task.getId()));
+            () -> jobTaskMapper.requestCancelIfTimedOut(
+                task.getTenantId(), task.getId(), task.getVersion()));
         if (rows > 0) {
           cancelled++;
           log.warn(

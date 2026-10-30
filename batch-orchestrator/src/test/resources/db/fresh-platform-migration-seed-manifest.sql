@@ -121,6 +121,17 @@ WITH seeded_rows AS (
     UNION ALL
 
     SELECT
+        'SEED_ROW',
+        jsonb_build_array(
+            'batch.waiting_partition_scan_cursor',
+            c.singleton_id::text,
+            to_jsonb(c) - ARRAY['updated_at']
+        )
+    FROM batch.waiting_partition_scan_cursor c
+
+    UNION ALL
+
+    SELECT
         'BACKFILL_TARGET',
         jsonb_build_array(target.table_name, target.row_count)
     FROM (

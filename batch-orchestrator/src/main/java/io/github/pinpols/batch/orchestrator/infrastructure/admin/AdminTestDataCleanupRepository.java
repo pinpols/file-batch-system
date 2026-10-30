@@ -140,7 +140,8 @@ public class AdminTestDataCleanupRepository {
     return result;
   }
 
-  private PrefixCleanupScope capturePrefixCleanupScope(String prefixLike, String operatorPrefixLike) {
+  private PrefixCleanupScope capturePrefixCleanupScope(
+      String prefixLike, String operatorPrefixLike) {
     PrefixCleanupScope discovery =
         new PrefixCleanupScope(prefixLike, operatorPrefixLike, List.of(), List.of(), List.of());
     List<Long> runIds = mapper.findWorkflowRunIdsByPrefix(discovery);

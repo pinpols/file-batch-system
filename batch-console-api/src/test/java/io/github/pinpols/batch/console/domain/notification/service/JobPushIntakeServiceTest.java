@@ -19,43 +19,50 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @DisplayName("作业推送的接纳决策与接收设备冻结")
+@ExtendWith(MockitoExtension.class)
 class JobPushIntakeServiceTest {
   @DisplayName("预演终态即使标志为假也不创建正式意图")
   @ParameterizedTest
   @ValueSource(strings = {"SUCCESS_DRY_RUN", "FAILED_DRY_RUN"})
   void shouldRejectFormalIntent_whenTerminalStateIsDryRun(String status) {
+    when(deliveries.insertDecision(any(JobPushDecisionInsertParam.class))).thenReturn(1);
     var job = job();
     job.put("instanceStatus", status);
-    when(subscriptions.findByTenantAndUser("ta", "alice")).thenReturn(List.of(device()));
     service.accept("ta", KEY, job);
     verifyDecision("DRY_RUN", "JOB_" + status);
     verifyNoInteractions(subscriptions);
   }
 
   private final ConsolePushProperties properties = new ConsolePushProperties();
-  private final ConsolePushSubscriptionMapper subscriptions =
-      mock(ConsolePushSubscriptionMapper.class);
-  private final JobPushDeliveryMapper deliveries = mock(JobPushDeliveryMapper.class);
-  private final JobPushIntakeService service =
-      new JobPushIntakeService(properties, subscriptions, deliveries);
+
+  @Mock
+  private ConsolePushSubscriptionMapper subscriptions;
+
+  @Mock
+  private JobPushDeliveryMapper deliveries;
+
+  private JobPushIntakeService service;
   private static final String KEY = "ta:job:10:terminal:SUCCESS";
 
   @BeforeEach
   void setup() {
+    service = new JobPushIntakeService(properties, subscriptions, deliveries);
     properties.setEnabled(true);
     properties.getJobNotify().setEnabled(true);
-    when(deliveries.insertDecision(any(JobPushDecisionInsertParam.class))).thenReturn(1);
-    when(deliveries.insertDevice(any(JobPushDeviceInsertParam.class))).thenReturn(1);
   }
 
   @DisplayName("推送停用时记录决策且不查询设备")
   @Test
   void shouldRecordDisabledDecision_whenPushDisabled() {
+    when(deliveries.insertDecision(any(JobPushDecisionInsertParam.class))).thenReturn(1);
     properties.setEnabled(false);
     service.accept("ta", KEY, job());
     verifyDecision("DISABLED", "JOB_SUCCESS");
@@ -66,6 +73,7 @@ class JobPushIntakeServiceTest {
   @DisplayName("预演不创建正式设备意图")
   @Test
   void shouldAvoidFormalIntent_whenDryRun() {
+    when(deliveries.insertDecision(any(JobPushDecisionInsertParam.class))).thenReturn(1);
     var job = job();
     job.put("dryRun", true);
     service.accept("ta", KEY, job);
@@ -76,6 +84,7 @@ class JobPushIntakeServiceTest {
   @DisplayName("操作员缺失时显式记录且不扩散到当前用户")
   @Test
   void shouldRecordMissingOperator_whenRecipientUnknown() {
+    when(deliveries.insertDecision(any(JobPushDecisionInsertParam.class))).thenReturn(1);
     var job = job();
     job.put("operatorId", null);
     service.accept("ta", KEY, job);
@@ -86,6 +95,7 @@ class JobPushIntakeServiceTest {
   @DisplayName("首次无订阅时记录明确决策")
   @Test
   void shouldRecordNoSubscriptions_whenFirstDecisionHasNoDevice() {
+    when(deliveries.insertDecision(any(JobPushDecisionInsertParam.class))).thenReturn(1);
     when(subscriptions.findByTenantAndUser("ta", "alice")).thenReturn(List.of());
     service.accept("ta", KEY, job());
     verifyDecision("NO_SUBSCRIPTIONS", "JOB_SUCCESS");
@@ -94,6 +104,8 @@ class JobPushIntakeServiceTest {
   @DisplayName("设备意图冻结所有者且载荷不保存端点或密钥")
   @Test
   void shouldFreezeOwnerWithoutCredentials_whenCreatingDeviceIntent() {
+    when(deliveries.insertDevice(any(JobPushDeviceInsertParam.class))).thenReturn(1);
+    when(deliveries.insertDecision(any(JobPushDecisionInsertParam.class))).thenReturn(1);
     var device = device();
     when(subscriptions.findByTenantAndUser("ta", "alice")).thenReturn(List.of(device));
     service.accept("ta", KEY, job());

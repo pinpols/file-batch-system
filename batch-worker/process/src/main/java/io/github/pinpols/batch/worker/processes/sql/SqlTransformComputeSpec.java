@@ -16,8 +16,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import lombok.Builder;
 
 /** 从 Job 冻结的 COMPUTE 阶段业务参数解析出的 SQL 加工规格。 */
+@Builder
 public record SqlTransformComputeSpec(
     String implCode,
     String sourceSql,
@@ -125,20 +127,21 @@ public record SqlTransformComputeSpec(
         firstNonNull(root.get("maxStagedRows"), root.get("max_staged_rows"));
     int maxStagedRows = parseMaxStagedRows(configuredMaxStagedRows);
 
-    SqlTransformComputeSpec spec = new SqlTransformComputeSpec(
-        SqlTransformComputePlugin.PLUGIN_ID,
-        sourceSql,
-        targetSchema,
-        targetTable,
-        writeMode,
-        stagingMode,
-        columns,
-        conflictColumns,
-        watermarkColumn,
-        params,
-        validations,
-        emptyResultPolicy,
-        maxStagedRows);
+    SqlTransformComputeSpec spec = SqlTransformComputeSpec.builder()
+        .implCode(SqlTransformComputePlugin.PLUGIN_ID)
+        .sourceSql(sourceSql)
+        .targetSchema(targetSchema)
+        .targetTable(targetTable)
+        .writeMode(writeMode)
+        .stagingMode(stagingMode)
+        .columns(columns)
+        .conflictColumns(conflictColumns)
+        .watermarkColumn(watermarkColumn)
+        .params(params)
+        .validations(validations)
+        .emptyResultPolicy(emptyResultPolicy)
+        .maxStagedRows(maxStagedRows)
+        .build();
     spec.validateIdentifiers();
     return spec;
   }

@@ -1,7 +1,5 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
-import java.util.Objects;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
@@ -11,6 +9,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.stereotype.Component;
 
 /**
@@ -51,16 +50,18 @@ public class DelimitedExportFormat extends AbstractExportFormat {
         resolveDelimitedFormatConfig(ctx.dataCtx().templateConfig());
 
     // ADR-041 Phase1.4:出站内嵌 trailer 控制记录(默认关闭,trailer_template.present=true 才启用)。
-    Object trailerTemplateValue = firstNonNull(
-        templateValue(ctx, "trailer_template"), templateValue(ctx, "trailerTemplate"));
+    Object trailerTemplateValue =
+        firstNonNull(templateValue(ctx, "trailer_template"), templateValue(ctx, "trailerTemplate"));
     Map<String, Object> trailerTemplate = toMap(trailerTemplateValue);
     boolean trailerEnabled = OutboundTrailerRecord.enabled(trailerTemplate);
     boolean resuming = isResuming(ctx);
     String amountField = trailerEnabled ? OutboundTrailerRecord.amountField(trailerTemplate) : null;
     BigDecimal resumeControlTotal =
         trailerEnabled && resuming && amountField != null ? batchControlTotal(ctx) : null;
-    boolean missingResumeControlTotal =
-        trailerEnabled && resuming && EmptyChecks.isNotNull(amountField) && EmptyChecks.isNull(resumeControlTotal);
+    boolean missingResumeControlTotal = trailerEnabled
+        && resuming
+        && EmptyChecks.isNotNull(amountField)
+        && EmptyChecks.isNull(resumeControlTotal);
     if (missingResumeControlTotal) {
       throw new IllegalStateException(
           "DELIMITED trailer control total cannot resume without batch total_amount/totalAmount");
@@ -82,8 +83,7 @@ public class DelimitedExportFormat extends AbstractExportFormat {
       DelimitedOutput output = new DelimitedOutput(writer, columns, formatConfig, ctx);
       long recordCount = ExportPageGenerationCoordinator.generatePaged(
           ctx, firstPage, file::flushAndSync, (batch, detail, rowIndex) -> {
-            writeDelimitedFields(
-                output, batch, detail, "data-row-" + (rowIndex + 1));
+            writeDelimitedFields(output, batch, detail, "data-row-" + (rowIndex + 1));
             writeNewLine(writer, ctx);
             if (accumulationField != null) {
               BigDecimal value = decimalValue(detail.get(accumulationField));
@@ -119,8 +119,7 @@ public class DelimitedExportFormat extends AbstractExportFormat {
       }
       String trailerValue = values.get(i);
       String encodedTrailerValue = csv(trailerValue, formatConfig);
-      writeText(
-          writer, encodedTrailerValue, "trailer", "trailer-" + (i + 1), ctx);
+      writeText(writer, encodedTrailerValue, "trailer", "trailer-" + (i + 1), ctx);
     }
     writeNewLine(writer, ctx);
   }

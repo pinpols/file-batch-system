@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.config.WorkerCoreAsyncConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
+import io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties;
 import io.github.pinpols.batch.worker.core.domain.PulledTask;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
@@ -46,28 +47,25 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Service;
 
 /**
- * 单任务执行包装器:将 {@link PulledTask} 转换为 {@link StepExecutionRequest}, 驱动业务 pipeline, 并将执行结果通过 {@link
- * TaskExecutionClient#report} 上报 Orchestrator.
+ * 单任务执行包装器：将 {@link PulledTask} 转换为 {@link StepExecutionRequest}，
+ * 驱动业务流水线，并通过 {@link TaskExecutionClient#report} 上报执行结果。
  *
- * <p><b>P0-1 (2026-05-03)</b>: 业务执行 submit 到 {@link TaskExecutionPool} 独立线程, listener 线程仅 {@code
- * future.get(timeout)} 等结果. 之前 plugin 无限循环 / 长 SQL 卡住 → orchestrator 标 TIMED_OUT, 但 worker 线程仍占 着,
- * Semaphore permit 永不释放 → worker 容量永久缩水. 现在超时即 {@code future.cancel(true)} → 释放 permit + 上报
- * orchestrator 失败 (errorCode=WORKER_EXECUTION_TIMEOUT). 协作式 cancel: 业务线程通过 {@code
- * Thread.isInterrupted()} / 阻塞 IO 自动响应; 不响应中断的线程在 {@link
- * WorkerExecutionTimeoutProperties#getCancelGraceSeconds()} 后被 watchdog 标记泄漏 (metric {@code
- * worker.task.execution.thread.leaked.total}, 不影响 listener 派下个 task).
+ * <p>业务在 {@link TaskExecutionPool} 的独立线程中执行，监听线程限时等待结果。
+ * 超时后请求中断并生成 {@code WORKER_EXECUTION_TIMEOUT} 结果；业务代码需通过中断检查或阻塞 I/O 协作退出。
+ * 超过 {@link WorkerExecutionTimeoutProperties#getCancelGraceSeconds()} 仍未退出的线程记入
+ * {@code worker.task.execution.thread.leaked.total}，不能将取消 Future 等同于业务线程已经结束。
  *
- * <p><b>生命周期</b>:
+ * <p>执行生命周期：
  *
  * <ol>
- *   <li>在 {@link ActiveTaskLeaseRegistry} 注册任务租约 (供 {@link WorkerTaskLeaseRenewer} 定时续租).
- *   <li>调用 {@link StepExecutionAdapter#execute} 执行业务 pipeline (在 pool 线程, 限时阻塞).
- *   <li>无论成功 / 失败 / 超时, finally 块内移除租约并上报结果——不存在 "执行完成但不上报" 的状态.
+ *   <li>登记当前 invocation 的租约，由 {@link WorkerTaskLeaseRenewer} 负责周期续租。
+ *   <li>执行池线程确认执行入口后，调用 {@link StepExecutionAdapter#execute} 执行业务。
+ *   <li>仍持有租约时上报结果；确认失败或租约丢失时停止执行或上报，避免旧所有者覆盖当前状态。
+ *   <li>退出执行包装器时清理本地租约登记；JVM 级故障保留原始异常，不转换为普通业务失败。
  * </ol>
  */
 @Slf4j
@@ -126,14 +124,14 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       WorkerExecutionTimeoutProperties timeoutProperties,
       ObjectProvider<MeterRegistry> meterRegistryProvider,
       @Qualifier(WorkerCoreAsyncConfiguration.WATCHDOG_SCHEDULER) TaskScheduler watchdog,
-      @Value("${batch.worker.lease.renew-interval-millis:10000}") long leaseRenewalIntervalMillis) {
+      WorkerLeaseProperties leaseProperties) {
     this.stepExecutionAdapter = stepExecutionAdapter;
     this.taskExecutionClient = taskExecutionClient;
     this.activeTaskLeaseRegistry = activeTaskLeaseRegistry;
     this.executionPool = executionPool;
     this.timeoutProperties = timeoutProperties;
     this.watchdog = watchdog;
-    this.leaseRenewalIntervalMillis = Math.max(1L, leaseRenewalIntervalMillis);
+    this.leaseRenewalIntervalMillis = Math.max(1L, leaseProperties.getRenewIntervalMillis());
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
     this.meterRegistry = registry;
     if (registry == null) {
@@ -195,8 +193,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
   public List<TaskClaimResult> claimBatch(List<TaskClaimItem> items) {
     long claimStartedAtNanos = activeTaskLeaseRegistry.currentNanos();
     List<TaskClaimResult> results = taskExecutionClient.claimBatch(items);
-    boolean claimBatchHasNoTrackableItems =
-        EmptyChecks.isNull(results)
+    boolean claimBatchHasNoTrackableItems = EmptyChecks.isNull(results)
         || EmptyChecks.isEmpty(results)
         || EmptyChecks.isNull(items)
         || EmptyChecks.isEmpty(items);
@@ -247,6 +244,20 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
   }
 
   @Override
+  public void releaseUnexecutedClaims(List<PulledTask> tasks) {
+    if (EmptyChecks.isNull(tasks)) return;
+    for (PulledTask task : tasks) {
+      if (EmptyChecks.isNotNull(task)) {
+        activeTaskLeaseRegistry.removeQueuedClaim(
+            task.getTaskId(),
+            task.getTenantId(),
+            task.getWorkerId(),
+            task.getPartitionInvocationId());
+      }
+    }
+  }
+
+  @Override
   @Observed(name = "worker.task.execute", contextualName = "worker.task.execute")
   public WorkerExecutionResult execute(PulledTask task) {
     if (EmptyChecks.isNull(task)
@@ -288,9 +299,8 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       } else {
         response = runWithTimeout(request, task, timeoutSeconds);
       }
-      // P1-2 闸门：若执行过程中 orchestrator 已明确驱逐本 lease（renew DB CAS 返回 false），
-      // 不再 report。markCompletingUnlessLost 与 markLost 共用 registry 写锁，避免“业务刚完成、
-      // 旧 renew 快照随后 rejected”把已完成任务误标 lost。
+      // 续租 CAS 拒绝后禁止旧所有者回报。完成确认与租约丢失标记共用注册表写锁，
+      // 防止已完成任务被迟到的旧续租结果错误标记为租约丢失。
       if (!activeTaskLeaseRegistry.markCompletingUnlessLost(task.getTaskId())) {
         log.error(
             "task lease lost during execution — aborting report: tenantId={}, taskId={},"
@@ -371,8 +381,8 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
   }
 
   /**
-   * 待执行 claim 若连续错过续租窗口，不得仅凭本地旧状态启动业务。同步续租以 Orchestrator invocation CAS
-   * 确认当前租约；拒绝或无法确认时失败关闭，留给 lease reclaim 重派。
+   * 已认领任务连续错过续租窗口时，通过 Orchestrator 的 invocation CAS 重新确认租约。
+   * 拒绝或无法确认时停止执行，由租约回收流程重新派发。
    */
   private boolean confirmLeaseBeforeExecution(PulledTask task) {
     if (activeTaskLeaseRegistry.isLost(task.getTaskId())) {
@@ -384,14 +394,30 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     if (!activeTaskLeaseRegistry.isRenewalDue(task.getTaskId(), staleAfterMillis)) {
       return true;
     }
+    Long renewalTaskId = Long.valueOf(task.getTaskId());
+    TaskLeaseRenewItem renewalItem = new TaskLeaseRenewItem(
+        task.getTenantId(), renewalTaskId, task.getWorkerId(), task.getPartitionInvocationId());
+    return confirmLease(task, renewalItem);
+  }
+
+  /** 在执行池实际取得线程后确认执行起点，排队等待不计入业务执行耗时。 */
+  private boolean confirmExecutionStart(PulledTask task) {
+    if (activeTaskLeaseRegistry.isLost(task.getTaskId())) {
+      return false;
+    }
+    Long taskId = Long.valueOf(task.getTaskId());
+    TaskLeaseRenewItem startItem = TaskLeaseRenewItem.executionStart(
+        task.getTenantId(), taskId, task.getWorkerId(), task.getPartitionInvocationId());
+    boolean confirmed = confirmLease(task, startItem);
+    if (!confirmed) {
+      // 无法确认执行身份时禁止进入业务，也不能将确认失败上报为业务执行失败。
+      activeTaskLeaseRegistry.markLost(task.getTaskId());
+    }
+    return confirmed;
+  }
+
+  private boolean confirmLease(PulledTask task, TaskLeaseRenewItem renewalItem) {
     try {
-      String tenantId = task.getTenantId();
-      Long renewalTaskId = Long.valueOf(task.getTaskId());
-      TaskLeaseRenewItem renewalItem = new TaskLeaseRenewItem(
-          tenantId,
-          renewalTaskId,
-          task.getWorkerId(),
-          task.getPartitionInvocationId());
       Map<Long, TaskLeaseRenewResult> resultByTaskId =
           taskExecutionClient.renewLeasesBatch(List.of(renewalItem));
       TaskLeaseRenewResult result;
@@ -433,9 +459,8 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
   }
 
   /**
-   * 把业务 pipeline 跑在 {@link TaskExecutionPool} 上, 主线程 (Kafka listener) 限时等待结果. 超时即 {@code
-   * future.cancel(true)} 释放 listener, 业务线程靠 {@link Thread#isInterrupted()} / 阻塞 IO 协作退出; 不退出的线程
-   * watchdog 记账放任 (worker 不会自动重启, 留给运维).
+   * 业务流程在 {@link TaskExecutionPool} 中执行，Kafka 监听线程限时等待结果。超时后调用 {@code
+   * future.cancel(true)}，业务线程通过中断或阻塞 I/O 协作退出；未退出线程由看门狗记录并交由运维处理。
    */
   private StepExecutionResponse runWithTimeout(
       StepExecutionRequest request, PulledTask task, long timeoutSeconds) {
@@ -445,6 +470,15 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       future = executionPool.submit(() -> {
         executing.set(true);
         try {
+          if (!confirmExecutionStart(task)) {
+            return new StepExecutionResponse(
+                false, "LEASE_LOST", "execution start was not confirmed");
+          }
+          if (activeTaskLeaseRegistry.isCancellationRequested(task.getTaskId())
+              || Thread.currentThread().isInterrupted()) {
+            return new StepExecutionResponse(
+                false, CANCELLED_ERROR_CODE, "task cancelled before adapter entry");
+          }
           return stepExecutionAdapter.execute(request);
         } finally {
           executing.set(false);
@@ -487,8 +521,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
           : "task execution cancelled";
       return new StepExecutionResponse(false, CANCELLED_ERROR_CODE, message);
     } catch (ExecutionException ex) {
-      // 业务异常已在 stepExecutionAdapter 里被包成 StepExecutionResponse.failure 返回, 这里到达说明 adapter 自己抛了
-      // RuntimeException (典型: 解析 payload 失败 / 框架 bug). 也按失败上报.
+      // 处理适配器未转换的执行异常；JVM 级故障继续抛出，其余异常转换为执行错误结果。
       Throwable cause = EmptyChecks.isNull(ex.getCause()) ? ex : ex.getCause();
       rethrowFatal(cause);
       log.error(
@@ -516,8 +549,8 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
   }
 
   /**
-   * 派发独立 watchdog: 宽限期后检查实际调用是否退出，而非已被 cancel 标为完成的 Future。不会强杀线程
-   * (Java 没有安全的强杀); 留给运维通过 metric 告警 + 重启 worker 回退.
+   * 宽限期后检查业务调用是否实际退出，不能仅依据 Future 的取消状态判断线程已结束。
+   * 未退出的线程通过指标告警交由运维处置，避免使用不安全的强制终止操作。
    */
   private void scheduleThreadLeakWatchdog(PulledTask task, AtomicBoolean executing) {
     long graceSeconds = Math.max(1L, timeoutProperties.getCancelGraceSeconds());

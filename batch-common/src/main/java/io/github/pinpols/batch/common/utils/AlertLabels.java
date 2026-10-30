@@ -70,7 +70,7 @@ public final class AlertLabels {
     if (lower.contains(GROUP_DISPATCH)) {
       return GROUP_DISPATCH;
     }
-    if (lower.contains("sla") || isJobMonitoringAlert(lower)) {
+    if (lower.contains("sla") || isRuntimeMonitoringAlert(lower)) {
       return GROUP_SLA;
     }
     boolean isFreshnessAlert =
@@ -78,17 +78,19 @@ public final class AlertLabels {
     if (isFreshnessAlert) {
       return GROUP_FRESHNESS;
     }
-    boolean isCapacityAlert = lower.contains(GROUP_CAPACITY)
-        || lower.contains("drain")
-        || lower.contains("backpressure");
+    boolean isCapacityAlert =
+        lower.contains(GROUP_CAPACITY) || lower.contains("drain") || lower.contains("backpressure");
     if (isCapacityAlert) {
       return GROUP_CAPACITY;
     }
     return GROUP_DEFAULT;
   }
 
-  private static boolean isJobMonitoringAlert(String normalizedAlertType) {
+  private static boolean isRuntimeMonitoringAlert(String normalizedAlertType) {
     return normalizedAlertType.equals("job_running_too_long")
+        || normalizedAlertType.equals("workflow_running_too_long")
+        || normalizedAlertType.equals("workflow_not_started_by_deadline")
+        || normalizedAlertType.equals("workflow_not_completed_by_deadline")
         || normalizedAlertType.equals("job_not_started_by_deadline")
         || normalizedAlertType.equals("job_completed_late")
         || normalizedAlertType.equals("job_not_completed_by_deadline")

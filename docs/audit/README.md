@@ -4,6 +4,15 @@
 
 | 文档 | 范围 |
 |---|---|
+| [后端 25 工作包全仓治理进度](backend-25-package-governance-2026-10-26.md) | 当前开发工作树 25 包及 6 项补充的实际静态/定向证据、已修项、未验范围与下一步；不继承历史清单的完成状态 |
+| [后端治理问题证据复核索引](backend-25-package-bug-evidence-index-2026-10-29.md) | 台账内问题编号和人工复核状态快照；区分独立缺陷、补证、修复回归及待核项 |
+| [后端代码规约与仓库卫生复扫](backend-code-convention-hygiene-scan-2026-10-26.md) | 当前 `fix/wdi-current` 动态工作树；PMD 4 处、判空 18 处、Spotless 1 文件，Javadoc 守卫与规范冲突；补查非 CI 的 Service 职责、测试 Mock/失败断言及真实 Mapper 验证缺口 |
+| [后端规约治理 Skill 覆盖复核](backend-convention-skill-coverage-review-2026-10-26.md) | 四个既有主入口主责收敛；25工作包及6项规范补充、统一Bug方法；撤回重复入口并保留历史提炼与分阶段验证 |
+| [本地规约门禁整改与复扫](local-hooks-and-convention-remediation-2026-10-26.md) | 修复 2026-10-25 扫描失败项；后端 pre-commit 53/53、pre-push 22/22，前端治理 18 项与生产构建通过；明确真实数据库和产品 E2E 未执行 |
+| [本地双钩子全量只读扫描与代码规约扫描](local-hooks-and-convention-full-scan-2026-10-25.md) | pre-commit 53 项（45✅/8❌）与 pre-push 21 项（18✅/3❌）逐门禁全量只读复跑；失败按并行工作流新增代码/文档、只读口径差异、钩子外检查分类；未修改代码、未暂存、未提交 |
+| [现行文档图整理](document-diagram-refresh-2026-10-25.md) / [59份清单](document-diagram-catalog-2026-10-25.csv) | 双仓图块59→127，明暗渲染与语义核对；归档零写入，完整构建体积门禁另列 |
+| [基础设施边界六项修复](infrastructure-abstraction-boundary-fix-2026-10-25.md) | 五处JDBC异常识别/构造下沉和Quartz时间源隔离；origin/main增量门禁6→0，152项定向测试通过 |
+| [测试编码约定核查](test-code-conventions-review-2026-10-25.md) / [逐项定位](test-code-conventions-findings-2026-10-25.csv) | 最新wdi-current测试编码静态审查；SQL具名承接21处、JDBC断言26处、Mock/AssertJ/LENIENT及前端候选，未批量整改或执行产品测试 |
 | [固定投影 Map 与长构造后续](model-map-and-constructor-followup-2026-10-24.md) / [651 项定位快照](model-next-candidates-2026-10-24.csv) | 7 个长构造调用点改用具名 Builder；20 个固定查询投影改用 record view（含集群诊断6项）；其余 138 个长构造与 486 个 Map 快照项仍待核对，未运行项目构建、测试或 MyBatis 映射 |
 | [实体与构造治理](entity-and-constructor-governance-2026-10-24.md) / [101模型](entity-model-governance-2026-10-24.csv) / [123构造裁定](nullable-constructor-governance-2026-10-24.csv) | 30生产文件、48构造和1固定Map；57对象字段及实参调用顺序核对；只做静态，不编译或测试 |
 | [测试 SQL 与 JDBC 断言收尾](test-sql-and-assertion-governance-2026-10-24.md) / [1529 项清单](test-sql-and-assertion-governance-2026-10-24.csv) | 102 个测试文件；24 个 SQL 实参、1504 个 JDBC 结果和 62 个轮询边界；Shell 默认枚举修复，只有静态证据 |
@@ -62,6 +71,7 @@
 | 文档 | 职责 |
 |---|---|
 | [ci-external-action-upgrade-review-2026-09-30.md](ci-external-action-upgrade-review-2026-09-30.md) | CI 外部 Actions 版本升级与验收记录 |
+| [runtime-config-import-impact-2026-10-24.md](runtime-config-import-impact-2026-10-24.md) | 运行时配置导入影响审计（2026-10-24）；仅用于追溯当时基线 |
 
 - [test-fixture-path-migration-2026-10-24.json](test-fixture-path-migration-2026-10-24.json)：36份场景 SQL/JSON/XLSX 的原路径、现路径与迁移前 SHA-256；证明路径迁移内容等价。
 
@@ -70,3 +80,15 @@
 - [脚本目录、说明与CI索引治理](script-and-ci-governance-review-2026-10-24.md)：连续十项要求、目录/基线迁移、守卫覆盖、实际验证和未关闭项。
 
 - [architecture-and-contract-assets-review-2026-10-24.md](architecture-and-contract-assets-review-2026-10-24.md)：当前Workflow分支五类系统资产逐文件核查、架构图/模型/协议修正及能力验证边界。
+
+## 归档存量逐文件处置
+
+[archive-document-disposition-2026-10-25.csv](archive-document-disposition-2026-10-25.csv) 记录初始149个归档文件的原路径、字节哈希、当前裁定、承接入口与理由；删除正文的决定已按后续纠偏恢复；内容复核和边界见[分类记录](document-classification-and-naming-review-2026-10-24.md)。
+
+## 历史经验保留与技能提炼
+
+[逐篇提炼映射](archive-experience-skill-extraction-2026-10-25.csv)记录120篇恢复原文的来源、哈希、方法与技能去向；恢复纠偏与实际检查见[分类复核](document-classification-and-naming-review-2026-10-24.md)。
+
+## 文档与脚本的全量技能复核
+
+[复核记录](document-script-skill-review-2026-10-25.md)说明范围、方法、技能优化与验证边界；[逐文件清单](document-script-skill-coverage-2026-10-25.csv)记录2157个冻结来源的路由和复核层级。

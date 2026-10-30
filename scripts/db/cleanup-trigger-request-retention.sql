@@ -1,6 +1,5 @@
--- 关联的运行数据属于完整归档事务，其中包括冷存储中的 Workflow 血缘。
--- 危险：删除已过期的终态请求/等待记录。只能在同一事务中内部调用这两个保留期
--- 数据库归属。仍有活跃或可恢复请求，或存在保留的运行时/台账引用时，均不符合清理条件。
+-- 危险：删除已过期的终态请求及等待记录；仅供两个保留期入口在同一事务中内部调用。
+-- 活跃或可恢复请求、保留的运行时及冷热台账引用均排除，Workflow 血缘由完整归档事务维护。
 \set ON_ERROR_STOP on
 
 \if :{?request_retention_cutoff}
@@ -29,7 +28,7 @@ SELECT :'trigger_request_cleanup_batch_size'::integer BETWEEN 1 AND 10000
   END $retention_options$;
 \endif
 
--- 脚本；不得对共享测试夹具运行，也不得跳过审查。
+-- 临时表只在调用方事务内有效；不得对共享测试夹具运行，也不得跳过目标范围审查。
 CREATE TEMP TABLE cleanup_trigger_request_candidates (
     id bigint PRIMARY KEY, tenant_id varchar(64) NOT NULL, request_id varchar(128) NOT NULL
 ) ON COMMIT DROP;

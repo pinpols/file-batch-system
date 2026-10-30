@@ -152,17 +152,27 @@ public record SdkPartition(
 
 ## 层次结构(与 ADR-036 合并视图)
 
-```
-SdkTaskHandler                                   ← ADR-035 协议,不动
-   ▲ implements
-SdkAbstractTaskHandler                           ← 共同基类:template 序 + commit/checkpoint/cancel 工具
-   ▲ extends
-   ├── SdkAbstractAtomicHandler<R>               (ADR-036)
-   ├── SdkAbstractImportHandler<R>               (ADR-036)
-   ├── SdkAbstractExportHandler<R>               (ADR-036)
-   ├── SdkAbstractProcessHandler<I,O>            (ADR-036)
-   ├── SdkAbstractDispatchHandler<R>             (ADR-036)
-   └── SdkAbstractParallelStreamHandler<I,O>     (本 ADR · 决策四)
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+%% 决策示意；实施范围以本文状态记录为准。
+classDiagram
+  direction LR
+  class SdkTaskHandler
+  <<interface>> SdkTaskHandler
+  class SdkAbstractTaskHandler
+  class SdkAbstractAtomicHandler
+  class SdkAbstractImportHandler
+  class SdkAbstractExportHandler
+  class SdkAbstractProcessHandler
+  class SdkAbstractDispatchHandler
+  class SdkAbstractParallelStreamHandler
+  SdkTaskHandler <|.. SdkAbstractTaskHandler
+  SdkAbstractTaskHandler <|-- SdkAbstractAtomicHandler
+  SdkAbstractTaskHandler <|-- SdkAbstractImportHandler
+  SdkAbstractTaskHandler <|-- SdkAbstractExportHandler
+  SdkAbstractTaskHandler <|-- SdkAbstractProcessHandler
+  SdkAbstractTaskHandler <|-- SdkAbstractDispatchHandler
+  SdkAbstractTaskHandler <|-- SdkAbstractParallelStreamHandler
 ```
 
 `SdkCheckpoint` / `ctx.commit()` / `ctx.isCancelled()` 是**横切能力**,任何模板(尤其长跑的 Import/Export/Process 与本 ADR 的 Parallel)都能用;短小的 Atomic 一般用不到。

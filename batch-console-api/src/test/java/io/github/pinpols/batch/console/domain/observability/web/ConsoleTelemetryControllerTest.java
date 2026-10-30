@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.domain.observability.web;
 
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -19,6 +18,11 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -26,10 +30,12 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 /** P2: ConsoleTelemetryController 接收前端事件 + 大小/字段约束。 */
 @DisplayName("遥测事件接口:事件上报与请求体约束校验")
+@ExtendWith(MockitoExtension.class)
 class ConsoleTelemetryControllerTest {
 
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -117,6 +123,20 @@ class ConsoleTelemetryControllerTest {
         .perform(post("/api/console/telemetry/events")
             .contentType(APPLICATION_JSON)
             .content("{\"events\":[{\"type\":\"info\",\"name\":\"x\"}]}"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "{\"app\":\"console\",\"events\":[null]}",
+        "{\"app\":\"console\",\"events\":[{\"type\":\"route\",\"name\":\"view\"},null]}"
+      })
+  @DisplayName("遥测事件数组包含空元素时返回参数错误，不能进入控制器空指针路径")
+  void shouldRejectNullEvent_whenListContainsNull(String payload) throws Exception {
+    mockMvc
+        .perform(
+            post("/api/console/telemetry/events").contentType(APPLICATION_JSON).content(payload))
         .andExpect(status().isBadRequest());
   }
 }

@@ -31,8 +31,7 @@ public class ConsoleRealtimeReplayStore implements RealtimeReplayStore {
 
   @Override
   public void append(ConsoleRealtimeStreamEnvelope envelope) {
-    boolean envelopeIsIncomplete =
-        EmptyChecks.isNull(envelope)
+    boolean envelopeIsIncomplete = EmptyChecks.isNull(envelope)
         || envelope.tenantId() == null
         || envelope.stream() == null
         || EmptyChecks.isNull(envelope.cursor());
@@ -63,8 +62,7 @@ public class ConsoleRealtimeReplayStore implements RealtimeReplayStore {
 
   @Override
   public ReplayBatch replay(String tenantId, String stream, String afterCursor, String eventType) {
-    boolean replayRequestIsIncomplete =
-        EmptyChecks.isNull(tenantId)
+    boolean replayRequestIsIncomplete = EmptyChecks.isNull(tenantId)
         || tenantId.isBlank()
         || stream == null
         || stream.isBlank()

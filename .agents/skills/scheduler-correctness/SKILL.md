@@ -33,3 +33,7 @@ description: 用户要求设计、修改或审查 Trigger、业务日历、定�
 - `batch-trigger/src/main/java/`、`batch-trigger/src/test/java/`
 - `scripts/sim/22-trigger-stage6c.sh`、`scripts/sim/24-trigger-stage6d.sh`
 - 涉及 Worker/Outbox/Kafka 主链时，同时使用 `worker-pipeline-review`；涉及变更门禁时使用 `code-review-and-gates`。
+
+## 当前文档与脚本的方法补充
+
+修改业务日期、Occurrence、readiness或调度恢复时，按需读取[调度身份、时间与恢复核对](references/time-recovery.md)。只加载相关方法，不把文档列出的操作自动加入执行范围。

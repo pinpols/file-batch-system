@@ -10,6 +10,27 @@
         <result column="batch_key" property="batchKey" javaType="java.lang.String"/>
     </resultMap>
 
+    <resultMap id="processStagingGenerationCursorMap"
+               type="io.github.pinpols.batch.worker.processes.cleanup.ProcessStagingGenerationCandidate"
+               extends="processStagingGenerationCandidateMap">
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <select id="listExpiredGenerationsAfter" resultMap="processStagingGenerationCursorMap"
+            parameterType="io.github.pinpols.batch.worker.processes.query.ProcessStagingExpiredScanQuery">
+        SELECT tenant_id, job_task_id, generation_id, batch_key, created_at
+        FROM batch.process_staging_generation
+        WHERE tenant_id = #{tenantId}
+          AND generation_status IN ('OPEN', 'SEALED')
+          AND job_task_id IS NOT NULL
+          AND created_at &lt; now() - make_interval(hours => #{retentionHours})
+        <if test="createdAt != null and generationId != null">
+          AND (created_at, generation_id) &gt; (#{createdAt}, CAST(#{generationId} AS uuid))
+        </if>
+        ORDER BY created_at, generation_id
+        LIMIT #{batchSize}
+    </select>
+
     <select id="listExpiredGenerations" resultMap="processStagingGenerationCandidateMap">
         SELECT tenant_id,
                job_task_id,

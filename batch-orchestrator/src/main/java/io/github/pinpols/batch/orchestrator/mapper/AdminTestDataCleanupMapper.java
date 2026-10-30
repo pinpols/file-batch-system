@@ -83,7 +83,8 @@ public interface AdminTestDataCleanupMapper {
     return cleanupByPrefixTarget(target.name(), scope);
   }
 
-  int cleanupByPrefixTarget(@Param("target") String target, @Param("scope") PrefixCleanupScope scope);
+  int cleanupByPrefixTarget(
+      @Param("target") String target, @Param("scope") PrefixCleanupScope scope);
 
   default int cleanupByTenantIds(CleanupTarget target, List<String> tenantIds) {
     return cleanupByTenantIdsTarget(target.name(), tenantIds);

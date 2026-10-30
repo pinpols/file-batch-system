@@ -328,8 +328,7 @@ public class BatchPlatformClient {
       long schedulerElapsedMs = (System.nanoTime() - schedulerStartNanos) / 1_000_000L;
       long remainingStopBudgetForLeaseMs = remainingMs(stopStartNanos, totalMs);
       long remainingSchedulerBudgetMs = Math.max(0L, schedulerBudgetMs - schedulerElapsedMs);
-      long leaseBudgetMs =
-          Math.min(remainingStopBudgetForLeaseMs, remainingSchedulerBudgetMs);
+      long leaseBudgetMs = Math.min(remainingStopBudgetForLeaseMs, remainingSchedulerBudgetMs);
       leaseRenewalScheduler.close(Duration.ofMillis(leaseBudgetMs));
     }
   }
@@ -357,18 +356,19 @@ public class BatchPlatformClient {
     boolean crashed = (kafkaConsumer != null && kafkaConsumer.hasCrashed()) || authFail;
     int inFlight = dispatcher == null ? 0 : dispatcher.inFlightCount();
     long consumerLag = kafkaConsumer == null ? -1L : kafkaConsumer.consumerLagMax();
-    return new SdkClientMetrics(
-        config.getTenantId(),
-        config.getWorkerCode(),
-        startedSnap,
-        startedSnap && !fatal && !crashed,
-        inFlight,
-        config.getMaxConcurrentTasks(),
-        handlers.size(),
-        fatal,
-        draining,
-        crashed,
-        consumerLag);
+    return SdkClientMetrics.builder()
+        .tenantId(config.getTenantId())
+        .workerCode(config.getWorkerCode())
+        .started(startedSnap)
+        .healthy(startedSnap && !fatal && !crashed)
+        .inFlightTaskCount(inFlight)
+        .maxConcurrentTasks(config.getMaxConcurrentTasks())
+        .registeredHandlerCount(handlers.size())
+        .dispatcherFatal(fatal)
+        .dispatcherDraining(draining)
+        .consumerCrashed(crashed)
+        .kafkaConsumerLag(consumerLag)
+        .build();
   }
 
   /**
